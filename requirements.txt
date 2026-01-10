@@ -1,0 +1,15 @@
+# File Organizer - Requirements
+#
+# This project uses only Python standard library modules.
+# No external dependencies are required.
+#
+# Minimum Python version: 3.6
+#
+# Standard library modules used:
+# - os
+# - shutil
+# - argparse
+# - pathlib
+# - datetime
+# - collections
+# - json
