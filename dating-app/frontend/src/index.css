@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 min-h-screen;
+    @apply text-white font-sans antialiased;
+  }
+
+  * {
+    @apply box-border;
+  }
+}
+
+@layer components {
+  /* 神秘卡片样式 */
+  .mystery-card {
+    @apply bg-white/10 backdrop-blur-md rounded-2xl p-6;
+    @apply border border-white/20 shadow-2xl;
+    @apply transition-all duration-300 hover:bg-white/15;
+  }
+
+  /* 神秘按钮 */
+  .mystery-button {
+    @apply bg-gradient-mystery text-white px-6 py-3 rounded-full;
+    @apply font-semibold transition-all duration-300;
+    @apply hover:scale-105 hover:shadow-2xl active:scale-95;
+  }
+
+  /* 发光效果 */
+  .glow-effect {
+    @apply shadow-[0_0_30px_rgba(167,139,250,0.3)];
+  }
+
+  /* 模糊遮罩（神秘感） */
+  .mystery-blur {
+    @apply backdrop-blur-xl bg-white/5;
+    @apply border border-white/10 rounded-2xl;
+  }
+
+  /* 渐变文字 */
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400;
+  }
+
+  /* AI头像容器 */
+  .ai-avatar {
+    @apply w-20 h-20 rounded-full;
+    @apply bg-gradient-radial from-purple-400 to-blue-600;
+    @apply flex items-center justify-center;
+    @apply shadow-[0_0_30px_rgba(167,139,250,0.6)];
+    @apply animate-pulse-slow;
+  }
+
+  /* 活动卡片 */
+  .activity-card {
+    @apply mystery-card overflow-hidden;
+    @apply hover:transform hover:translate-y-[-8px];
+    @apply cursor-pointer;
+  }
+
+  /* 聊天气泡 */
+  .chat-bubble {
+    @apply max-w-[70%] p-4 rounded-2xl;
+    @apply break-words;
+  }
+
+  .chat-bubble-sent {
+    @apply chat-bubble bg-gradient-mystery ml-auto;
+  }
+
+  .chat-bubble-received {
+    @apply chat-bubble bg-white/10 backdrop-blur-md;
+  }
+
+  /* 加载动画 */
+  .loader {
+    @apply w-12 h-12 border-4 border-purple-200;
+    @apply border-t-purple-600 rounded-full;
+    @apply animate-spin;
+  }
+
+  /* 输入框样式 */
+  .mystery-input {
+    @apply w-full px-4 py-3 rounded-xl;
+    @apply bg-white/10 backdrop-blur-md;
+    @apply border border-white/20;
+    @apply text-white placeholder-white/50;
+    @apply focus:outline-none focus:border-purple-400;
+    @apply focus:ring-2 focus:ring-purple-400/50;
+    @apply transition-all duration-300;
+  }
+
+  /* 徽章 */
+  .badge {
+    @apply inline-block px-3 py-1 rounded-full text-sm;
+    @apply bg-white/10 backdrop-blur-sm;
+    @apply border border-white/20;
+  }
+
+  /* 神秘揭示效果 */
+  .reveal-animation {
+    @apply transition-all duration-500 ease-out;
+    animation: reveal 0.6s ease-out;
+  }
+
+  @keyframes reveal {
+    from {
+      opacity: 0;
+      filter: blur(10px);
+      transform: scale(0.9);
+    }
+    to {
+      opacity: 1;
+      filter: blur(0);
+      transform: scale(1);
+    }
+  }
+
+  /* 心跳动画 */
+  .heartbeat {
+    animation: heartbeat 1.5s ease-in-out infinite;
+  }
+
+  @keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    10%, 30% { transform: scale(1.1); }
+    20%, 40% { transform: scale(0.9); }
+  }
+
+  /* 星光闪烁 */
+  .sparkle {
+    animation: sparkle 2s ease-in-out infinite;
+  }
+
+  @keyframes sparkle {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+}
+
+@layer utilities {
+  /* 隐藏滚动条但保持功能 */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* 玻璃形态 */
+  .glass {
+    @apply bg-white/10 backdrop-blur-lg;
+    @apply border border-white/20;
+  }
+
+  /* 悬浮阴影 */
+  .hover-lift {
+    @apply transition-transform duration-300;
+    @apply hover:-translate-y-2 hover:shadow-2xl;
+  }
+}
