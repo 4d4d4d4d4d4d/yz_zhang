@@ -10,6 +10,7 @@ import authRoutes from './src/routes/auth.js';
 import aiRoutes from './src/routes/ai.js';
 import matchRoutes from './src/routes/match.js';
 import activityRoutes from './src/routes/activity.js';
+import gameRoutes from './src/routes/game.js';
 
 // 导入模型
 import Conversation from './src/models/Conversation.js';
@@ -48,6 +49,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/matches', matchRoutes);
 app.use('/api/activities', activityRoutes);
+app.use('/api/games', gameRoutes);
 
 // 健康检查
 app.get('/api/health', (req, res) => {

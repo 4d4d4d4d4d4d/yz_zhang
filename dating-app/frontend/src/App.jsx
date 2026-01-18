@@ -10,6 +10,7 @@ import Home from './pages/Home';
 import AICompanion from './pages/AICompanion';
 import Matches from './pages/Matches';
 import Activities from './pages/Activities';
+import Games from './pages/Games';
 import Profile from './pages/Profile';
 import Layout from './components/Layout';
 
@@ -56,6 +57,7 @@ function App() {
           <Route path="ai-companion" element={<AICompanion />} />
           <Route path="matches" element={<Matches />} />
           <Route path="activities" element={<Activities />} />
+          <Route path="games" element={<Games />} />
           <Route path="profile" element={<Profile />} />
         </Route>
 

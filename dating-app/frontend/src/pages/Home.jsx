@@ -77,11 +77,12 @@ const Home = () => {
       </motion.div>
 
       {/* 快速操作 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
           { icon: '🤖', label: 'AI伴侣', desc: '情感陪伴', link: '/ai-companion', color: 'from-purple-500 to-pink-500' },
           { icon: '💕', label: '寻找匹配', desc: '神秘邂逅', link: '/matches', color: 'from-pink-500 to-red-500' },
           { icon: '🎯', label: '活动广场', desc: '线下聚会', link: '/activities', color: 'from-blue-500 to-cyan-500' },
+          { icon: '🎮', label: '互动游戏', desc: '趣味互动', link: '/games', color: 'from-orange-500 to-yellow-500' },
           { icon: '👤', label: '个人资料', desc: '完善信息', link: '/profile', color: 'from-green-500 to-teal-500' }
         ].map((item, index) => (
           <motion.div

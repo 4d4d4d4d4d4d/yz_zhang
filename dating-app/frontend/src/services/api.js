@@ -79,4 +79,22 @@ export const activityAPI = {
     api.get('/activities/recommendations', { params: { limit } })
 };
 
+// ============ 游戏API ============
+export const gameAPI = {
+  createGame: (data) => api.post('/games', data),
+  getPublicGames: (params) => api.get('/games/public', { params }),
+  getMyGames: (status) => api.get('/games/my-games', { params: { status } }),
+  getGameDetails: (gameId) => api.get(`/games/${gameId}`),
+  joinGame: (gameId) => api.post(`/games/${gameId}/join`),
+  startGame: (gameId) => api.post(`/games/${gameId}/start`),
+  getQuestion: (gameId, questionType) =>
+    api.get(`/games/${gameId}/question`, { params: { questionType } }),
+  submitAnswer: (gameId, data) => api.post(`/games/${gameId}/answer`, data),
+  getPersonalityTest: () => api.get('/games/personality-test/questions'),
+  submitPersonalityTest: (gameId, answers) =>
+    api.post(`/games/${gameId}/personality-test`, { answers }),
+  endGame: (gameId) => api.post(`/games/${gameId}/end`),
+  rateGame: (gameId, rating) => api.post(`/games/${gameId}/rate`, { rating })
+};
+
 export default api;
