@@ -97,4 +97,14 @@ export const gameAPI = {
   rateGame: (gameId, rating) => api.post(`/games/${gameId}/rate`, { rating })
 };
 
+// ============ 通知API ============
+export const notificationAPI = {
+  getNotifications: (params) => api.get('/notifications', { params }),
+  getUnreadCount: () => api.get('/notifications/unread-count'),
+  markAsRead: (notificationId) => api.patch(`/notifications/${notificationId}/read`),
+  markAllAsRead: () => api.post('/notifications/mark-all-read'),
+  deleteNotification: (notificationId) => api.delete(`/notifications/${notificationId}`),
+  clearReadNotifications: () => api.delete('/notifications/clear-read')
+};
+
 export default api;

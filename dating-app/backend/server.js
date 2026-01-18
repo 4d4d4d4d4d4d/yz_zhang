@@ -11,6 +11,7 @@ import aiRoutes from './src/routes/ai.js';
 import matchRoutes from './src/routes/match.js';
 import activityRoutes from './src/routes/activity.js';
 import gameRoutes from './src/routes/game.js';
+import notificationRoutes from './src/routes/notification.js';
 
 // 导入模型
 import Conversation from './src/models/Conversation.js';
@@ -50,6 +51,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/matches', matchRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api/games', gameRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // 健康检查
 app.get('/api/health', (req, res) => {

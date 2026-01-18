@@ -1,6 +1,7 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import useAuthStore from '../store/authStore';
+import NotificationBell from './NotificationBell';
 
 const Layout = () => {
   const location = useLocation();
@@ -26,6 +27,7 @@ const Layout = () => {
           </Link>
 
           <div className="flex items-center space-x-6">
+            <NotificationBell />
             <span className="text-sm text-white/70">
               {user?.profile?.displayName || user?.username}
             </span>

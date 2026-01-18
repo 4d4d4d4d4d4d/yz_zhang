@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { activityAPI } from '../services/api';
 
 const Activities = () => {
+  const navigate = useNavigate();
   const [activities, setActivities] = useState([]);
   const [recommendedActivities, setRecommendedActivities] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -130,6 +132,7 @@ const Activities = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
+                onClick={() => navigate(`/activities/${activity._id}`)}
                 className="activity-card"
               >
                 {/* 活动封面 */}
@@ -207,12 +210,15 @@ const Activities = () => {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => handleJoinActivity(activity._id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleJoinActivity(activity._id);
+                    }}
                     disabled={activity.status === 'full' || activity.isParticipating}
                     className="w-full mystery-button text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {activity.isParticipating ? '已报名' :
-                     activity.status === 'full' ? '已满员' : '立即报名'}
+                     activity.status === 'full' ? '已满员' : '查看详情'}
                   </motion.button>
                 </div>
               </motion.div>
