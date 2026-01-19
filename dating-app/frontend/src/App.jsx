@@ -17,6 +17,7 @@ import Discover from './pages/Discover';
 import UserProfile from './pages/UserProfile';
 import Settings from './pages/Settings';
 import Layout from './components/Layout';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // 受保护的路由
 const ProtectedRoute = ({ children }) => {
@@ -42,37 +43,39 @@ function App() {
   }, [isAuthenticated, user]);
 
   return (
-    <Router>
-      <Routes>
-        {/* 公开路由 */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+    <ErrorBoundary>
+      <Router>
+        <Routes>
+          {/* 公开路由 */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
-        {/* 受保护的路由 */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Home />} />
-          <Route path="ai-companion" element={<AICompanion />} />
-          <Route path="matches" element={<Matches />} />
-          <Route path="activities" element={<Activities />} />
-          <Route path="activities/:activityId" element={<ActivityDetail />} />
-          <Route path="games" element={<Games />} />
-          <Route path="discover" element={<Discover />} />
-          <Route path="users/:userId" element={<UserProfile />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
+          {/* 受保护的路由 */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Home />} />
+            <Route path="ai-companion" element={<AICompanion />} />
+            <Route path="matches" element={<Matches />} />
+            <Route path="activities" element={<Activities />} />
+            <Route path="activities/:activityId" element={<ActivityDetail />} />
+            <Route path="games" element={<Games />} />
+            <Route path="discover" element={<Discover />} />
+            <Route path="users/:userId" element={<UserProfile />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
 
-        {/* 重定向 */}
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-    </Router>
+          {/* 重定向 */}
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </Router>
+    </ErrorBoundary>
   );
 }
 
