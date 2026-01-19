@@ -16,6 +16,7 @@ import Profile from './pages/Profile';
 import Discover from './pages/Discover';
 import UserProfile from './pages/UserProfile';
 import Settings from './pages/Settings';
+import MatchDetail from './pages/MatchDetail';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -62,6 +63,7 @@ function App() {
             <Route index element={<Home />} />
             <Route path="ai-companion" element={<AICompanion />} />
             <Route path="matches" element={<Matches />} />
+            <Route path="matches/:matchId" element={<MatchDetail />} />
             <Route path="activities" element={<Activities />} />
             <Route path="activities/:activityId" element={<ActivityDetail />} />
             <Route path="games" element={<Games />} />
