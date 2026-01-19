@@ -14,6 +14,9 @@ import activityRoutes from './src/routes/activity.js';
 import gameRoutes from './src/routes/game.js';
 import notificationRoutes from './src/routes/notification.js';
 import safetyRoutes from './src/routes/safety.js';
+import interactiveGameRoutes from './src/routes/interactiveGame.js';
+import momentRoutes from './src/routes/moment.js';
+import partyRoomRoutes from './src/routes/partyRoom.js';
 
 // 导入模型
 import Conversation from './src/models/Conversation.js';
@@ -56,6 +59,9 @@ app.use('/api/activities', activityRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/safety', safetyRoutes);
+app.use('/api/interactive-games', interactiveGameRoutes);
+app.use('/api/moments', momentRoutes);
+app.use('/api/party-rooms', partyRoomRoutes);
 
 // 健康检查
 app.get('/api/health', (req, res) => {

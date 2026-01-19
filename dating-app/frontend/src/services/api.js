@@ -128,4 +128,46 @@ export const safetyAPI = {
   cancelReport: (reportId) => api.delete(`/safety/reports/${reportId}`)
 };
 
+// ============ 互动游戏API ============
+export const interactiveGameAPI = {
+  createGame: (data) => api.post('/interactive-games', data),
+  getPublicGames: (params) => api.get('/interactive-games/public', { params }),
+  getScriptTemplates: () => api.get('/interactive-games/templates/scripts'),
+  getGameDetails: (gameId) => api.get(`/interactive-games/${gameId}`),
+  joinGame: (gameId, data) => api.post(`/interactive-games/${gameId}/join`, data),
+  startGame: (gameId) => api.post(`/interactive-games/${gameId}/start`),
+  submitDrawing: (gameId, data) => api.post(`/interactive-games/${gameId}/drawing`, data),
+  submitGuess: (gameId, data) => api.post(`/interactive-games/${gameId}/guess`, data),
+  sendChat: (gameId, data) => api.post(`/interactive-games/${gameId}/chat`, data)
+};
+
+// ============ 瞬间API ============
+export const momentAPI = {
+  createMoment: (data) => api.post('/moments', data),
+  getMomentsFeed: (params) => api.get('/moments/feed', { params }),
+  getTrendingTopics: (params) => api.get('/moments/trending', { params }),
+  getNearbyMoments: (params) => api.get('/moments/nearby', { params }),
+  getUserMoments: (userId, params) => api.get(`/moments/user/${userId}`, { params }),
+  getMomentById: (momentId) => api.get(`/moments/${momentId}`),
+  deleteMoment: (momentId) => api.delete(`/moments/${momentId}`),
+  toggleLike: (momentId) => api.post(`/moments/${momentId}/like`),
+  addComment: (momentId, data) => api.post(`/moments/${momentId}/comment`, data),
+  deleteComment: (momentId, commentId) => api.delete(`/moments/${momentId}/comment/${commentId}`),
+  voteOnPoll: (momentId, data) => api.post(`/moments/${momentId}/vote`, data)
+};
+
+// ============ 派对房间API ============
+export const partyRoomAPI = {
+  createRoom: (data) => api.post('/party-rooms', data),
+  getActiveRooms: (params) => api.get('/party-rooms/active', { params }),
+  getRoomDetails: (roomId) => api.get(`/party-rooms/${roomId}`),
+  joinRoom: (roomId, data) => api.post(`/party-rooms/${roomId}/join`, data),
+  leaveRoom: (roomId) => api.post(`/party-rooms/${roomId}/leave`),
+  endRoom: (roomId) => api.post(`/party-rooms/${roomId}/end`),
+  takeSeat: (roomId, data) => api.post(`/party-rooms/${roomId}/seat`, data),
+  leaveSeat: (roomId) => api.delete(`/party-rooms/${roomId}/seat`),
+  sendMessage: (roomId, data) => api.post(`/party-rooms/${roomId}/message`, data),
+  toggleMute: (roomId, userId) => api.post(`/party-rooms/${roomId}/mute/${userId}`)
+};
+
 export default api;
