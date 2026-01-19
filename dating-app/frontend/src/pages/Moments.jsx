@@ -17,6 +17,7 @@ import {
 import { HeartIcon as HeartSolidIcon } from '@heroicons/react/24/solid';
 import Loading from '../components/Loading';
 import EmptyState from '../components/EmptyState';
+import CreateMomentModal from '../components/CreateMomentModal';
 
 const Moments = () => {
   const navigate = useNavigate();
@@ -360,6 +361,13 @@ const Moments = () => {
           </div>
         </div>
       </div>
+
+      {/* Create Moment Modal */}
+      <CreateMomentModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={loadMoments}
+      />
     </div>
   );
 };

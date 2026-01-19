@@ -20,6 +20,8 @@ import MatchDetail from './pages/MatchDetail';
 import Moments from './pages/Moments';
 import InteractiveGames from './pages/InteractiveGames';
 import PartyRooms from './pages/PartyRooms';
+import CreateGameRoom from './pages/CreateGameRoom';
+import CreatePartyRoom from './pages/CreatePartyRoom';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -74,7 +76,9 @@ function App() {
             <Route path="users/:userId" element={<UserProfile />} />
             <Route path="moments" element={<Moments />} />
             <Route path="interactive-games" element={<InteractiveGames />} />
+            <Route path="interactive-games/create" element={<CreateGameRoom />} />
             <Route path="party-rooms" element={<PartyRooms />} />
+            <Route path="party-rooms/create" element={<CreatePartyRoom />} />
             <Route path="profile" element={<Profile />} />
             <Route path="settings" element={<Settings />} />
           </Route>
