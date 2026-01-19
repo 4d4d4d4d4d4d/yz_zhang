@@ -107,4 +107,14 @@ export const notificationAPI = {
   clearReadNotifications: () => api.delete('/notifications/clear-read')
 };
 
+// ============ 用户API ============
+export const userAPI = {
+  searchUsers: (params) => api.get('/users/search', { params }),
+  getRecommendedUsers: (limit) => api.get('/users/recommended', { params: { limit } }),
+  getUserProfile: (userId) => api.get(`/users/${userId}`),
+  getOnlineUsers: (limit) => api.get('/users/online', { params: { limit } }),
+  getNearbyUsers: (limit) => api.get('/users/nearby', { params: { limit } }),
+  getPopularUsers: (limit) => api.get('/users/popular', { params: { limit } })
+};
+
 export default api;

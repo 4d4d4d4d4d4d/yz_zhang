@@ -13,6 +13,9 @@ import Activities from './pages/Activities';
 import ActivityDetail from './pages/ActivityDetail';
 import Games from './pages/Games';
 import Profile from './pages/Profile';
+import Discover from './pages/Discover';
+import UserProfile from './pages/UserProfile';
+import Settings from './pages/Settings';
 import Layout from './components/Layout';
 
 // 受保护的路由
@@ -60,7 +63,10 @@ function App() {
           <Route path="activities" element={<Activities />} />
           <Route path="activities/:activityId" element={<ActivityDetail />} />
           <Route path="games" element={<Games />} />
+          <Route path="discover" element={<Discover />} />
+          <Route path="users/:userId" element={<UserProfile />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
 
         {/* 重定向 */}

@@ -7,6 +7,7 @@ import { Server } from 'socket.io';
 
 // 导入路由
 import authRoutes from './src/routes/auth.js';
+import userRoutes from './src/routes/user.js';
 import aiRoutes from './src/routes/ai.js';
 import matchRoutes from './src/routes/match.js';
 import activityRoutes from './src/routes/activity.js';
@@ -47,6 +48,7 @@ app.use((req, res, next) => {
 
 // API路由
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/matches', matchRoutes);
 app.use('/api/activities', activityRoutes);

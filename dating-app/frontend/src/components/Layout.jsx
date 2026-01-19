@@ -11,6 +11,7 @@ const Layout = () => {
     { path: '/', label: '首页', icon: '🏠' },
     { path: '/ai-companion', label: 'AI伴侣', icon: '🤖' },
     { path: '/matches', label: '匹配', icon: '💕' },
+    { path: '/discover', label: '发现', icon: '🔍' },
     { path: '/activities', label: '活动', icon: '🎯' },
     { path: '/games', label: '游戏', icon: '🎮' },
     { path: '/profile', label: '我的', icon: '👤' }
