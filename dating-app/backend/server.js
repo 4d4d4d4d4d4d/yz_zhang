@@ -13,6 +13,7 @@ import matchRoutes from './src/routes/match.js';
 import activityRoutes from './src/routes/activity.js';
 import gameRoutes from './src/routes/game.js';
 import notificationRoutes from './src/routes/notification.js';
+import safetyRoutes from './src/routes/safety.js';
 
 // 导入模型
 import Conversation from './src/models/Conversation.js';
@@ -54,6 +55,7 @@ app.use('/api/matches', matchRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/safety', safetyRoutes);
 
 // 健康检查
 app.get('/api/health', (req, res) => {

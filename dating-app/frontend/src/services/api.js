@@ -117,4 +117,15 @@ export const userAPI = {
   getPopularUsers: (limit) => api.get('/users/popular', { params: { limit } })
 };
 
+// ============ 安全API ============
+export const safetyAPI = {
+  blockUser: (userId, data) => api.post(`/safety/block/${userId}`, data),
+  unblockUser: (userId) => api.delete(`/safety/block/${userId}`),
+  getBlockedUsers: (params) => api.get('/safety/blocked', { params }),
+  checkBlocked: (userId) => api.get(`/safety/blocked/${userId}`),
+  reportUser: (userId, data) => api.post(`/safety/report/${userId}`, data),
+  getMyReports: (params) => api.get('/safety/reports', { params }),
+  cancelReport: (reportId) => api.delete(`/safety/reports/${reportId}`)
+};
+
 export default api;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { userAPI, matchAPI, aiAPI } from '../services/api';
+import { motion, AnimatePresence } from 'framer-motion';
+import { userAPI, matchAPI, aiAPI, safetyAPI } from '../services/api';
 import {
   ArrowLeftIcon,
   HeartIcon,
@@ -11,7 +11,11 @@ import {
   BriefcaseIcon,
   AcademicCapIcon,
   SparklesIcon,
-  LightBulbIcon
+  LightBulbIcon,
+  EllipsisVerticalIcon,
+  NoSymbolIcon,
+  FlagIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartSolidIcon } from '@heroicons/react/24/solid';
 
@@ -23,6 +27,13 @@ const UserProfile = () => {
   const [matching, setMatching] = useState(false);
   const [iceBreakers, setIceBreakers] = useState([]);
   const [showIceBreakers, setShowIceBreakers] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [blockReason, setBlockReason] = useState('inappropriate');
+  const [blockNotes, setBlockNotes] = useState('');
+  const [reportReason, setReportReason] = useState('inappropriate_content');
+  const [reportDescription, setReportDescription] = useState('');
 
   useEffect(() => {
     loadUserProfile();
@@ -68,6 +79,43 @@ const UserProfile = () => {
     navigate(`/chat/${userId}`);
   };
 
+  const handleBlock = async () => {
+    try {
+      await safetyAPI.blockUser(userId, {
+        reason: blockReason,
+        notes: blockNotes
+      });
+      alert('已屏蔽该用户');
+      setShowBlockModal(false);
+      navigate('/discover');
+    } catch (error) {
+      console.error('Block user error:', error);
+      alert(error.response?.data?.error || '屏蔽失败，请重试');
+    }
+  };
+
+  const handleReport = async () => {
+    if (!reportDescription.trim()) {
+      alert('请填写举报描述');
+      return;
+    }
+
+    try {
+      await safetyAPI.reportUser(userId, {
+        type: 'user',
+        reason: reportReason,
+        description: reportDescription
+      });
+      alert('举报已提交，感谢您的反馈');
+      setShowReportModal(false);
+      setReportDescription('');
+      setReportReason('inappropriate_content');
+    } catch (error) {
+      console.error('Report user error:', error);
+      alert(error.response?.data?.error || '举报失败，请重试');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
@@ -109,7 +157,7 @@ const UserProfile = () => {
             <ArrowLeftIcon className="w-5 h-5" />
             返回
           </button>
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center">
             <button
               onClick={handleChat}
               className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all flex items-center gap-2"
@@ -134,6 +182,45 @@ const UserProfile = () => {
                 </>
               )}
             </button>
+
+            {/* More Menu */}
+            <div className="relative">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="p-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"
+              >
+                <EllipsisVerticalIcon className="w-5 h-5" />
+              </button>
+
+              {showMenu && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-lg shadow-xl border border-white/10 overflow-hidden z-20"
+                >
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      setShowBlockModal(true);
+                    }}
+                    className="w-full px-4 py-3 text-left text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"
+                  >
+                    <NoSymbolIcon className="w-5 h-5" />
+                    屏蔽用户
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      setShowReportModal(true);
+                    }}
+                    className="w-full px-4 py-3 text-left text-red-400 hover:bg-white/10 transition-colors flex items-center gap-2"
+                  >
+                    <FlagIcon className="w-5 h-5" />
+                    举报用户
+                  </button>
+                </motion.div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -345,6 +432,176 @@ const UserProfile = () => {
           </motion.div>
         )}
       </div>
+
+      {/* Block Modal */}
+      <AnimatePresence>
+        {showBlockModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setShowBlockModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="mystery-card p-6 max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <NoSymbolIcon className="w-6 h-6 text-red-400" />
+                  屏蔽用户
+                </h2>
+                <button
+                  onClick={() => setShowBlockModal(false)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <XMarkIcon className="w-6 h-6" />
+                </button>
+              </div>
+
+              <p className="text-gray-300 mb-4">
+                屏蔽后，您将无法看到该用户的信息，该用户也无法与您互动。
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-gray-300 text-sm mb-2 block">屏蔽原因</label>
+                  <select
+                    value={blockReason}
+                    onChange={(e) => setBlockReason(e.target.value)}
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="harassment">骚扰</option>
+                    <option value="inappropriate">不当行为</option>
+                    <option value="spam">垃圾信息</option>
+                    <option value="fake">虚假账号</option>
+                    <option value="other">其他</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-gray-300 text-sm mb-2 block">
+                    备注（可选）
+                  </label>
+                  <textarea
+                    value={blockNotes}
+                    onChange={(e) => setBlockNotes(e.target.value)}
+                    placeholder="添加备注..."
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowBlockModal(false)}
+                  className="flex-1 px-4 py-3 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleBlock}
+                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all"
+                >
+                  确认屏蔽
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Report Modal */}
+      <AnimatePresence>
+        {showReportModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setShowReportModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="mystery-card p-6 max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <FlagIcon className="w-6 h-6 text-red-400" />
+                  举报用户
+                </h2>
+                <button
+                  onClick={() => setShowReportModal(false)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <XMarkIcon className="w-6 h-6" />
+                </button>
+              </div>
+
+              <p className="text-gray-300 mb-4">
+                感谢您帮助我们维护社区安全。我们会认真审核您的举报。
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-gray-300 text-sm mb-2 block">举报原因</label>
+                  <select
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="harassment">骚扰</option>
+                    <option value="inappropriate_content">不当内容</option>
+                    <option value="spam">垃圾信息</option>
+                    <option value="fake_profile">虚假资料</option>
+                    <option value="scam">诈骗</option>
+                    <option value="underage">未成年</option>
+                    <option value="violence">暴力内容</option>
+                    <option value="hate_speech">仇恨言论</option>
+                    <option value="other">其他</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-gray-300 text-sm mb-2 block">
+                    详细描述 <span className="text-red-400">*</span>
+                  </label>
+                  <textarea
+                    value={reportDescription}
+                    onChange={(e) => setReportDescription(e.target.value)}
+                    placeholder="请详细描述问题..."
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                    rows={4}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowReportModal(false)}
+                  className="flex-1 px-4 py-3 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleReport}
+                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all"
+                >
+                  提交举报
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
