@@ -77,27 +77,30 @@ const Home = () => {
       </motion.div>
 
       {/* 快速操作 */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
         {[
+          { icon: '✨', label: '瞬间', desc: '分享生活', link: '/moments', color: 'from-yellow-500 to-orange-500' },
           { icon: '🤖', label: 'AI伴侣', desc: '情感陪伴', link: '/ai-companion', color: 'from-purple-500 to-pink-500' },
+          { icon: '🎤', label: '派对房', desc: '语音连麦', link: '/party-rooms', color: 'from-indigo-500 to-purple-500' },
+          { icon: '🎮', label: '互动游戏', desc: '趣味社交', link: '/interactive-games', color: 'from-green-500 to-teal-500' },
           { icon: '💕', label: '寻找匹配', desc: '神秘邂逅', link: '/matches', color: 'from-pink-500 to-red-500' },
+          { icon: '🔍', label: '发现', desc: '探索用户', link: '/discover', color: 'from-cyan-500 to-blue-500' },
           { icon: '🎯', label: '活动广场', desc: '线下聚会', link: '/activities', color: 'from-blue-500 to-cyan-500' },
-          { icon: '🎮', label: '互动游戏', desc: '趣味互动', link: '/games', color: 'from-orange-500 to-yellow-500' },
-          { icon: '👤', label: '个人资料', desc: '完善信息', link: '/profile', color: 'from-green-500 to-teal-500' }
+          { icon: '👤', label: '个人资料', desc: '完善信息', link: '/profile', color: 'from-gray-500 to-slate-500' }
         ].map((item, index) => (
           <motion.div
             key={item.label}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: index * 0.1 }}
+            transition={{ delay: index * 0.05 }}
             whileHover={{ scale: 1.05 }}
           >
             <Link to={item.link} className="block mystery-card hover-lift text-center">
-              <div className={`w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center text-3xl`}>
+              <div className={`w-14 h-14 mx-auto mb-2 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center text-2xl`}>
                 {item.icon}
               </div>
-              <h3 className="font-semibold mb-1">{item.label}</h3>
-              <p className="text-sm text-white/60">{item.desc}</p>
+              <h3 className="font-semibold text-sm mb-1">{item.label}</h3>
+              <p className="text-xs text-white/60">{item.desc}</p>
             </Link>
           </motion.div>
         ))}
