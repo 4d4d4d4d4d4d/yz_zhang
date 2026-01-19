@@ -17,6 +17,9 @@ import Discover from './pages/Discover';
 import UserProfile from './pages/UserProfile';
 import Settings from './pages/Settings';
 import MatchDetail from './pages/MatchDetail';
+import Moments from './pages/Moments';
+import InteractiveGames from './pages/InteractiveGames';
+import PartyRooms from './pages/PartyRooms';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -69,6 +72,9 @@ function App() {
             <Route path="games" element={<Games />} />
             <Route path="discover" element={<Discover />} />
             <Route path="users/:userId" element={<UserProfile />} />
+            <Route path="moments" element={<Moments />} />
+            <Route path="interactive-games" element={<InteractiveGames />} />
+            <Route path="party-rooms" element={<PartyRooms />} />
             <Route path="profile" element={<Profile />} />
             <Route path="settings" element={<Settings />} />
           </Route>

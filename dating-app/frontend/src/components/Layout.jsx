@@ -9,11 +9,11 @@ const Layout = () => {
 
   const navItems = [
     { path: '/', label: '首页', icon: '🏠' },
-    { path: '/ai-companion', label: 'AI伴侣', icon: '🤖' },
+    { path: '/moments', label: '瞬间', icon: '✨' },
+    { path: '/party-rooms', label: '派对', icon: '🎤' },
+    { path: '/interactive-games', label: '互动', icon: '🎮' },
     { path: '/matches', label: '匹配', icon: '💕' },
     { path: '/discover', label: '发现', icon: '🔍' },
-    { path: '/activities', label: '活动', icon: '🎯' },
-    { path: '/games', label: '游戏', icon: '🎮' },
     { path: '/profile', label: '我的', icon: '👤' }
   ];
 
