@@ -19,7 +19,9 @@ import Settings from './pages/Settings';
 import MatchDetail from './pages/MatchDetail';
 import Moments from './pages/Moments';
 import InteractiveGames from './pages/InteractiveGames';
+import InteractiveGameRoom from './pages/InteractiveGameRoom';
 import PartyRooms from './pages/PartyRooms';
+import PartyRoomDetail from './pages/PartyRoomDetail';
 import CreateGameRoom from './pages/CreateGameRoom';
 import CreatePartyRoom from './pages/CreatePartyRoom';
 import Layout from './components/Layout';
@@ -77,8 +79,10 @@ function App() {
             <Route path="moments" element={<Moments />} />
             <Route path="interactive-games" element={<InteractiveGames />} />
             <Route path="interactive-games/create" element={<CreateGameRoom />} />
+            <Route path="interactive-games/:gameId" element={<InteractiveGameRoom />} />
             <Route path="party-rooms" element={<PartyRooms />} />
             <Route path="party-rooms/create" element={<CreatePartyRoom />} />
+            <Route path="party-rooms/:roomId" element={<PartyRoomDetail />} />
             <Route path="profile" element={<Profile />} />
             <Route path="settings" element={<Settings />} />
           </Route>
