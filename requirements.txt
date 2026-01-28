@@ -1,15 +1,61 @@
-# File Organizer - Requirements
+# Multi-Agent System & File Organizer - Requirements
 #
-# This project uses only Python standard library modules.
-# No external dependencies are required.
+# Minimum Python version: 3.8
 #
-# Minimum Python version: 3.6
+# =============================================================================
+# Core Dependencies (Multi-Agent System)
+# =============================================================================
+
+# Standard library modules used (no install needed):
+# - abc, dataclasses, enum, typing (type system)
+# - uuid, hashlib (identifiers)
+# - threading, queue (concurrency)
+# - logging, time, datetime (utilities)
+# - json, collections (data structures)
+# - pathlib, os, shutil (file operations)
+
+# =============================================================================
+# Optional Dependencies (for LLM Integration)
+# =============================================================================
+
+# HTTP client for API calls (optional, for LLM integration)
+httpx>=0.24.0
+
+# =============================================================================
+# Development Dependencies
+# =============================================================================
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# Code quality
+flake8>=6.0.0
+mypy>=1.0.0
+black>=23.0.0
+
+# =============================================================================
+# Provider-Specific (install as needed)
+# =============================================================================
+
+# For OpenAI integration:
+# openai>=1.0.0
+
+# For Anthropic integration:
+# anthropic>=0.8.0
+
+# =============================================================================
+# Notes
+# =============================================================================
 #
-# Standard library modules used:
-# - os
-# - shutil
-# - argparse
-# - pathlib
-# - datetime
-# - collections
-# - json
+# The core multi-agent system works with standard library only.
+# LLM integration requires httpx for API calls.
+#
+# Quick start (core only):
+#   pip install -e .
+#
+# With LLM support:
+#   pip install -e ".[llm]"
+#
+# Development:
+#   pip install -e ".[dev]"
