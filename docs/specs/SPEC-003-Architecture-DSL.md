@@ -1,9 +1,17 @@
 # SPEC-003：架构描述 DSL 规范
 
-文档状态：Draft v0.1
+文档状态：Draft v0.2
 作者：架构组
 目的：定义平台架构描述的声明式 DSL
 依赖：SPEC-001 IModule 接口规范、SPEC-002 反压协议规范
+
+v0.2 变更：
+- §3.4 收紧 `mapping_hints` 语义为"消歧"，禁止赋予额外能力（D2）
+- §4 收紧 `mapping_hints` JSON Schema 为窄结构（D2）
+- §5 Elaborator 增加 `remove_modules` 自动剔除悬空连线（warn）（D3）
+- §5 增加 Phase 3.5 配置一致性检查（warn，R6#9）
+- §6 增加列表类 config 的 `__append__` / `__remove__` 语法（R6#4）
+- §6 补充自动 prune 在 override 表中的语义
 
 ## 1. 目的与范围
 
@@ -353,13 +361,41 @@ overrides:
   add_connections:
     - { from: vau.out_lut_exp, to: dsb.in_write, fifo_depth: 8, latency_cycles: 1 }
 
-  # mapping_hints 在 mapper 规则中读取
+  # mapping_hints 仅在多个候选模块都 can_execute 时用于消歧
   mapping_hints:
     softmax:
-      exp_stage_module: vau
+      exp_stage_module: vau           # vau 和 avp 都声明了 exp capability 时，选 vau
       reduce_stage_module: vau
       div_stage_modules: [avp, vau]   # rsqrt on avp, mul on vau
 ```
+
+**`mapping_hints` 语义约束（重要，v0.2 新增）**：
+
+`mapping_hints` 与 SPEC-001 "模块自描述、不依赖外部知识"原则有张力。为防止 variant 通过 hints 隐式赋予模块本不具备的能力，规定以下硬约束：
+
+| 约束 | 说明 | 违反后果 |
+|---|---|---|
+| **仅用于消歧** | 仅在多个候选模块同时 `can_execute(op) == true` 时生效 | Elaborator 拒绝 |
+| **不赋能** | hints 不能让 `can_execute(op) == false` 的模块被路由 | Elaborator 拒绝 |
+| **窄 schema** | 仅允许 `{op_type: {stage_name: module_id \| [module_id, ...]}}` 结构 | Schema 校验失败 |
+| **引用必须有效** | hints 中提到的所有 module_id 必须在 modules 列表中存在 | Elaborator 拒绝 |
+
+Elaborator 在 Phase 3 语义校验时：
+
+```python
+def _validate_mapping_hints(self, hints: dict, modules: dict[str, IModule]):
+    for op_type, stages in hints.items():
+        for stage_name, target in stages.items():
+            target_ids = target if isinstance(target, list) else [target]
+            for mid in target_ids:
+                if mid not in modules:
+                    raise OverrideError(f"mapping_hint references unknown module: {mid}")
+                # 注：can_execute 校验留到 Mapper 实际路由时，因为需要具体 op 实例
+```
+
+Mapper 在路由 op 时，若 hint 指向的所有模块都 `can_execute(op) == false`，必须 raise `InvalidMappingHintError`，不允许 silently fallback。
+
+如果架构师确实希望"赋予 module 新能力"，正确做法是通过 `overrides.modules.<id>.config.<flag>: true` 启用 capability flag（如 `vau.config.lut_exp: true`），而不是用 mapping_hints。
 
 ### 3.5 Variant 示例：MAC 劈裂
 
@@ -539,7 +575,19 @@ definitions:
         type: array
         items: { $ref: "#/definitions/Connection" }
       mapping_hints:
-        type: object  # 自由格式，由 Mapper 解释
+        type: object
+        # v0.2 收紧：窄 schema，仅 op_type → stage_name → module_id | [module_id]
+        additionalProperties:
+          type: object
+          additionalProperties:
+            oneOf:
+              - type: string
+                pattern: "^[a-z][a-z0-9_]*$"
+              - type: array
+                items:
+                  type: string
+                  pattern: "^[a-z][a-z0-9_]*$"
+                minItems: 1
 
   Topology:
     type: object
@@ -617,6 +665,17 @@ class ArchitectureElaborator:
         # - 连接的端口都存在且方向匹配
         # - capability 依赖自洽
         # - topology 中所有 module 都已定义
+        # - mapping_hints 引用合法（v0.2，见 §3.4）
+
+        # ============== Phase 3.5: 配置一致性 warning（v0.2）==============
+        # 跨模块配置不匹配，仅 warn 不 error
+        self._check_config_consistency(merged)
+        # 典型规则：
+        # - mac.cols 与 dsb.read_port_width_bits 对齐
+        # - dagc.bfp_ratio 与 mac.precision_modes 包含 MIXED_BFP8_BFP16 一致
+        # - cdc 连接 async_fifo_depth >= burst 推算值（见 SPEC-002 §5.1.4）
+        # 规则可扩展，每条规则形如：
+        #   ConsistencyRule(predicate, message, severity=WARN)
 
         # ============== Phase 4: 实例化时钟 ==============
         clocks = {
@@ -695,10 +754,31 @@ class ArchitectureElaborator:
 
         # 处理 add/remove modules
         if "remove_modules" in overrides:
+            removed_ids = set(overrides["remove_modules"])
             result["modules"] = [
                 m for m in result["modules"]
-                if m["id"] not in overrides["remove_modules"]
+                if m["id"] not in removed_ids
             ]
+
+            # v0.2：自动 prune 引用已删模块的连线（产生 warning）
+            dangling = []
+            kept = []
+            for c in result["connections"]:
+                src_mod = c["from"].split(".")[0]
+                dst_mod = c["to"].split(".")[0]
+                if src_mod in removed_ids or dst_mod in removed_ids:
+                    dangling.append(c)
+                else:
+                    kept.append(c)
+            if dangling:
+                self._warn(
+                    f"removed modules {sorted(removed_ids)} had {len(dangling)} "
+                    f"dangling connections, auto-pruned: "
+                    f"{[(c['from'], c['to']) for c in dangling]}. "
+                    f"If intentional, add them to remove_connections explicitly."
+                )
+                result["connections"] = kept
+
         if "add_modules" in overrides:
             result["modules"].extend(overrides["add_modules"])
 
@@ -710,6 +790,17 @@ class ArchitectureElaborator:
                     if not (c["from"] == to_remove["from"] and c["to"] == to_remove["to"])
                 ]
         if "add_connections" in overrides:
+            # v0.2：add_connections 引用 remove_modules 中的模块视为手误 → error
+            existing_ids = {m["id"] for m in result["modules"]}
+            for c in overrides["add_connections"]:
+                src_mod = c["from"].split(".")[0]
+                dst_mod = c["to"].split(".")[0]
+                missing = [m for m in (src_mod, dst_mod) if m not in existing_ids]
+                if missing:
+                    raise OverrideError(
+                        f"add_connections references non-existent module(s): {missing}. "
+                        f"connection: {c['from']} → {c['to']}"
+                    )
             result["connections"].extend(overrides["add_connections"])
 
         # mapping_hints 透传
@@ -723,19 +814,84 @@ class ArchitectureElaborator:
 
 | Override 操作 | 语义 | 示例 |
 |---|---|---|
-| `modules.<id>.config.<key>` | shallow merge：覆盖该 key，保留其他 | 改一个参数 |
+| `modules.<id>.config.<scalar>` | 替换标量值 | 改 throughput |
+| `modules.<id>.config.<dict>` | shallow merge：merge 第一层，深层替换 | 改 nested 配置 |
+| `modules.<id>.config.<list>` | **默认整体替换**（v0.2 明确） | 替换 precision_modes |
+| `modules.<id>.config.<list>.__append__: [...]` | 在原列表追加（v0.2 新增） | 加一个 FP8 精度 |
+| `modules.<id>.config.<list>.__remove__: [...]` | 从原列表按值删除（v0.2 新增） | 去掉 FP16 精度 |
 | `modules.<id>.clock` | 替换 clock 引用 | 改时钟域 |
 | `add_modules` | 追加新模块 | 加 SAU |
-| `remove_modules` | 按 id 删除模块 | 删 TAU |
-| `add_connections` | 追加新连接 | 新模块的连线 |
+| `remove_modules` | 按 id 删除模块；**自动 prune 悬空连线**（v0.2，warn） | 删 TAU |
+| `add_connections` | 追加新连接；**引用不存在模块时报错**（v0.2） | 新模块的连线 |
 | `remove_connections` | 按 from+to 删除连接 | 删除旧连接 |
-| `mapping_hints` | 替换 hints 块 | Mapper 行为提示 |
+| `mapping_hints` | 替换 hints 块；**窄 schema、仅消歧**（v0.2，见 §3.4） | Mapper 行为提示 |
 
-重要约束：
+### 6.1 列表 override 示例（v0.2）
+
+默认替换：
+```yaml
+overrides:
+  modules:
+    mac:
+      config:
+        precision_modes: [INT8, FP16, FP8]   # 整体替换 baseline 列表
+```
+
+追加：
+```yaml
+overrides:
+  modules:
+    mac:
+      config:
+        precision_modes:
+          __append__: [FP8]                  # baseline + [FP8]
+```
+
+删除：
+```yaml
+overrides:
+  modules:
+    mac:
+      config:
+        precision_modes:
+          __remove__: [FP16]                 # baseline - [FP16]
+```
+
+组合（先删后加）：
+```yaml
+overrides:
+  modules:
+    mac:
+      config:
+        precision_modes:
+          __remove__: [FP16]
+          __append__: [FP8]
+```
+
+执行顺序：`__remove__` 先于 `__append__`。如果同一项同时在两边出现，最终结果是被 append（净增）。
+
+### 6.2 重要约束
 
 - override 中不能修改连接的属性（要修改先 remove 再 add）
 - override 中不能修改模块 type（type 变化等于换模块，应 remove + add）
-- override 不递归继承（base 不能再 base 别人，避免链式继承复杂度）
+- **override 不递归继承**：variant 的 `base` 必须指向 baseline 文件（不能指向另一 variant）。Elaborator Phase 1 检测 `base` 文件本身含 `base` 字段时直接 error（v0.2 强约束，对应 R6#7 / ADR-001.2 修订）
+
+### 6.3 base 链式继承禁令的实现
+
+```python
+def _load_yaml(self, path: str) -> dict:
+    raw = yaml.safe_load(open(path))
+    if "base" in raw:
+        base_raw = yaml.safe_load(open(raw["base"]))
+        if "base" in base_raw:
+            raise OverrideError(
+                f"Chain inheritance not allowed: {path} → {raw['base']} → "
+                f"{base_raw['base']}. Promote intermediate variant to a new "
+                f"baseline first, or flatten into a single override layer."
+            )
+        return self._apply_overrides(base_raw, raw.get("overrides", {}))
+    return raw
+```
 
 ## 7. 测试规范
 

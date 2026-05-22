@@ -1,6 +1,6 @@
 # NPU 仿真平台核心 Spec 文档集
 
-文档状态：Draft v0.1
+文档状态：Draft v0.2
 最后更新：2026-05-22
 Owners：架构组
 
@@ -8,11 +8,12 @@ Owners：架构组
 
 | 文档 | 范围 | 状态 |
 |---|---|---|
-| [SPEC-001 IModule 接口规范](./SPEC-001-IModule.md) | 所有 NPU 宏模块必须实现的统一抽象接口 | Draft v0.1 |
-| [SPEC-002 反压协议规范](./SPEC-002-Backpressure.md) | 模块间数据传输的反压协议、stall 上报、反压链追溯 | Draft v0.1 |
-| [SPEC-003 架构描述 DSL 规范](./SPEC-003-Architecture-DSL.md) | 平台架构描述的声明式 YAML DSL | Draft v0.1 |
-| [ADR-001 关键技术决策记录](./ADR-001-Key-Decisions.md) | 6 条核心决策（仿真内核 / DSL / Mapper / 反压 / 归因 / 版本锁定） | Accepted |
-| [整体 Review v0.1](./review-v0.1.md) | 交叉一致性审查 + 10 条 R6 修订建议 + R7 行动计划 | Draft v0.1 |
+| [SPEC-001 IModule 接口规范](./SPEC-001-IModule.md) | 所有 NPU 宏模块必须实现的统一抽象接口 | Draft v0.2 |
+| [SPEC-002 反压协议规范](./SPEC-002-Backpressure.md) | 模块间数据传输的反压协议、stall 上报、反压链追溯 | Draft v0.2 |
+| [SPEC-003 架构描述 DSL 规范](./SPEC-003-Architecture-DSL.md) | 平台架构描述的声明式 YAML DSL | Draft v0.2 |
+| [ADR-001 关键技术决策记录](./ADR-001-Key-Decisions.md) | 6 条核心决策 | Accepted (v0.2 微调) |
+| [ADR-002 模块身份判定标准](./ADR-002-Module-Identity.md) | 新 IModule 子类 vs. capability flag 化的判定规则 | Accepted |
+| [整体 Review v0.1](./review-v0.1.md) | v0.1 交叉一致性审查 + 10 条 R6 修订建议 | 历史 |
 
 ## 依赖关系
 
@@ -23,39 +24,49 @@ SPEC-001 (IModule)
    │
    ├── SPEC-003 (Architecture DSL) → 依赖 IModule.module_type / config_schema / port_specs
    │
-   └── ADR-001 (Key Decisions) → 解释为什么这样设计
+   ├── ADR-001 (Key Decisions) → 解释为什么这样设计
+   │
+   └── ADR-002 (Module Identity) → 决定何时新写 IModule 子类
 ```
+
+## v0.2 变更摘要
+
+### Review R6 修订（已完成）
+
+| # | 严重度 | 位置 | 状态 |
+|---|---|---|---|
+| 1 | 高 | SPEC-001 §3.1 / 3.1.1 | ✅ 加 `module_type()` 命名规范 + 正则约束 |
+| 2 | 高 | SPEC-002 §3.4 | ✅ 加多生产者反压归因（含 trace_multi_producer_contention API） |
+| 3 | 高 | SPEC-002 §5.1 | ✅ 加 Cross-Domain Transport（CdcConnectionSpec、跨域延迟、跨域 stall 归因、Elaborator 校验） |
+| 4 | 高 | SPEC-003 §6 | ✅ 列表 override `__append__` / `__remove__` 语义 |
+| 5 | 中 | SPEC-002 §3.3.1 | ✅ Tracer Realtime vs Offline 双模式 |
+| 6 | 中 | SPEC-002 §7 | ✅ 7 条必查不变量 + 3 条 warn 不变量 + InvariantReport API |
+| 7 | 中 | ADR-001.2 Constraints | ✅ 禁止 variant 链式继承 + variant 生命周期标记 |
+| 8 | 中 | SPEC-001 §3.3 | ✅ IClock 接口定义（时间查询 / 推进 / 跨域协作） |
+| 9 | 低 | SPEC-003 §5 Phase 3.5 | ✅ Elaborator 配置一致性 warning |
+| 10 | 低 | 新文档 | ⏳ SPEC-004 Functional Simulation（推迟到 Phase 2） |
+
+### 开放问题决议（已落地）
+
+| ID | 决议 | 落地位置 |
+|---|---|---|
+| D1 | 新 type vs flag 化判定标准 | 新文档 ADR-002 |
+| D2 | `mapping_hints` 仅消歧、不赋能、窄 schema | SPEC-003 §3.4 + §4 |
+| D3 | `remove_modules` 自动 prune 悬空连线（warn）；`add_connections` 引用无效模块时 error | SPEC-003 §5 + §6 |
 
 ## 后续计划
 
-### 待修订（v0.2 目标，来自 Review R6）
+### v0.3 候选项
 
-- [ ] R6#1（高）：SPEC-001 §3.1 增加 `module_type()` 命名规范
-- [ ] R6#2（高）：SPEC-002 §3.3 增加"多生产者反压归因"小节
-- [ ] R6#3（高）：SPEC-002 增加 Cross-Domain Transport (CDC) 小节
-- [ ] R6#4（高）：SPEC-003 §6 列表 override 语义 + `__append__`/`__remove__`
-- [ ] R6#5（中）：SPEC-002 §3.3 明确 BackpressureTracer 实时 vs 离线模式
-- [ ] R6#6（中）：SPEC-002 增加 simulation invariant check
-- [ ] R6#7（中）：ADR-001.2 补充禁止 variant 链式继承
-- [ ] R6#8（中）：SPEC-001 补充 IClock 接口细节
-- [ ] R6#9（低）：SPEC-003 §5 Elaborator 增加配置一致性 warning
-- [ ] R6#10（低）：新文档 SPEC-004 Functional Simulation Interface（Phase 2）
+- [ ] SPEC-004 Functional Simulation Interface（数值精度评估管线）
+- [ ] MAC 劈裂场景按 ADR-002 重新评估（v0.1 用 flag 写的 split_mode 可能要升级为新 type）
+- [ ] 模块 spec 文档模板的"功能定位"章节增加 ADR-002 触发条件标注
 
-### 待解决的开放问题（Review 未直接回应）
+### 实现路径
 
-1. **MTU_Fused 何时新写 IModule 子类 vs. 只在 DSL 层做参数化**
-   - SPEC-003 §3.6 用了 `type: MTU_Fused`，意味着新写一个 IModule 子类
-   - 但理论上也可在 MTU 上加 capability flag `dma_integrated` 实现
-   - 需要明确"新 type" 的判定标准（端口拓扑变 / capability 集合根本变 / 内部状态机变）
+按 SPEC-001 § R7 的节奏：
 
-2. **`mapping_hints` 自由格式与"无外部知识"原则的张力**
-   - SPEC-001 设计原则：模块自描述，不依赖外部知识
-   - SPEC-003 `mapping_hints` 是 Mapper 与架构 variant 的契约层，schema 是 free-form
-   - 风险：variant 通过 hints 隐式注入 mapping 知识，模块行为不再完全自描述
-   - 需要明确 hints 的边界：只允许指定"使用哪个模块"还是可以指定"使用哪个 capability"
-
-3. **override 引用已 `remove_modules` 模块端口的处理**
-   - SPEC-003 §5 Elaborator Phase 3 语义校验是否覆盖此场景
-   - 建议：在 `_apply_overrides` 后立即扫描 connections，剔除引用已删模块的连线 + 报 warning，而不是延迟到 Phase 3 才报 PortNotFoundError
-
-这三点建议在 v0.2 修订前先讨论清楚，避免修订完又要返工。
+1. Phase 0 detailed design（SystemC kernel + pybind11 binding）
+2. Phase 1 实现骨架（ModuleRegistry + dummy module + send/stall 链路）
+3. Phase 1 起 3 个模块 spec：DAGC / DSB / MAC（包含校准记录）
+4. 第一个 Use Case spec：AGU-W 带宽减半评估

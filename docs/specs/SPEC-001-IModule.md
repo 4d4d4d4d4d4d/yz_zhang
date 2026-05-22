@@ -1,9 +1,15 @@
 # SPEC-001：IModule 接口规范
 
-文档状态：Draft v0.1
+文档状态：Draft v0.2
 作者：架构组
 目的：定义所有 NPU 宏模块必须实现的统一抽象接口
-依赖：ADR-000 平台架构总览
+依赖：ADR-000 平台架构总览、ADR-002 模块身份判定标准
+
+v0.2 变更:
+- §3.1 `module_type()` 增加命名规范说明
+- 新增 §3.1.1 Module Type 命名规范
+- §3.2 新增 `IClock` 接口定义
+- 参见 ADR-002 关于"新 IModule 子类 vs. capability flag 化"的判定标准
 
 ## 1. 目的与范围
 
@@ -87,7 +93,14 @@ class IModule(ABC):
     def module_type(cls) -> str:
         """模块类型的唯一名称，如 "DAGC"、"MatVecArray"。
         用于 ModuleRegistry 注册和架构描述文件引用。
-        约定：PascalCase，全平台唯一。"""
+
+        命名规范（详见 §3.1.1）：
+        - PascalCase，首字母大写
+        - 不以数字开头，不含特殊字符（仅 [A-Za-z0-9]）
+        - 长度 ≤ 24 字符
+        - 全平台唯一
+        - 必须与 docs/module_specs/<snake_case>.md 文件对应
+        """
         ...
 
     @classmethod
@@ -237,6 +250,25 @@ class IModule(ABC):
         )
 ```
 
+### 3.1.1 Module Type 命名规范
+
+`module_type()` 返回值是模块在 ModuleRegistry、架构 DSL、报告输出中的统一标识符。规则如下：
+
+| 规则 | 说明 | 示例 |
+|---|---|---|
+| PascalCase | 首字母大写，单词边界大写 | `DAGC`, `MatVecArray` |
+| 不以数字开头 | 不允许 `2DArray` 之类 | ❌ `4BitReorder` → ✅ `FourBitReorder` |
+| 仅字母数字 | 不含下划线 / 连字符 / 空格 | ❌ `MAC_Array` → ✅ `MacArray` |
+| 长度 ≤ 24 字符 | 报告表格 / 可视化友好 | `MtuFused` (8 字符，OK) |
+| 全平台唯一 | ModuleRegistry 注册时拒绝重复 | 触发 `DuplicateModuleTypeError` |
+| 对应文档 | 必须有 `docs/module_specs/<snake_case>.md` | `MatVecArray` → `mat_vec_array.md` |
+
+正则约束：`^[A-Z][A-Za-z0-9]{0,23}$`
+
+CI 校验：扫描所有 `IModule` 子类的 `module_type()` 返回值，违反上述规则任一条则 build 失败。
+
+注：现有文档中出现的 `MTU_Fused` 等带下划线写法是 v0.1 残留，应在 v0.2 实现阶段统一改为 `MtuFused`。
+
 ### 3.2 辅助接口
 
 ```python
@@ -275,6 +307,78 @@ class IOperation(ABC):
     @abstractmethod
     def precision(self) -> "Precision": ...
 ```
+
+### 3.3 IClock 接口
+
+`bind_services()` 注入的 `IClock` 是模块感知仿真时间、推进 cycle、跨时钟域协作的唯一通道。模块不允许持有任何其他时间源（不能 `time.time()`，不能直接读 SystemC 全局时间）。
+
+```python
+# interfaces/clock.py
+
+class IClock(ABC):
+    """模块的时间抽象。每个模块在 bind_services() 时绑定一个 clock domain。"""
+
+    # ============== 时间查询（无副作用）==============
+
+    @property
+    @abstractmethod
+    def domain_id(self) -> str:
+        """所属时钟域 id（与 DSL 中 clock_domains.id 对应）。"""
+        ...
+
+    @property
+    @abstractmethod
+    def period_ps(self) -> int:
+        """时钟周期（皮秒）。"""
+        ...
+
+    @abstractmethod
+    def current_time_ps(self) -> int:
+        """当前仿真时间（皮秒，全局时间轴）。无副作用。"""
+        ...
+
+    @abstractmethod
+    def current_cycle(self) -> int:
+        """当前 cycle 计数（本域内）。等同 current_time_ps() // period_ps。"""
+        ...
+
+    # ============== 时间推进（有副作用，挂起当前 SC_THREAD）==============
+
+    @abstractmethod
+    def wait_cycles(self, n: int) -> None:
+        """挂起当前 SC_THREAD n 个 cycle。仿真时间前进。"""
+        ...
+
+    @abstractmethod
+    def wait_until_ps(self, target_time_ps: int) -> None:
+        """挂起到指定时间。target 必须 >= current_time_ps()。"""
+        ...
+
+    @abstractmethod
+    def wait_event(self, event: "IClockEvent") -> None:
+        """挂起直到事件触发（rising_edge / falling_edge / custom）。"""
+        ...
+
+    # ============== 跨域协作 ==============
+
+    @abstractmethod
+    def is_same_domain(self, other: "IClock") -> bool:
+        """两个 clock 是否属于同一域（period_ps 与 domain_id 都相同）。
+        ITransportPort 用此判断是否需要插入 CDC FIFO（见 SPEC-002 §5.1）。"""
+        ...
+
+@dataclass(frozen=True)
+class IClockEvent:
+    """时钟域内的事件对象。具体类型由实现决定。"""
+    name: str         # 如 "rising_edge"
+    domain_id: str
+```
+
+实现要点：
+
+- `wait_cycles` / `wait_until_ps` / `wait_event` 必须在 SC_THREAD 中调用，不能在普通函数中调用
+- `current_time_ps()` / `current_cycle()` 必须无副作用，Mapper 在 `estimate_*` 中可以查询但不能推进
+- 跨时钟域的协作通过 SPEC-002 §5.1 的 CDC 通道完成，模块不应直接调用对方 clock 的 wait 方法
 
 ## 4. 模块注册机制
 

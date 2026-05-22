@@ -1,8 +1,12 @@
 # ADR-001：关键技术决策记录
 
-文档状态：Draft v0.1
+文档状态：Draft v0.2
 作者：架构组
 依赖：SPEC-001 / SPEC-002 / SPEC-003
+
+v0.2 变更：
+- ADR-001.2 Consequences 补充"禁止 variant 链式继承"约束（R6#7）
+- 其他 ADR 内容不变
 
 ---
 
@@ -121,6 +125,18 @@ Accepted
 
 - 通过 override 机制减少重复
 - 必要时提供 YAML 预处理器（如 Jinja2 模板，但只作为生成 YAML 的工具，不嵌入运行时）
+
+### Constraints（v0.2 新增）
+
+- **禁止 variant 链式继承**：variant 文件的 `base` 必须指向 baseline 文件（不含 `base` 字段的完整架构）。不允许 variant 再 base 另一个 variant。
+  - 理由：链式继承让"baseline 改一处所有 variant 都受影响"变得不可推理，与 ADR 选 YAML 的"可 review、可追溯"初衷冲突
+  - 替代路径：variant 趋于稳定后做 **baseline refresh**，把它 promote 为新 baseline，旧 variant 归档
+  - 实现：Elaborator Phase 1 加载 `base` 文件时若再发现 `base` 字段，直接抛 `OverrideError`（详见 SPEC-003 §6.3）
+- **variant 必须有生命周期标记**：DSL `metadata.tags` 必须包含 `experimental` / `staging` / `promoted` / `archived` 之一，CI 检查
+  - `experimental`：探索期，<= 6 周
+  - `staging`：评估通过，等待 promote 为 baseline
+  - `promoted`：已成为或合并入 baseline，文件保留为历史
+  - `archived`：已淘汰，不再 elaborate
 
 ---
 
