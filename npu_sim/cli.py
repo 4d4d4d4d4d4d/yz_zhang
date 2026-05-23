@@ -1,0 +1,188 @@
+"""Command-line interface: elaborate / simulate / compare architectures.
+
+Subcommands:
+
+    list-modules                List registered IModule + INumericalModel types.
+    simulate <dsl>              Elaborate + run; print a SimulationResult report
+                                as Markdown to stdout (or --out file).
+    compare <baseline> <variant>
+                                Run both; print a ComparisonReport.
+
+Designed for the SPEC-003 §7 R7 workflow: researcher edits a YAML, runs
+`python -m npu_sim compare base.yaml variant.yaml`, pastes the output into
+a PR / email.
+
+Exit codes:
+    0   success
+    1   simulation produced an INVALID invariant report
+    2   elaboration / DSL error
+    3   unknown subcommand / argument error
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+from typing import Optional, Sequence, TextIO
+
+import npu_sim.modules  # noqa: F401  side-effect: registers all probe modules
+from npu_sim.core.errors import NpuSimError
+from npu_sim.core.module_registry import ModuleRegistry
+from npu_sim.core.numerical_registry import NumericalModelRegistry
+from npu_sim.evaluation import compare, elaborate_and_run
+from npu_sim.reporting import (
+    render_comparison_report,
+    render_simulation_report,
+)
+
+
+# ============================================================
+# Subcommand handlers
+# ============================================================
+
+
+def _cmd_list_modules(args: argparse.Namespace, out: TextIO) -> int:
+    out.write("Registered IModule types:\n")
+    for name in ModuleRegistry.list_modules():
+        out.write(f"  - {name}\n")
+    out.write("\nRegistered INumericalModel types:\n")
+    seen: dict[str, list[str]] = {}
+    for (module_type, fidelity) in NumericalModelRegistry._registry:
+        seen.setdefault(module_type, []).append(fidelity)
+    if not seen:
+        out.write("  (none)\n")
+    else:
+        for module_type in sorted(seen):
+            fids = sorted(seen[module_type])
+            out.write(f"  - {module_type}: {', '.join(fids)}\n")
+    return 0
+
+
+def _cmd_simulate(args: argparse.Namespace, out: TextIO) -> int:
+    dsl_path = _require_path(args.dsl)
+    try:
+        result = elaborate_and_run(str(dsl_path), max_cycles=args.max_cycles)
+    except NpuSimError as exc:
+        sys.stderr.write(f"elaboration error: {exc}\n")
+        return 2
+
+    md = render_simulation_report(result)
+    _write_output(md, args.out, out)
+    return 0 if result.invariant_report.overall_valid else 1
+
+
+def _cmd_compare(args: argparse.Namespace, out: TextIO) -> int:
+    baseline_path = _require_path(args.baseline)
+    variant_path = _require_path(args.variant)
+    try:
+        baseline = elaborate_and_run(
+            str(baseline_path), max_cycles=args.max_cycles
+        )
+        variant = elaborate_and_run(
+            str(variant_path), max_cycles=args.max_cycles
+        )
+    except NpuSimError as exc:
+        sys.stderr.write(f"elaboration error: {exc}\n")
+        return 2
+
+    report = compare(baseline, variant)
+    md = render_comparison_report(report)
+    _write_output(md, args.out, out)
+    return 0 if report.both_valid else 1
+
+
+# ============================================================
+# Argparse wiring
+# ============================================================
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="python -m npu_sim",
+        description="NPU simulation platform CLI.",
+    )
+    subparsers = parser.add_subparsers(dest="cmd", required=True)
+
+    p_list = subparsers.add_parser(
+        "list-modules",
+        help="List registered IModule and INumericalModel types.",
+    )
+    p_list.set_defaults(handler=_cmd_list_modules)
+
+    p_sim = subparsers.add_parser(
+        "simulate",
+        help="Elaborate + run a single architecture DSL file.",
+    )
+    p_sim.add_argument("dsl", help="Path to the architecture YAML.")
+    p_sim.add_argument(
+        "--max-cycles",
+        type=int,
+        default=10_000,
+        help="Scheduler step cap (default: 10000).",
+    )
+    p_sim.add_argument(
+        "--out",
+        default=None,
+        help="Optional output file; defaults to stdout.",
+    )
+    p_sim.set_defaults(handler=_cmd_simulate)
+
+    p_cmp = subparsers.add_parser(
+        "compare",
+        help="Run baseline + variant DSLs and emit a comparison report.",
+    )
+    p_cmp.add_argument("baseline", help="Path to the baseline architecture YAML.")
+    p_cmp.add_argument("variant", help="Path to the variant architecture YAML.")
+    p_cmp.add_argument(
+        "--max-cycles",
+        type=int,
+        default=10_000,
+        help="Scheduler step cap for each run (default: 10000).",
+    )
+    p_cmp.add_argument(
+        "--out",
+        default=None,
+        help="Optional output file; defaults to stdout.",
+    )
+    p_cmp.set_defaults(handler=_cmd_compare)
+
+    return parser
+
+
+def main(argv: Optional[Sequence[str]] = None, out: Optional[TextIO] = None) -> int:
+    """Programmatic entry point. Returns the exit code instead of calling sys.exit.
+
+    `argv` defaults to sys.argv[1:] when None; `out` defaults to sys.stdout.
+    Useful for in-process testing.
+    """
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    out_stream = out if out is not None else sys.stdout
+    return args.handler(args, out_stream)
+
+
+# ============================================================
+# Helpers
+# ============================================================
+
+
+def _require_path(value: str) -> Path:
+    path = Path(value)
+    if not path.exists():
+        sys.stderr.write(f"file not found: {path}\n")
+        sys.exit(2)
+    return path
+
+
+def _write_output(text: str, out_path: Optional[str], default: TextIO) -> None:
+    if out_path:
+        Path(out_path).write_text(text + "\n", encoding="utf-8")
+    else:
+        default.write(text)
+        if not text.endswith("\n"):
+            default.write("\n")
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised via `python -m npu_sim`
+    sys.exit(main())
