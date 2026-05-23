@@ -247,6 +247,12 @@ class ArchitectureElaborator:
                 clocks["_default"] = SimpleClock("_default", period_ps=1000)
                 clock_ref = "_default"
 
+            # Convention (pending v1.1 spec amendment): if the module exposes
+            # `assign_id`, the Elaborator passes the DSL instance id so the
+            # module can use it as owner_module on its ports and stall records.
+            if hasattr(module, "assign_id"):
+                module.assign_id(inst["id"])
+
             module.bind_services(
                 event_bus=self._event_bus,
                 stat_sink=self._stat_sink,
@@ -302,15 +308,58 @@ class ArchitectureElaborator:
             else:
                 spec = ConnectionSpec(**base_spec_kwargs)
 
+            # Optionally wire real TlmConnection + port attach. Modules that
+            # don't yet expose runtime ports (e.g. Dummy) are skipped — only
+            # the spec is recorded for them.
+            runtime = self._maybe_wire_connection(
+                spec=spec,
+                source_module=modules[src_mod_id],
+                source_port_name=src_port,
+                sink_module=modules[dst_mod_id],
+                sink_port_name=dst_port,
+                source_clock=src_clock or next(iter(self._instance_clocks(clocks))),
+            )
+
             connections.append(
                 ElaboratedConnection(
                     spec=spec,
                     source_module=modules[src_mod_id],
                     sink_module=modules[dst_mod_id],
                     is_cross_domain=is_cross_domain,
+                    runtime=runtime,
                 )
             )
         return connections
+
+    @staticmethod
+    def _instance_clocks(clocks):
+        return clocks.values()
+
+    def _maybe_wire_connection(
+        self,
+        spec,
+        source_module,
+        source_port_name,
+        sink_module,
+        sink_port_name,
+        source_clock,
+    ):
+        """Build a TlmConnection and attach() both ports if they support it."""
+        from npu_sim.runtime.connection import TlmConnection
+        from npu_sim.runtime.ports import TlmInputPort, TlmOutputPort
+
+        out_ports = source_module.output_ports()
+        in_ports = sink_module.input_ports()
+        out_port = out_ports.get(source_port_name)
+        in_port = in_ports.get(sink_port_name)
+
+        if not isinstance(out_port, TlmOutputPort) or not isinstance(in_port, TlmInputPort):
+            return None
+
+        conn = TlmConnection(spec=spec, source_clock=source_clock)
+        out_port.attach(conn, sink_module_id=getattr(sink_module, "_owner_id", sink_module.module_type()))
+        in_port.attach(conn)
+        return conn
 
     # ============================================================
     # Phase 7: topology

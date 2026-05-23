@@ -18,14 +18,16 @@ from npu_sim.interfaces.transport import ConnectionSpec
 class ElaboratedConnection:
     """A concrete connection built by the Elaborator.
 
-    Phase 3 stores the spec and references to the source / sink modules but
-    does not yet wire real ITransportPort objects (Phase 2 scope).
+    Phase 2 (this revision) wires real TlmConnection + port attachment when the
+    source / sink modules expose TlmOutput/TlmInput ports; otherwise only the
+    spec is recorded (for modules that haven't been ported to real ports yet).
     """
 
     spec: ConnectionSpec
     source_module: IModule
     sink_module: IModule
     is_cross_domain: bool = False
+    runtime: object = None  # TlmConnection when wired; None otherwise
 
 
 @dataclass
