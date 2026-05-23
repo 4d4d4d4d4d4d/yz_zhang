@@ -71,8 +71,16 @@ v1.0 已 Accepted,以此为契约启动实现。任何与 spec 不符的实现�
 
 ### v1.1 候选项
 
+源自 v1.0 spec:
 - 随机算子 / stochastic rounding（SPEC-004 §9）
 - 多 die / 多 chip functional sim 精度建模（SPEC-004 §9）
 - MAC 劈裂按 ADR-002 重新判定身份
 - 模块 spec 模板加 ADR-002 触发条件标注栏
 - 实现层批量改名 `MTU_Fused → MtuFused`,同步 DSL 例
+
+源自实现期暴露的 spec 澄清(implementation-phase findings):
+- **SPEC-001 §3.1 增加 `assign_id(instance_id)` 约定** —— 模块需要知道自己的 DSL 实例 id 才能正确填 `record_stall(module=...)` 与 port `owner_module`,目前以非正式约定挂在 Elaborator Phase 5 中 (commit cdeed59)。建议作为 IModule 必选生命周期方法,在 bind_services 之前调用。
+- **SPEC-002 §7 INV-3 收紧定义** —— 字面"survivors > 0 即 deadlock"会把空轮询的 Consumer 误判为死锁。实现中改为"survivors > 0 **且** 任一连接 in_flight > 0",与 §7 原文"BACKPRESSURE 挂起"对齐 (commit 3157746)。建议在 §7 加旁注澄清。
+- **SPEC-002 §7 INV-W3 平均利用率采样方法** —— 当前实现用终态采样近似,完整方案需要 per-cycle 采样基础设施。建议明确两种实现路径与各自精度等级。
+- **SPEC-002 §3.4 multi-producer 归因数据源** —— v1.0 spec 未明确归因数据是来自 stall 事件还是连接级 per-producer 计数。实现选择后者(`TlmConnection.producer_activity()`),并在 §3.4 加约定。
+- **SPEC-002 §3.3 BackpressureTracer 时间窗口** —— v1.0 spec 写 `time_window_ps` 是必需参数,实现期默认 None 表示完整历史更实用。建议 §3.3 显式说明 None 语义。

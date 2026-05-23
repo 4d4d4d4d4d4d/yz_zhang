@@ -35,6 +35,7 @@ from npu_sim.interfaces.services import (
     StallEvent,
     StallReason,
 )
+from npu_sim.runtime.connection import ProducerActivity, TlmConnection
 
 
 # ============================================================
@@ -92,17 +93,6 @@ class StallChain:
             if link.from_module == module_id or link.to_module == module_id:
                 return True
         return False
-
-
-@dataclass
-class ProducerActivity:
-    """Per-producer activity at a contended sink. SPEC-002 §3.4."""
-
-    producer_module: str
-    n_requests: int
-    accepted_count: int
-    rejected_count: int
-    stall_ps_contributed: int
 
 
 @dataclass
@@ -293,17 +283,62 @@ class BackpressureTracer:
     def trace_multi_producer_contention(
         self,
         sink_module: str,
+        connections: Optional[list[TlmConnection]] = None,
         time_window_ps: Optional[tuple[int, int]] = None,
     ) -> list[MultiProducerContention]:
         """SPEC-002 §3.4 — multi-producer contention at a shared sink.
 
-        Phase 4 status: API is stable but returns an empty list until the
-        connection layer records per-producer attempts. Adding that
-        bookkeeping is a small follow-up (TlmConnection.try_enqueue annotated
-        with the calling producer id) and is tracked separately.
+        Algorithm:
+          1. Filter `connections` to those terminating at `sink_module`.
+          2. If fewer than 2 distinct producers feed in, there is no
+             multi-producer contention by definition — return [].
+          3. Aggregate per-producer accept/reject counts across the inbound
+             connections; rejections are how producers see contention at the
+             shared sink.
+
+        Time-window filtering on the per-producer record requires per-attempt
+        time series and is deferred to v1.1 (see docs/specs/README.md).
         """
-        del sink_module, time_window_ps  # noqa: F841 (API signature reserved)
-        return []
+        if not connections:
+            return []
+
+        inbound = [
+            c for c in connections if c.spec().sink_module == sink_module
+        ]
+        # Aggregate per-producer across all inbound connections.
+        agg: dict[str, ProducerActivity] = {}
+        for c in inbound:
+            for a in c.producer_activity():
+                cur = agg.get(a.producer_module)
+                if cur is None:
+                    agg[a.producer_module] = ProducerActivity(
+                        producer_module=a.producer_module,
+                        accepted_count=a.accepted_count,
+                        rejected_count=a.rejected_count,
+                        stall_ps_contributed=a.stall_ps_contributed,
+                    )
+                else:
+                    cur.accepted_count += a.accepted_count
+                    cur.rejected_count += a.rejected_count
+                    cur.stall_ps_contributed += a.stall_ps_contributed
+
+        if len(agg) < 2:
+            return []
+
+        producers = sorted(
+            agg.values(),
+            key=lambda a: (-a.rejected_count, a.producer_module),
+        )
+        total = sum(a.stall_ps_contributed for a in producers)
+        window = time_window_ps or (0, 0)
+
+        return [MultiProducerContention(
+            sink_module=sink_module,
+            time_window_ps=window,
+            producers=producers,
+            bottleneck_resource="<merger_input>",
+            total_contention_ps=total,
+        )]
 
     # --- helpers ---
 

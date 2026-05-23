@@ -7,11 +7,32 @@ folded into latency_cycles at elaboration time when SystemC support lands).
 
 from __future__ import annotations
 
-from collections import deque
+from collections import defaultdict, deque
+from dataclasses import dataclass
 from typing import Optional
 
 from npu_sim.interfaces.clock import IClock
 from npu_sim.interfaces.transport import ConnectionSpec, IConnection, TransportToken
+
+
+@dataclass
+class ProducerActivity:
+    """Per-producer enqueue stats recorded by TlmConnection.
+
+    SPEC-002 §3.4: used by BackpressureTracer to attribute multi-producer
+    contention at a shared sink. `stall_ps_contributed` is the lower bound,
+    approximated as `rejected * source_clock.period_ps` because each rejection
+    consumes exactly one yield in the generator model.
+    """
+
+    producer_module: str
+    accepted_count: int = 0
+    rejected_count: int = 0
+    stall_ps_contributed: int = 0
+
+    @property
+    def n_requests(self) -> int:
+        return self.accepted_count + self.rejected_count
 
 
 class TlmConnection(IConnection):
@@ -32,19 +53,33 @@ class TlmConnection(IConnection):
         self._tokens_dequeued: int = 0
         # Peak in-flight reached during the run, for INV-7 verification.
         self._peak_in_flight: int = 0
+        # Per-source attempt counters (SPEC-002 §3.4 multi-producer attribution).
+        self._producer_activity: dict[str, ProducerActivity] = defaultdict(
+            lambda: ProducerActivity(producer_module="")
+        )
 
     def spec(self) -> ConnectionSpec:
         return self._spec
 
     def try_enqueue(self, token: TransportToken) -> bool:
+        producer = token.source_module
+        activity = self._producer_activity[producer]
+        if activity.producer_module == "":
+            # Lazy fill of producer_module on first sight (default factory uses "").
+            activity.producer_module = producer
+
         if len(self._pending) >= self._capacity:
+            activity.rejected_count += 1
+            activity.stall_ps_contributed += self._source_clock.period_ps
             return False
+
         available_at = (
             self._source_clock.current_time_ps()
             + self._spec.latency_cycles * self._source_clock.period_ps
         )
         self._pending.append((token, available_at))
         self._tokens_enqueued += 1
+        activity.accepted_count += 1
         if len(self._pending) > self._peak_in_flight:
             self._peak_in_flight = len(self._pending)
         return True
@@ -80,3 +115,7 @@ class TlmConnection(IConnection):
     @property
     def peak_in_flight(self) -> int:
         return self._peak_in_flight
+
+    def producer_activity(self) -> list[ProducerActivity]:
+        """Snapshot of per-producer attempt stats."""
+        return [a for a in self._producer_activity.values() if a.producer_module]

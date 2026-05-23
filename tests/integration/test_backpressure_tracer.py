@@ -12,9 +12,14 @@ from npu_sim.interfaces.services import (
     InMemoryStatSink,
     StallReason,
 )
+from npu_sim.runtime.connection import TlmConnection
 from npu_sim.runtime.scheduler import SimpleScheduler
 from npu_sim.runtime.tracer import BackpressureTracer, TracerMode
-import npu_sim.modules  # noqa: F401  side-effect: registers Producer/Consumer/Passthrough
+import npu_sim.modules  # noqa: F401  side-effect: registers Producer/Consumer/Passthrough/Merger
+
+
+def _runtime_connections(arch):
+    return [c.runtime for c in arch.connections if isinstance(c.runtime, TlmConnection)]
 
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "architectures"
@@ -225,16 +230,75 @@ class TestTimeWindow:
 
 
 # ============================================================
-# §3.4: multi-producer attribution API stability.
-# Phase 4: API returns empty list (no producer-side bookkeeping yet).
+# §3.4: multi-producer attribution
 # ============================================================
 
 
 class TestMultiProducerApi:
 
-    def test_returns_empty_until_producer_attribution_lands(self):
+    def test_no_connections_returns_empty(self):
+        """Without per-producer data the tracer must still respond gracefully."""
         arch, bus, sink, _clock = _build("probe_slow_consumer.yaml")
         _drive(arch, max_cycles=200)
         tracer = BackpressureTracer(mode=TracerMode.OFFLINE, source=sink)
         result = tracer.trace_multi_producer_contention("cons")
         assert result == []
+
+    def test_single_producer_sink_returns_empty(self):
+        """A sink with only one inbound producer is not multi-producer
+        contention by definition."""
+        arch, bus, sink, _clock = _build("probe_slow_consumer.yaml")
+        _drive(arch, max_cycles=200)
+        tracer = BackpressureTracer(mode=TracerMode.OFFLINE, source=sink)
+        result = tracer.trace_multi_producer_contention(
+            "cons", connections=_runtime_connections(arch)
+        )
+        assert result == []
+
+    def test_two_producers_into_slow_merger(self):
+        """Two producers + slow merger: both producers must show rejections
+        recorded against the merger; the contention report enumerates each."""
+        arch, bus, sink, _clock = _build("probe_two_producer_merger.yaml")
+        _drive(arch, max_cycles=500)
+
+        # Consumer must drain all 8 (4 from each producer).
+        assert arch.modules["cons"].received == 8
+
+        tracer = BackpressureTracer(mode=TracerMode.OFFLINE, source=sink)
+        result = tracer.trace_multi_producer_contention(
+            "merger", connections=_runtime_connections(arch)
+        )
+        assert len(result) == 1
+        contention = result[0]
+        assert contention.sink_module == "merger"
+        producer_ids = {p.producer_module for p in contention.producers}
+        assert producer_ids == {"prod_a", "prod_b"}
+
+        # At least one producer must have been rejected by the slow merger.
+        total_rejected = sum(p.rejected_count for p in contention.producers)
+        assert total_rejected > 0
+        # Stall contribution accumulates with rejections.
+        assert contention.total_contention_ps > 0
+        # Each producer ultimately delivered all 4 of its tokens.
+        for p in contention.producers:
+            assert p.accepted_count == 4
+
+    def test_realtime_offline_agree_on_contention(self):
+        """REALTIME and OFFLINE tracers see the same per-producer aggregates
+        because the data is recorded on the connection, not in events."""
+        arch, bus, sink, _clock = _build("probe_two_producer_merger.yaml")
+
+        realtime = BackpressureTracer(mode=TracerMode.REALTIME, source=bus)
+        _drive(arch, max_cycles=500)
+        offline = BackpressureTracer(mode=TracerMode.OFFLINE, source=sink)
+
+        conns = _runtime_connections(arch)
+        r_real = realtime.trace_multi_producer_contention("merger", connections=conns)
+        r_off = offline.trace_multi_producer_contention("merger", connections=conns)
+
+        assert len(r_real) == len(r_off) == 1
+        real_summary = {p.producer_module: (p.accepted_count, p.rejected_count)
+                        for p in r_real[0].producers}
+        off_summary = {p.producer_module: (p.accepted_count, p.rejected_count)
+                       for p in r_off[0].producers}
+        assert real_summary == off_summary
