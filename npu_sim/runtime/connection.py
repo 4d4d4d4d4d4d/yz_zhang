@@ -27,6 +27,11 @@ class TlmConnection(IConnection):
         self._capacity = spec.fifo_depth
         # Each entry: (token, available_at_ps). Ordered by enqueue time.
         self._pending: deque[tuple[TransportToken, int]] = deque()
+        # Lifetime counters (used by SimulationInvariantChecker per SPEC-002 §7).
+        self._tokens_enqueued: int = 0
+        self._tokens_dequeued: int = 0
+        # Peak in-flight reached during the run, for INV-7 verification.
+        self._peak_in_flight: int = 0
 
     def spec(self) -> ConnectionSpec:
         return self._spec
@@ -39,6 +44,9 @@ class TlmConnection(IConnection):
             + self._spec.latency_cycles * self._source_clock.period_ps
         )
         self._pending.append((token, available_at))
+        self._tokens_enqueued += 1
+        if len(self._pending) > self._peak_in_flight:
+            self._peak_in_flight = len(self._pending)
         return True
 
     def try_dequeue(self, now_ps: Optional[int] = None) -> Optional[TransportToken]:
@@ -50,6 +58,7 @@ class TlmConnection(IConnection):
         if avail > now_ps:
             return None
         self._pending.popleft()
+        self._tokens_dequeued += 1
         return token
 
     def current_in_flight(self) -> int:
@@ -59,3 +68,15 @@ class TlmConnection(IConnection):
         if self._capacity == 0:
             return 0.0
         return len(self._pending) / self._capacity
+
+    @property
+    def tokens_enqueued(self) -> int:
+        return self._tokens_enqueued
+
+    @property
+    def tokens_dequeued(self) -> int:
+        return self._tokens_dequeued
+
+    @property
+    def peak_in_flight(self) -> int:
+        return self._peak_in_flight

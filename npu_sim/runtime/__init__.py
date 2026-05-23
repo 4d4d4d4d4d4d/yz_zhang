@@ -2,6 +2,13 @@
 
 from npu_sim.runtime.connection import TlmConnection
 from npu_sim.runtime.fifo import Fifo
+from npu_sim.runtime.invariants import (
+    IInvariantChecker,
+    InvariantFailure,
+    InvariantReport,
+    InvariantWarning,
+    SimulationInvariantChecker,
+)
 from npu_sim.runtime.ports import TlmInputPort, TlmOutputPort
 from npu_sim.runtime.scheduler import SchedulerResult, SimpleScheduler
 from npu_sim.runtime.tracer import (
@@ -18,10 +25,15 @@ __all__ = [
     "BackpressureTracer",
     "ChainLink",
     "Fifo",
+    "IInvariantChecker",
+    "InvariantFailure",
+    "InvariantReport",
+    "InvariantWarning",
     "MultiProducerContention",
     "ProducerActivity",
     "SchedulerResult",
     "SimpleScheduler",
+    "SimulationInvariantChecker",
     "StallCause",
     "StallChain",
     "TlmConnection",
