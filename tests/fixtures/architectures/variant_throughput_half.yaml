@@ -1,0 +1,11 @@
+schema_version: "1.0"
+name: "Dummy - half throughput"
+description: "Halve producer throughput; tests scalar override."
+
+base: baseline_dummy.yaml
+
+overrides:
+  modules:
+    producer:
+      config:
+        throughput_elems_per_cycle: 1

@@ -1,0 +1,9 @@
+schema_version: "1.0"
+name: "Bad hints"
+
+base: baseline_dummy.yaml
+
+overrides:
+  mapping_hints:
+    passthrough:
+      stage_1: ghost_module

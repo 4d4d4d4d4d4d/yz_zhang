@@ -1,0 +1,16 @@
+schema_version: "1.0"
+name: "Dummy - fused into single module"
+description: "Removes producer + consumer; adds a fused module replacing both."
+
+base: baseline_dummy.yaml
+
+overrides:
+  remove_modules: [producer, consumer]
+  add_modules:
+    - id: fused
+      type: Dummy
+      clock: main_clk
+      config:
+        throughput_elems_per_cycle: 4
+        support_extra: true
+        internal_fifo_depth: 16

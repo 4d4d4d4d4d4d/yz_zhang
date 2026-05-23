@@ -1,0 +1,11 @@
+schema_version: "1.0"
+name: "Chain inheritance attempt"
+description: "Tries to base off an intermediate variant. Elaborator must reject."
+
+base: variant_intermediate.yaml
+
+overrides:
+  modules:
+    producer:
+      config:
+        throughput_elems_per_cycle: 8
