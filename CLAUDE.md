@@ -135,5 +135,8 @@ the README list.
   contracts for now.
 - A trained NPU model. SPEC-004 functional sim runs structural data flow,
   not numerical training.
-- Production-grade. Coverage is good for the v1.0 contracts but real NPU
-  modules (DAGC, DSB, MAC...) haven't been implemented yet.
+- Production-grade. Coverage is good for the v1.0 contracts and the Phase 2
+  module library (DAGC, DSB, MAC, VAU, AVP — behavior defined in SPEC-005),
+  but the timing/area/energy coefficients are pre-silicon estimates awaiting
+  Phase 5 calibration, and the functional models are golden reference ops,
+  not bit-accurate RTL.
