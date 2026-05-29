@@ -1,0 +1,72 @@
+schema_version: "1.0"
+name: "NPU datapath pipeline (baseline)"
+description: >
+  Full Phase 2 datapath: Producer -> DAGC -> DSB -> MAC -> VAU -> AVP ->
+  Consumer. Exercises SPEC-005 module composition under the SPEC-002 transport
+  / backpressure protocol.
+
+metadata:
+  tags: ["pipeline", "phase2"]
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 16
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 8
+
+  - id: dagc
+    type: DAGC
+    clock: main_clk
+    config:
+      bfp8_unpack_throughput: 8
+      bfp16_unpack_throughput: 4
+      bfp_ratio: "2:1"
+
+  - id: dsb
+    type: DSB
+    clock: main_clk
+    config:
+      buffer_kb: 64
+      read_throughput: 8
+      enable_double_buffer: true
+
+  - id: mac
+    type: MAC
+    clock: main_clk
+    config:
+      array_rows: 32
+      array_cols: 32
+      support_bfp16: true
+
+  - id: vau
+    type: VAU
+    clock: main_clk
+    config:
+      lanes: 16
+
+  - id: avp
+    type: AVP
+    clock: main_clk
+    config:
+      vector_width: 16
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+
+connections:
+  - { from: prod.out,          to: dagc.in_packed, fifo_depth: 4, latency_cycles: 1 }
+  - { from: dagc.out_unpacked, to: dsb.in_data,    fifo_depth: 4, latency_cycles: 1 }
+  - { from: dsb.out_data,      to: mac.in_act,     fifo_depth: 4, latency_cycles: 1 }
+  - { from: mac.out_psum,      to: vau.in_a,       fifo_depth: 4, latency_cycles: 1 }
+  - { from: vau.out,           to: avp.in_data,    fifo_depth: 4, latency_cycles: 1 }
+  - { from: avp.out_data,      to: cons.in,        fifo_depth: 4, latency_cycles: 1 }

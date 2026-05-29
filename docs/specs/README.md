@@ -85,3 +85,4 @@ v1.0 已 Accepted,以此为契约启动实现。任何与 spec 不符的实现�
 - **SPEC-002 §7 INV-W3 平均利用率采样方法** —— 当前实现用终态采样近似,完整方案需要 per-cycle 采样基础设施。建议明确两种实现路径与各自精度等级。
 - **SPEC-002 §3.4 multi-producer 归因数据源** —— v1.0 spec 未明确归因数据是来自 stall 事件还是连接级 per-producer 计数。实现选择后者(`TlmConnection.producer_activity()`),并在 §3.4 加约定。
 - **SPEC-002 §3.3 BackpressureTracer 时间窗口** —— v1.0 spec 写 `time_window_ps` 是必需参数,实现期默认 None 表示完整历史更实用。建议 §3.3 显式说明 None 语义。
+- **SPEC-003 §7 / comparator `cycle_delta` 不是延迟指标** —— Phase 2 模块 `behavior()` 是无限生成器(永不 StopIteration),调度器对任何含常驻模块(Consumer/各级流水)的架构都会跑满 `max_cycles`,故 `SimulationResult.cycles_run` 反映的是预算而非"全部 token 排空"的完成时间。结论:`compare().cycle_delta` 仅对会自然终止的架构有意义;对稳态流水线,`total_stall_ps` 才是延迟回归信号(见 `tests/integration/test_npu_pipeline.py`)。建议为 SimulationResult 增加一个 drain-time 指标(如最后一个 token 抵达时间戳)或在 §7 说明 cycles_run 的预算语义。
