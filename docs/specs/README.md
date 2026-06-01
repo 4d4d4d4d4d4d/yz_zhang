@@ -13,6 +13,7 @@ Owners：架构组
 | [SPEC-003 架构描述 DSL 规范](./SPEC-003-Architecture-DSL.md) | 平台架构描述的声明式 YAML DSL | v1.0 Accepted |
 | [SPEC-004 Functional Simulation Interface](./SPEC-004-Functional-Simulation.md) | 数值精度评估管线的接口与契约 | v1.0 Accepted |
 | [SPEC-005 模块库规范](./SPEC-005-Module-Library.md) | Phase 2 真实模块（DSB/MAC/VAU/AVP）的行为/时序/functional 契约 | v0.1 Draft |
+| [SPEC-006 Rule-based Mapper 规范](./SPEC-006-Mapper.md) | Phase 4 规则化映射器接口与算法（op-graph → 模块指派）| v0.1 Draft |
 | [ADR-001 关键技术决策记录](./ADR-001-Key-Decisions.md) | 6 条核心决策 | Accepted |
 | [ADR-002 模块身份判定标准](./ADR-002-Module-Identity.md) | 新 IModule 子类 vs. capability flag 化的判定规则 | Accepted |
 | [Review v0.1](./review-v0.1.md) | v0.1 交叉一致性审查（历史） | 历史 |
@@ -67,7 +68,7 @@ v1.0 已 Accepted,以此为契约启动实现。任何与 spec 不符的实现�
 | Phase 1 | Python 骨架 | interfaces/ + core/ 抽象类、ModuleRegistry、NumericalModelRegistry、Dummy 模块、端到端最小链路测试 |
 | Phase 2 | 模块库 | DAGC / DSB / MAC / VAU / AVP 真实模块的 timing + functional 实现 ✅（行为契约见 SPEC-005；timing 系数待 Phase 5 校准）|
 | Phase 3 | 架构描述与 Elaborator | YAML 加载、Schema 校验、Override 合并、9 阶段 elaboration |
-| Phase 4 | Mapper 与报告 | Rule-based Mapper、反压链追溯、不变量检查、报告生成 |
+| Phase 4 | Mapper 与报告 | Rule-based Mapper ✅（SPEC-006）、反压链追溯 ✅、不变量检查 ✅、报告生成 ✅ |
 | Phase 5 | 校准与 Use Case | DAGC/DSB/MAC 校准记录、AGU-W 减半 use case 端到端跑通 |
 
 ### v1.1 候选项

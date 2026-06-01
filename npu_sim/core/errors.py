@@ -86,3 +86,14 @@ class CircularReferenceError(NpuSimError):
 
     Reference: SPEC-003 §7 (test).
     """
+
+
+class MappingError(NpuSimError):
+    """Base for Mapper-side errors. Reference: SPEC-006 §4."""
+
+
+class NoMappingError(MappingError):
+    """Raised by RuleBasedMapper in strict mode when an op has no candidate.
+
+    Reference: SPEC-006 §3.4.
+    """
