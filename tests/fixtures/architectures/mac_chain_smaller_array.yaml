@@ -1,0 +1,15 @@
+schema_version: "1.0"
+name: "MAC chain (variant: smaller array)"
+description: >
+  Shrink the MAC array from 32x32 to 8x8 (cols//rows ratio unchanged but
+  runtime per-token compute increases). Verifies SPEC-005 §3.4 knob has an
+  observable drain-time / stall impact via the comparator.
+
+base: mac_chain.yaml
+
+overrides:
+  modules:
+    mac:
+      config:
+        array_rows: 8
+        array_cols: 16
