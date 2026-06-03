@@ -4,6 +4,7 @@ Reference: SPEC-003 §7 R7 (the "AGU-W bandwidth half" archetype).
 """
 
 from npu_sim.evaluation.comparator import ComparisonReport, compare
+from npu_sim.evaluation.numerical_compare import compare_tensors
 from npu_sim.evaluation.runner import (
     SimulationResult,
     elaborate_and_run,
@@ -14,6 +15,7 @@ __all__ = [
     "ComparisonReport",
     "SimulationResult",
     "compare",
+    "compare_tensors",
     "elaborate_and_run",
     "run_simulation",
 ]
