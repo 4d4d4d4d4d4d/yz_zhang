@@ -148,3 +148,10 @@ class IMapper(ABC):
 - 多模块算子(一个 op 跨多个模块)、空间映射(systolic tile sharding)。
 - `reporting.markdown` 增加 MappingPlan 渲染。
 - mapping_hints(SPEC-003 §3.4)消歧:用户指定首选 module_id 时优先采纳。
+- **估算 vs 实测对账(精度)**:目前 `npu_sim.evaluation.estimate_plan` 与
+  `run_simulation` 已在同一架构实例上共存(见
+  `tests/integration/test_mapper_pipeline_integration.py`),但仅做"两者均可
+  跑通且对 config 同步响应"级别的一致性检查。v1.1 需要规范化"静态估算应是
+  动态 drain_time 的下界,误差不超过 N%"的契约,这要求 mapper 把每个 op
+  的估算与 sim 测得的 per-op 完成时间进行 join 比对(目前 SPEC-001 §3.2 未
+  要求 sim 暴露 per-op 完成时间)。
