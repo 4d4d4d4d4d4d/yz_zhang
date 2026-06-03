@@ -42,6 +42,7 @@ class SimulationResult:
     architecture_name: str
     cycles_run: int
     sim_time_ps: int
+    drain_time_ps: int                     # max last-dequeue ps across all connections
     scheduler_result: SchedulerResult
     invariant_report: InvariantReport
     stall_events: tuple[StallEvent, ...]
@@ -107,6 +108,7 @@ def run_simulation(
     # Tokens per connection.
     tokens_delivered: dict[str, int] = {}
     tokens_in_flight: dict[str, int] = {}
+    drain_time_ps = 0
     for c in arch.connections:
         if isinstance(c.runtime, TlmConnection):
             key = (
@@ -115,6 +117,8 @@ def run_simulation(
             )
             tokens_delivered[key] = c.runtime.tokens_dequeued
             tokens_in_flight[key] = c.runtime.current_in_flight()
+            if c.runtime.last_dequeue_time_ps > drain_time_ps:
+                drain_time_ps = c.runtime.last_dequeue_time_ps
 
     # Area / power aggregation across modules.
     total_area_um2 = sum(m.total_area_um2() for m in arch.modules.values())
@@ -126,6 +130,7 @@ def run_simulation(
         architecture_name=arch.name,
         cycles_run=sched_result.cycles_run,
         sim_time_ps=sim_time_ps,
+        drain_time_ps=drain_time_ps,
         scheduler_result=sched_result,
         invariant_report=inv_report,
         stall_events=tuple(stall_events),

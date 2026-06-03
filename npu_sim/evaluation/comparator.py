@@ -20,6 +20,8 @@ class ComparisonReport:
 
     cycle_delta: int                       # variant - baseline (positive = slower)
     cycle_delta_pct: float                 # vs baseline (None if baseline=0)
+    drain_time_delta_ps: int               # primary latency metric (positive = slower)
+    drain_time_delta_pct: float            # vs baseline (NaN if baseline=0)
     stall_delta_ps: int
     bottleneck_changed: bool
     baseline_bottleneck: Optional[str]
@@ -39,6 +41,11 @@ def compare(
     cycle_pct = (
         100.0 * cycle_delta / baseline.cycles_run
         if baseline.cycles_run > 0 else float("nan")
+    )
+    drain_delta = variant.drain_time_ps - baseline.drain_time_ps
+    drain_pct = (
+        100.0 * drain_delta / baseline.drain_time_ps
+        if baseline.drain_time_ps > 0 else float("nan")
     )
     stall_delta = variant.total_stall_ps - baseline.total_stall_ps
     area_delta = variant.total_area_um2 - baseline.total_area_um2
@@ -61,6 +68,8 @@ def compare(
         variant=variant,
         cycle_delta=cycle_delta,
         cycle_pct=cycle_pct,
+        drain_delta=drain_delta,
+        drain_pct=drain_pct,
         stall_delta=stall_delta,
         area_delta=area_delta,
         power_delta=power_delta,
@@ -73,6 +82,8 @@ def compare(
         variant=variant,
         cycle_delta=cycle_delta,
         cycle_delta_pct=cycle_pct,
+        drain_time_delta_ps=drain_delta,
+        drain_time_delta_pct=drain_pct,
         stall_delta_ps=stall_delta,
         bottleneck_changed=bottleneck_changed,
         baseline_bottleneck=baseline.bottleneck_module,
@@ -96,6 +107,8 @@ def _format_summary(
     variant: SimulationResult,
     cycle_delta: int,
     cycle_pct: float,
+    drain_delta: int,
+    drain_pct: float,
     stall_delta: int,
     area_delta: float,
     power_delta: float,
@@ -106,6 +119,8 @@ def _format_summary(
     lines = [
         f"Comparison: {baseline.architecture_name!r} (baseline) "
         f"vs {variant.architecture_name!r} (variant) — {valid_tag}",
+        f"  drain_time:   {baseline.drain_time_ps} ps → {variant.drain_time_ps} ps "
+        f"(Δ={drain_delta:+d}{f', {drain_pct:+.1f}%' if drain_pct == drain_pct else ''})",
         f"  cycles_run:   {baseline.cycles_run} → {variant.cycles_run} "
         f"(Δ={cycle_delta:+d}{f', {cycle_pct:+.1f}%' if cycle_pct == cycle_pct else ''})",
         f"  total_stall:  {baseline.total_stall_ps} ps → "

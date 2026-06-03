@@ -51,6 +51,11 @@ class TlmConnection(IConnection):
         # Lifetime counters (used by SimulationInvariantChecker per SPEC-002 §7).
         self._tokens_enqueued: int = 0
         self._tokens_dequeued: int = 0
+        # ps timestamp of the most recent successful dequeue. Used by the
+        # runner to compute SimulationResult.drain_time_ps — the meaningful
+        # latency metric for steady-state pipelines (see SPEC-003 §7 finding
+        # in docs/specs/README.md).
+        self._last_dequeue_time_ps: int = 0
         # Peak in-flight reached during the run, for INV-7 verification.
         self._peak_in_flight: int = 0
         # Per-source attempt counters (SPEC-002 §3.4 multi-producer attribution).
@@ -94,6 +99,7 @@ class TlmConnection(IConnection):
             return None
         self._pending.popleft()
         self._tokens_dequeued += 1
+        self._last_dequeue_time_ps = now_ps
         return token
 
     def current_in_flight(self) -> int:
@@ -115,6 +121,11 @@ class TlmConnection(IConnection):
     @property
     def peak_in_flight(self) -> int:
         return self._peak_in_flight
+
+    @property
+    def last_dequeue_time_ps(self) -> int:
+        """Timestamp of the most recent successful dequeue (0 if none)."""
+        return self._last_dequeue_time_ps
 
     def producer_activity(self) -> list[ProducerActivity]:
         """Snapshot of per-producer attempt stats."""

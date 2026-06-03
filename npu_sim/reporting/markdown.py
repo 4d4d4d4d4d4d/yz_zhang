@@ -60,6 +60,7 @@ def _header(result: SimulationResult) -> str:
 
 def _summary_table(result: SimulationResult) -> str:
     rows = [
+        ("drain_time_ps", f"{result.drain_time_ps:,}"),
         ("cycles_run", str(result.cycles_run)),
         ("sim_time_ps", f"{result.sim_time_ps:,}"),
         ("total_stall_ps", f"{result.total_stall_ps:,}"),
@@ -146,6 +147,12 @@ def _comparison_summary_table(report: ComparisonReport) -> str:
         return f"{p:+.1f}%" if p == p else "n/a"  # NaN-safe
 
     rows = [
+        (
+            "drain_time_ps",
+            f"{b.drain_time_ps:,}",
+            f"{v.drain_time_ps:,}",
+            f"{report.drain_time_delta_ps:+,} ({_fmt_pct(report.drain_time_delta_pct)})",
+        ),
         (
             "cycles_run",
             str(b.cycles_run),

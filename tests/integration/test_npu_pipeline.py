@@ -80,6 +80,13 @@ class TestPipelineRegression:
         # Quartering AVP throughput makes upstream stages stall waiting on it.
         assert report.stall_delta_ps > 0
 
+    def test_narrow_avp_extends_drain_time(self, baseline, narrow_avp):
+        # drain_time_ps is the spec-meaningful latency metric (last-token
+        # arrival at the consumer): quartering AVP must delay it.
+        report = compare(baseline, narrow_avp)
+        assert report.drain_time_delta_ps > 0
+        assert baseline.drain_time_ps > 0  # sanity: baseline did drain
+
     def test_avp_remains_the_bottleneck(self, baseline, narrow_avp):
         assert baseline.bottleneck_module == "avp"
         assert narrow_avp.bottleneck_module == "avp"
