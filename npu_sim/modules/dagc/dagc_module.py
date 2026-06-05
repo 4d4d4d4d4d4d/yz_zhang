@@ -94,6 +94,15 @@ class DAGC(IModule):
                     "maximum": 64,
                     "default": 16,
                 },
+                "enable_compact_unpack": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": (
+                        "SPEC-005 v1.1 §2: trade +1 cycle/token decode for "
+                        "-20% area by replacing the wide unpack register file "
+                        "with dynamic decode."
+                    ),
+                },
             },
             "required": ["bfp8_unpack_throughput", "bfp16_unpack_throughput"],
         }
@@ -129,6 +138,17 @@ class DAGC(IModule):
                 area_cost_um2=2300.0,
                 static_power_uw=6.0,
                 dynamic_energy_pj=0.5,
+            ),
+            Capability(
+                name="compact_unpack",
+                description=(
+                    "SPEC-005 v1.1 §2: compact unpack mode (dynamic decode "
+                    "instead of wide register file). Negative area_cost_um2 "
+                    "is the optimization delta vs full-unpack baseline."
+                ),
+                area_cost_um2=-1980.0,  # 20% of 3500+6200=9700 → -1940; rounded
+                static_power_uw=-2.0,
+                dynamic_energy_pj=-0.2,
             ),
         ]
 
@@ -173,6 +193,7 @@ class DAGC(IModule):
         self._support_4bit: bool = True
         self._support_mix: bool = True
         self._join_fifo_depth: int = 16
+        self._compact_unpack: bool = False
         self._active_caps: list[str] = []
 
         self._unpacked: int = 0
@@ -198,12 +219,17 @@ class DAGC(IModule):
         self._support_4bit = config.get("support_4bit_reorder", True)
         self._support_mix = config.get("support_mixed_bfp8_bfp16", True)
         self._join_fifo_depth = config.get("join_fifo_depth", 16)
+        self._compact_unpack = config.get("enable_compact_unpack", False)
 
         self._active_caps = ["bfp8_unpack", "bfp16_unpack"]
         if self._support_mix:
             self._active_caps.append("bfp8_bfp16_mix")
         if self._support_4bit:
             self._active_caps.append("int4_reorder")
+        if self._compact_unpack:
+            # SPEC-005 v1.1 §U.1 — compact_unpack flips one capability that
+            # contributes negative area / power deltas vs full-unpack baseline.
+            self._active_caps.append("compact_unpack")
 
         specs = {p.name: p for p in self.port_specs()}
         self._in_packed_port = TlmInputPort(specs["in_packed"], self._owner_id, self._clock)
@@ -291,8 +317,13 @@ class DAGC(IModule):
     # ============== Behavior (generator) ==============
 
     def _unpack_cycles(self, token: TransportToken) -> int:
-        """Cycles to unpack one packed token through the BFP8 lane."""
-        return max(1, -(-token.size_bytes // self._bfp8_tp))  # ceil division
+        """Cycles to unpack one packed token through the BFP8 lane.
+
+        SPEC-005 v1.1 §U.1: compact_unpack mode costs +1 decode cycle per
+        token (dynamic decode vs wide register file).
+        """
+        base = max(1, -(-token.size_bytes // self._bfp8_tp))  # ceil division
+        return base + (1 if self._compact_unpack else 0)
 
     def behavior(self) -> Iterator[None]:
         """Poll in_packed, unpack each token, forward the wider result.

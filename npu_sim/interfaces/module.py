@@ -65,6 +65,20 @@ class EnergyEstimate:
     confidence: float
 
 
+@dataclass(frozen=True)
+class AreaModel:
+    """Per-instance silicon area estimate. Reference: SPEC-001 v1.1 §3.2.5.
+
+    Unlike LatencyEstimate / EnergyEstimate, area does not depend on op — it
+    is a property of the configured module. Virtual modules (probes / test
+    fixtures) may return ``um2=0.0`` with ``notes="virtual"``.
+    """
+
+    um2: float
+    breakdown: dict[str, float] = field(default_factory=dict)
+    notes: str = ""
+
+
 class IModule(ABC):
     """Abstract base class for all NPU macro-modules.
 
@@ -164,6 +178,21 @@ class IModule(ABC):
             for cap in self.declared_capabilities()
             if cap.name in active
         )
+
+    def estimate_area(self) -> AreaModel:
+        """Per-instance area estimate. Reference: SPEC-001 v1.1 §3.2.5.
+
+        Default implementation aggregates active capability area into a
+        breakdown keyed by capability name. Subclasses may override to apply
+        relocate / shared-logic / format-optimization adjustments.
+        """
+        active = set(self.active_capabilities())
+        breakdown = {
+            cap.name: cap.area_cost_um2
+            for cap in self.declared_capabilities()
+            if cap.name in active
+        }
+        return AreaModel(um2=sum(breakdown.values()), breakdown=breakdown)
 
     def static_power_uw(self) -> float:
         """Sum of static_power_uw across active capabilities."""
