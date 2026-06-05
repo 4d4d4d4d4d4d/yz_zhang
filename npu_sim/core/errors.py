@@ -97,3 +97,10 @@ class NoMappingError(MappingError):
 
     Reference: SPEC-006 §3.4.
     """
+
+
+class ConfigurationError(NpuSimError):
+    """Raised by IModule.configure() on invalid config.
+
+    Reference: SPEC-001 §3.5.2, SPEC-007 §3.1.2.
+    """

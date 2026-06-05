@@ -6,6 +6,7 @@ at startup.
 
 from npu_sim.modules import (  # noqa: F401  (side-effect: registration)
     avp,
+    control,
     dagc,
     dsb,
     dummy,
@@ -14,4 +15,4 @@ from npu_sim.modules import (  # noqa: F401  (side-effect: registration)
     vau,
 )
 
-__all__ = ["avp", "dagc", "dsb", "dummy", "mac", "probe", "vau"]
+__all__ = ["avp", "control", "dagc", "dsb", "dummy", "mac", "probe", "vau"]
