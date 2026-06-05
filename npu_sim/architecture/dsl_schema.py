@@ -91,6 +91,26 @@ DSL_SCHEMA: dict = {
                         "properties": {
                             "config": {"type": "object"},
                             "clock": {"type": "string", "pattern": _NAME},
+                            "__relocate__": {
+                                # SPEC-003 v1.1 §2.2: relocate a module across
+                                # dies / domains by injecting estimate_*
+                                # multipliers. Does not touch ports / type /
+                                # capabilities.
+                                "type": "object",
+                                "properties": {
+                                    "from_die": {"type": ["string", "integer"]},
+                                    "to_die": {"type": ["string", "integer"]},
+                                    "latency_penalty_pct": {
+                                        "type": "number", "minimum": 0
+                                    },
+                                    "energy_penalty_pct": {
+                                        "type": "number", "minimum": 0
+                                    },
+                                    "area_penalty_pct": {
+                                        "type": "number", "minimum": 0
+                                    },
+                                },
+                            },
                         },
                     },
                 },

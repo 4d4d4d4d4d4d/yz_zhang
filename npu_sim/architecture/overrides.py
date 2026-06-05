@@ -107,6 +107,18 @@ def apply_overrides(
             if "clock" in mod_override:
                 existing["clock"] = mod_override["clock"]
 
+            if "__relocate__" in mod_override:
+                # SPEC-003 v1.1 §2.2: stash on the module instance dict so
+                # Elaborator can wrap estimate_* after configure(). Does NOT
+                # mutate config — keeps the override surface orthogonal.
+                reloc = mod_override["__relocate__"]
+                if reloc.get("from_die") == reloc.get("to_die") and "from_die" in reloc:
+                    raise OverrideError(
+                        f"__relocate__ on {mod_id!r}: from_die equals to_die "
+                        f"({reloc['from_die']!r}); no-op relocate is invalid."
+                    )
+                existing["__relocate__"] = copy.deepcopy(reloc)
+
     # ---- 2. remove_modules + auto-prune dangling connections (D3) ----
 
     if "remove_modules" in overrides:

@@ -50,6 +50,71 @@ from npu_sim.interfaces.transport import (
 ConsistencyRule = Callable[[dict], Optional[str]]
 
 
+def _apply_relocate(module: IModule, reloc: dict) -> None:
+    """Wrap a module's estimate_* methods with __relocate__ multipliers.
+
+    SPEC-003 v1.1 §2.2 — multipliers apply on top of the module's own
+    estimate so capability changes are not required. The original methods
+    are preserved on ``module._relocate_original_*`` for inspection.
+    """
+    from npu_sim.interfaces.module import AreaModel
+
+    lat_pct = reloc.get("latency_penalty_pct", 0.0)
+    nrg_pct = reloc.get("energy_penalty_pct", 0.0)
+    area_pct = reloc.get("area_penalty_pct", 0.0)
+
+    if lat_pct == 0.0 and nrg_pct == 0.0 and area_pct == 0.0:
+        return  # nothing to do; pure-tagging relocate.
+
+    lat_factor = 1.0 + lat_pct / 100.0
+    nrg_factor = 1.0 + nrg_pct / 100.0
+    area_factor = 1.0 + area_pct / 100.0
+
+    orig_latency = module.estimate_latency
+    orig_energy = module.estimate_energy
+    orig_area = module.estimate_area
+
+    def relocated_latency(op):
+        est = orig_latency(op)
+        return type(est)(
+            min_cycles=int(est.min_cycles * lat_factor),
+            typical_cycles=int(est.typical_cycles * lat_factor),
+            max_cycles=int(est.max_cycles * lat_factor),
+            confidence=est.confidence,
+        )
+
+    def relocated_energy(op):
+        est = orig_energy(op)
+        return type(est)(
+            dynamic_pj=est.dynamic_pj * nrg_factor,
+            static_pj_per_cycle=est.static_pj_per_cycle * nrg_factor,
+            confidence=est.confidence,
+        )
+
+    def relocated_area():
+        a = orig_area()
+        return AreaModel(
+            um2=a.um2 * area_factor,
+            breakdown={k: v * area_factor for k, v in a.breakdown.items()},
+            notes=(a.notes + " | __relocate__").strip(" |"),
+        )
+
+    # Stash originals for invariant / inspection.
+    module._relocate_original_estimate_latency = orig_latency
+    module._relocate_original_estimate_energy = orig_energy
+    module._relocate_original_estimate_area = orig_area
+    module._relocate_meta = dict(reloc)
+    module.estimate_latency = relocated_latency
+    module.estimate_energy = relocated_energy
+    module.estimate_area = relocated_area
+
+    # total_area_um2 is what runner.run_simulation aggregates; override too.
+    def relocated_total_area_um2() -> float:
+        return relocated_area().um2
+
+    module.total_area_um2 = relocated_total_area_um2
+
+
 class ArchitectureElaborator:
     """Translate a DSL description into an in-memory Architecture object."""
 
@@ -259,6 +324,14 @@ class ArchitectureElaborator:
                 clock=clocks[clock_ref],
             )
             module.configure(cfg)
+
+            # SPEC-003 v1.1 §2.2: __relocate__ wraps estimate_* with penalty
+            # multipliers. Applied here so any consumer of estimate_latency /
+            # estimate_energy / estimate_area sees the relocated coefficients.
+            reloc = inst.get("__relocate__")
+            if reloc:
+                _apply_relocate(module, reloc)
+
             modules[inst["id"]] = module
         return modules
 
