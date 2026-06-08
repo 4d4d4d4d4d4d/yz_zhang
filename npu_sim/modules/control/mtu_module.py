@@ -11,6 +11,9 @@ Latency model per §6.3.1:
 
 from __future__ import annotations
 
+import math
+from typing import Iterator, Optional
+
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.module import (
     AreaModel,
@@ -26,7 +29,9 @@ from npu_sim.interfaces.transport import (
     ITransportPort,
     PortDirection,
     PortSpec,
+    TransportToken,
 )
+from npu_sim.runtime.ports import TlmInputPort, TlmOutputPort
 
 
 # Reuse the same per-segment knobs as TAU/DMA so the comparison is apples to apples.
@@ -99,6 +104,11 @@ class MTU(IModule):
         self._burst_lat = _DRAM_BURST_LATENCY
         self._bus_w = _BUS_WIDTH_BYTES
         self._overlap = _OVERLAP_FACTOR
+        self._bursts_per_token = 8
+        self._payload_per_token = 1024
+        self._busy = False
+        self._in_port: Optional[TlmInputPort] = None
+        self._out_port: Optional[TlmOutputPort] = None
 
     def assign_id(self, module_id): self._owner_id = module_id
     def bind_services(self, event_bus, stat_sink, clock):
@@ -110,12 +120,23 @@ class MTU(IModule):
         self._burst_lat = config.get("dram_burst_latency", _DRAM_BURST_LATENCY)
         self._bus_w = config.get("bus_width_bytes", _BUS_WIDTH_BYTES)
         self._overlap = config.get("overlap_factor", _OVERLAP_FACTOR)
+        self._bursts_per_token = config.get("bursts_per_token", 8)
+        self._payload_per_token = config.get("payload_bytes_per_token", 1024)
+        specs = {p.name: p for p in self.port_specs()}
+        self._in_port = TlmInputPort(specs["descriptor_in"], self._owner_id, self._clock)
+        self._out_port = TlmOutputPort(
+            specs["data_out"], self._owner_id, self._clock, self._stat_sink
+        )
         self._configured = True
 
-    def reset(self): pass
-    def destroy(self): pass
-    def input_ports(self): return {}
-    def output_ports(self): return {}
+    def reset(self): self._busy = False
+    def destroy(self):
+        self._in_port = None
+        self._out_port = None
+    def input_ports(self):
+        return {"descriptor_in": self._in_port} if self._in_port else {}
+    def output_ports(self):
+        return {"data_out": self._out_port} if self._out_port else {}
 
     def active_capabilities(self):
         return ["tensor_address_gen", "bulk_memory_transfer"] if self._configured else []
@@ -123,7 +144,6 @@ class MTU(IModule):
     def can_execute(self, operation): return self._configured
 
     def estimate_latency(self, operation: IOperation) -> LatencyEstimate:
-        import math
         bursts = int(operation.shape_info.get("bursts", 64))
         payload = int(operation.shape_info.get("payload_bytes", 4096))
         t_tau = bursts * _TAU_CYCLES_PER_BURST
@@ -159,4 +179,34 @@ class MTU(IModule):
             notes="SPEC-007 §6.4.1 [calibration knob]",
         )
 
-    def snapshot_state(self): return ModuleState(busy=False)
+    def snapshot_state(self): return ModuleState(busy=self._busy)
+
+    def _per_token_cycles(self) -> int:
+        bursts = self._bursts_per_token
+        payload = self._payload_per_token
+        t_tau = bursts * _TAU_CYCLES_PER_BURST
+        per_burst = self._burst_lat + (payload // bursts) // self._bus_w
+        t_dma = bursts * per_burst
+        overlap = math.ceil(min(t_tau, t_dma) * self._overlap)
+        return t_tau + t_dma - overlap
+
+    def behavior(self) -> Iterator[None]:
+        """§6.3.1: fused addr+data path, per-token cycles include overlap."""
+        per_token = self._per_token_cycles()
+        while True:
+            token = self._in_port.try_receive()
+            if token is None:
+                self._busy = False
+                yield
+                continue
+            self._busy = True
+            for _ in range(per_token):
+                yield
+            out = TransportToken(
+                payload=token.payload,
+                size_bytes=self._payload_per_token,
+                timestamp_ps=self._clock.current_time_ps(),
+                source_module=self._owner_id,
+                metadata={**token.metadata, "transferred_by": self._owner_id},
+            )
+            yield from self._out_port.send(out)

@@ -7,7 +7,7 @@ topologies.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Iterator, Optional
 
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.clock import IClock
@@ -26,7 +26,9 @@ from npu_sim.interfaces.transport import (
     ITransportPort,
     PortDirection,
     PortSpec,
+    TransportToken,
 )
+from npu_sim.runtime.ports import TlmInputPort, TlmOutputPort
 
 
 # §4.3.1: 4 cycles per burst address (calibration knob).
@@ -90,6 +92,10 @@ class TAU(IModule):
         self._owner_id = self.module_type()
         self._configured = False
         self._addr_fifo_depth = 16
+        self._bursts_per_token = 8
+        self._busy = False
+        self._in_port: Optional[TlmInputPort] = None
+        self._out_port: Optional[TlmOutputPort] = None
 
     def assign_id(self, module_id: str) -> None:
         self._owner_id = module_id
@@ -103,12 +109,22 @@ class TAU(IModule):
         if self._configured:
             raise RuntimeError("TAU.configure() once only.")
         self._addr_fifo_depth = config.get("addr_fifo_depth", 16)
+        self._bursts_per_token = config.get("bursts_per_token", 8)
+        specs = {p.name: p for p in self.port_specs()}
+        self._in_port = TlmInputPort(specs["descriptor_in"], self._owner_id, self._clock)
+        self._out_port = TlmOutputPort(
+            specs["addr_stream_out"], self._owner_id, self._clock, self._stat_sink
+        )
         self._configured = True
 
-    def reset(self) -> None: pass
-    def destroy(self) -> None: pass
-    def input_ports(self) -> dict[str, ITransportPort]: return {}
-    def output_ports(self) -> dict[str, ITransportPort]: return {}
+    def reset(self) -> None: self._busy = False
+    def destroy(self) -> None:
+        self._in_port = None
+        self._out_port = None
+    def input_ports(self) -> dict[str, ITransportPort]:
+        return {"descriptor_in": self._in_port} if self._in_port else {}
+    def output_ports(self) -> dict[str, ITransportPort]:
+        return {"addr_stream_out": self._out_port} if self._out_port else {}
 
     def active_capabilities(self) -> list[str]:
         return ["tensor_address_gen"] if self._configured else []
@@ -151,4 +167,26 @@ class TAU(IModule):
         )
 
     def snapshot_state(self) -> ModuleState:
-        return ModuleState(busy=False)
+        return ModuleState(busy=self._busy)
+
+    def behavior(self) -> Iterator[None]:
+        """§4.3.1: process each descriptor token in (bursts × 4) cycles."""
+        per_token = self._bursts_per_token * _CYCLES_PER_BURST
+        while True:
+            token = self._in_port.try_receive()
+            if token is None:
+                self._busy = False
+                yield
+                continue
+            self._busy = True
+            for _ in range(per_token):
+                yield
+            out = TransportToken(
+                payload=token.payload,
+                size_bytes=token.size_bytes,
+                timestamp_ps=self._clock.current_time_ps(),
+                source_module=self._owner_id,
+                metadata={**token.metadata, "addressed_by": self._owner_id},
+            )
+            yield from self._out_port.send(out)
+        # unreachable

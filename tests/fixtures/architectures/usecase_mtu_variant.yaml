@@ -1,0 +1,39 @@
+schema_version: "1.0"
+name: "MTU variant (fused address-gen + transfer)"
+description: |
+  SPEC-007 §6.3 evaluation variant: TAU+DMA replaced by a single MTU
+  module with §6.3.1 overlap savings. Drain time vs baseline shows the
+  fusion benefit; area decreases (§6.4.1: 95k < 30k+80k = 110k).
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 8
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 8
+
+  - id: mtu_0
+    type: MTU
+    clock: main_clk
+    config:
+      bursts_per_token: 8
+      payload_bytes_per_token: 1024
+      dram_burst_latency: 40
+      bus_width_bytes: 32
+      overlap_factor: 0.8
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+
+connections:
+  - { from: prod.out, to: mtu_0.descriptor_in, fifo_depth: 8, latency_cycles: 1 }
+  - { from: mtu_0.data_out, to: cons.in, fifo_depth: 8, latency_cycles: 1 }

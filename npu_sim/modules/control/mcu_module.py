@@ -16,7 +16,7 @@ variant architectures.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Iterator, Optional
 
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.clock import IClock
@@ -35,7 +35,9 @@ from npu_sim.interfaces.transport import (
     ITransportPort,
     PortDirection,
     PortSpec,
+    TransportToken,
 )
+from npu_sim.runtime.ports import TlmInputPort, TlmOutputPort
 
 
 # §2.3.1 segment costs (calibration knob).
@@ -132,13 +134,17 @@ class MCU(IModule):
 
     @classmethod
     def port_specs(cls) -> list[PortSpec]:
+        # SPEC-007 §2.2: workload arrives on cmd_in, dispatch emitted on op_out.
+        # ogu_req/ogu_resp are reserved for future per-op OGU handshake (v1.1
+        # models OGU offload via the latency reduction only, not a real
+        # runtime channel — see SPEC-007 §2.3.2).
         return [
             PortSpec(
                 name="cmd_in",
                 direction=PortDirection.INPUT,
                 data_type=DataType.COMMAND,
                 width_bits=64,
-                fifo_depth=4,
+                fifo_depth=8,
             ),
             PortSpec(
                 name="op_out",
@@ -146,20 +152,6 @@ class MCU(IModule):
                 data_type=DataType.COMMAND,
                 width_bits=64,
                 fifo_depth=8,
-            ),
-            PortSpec(
-                name="ogu_req",
-                direction=PortDirection.OUTPUT,
-                data_type=DataType.COMMAND,
-                width_bits=64,
-                fifo_depth=4,
-            ),
-            PortSpec(
-                name="ogu_resp",
-                direction=PortDirection.INPUT,
-                data_type=DataType.COMMAND,
-                width_bits=64,
-                fifo_depth=4,
             ),
         ]
 
@@ -174,6 +166,10 @@ class MCU(IModule):
         self._has_ogu: bool = False
         self._threads: int = 1
         self._active_caps: list[str] = []
+        self._busy: bool = False
+        self._dispatched: int = 0
+        self._in_port: Optional[TlmInputPort] = None
+        self._out_port: Optional[TlmOutputPort] = None
 
     def assign_id(self, module_id: str) -> None:
         self._owner_id = module_id
@@ -200,21 +196,29 @@ class MCU(IModule):
             self._active_caps += ["bd_gen_fallback", "op_config_fallback"]
         if self._threads == 2:
             self._active_caps.append("thread_2_register_set")
+
+        specs = {p.name: p for p in self.port_specs()}
+        self._in_port = TlmInputPort(specs["cmd_in"], self._owner_id, self._clock)
+        self._out_port = TlmOutputPort(
+            specs["op_out"], self._owner_id, self._clock, self._stat_sink
+        )
         self._configured = True
 
     def reset(self) -> None:
-        pass
+        self._busy = False
+        self._dispatched = 0
 
     def destroy(self) -> None:
-        pass
+        self._in_port = None
+        self._out_port = None
 
     # ============== Ports ==============
 
     def input_ports(self) -> dict[str, ITransportPort]:
-        return {}
+        return {"cmd_in": self._in_port} if self._in_port else {}
 
     def output_ports(self) -> dict[str, ITransportPort]:
-        return {}
+        return {"op_out": self._out_port} if self._out_port else {}
 
     # ============== Capability queries ==============
 
@@ -266,4 +270,42 @@ class MCU(IModule):
     # ============== Runtime state ==============
 
     def snapshot_state(self) -> ModuleState:
-        return ModuleState(busy=False, current_op=None)
+        return ModuleState(busy=self._busy, current_op="op_dispatch" if self._busy else None)
+
+    @property
+    def dispatched(self) -> int:
+        return self._dispatched
+
+    # ============== Behavior (generator) ==============
+
+    def _per_op_cycles(self) -> int:
+        """SPEC-007 §2.3.1 / §2.3.2 / §2.3.3 — per-op total work."""
+        per_thread = 60 if self._has_ogu else 260   # _T_OPCFG or full chain
+        return per_thread * self._threads
+
+    def behavior(self) -> Iterator[None]:
+        """Receive op tokens, wait T_mcu cycles, emit dispatched token.
+
+        Matches the SPEC-007 §2.5 use case: throughput delta between
+        baseline (no OGU, 260 c/op) and variant (with OGU, 60 c/op) shows
+        up as drain_time delta in the comparator.
+        """
+        per_op = self._per_op_cycles()
+        while True:
+            token = self._in_port.try_receive()
+            if token is None:
+                self._busy = False
+                yield
+                continue
+            self._busy = True
+            for _ in range(per_op):
+                yield
+            out = TransportToken(
+                payload=token.payload,
+                size_bytes=token.size_bytes,
+                timestamp_ps=self._clock.current_time_ps(),
+                source_module=self._owner_id,
+                metadata={**token.metadata, "dispatched_by": self._owner_id},
+            )
+            yield from self._out_port.send(out)
+            self._dispatched += 1

@@ -1,0 +1,22 @@
+schema_version: "1.0"
+name: "MCU + OGU (single-thread, offloaded)"
+description: |
+  SPEC-007 §2.5 evaluation variant: same workload, but MCU offloads
+  T_buffsize + T_bd to OGU. MCU now runs only T_opcfg = 60 cycles/op.
+  Drain time vs baseline shows the ~4.3× speedup; area increases by
+  the OGU silicon contribution.
+
+base: usecase_mcu_baseline.yaml
+
+overrides:
+  modules:
+    mcu_0:
+      config:
+        has_ogu_peer: true
+        ogu_peer_id: ogu_0
+  add_modules:
+    - id: ogu_0
+      type: OGU
+      clock: main_clk
+      config:
+        mcu_peer_id: mcu_0

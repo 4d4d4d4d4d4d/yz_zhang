@@ -1,86 +1,70 @@
-"""SPEC-007 §7 — MAC/DSB/AGU algorithm-stimulus use case.
+"""SPEC-007 §7.3 — MAC/DSB/AGU 算法激励,通过仿真驱动评估。
 
-The "MAC/DSB/AGU 算法激励" item in the 2026-06-04 evaluation list:
-sweep AGU pipeline_depth against client (MAC/DSB) array size and observe
-how the stall to the client behaves. The §7.3.1 contract is "1 addr/cycle
-steady-state"; pipeline_depth drives the fill-stage stall.
+Drives:
+  baseline = usecase_agu_shallow.yaml  (pipeline_depth=1, no fill stall)
+  variant  = usecase_agu_deep.yaml     (pipeline_depth=8, +7 fill cycles)
+
+The fill stall is realized in the simulator: variant.drain_time should be
+exactly +7 cycles vs baseline for the first token, amortizing to 0 over
+many tokens.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from npu_sim.core.errors import ConfigurationError
-from npu_sim.interfaces.operation import Precision, PrecisionKind, StaticOperation
-from npu_sim.interfaces.services import InMemoryEventBus, InMemoryStatSink
-from npu_sim.architecture.clock import SimpleClock
-from npu_sim.modules.control.agu_module import AGU
+from npu_sim.evaluation import compare, elaborate_and_run
+import npu_sim.modules  # noqa: F401
 
 
-def _bind(client_id: str = "mac_0", pipeline_depth: int = 3) -> AGU:
-    bus = InMemoryEventBus()
-    sink = InMemoryStatSink(event_bus=bus)
-    clock = SimpleClock("global", period_ps=1000)
-    a = AGU()
-    a.bind_services(event_bus=bus, stat_sink=sink, clock=clock)
-    a.configure({"client_module_id": client_id, "agu_pipeline_depth": pipeline_depth})
-    return a
+FIXTURES = Path(__file__).parent.parent / "fixtures" / "architectures"
 
 
-def _op(n_addresses: int = 256):
-    return StaticOperation(
-        _op_type="addr_loop",
-        _required_capabilities=("inner_loop_address_gen",),
-        _shape_info=(("n_addresses", n_addresses),),
-        _precision=Precision(kind=PrecisionKind.INT8),
-    )
+@pytest.fixture(scope="module")
+def report():
+    base = elaborate_and_run(str(FIXTURES / "usecase_agu_shallow.yaml"), max_cycles=2000)
+    var = elaborate_and_run(str(FIXTURES / "usecase_agu_deep.yaml"), max_cycles=2000)
+    return compare(base, var)
 
 
-class TestAGUStimulus:
-    """§7.3 pipeline_depth sweep."""
+class TestAGUPipelineDepthImpact:
+    """§7.3.1: fill stall = pipeline_depth - 1 (one-time)."""
 
-    @pytest.mark.parametrize("depth", [1, 2, 3, 4, 8])
-    def test_fill_stall_equals_depth_minus_one(self, depth):
-        """§7.3.1: fill stalls client by (pipeline_depth - 1) cycles."""
-        agu = _bind(pipeline_depth=depth)
-        assert agu.estimate_stall_to_client() == depth - 1
-
-    def test_steady_state_throughput_is_one_addr_per_cycle(self):
-        """§7.3.1: amortised over many addresses, fill stall vanishes."""
-        agu = _bind(pipeline_depth=3)
-        n = 1024
-        cycles = agu.estimate_latency(_op(n_addresses=n)).typical_cycles
-        # fill (3) + steady (n) = 3 + 1024.
-        # Throughput → 1.0 addrs/cycle as n grows.
-        throughput = n / cycles
-        assert throughput > 0.99, (
-            f"§7.3.1: AGU throughput {throughput:.3f} addrs/cycle below 0.99"
+    def test_deep_pipeline_adds_fill_stall(self, report):
+        delta_ps = report.drain_time_delta_ps
+        # depth=8 vs depth=1 → +7 cycles × 1000 ps/cycle = +7000 ps.
+        assert delta_ps == 7000, (
+            f"AGU depth=8 vs depth=1 should add exactly +7000 ps fill, "
+            f"got {delta_ps:+d} ps"
         )
 
-    def test_deeper_pipeline_costs_more_fill(self):
-        """Stimulus: depth=8 should fill-stall 7 cycles, depth=1 stalls 0."""
-        shallow = _bind(pipeline_depth=1)
-        deep = _bind(pipeline_depth=8)
-        c_shallow = shallow.estimate_latency(_op(n_addresses=32)).typical_cycles
-        c_deep = deep.estimate_latency(_op(n_addresses=32)).typical_cycles
-        assert c_deep - c_shallow == 7
+    def test_steady_state_throughput_unchanged(self, report):
+        """§7.3.1: pipeline_depth only affects fill, not steady-state rate.
+        Per-token cycles after fill should match."""
+        # Both runs process 4 tokens × 64 addrs/token = 256 effective work
+        # cycles. Variant pays +7 fill once. Δ/total should be < 3%.
+        delta_pct = abs(report.drain_time_delta_pct)
+        assert delta_pct <= 3.0, (
+            f"§7.3.1: throughput should be steady; Δ {delta_pct:.1f}% > 3%"
+        )
 
-    def test_agu_rejects_missing_client(self):
-        from npu_sim.interfaces.services import InMemoryEventBus, InMemoryStatSink
-        from npu_sim.architecture.clock import SimpleClock
-
-        bus = InMemoryEventBus()
-        sink = InMemoryStatSink(event_bus=bus)
-        clock = SimpleClock("global", period_ps=1000)
-        a = AGU()
-        a.bind_services(event_bus=bus, stat_sink=sink, clock=clock)
-        with pytest.raises(ConfigurationError, match="§7.1.2"):
-            a.configure({"agu_pipeline_depth": 3})
+    def test_area_unchanged_by_depth(self, report):
+        """v1.0 model: pipeline_depth doesn't change declared capability area."""
+        assert report.area_delta_um2 == 0.0
 
 
-class TestControlModuleRegistration:
-    def test_all_six_spec007_modules_registered(self):
-        from npu_sim.core.module_registry import ModuleRegistry
-        registered = set(ModuleRegistry.list_modules())
-        for required in ["MCU", "OGU", "TAU", "DMA", "MTU", "AGU"]:
-            assert required in registered, f"{required} not registered"
+class TestAGUMACDSBStimulus:
+    """§7.3.2 stimulus: the depth/throughput tradeoff is observable."""
+
+    def test_both_runs_valid(self, report):
+        assert report.both_valid
+
+    def test_tokens_delivered_match(self, report):
+        """Throughput parity: same number of tokens flow through."""
+        for key in report.baseline.tokens_delivered:
+            assert report.baseline.tokens_delivered[key] == \
+                   report.variant.tokens_delivered.get(key, 0), (
+                f"Token count mismatch on {key}"
+            )

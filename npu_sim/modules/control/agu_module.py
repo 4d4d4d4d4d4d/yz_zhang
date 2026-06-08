@@ -8,6 +8,8 @@ the stall behavior.
 
 from __future__ import annotations
 
+from typing import Iterator, Optional
+
 from npu_sim.core.errors import ConfigurationError
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.module import (
@@ -24,7 +26,9 @@ from npu_sim.interfaces.transport import (
     ITransportPort,
     PortDirection,
     PortSpec,
+    TransportToken,
 )
+from npu_sim.runtime.ports import TlmInputPort, TlmOutputPort
 
 
 @ModuleRegistry.register
@@ -79,6 +83,11 @@ class AGU(IModule):
         self._configured = False
         self._client_id = None
         self._pipeline_depth = 3
+        self._addresses_per_token = 64
+        self._busy = False
+        self._first_token = True
+        self._in_port: Optional[TlmInputPort] = None
+        self._out_port: Optional[TlmOutputPort] = None
 
     def assign_id(self, module_id): self._owner_id = module_id
     def bind_services(self, event_bus, stat_sink, clock):
@@ -93,12 +102,24 @@ class AGU(IModule):
             )
         self._client_id = config["client_module_id"]
         self._pipeline_depth = config.get("agu_pipeline_depth", 3)
+        self._addresses_per_token = config.get("addresses_per_token", 64)
+        specs = {p.name: p for p in self.port_specs()}
+        self._in_port = TlmInputPort(specs["op_in"], self._owner_id, self._clock)
+        self._out_port = TlmOutputPort(
+            specs["inner_addr_out"], self._owner_id, self._clock, self._stat_sink
+        )
         self._configured = True
 
-    def reset(self): pass
-    def destroy(self): pass
-    def input_ports(self): return {}
-    def output_ports(self): return {}
+    def reset(self):
+        self._busy = False
+        self._first_token = True
+    def destroy(self):
+        self._in_port = None
+        self._out_port = None
+    def input_ports(self):
+        return {"op_in": self._in_port} if self._in_port else {}
+    def output_ports(self):
+        return {"inner_addr_out": self._out_port} if self._out_port else {}
 
     def active_capabilities(self):
         return ["inner_loop_address_gen"] if self._configured else []
@@ -138,7 +159,36 @@ class AGU(IModule):
             notes="SPEC-007 §7.4.1 [calibration knob]",
         )
 
-    def snapshot_state(self): return ModuleState(busy=False)
+    def snapshot_state(self): return ModuleState(busy=self._busy)
+
+    def behavior(self) -> Iterator[None]:
+        """§7.3.1: 1 addr/cycle steady-state; pipeline_depth fills only on
+        the first token (or after an idle gap), then runs at full rate."""
+        n_addrs = self._addresses_per_token
+        while True:
+            token = self._in_port.try_receive()
+            if token is None:
+                self._busy = False
+                self._first_token = True  # stall resumes fill cost
+                yield
+                continue
+            self._busy = True
+            # Fill stall only on the first token after idle (or sim start).
+            if self._first_token:
+                for _ in range(self._pipeline_depth - 1):
+                    yield
+                self._first_token = False
+            # Steady-state: n_addrs cycles per token.
+            for _ in range(n_addrs):
+                yield
+            out = TransportToken(
+                payload=token.payload,
+                size_bytes=token.size_bytes,
+                timestamp_ps=self._clock.current_time_ps(),
+                source_module=self._owner_id,
+                metadata={**token.metadata, "addressed_by": self._owner_id},
+            )
+            yield from self._out_port.send(out)
 
     def estimate_stall_to_client(self, client_throughput_per_cycle: float = 1.0) -> int:
         """SPEC-007 §7.3.1: AGU must deliver 1 addr/cycle; if pipeline_depth

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Iterator, Optional
+
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.module import (
     AreaModel,
@@ -17,7 +19,9 @@ from npu_sim.interfaces.transport import (
     ITransportPort,
     PortDirection,
     PortSpec,
+    TransportToken,
 )
+from npu_sim.runtime.ports import TlmInputPort, TlmOutputPort
 
 
 # §5.3.1 calibration knobs.
@@ -74,6 +78,11 @@ class DMA(IModule):
         self._configured = False
         self._burst_lat = _DRAM_BURST_LATENCY
         self._bus_w = _BUS_WIDTH_BYTES
+        self._bursts_per_token = 8
+        self._payload_per_token = 1024
+        self._busy = False
+        self._in_port: Optional[TlmInputPort] = None
+        self._out_port: Optional[TlmOutputPort] = None
 
     def assign_id(self, module_id): self._owner_id = module_id
     def bind_services(self, event_bus, stat_sink, clock):
@@ -84,12 +93,23 @@ class DMA(IModule):
             raise RuntimeError("DMA.configure() once only.")
         self._burst_lat = config.get("dram_burst_latency", _DRAM_BURST_LATENCY)
         self._bus_w = config.get("bus_width_bytes", _BUS_WIDTH_BYTES)
+        self._bursts_per_token = config.get("bursts_per_token", 8)
+        self._payload_per_token = config.get("payload_bytes_per_token", 1024)
+        specs = {p.name: p for p in self.port_specs()}
+        self._in_port = TlmInputPort(specs["addr_stream_in"], self._owner_id, self._clock)
+        self._out_port = TlmOutputPort(
+            specs["data_out"], self._owner_id, self._clock, self._stat_sink
+        )
         self._configured = True
 
-    def reset(self): pass
-    def destroy(self): pass
-    def input_ports(self): return {}
-    def output_ports(self): return {}
+    def reset(self): self._busy = False
+    def destroy(self):
+        self._in_port = None
+        self._out_port = None
+    def input_ports(self):
+        return {"addr_stream_in": self._in_port} if self._in_port else {}
+    def output_ports(self):
+        return {"data_out": self._out_port} if self._out_port else {}
 
     def active_capabilities(self):
         return ["bulk_memory_transfer"] if self._configured else []
@@ -135,4 +155,29 @@ class DMA(IModule):
             notes="SPEC-007 §5.4.1 [calibration knob]",
         )
 
-    def snapshot_state(self): return ModuleState(busy=False)
+    def snapshot_state(self): return ModuleState(busy=self._busy)
+
+    def _per_token_cycles(self) -> int:
+        per_burst = self._burst_lat + (self._payload_per_token // self._bursts_per_token) // self._bus_w
+        return self._bursts_per_token * per_burst
+
+    def behavior(self) -> Iterator[None]:
+        """§5.3.1: each address stream token = (bursts × per_burst) cycles."""
+        per_token = self._per_token_cycles()
+        while True:
+            token = self._in_port.try_receive()
+            if token is None:
+                self._busy = False
+                yield
+                continue
+            self._busy = True
+            for _ in range(per_token):
+                yield
+            out = TransportToken(
+                payload=token.payload,
+                size_bytes=self._payload_per_token,
+                timestamp_ps=self._clock.current_time_ps(),
+                source_module=self._owner_id,
+                metadata={**token.metadata, "transferred_by": self._owner_id},
+            )
+            yield from self._out_port.send(out)
