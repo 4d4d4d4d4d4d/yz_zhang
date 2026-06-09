@@ -6,6 +6,7 @@ Reference: SPEC-003 §7 R7 (the "AGU-W bandwidth half" archetype).
 from typing import Sequence
 
 from npu_sim.architecture.architecture import IArchitecture
+from npu_sim.architecture.elaborator import ArchitectureElaborator
 from npu_sim.evaluation.comparator import ComparisonReport, compare
 from npu_sim.evaluation.numerical_compare import compare_tensors
 from npu_sim.evaluation.runner import (
@@ -14,7 +15,22 @@ from npu_sim.evaluation.runner import (
     run_simulation,
 )
 from npu_sim.interfaces.operation import IOperation
+from npu_sim.interfaces.services import InMemoryEventBus, InMemoryStatSink
 from npu_sim.mapping import MappingPlan, RuleBasedMapper
+
+
+def elaborate(dsl_path: str) -> IArchitecture:
+    """Elaborate a DSL file with fresh services. The single entry point
+    for use cases that need to inspect the elaborated architecture
+    (capabilities, modules, topology) without running the simulator.
+
+    Pair with :func:`run_simulation` for explicit sim invocations or use
+    :func:`elaborate_and_run` for one-shot eval. Keeps evaluation code
+    YAML-driven by hiding event_bus / stat_sink wiring.
+    """
+    bus = InMemoryEventBus()
+    sink = InMemoryStatSink(event_bus=bus)
+    return ArchitectureElaborator(event_bus=bus, stat_sink=sink).elaborate(dsl_path)
 
 
 def estimate_plan(
@@ -22,14 +38,7 @@ def estimate_plan(
     architecture: IArchitecture,
     strict: bool = True,
 ) -> MappingPlan:
-    """Map ops onto an elaborated architecture using RuleBasedMapper.
-
-    The single integration entry point combining SPEC-006 mapping with the
-    SPEC-003 elaborated architecture. Lets a use case produce a static
-    estimate (MappingPlan.total_typical_cycles / total_dynamic_pj) alongside
-    the dynamic simulation result from `run_simulation`, so estimate vs
-    measured can be compared.
-    """
+    """Map ops onto an elaborated architecture using RuleBasedMapper."""
     return RuleBasedMapper(strict=strict).map(operations, architecture)
 
 
@@ -39,6 +48,7 @@ __all__ = [
     "SimulationResult",
     "compare",
     "compare_tensors",
+    "elaborate",
     "elaborate_and_run",
     "estimate_plan",
     "run_simulation",

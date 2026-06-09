@@ -17,6 +17,8 @@ import pytest
 from npu_sim.evaluation import compare, elaborate_and_run
 import npu_sim.modules  # noqa: F401
 
+from tests.integration._yaml_driven_contract import assert_evaluation_is_yaml_driven
+
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "architectures"
 
@@ -82,3 +84,7 @@ class TestOGUAreaImpact:
         # Baseline area = full MCU. Variant area = stripped MCU + OGU.
         # If OGU < (full MCU - stripped MCU), variant ≤ baseline.
         assert report.variant.total_area_um2 < report.baseline.total_area_um2
+
+
+def test_yaml_driven_contract():
+    assert_evaluation_is_yaml_driven(__file__)

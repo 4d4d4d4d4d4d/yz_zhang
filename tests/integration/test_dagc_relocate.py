@@ -18,6 +18,8 @@ import pytest
 from npu_sim.evaluation import compare, elaborate_and_run
 import npu_sim.modules  # noqa: F401
 
+from tests.integration._yaml_driven_contract import assert_evaluation_is_yaml_driven
+
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "architectures"
 
@@ -63,9 +65,8 @@ class TestRelocateAreaPolicy:
 class TestRelocateValidation:
     def test_same_die_relocate_is_rejected(self, tmp_path):
         """§2.2 schema: from_die == to_die is a no-op and must error."""
-        from npu_sim.architecture.elaborator import ArchitectureElaborator
         from npu_sim.core.errors import OverrideError
-        from npu_sim.interfaces.services import InMemoryEventBus, InMemoryStatSink
+        from npu_sim.evaluation import elaborate as _elaborate
 
         bad = tmp_path / "bad_relocate.yaml"
         bad.write_text(f"""schema_version: "1.0"
@@ -79,8 +80,9 @@ overrides:
         to_die: 0
         latency_penalty_pct: 5
 """)
-        bus = InMemoryEventBus()
-        sink = InMemoryStatSink(event_bus=bus)
-        elab = ArchitectureElaborator(event_bus=bus, stat_sink=sink)
         with pytest.raises(OverrideError, match="from_die equals to_die"):
-            elab.elaborate(str(bad))
+            _elaborate(str(bad))
+
+
+def test_yaml_driven_contract():
+    assert_evaluation_is_yaml_driven(__file__)

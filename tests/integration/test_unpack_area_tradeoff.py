@@ -15,8 +15,10 @@ from pathlib import Path
 
 import pytest
 
-from npu_sim.evaluation import compare, elaborate_and_run
+from npu_sim.evaluation import compare, elaborate, elaborate_and_run
 import npu_sim.modules  # noqa: F401
+
+from tests.integration._yaml_driven_contract import assert_evaluation_is_yaml_driven
 
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "architectures"
@@ -64,18 +66,13 @@ class TestUnpackCapabilitySetShape:
     """§U.3 (weakened): the variant adds compact_unpack and keeps all others."""
 
     def test_active_capabilities_only_add_compact_unpack(self):
-        from npu_sim.architecture.elaborator import ArchitectureElaborator
-        from npu_sim.interfaces.services import InMemoryEventBus, InMemoryStatSink
-
-        def _arch(name: str):
-            bus = InMemoryEventBus()
-            sink = InMemoryStatSink(event_bus=bus)
-            return ArchitectureElaborator(event_bus=bus, stat_sink=sink).elaborate(
-                str(FIXTURES / name)
-            )
-        a_base = _arch("usecase_unpack_baseline.yaml")
-        a_var = _arch("usecase_unpack_compact.yaml")
+        a_base = elaborate(str(FIXTURES / "usecase_unpack_baseline.yaml"))
+        a_var = elaborate(str(FIXTURES / "usecase_unpack_compact.yaml"))
         base_caps = set(a_base.modules["dagc"].active_capabilities())
         var_caps = set(a_var.modules["dagc"].active_capabilities())
         assert var_caps - base_caps == {"compact_unpack"}
         assert base_caps - var_caps == set()
+
+
+def test_yaml_driven_contract():
+    assert_evaluation_is_yaml_driven(__file__)

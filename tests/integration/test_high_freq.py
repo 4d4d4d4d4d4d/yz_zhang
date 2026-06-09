@@ -15,6 +15,8 @@ from pathlib import Path
 from npu_sim.evaluation import compare, elaborate_and_run
 import npu_sim.modules  # noqa: F401
 
+from tests.integration._yaml_driven_contract import assert_evaluation_is_yaml_driven
+
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "architectures"
 
@@ -50,3 +52,7 @@ class TestFrequencyScaling:
         )
         # Area unchanged — freq scaling is timing-only.
         assert abs(report.area_delta_um2) < 1e-3
+
+
+def test_yaml_driven_contract():
+    assert_evaluation_is_yaml_driven(__file__)

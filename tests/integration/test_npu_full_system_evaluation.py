@@ -23,6 +23,8 @@ import pytest
 from npu_sim.evaluation import compare, elaborate_and_run
 import npu_sim.modules  # noqa: F401
 
+from tests.integration._yaml_driven_contract import assert_evaluation_is_yaml_driven
+
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "architectures"
 
@@ -105,34 +107,5 @@ class TestStallChainStillTraceable:
         )
 
 
-class TestEvaluationIsPureYamlDriven:
-    """Meta-test: this test file does NOT manually construct modules or
-    call estimate_* directly. The only input is YAML; the only output is
-    the comparator. Proves the user contract:
-    '改 YAML → simulator → result'."""
-
-    def test_no_python_module_construction_in_use_case(self):
-        """Statically verifies this test file imports neither MCU/OGU/DAGC
-        classes directly nor invokes any estimate_* method. Strips strings
-        and comments before scanning so docstrings can mention them freely.
-        """
-        import inspect, re, sys, io, tokenize
-        source = inspect.getsource(sys.modules[__name__])
-        # Drop string literals + comments before scanning so that
-        # docstrings/strings mentioning module names don't trigger.
-        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
-        code_only = "".join(
-            t.string for t in tokens
-            if t.type not in (tokenize.STRING, tokenize.COMMENT)
-        )
-        offenders = re.findall(
-            r"\b(MCU|OGU|TAU|DMA|MTU|AGU|DAGC|DSB|MAC|VAU|AVP)\(",
-            code_only,
-        )
-        assert offenders == [], (
-            f"Use case constructs modules in Python: {offenders}. "
-            f"All evaluation must go through YAML + elaborate_and_run."
-        )
-        assert ".estimate_" not in code_only, (
-            "Use case calls .estimate_* directly; should use compare() metrics."
-        )
+def test_yaml_driven_contract():
+    assert_evaluation_is_yaml_driven(__file__)
