@@ -1,0 +1,32 @@
+schema_version: "1.0"
+name: "NPU full system variant (MCU+OGU + compact unpack + DAGC relocate)"
+description: |
+  System-level evaluation combining three SPEC-007/SPEC-005 v1.1 levers:
+    - OGU offloads BD-gen + buffsize from MCU (-78% MCU work)
+    - DAGC compact_unpack saves area (-1980 μm²)
+    - DAGC __relocate__ models a 3D-stacked DAGC die (+10% transport)
+  All applied via a single overrides block on top of the baseline YAML.
+
+base: usecase_npu_full_baseline.yaml
+
+overrides:
+  modules:
+    mcu_0:
+      config:
+        has_ogu_peer: true
+        ogu_peer_id: ogu_0
+    dagc:
+      config:
+        enable_compact_unpack: true
+      __relocate__:
+        from_die: 0
+        to_die: 1
+        latency_penalty_pct: 10
+        energy_penalty_pct: 10
+        area_penalty_pct: 0
+  add_modules:
+    - id: ogu_0
+      type: OGU
+      clock: main_clk
+      config:
+        mcu_peer_id: mcu_0

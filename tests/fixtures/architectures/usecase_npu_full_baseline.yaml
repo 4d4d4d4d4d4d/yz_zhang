@@ -1,0 +1,101 @@
+schema_version: "1.0"
+name: "NPU full system baseline (data + control plane, no OGU)"
+description: |
+  Full NPU evaluation baseline: SPEC-005 data path (DAGC → DSB → MAC → VAU
+  → AVP) plus SPEC-007 control plane (MCU + AGU + MTU). The control plane
+  has no OGU; the variant adds OGU to evaluate the system-level impact.
+
+metadata:
+  tags: ["full_system", "evaluation", "spec005+spec007"]
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  # ============= Data plane (SPEC-005) =============
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 16
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 8
+
+  - id: dagc
+    type: DAGC
+    clock: main_clk
+    config:
+      bfp8_unpack_throughput: 8
+      bfp16_unpack_throughput: 4
+      bfp_ratio: "2:1"
+      enable_compact_unpack: false
+
+  - id: dsb
+    type: DSB
+    clock: main_clk
+    config:
+      buffer_kb: 64
+      read_throughput: 8
+      enable_double_buffer: true
+
+  - id: mac
+    type: MAC
+    clock: main_clk
+    config:
+      array_rows: 32
+      array_cols: 32
+      support_bfp16: true
+
+  - id: vau
+    type: VAU
+    clock: main_clk
+    config:
+      lanes: 16
+
+  - id: avp
+    type: AVP
+    clock: main_clk
+    config:
+      vector_width: 16
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+
+  # ============= Control plane (SPEC-007) =============
+  - id: mcu_0
+    type: MCU
+    clock: main_clk
+    config:
+      has_ogu_peer: false
+      threads: 1
+
+  - id: agu_mac
+    type: AGU
+    clock: main_clk
+    config:
+      client_module_id: mac
+      agu_pipeline_depth: 3
+      addresses_per_token: 64
+
+  - id: mtu_0
+    type: MTU
+    clock: main_clk
+    config:
+      bursts_per_token: 8
+      payload_bytes_per_token: 1024
+      dram_burst_latency: 40
+      bus_width_bytes: 32
+      overlap_factor: 0.8
+
+connections:
+  # Data plane chain (unchanged from npu_pipeline.yaml).
+  - { from: prod.out,          to: dagc.in_packed, fifo_depth: 4, latency_cycles: 1 }
+  - { from: dagc.out_unpacked, to: dsb.in_data,    fifo_depth: 4, latency_cycles: 1 }
+  - { from: dsb.out_data,      to: mac.in_act,     fifo_depth: 4, latency_cycles: 1 }
+  - { from: mac.out_psum,      to: vau.in_a,       fifo_depth: 4, latency_cycles: 1 }
+  - { from: vau.out,           to: avp.in_data,    fifo_depth: 4, latency_cycles: 1 }
+  - { from: avp.out_data,      to: cons.in,        fifo_depth: 4, latency_cycles: 1 }
