@@ -362,13 +362,25 @@ class ArchitectureElaborator:
                 and not src_clock.is_same_domain(dst_clock)
             )
 
+            # SPEC-003 v1.1 §2.2.2: __relocate__ on a source module injects
+            # extra physical transport latency on every connection leaving
+            # it (the off-die / 3D penalty manifested in the sim).
+            base_latency = c.get("latency_cycles", 1)
+            src_module = modules[src_mod_id]
+            src_reloc = getattr(src_module, "_relocate_meta", None)
+            if src_reloc:
+                lat_pct = src_reloc.get("latency_penalty_pct", 0.0)
+                # Penalty is ≥1 cycle to ensure non-trivial relocate is visible.
+                extra = max(1 if lat_pct > 0 else 0, int(base_latency * lat_pct / 100.0))
+                base_latency += extra
+
             base_spec_kwargs = dict(
                 source_module=src_mod_id,
                 source_port=src_port,
                 sink_module=dst_mod_id,
                 sink_port=dst_port,
                 fifo_depth=c.get("fifo_depth", 1),
-                latency_cycles=c.get("latency_cycles", 1),
+                latency_cycles=base_latency,
                 bandwidth_gbps=c.get("bandwidth_gbps", 0.0),
             )
 
