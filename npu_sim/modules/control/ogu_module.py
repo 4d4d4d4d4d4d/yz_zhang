@@ -7,7 +7,7 @@ load optimization" target (§3.3.2) is asserted at the use-case level:
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Iterator, Optional
 
 from npu_sim.core.errors import ConfigurationError
 from npu_sim.core.module_registry import ModuleRegistry
@@ -27,7 +27,9 @@ from npu_sim.interfaces.transport import (
     ITransportPort,
     PortDirection,
     PortSpec,
+    TransportToken,
 )
+from npu_sim.runtime.ports import TlmInputPort, TlmOutputPort
 
 
 # §3.3.1 segment costs (calibration knob).
@@ -134,6 +136,11 @@ class OGU(IModule):
         self._configured: bool = False
         self._mcu_peer_id: Optional[str] = None
         self._active_caps: list[str] = []
+        self._busy: bool = False
+        self._stage: str = "idle"
+        self._serviced: int = 0
+        self._req_port: Optional[TlmInputPort] = None
+        self._resp_port: Optional[TlmOutputPort] = None
 
     def assign_id(self, module_id: str) -> None:
         self._owner_id = module_id
@@ -158,21 +165,29 @@ class OGU(IModule):
             "bd_gen",
             "op_config_assist",
         ]
+        specs = {p.name: p for p in self.port_specs()}
+        self._req_port = TlmInputPort(specs["req_in"], self._owner_id, self._clock)
+        self._resp_port = TlmOutputPort(
+            specs["resp_out"], self._owner_id, self._clock, self._stat_sink
+        )
         self._configured = True
 
     def reset(self) -> None:
-        pass
+        self._busy = False
+        self._stage = "idle"
+        self._serviced = 0
 
     def destroy(self) -> None:
-        pass
+        self._req_port = None
+        self._resp_port = None
 
     # ============== Ports ==============
 
     def input_ports(self) -> dict[str, ITransportPort]:
-        return {}
+        return {"req_in": self._req_port} if self._req_port else {}
 
     def output_ports(self) -> dict[str, ITransportPort]:
-        return {}
+        return {"resp_out": self._resp_port} if self._resp_port else {}
 
     # ============== Capability queries ==============
 
@@ -218,4 +233,45 @@ class OGU(IModule):
     # ============== Runtime state ==============
 
     def snapshot_state(self) -> ModuleState:
-        return ModuleState(busy=False, current_op=None)
+        return ModuleState(busy=self._busy, current_op=self._stage if self._busy else None)
+
+    @property
+    def serviced(self) -> int:
+        return self._serviced
+
+    # ============== Behavior (generator) ==============
+
+    def behavior(self) -> Iterator[None]:
+        """SPEC-007 §3.3 — real handshake with MCU peer.
+
+        For each incoming ogu_req: run buffsize (20 cycles) + bd_gen (30
+        cycles) = 50 cycles total, then emit ogu_resp. MCU's behavior()
+        runs op_config (60 cycles) in parallel; total per-op latency is
+        max(50, 60) = 60, not 50+60 — this is true pipeline parallelism
+        visible in the per-cycle scheduler trace.
+        """
+        while True:
+            req = self._req_port.try_receive()
+            if req is None:
+                self._busy = False
+                self._stage = "idle"
+                yield
+                continue
+            self._busy = True
+            for stage_name, stage_cycles in (
+                ("buffsize", _T_BUFFSIZE),
+                ("bd_gen", _T_BD),
+            ):
+                self._stage = stage_name
+                for _ in range(stage_cycles):
+                    yield
+            self._stage = "resp"
+            resp = TransportToken(
+                payload=req.payload,
+                size_bytes=req.size_bytes,
+                timestamp_ps=self._clock.current_time_ps(),
+                source_module=self._owner_id,
+                metadata={**req.metadata, "kind": "ogu_resp"},
+            )
+            yield from self._resp_port.send(resp)
+            self._serviced += 1

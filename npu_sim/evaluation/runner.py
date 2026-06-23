@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Callable, Optional
 
 from npu_sim.architecture.architecture import IArchitecture
 from npu_sim.architecture.clock import SimpleClock
@@ -59,6 +59,7 @@ class SimulationResult:
 def run_simulation(
     arch: IArchitecture,
     max_cycles: int = 10_000,
+    per_cycle_hook: Optional[Callable[[int, IArchitecture], None]] = None,
 ) -> SimulationResult:
     """Drive every behavior()-bearing module and produce a SimulationResult.
 
@@ -67,6 +68,10 @@ def run_simulation(
     The Elaborator is the canonical source for the bound services; we fetch
     the sink and bus from the first module's port owner record so this
     runner does not require them to be threaded through separately.
+
+    ``per_cycle_hook(cycle_index, arch)`` is invoked AFTER each scheduled
+    tick advances; pass :class:`npu_sim.reporting.waveform.WaveformRecorder`
+    to capture cycle-by-cycle state for waveform rendering.
     """
 
     main_clock: SimpleClock = arch.clocks[next(iter(arch.clocks))]
@@ -83,7 +88,29 @@ def run_simulation(
     for mid, module in arch.modules.items():
         if hasattr(module, "behavior"):
             scheduler.spawn(module.behavior(), module_id=mid)
-    sched_result = scheduler.run(max_cycles=max_cycles)
+
+    if per_cycle_hook is None:
+        sched_result = scheduler.run(max_cycles=max_cycles)
+    else:
+        # Tick the scheduler one cycle at a time so we can sample state.
+        # SimpleScheduler.run() advances *by* its max_cycles argument (not
+        # *to* it), so passing 1 each iteration gives a clean 1-cycle step.
+        # Slightly slower than batched run() but only used when a recorder
+        # is attached.
+        sched_result = None
+        cumulative = SchedulerResult(cycles_run=0, finished=0, deadlocked=0, behavior_ids_alive=[])
+        for c in range(max_cycles):
+            step = scheduler.run(max_cycles=1)
+            cumulative = SchedulerResult(
+                cycles_run=cumulative.cycles_run + step.cycles_run,
+                finished=cumulative.finished + step.finished,
+                deadlocked=step.deadlocked,
+                behavior_ids_alive=step.behavior_ids_alive,
+            )
+            per_cycle_hook(c, arch)
+            if step.cycles_run == 0:  # scheduler exhausted (all behaviors done)
+                break
+        sched_result = cumulative
 
     sim_time_ps = main_clock.current_time_ps()
 

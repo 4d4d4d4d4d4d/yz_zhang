@@ -20,3 +20,7 @@ overrides:
       clock: main_clk
       config:
         mcu_peer_id: mcu_0
+  add_connections:
+    # Real SPEC-007 §2/§3 handshake on the SPEC-002 transport layer.
+    - { from: mcu_0.ogu_req,  to: ogu_0.req_in,    fifo_depth: 4, latency_cycles: 1 }
+    - { from: ogu_0.resp_out, to: mcu_0.ogu_resp,  fifo_depth: 4, latency_cycles: 1 }

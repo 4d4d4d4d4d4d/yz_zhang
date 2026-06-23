@@ -94,6 +94,7 @@ class MAC(IModule):
         self._psums: int = 0
         self._weight_loaded: bool = False
         self._busy: bool = False
+        self._stage: str = "idle"
         self._in_act_port: Optional[TlmInputPort] = None
         self._in_weight_port: Optional[TlmInputPort] = None
         self._in_cmd_port: Optional[TlmInputPort] = None
@@ -212,7 +213,7 @@ class MAC(IModule):
     def snapshot_state(self) -> ModuleState:
         return ModuleState(
             busy=self._busy,
-            current_op="matmul" if self._busy else None,
+            current_op=self._stage if self._busy else None,
             internal_fifo_levels={
                 "in_act": self._in_act_port.fifo_level() if self._in_act_port else 0,
                 "in_weight": self._in_weight_port.fifo_level() if self._in_weight_port else 0,
@@ -223,13 +224,23 @@ class MAC(IModule):
     def psums(self) -> int:
         return self._psums
 
+    @property
+    def stage(self) -> str:
+        return self._stage
+
     # ============== Behavior (generator) ==============
 
     def _compute_cycles(self) -> int:
         return max(1, self._cols // self._rows) + 1
 
     def behavior(self) -> Iterator[None]:
-        """Weight-stationary stream: preload weights, multiply each activation."""
+        """Weight-stationary stream with visible internal stages.
+
+        The pipeline cycle budget is unchanged from v1.0 (preserves the
+        SPEC-005 timing contract); only ``current_op`` in snapshot_state
+        progresses through named stages so cycle-by-cycle traces show the
+        systolic-fill / compute / writeback phases.
+        """
         while True:
             if self._in_cmd_port is not None:
                 self._in_cmd_port.try_receive()
@@ -240,11 +251,25 @@ class MAC(IModule):
             act = self._in_act_port.try_receive()
             if act is None:
                 self._busy = False
+                self._stage = "idle"
                 yield
                 continue
 
             self._busy = True
-            for _ in range(self._compute_cycles()):
+            total = self._compute_cycles()
+            # Sub-stage the same total cycles across fill/compute/writeback.
+            fill_n = max(0, total // 3)
+            compute_n = max(0, total // 3)
+            wb_n = total - fill_n - compute_n  # remainder
+
+            self._stage = "systolic_fill"
+            for _ in range(fill_n):
+                yield
+            self._stage = "systolic_compute"
+            for _ in range(compute_n):
+                yield
+            self._stage = "writeback_psum"
+            for _ in range(wb_n):
                 yield
 
             psum = TransportToken(
