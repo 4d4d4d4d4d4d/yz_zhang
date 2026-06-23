@@ -11,8 +11,9 @@ from npu_sim.modules import (  # noqa: F401  (side-effect: registration)
     dsb,
     dummy,
     mac,
+    memory,
     probe,
     vau,
 )
 
-__all__ = ["avp", "control", "dagc", "dsb", "dummy", "mac", "probe", "vau"]
+__all__ = ["avp", "control", "dagc", "dsb", "dummy", "mac", "memory", "probe", "vau"]
