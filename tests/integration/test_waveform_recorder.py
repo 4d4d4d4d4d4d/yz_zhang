@@ -131,3 +131,39 @@ class TestWaveformRendering:
 
 def test_yaml_driven_contract():
     assert_evaluation_is_yaml_driven(__file__)
+
+
+class TestStallOverlay:
+    """SPEC-002 §3.3: back-pressure should be visually distinct from work."""
+
+    @pytest.fixture(scope="class")
+    def stall_trace(self):
+        arch = elaborate(str(FIXTURES / "usecase_stall_demo.yaml"))
+        rec = WaveformRecorder()
+        run_simulation(arch, max_cycles=400, per_cycle_hook=rec)
+        return arch, rec
+
+    def test_render_marks_back_pressure_cycles(self, stall_trace):
+        arch, rec = stall_trace
+        out = rec.render(arch, max_cycles=300)
+        # Stall glyph X must appear in the output.
+        assert "STALL" in out, "Stall legend missing"
+        # The producer should have many stall cycles since the consumer is slow.
+        prod_line = next(
+            (line for line in out.splitlines() if line.startswith("prod")),
+            None,
+        )
+        assert prod_line is not None
+        assert "X" in prod_line, (
+            f"Expected prod to show X stall cells, got: {prod_line}"
+        )
+
+    def test_no_stall_glyph_when_no_back_pressure(self):
+        """Sanity: a fast-consumer arch should NOT emit STALL legend."""
+        arch = elaborate(str(FIXTURES / "dagc_chain.yaml"))
+        rec = WaveformRecorder()
+        run_simulation(arch, max_cycles=200, per_cycle_hook=rec)
+        out = rec.render(arch, max_cycles=200)
+        assert "STALL" not in out, (
+            "dagc_chain is a happy-path fixture; should not produce stalls"
+        )
