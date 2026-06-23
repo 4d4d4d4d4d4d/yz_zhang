@@ -15,6 +15,7 @@ Owners：架构组
 | [SPEC-005 模块库规范](./SPEC-005-Module-Library.md) | Phase 2 真实模块（DSB/MAC/VAU/AVP）的行为/时序/functional 契约 | v0.1 Draft |
 | [SPEC-006 Rule-based Mapper 规范](./SPEC-006-Mapper.md) | Phase 4 规则化映射器接口与算法（op-graph → 模块指派）| v0.1 Draft |
 | [SPEC-007 控制与数据传输模块族](./SPEC-007-Control-Transfer-Modules.md) | MCU / OGU / TAU / DMA / MTU / AGU 行为契约 | v0.1 Draft（Review pending）|
+| [SPEC-008 内存模块族](./SPEC-008-Memory-Modules.md) | WB / OB / Quant / SFU 逐模块累加交付 | v0.1 Draft（§1 WB Review pending）|
 | [SPEC-001 v1.1 增订](./SPEC-001-v1.1-amendment.md) | Area 维度 + clock_domain | v1.1 Draft（Review pending）|
 | [SPEC-003 v1.1 增订](./SPEC-003-v1.1-amendment.md) | `__relocate__` / `clock_domains` / `physical_dimension` | v1.1 Draft（Review pending）|
 | [SPEC-005 v1.1 增订](./SPEC-005-v1.1-amendment.md) | 现存模块 area 系数 + UNPACK capability | v1.1 Draft（Review pending）|
