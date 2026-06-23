@@ -1,0 +1,12 @@
+schema_version: "1.0"
+name: "SFU with trig enabled (+sin/cos)"
+description: |
+  §4.7 trig cost: enable_trig adds sin+cos capabilities → +8000 μm² area.
+
+base: usecase_sfu_baseline.yaml
+
+overrides:
+  modules:
+    sfu:
+      config:
+        enable_trig: true

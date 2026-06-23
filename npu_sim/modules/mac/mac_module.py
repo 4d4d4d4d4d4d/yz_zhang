@@ -52,6 +52,16 @@ class MAC(IModule):
                 "array_cols": {"type": "integer", "minimum": 4, "maximum": 256, "default": 32},
                 "support_bfp16": {"type": "boolean", "default": True},
                 "support_fp16": {"type": "boolean", "default": False},
+                "psums_per_tile": {
+                    "type": "integer", "minimum": 1, "maximum": 256, "default": 1,
+                    "description": (
+                        "SPEC-008 §2.10: number of partial psums per output "
+                        "tile. MAC tags each emitted psum with tile_id and "
+                        "partial_idx so an OB can accumulate them. Default 1 "
+                        "= each psum is a complete tile (no accumulation, "
+                        "backward-compatible with v1.0)."
+                    ),
+                },
             },
             "required": ["array_rows", "array_cols"],
         }
@@ -89,6 +99,7 @@ class MAC(IModule):
         self._cols: int = 32
         self._support_bfp16: bool = True
         self._support_fp16: bool = False
+        self._psums_per_tile: int = 1
         self._active_caps: list[str] = []
 
         self._psums: int = 0
@@ -115,6 +126,7 @@ class MAC(IModule):
         self._cols = config["array_cols"]
         self._support_bfp16 = config.get("support_bfp16", True)
         self._support_fp16 = config.get("support_fp16", False)
+        self._psums_per_tile = config.get("psums_per_tile", 1)
 
         self._active_caps = ["int8_matmul", "accumulate_fp32"]
         if self._support_bfp16:
@@ -272,12 +284,24 @@ class MAC(IModule):
             for _ in range(wb_n):
                 yield
 
+            # SPEC-008 §2.10: tag psum with (tile_id, partial_idx) so OB can
+            # accumulate. psums_per_tile=1 → each psum is a complete tile.
+            partial_idx = self._psums % self._psums_per_tile
+            tile_id = self._psums // self._psums_per_tile
+            is_last_partial = (partial_idx == self._psums_per_tile - 1)
             psum = TransportToken(
                 payload=act.payload,
                 size_bytes=act.size_bytes * 2,  # FP32 psum is wider
                 timestamp_ps=self._clock.current_time_ps(),
                 source_module=self._owner_id,
-                metadata={**act.metadata, "psum": True, "weight_loaded": self._weight_loaded},
+                metadata={
+                    **act.metadata,
+                    "psum": True,
+                    "weight_loaded": self._weight_loaded,
+                    "tile_id": tile_id,
+                    "partial_idx": partial_idx,
+                    "is_last_partial": is_last_partial,
+                },
             )
             yield from self._out_port.send(psum)
             self._psums += 1
