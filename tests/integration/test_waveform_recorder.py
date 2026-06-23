@@ -167,3 +167,31 @@ class TestStallOverlay:
         assert "STALL" not in out, (
             "dagc_chain is a happy-path fixture; should not produce stalls"
         )
+
+    def test_stall_cause_attribution_shown(self, stall_trace):
+        """SPEC-002 §3.3.1: each stalled module surfaces its caused_by peer."""
+        arch, rec = stall_trace
+        out = rec.render(arch, max_cycles=300)
+        assert "stalled by:" in out, "Stall causality hint missing"
+        # Producer's stall is caused by DAGC; DAGC's by consumer.
+        assert "stalled by: dagc" in out or "stalled by: cons" in out
+
+
+class TestFIFOSparkline:
+    """Per-connection FIFO depth is rendered as a digit sparkline."""
+
+    def test_fifo_section_present_when_tlm_connections_exist(self):
+        arch = elaborate(str(FIXTURES / "usecase_stall_demo.yaml"))
+        rec = WaveformRecorder()
+        run_simulation(arch, max_cycles=300, per_cycle_hook=rec)
+        out = rec.render(arch, max_cycles=100)
+        assert "FIFO depth per connection" in out
+        # The stall demo's FIFOs should saturate (digit 4 visible in run).
+        assert "prod.out→dagc.in_packed" in out
+
+    def test_fifo_can_be_disabled(self):
+        arch = elaborate(str(FIXTURES / "usecase_stall_demo.yaml"))
+        rec = WaveformRecorder()
+        run_simulation(arch, max_cycles=300, per_cycle_hook=rec)
+        out = rec.render(arch, max_cycles=100, show_fifos=False)
+        assert "FIFO depth per connection" not in out
