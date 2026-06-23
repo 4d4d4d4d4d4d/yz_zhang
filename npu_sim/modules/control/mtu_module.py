@@ -107,6 +107,7 @@ class MTU(IModule):
         self._bursts_per_token = 8
         self._payload_per_token = 1024
         self._busy = False
+        self._stage = "idle"
         self._in_port: Optional[TlmInputPort] = None
         self._out_port: Optional[TlmOutputPort] = None
 
@@ -179,7 +180,8 @@ class MTU(IModule):
             notes="SPEC-007 §6.4.1 [calibration knob]",
         )
 
-    def snapshot_state(self): return ModuleState(busy=self._busy)
+    def snapshot_state(self):
+        return ModuleState(busy=self._busy, current_op=self._stage if self._busy else None)
 
     def _per_token_cycles(self) -> int:
         bursts = self._bursts_per_token
@@ -191,17 +193,31 @@ class MTU(IModule):
         return t_tau + t_dma - overlap
 
     def behavior(self) -> Iterator[None]:
-        """§6.3.1: fused addr+data path, per-token cycles include overlap."""
+        """§6.3.1: fused addr+data path. Stages mirror the internal TAU/DMA
+        share that runs in parallel: addr_fused (faster) overlaps with
+        dram_fused (slower); the union takes per_token cycles total.
+        """
         per_token = self._per_token_cycles()
+        # Split visible cycles roughly: 1 recv + addr_phase + dram_phase + 1 emit.
+        addr_phase = max(0, self._bursts_per_token * _TAU_CYCLES_PER_BURST - 1)
+        dram_phase = max(0, per_token - 2 - addr_phase)
         while True:
             token = self._in_port.try_receive()
             if token is None:
                 self._busy = False
+                self._stage = "idle"
                 yield
                 continue
             self._busy = True
-            for _ in range(per_token):
+            self._stage = "recv_desc"
+            yield
+            self._stage = "addr_fused"
+            for _ in range(addr_phase):
                 yield
+            self._stage = "dram_fused"
+            for _ in range(dram_phase):
+                yield
+            self._stage = "emit_data"
             out = TransportToken(
                 payload=token.payload,
                 size_bytes=self._payload_per_token,

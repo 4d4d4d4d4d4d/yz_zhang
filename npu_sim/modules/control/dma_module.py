@@ -81,6 +81,7 @@ class DMA(IModule):
         self._bursts_per_token = 8
         self._payload_per_token = 1024
         self._busy = False
+        self._stage = "idle"
         self._in_port: Optional[TlmInputPort] = None
         self._out_port: Optional[TlmOutputPort] = None
 
@@ -155,24 +156,32 @@ class DMA(IModule):
             notes="SPEC-007 §5.4.1 [calibration knob]",
         )
 
-    def snapshot_state(self): return ModuleState(busy=self._busy)
+    def snapshot_state(self):
+        return ModuleState(busy=self._busy, current_op=self._stage if self._busy else None)
 
     def _per_token_cycles(self) -> int:
         per_burst = self._burst_lat + (self._payload_per_token // self._bursts_per_token) // self._bus_w
         return self._bursts_per_token * per_burst
 
     def behavior(self) -> Iterator[None]:
-        """§5.3.1: each address stream token = (bursts × per_burst) cycles."""
+        """§5.3.1: address stream → bulk DRAM read. Stages:
+          recv_addr → dram_burst (per_token-2 cycles) → emit_data
+        """
         per_token = self._per_token_cycles()
         while True:
             token = self._in_port.try_receive()
             if token is None:
                 self._busy = False
+                self._stage = "idle"
                 yield
                 continue
             self._busy = True
-            for _ in range(per_token):
+            self._stage = "recv_addr"
+            yield
+            self._stage = "dram_burst"
+            for _ in range(max(0, per_token - 2)):
                 yield
+            self._stage = "emit_data"
             out = TransportToken(
                 payload=token.payload,
                 size_bytes=self._payload_per_token,

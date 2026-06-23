@@ -92,6 +92,7 @@ class AVP(IModule):
         self._support_pooling: bool = False
         self._lut_entries: int = 256
         self._active_caps: list[str] = []
+        self._stage: str = "idle"
 
         self._processed: int = 0
         self._busy: bool = False
@@ -190,7 +191,7 @@ class AVP(IModule):
     def snapshot_state(self) -> ModuleState:
         return ModuleState(
             busy=self._busy,
-            current_op="activation" if self._busy else None,
+            current_op=self._stage if self._busy else None,
             internal_fifo_levels={
                 "in_data": self._in_data_port.fifo_level() if self._in_data_port else 0,
             },
@@ -214,13 +215,16 @@ class AVP(IModule):
             token = self._in_data_port.try_receive()
             if token is None:
                 self._busy = False
+                self._stage = "idle"
                 yield
                 continue
 
             self._busy = True
+            self._stage = "lut_lookup"
             for _ in range(self._act_cycles(token)):
                 yield
 
+            self._stage = "emit"
             out_token = TransportToken(
                 payload=token.payload,
                 size_bytes=token.size_bytes,

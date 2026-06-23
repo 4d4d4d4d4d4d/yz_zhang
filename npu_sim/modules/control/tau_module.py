@@ -94,6 +94,7 @@ class TAU(IModule):
         self._addr_fifo_depth = 16
         self._bursts_per_token = 8
         self._busy = False
+        self._stage = "idle"
         self._in_port: Optional[TlmInputPort] = None
         self._out_port: Optional[TlmOutputPort] = None
 
@@ -167,20 +168,29 @@ class TAU(IModule):
         )
 
     def snapshot_state(self) -> ModuleState:
-        return ModuleState(busy=self._busy)
+        return ModuleState(busy=self._busy, current_op=self._stage if self._busy else None)
 
     def behavior(self) -> Iterator[None]:
-        """§4.3.1: process each descriptor token in (bursts × 4) cycles."""
+        """§4.3.1: each descriptor token = (bursts × 4) cycles of address-gen.
+
+        Stages visible in snapshot_state.current_op:
+          load_descriptor (1 cycle) → addr_gen (bursts×4 cycles) → emit (1)
+        """
         per_token = self._bursts_per_token * _CYCLES_PER_BURST
         while True:
             token = self._in_port.try_receive()
             if token is None:
                 self._busy = False
+                self._stage = "idle"
                 yield
                 continue
             self._busy = True
-            for _ in range(per_token):
+            self._stage = "load_descriptor"
+            yield
+            self._stage = "addr_gen"
+            for _ in range(max(0, per_token - 2)):  # -2 for load + emit
                 yield
+            self._stage = "emit"
             out = TransportToken(
                 payload=token.payload,
                 size_bytes=token.size_bytes,
@@ -189,4 +199,3 @@ class TAU(IModule):
                 metadata={**token.metadata, "addressed_by": self._owner_id},
             )
             yield from self._out_port.send(out)
-        # unreachable

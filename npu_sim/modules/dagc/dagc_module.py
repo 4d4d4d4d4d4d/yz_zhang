@@ -198,6 +198,7 @@ class DAGC(IModule):
 
         self._unpacked: int = 0
         self._busy: bool = False
+        self._stage: str = "idle"
         self._in_packed_port: Optional[TlmInputPort] = None
         self._in_cmd_port: Optional[TlmInputPort] = None
         self._out_port: Optional[TlmOutputPort] = None
@@ -303,7 +304,7 @@ class DAGC(IModule):
     def snapshot_state(self) -> ModuleState:
         return ModuleState(
             busy=self._busy,
-            current_op="unpack" if self._busy else None,
+            current_op=self._stage if self._busy else None,
             internal_fifo_levels={
                 "in_packed": self._in_packed_port.fifo_level() if self._in_packed_port else 0,
                 "in_cmd": self._in_cmd_port.fifo_level() if self._in_cmd_port else 0,
@@ -339,13 +340,24 @@ class DAGC(IModule):
             token = self._in_packed_port.try_receive()
             if token is None:
                 self._busy = False
+                self._stage = "idle"
                 yield
                 continue
 
             self._busy = True
-            for _ in range(self._unpack_cycles(token)):
+            total = self._unpack_cycles(token)
+            # Sub-stages within the same cycle budget.
+            decode_n = 1 if self._compact_unpack else 0
+            unpack_n = max(0, total - decode_n)
+            if decode_n:
+                self._stage = "decode_compact"
+                for _ in range(decode_n):
+                    yield
+            self._stage = "unpack_bfp"
+            for _ in range(unpack_n):
                 yield
 
+            self._stage = "emit"
             unpacked_token = TransportToken(
                 payload=token.payload,
                 size_bytes=token.size_bytes * 2,  # unpacked stream is wider

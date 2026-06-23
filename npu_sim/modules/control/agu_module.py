@@ -85,6 +85,7 @@ class AGU(IModule):
         self._pipeline_depth = 3
         self._addresses_per_token = 64
         self._busy = False
+        self._stage = "idle"
         self._first_token = True
         self._in_port: Optional[TlmInputPort] = None
         self._out_port: Optional[TlmOutputPort] = None
@@ -159,28 +160,32 @@ class AGU(IModule):
             notes="SPEC-007 §7.4.1 [calibration knob]",
         )
 
-    def snapshot_state(self): return ModuleState(busy=self._busy)
+    def snapshot_state(self):
+        return ModuleState(busy=self._busy, current_op=self._stage if self._busy else None)
 
     def behavior(self) -> Iterator[None]:
         """§7.3.1: 1 addr/cycle steady-state; pipeline_depth fills only on
-        the first token (or after an idle gap), then runs at full rate."""
+        first token (or after idle gap). Stages: fill / addr_stream / emit.
+        """
         n_addrs = self._addresses_per_token
         while True:
             token = self._in_port.try_receive()
             if token is None:
                 self._busy = False
-                self._first_token = True  # stall resumes fill cost
+                self._stage = "idle"
+                self._first_token = True  # resumes fill cost after idle
                 yield
                 continue
             self._busy = True
-            # Fill stall only on the first token after idle (or sim start).
             if self._first_token:
+                self._stage = "fill"
                 for _ in range(self._pipeline_depth - 1):
                     yield
                 self._first_token = False
-            # Steady-state: n_addrs cycles per token.
+            self._stage = "addr_stream"
             for _ in range(n_addrs):
                 yield
+            self._stage = "emit"
             out = TransportToken(
                 payload=token.payload,
                 size_bytes=token.size_bytes,

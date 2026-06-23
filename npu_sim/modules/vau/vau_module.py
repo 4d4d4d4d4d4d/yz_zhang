@@ -86,6 +86,7 @@ class VAU(IModule):
         self._support_max: bool = True
         self._support_relu: bool = True
         self._active_caps: list[str] = []
+        self._stage: str = "idle"
 
         self._processed: int = 0
         self._busy: bool = False
@@ -127,6 +128,7 @@ class VAU(IModule):
     def reset(self) -> None:
         self._processed = 0
         self._busy = False
+        self._stage = "idle"
 
     def destroy(self) -> None:
         self._in_a_port = None
@@ -179,7 +181,7 @@ class VAU(IModule):
     def snapshot_state(self) -> ModuleState:
         return ModuleState(
             busy=self._busy,
-            current_op="vector" if self._busy else None,
+            current_op=self._stage if self._busy else None,
             internal_fifo_levels={
                 "in_a": self._in_a_port.fifo_level() if self._in_a_port else 0,
             },
@@ -205,13 +207,16 @@ class VAU(IModule):
             token = self._in_a_port.try_receive()
             if token is None:
                 self._busy = False
+                self._stage = "idle"
                 yield
                 continue
 
             self._busy = True
+            self._stage = "vector_op"
             for _ in range(self._op_cycles(token)):
                 yield
 
+            self._stage = "emit"
             out_token = TransportToken(
                 payload=token.payload,
                 size_bytes=token.size_bytes,

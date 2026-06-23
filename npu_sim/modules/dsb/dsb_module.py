@@ -127,6 +127,7 @@ class DSB(IModule):
         self._active_caps: list[str] = []
 
         self._staged: int = 0
+        self._stage: str = "idle"
         self._busy: bool = False
         self._in_data_port: Optional[TlmInputPort] = None
         self._in_cmd_port: Optional[TlmInputPort] = None
@@ -220,7 +221,7 @@ class DSB(IModule):
     def snapshot_state(self) -> ModuleState:
         return ModuleState(
             busy=self._busy,
-            current_op="stage" if self._busy else None,
+            current_op=self._stage if self._busy else None,
             internal_fifo_levels={
                 "in_data": self._in_data_port.fifo_level() if self._in_data_port else 0,
             },
@@ -244,13 +245,16 @@ class DSB(IModule):
             token = self._in_data_port.try_receive()
             if token is None:
                 self._busy = False
+                self._stage = "idle"
                 yield
                 continue
 
             self._busy = True
+            self._stage = "stage_tile"
             for _ in range(self._stage_cycles(token)):
                 yield
 
+            self._stage = "broadcast"
             for copy_idx in range(self._broadcast_factor):
                 staged_token = TransportToken(
                     payload=token.payload,

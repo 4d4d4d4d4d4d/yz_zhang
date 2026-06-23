@@ -92,6 +92,29 @@ def _cmd_compare(args: argparse.Namespace, out: TextIO) -> int:
     return 0 if report.both_valid else 1
 
 
+def _cmd_trace(args: argparse.Namespace, out: TextIO) -> int:
+    from npu_sim.evaluation import elaborate
+    from npu_sim.evaluation.runner import run_simulation
+    from npu_sim.reporting.waveform import WaveformRecorder
+
+    dsl_path = _require_path(args.dsl)
+    try:
+        arch = elaborate(str(dsl_path))
+    except NpuSimError as exc:
+        sys.stderr.write(f"elaboration error: {exc}\n")
+        return 2
+
+    recorder = WaveformRecorder()
+    run_simulation(arch, max_cycles=args.max_cycles, per_cycle_hook=recorder)
+    rendered = recorder.render(
+        arch,
+        max_cycles=args.show_cycles,
+        condense_idle=not args.no_condense,
+    )
+    _write_output(rendered, args.out, out)
+    return 0
+
+
 # ============================================================
 # Argparse wiring
 # ============================================================
@@ -146,6 +169,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional output file; defaults to stdout.",
     )
     p_cmp.set_defaults(handler=_cmd_compare)
+
+    p_trc = subparsers.add_parser(
+        "trace",
+        help="Render an ASCII cycle-by-cycle waveform of an architecture.",
+    )
+    p_trc.add_argument("dsl", help="Path to the architecture YAML.")
+    p_trc.add_argument(
+        "--max-cycles",
+        type=int,
+        default=500,
+        help="Scheduler step cap (default: 500).",
+    )
+    p_trc.add_argument(
+        "--show-cycles",
+        type=int,
+        default=200,
+        help="How many cycles to render in the waveform (default: 200).",
+    )
+    p_trc.add_argument(
+        "--no-condense",
+        action="store_true",
+        help="Disable condensation of all-idle cycle ranges.",
+    )
+    p_trc.add_argument(
+        "--out",
+        default=None,
+        help="Optional output file; defaults to stdout.",
+    )
+    p_trc.set_defaults(handler=_cmd_trace)
 
     return parser
 
