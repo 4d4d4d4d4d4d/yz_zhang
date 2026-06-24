@@ -1,0 +1,7 @@
+schema_version: "1.0"
+name: "IM2COL 3x3 conv — kernel-size variant"
+base: usecase_im2col_1x1.yaml
+overrides:
+  modules:
+    im:
+      config: { kernel_h: 3, kernel_w: 3 }

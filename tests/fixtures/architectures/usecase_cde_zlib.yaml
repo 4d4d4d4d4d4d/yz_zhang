@@ -1,0 +1,7 @@
+schema_version: "1.0"
+name: "CDE zlib enabled — higher compression cost"
+base: usecase_cde_05.yaml
+overrides:
+  modules:
+    cde:
+      config: { compression_ratio: 0.25, enable_zlib: true }
