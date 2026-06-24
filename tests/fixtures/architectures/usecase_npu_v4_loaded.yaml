@@ -1,0 +1,22 @@
+schema_version: "1.0"
+name: "NPU v4 loaded — 6-spec stacked variant"
+description: |
+  One knob per SPEC-011 module flipped (plus a few SPEC-008/010 knobs)
+  via a single overrides block. Verifies area-model composition over
+  the full 26-module set.
+base: usecase_npu_v4_full_stack.yaml
+overrides:
+  modules:
+    mc:
+      config: { n_banks: 16 }       # SPEC-011 §1: +8*8000 = +64000
+    l2:
+      config: { capacity_kb: 2048 } # SPEC-011 §2: +(2048-512)*800 = +1_228_800
+    se:
+      config: { enable_structured_pruning: true }  # SPEC-011 §3: +8000
+    tlu:
+      config: { table_size_kb: 8192, enable_scatter: true }
+                                    # SPEC-011 §4: +(8192-2048)*600 = +3_686_400, +4000 scatter
+    cmdq:
+      config: { enable_priority: true }   # SPEC-011 §5: +5000
+    mmu:
+      config: { tlb_entries: 256 }  # SPEC-011 §6: +(256-64)*200 = +38_400

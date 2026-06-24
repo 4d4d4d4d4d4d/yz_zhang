@@ -18,6 +18,7 @@ Owners：架构组
 | [SPEC-008 内存与精度模块族](./SPEC-008-Memory-Modules.md) | WB / OB / Quant / SFU | v0.1 Draft（全 4 §§ Accepted + 实现）|
 | [SPEC-009 工作负载形变与互连](./SPEC-009-Workload-Interconnect.md) | IM2COL / RDC / NoC / CDE / Transpose | v0.1 Draft（全 5 §§ 实现 + 测试）|
 | [SPEC-010 系统基础设施](./SPEC-010-System-Infrastructure.md) | PMU / SYNC | v0.1 Draft（全 2 §§ 实现 + 测试）|
+| [SPEC-011 DRAM 子系统与专用计算](./SPEC-011-DRAM-Specialized.md) | MC / L2 / SE / TLU / CMDQ / MMU | v0.1 Draft（全 6 §§ 实现 + 测试）|
 | [SPEC-001 v1.1 增订](./SPEC-001-v1.1-amendment.md) | Area 维度 + clock_domain | v1.1 Draft（Review pending）|
 | [SPEC-003 v1.1 增订](./SPEC-003-v1.1-amendment.md) | `__relocate__` / `clock_domains` / `physical_dimension` | v1.1 Draft（Review pending）|
 | [SPEC-005 v1.1 增订](./SPEC-005-v1.1-amendment.md) | 现存模块 area 系数 + UNPACK capability | v1.1 Draft（Review pending）|
