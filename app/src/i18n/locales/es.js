@@ -4,6 +4,7 @@ export default {
     home: 'Inicio',
     product: 'Producto',
     studio: 'Estudio',
+    console: 'Consola',
     cases: 'Clientes',
     pricing: 'Precios',
     about: 'Nosotros',
@@ -99,6 +100,15 @@ export default {
     or: 'O contáctanos directo',
     email_us: 'partners@adforge.ai',
     book_call: 'Reserva una intro de 30 min'
+  },
+  console: {
+    s: {
+      recommend: { title: 'Recomendaciones IA', sub: 'Conceptos de anuncios rankeados y explicables, sobre datos anónimos de 1,200+ marcas.' },
+      marketing: { title: 'Hub de marketing', sub: 'Rendimiento en tiempo real por canal, insights con IA y biblioteca creativa.' },
+      partners:  { title: 'Red de negocios', sub: 'Partners verificados, análisis de fit y aperturas localizadas con IA.' },
+      deals:     { title: 'Sala de deal', sub: 'Comparación de términos, redlines con IA, e-sign y registro de actividad.' },
+      trust:     { title: 'Trust Center', sub: 'Postura por mercado, riesgos activos, repositorio de documentos y revisión IA.' }
+    }
   },
   footer: {
     tagline: 'Renderizado de anuncios con IA para marcas globales.',

@@ -4,6 +4,7 @@ export default {
     home: '首页',
     product: '产品',
     studio: '在线 Demo',
+    console: '工作台',
     cases: '客户案例',
     pricing: '价格',
     about: '关于我们',
@@ -101,6 +102,15 @@ export default {
     or: '或者直接联系我们',
     email_us: 'partners@adforge.ai',
     book_call: '预约 30 分钟介绍电话'
+  },
+  console: {
+    s: {
+      recommend: { title: 'AI 推荐', sub: '可解释、可排序的广告创意推荐，背后是 1,200+ 品牌脱敏后的真实数据。' },
+      marketing: { title: '营销中心', sub: '跨渠道的实时表现、AI 洞察以及创意素材库。' },
+      partners:  { title: '业务对接', sub: '认证合作伙伴、匹配度拆解、AI 起草本地化沟通话术。' },
+      deals:     { title: '洽谈协作', sub: '条款对照、AI 红线、电子签与活动日志，集中在一个工作台。' },
+      trust:     { title: '风险与合规', sub: '按市场的合规状态、风险清单、文档库与实时 AI 风险审查。' }
+    }
   },
   footer: {
     tagline: '为出海品牌打造的 AI 广告渲染引擎。',

@@ -19,6 +19,7 @@ const year = new Date().getFullYear()
           <h4>{{ t('footer.product') }}</h4>
           <router-link to="/product">{{ t('nav.product') }}</router-link>
           <router-link to="/studio">{{ t('nav.studio') }}</router-link>
+          <router-link to="/console">{{ t('nav.console') }}</router-link>
           <router-link to="/pricing">{{ t('nav.pricing') }}</router-link>
         </div>
         <div>

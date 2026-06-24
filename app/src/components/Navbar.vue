@@ -9,6 +9,7 @@ const links = [
   { to: '/', key: 'nav.home' },
   { to: '/product', key: 'nav.product' },
   { to: '/studio', key: 'nav.studio' },
+  { to: '/console', key: 'nav.console' },
   { to: '/cases', key: 'nav.cases' },
   { to: '/pricing', key: 'nav.pricing' },
   { to: '/about', key: 'nav.about' }

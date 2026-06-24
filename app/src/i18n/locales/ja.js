@@ -4,6 +4,7 @@ export default {
     home: 'ホーム',
     product: 'プロダクト',
     studio: 'スタジオ',
+    console: 'コンソール',
     cases: '導入事例',
     pricing: '料金',
     about: '会社情報',
@@ -99,6 +100,15 @@ export default {
     or: 'または直接ご連絡',
     email_us: 'partners@adforge.ai',
     book_call: '30 分の紹介ミーティング'
+  },
+  console: {
+    s: {
+      recommend: { title: 'AI レコメンド', sub: '説明可能でランク付けされた広告コンセプト。1,200+ ブランドの匿名化データに基づく。' },
+      marketing: { title: 'マーケティングハブ', sub: 'チャネル横断の実績、AI による洞察、クリエイティブライブラリ。' },
+      partners:  { title: 'ビジネス対接', sub: '認証済みパートナー、フィット分析、AI が起草するローカライズド初回メッセージ。' },
+      deals:     { title: 'ディールルーム', sub: '条項比較、AI レッドライン、電子署名、アクティビティログを一つのワークスペースで。' },
+      trust:     { title: 'トラストセンター', sub: '地域別ポスチャー、未解決リスク、ドキュメントリポジトリ、AI リスクレビュー。' }
+    }
   },
   footer: {
     tagline: 'グローバルブランドのための AI 広告レンダリング。',
