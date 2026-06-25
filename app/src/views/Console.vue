@@ -1,64 +1,84 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
-import SecurityRibbon from '../components/SecurityRibbon.vue'
-import SubTabs from '../components/SubTabs.vue'
+import SecurityRibbon  from '../components/SecurityRibbon.vue'
+import SubTabs         from '../components/SubTabs.vue'
+import LiveActivityFeed from '../components/LiveActivityFeed.vue'
 
 import RecommendDeep     from '../components/RecommendDeep.vue'
 import RecommendAdvanced from '../components/RecommendAdvanced.vue'
+import ModelRegistry     from '../components/ModelRegistry.vue'
+import BanditExplorer    from '../components/BanditExplorer.vue'
 
-import MarketingHub     from '../components/MarketingHub.vue'
-import MarketingControl from '../components/MarketingControl.vue'
+import MarketingHub        from '../components/MarketingHub.vue'
+import MarketingControl    from '../components/MarketingControl.vue'
+import AttributionWaterfall from '../components/AttributionWaterfall.vue'
+import AudienceBuilder     from '../components/AudienceBuilder.vue'
 
 import BusinessMatchHub from '../components/BusinessMatchHub.vue'
 import PipelineBoard    from '../components/PipelineBoard.vue'
+import AccountIntel     from '../components/AccountIntel.vue'
+import OutreachSequence from '../components/OutreachSequence.vue'
 
 import DealRoom              from '../components/DealRoom.vue'
 import NegotiationPlaybook   from '../components/NegotiationPlaybook.vue'
+import ApprovalFlow          from '../components/ApprovalFlow.vue'
+import ClauseLibrary         from '../components/ClauseLibrary.vue'
 
 import TrustCenter      from '../components/TrustCenter.vue'
 import ControlsRegister from '../components/ControlsRegister.vue'
+import RiskHeatmap      from '../components/RiskHeatmap.vue'
+import DPIAWorkflow     from '../components/DPIAWorkflow.vue'
 
 const { t } = useI18n()
 const route = useRoute()
-const router = useRouter()
 
 const sections = [
   {
     key: 'recommend', icon: '🧠',
     sub: [
-      { v: 'inputs',   label: 'Inputs & ranking', comp: RecommendDeep },
-      { v: 'agents',   label: 'Multi-agent pipeline', comp: RecommendAdvanced }
+      { v: 'inputs',   label: 'Inputs · ranking',         comp: RecommendDeep },
+      { v: 'agents',   label: 'Agent pipeline',           comp: RecommendAdvanced },
+      { v: 'registry', label: 'Model registry · canary',  comp: ModelRegistry },
+      { v: 'bandit',   label: 'Live bandit',              comp: BanditExplorer }
     ]
   },
   {
     key: 'marketing', icon: '📈',
     sub: [
-      { v: 'overview', label: 'Overview', comp: MarketingHub },
-      { v: 'control',  label: 'Campaigns + A/B + Geo', comp: MarketingControl }
+      { v: 'overview',    label: 'Overview',              comp: MarketingHub },
+      { v: 'control',     label: 'Campaigns · A/B · geo', comp: MarketingControl },
+      { v: 'attribution', label: 'Attribution',           comp: AttributionWaterfall },
+      { v: 'audience',    label: 'Audience builder',      comp: AudienceBuilder }
     ]
   },
   {
     key: 'partners', icon: '🤝',
     sub: [
       { v: 'network',  label: 'Network profile', comp: BusinessMatchHub },
-      { v: 'pipeline', label: 'Pipeline board', comp: PipelineBoard }
+      { v: 'pipeline', label: 'Pipeline board',  comp: PipelineBoard },
+      { v: 'intel',    label: 'Account intel',   comp: AccountIntel },
+      { v: 'outreach', label: 'Outreach cadence',comp: OutreachSequence }
     ]
   },
   {
     key: 'deals', icon: '📝',
     sub: [
-      { v: 'room',     label: 'Deal room', comp: DealRoom },
-      { v: 'playbook', label: 'Playbook · ZOPA · redline', comp: NegotiationPlaybook }
+      { v: 'room',     label: 'Deal room',                comp: DealRoom },
+      { v: 'playbook', label: 'Playbook · ZOPA · redline',comp: NegotiationPlaybook },
+      { v: 'workflow', label: 'Approval workflow',        comp: ApprovalFlow },
+      { v: 'library',  label: 'Clause library',           comp: ClauseLibrary }
     ]
   },
   {
     key: 'trust', icon: '🛡',
     sub: [
-      { v: 'posture',  label: 'Posture', comp: TrustCenter },
-      { v: 'controls', label: 'Controls · DSR · runbook', comp: ControlsRegister }
+      { v: 'posture',  label: 'Posture',         comp: TrustCenter },
+      { v: 'controls', label: 'Controls · DSR',  comp: ControlsRegister },
+      { v: 'heatmap',  label: 'Risk heatmap',    comp: RiskHeatmap },
+      { v: 'dpia',     label: 'DPIA workflow',   comp: DPIAWorkflow }
     ]
   }
 ]
@@ -90,6 +110,7 @@ const activeComp = computed(() => active.value.sub.find(s => s.v === subTab.valu
             class="nav-item" :class="{ on: active.key === s.key }">
             <span class="ico">{{ s.icon }}</span>
             <span>{{ t(`console.s.${s.key}.title`) }}</span>
+            <span class="cnt">{{ s.sub.length }}</span>
           </router-link>
         </nav>
         <div class="hint card">
@@ -110,6 +131,8 @@ const activeComp = computed(() => active.value.sub.find(s => s.v === subTab.valu
         <SubTabs v-model="subTab" :tabs="subTabs" />
 
         <component :is="activeComp" :key="active.key + '/' + subTab" />
+
+        <LiveActivityFeed />
       </main>
     </div>
   </section>
@@ -125,10 +148,12 @@ const activeComp = computed(() => active.value.sub.find(s => s.v === subTab.valu
 .ws-org { font-size: 11px; color: var(--text-dim); }
 .kicker { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 6px; }
 .nav { display: flex; flex-direction: column; gap: 4px; }
-.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; color: var(--text-dim); font-size: 14px; }
+.nav-item { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 10px; color: var(--text-dim); font-size: 14px; }
 .nav-item:hover { background: var(--surface); color: var(--text); }
 .nav-item.on { background: rgba(124, 92, 255, .15); color: #fff; border: 1px solid rgba(124, 92, 255, .35); padding: 9px 11px; }
 .ico { font-size: 16px; }
+.cnt { font-size: 10px; padding: 2px 7px; border-radius: 999px; background: var(--surface-2); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.nav-item.on .cnt { background: rgba(124, 92, 255, .3); color: #fff; }
 .hint { margin-top: auto; padding: 14px; background: rgba(124, 92, 255, .06); border-color: rgba(124, 92, 255, .25); }
 .hint p { margin: 4px 0 12px; font-size: 12px; color: var(--text-dim); }
 .btn.sm { padding: 6px 12px; font-size: 12px; justify-content: center; width: 100%; }
