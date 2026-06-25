@@ -1,25 +1,75 @@
 <script setup>
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import RecommendDeep from '../components/RecommendDeep.vue'
-import MarketingHub from '../components/MarketingHub.vue'
+
+import SecurityRibbon from '../components/SecurityRibbon.vue'
+import SubTabs from '../components/SubTabs.vue'
+
+import RecommendDeep     from '../components/RecommendDeep.vue'
+import RecommendAdvanced from '../components/RecommendAdvanced.vue'
+
+import MarketingHub     from '../components/MarketingHub.vue'
+import MarketingControl from '../components/MarketingControl.vue'
+
 import BusinessMatchHub from '../components/BusinessMatchHub.vue'
-import DealRoom from '../components/DealRoom.vue'
-import TrustCenter from '../components/TrustCenter.vue'
+import PipelineBoard    from '../components/PipelineBoard.vue'
+
+import DealRoom              from '../components/DealRoom.vue'
+import NegotiationPlaybook   from '../components/NegotiationPlaybook.vue'
+
+import TrustCenter      from '../components/TrustCenter.vue'
+import ControlsRegister from '../components/ControlsRegister.vue'
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 
 const sections = [
-  { key: 'recommend', icon: '🧠', titleKey: 'console.s.recommend.title', subKey: 'console.s.recommend.sub', comp: RecommendDeep },
-  { key: 'marketing', icon: '📈', titleKey: 'console.s.marketing.title', subKey: 'console.s.marketing.sub', comp: MarketingHub },
-  { key: 'partners',  icon: '🤝', titleKey: 'console.s.partners.title',  subKey: 'console.s.partners.sub',  comp: BusinessMatchHub },
-  { key: 'deals',     icon: '📝', titleKey: 'console.s.deals.title',     subKey: 'console.s.deals.sub',     comp: DealRoom },
-  { key: 'trust',     icon: '🛡', titleKey: 'console.s.trust.title',     subKey: 'console.s.trust.sub',     comp: TrustCenter }
+  {
+    key: 'recommend', icon: '🧠',
+    sub: [
+      { v: 'inputs',   label: 'Inputs & ranking', comp: RecommendDeep },
+      { v: 'agents',   label: 'Multi-agent pipeline', comp: RecommendAdvanced }
+    ]
+  },
+  {
+    key: 'marketing', icon: '📈',
+    sub: [
+      { v: 'overview', label: 'Overview', comp: MarketingHub },
+      { v: 'control',  label: 'Campaigns + A/B + Geo', comp: MarketingControl }
+    ]
+  },
+  {
+    key: 'partners', icon: '🤝',
+    sub: [
+      { v: 'network',  label: 'Network profile', comp: BusinessMatchHub },
+      { v: 'pipeline', label: 'Pipeline board', comp: PipelineBoard }
+    ]
+  },
+  {
+    key: 'deals', icon: '📝',
+    sub: [
+      { v: 'room',     label: 'Deal room', comp: DealRoom },
+      { v: 'playbook', label: 'Playbook · ZOPA · redline', comp: NegotiationPlaybook }
+    ]
+  },
+  {
+    key: 'trust', icon: '🛡',
+    sub: [
+      { v: 'posture',  label: 'Posture', comp: TrustCenter },
+      { v: 'controls', label: 'Controls · DSR · runbook', comp: ControlsRegister }
+    ]
+  }
 ]
 
 const active = computed(() => sections.find(s => s.key === route.params.tab) || sections[0])
+
+const subTab = ref(active.value.sub[0].v)
+watch(() => active.value.key, () => { subTab.value = active.value.sub[0].v })
+
+const subTabs = computed(() => active.value.sub.map(s => ({ v: s.v, label: s.label })))
+const activeComp = computed(() => active.value.sub.find(s => s.v === subTab.value)?.comp)
 </script>
 
 <template>
@@ -30,7 +80,7 @@ const active = computed(() => sections.find(s => s.key === route.params.tab) || 
           <div class="ws-logo">A</div>
           <div>
             <div class="ws-name">AdForge Workspace</div>
-            <div class="ws-org">Lumi DTC · Pro</div>
+            <div class="ws-org">Lumi DTC · Enterprise</div>
           </div>
         </div>
         <div class="kicker">Modules</div>
@@ -39,7 +89,7 @@ const active = computed(() => sections.find(s => s.key === route.params.tab) || 
             :to="{ name: 'console', params: { tab: s.key } }"
             class="nav-item" :class="{ on: active.key === s.key }">
             <span class="ico">{{ s.icon }}</span>
-            <span>{{ t(s.titleKey) }}</span>
+            <span>{{ t(`console.s.${s.key}.title`) }}</span>
           </router-link>
         </nav>
         <div class="hint card">
@@ -50,11 +100,16 @@ const active = computed(() => sections.find(s => s.key === route.params.tab) || 
       </aside>
 
       <main class="main">
+        <SecurityRibbon />
+
         <div class="m-head">
-          <h2 class="grad-text">{{ t(active.titleKey) }}</h2>
-          <p>{{ t(active.subKey) }}</p>
+          <h2 class="grad-text">{{ t(`console.s.${active.key}.title`) }}</h2>
+          <p>{{ t(`console.s.${active.key}.sub`) }}</p>
         </div>
-        <component :is="active.comp" :key="active.key" />
+
+        <SubTabs v-model="subTab" :tabs="subTabs" />
+
+        <component :is="activeComp" :key="active.key + '/' + subTab" />
       </main>
     </div>
   </section>
@@ -79,7 +134,7 @@ const active = computed(() => sections.find(s => s.key === route.params.tab) || 
 .btn.sm { padding: 6px 12px; font-size: 12px; justify-content: center; width: 100%; }
 
 .main { min-width: 0; }
-.m-head { margin-bottom: 24px; }
+.m-head { margin-bottom: 20px; }
 .m-head h2 { font-size: 32px; }
 .m-head p { margin: 6px 0 0; color: var(--text-dim); }
 
