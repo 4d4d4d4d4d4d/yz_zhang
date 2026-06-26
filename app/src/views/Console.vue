@@ -11,26 +11,36 @@ import RecommendDeep     from '../components/RecommendDeep.vue'
 import RecommendAdvanced from '../components/RecommendAdvanced.vue'
 import ModelRegistry     from '../components/ModelRegistry.vue'
 import BanditExplorer    from '../components/BanditExplorer.vue'
+import FeatureStore      from '../components/FeatureStore.vue'
+import ExperimentManager from '../components/ExperimentManager.vue'
 
 import MarketingHub        from '../components/MarketingHub.vue'
 import MarketingControl    from '../components/MarketingControl.vue'
 import AttributionWaterfall from '../components/AttributionWaterfall.vue'
 import AudienceBuilder     from '../components/AudienceBuilder.vue'
+import CohortRetention     from '../components/CohortRetention.vue'
+import ForecastSim         from '../components/ForecastSim.vue'
 
 import BusinessMatchHub from '../components/BusinessMatchHub.vue'
 import PipelineBoard    from '../components/PipelineBoard.vue'
 import AccountIntel     from '../components/AccountIntel.vue'
 import OutreachSequence from '../components/OutreachSequence.vue'
+import SalesForecast    from '../components/SalesForecast.vue'
+import TerritoryQuota   from '../components/TerritoryQuota.vue'
 
 import DealRoom              from '../components/DealRoom.vue'
 import NegotiationPlaybook   from '../components/NegotiationPlaybook.vue'
 import ApprovalFlow          from '../components/ApprovalFlow.vue'
 import ClauseLibrary         from '../components/ClauseLibrary.vue'
+import ObligationTracker     from '../components/ObligationTracker.vue'
+import ContractAnalytics     from '../components/ContractAnalytics.vue'
 
 import TrustCenter      from '../components/TrustCenter.vue'
 import ControlsRegister from '../components/ControlsRegister.vue'
 import RiskHeatmap      from '../components/RiskHeatmap.vue'
 import DPIAWorkflow     from '../components/DPIAWorkflow.vue'
+import AuditRoom        from '../components/AuditRoom.vue'
+import PolicyManagement from '../components/PolicyManagement.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -39,10 +49,12 @@ const sections = [
   {
     key: 'recommend', icon: '🧠',
     sub: [
-      { v: 'inputs',   label: 'Inputs · ranking',         comp: RecommendDeep },
-      { v: 'agents',   label: 'Agent pipeline',           comp: RecommendAdvanced },
-      { v: 'registry', label: 'Model registry · canary',  comp: ModelRegistry },
-      { v: 'bandit',   label: 'Live bandit',              comp: BanditExplorer }
+      { v: 'inputs',     label: 'Inputs · ranking',         comp: RecommendDeep },
+      { v: 'agents',     label: 'Agent pipeline',           comp: RecommendAdvanced },
+      { v: 'registry',   label: 'Model registry · canary',  comp: ModelRegistry },
+      { v: 'bandit',     label: 'Live bandit',              comp: BanditExplorer },
+      { v: 'features',   label: 'Feature store',            comp: FeatureStore },
+      { v: 'experiments',label: 'Experiments',              comp: ExperimentManager }
     ]
   },
   {
@@ -51,7 +63,9 @@ const sections = [
       { v: 'overview',    label: 'Overview',              comp: MarketingHub },
       { v: 'control',     label: 'Campaigns · A/B · geo', comp: MarketingControl },
       { v: 'attribution', label: 'Attribution',           comp: AttributionWaterfall },
-      { v: 'audience',    label: 'Audience builder',      comp: AudienceBuilder }
+      { v: 'audience',    label: 'Audience builder',      comp: AudienceBuilder },
+      { v: 'retention',   label: 'Cohort retention',      comp: CohortRetention },
+      { v: 'forecast',    label: 'What-if forecast',      comp: ForecastSim }
     ]
   },
   {
@@ -60,16 +74,20 @@ const sections = [
       { v: 'network',  label: 'Network profile', comp: BusinessMatchHub },
       { v: 'pipeline', label: 'Pipeline board',  comp: PipelineBoard },
       { v: 'intel',    label: 'Account intel',   comp: AccountIntel },
-      { v: 'outreach', label: 'Outreach cadence',comp: OutreachSequence }
+      { v: 'outreach', label: 'Outreach cadence',comp: OutreachSequence },
+      { v: 'forecast', label: 'Sales forecast',  comp: SalesForecast },
+      { v: 'territory',label: 'Territory · quota', comp: TerritoryQuota }
     ]
   },
   {
     key: 'deals', icon: '📝',
     sub: [
-      { v: 'room',     label: 'Deal room',                comp: DealRoom },
-      { v: 'playbook', label: 'Playbook · ZOPA · redline',comp: NegotiationPlaybook },
-      { v: 'workflow', label: 'Approval workflow',        comp: ApprovalFlow },
-      { v: 'library',  label: 'Clause library',           comp: ClauseLibrary }
+      { v: 'room',         label: 'Deal room',                comp: DealRoom },
+      { v: 'playbook',     label: 'Playbook · ZOPA · redline',comp: NegotiationPlaybook },
+      { v: 'workflow',     label: 'Approval workflow',        comp: ApprovalFlow },
+      { v: 'library',      label: 'Clause library',           comp: ClauseLibrary },
+      { v: 'obligations',  label: 'Obligations',              comp: ObligationTracker },
+      { v: 'analytics',    label: 'CLM analytics',            comp: ContractAnalytics }
     ]
   },
   {
@@ -78,7 +96,9 @@ const sections = [
       { v: 'posture',  label: 'Posture',         comp: TrustCenter },
       { v: 'controls', label: 'Controls · DSR',  comp: ControlsRegister },
       { v: 'heatmap',  label: 'Risk heatmap',    comp: RiskHeatmap },
-      { v: 'dpia',     label: 'DPIA workflow',   comp: DPIAWorkflow }
+      { v: 'dpia',     label: 'DPIA workflow',   comp: DPIAWorkflow },
+      { v: 'audit',    label: 'Audit room',      comp: AuditRoom },
+      { v: 'policies', label: 'Policies · training', comp: PolicyManagement }
     ]
   }
 ]
