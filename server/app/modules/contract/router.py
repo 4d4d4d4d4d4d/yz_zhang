@@ -39,6 +39,18 @@ def _dump(c: Contract) -> dict:
     }
 
 
+@router.get("/by-task/{task_id}")
+def get_contract_by_task(
+    task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    contract = db.query(Contract).filter(Contract.task_id == task_id).first()
+    if not contract:
+        raise not_found("该任务暂无合约")
+    if user.id not in (contract.requester_id, contract.executor_id) and not user.is_admin:
+        raise forbidden()
+    return _dump(contract)
+
+
 @router.get("/{contract_id}")
 def get_contract(
     contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)

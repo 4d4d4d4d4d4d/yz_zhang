@@ -1,0 +1,7 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+server/data/
+server/test_platform.db
+.vite/
