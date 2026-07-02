@@ -109,6 +109,7 @@ export default {
       marketing: { title: 'Marketing Hub', sub: 'Real-time performance across channels, with AI-generated insights and creative library.' },
       partners:  { title: 'Business Network', sub: 'Verified partners, fit breakdowns, and AI-drafted localized openers.' },
       deals:     { title: 'Deal Room', sub: 'Structured term comparison, AI redlines, e-sign and activity log in one workspace.' },
+      showcase:  { title: 'Video Showcase', sub: 'Provenance-signed video work, verified metrics, and scoped trust links that turn proof into signed deals.' },
       trust:     { title: 'Trust Center', sub: 'Per-market posture, active risks, document repository and live AI risk review.' }
     }
   },

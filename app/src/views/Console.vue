@@ -35,6 +35,10 @@ import ClauseLibrary         from '../components/ClauseLibrary.vue'
 import ObligationTracker     from '../components/ObligationTracker.vue'
 import ContractAnalytics     from '../components/ContractAnalytics.vue'
 
+import ShowcaseGallery   from '../components/ShowcaseGallery.vue'
+import TrustLinkBuilder  from '../components/TrustLinkBuilder.vue'
+import VerificationQueue from '../components/VerificationQueue.vue'
+
 import TrustCenter      from '../components/TrustCenter.vue'
 import ControlsRegister from '../components/ControlsRegister.vue'
 import RiskHeatmap      from '../components/RiskHeatmap.vue'
@@ -88,6 +92,14 @@ const sections = [
       { v: 'library',      label: 'Clause library',           comp: ClauseLibrary },
       { v: 'obligations',  label: 'Obligations',              comp: ObligationTracker },
       { v: 'analytics',    label: 'CLM analytics',            comp: ContractAnalytics }
+    ]
+  },
+  {
+    key: 'showcase', icon: '🎬',
+    sub: [
+      { v: 'gallery',      label: 'Video showcase',        comp: ShowcaseGallery },
+      { v: 'links',        label: 'Trust links',           comp: TrustLinkBuilder },
+      { v: 'verification', label: 'Verification queue',    comp: VerificationQueue }
     ]
   },
   {

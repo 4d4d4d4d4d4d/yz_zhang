@@ -20,9 +20,27 @@ All marketing surfaces, all interactive demos, all dynamic copy are translated a
 cd app
 npm install
 npm run dev      # http://localhost:5173
+npm run test     # unit tests (Vitest) for src/logic
 npm run build    # production build → dist/
 npm run preview  # serve the build
 ```
+
+## Architecture: specs, logic layer, tests
+
+Commercialization capabilities are built spec-first — see [`docs/specs/`](../docs/specs/)
+for the reviewed design of each domain (architecture, recommendations,
+marketing, matchmaking, negotiation, risk & legal, showcase & trust).
+
+Domain algorithms live in `src/logic/` as pure, framework-free modules
+(recommendation ranking with explanations, ROAS water-fill budget allocation,
+partner fit scoring, ZOPA / playbook term evaluation, market compliance
+gates, trust scoring + scoped share links + a bounded-concurrency
+verification queue). Each module is covered by unit tests in `tests/`.
+
+The **Console → Video Showcase** section is the trust surface for closing
+cross-border deals: provenance-signed video work with evidence-backed badges,
+least-privilege expiring trust links (watermark enforced whenever assets are
+shared), and a live view of the priority verification queue.
 
 ## Stack
 

@@ -107,6 +107,7 @@ export default {
       marketing: { title: 'Hub de marketing', sub: 'Rendimiento en tiempo real por canal, insights con IA y biblioteca creativa.' },
       partners:  { title: 'Red de negocios', sub: 'Partners verificados, análisis de fit y aperturas localizadas con IA.' },
       deals:     { title: 'Sala de deal', sub: 'Comparación de términos, redlines con IA, e-sign y registro de actividad.' },
+      showcase:  { title: 'Showcase de vídeo', sub: 'Trabajos con procedencia firmada, métricas verificadas y trust links con alcance controlado.' },
       trust:     { title: 'Trust Center', sub: 'Postura por mercado, riesgos activos, repositorio de documentos y revisión IA.' }
     }
   },
