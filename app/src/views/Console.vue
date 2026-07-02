@@ -35,6 +35,11 @@ import ClauseLibrary         from '../components/ClauseLibrary.vue'
 import ObligationTracker     from '../components/ObligationTracker.vue'
 import ContractAnalytics     from '../components/ContractAnalytics.vue'
 
+import AvatarStudio      from '../components/AvatarStudio.vue'
+import ImmersiveMeeting  from '../components/ImmersiveMeeting.vue'
+import VirtualTour       from '../components/VirtualTour.vue'
+import FieldVerification from '../components/FieldVerification.vue'
+
 import ShowcaseGallery   from '../components/ShowcaseGallery.vue'
 import TrustLinkBuilder  from '../components/TrustLinkBuilder.vue'
 import VerificationQueue from '../components/VerificationQueue.vue'
@@ -100,6 +105,15 @@ const sections = [
       { v: 'gallery',      label: 'Video showcase',        comp: ShowcaseGallery },
       { v: 'links',        label: 'Trust links',           comp: TrustLinkBuilder },
       { v: 'verification', label: 'Verification queue',    comp: VerificationQueue }
+    ]
+  },
+  {
+    key: 'immersive', icon: '🕶',
+    sub: [
+      { v: 'avatar',  label: 'Digital human studio',  comp: AvatarStudio },
+      { v: 'meeting', label: 'Immersive meeting',     comp: ImmersiveMeeting },
+      { v: 'tour',    label: 'Virtual factory tour',  comp: VirtualTour },
+      { v: 'field',   label: 'Field verification',    comp: FieldVerification }
     ]
   },
   {

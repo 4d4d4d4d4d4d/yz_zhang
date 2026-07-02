@@ -110,6 +110,7 @@ export default {
       partners:  { title: 'Business Network', sub: 'Verified partners, fit breakdowns, and AI-drafted localized openers.' },
       deals:     { title: 'Deal Room', sub: 'Structured term comparison, AI redlines, e-sign and activity log in one workspace.' },
       showcase:  { title: 'Video Showcase', sub: 'Provenance-signed video work, verified metrics, and scoped trust links that turn proof into signed deals.' },
+      immersive: { title: 'Immersive Suite', sub: 'Digital-human presenters, live cross-language meetings, VR-style factory tours and on-the-ground verification specialists.' },
       trust:     { title: 'Trust Center', sub: 'Per-market posture, active risks, document repository and live AI risk review.' }
     }
   },

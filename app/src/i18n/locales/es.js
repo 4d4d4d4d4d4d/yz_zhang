@@ -108,6 +108,7 @@ export default {
       partners:  { title: 'Red de negocios', sub: 'Partners verificados, análisis de fit y aperturas localizadas con IA.' },
       deals:     { title: 'Sala de deal', sub: 'Comparación de términos, redlines con IA, e-sign y registro de actividad.' },
       showcase:  { title: 'Showcase de vídeo', sub: 'Trabajos con procedencia firmada, métricas verificadas y trust links con alcance controlado.' },
+      immersive: { title: 'Suite inmersiva', sub: 'Presentadores digitales, reuniones multilingües en vivo, tours VR de fábrica y verificación en terreno.' },
       trust:     { title: 'Trust Center', sub: 'Postura por mercado, riesgos activos, repositorio de documentos y revisión IA.' }
     }
   },

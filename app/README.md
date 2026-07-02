@@ -42,6 +42,15 @@ cross-border deals: provenance-signed video work with evidence-backed badges,
 least-privilege expiring trust links (watermark enforced whenever assets are
 shared), and a live view of the priority verification queue.
 
+The **Console → Immersive Suite** section covers the in-person half of
+going global, online: a digital-human studio (script → timed storyboard →
+per-language presenter variants, synthetic-media disclosure always on),
+an immersive meeting room with live glossary-protected captions and a
+cross-timezone scheduler, a VR-style virtual factory tour (walkway-graph
+navigation, coverage tracking, adaptive bitrate that degrades but never
+denies), and a field-verification network — vetted local specialists whose
+on-site evidence lands in a tamper-evident hash chain before attestation.
+
 ## Stack
 
 - Vue 3 (Composition API)
