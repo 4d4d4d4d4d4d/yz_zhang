@@ -13,6 +13,8 @@ import ModelRegistry     from '../components/ModelRegistry.vue'
 import BanditExplorer    from '../components/BanditExplorer.vue'
 import FeatureStore      from '../components/FeatureStore.vue'
 import ExperimentManager from '../components/ExperimentManager.vue'
+import UsageMetering     from '../components/UsageMetering.vue'
+import PersonalizationDash from '../components/PersonalizationDash.vue'
 
 import MarketingHub        from '../components/MarketingHub.vue'
 import MarketingControl    from '../components/MarketingControl.vue'
@@ -20,6 +22,8 @@ import AttributionWaterfall from '../components/AttributionWaterfall.vue'
 import AudienceBuilder     from '../components/AudienceBuilder.vue'
 import CohortRetention     from '../components/CohortRetention.vue'
 import ForecastSim         from '../components/ForecastSim.vue'
+import RevenueDashboard    from '../components/RevenueDashboard.vue'
+import UpsellEngine        from '../components/UpsellEngine.vue'
 
 import BusinessMatchHub from '../components/BusinessMatchHub.vue'
 import PipelineBoard    from '../components/PipelineBoard.vue'
@@ -27,6 +31,8 @@ import AccountIntel     from '../components/AccountIntel.vue'
 import OutreachSequence from '../components/OutreachSequence.vue'
 import SalesForecast    from '../components/SalesForecast.vue'
 import TerritoryQuota   from '../components/TerritoryQuota.vue'
+import OrderBook       from '../components/OrderBook.vue'
+import MarketplaceCommission from '../components/MarketplaceCommission.vue'
 
 import DealRoom              from '../components/DealRoom.vue'
 import NegotiationPlaybook   from '../components/NegotiationPlaybook.vue'
@@ -34,6 +40,8 @@ import ApprovalFlow          from '../components/ApprovalFlow.vue'
 import ClauseLibrary         from '../components/ClauseLibrary.vue'
 import ObligationTracker     from '../components/ObligationTracker.vue'
 import ContractAnalytics     from '../components/ContractAnalytics.vue'
+import CPQEditor             from '../components/CPQEditor.vue'
+import RevenueRecognition    from '../components/RevenueRecognition.vue'
 
 import TrustCenter      from '../components/TrustCenter.vue'
 import ControlsRegister from '../components/ControlsRegister.vue'
@@ -41,6 +49,8 @@ import RiskHeatmap      from '../components/RiskHeatmap.vue'
 import DPIAWorkflow     from '../components/DPIAWorkflow.vue'
 import AuditRoom        from '../components/AuditRoom.vue'
 import PolicyManagement from '../components/PolicyManagement.vue'
+import CustomerHealth   from '../components/CustomerHealth.vue'
+import SupportSLA       from '../components/SupportSLA.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -54,7 +64,9 @@ const sections = [
       { v: 'registry',   label: 'Model registry · canary',  comp: ModelRegistry },
       { v: 'bandit',     label: 'Live bandit',              comp: BanditExplorer },
       { v: 'features',   label: 'Feature store',            comp: FeatureStore },
-      { v: 'experiments',label: 'Experiments',              comp: ExperimentManager }
+      { v: 'experiments',label: 'Experiments',              comp: ExperimentManager },
+      { v: 'metering',   label: 'Usage · billing',          comp: UsageMetering },
+      { v: 'tenant',     label: 'Tenant impact',            comp: PersonalizationDash }
     ]
   },
   {
@@ -65,7 +77,9 @@ const sections = [
       { v: 'attribution', label: 'Attribution',           comp: AttributionWaterfall },
       { v: 'audience',    label: 'Audience builder',      comp: AudienceBuilder },
       { v: 'retention',   label: 'Cohort retention',      comp: CohortRetention },
-      { v: 'forecast',    label: 'What-if forecast',      comp: ForecastSim }
+      { v: 'forecast',    label: 'What-if forecast',      comp: ForecastSim },
+      { v: 'revenue',     label: 'SaaS revenue',          comp: RevenueDashboard },
+      { v: 'upsell',      label: 'Upsell engine',         comp: UpsellEngine }
     ]
   },
   {
@@ -76,7 +90,9 @@ const sections = [
       { v: 'intel',    label: 'Account intel',   comp: AccountIntel },
       { v: 'outreach', label: 'Outreach cadence',comp: OutreachSequence },
       { v: 'forecast', label: 'Sales forecast',  comp: SalesForecast },
-      { v: 'territory',label: 'Territory · quota', comp: TerritoryQuota }
+      { v: 'territory',label: 'Territory · quota', comp: TerritoryQuota },
+      { v: 'orders',   label: 'Order book',      comp: OrderBook },
+      { v: 'commission',label:'Marketplace · commission', comp: MarketplaceCommission }
     ]
   },
   {
@@ -87,7 +103,9 @@ const sections = [
       { v: 'workflow',     label: 'Approval workflow',        comp: ApprovalFlow },
       { v: 'library',      label: 'Clause library',           comp: ClauseLibrary },
       { v: 'obligations',  label: 'Obligations',              comp: ObligationTracker },
-      { v: 'analytics',    label: 'CLM analytics',            comp: ContractAnalytics }
+      { v: 'analytics',    label: 'CLM analytics',            comp: ContractAnalytics },
+      { v: 'cpq',          label: 'CPQ · quote',              comp: CPQEditor },
+      { v: 'revrec',       label: 'Rev recognition',          comp: RevenueRecognition }
     ]
   },
   {
@@ -98,7 +116,9 @@ const sections = [
       { v: 'heatmap',  label: 'Risk heatmap',    comp: RiskHeatmap },
       { v: 'dpia',     label: 'DPIA workflow',   comp: DPIAWorkflow },
       { v: 'audit',    label: 'Audit room',      comp: AuditRoom },
-      { v: 'policies', label: 'Policies · training', comp: PolicyManagement }
+      { v: 'policies', label: 'Policies · training', comp: PolicyManagement },
+      { v: 'health',   label: 'Customer health', comp: CustomerHealth },
+      { v: 'support',  label: 'Support · SLA',   comp: SupportSLA }
     ]
   }
 ]
