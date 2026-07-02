@@ -1,172 +1,57 @@
-# File Organizer
+# 协作任务平台（Task Platform）
 
-A simple yet powerful Python utility to organize files in directories by various criteria.
+AI 驱动的任务协作与本地服务平台 Monorepo：任务发布 → AI 分解 → 智能推荐 →
+合约托管 → 执行验收 → 结算评价 → 经验入库的完整闭环。
 
-## Features
+> Spec 驱动开发：先写 [docs/specs/](docs/specs/README.md)（15 个模块功能拆分），
+> 再按 spec 逐模块实现并配测试，追溯矩阵见 [16-traceability.md](docs/specs/16-traceability.md)。
 
-- **Organize by Extension**: Automatically categorizes files into folders like Images, Documents, Code, etc.
-- **Organize by Date**: Groups files by modification date (YYYY/Month folders)
-- **Organize by Size**: Sorts files into Small/Medium/Large categories
-- **Dry-run Mode**: Preview changes before applying them
-- **Custom Categories**: Define your own file type categories via JSON config
-- **Duplicate Handling**: Automatically handles files with duplicate names
+## 目录结构
 
-## Installation
+```
+docs/specs/       # 功能拆分 spec（01~15）+ 追溯矩阵（16）
+server/           # 后端：FastAPI 模块化单体（Python 3.11+）
+  app/core/       #   配置/DB/安全/事件总线/依赖
+  app/modules/    #   account task matching contract wallet decompose
+                  #   knowledge im dispute notification support
+  tests/          #   37 个测试（含端到端闭环+资金守恒审计）
+packages/core/    # 共享 TS SDK（Web/App 复用，7 tests）
+web/              # Web 前端：React + Vite（4 tests）
+app/              # App：React Native / Expo 骨架
+tools/            # 与平台无关的历史小工具（file-organizer）
+```
 
-No external dependencies required! Just Python 3.6+
+## 快速开始
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd yz_zhang
+# 后端（Python 3.11+）
+cd server
+pip install -r requirements.txt
+python -m pytest tests/ -q        # 跑测试
+uvicorn app.main:app --port 8000  # 启动 API（文档：/docs）
 
-# Make the script executable (optional)
-chmod +x file_organizer.py
+# 前端（Node 20+，仓库根目录）
+npm install
+npm test          # core + web 全部测试
+npm run dev:web   # http://localhost:5173（代理 /api 到 8000）
 ```
 
-## Usage
+## 体验主闭环（Web）
 
-### Basic Usage
+1. 注册两个账号（验证码固定 `123456`），在「我的」完成实名认证（模拟）。
+2. 账号 A 充值（钱包页，模拟支付）→ 发布任务；项目型任务会触发 **AI 分解**，
+   可编辑子任务预算后确认，无前置依赖的子任务自动发布。
+3. 账号 B 设置技能标签 → 在广场报名；A 在任务详情查看 **AI 推荐人选** 并选人。
+4. 双方**签署智能合约** → A 托管资金 → B 执行（进度/打卡）→ 提交验收。
+5. A 验收通过自动放款（平台抽佣 8%）→ 双向互评 → 信用分更新 →
+   经验卡入库，下次发布同类任务可查「参考价」。
+6. 出问题可「发起纠纷」：资金冻结 → 和解或仲裁 → 裁决自动执行分账。
 
-```bash
-# Organize by file extension
-python file_organizer.py /path/to/directory --by-extension
+## 技术要点
 
-# Organize by modification date
-python file_organizer.py /path/to/directory --by-date
-
-# Organize by file size
-python file_organizer.py /path/to/directory --by-size
-```
-
-### Dry Run (Preview Mode)
-
-Always recommended to run with `--dry-run` first to see what will happen:
-
-```bash
-python file_organizer.py /path/to/directory --by-extension --dry-run
-```
-
-### Custom Categories
-
-Create a custom configuration file to define your own file categories:
-
-```bash
-python file_organizer.py /path/to/directory --by-extension --config my_categories.json
-```
-
-See `example_config.json` for the configuration format.
-
-## Examples
-
-### Example 1: Organize Downloads Folder
-
-```bash
-python file_organizer.py ~/Downloads --by-extension --dry-run
-```
-
-This will show you how your files would be organized into categories like:
-- Images/ (jpg, png, gif, etc.)
-- Documents/ (pdf, docx, txt, etc.)
-- Videos/ (mp4, avi, mkv, etc.)
-- And more...
-
-### Example 2: Organize Photos by Date
-
-```bash
-python file_organizer.py ~/Pictures --by-date
-```
-
-This will organize your photos into folders like:
-- 2025/January/
-- 2025/February/
-- 2024/December/
-
-### Example 3: Clean Up Large Files
-
-```bash
-python file_organizer.py /path/to/folder --by-size
-```
-
-This will separate files into:
-- Small (< 1MB)/
-- Medium (1-10MB)/
-- Large (> 10MB)/
-
-## Default File Categories
-
-The organizer recognizes these file types by default:
-
-- **Images**: jpg, jpeg, png, gif, bmp, svg, webp, ico
-- **Documents**: pdf, doc, docx, txt, odt, rtf, tex, md
-- **Spreadsheets**: xls, xlsx, csv, ods
-- **Presentations**: ppt, pptx, odp
-- **Videos**: mp4, avi, mkv, mov, flv, wmv, webm
-- **Audio**: mp3, wav, flac, aac, ogg, wma, m4a
-- **Archives**: zip, rar, 7z, tar, gz, bz2, xz
-- **Code**: py, js, java, cpp, c, h, hpp, cs, go, rs, rb
-- **Web**: html, css, scss, sass, xml, json, yaml, yml
-- **Executables**: exe, dll, so, dylib, app, deb, rpm
-- **Fonts**: ttf, otf, woff, woff2, eot
-
-Files that don't match any category go into an "Other" folder.
-
-## Custom Configuration
-
-Create a JSON file with your custom categories:
-
-```json
-{
-  "MyImages": [".jpg", ".png", ".heic"],
-  "MyDocuments": [".pdf", ".docx"],
-  "ProjectFiles": [".psd", ".ai", ".sketch"]
-}
-```
-
-Then use it with:
-
-```bash
-python file_organizer.py /path/to/dir --by-extension --config custom.json
-```
-
-## Safety Features
-
-- **Dry-run mode**: Test before making changes
-- **Duplicate handling**: Automatically renames files if duplicates exist
-- **Non-recursive**: Only processes files in the specified directory (not subdirectories)
-- **Validation**: Checks that the directory exists before proceeding
-
-## Use Cases
-
-- Clean up messy Downloads folders
-- Organize photo libraries by date
-- Sort project files by type
-- Identify large files taking up space
-- Prepare files for backup or archival
-- Maintain organized work directories
-
-## Requirements
-
-- Python 3.6 or higher
-- No external dependencies (uses only standard library)
-
-## License
-
-MIT License - Feel free to use and modify as needed.
-
-## Contributing
-
-Suggestions and improvements are welcome! Feel free to:
-- Report bugs
-- Suggest new features
-- Submit pull requests
-
-## Future Enhancements
-
-Potential features for future versions:
-- Recursive organization (organize subdirectories)
-- Undo functionality
-- Pattern-based filtering (ignore certain files)
-- Move vs Copy mode
-- Integration with cloud storage
-- GUI interface
+- **状态机**：任务/合约状态流转白名单约束，非法流转 409。
+- **事件总线**：进程内领域事件（`task.completed`、`contract.funded`…）驱动
+  经验入库、后继子任务发布、会话创建、通知，生产可平滑替换为 MQ。
+- **资金**：整数分记账、只增流水、三态账本（可用/托管/冻结）、E2E 资金守恒断言。
+- **LLM 网关**：`decompose/llm.py` 抽象接口 + 模板实现，接真实模型不动业务代码。
+- **可解释推荐**：技能/信用/距离/评价加权，返回推荐理由。
