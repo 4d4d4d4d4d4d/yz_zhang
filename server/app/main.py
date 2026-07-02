@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.core.db import init_db
+from app.core.db import SessionLocal, init_db
 
 
 def create_app() -> FastAPI:
@@ -15,12 +15,45 @@ def create_app() -> FastAPI:
     )
     init_db()
 
+    # 领域事件订阅（14 号 spec 第 3 节）
+    from app.modules.decompose import service as decompose_service
+    from app.modules.im import service as im_service
+    from app.modules.knowledge import service as knowledge_service
+    from app.modules.notification import service as notification_service
+
+    knowledge_service.register_event_handlers()
+    decompose_service.register_event_handlers()
+    im_service.register_event_handlers()
+    notification_service.register_event_handlers()
+
+    # 冷启动种子数据（KB 模板与 FAQ）
+    with SessionLocal() as db:
+        knowledge_service.seed(db)
+        db.commit()
+
     from app.modules.account.router import router as account_router
     from app.modules.contract.router import router as contract_router
+    from app.modules.decompose.router import router as decompose_router
+    from app.modules.dispute.router import router as dispute_router
+    from app.modules.im.router import router as im_router
+    from app.modules.knowledge.router import router as knowledge_router
+    from app.modules.notification.router import router as notification_router
+    from app.modules.support.router import router as support_router
     from app.modules.task.router import router as task_router
     from app.modules.wallet.router import router as wallet_router
 
-    for router in (account_router, wallet_router, task_router, contract_router):
+    for router in (
+        account_router,
+        wallet_router,
+        task_router,
+        contract_router,
+        decompose_router,
+        knowledge_router,
+        im_router,
+        dispute_router,
+        notification_router,
+        support_router,
+    ):
         app.include_router(router, prefix=settings.API_PREFIX)
 
     @app.get("/healthz")
