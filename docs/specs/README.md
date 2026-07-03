@@ -21,6 +21,7 @@ the test assertions.
 | 10 | [Field Verification Network](10-field-verification.md) | `logic/fieldVerify.js` | `tests/fieldVerify.test.js` |
 | 11 | [Trust Pipeline: evidence → signature](11-trust-pipeline.md) | `logic/pipeline.js` | `tests/pipeline.test.js` |
 | 12 | [CI & Test Maintenance](12-ci-quality.md) | `.github/workflows/ci.yml` | CI itself |
+| 13 | [Inline-Algorithm Migration](13-logic-migration.md) | `logic/bandit.js` | `tests/bandit.test.js` |
 
 Capability flow across domains:
 

@@ -64,3 +64,12 @@ real delivery platform under load:
 - ⚠️ Deferred: moving existing v2–v4 component-inline algorithms onto the
   logic layer is incremental; new modules must use the logic layer from day one.
 - Verdict: **approved to build**.
+
+## Review record — R2 (2026-07-03)
+
+- ✅ R1 deferred item picked up: spec 13 defines the migration policy and
+  executes the first extraction (`BanditExplorer` → `logic/bandit.js`);
+  remaining inline modules are tracked in spec 13's migration queue.
+- ✅ Composition layers (spec 11 pipeline) confirmed compliant with the
+  no-cross-import rule by consuming domain outputs instead of modules.
+- Verdict: architecture holding as designed.
