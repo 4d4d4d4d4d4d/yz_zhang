@@ -19,6 +19,8 @@ def get_current_user(
     user = db.get(User, user_id)
     if not user:
         raise forbidden("用户不存在", "unauthenticated")
+    if user.is_banned:
+        raise forbidden("账号已被封禁，如有异议请申诉", "account_banned")
     return user
 
 

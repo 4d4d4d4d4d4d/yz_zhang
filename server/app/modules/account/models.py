@@ -29,6 +29,8 @@ class User(Base):
     real_name: Mapped[str] = mapped_column(String(50), default="")
     # 平台侧角色（OPS-001 简化：仲裁/运营用）
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    # RISK-006 封禁（封禁后所有需登录操作被拒）
+    is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
     # CRED-001 信用分（初始 100）与评价聚合
     credit_score: Mapped[int] = mapped_column(Integer, default=100)
     rating_sum: Mapped[int] = mapped_column(Integer, default=0)

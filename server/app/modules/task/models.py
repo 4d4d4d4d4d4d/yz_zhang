@@ -60,6 +60,10 @@ class Task(Base):
     address_hint: Mapped[str] = mapped_column(String(120), default="")  # 商圈级(GEO-004)
     address_exact: Mapped[str] = mapped_column(String(200), default="")
 
+    # TASK-008 可见范围：public 公开广场 / circle 仅圈层任务板
+    visibility: Mapped[str] = mapped_column(String(12), default="public")
+    circle_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
     status: Mapped[str] = mapped_column(String(30), default="draft", index=True)
     deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

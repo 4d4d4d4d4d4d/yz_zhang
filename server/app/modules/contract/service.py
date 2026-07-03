@@ -11,7 +11,7 @@ from app.core.events import publish
 from app.modules.account.models import utcnow
 from app.modules.wallet import service as wallet
 
-from .models import Contract
+from .models import ChangeOrder, Contract, Milestone
 
 # SC-006 取消/违约规则表：执行者获得托管金的比例（万分比），按阶段与责任方
 CANCEL_RULES = {
@@ -43,7 +43,35 @@ def generate(db: Session, task, executor_id: int, amount_cents: int) -> Contract
     )
     db.add(contract)
     db.flush()
+    # SC-004 默认单里程碑=全额；双签前可由发布者重新定义分期
+    db.add(Milestone(contract_id=contract.id, idx=1, title="全部交付", amount_cents=amount_cents))
     return contract
+
+
+def define_milestones(db: Session, contract: Contract, user_id: int, items: list[dict]) -> list[Milestone]:
+    """SC-004 双签前定义分期结构（金额必须与合约总额守恒）。"""
+    if user_id != contract.requester_id:
+        raise bad_request("仅发布方可定义里程碑", "not_party")
+    if contract.status != "pending_signatures":
+        raise conflict("合约签署后不可重定义里程碑，请走变更单", "milestones_locked")
+    if not items:
+        raise bad_request("里程碑不能为空", "empty_milestones")
+    total = sum(i["amount_cents"] for i in items)
+    if total != contract.amount_cents:
+        raise bad_request(
+            f"里程碑合计 {total} 必须等于合约金额 {contract.amount_cents}", "amount_mismatch"
+        )
+    if any(i["amount_cents"] <= 0 for i in items):
+        raise bad_request("每期金额必须为正", "invalid_amount")
+    db.query(Milestone).filter(Milestone.contract_id == contract.id).delete()
+    rows = [
+        Milestone(contract_id=contract.id, idx=i + 1, title=item.get("title", f"第{i + 1}期"),
+                  amount_cents=item["amount_cents"])
+        for i, item in enumerate(items)
+    ]
+    db.add_all(rows)
+    db.flush()
+    return rows
 
 
 def sign(db: Session, contract: Contract, user_id: int) -> Contract:
@@ -82,23 +110,120 @@ def _fee(contract: Contract, amount: int) -> int:
 
 
 def release(db: Session, contract: Contract) -> Contract:
-    """SC-005 验收通过自动放款。"""
+    """SC-005 整体验收放款：放出全部剩余托管（已分期放款的部分不重复）。"""
     if contract.frozen:
         raise conflict("合约处于纠纷冻结中", "contract_frozen")
     if contract.status != "funded":
         raise conflict("合约不在可放款状态", "not_releasable")
-    wallet.escrow_release(
-        db,
-        contract.requester_id,
-        contract.executor_id,
-        contract.amount_cents,
-        _fee(contract, contract.amount_cents),
-        contract.id,
-    )
+    remaining = contract.amount_cents - contract.released_cents
+    if remaining > 0:
+        wallet.escrow_release(
+            db, contract.requester_id, contract.executor_id,
+            remaining, _fee(contract, remaining), contract.id,
+        )
+    db.query(Milestone).filter(
+        Milestone.contract_id == contract.id, Milestone.status != "released"
+    ).update({"status": "released"})
+    contract.released_cents = contract.amount_cents
     contract.status = "released"
     contract.closed_at = utcnow()
     db.add(contract)
     publish(db, "contract.released", {"contract_id": contract.id, "task_id": contract.task_id})
+    return contract
+
+
+def deliver_milestone(db: Session, contract: Contract, user_id: int, milestone: Milestone) -> Milestone:
+    """SC-004 分期交付。"""
+    if user_id != contract.executor_id:
+        raise bad_request("仅执行方可提交里程碑交付", "not_party")
+    if contract.status != "funded" or contract.frozen:
+        raise conflict("合约不在执行中", "not_active")
+    if milestone.status != "pending":
+        raise conflict("该里程碑已交付或已放款", "invalid_milestone_state")
+    milestone.status = "delivered"
+    db.add(milestone)
+    return milestone
+
+
+def release_milestone(db: Session, contract: Contract, user_id: int, milestone: Milestone) -> Milestone:
+    """SC-004/005 分期验收放款；全部放完 → 合约终结。"""
+    if user_id != contract.requester_id:
+        raise bad_request("仅发布方可验收里程碑", "not_party")
+    if contract.frozen:
+        raise conflict("合约处于纠纷冻结中", "contract_frozen")
+    if contract.status != "funded":
+        raise conflict("合约不在可放款状态", "not_releasable")
+    if milestone.status != "delivered":
+        raise conflict("里程碑需先交付", "invalid_milestone_state")
+    wallet.escrow_release(
+        db, contract.requester_id, contract.executor_id,
+        milestone.amount_cents, _fee(contract, milestone.amount_cents), contract.id,
+    )
+    milestone.status = "released"
+    contract.released_cents += milestone.amount_cents
+    db.add_all([milestone, contract])
+    if contract.released_cents >= contract.amount_cents:
+        contract.status = "released"
+        contract.closed_at = utcnow()
+        db.add(contract)
+        publish(db, "contract.released", {"contract_id": contract.id, "task_id": contract.task_id})
+    return milestone
+
+
+def propose_change(db: Session, contract: Contract, user_id: int, new_amount: int, reason: str) -> ChangeOrder:
+    """SC-007 变更单：改价提案（放款开始后不可改）。"""
+    if user_id not in (contract.requester_id, contract.executor_id):
+        raise bad_request("非合约当事人", "not_party")
+    if contract.status not in ("signed", "funded") or contract.frozen:
+        raise conflict("当前状态不可变更", "not_changeable")
+    if contract.released_cents > 0:
+        raise conflict("已开始分期放款，不可整体改价", "already_releasing")
+    if new_amount <= 0 or new_amount == contract.amount_cents:
+        raise bad_request("变更金额无效", "invalid_amount")
+    pending = (
+        db.query(ChangeOrder)
+        .filter(ChangeOrder.contract_id == contract.id, ChangeOrder.status == "pending")
+        .first()
+    )
+    if pending:
+        raise conflict("已有待处理的变更单", "change_pending")
+    order = ChangeOrder(
+        contract_id=contract.id, proposed_by=user_id, new_amount_cents=new_amount, reason=reason
+    )
+    db.add(order)
+    db.flush()
+    return order
+
+
+def accept_change(db: Session, contract: Contract, user_id: int, order: ChangeOrder) -> Contract:
+    """对方接受变更单 → 差额多退少补、版本 +1、任务预算同步。"""
+    if order.status != "pending":
+        raise conflict("变更单已处理", "change_closed")
+    if user_id == order.proposed_by or user_id not in (contract.requester_id, contract.executor_id):
+        raise bad_request("需由合约对方接受变更", "not_counterparty")
+    milestones = db.query(Milestone).filter(Milestone.contract_id == contract.id).all()
+    if len(milestones) > 1:
+        raise conflict("多里程碑合约请拆期变更（暂不支持整体改价）", "multi_milestone")
+    diff = order.new_amount_cents - contract.amount_cents
+    if contract.status == "funded":
+        if diff > 0:
+            wallet.escrow_hold(db, contract.requester_id, diff, contract.id)
+        else:
+            wallet.escrow_refund(db, contract.requester_id, -diff, contract.id, "变更单减价退款")
+    contract.amount_cents = order.new_amount_cents
+    contract.version += 1
+    if milestones:
+        milestones[0].amount_cents = order.new_amount_cents
+        db.add(milestones[0])
+    order.status = "accepted"
+    db.add_all([contract, order])
+    # 任务预算同步（TASK-025 变更单双方确认后合约同步变更）
+    from app.modules.task.models import Task
+
+    task = db.get(Task, contract.task_id)
+    if task:
+        task.budget_cents = order.new_amount_cents
+        db.add(task)
     return contract
 
 
@@ -114,21 +239,22 @@ def cancel(db: Session, contract: Contract, cancelled_by: int) -> dict:
     if contract.status != "funded":
         raise conflict("合约不在可取消状态", "not_cancellable")
     who = "requester" if cancelled_by == contract.requester_id else "executor"
+    remaining = contract.amount_cents - contract.released_cents
     comp_bps = CANCEL_RULES.get(("funded_early", who), 0)
-    comp = contract.amount_cents * comp_bps // 10000
+    comp = remaining * comp_bps // 10000
     if comp > 0:
         wallet.dispute_split(
             db,
             contract.requester_id,
             contract.executor_id,
-            contract.amount_cents,
+            remaining,
             comp,
             _fee(contract, comp),
             contract.id,
         )
         contract.status = "split"
     else:
-        wallet.escrow_refund(db, contract.requester_id, contract.amount_cents, contract.id, "任务取消退款")
+        wallet.escrow_refund(db, contract.requester_id, remaining, contract.id, "任务取消退款")
         contract.status = "refunded"
     contract.closed_at = utcnow()
     db.add(contract)
@@ -145,12 +271,13 @@ def execute_verdict(db: Session, contract: Contract, executor_share_bps: int) ->
     """DSP-007 裁决自动执行：按比例分割托管资金。"""
     if contract.status != "funded":
         raise conflict("合约不在可执行裁决状态", "not_splittable")
-    share = contract.amount_cents * executor_share_bps // 10000
+    remaining = contract.amount_cents - contract.released_cents
+    share = remaining * executor_share_bps // 10000
     wallet.dispute_split(
         db,
         contract.requester_id,
         contract.executor_id,
-        contract.amount_cents,
+        remaining,
         share,
         _fee(contract, share),
         contract.id,

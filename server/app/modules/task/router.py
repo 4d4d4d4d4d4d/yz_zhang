@@ -38,6 +38,8 @@ class TaskIn(BaseModel):
     address_hint: str = ""
     address_exact: str = ""
     deadline: datetime | None = None
+    visibility: str = "public"
+    circle_id: int | None = None
     publish_now: bool = True
 
 
@@ -87,6 +89,8 @@ def dump_task(task: Task, viewer: User | None = None) -> dict:
         "address_hint": task.address_hint,
         # GEO-004 位置脱敏：精确地址仅成交双方可见
         "address_exact": task.address_exact if is_party else "",
+        "visibility": task.visibility,
+        "circle_id": task.circle_id,
         "status": task.status,
         "deadline": task.deadline.isoformat() if task.deadline else None,
         "reject_count": task.reject_count,
@@ -106,6 +110,14 @@ def _get_task(db: Session, task_id: int) -> Task:
 def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if body.task_type not in TASK_TYPES:
         raise bad_request("非法任务类型", "invalid_type")
+    if body.visibility not in ("public", "circle"):
+        raise bad_request("非法可见范围", "invalid_visibility")
+    if body.visibility == "circle":
+        # TASK-008/CIR-005 圈层定向任务：发布者必须是活跃成员
+        from app.modules.circle.router import active_member
+
+        if not body.circle_id or not active_member(db, body.circle_id, user.id):
+            raise forbidden("需先加入该圈层", "not_circle_member")
     task = Task(creator_id=user.id, **body.model_dump(exclude={"publish_now"}))
     db.add(task)
     db.flush()
@@ -139,7 +151,8 @@ def list_tasks(
     max_km: float = Query(default=0, ge=0),
     limit: int = Query(default=20, le=100),
 ):
-    query = db.query(Task).filter(Task.status == status)
+    # 公开广场不展示圈层定向任务（TASK-008）
+    query = db.query(Task).filter(Task.status == status, Task.visibility == "public")
     if q:
         query = query.filter(Task.title.contains(q) | Task.description.contains(q))
     if category:
