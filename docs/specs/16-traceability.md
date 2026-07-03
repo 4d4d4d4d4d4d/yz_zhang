@@ -1,7 +1,20 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1 完成（2026-07-03）。后端 68 tests + 前端 18 tests 全绿。
-> 范围：15-roadmap.md 的 MVP 全集 + V1 全集；剩余为 V2 项，见文末。
+> 状态：MVP + V1 + V2（平台内可实现部分）完成（2026-07-03）。
+> 后端 77 tests + 前端 19 tests 全绿。剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V2 批次）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| CRED-005 保证金（成交冻结/闭环退还/违约罚没） | `wallet/service.py` + `contract/service.py::_settle_deposit` | `tests/test_v2_features.py` |
+| ACC-022 职业资质 + 受限类目准入 | `account/router.py` + `task/service.py::check_category_qualification` | 同上 |
+| LAW-003 律师市场（法律咨询类目 = 持证律师接单） | 同上（复用任务流） | 同上 |
+| SC-011 存证哈希链（append-only、防篡改可验证） | `anchor/`（合约签署/托管/放款/裁决自动入链） | 同上（含篡改检测） |
+| ACC-033 黑名单（禁私聊/禁报名/推荐排除，双向） | `account/models.py::Block` + im/task/matching 检查点 | 同上 |
+| IM-004 消息撤回（2 分钟窗口，审计副本保留） | `im/router.py::recall_message` | 同上 |
+| AI-DEC-023 子任务违约自动重新招募 | `decompose/resilience.py` | 同上 |
+| AI-DEC-022 逾期预警 job | `decompose/resilience.py::deadline_alerts` | 同上 |
 
 ## 已实现（V1 收尾批次）
 
@@ -101,12 +114,12 @@
 | IM | REST 轮询 | WebSocket/云 IM（`MessageProvider` 抽象） |
 | 定时任务 | 暴露为可调用 job 接口 | 调度器（cron/celery） |
 
-## 未实现（剩余 V2 项）
+## 未实现（均依赖外部供应商/云服务，代码侧接口已就位）
 
-- 短视频上传转码与沉浸流（CNT-002/014）— 依赖转码/内容安全云服务
-- 个性化推荐流排序（CNT-011 完整版：行为特征模型）
-- SC-011 上链存证（当前为 SHA256 哈希雏形）
-- LAW-003 律师入驻市场（可复用任务类型实现）
-- 音视频通话（IM-007）、保证金（CRED-005）、企业认证与发票（ACC-021/PAY-008）
-- App 深化：地图撒点、扫码打卡、离线推送通道（API 均已就绪）
-- 真实供应商接入：短信/eKYC/持牌支付托管/LLM/内容安全（接口抽象已就位）
+- 短视频上传转码与沉浸流（CNT-002/014）— 转码/CDN/内容安全云服务
+- 个性化推荐流排序模型（CNT-011 完整版）— 需线上行为数据积累
+- 存证链上锚定（SC-011 阶段三）— 哈希链已实现，差公链/联盟链写入
+- 音视频通话（IM-007）— RTC 云服务
+- 企业认证与发票（ACC-021/PAY-008）— 工商核验与税务接口
+- App 深化：地图撒点、扫码打卡、离线推送通道（后端 API 均已就绪）
+- 真实供应商接入：短信/eKYC/持牌支付托管/LLM/内容安全（抽象层已就位，接入不动业务代码）

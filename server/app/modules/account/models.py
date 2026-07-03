@@ -24,6 +24,8 @@ class User(Base):
     # ACC-011 技能标签 / ACC-015 兴趣标签
     skills: Mapped[list] = mapped_column(JSON, default=list)
     interests: Mapped[list] = mapped_column(JSON, default=list)
+    # ACC-022 职业资质（如 律师/电工），受限类目接单准入
+    certifications: Mapped[list] = mapped_column(JSON, default=list)
     # ACC-020 实名认证（模拟 eKYC 通过后置位；接单/提现前强制）
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     real_name: Mapped[str] = mapped_column(String(50), default="")
@@ -41,3 +43,14 @@ class User(Base):
     @property
     def rating_avg(self) -> float:
         return round(self.rating_sum / self.rating_count, 2) if self.rating_count else 0.0
+
+
+class Block(Base):
+    """ACC-033 黑名单：拉黑后不再互相匹配/私聊/报名。"""
+
+    __tablename__ = "blocks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    blocker_id: Mapped[int] = mapped_column(Integer, index=True)
+    blocked_id: Mapped[int] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

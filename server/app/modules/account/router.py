@@ -8,7 +8,7 @@ from app.core.deps import get_current_user
 from app.core.errors import bad_request, conflict, not_found
 from app.core.security import create_token, hash_password, verify_password
 
-from .models import User
+from .models import Block, User
 
 router = APIRouter(tags=["account"])
 
@@ -46,6 +46,11 @@ class VerifyIn(BaseModel):
     id_number: str = Field(min_length=15, max_length=18)
 
 
+class CertificationIn(BaseModel):
+    name: str = Field(min_length=2, max_length=30)  # 如：律师 / 电工
+    license_no: str = Field(min_length=4, max_length=50)
+
+
 def _me(user: User) -> dict:
     return {
         "id": user.id,
@@ -59,6 +64,7 @@ def _me(user: User) -> dict:
         "interests": user.interests,
         "is_verified": user.is_verified,
         "is_admin": user.is_admin,
+        "certifications": user.certifications,
         "credit_score": user.credit_score,
         "rating_avg": user.rating_avg,
         "tasks_completed": user.tasks_completed,
@@ -133,6 +139,48 @@ def verify_identity(
     user.real_name = body.real_name
     db.add(user)
     return {"is_verified": True}
+
+
+# ---------- 黑名单（ACC-033）----------
+@router.post("/users/{user_id}/block")
+def toggle_block(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user_id == user.id:
+        raise bad_request("不能拉黑自己", "self_block")
+    if not db.get(User, user_id):
+        raise not_found("用户不存在")
+    existing = (
+        db.query(Block).filter(Block.blocker_id == user.id, Block.blocked_id == user_id).first()
+    )
+    if existing:
+        db.delete(existing)
+        return {"blocked": False}
+    db.add(Block(blocker_id=user.id, blocked_id=user_id))
+    return {"blocked": True}
+
+
+@router.get("/users/me/blocks")
+def my_blocks(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    rows = db.query(Block).filter(Block.blocker_id == user.id).all()
+    out = []
+    for r in rows:
+        u = db.get(User, r.blocked_id)
+        out.append({"user_id": r.blocked_id, "nickname": u.nickname if u else ""})
+    return out
+
+
+# ---------- 职业资质认证（ACC-022，模拟审核即通过）----------
+@router.post("/users/me/certifications", status_code=201)
+def add_certification(
+    body: CertificationIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """受限类目（法律咨询/电工等）接单准入凭证。生产接资质核验机构。"""
+    if not user.is_verified:
+        raise conflict("需先完成实名认证", "verification_required")
+    if body.name in user.certifications:
+        raise conflict("已有该资质", "certification_exists")
+    user.certifications = user.certifications + [body.name]
+    db.add(user)
+    return {"certifications": user.certifications}
 
 
 # ---------- 个人数据导出（ACC-031，PIPL/GDPR）----------

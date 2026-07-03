@@ -80,6 +80,38 @@ def escrow_refund(db: Session, payer_id: int, amount: int, contract_id: int, mem
     _log(db, payer_id, "refund", amount, contract_id, memo)
 
 
+def freeze_deposit(db: Session, user_id: int, amount: int, contract_id: int):
+    """CRED-005 保证金冻结：可用 → 冻结。"""
+    acct = get_or_create(db, user_id)
+    if acct.available_cents < amount:
+        raise bad_request("可用余额不足以缴纳保证金", "insufficient_deposit")
+    acct.available_cents -= amount
+    acct.frozen_cents += amount
+    _log(db, user_id, "deposit_hold", -amount, contract_id, "任务保证金冻结")
+
+
+def unfreeze_deposit(db: Session, user_id: int, amount: int, contract_id: int):
+    """保证金退还：冻结 → 可用。"""
+    acct = get_or_create(db, user_id)
+    if acct.frozen_cents < amount:
+        raise bad_request("冻结余额异常", "frozen_mismatch")
+    acct.frozen_cents -= amount
+    acct.available_cents += amount
+    _log(db, user_id, "deposit_return", amount, contract_id, "保证金退还")
+
+
+def forfeit_deposit(db: Session, executor_id: int, requester_id: int, amount: int, contract_id: int):
+    """执行者违约：保证金罚没给发布者。"""
+    acct = get_or_create(db, executor_id)
+    if acct.frozen_cents < amount:
+        raise bad_request("冻结余额异常", "frozen_mismatch")
+    acct.frozen_cents -= amount
+    _log(db, executor_id, "deposit_forfeit", -amount, contract_id, "违约保证金罚没")
+    payee = get_or_create(db, requester_id)
+    payee.available_cents += amount
+    _log(db, requester_id, "deposit_forfeit", amount, contract_id, "对方违约保证金赔付")
+
+
 def dispute_split(
     db: Session, payer_id: int, payee_id: int, total: int, payee_share: int, fee: int, contract_id: int
 ):

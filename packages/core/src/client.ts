@@ -315,6 +315,30 @@ export class PlatformClient {
     return this.request<{ ok: boolean }>('DELETE', `/subscriptions/${id}`);
   }
 
+  // ---- block / recall / certification / anchors ----
+  toggleBlock(userId: number) {
+    return this.request<{ blocked: boolean }>('POST', `/users/${userId}/block`);
+  }
+  myBlocks() {
+    return this.request<Array<{ user_id: number; nickname: string }>>('GET', '/users/me/blocks');
+  }
+  recallMessage(messageId: number) {
+    return this.request<{ ok: boolean }>('POST', `/messages/${messageId}/recall`);
+  }
+  addCertification(name: string, licenseNo: string) {
+    return this.request<{ certifications: string[] }>('POST', '/users/me/certifications', {
+      name, license_no: licenseNo,
+    });
+  }
+  contractAnchors(contractId: number) {
+    return this.request<Array<{ seq: number; event_type: string; chain_hash: string; payload_hash: string; created_at: string }>>(
+      'GET', `/anchors/contracts/${contractId}`,
+    );
+  }
+  verifyAnchorChain() {
+    return this.request<{ valid: boolean; total: number; broken_at_seq?: number }>('GET', '/anchors/verify');
+  }
+
   // ---- legal / reports ----
   legalAsk(question: string) {
     return this.request<{ answer: string; disclaimer: string; refused: boolean }>('POST', '/legal/ask', { question });

@@ -49,6 +49,8 @@ def _dump(c: Contract, db: Session | None = None) -> dict:
         "signed_by_executor": c.signed_by_executor,
         "frozen": c.frozen,
         "version": c.version,
+        "deposit_cents": c.deposit_cents,
+        "deposit_status": c.deposit_status,
     }
     if db is not None:
         rows = (

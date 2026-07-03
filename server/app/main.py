@@ -16,6 +16,8 @@ def create_app() -> FastAPI:
     init_db()
 
     # 领域事件订阅（14 号 spec 第 3 节）
+    from app.modules.anchor import service as anchor_service
+    from app.modules.decompose import resilience as decompose_resilience
     from app.modules.decompose import service as decompose_service
     from app.modules.im import service as im_service
     from app.modules.knowledge import service as knowledge_service
@@ -29,6 +31,8 @@ def create_app() -> FastAPI:
     notification_service.register_event_handlers()
     matching_events.register_event_handlers()
     task_events.register_event_handlers()
+    anchor_service.register_event_handlers()
+    decompose_resilience.register_event_handlers()
 
     # 冷启动种子数据（KB 模板与 FAQ）
     with SessionLocal() as db:
@@ -37,6 +41,7 @@ def create_app() -> FastAPI:
 
     from app.modules.account.router import router as account_router
     from app.modules.admin.router import router as admin_router
+    from app.modules.anchor.router import router as anchor_router
     from app.modules.circle.router import router as circle_router
     from app.modules.legal.router import router as legal_router
     from app.modules.matching.router import router as matching_router
@@ -69,6 +74,7 @@ def create_app() -> FastAPI:
         legal_router,
         admin_router,
         search_router,
+        anchor_router,
     ):
         app.include_router(router, prefix=settings.API_PREFIX)
 

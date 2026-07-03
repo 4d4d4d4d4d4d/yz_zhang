@@ -40,9 +40,15 @@ def generate(db: Session, task, executor_id: int, amount_cents: int) -> Contract
         amount_cents=amount_cents,
         fee_bps=settings.PLATFORM_FEE_BPS,
         terms=terms,
+        deposit_cents=task.deposit_cents or 0,
     )
     db.add(contract)
     db.flush()
+    # CRED-005 成交即冻结执行者保证金
+    if contract.deposit_cents > 0:
+        wallet.freeze_deposit(db, executor_id, contract.deposit_cents, contract.id)
+        contract.deposit_status = "held"
+        db.add(contract)
     # SC-004 默认单里程碑=全额；双签前可由发布者重新定义分期
     db.add(Milestone(contract_id=contract.id, idx=1, title="全部交付", amount_cents=amount_cents))
     return contract
@@ -109,6 +115,21 @@ def _fee(contract: Contract, amount: int) -> int:
     return amount * contract.fee_bps // 10000
 
 
+def _settle_deposit(db: Session, contract: Contract, forfeit: bool = False) -> None:
+    """保证金结清：正常闭环退还，执行者违约罚没给发布者（CRED-005）。"""
+    if contract.deposit_status != "held":
+        return
+    if forfeit:
+        wallet.forfeit_deposit(
+            db, contract.executor_id, contract.requester_id, contract.deposit_cents, contract.id
+        )
+        contract.deposit_status = "forfeited"
+    else:
+        wallet.unfreeze_deposit(db, contract.executor_id, contract.deposit_cents, contract.id)
+        contract.deposit_status = "returned"
+    db.add(contract)
+
+
 def release(db: Session, contract: Contract) -> Contract:
     """SC-005 整体验收放款：放出全部剩余托管（已分期放款的部分不重复）。"""
     if contract.frozen:
@@ -128,6 +149,7 @@ def release(db: Session, contract: Contract) -> Contract:
     contract.status = "released"
     contract.closed_at = utcnow()
     db.add(contract)
+    _settle_deposit(db, contract)
     publish(db, "contract.released", {"contract_id": contract.id, "task_id": contract.task_id})
     return contract
 
@@ -166,6 +188,7 @@ def release_milestone(db: Session, contract: Contract, user_id: int, milestone: 
         contract.status = "released"
         contract.closed_at = utcnow()
         db.add(contract)
+        _settle_deposit(db, contract)
         publish(db, "contract.released", {"contract_id": contract.id, "task_id": contract.task_id})
     return milestone
 
@@ -235,6 +258,7 @@ def cancel(db: Session, contract: Contract, cancelled_by: int) -> dict:
         contract.status = "cancelled"
         contract.closed_at = utcnow()
         db.add(contract)
+        _settle_deposit(db, contract)  # 未托管阶段取消：保证金原路退还
         return {"executor_compensation_cents": 0}
     if contract.status != "funded":
         raise conflict("合约不在可取消状态", "not_cancellable")
@@ -258,6 +282,8 @@ def cancel(db: Session, contract: Contract, cancelled_by: int) -> dict:
         contract.status = "refunded"
     contract.closed_at = utcnow()
     db.add(contract)
+    # CRED-005：执行者违约取消 → 罚没保证金；发布者取消 → 退还
+    _settle_deposit(db, contract, forfeit=(who == "executor"))
     return {"executor_compensation_cents": comp, "cancelled_by": who}
 
 
@@ -288,5 +314,6 @@ def execute_verdict(db: Session, contract: Contract, executor_share_bps: int) ->
     )
     contract.closed_at = utcnow()
     db.add(contract)
+    _settle_deposit(db, contract)  # 仲裁结案：保证金退还（罚没仅适用于违约取消）
     publish(db, "contract.verdict_executed", {"contract_id": contract.id, "task_id": contract.task_id})
     return {"executor_amount_cents": share}

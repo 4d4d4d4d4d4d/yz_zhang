@@ -31,6 +31,7 @@ class TaskIn(BaseModel):
     required_skills: list[str] = []
     budget_cents: int = 0
     pricing: str = "fixed"
+    deposit_cents: int = 0
     is_remote: bool = False
     city: str = ""
     lat: float | None = None
@@ -83,6 +84,7 @@ def dump_task(task: Task, viewer: User | None = None) -> dict:
         "required_skills": task.required_skills,
         "budget_cents": task.budget_cents,
         "pricing": task.pricing,
+        "deposit_cents": task.deposit_cents,
         "is_remote": task.is_remote,
         "city": task.city,
         "lat": task.lat,
@@ -200,6 +202,11 @@ def apply(
         raise conflict("任务不在招募中", "not_recruiting")
     if task.creator_id == user.id:
         raise bad_request("不能报名自己发布的任务", "self_apply")
+    service.check_category_qualification(task, user)  # ACC-022 受限类目准入
+    from app.modules.account.service import is_blocked_between
+
+    if is_blocked_between(db, user.id, task.creator_id):  # ACC-033
+        raise forbidden("无法报名该任务", "blocked")
     dup = (
         db.query(Application)
         .filter(Application.task_id == task_id, Application.applicant_id == user.id)
@@ -374,6 +381,14 @@ def _complete_task(db: Session, task: Task) -> None:
         credit.record_task_completed(db, task.executor_id)
 
 
+@router.post("/tasks/jobs/deadline-alerts")
+def run_deadline_alerts(db: Session = Depends(get_db)):
+    """AI-DEC-022 逾期预警 job。"""
+    from app.modules.decompose.resilience import deadline_alerts
+
+    return {"alerted": deadline_alerts(db, utcnow())}
+
+
 @router.post("/tasks/jobs/auto-accept")
 def run_auto_accept(db: Session = Depends(get_db)):
     """TASK-031 超时自动验收（生产为定时任务，这里同时暴露为可调用 job）。"""
@@ -403,7 +418,7 @@ def cancel_task(task_id: int, user: User = Depends(get_current_user), db: Sessio
         # 托管后执行者违约取消 → 信用惩罚（CRED-004）
         if result.get("cancelled_by") == "executor":
             credit.adjust_credit(db, user.id, credit.CREDIT_CANCEL_PENALTY)
-    service.transition(db, task, "cancelled")
+    service.transition(db, task, "cancelled", {"cancelled_by": result.get("cancelled_by", "")})
     return {"task": dump_task(task, user), **result}
 
 

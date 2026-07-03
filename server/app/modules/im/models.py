@@ -28,4 +28,6 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text)
     # IM-006 风控：命中站外引导/联系方式模式时标记（提示防跳单，不拦截内容本身）
     risk_flagged: Mapped[bool] = mapped_column(Boolean, default=False)
+    # IM-004 撤回：内容保留为审计副本（任务会话证据链要求），仅展示层隐藏
+    recalled: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

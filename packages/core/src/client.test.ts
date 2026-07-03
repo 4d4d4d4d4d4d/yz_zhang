@@ -99,6 +99,23 @@ describe('V1 接口', () => {
     expect(JSON.parse(init.body)).toEqual({ user_id: 42, message: '来' });
   });
 
+  it('黑名单/撤回/资质/存证接口路径', async () => {
+    const { client, fetchImpl } = makeClient(200, {});
+    await client.toggleBlock(9);
+    await client.recallMessage(11);
+    await client.addCertification('律师', 'A1234');
+    await client.verifyAnchorChain();
+    const urls = fetchImpl.mock.calls.map((c) => c[0]);
+    expect(urls).toEqual([
+      'http://x/api/v1/users/9/block',
+      'http://x/api/v1/messages/11/recall',
+      'http://x/api/v1/users/me/certifications',
+      'http://x/api/v1/anchors/verify',
+    ]);
+    const [, certInit] = fetchImpl.mock.calls[2];
+    expect(JSON.parse(certInit.body)).toEqual({ name: '律师', license_no: 'A1234' });
+  });
+
   it('举报接口字段', async () => {
     const { client, fetchImpl } = makeClient(201, { id: 1, status: 'pending' });
     await client.report('content', 8, '违规');

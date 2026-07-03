@@ -51,6 +51,8 @@ class Task(Base):
 
     budget_cents: Mapped[int] = mapped_column(Integer, default=0)
     pricing: Mapped[str] = mapped_column(String(20), default="fixed")  # fixed 一口价 / bidding 竞价
+    # CRED-005 执行者保证金（发布者设定，成交时冻结，闭环退还，违约罚没）
+    deposit_cents: Mapped[int] = mapped_column(Integer, default=0)
 
     # GEO：is_remote 线上任务不限地域；线下任务坐标 + 脱敏地址(公开) + 精确地址(成交后可见)
     is_remote: Mapped[bool] = mapped_column(Boolean, default=False)

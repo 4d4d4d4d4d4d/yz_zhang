@@ -32,10 +32,23 @@ def _distance_score(task, user: User) -> float:
 
 
 def recommend(db: Session, task, limit: int = 10) -> list[dict]:
+    from app.modules.account.models import Block
+
     # 召回：实名认证 + 非发布者本人；技能召回 + 同城召回的并集（MVP 全量扫，规模化换索引）
     candidates = (
         db.query(User).filter(User.is_verified.is_(True), User.id != task.creator_id).all()
     )
+    # ACC-033 黑名单：双向排除
+    blocked_pairs = {
+        (b.blocker_id, b.blocked_id)
+        for b in db.query(Block).filter(
+            (Block.blocker_id == task.creator_id) | (Block.blocked_id == task.creator_id)
+        )
+    }
+    candidates = [
+        u for u in candidates
+        if (task.creator_id, u.id) not in blocked_pairs and (u.id, task.creator_id) not in blocked_pairs
+    ]
     scored = []
     for user in candidates:
         skill = _skill_score(task.required_skills, user.skills)

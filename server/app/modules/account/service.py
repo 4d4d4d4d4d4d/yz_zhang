@@ -1,7 +1,20 @@
-"""信用分服务（CRED-001/002/004）。"""
+"""信用分服务（CRED-001/002/004）与黑名单（ACC-033）。"""
 from sqlalchemy.orm import Session
 
-from .models import User
+from .models import Block, User
+
+
+def is_blocked_between(db: Session, user_a: int, user_b: int) -> bool:
+    """任一方向拉黑即视为不可互动。"""
+    return (
+        db.query(Block)
+        .filter(
+            ((Block.blocker_id == user_a) & (Block.blocked_id == user_b))
+            | ((Block.blocker_id == user_b) & (Block.blocked_id == user_a))
+        )
+        .first()
+        is not None
+    )
 
 # 信用分增减规则（后台可配的简化版）
 CREDIT_TASK_COMPLETED = 2
