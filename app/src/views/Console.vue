@@ -43,6 +43,7 @@ import FieldVerification from '../components/FieldVerification.vue'
 import ShowcaseGallery   from '../components/ShowcaseGallery.vue'
 import TrustLinkBuilder  from '../components/TrustLinkBuilder.vue'
 import VerificationQueue from '../components/VerificationQueue.vue'
+import TrustPipeline     from '../components/TrustPipeline.vue'
 
 import TrustCenter      from '../components/TrustCenter.vue'
 import ControlsRegister from '../components/ControlsRegister.vue'
@@ -104,7 +105,8 @@ const sections = [
     sub: [
       { v: 'gallery',      label: 'Video showcase',        comp: ShowcaseGallery },
       { v: 'links',        label: 'Trust links',           comp: TrustLinkBuilder },
-      { v: 'verification', label: 'Verification queue',    comp: VerificationQueue }
+      { v: 'verification', label: 'Verification queue',    comp: VerificationQueue },
+      { v: 'pipeline',     label: 'Deal readiness',        comp: TrustPipeline }
     ]
   },
   {

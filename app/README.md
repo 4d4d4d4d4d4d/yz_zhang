@@ -27,9 +27,13 @@ npm run preview  # serve the build
 
 ## Architecture: specs, logic layer, tests
 
-Commercialization capabilities are built spec-first — see [`docs/specs/`](../docs/specs/)
-for the reviewed design of each domain (architecture, recommendations,
-marketing, matchmaking, negotiation, risk & legal, showcase & trust).
+Commercialization capabilities are built spec-first — see the
+[specs index](../docs/specs/README.md) for the reviewed design of all 12
+domains (architecture, recommendations, marketing, matchmaking,
+negotiation, risk & legal, showcase & trust, digital humans, cross-language
+meetings, virtual tours, field verification, and the trust pipeline that
+composes them into deal readiness). CI (`.github/workflows/ci.yml`) runs
+the full test suite and the production build on every push and PR.
 
 Domain algorithms live in `src/logic/` as pure, framework-free modules
 (recommendation ranking with explanations, ROAS water-fill budget allocation,
