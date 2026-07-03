@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { rankPartners } from '../logic/matching.js'
 
 const category = ref('beauty')
 const market = ref('JP')
@@ -13,28 +14,27 @@ const stages = [
   { v: 'scale', label: 'Scaling' }
 ]
 
+// Spec 13 R3: one scoring engine everywhere — this DB feeds spec 03's
+// rankPartners. Editorial score maps to the trust factor.
 const partnerDB = [
-  { name: 'Lumen Studios', kind: 'Creative agency', regions: ['JP', 'KR'], cats: ['beauty', 'fashion'], score: 94, note: 'Tokyo-based, won 2024 Spikes Asia for Shiseido relaunch.' },
-  { name: 'Aurora Media', kind: 'Media buying', regions: ['JP', 'SEA'], cats: ['beauty', 'food'], score: 91, note: 'Managed $40M in beauty DTC in APAC last year.' },
-  { name: 'Northwave Partners', kind: 'Distributor', regions: ['US', 'BR'], cats: ['saas', 'tech'], score: 88, note: 'B2B SaaS distribution across the Americas.' },
-  { name: 'Mizu Logistics', kind: '3PL', regions: ['JP', 'KR', 'SEA'], cats: ['beauty', 'fashion', 'food'], score: 85, note: 'Same-day fulfillment from Osaka and Singapore.' },
-  { name: 'Helio Influencer', kind: 'Influencer network', regions: ['BR', 'MX', 'US'], cats: ['fashion', 'beauty'], score: 82, note: '12k creators across LATAM, fluent in PT/ES.' },
-  { name: 'Cobalt Legal', kind: 'Compliance partner', regions: ['DE', 'US', 'JP'], cats: ['saas', 'tech', 'beauty'], score: 90, note: 'GDPR / CCPA / APPI advisory, cross-border DPAs.' },
-  { name: 'Verda Commerce', kind: 'Marketplace ops', regions: ['JP', 'SEA'], cats: ['beauty', 'fashion', 'tech'], score: 80, note: 'Rakuten + Shopee onboarding in <14 days.' }
+  { id: 'lumen',  name: 'Lumen Studios', kind: 'Creative agency', stage: 'growth', regions: ['JP', 'KR'], cats: ['beauty', 'fashion'], score: 94, note: 'Tokyo-based, won 2024 Spikes Asia for Shiseido relaunch.' },
+  { id: 'aurora', name: 'Aurora Media', kind: 'Media buying', stage: 'scale', regions: ['JP', 'SEA'], cats: ['beauty', 'food'], score: 91, note: 'Managed $40M in beauty DTC in APAC last year.' },
+  { id: 'north',  name: 'Northwave Partners', kind: 'Distributor', stage: 'scale', regions: ['US', 'BR'], cats: ['saas', 'tech'], score: 88, note: 'B2B SaaS distribution across the Americas.' },
+  { id: 'mizu',   name: 'Mizu Logistics', kind: '3PL', stage: 'enterprise', regions: ['JP', 'KR', 'SEA'], cats: ['beauty', 'fashion', 'food'], score: 85, note: 'Same-day fulfillment from Osaka and Singapore.' },
+  { id: 'helio',  name: 'Helio Influencer', kind: 'Influencer network', stage: 'growth', regions: ['BR', 'MX', 'US'], cats: ['fashion', 'beauty'], score: 82, note: '12k creators across LATAM, fluent in PT/ES.' },
+  { id: 'cobalt', name: 'Cobalt Legal', kind: 'Compliance partner', stage: 'enterprise', regions: ['DE', 'US', 'JP'], cats: ['saas', 'tech', 'beauty'], score: 90, note: 'GDPR / CCPA / APPI advisory, cross-border DPAs.' },
+  { id: 'verda',  name: 'Verda Commerce', kind: 'Marketplace ops', stage: 'growth', regions: ['JP', 'SEA'], cats: ['beauty', 'fashion', 'tech'], score: 80, note: 'Rakuten + Shopee onboarding in <14 days.' }
 ]
 
+const STAGE_MAP = { discovery: 'seed', launch: 'growth', scale: 'scale' }
+
 const matches = computed(() => {
-  return partnerDB
-    .map(p => {
-      let score = p.score
-      if (!p.regions.includes(market.value)) score -= 30
-      if (!p.cats.includes(category.value)) score -= 25
-      if (stage.value === 'discovery') score -= 4
-      if (stage.value === 'scale' && p.kind === 'Creative agency') score += 3
-      return { ...p, matchScore: Math.max(0, Math.min(99, score)) }
-    })
-    .sort((a, b) => b.matchScore - a.matchScore)
-    .slice(0, 5)
+  const need = { categories: [category.value], markets: [market.value], stage: STAGE_MAP[stage.value] }
+  const partners = partnerDB.map(p => ({
+    id: p.id, categories: p.cats, markets: p.regions, stage: p.stage, trust: p.score / 100, meta: p
+  }))
+  return rankPartners(need, partners, { topN: 5, includeWeak: true })
+    .map(r => ({ ...r.partner.meta, matchScore: r.score, reasons: r.reasons }))
 })
 </script>
 

@@ -98,7 +98,7 @@ export default {
     success: '受領しました。1 営業日以内にご連絡します。',
     error: '必須項目を入力してください。',
     or: 'または直接ご連絡',
-    email_us: 'partners@adforge.ai',
+    email_us: "partners{'@'}adforge.ai",
     book_call: '30 分の紹介ミーティング'
   },
   console: {

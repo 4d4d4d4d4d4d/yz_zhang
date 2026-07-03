@@ -100,7 +100,7 @@ export default {
     success: 'Thanks — we’ll be in touch within one business day.',
     error: 'Please fill in the required fields.',
     or: 'Or reach us directly',
-    email_us: 'partners@adforge.ai',
+    email_us: "partners{'@'}adforge.ai",
     book_call: 'Book a 30-min intro call'
   },
   console: {

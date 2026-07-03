@@ -54,14 +54,50 @@ multi-armed bandit inside `BanditExplorer.vue`.
 - Shares sum to exactly 100 at every step; regret non-decreasing;
   window cap respected; ε clamp; reset restores initial state.
 
-## Migration queue (future revisions)
-- `RenderStudio.vue` render-plan builder → `logic/render.js`
-- `PartnerMatcher.vue` (marketing site) → reuse `logic/matching.js`
-- `ForecastSim.vue` what-if model → `logic/forecast.js`
+## Migration queue
+- ~~`RenderStudio.vue` render-plan builder → `logic/render.js`~~ (R2, done)
+- ~~`PartnerMatcher.vue` (marketing site) → reuse `logic/matching.js`~~ (R3, done)
+- ~~`ForecastSim.vue` what-if model → `logic/forecast.js`~~ (R4, done)
+- Queue empty — remaining console modules carry only presentation logic.
 
 ## Review record — R1
 - ✅ RNG injection made a hard policy rule (rule 2) — the whole point of
   the migration is testability.
 - ✅ Behavior parity via smoke test required (rule 3) so migrations can't
   quietly change module behavior.
+- Verdict: **approved**.
+
+## Revision R2 (2026-07-03) — `RenderStudio.vue` → `logic/render.js`
+- API: `buildRenderPlan({ targets, formats }, catalog)` — pure cartesian
+  market × format expansion with language lookup; empty selections → `[]`,
+  unknown ids skipped with a `skipped[]` note (draft silently dropped
+  them — rejected in review).
+  `advanceProgress(progress, rng)` — one tick of simulated render progress
+  (`+8 + rng()·14`, capped 100), RNG injected per rule 2.
+- Component keeps its timing loop (pacing is presentation).
+- Verdict: **approved**.
+
+## Revision R3 (2026-07-03) — `PartnerMatcher.vue` reuses `logic/matching.js`
+- **Reviewed behavior change**: the marketing-site matcher's ad-hoc
+  penalty scoring is retired in favor of spec 03's engine — one scoring
+  model everywhere, so a demo score on the site matches the console.
+  Partner DB entries gain `stage`; their editorial `score` maps to the
+  trust factor (`score/100`). UI layout, filters and top-5 contract
+  unchanged; displayed numbers legitimately shift (recorded here per
+  spec 12 policy: spec first, then tests, then code).
+- Verdict: **approved**.
+
+## Revision R4 (2026-07-03) — `ForecastSim.vue` → `logic/forecast.js`
+- API: `saturatingRevenue(ch, budgetK)` = `k·sat·(1−e^{−b/sat})`;
+  `marginalRoas(ch, budgetK)` = `k·e^{−b/sat}`;
+  `project(channels, totalBudget)` — per-channel budget/revenue/marginal/
+  ROAS + portfolio totals;
+  `rebalanceAllocations(channels, id, val)` — slider move redistributes
+  proportionally, result always sums to 100;
+  `optimalAllocation(channels, totalBudget)` — λ-sweep water-fill
+  equalizing marginal ROAS, returns integer percentages summing to 100.
+- Fully deterministic (no RNG in this domain).
+- Guarantees under test: revenue monotone & saturating (≤ k·sat),
+  marginal strictly decreasing, rebalance conservation, optimizer never
+  returns a worse portfolio than the uniform split.
 - Verdict: **approved**.

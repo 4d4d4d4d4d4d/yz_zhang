@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { saturatingRevenue, project, rebalanceAllocations, optimalAllocation } from '../logic/forecast.js'
 
 // Each channel: saturating ROAS — diminishing returns model
 const channels = ref([
@@ -11,78 +12,33 @@ const channels = ref([
 ])
 const totalBudget = ref(200000)
 
-// Revenue function: r(b) = k * sat * (1 - e^{-b/sat})   (saturation curve in $thousands)
-function revenue(ch, bk) {
-  return ch.k * ch.sat * (1 - Math.exp(-bk / ch.sat))
-}
-function marginalRoas(ch, bk) {
-  // derivative: k * e^{-b/sat}
-  return ch.k * Math.exp(-bk / ch.sat)
-}
-
 const allocSum = computed(() => channels.value.reduce((s, c) => s + c.alloc, 0))
 
 function setAlloc(id, val) {
-  const ch = channels.value.find(c => c.id === id)
-  if (!ch) return
-  const diff = val - ch.alloc
-  ch.alloc = val
-  const others = channels.value.filter(c => c.id !== id)
-  let pool = others.reduce((s, c) => s + c.alloc, 0)
-  if (pool > 0) {
-    for (const c of others) c.alloc = Math.max(0, Math.round(c.alloc - diff * (c.alloc / pool)))
-  }
-  const sum = channels.value.reduce((s, c) => s + c.alloc, 0)
-  if (sum !== 100) {
-    const target = channels.value.find(c => c.id !== id && c.alloc > 0) || channels.value[0]
-    target.alloc += 100 - sum
-  }
+  const next = rebalanceAllocations(channels.value, id, val)
+  for (const c of channels.value) c.alloc = next[c.id]
 }
 
 const projections = computed(() => {
-  return channels.value.map(c => {
-    const budgetK = (totalBudget.value * c.alloc / 100) / 1000
-    const revK = revenue(c, budgetK)
-    const mr = marginalRoas(c, budgetK)
-    const roas = budgetK > 0 ? revK / budgetK : 0
-    return { ...c, budget: budgetK * 1000, revenue: revK * 1000, marginal: mr, roas }
-  })
+  const { rows } = project(channels.value, totalBudget.value)
+  return channels.value.map((c, i) => ({ ...c, ...rows[i] }))
 })
 
-const totalRev = computed(() => projections.value.reduce((s, p) => s + p.revenue, 0))
-const totalRoas = computed(() => totalRev.value / totalBudget.value)
+const totalRev = computed(() => project(channels.value, totalBudget.value).totalRevenue)
+const totalRoas = computed(() => project(channels.value, totalBudget.value).totalRoas)
 
-// Optimal allocation: equalize marginal ROAS across channels (water-filling)
 function applyOptimal() {
-  const totalK = totalBudget.value / 1000
-  let lambdas = channels.value.map(c => c.k * 0.05)
-  let bestAllocs = null, bestRev = -Infinity
-  for (let iter = 0; iter < 200; iter++) {
-    const lambda = 0.05 + iter * 0.025
-    const budgets = channels.value.map(c => {
-      if (lambda >= c.k) return 0
-      return c.sat * Math.log(c.k / lambda)
-    })
-    const sum = budgets.reduce((s, b) => s + b, 0)
-    if (Math.abs(sum - totalK) / totalK < 0.02) {
-      const rev = budgets.reduce((s, b, i) => s + revenue(channels.value[i], b), 0)
-      if (rev > bestRev) { bestRev = rev; bestAllocs = budgets.map(b => Math.round((b / sum) * 100)) }
-    }
-  }
-  if (bestAllocs) {
-    const totalPct = bestAllocs.reduce((s, b) => s + b, 0)
-    bestAllocs[0] += 100 - totalPct
-    bestAllocs.forEach((b, i) => channels.value[i].alloc = b)
-  }
+  const next = optimalAllocation(channels.value, totalBudget.value)
+  if (next) for (const c of channels.value) c.alloc = next[c.id]
 }
 
 function curvePath(ch, w = 200, h = 60) {
   const maxB = totalBudget.value / 1000
-  const maxR = revenue(ch, maxB) || 1
+  const maxR = saturatingRevenue(ch, maxB) || 1
   const pts = []
   for (let i = 0; i <= 30; i++) {
     const b = (i / 30) * maxB
-    const r = revenue(ch, b)
+    const r = saturatingRevenue(ch, b)
     const x = (b / maxB) * w
     const y = h - (r / maxR) * (h - 4) - 2
     pts.push(`${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`)
@@ -93,9 +49,9 @@ function curvePath(ch, w = 200, h = 60) {
 function dotPos(ch) {
   const budgetK = (totalBudget.value * ch.alloc / 100) / 1000
   const maxB = totalBudget.value / 1000
-  const maxR = revenue(ch, maxB) || 1
+  const maxR = saturatingRevenue(ch, maxB) || 1
   const x = (budgetK / maxB) * 200
-  const y = 60 - (revenue(ch, budgetK) / maxR) * 56 - 2
+  const y = 60 - (saturatingRevenue(ch, budgetK) / maxR) * 56 - 2
   return { x: x.toFixed(1), y: y.toFixed(1) }
 }
 </script>

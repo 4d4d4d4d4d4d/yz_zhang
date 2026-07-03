@@ -100,7 +100,7 @@ export default {
     success: '已收到，1 个工作日内联系您。',
     error: '请补全必填项。',
     or: '或者直接联系我们',
-    email_us: 'partners@adforge.ai',
+    email_us: "partners{'@'}adforge.ai",
     book_call: '预约 30 分钟介绍电话'
   },
   console: {

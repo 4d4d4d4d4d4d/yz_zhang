@@ -98,7 +98,7 @@ export default {
     success: 'Gracias — te contactamos en un día hábil.',
     error: 'Completa los campos requeridos.',
     or: 'O contáctanos directo',
-    email_us: 'partners@adforge.ai',
+    email_us: "partners{'@'}adforge.ai",
     book_call: 'Reserva una intro de 30 min'
   },
   console: {
