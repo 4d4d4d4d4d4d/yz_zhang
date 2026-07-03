@@ -21,12 +21,14 @@ def create_app() -> FastAPI:
     from app.modules.knowledge import service as knowledge_service
     from app.modules.matching import events as matching_events
     from app.modules.notification import service as notification_service
+    from app.modules.task import events as task_events
 
     knowledge_service.register_event_handlers()
     decompose_service.register_event_handlers()
     im_service.register_event_handlers()
     notification_service.register_event_handlers()
     matching_events.register_event_handlers()
+    task_events.register_event_handlers()
 
     # 冷启动种子数据（KB 模板与 FAQ）
     with SessionLocal() as db:
@@ -45,6 +47,7 @@ def create_app() -> FastAPI:
     from app.modules.im.router import router as im_router
     from app.modules.knowledge.router import router as knowledge_router
     from app.modules.notification.router import router as notification_router
+    from app.modules.search.router import router as search_router
     from app.modules.support.router import router as support_router
     from app.modules.task.router import router as task_router
     from app.modules.wallet.router import router as wallet_router
@@ -65,6 +68,7 @@ def create_app() -> FastAPI:
         matching_router,
         legal_router,
         admin_router,
+        search_router,
     ):
         app.include_router(router, prefix=settings.API_PREFIX)
 

@@ -71,6 +71,52 @@ def legal_ask(body: AskIn, user: User = Depends(get_current_user)):
     return {"answer": best["answer"], "disclaimer": DISCLAIMER, "refused": False}
 
 
+class DocumentIn(BaseModel):
+    kind: str  # demand_letter 催告函 / settlement_agreement 和解协议
+    task_id: int
+    demand: str = Field(default="", max_length=500)  # 诉求（如：3 日内完成整改）
+
+
+@router.post("/documents")
+def generate_document(
+    body: DocumentIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """LAW-002 文书模板生成：按任务/合约数据填充草稿（仅当事人；草稿需自行核对）。"""
+    task = db.get(Task, body.task_id)
+    if not task:
+        raise not_found("任务不存在")
+    if user.id not in (task.creator_id, task.executor_id):
+        raise forbidden("仅任务当事人可生成文书")
+    from app.modules.contract.models import Contract
+
+    contract = db.query(Contract).filter(Contract.task_id == task.id).first()
+    amount = (contract.amount_cents if contract else task.budget_cents) / 100
+    counterparty = task.executor_id if user.id == task.creator_id else task.creator_id
+    if body.kind == "demand_letter":
+        text = (
+            f"催告函\n\n"
+            f"致 用户{counterparty}：\n"
+            f"就平台任务《{task.title}》（任务编号 {task.id}，合约金额 {amount:.2f} 元），"
+            f"你方未按约定履行义务。现郑重催告：{body.demand or '请于收到本函 3 日内履行合约义务'}。\n"
+            f"逾期未履行的，本人将依据《平台争议处理规则》发起仲裁，并保留诉诸法律的权利。\n\n"
+            f"催告人：用户{user.id}（实名认证）"
+        )
+    elif body.kind == "settlement_agreement":
+        text = (
+            f"和解协议（草稿）\n\n"
+            f"甲方：用户{task.creator_id}　乙方：用户{task.executor_id}\n"
+            f"就任务《{task.title}》（编号 {task.id}，托管金额 {amount:.2f} 元）产生的争议，"
+            f"双方自愿达成如下和解：\n"
+            f"一、结算方案：{body.demand or '[请填写分割比例或金额]'}；\n"
+            f"二、款项由平台按本协议自动执行，执行完毕后双方互不追究；\n"
+            f"三、本协议经双方在平台确认后生效。"
+        )
+    else:
+        raise not_found("不支持的文书类型")
+    return {"kind": body.kind, "text": text,
+            "disclaimer": "本文书为模板草稿，重要事项请咨询执业律师后使用。"}
+
+
 @router.get("/disputes/{dispute_id}/evidence-export")
 def evidence_export(
     dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)

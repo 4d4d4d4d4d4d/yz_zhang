@@ -48,6 +48,10 @@ export interface Task {
   lng: number | null;
   address_hint: string;
   address_exact: string;
+  visibility?: string;
+  circle_id?: number | null;
+  recurrence?: string;
+  recurred_from_id?: number | null;
   status: TaskStatus;
   deadline: string | null;
   reject_count: number;

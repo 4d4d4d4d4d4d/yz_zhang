@@ -1,4 +1,5 @@
 import { Link, Navigate, Route, Routes } from 'react-router-dom';
+import Admin from './pages/Admin';
 import Circles from './pages/Circles';
 import Community from './pages/Community';
 import Login from './pages/Login';
@@ -28,6 +29,7 @@ export default function App() {
         <span className="spacer" />
         {me ? (
           <>
+            {me.is_admin && <Link to="/admin">管理</Link>}
             <Link to="/notifications">🔔</Link>
             <Link to="/profile">
               {me.nickname} <span className="badge">{me.credit_score} 分</span>
@@ -49,6 +51,7 @@ export default function App() {
         <Route path="/notifications" element={hasToken ? <Notifications /> : <Navigate to="/login" />} />
         <Route path="/profile" element={hasToken ? <Profile /> : <Navigate to="/login" />} />
         <Route path="/support" element={hasToken ? <Support /> : <Navigate to="/login" />} />
+        <Route path="/admin" element={hasToken ? <Admin /> : <Navigate to="/login" />} />
       </Routes>
     </>
   );

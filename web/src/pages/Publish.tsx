@@ -8,7 +8,7 @@ export default function Publish() {
   const nav = useNavigate();
   const [form, setForm] = useState({
     title: '', description: '', category: '保洁', budget_yuan: '200',
-    task_type: 'service', is_remote: false, city: '上海',
+    task_type: 'service', pricing: 'fixed', recurrence: 'none', is_remote: false, city: '上海',
     lat: '31.2304', lng: '121.4737', address_hint: '', address_exact: '',
   });
   const [error, setError] = useState('');
@@ -33,6 +33,8 @@ export default function Publish() {
         description: form.description,
         category: form.category,
         task_type: form.task_type as Task['task_type'],
+        pricing: form.pricing,
+        recurrence: form.recurrence,
         budget_cents: Math.round(parseFloat(form.budget_yuan) * 100),
         is_remote: form.is_remote,
         city: form.city,
@@ -142,6 +144,19 @@ export default function Publish() {
           </div>
           <div className="row">
             <label className="grow">预算（元）<input type="number" min={1} value={form.budget_yuan} onChange={(e) => set('budget_yuan', e.target.value)} /></label>
+            <label className="grow">计价方式
+              <select value={form.pricing} onChange={(e) => set('pricing', e.target.value)}>
+                <option value="fixed">一口价</option>
+                <option value="bidding">竞价（执行者报价比选）</option>
+              </select>
+            </label>
+            <label className="grow">周期
+              <select value={form.recurrence} onChange={(e) => set('recurrence', e.target.value)}>
+                <option value="none">一次性</option>
+                <option value="weekly">每周（完成后自动续期）</option>
+                <option value="monthly">每月</option>
+              </select>
+            </label>
             <button type="button" className="ghost" onClick={() => void checkPrice()}>查同类参考价</button>
           </div>
           {priceRef && (

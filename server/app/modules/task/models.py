@@ -63,6 +63,9 @@ class Task(Base):
     # TASK-008 可见范围：public 公开广场 / circle 仅圈层任务板
     visibility: Mapped[str] = mapped_column(String(12), default="public")
     circle_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    # TASK-006 周期任务：none/weekly/monthly，闭环后自动生成下一期
+    recurrence: Mapped[str] = mapped_column(String(10), default="none")
+    recurred_from_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     status: Mapped[str] = mapped_column(String(30), default="draft", index=True)
     deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

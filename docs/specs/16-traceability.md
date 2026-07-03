@@ -1,7 +1,19 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1 主体完成（2026-07-03）。后端 63 tests + 前端 16 tests 全绿。
-> 范围：15-roadmap.md 的 MVP 全集 + V1 大部分；剩余项见文末。
+> 状态：MVP + V1 完成（2026-07-03）。后端 68 tests + 前端 18 tests 全绿。
+> 范围：15-roadmap.md 的 MVP 全集 + V1 全集；剩余为 V2 项，见文末。
+
+## 已实现（V1 收尾批次）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| SRCH-001 统一搜索（任务/用户/内容/圈层分组） | `server/app/modules/search/router.py` | `tests/test_v1_extras.py` |
+| TASK-006 周期任务（闭环自动续期+通知） | `task/events.py` + `Task.recurrence` | 同上 |
+| LAW-002 文书生成（催告函/和解协议，自动填充） | `legal/router.py::generate_document` | 同上 |
+| ACC-031 个人数据导出（PIPL/GDPR） | `account/router.py::export_my_data` | 同上 |
+| OPS 管理后台 Web UI（指标/举报处置/封禁） | `web/src/pages/Admin.tsx` | `web/src/Admin.test.tsx` |
+| MATCH-007 竞价发布与报价比选 UI | `web/src/pages/{Publish,TaskDetail}.tsx` | 构建 + SDK 单测 |
+| APP-005/006 App 五 Tab + 任务详情操作/钱包/通知 | `app/App.tsx` | 骨架（Expo 运行时验证） |
 
 ## 已实现（V1 增量，2026-07-03）
 
@@ -89,13 +101,12 @@
 | IM | REST 轮询 | WebSocket/云 IM（`MessageProvider` 抽象） |
 | 定时任务 | 暴露为可调用 job 接口 | 调度器（cron/celery） |
 
-## 未实现（剩余 V1/V2 项）
+## 未实现（剩余 V2 项）
 
-- 短视频上传转码与沉浸流（CNT-002/014）— V2（转码/审核成本高）
-- 个性化推荐流排序（CNT-011 完整版：行为特征模型）— V2
-- SC-011 上链存证（当前为 SHA256 哈希雏形）— V2
-- LAW-002/003 文书生成、律师入驻市场 — V2
-- 管理后台独立前端（API 已就绪，缺 UI）— V1 收尾
-- 竞价比选页（MATCH-007 后端 bid 已支持，缺专属 UI）— V1 收尾
-- 音视频通话（IM-007）、周期任务（TASK-006）、保证金（CRED-005）— V2
-- App 完整版（地图/打卡/推送/圈层）— V1 收尾
+- 短视频上传转码与沉浸流（CNT-002/014）— 依赖转码/内容安全云服务
+- 个性化推荐流排序（CNT-011 完整版：行为特征模型）
+- SC-011 上链存证（当前为 SHA256 哈希雏形）
+- LAW-003 律师入驻市场（可复用任务类型实现）
+- 音视频通话（IM-007）、保证金（CRED-005）、企业认证与发票（ACC-021/PAY-008）
+- App 深化：地图撒点、扫码打卡、离线推送通道（API 均已就绪）
+- 真实供应商接入：短信/eKYC/持牌支付托管/LLM/内容安全（接口抽象已就位）

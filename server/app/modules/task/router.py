@@ -40,6 +40,7 @@ class TaskIn(BaseModel):
     deadline: datetime | None = None
     visibility: str = "public"
     circle_id: int | None = None
+    recurrence: str = "none"
     publish_now: bool = True
 
 
@@ -91,6 +92,8 @@ def dump_task(task: Task, viewer: User | None = None) -> dict:
         "address_exact": task.address_exact if is_party else "",
         "visibility": task.visibility,
         "circle_id": task.circle_id,
+        "recurrence": task.recurrence,
+        "recurred_from_id": task.recurred_from_id,
         "status": task.status,
         "deadline": task.deadline.isoformat() if task.deadline else None,
         "reject_count": task.reject_count,
@@ -112,6 +115,8 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
         raise bad_request("非法任务类型", "invalid_type")
     if body.visibility not in ("public", "circle"):
         raise bad_request("非法可见范围", "invalid_visibility")
+    if body.recurrence not in ("none", "weekly", "monthly"):
+        raise bad_request("非法周期设置", "invalid_recurrence")
     if body.visibility == "circle":
         # TASK-008/CIR-005 圈层定向任务：发布者必须是活跃成员
         from app.modules.circle.router import active_member

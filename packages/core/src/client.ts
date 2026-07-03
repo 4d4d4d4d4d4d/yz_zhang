@@ -330,6 +330,54 @@ export class PlatformClient {
     });
   }
 
+  // ---- search / recurring / export ----
+  search(q: string) {
+    return this.request<{
+      tasks: Array<{ id: number; title: string; category: string; budget_cents: number; city: string }>;
+      users: Array<{ id: number; nickname: string; skills: string[]; credit_score: number; rating_avg: number }>;
+      contents: Array<{ id: number; kind: string; title: string; body: string; author_id: number }>;
+      circles: Array<{ id: number; name: string; kind: string; member_count: number }>;
+    }>('GET', `/search?q=${encodeURIComponent(q)}`);
+  }
+  exportMyData() {
+    return this.request<Record<string, unknown>>('GET', '/users/me/export');
+  }
+  legalDocument(kind: 'demand_letter' | 'settlement_agreement', taskId: number, demand = '') {
+    return this.request<{ kind: string; text: string; disclaimer: string }>('POST', '/legal/documents', {
+      kind, task_id: taskId, demand,
+    });
+  }
+
+  // ---- admin ----
+  adminMetrics() {
+    return this.request<{
+      total_users: number; verified_users: number; total_tasks: number; published_tasks: number;
+      completed_tasks: number; closed_loop_rate: number; dispute_count: number;
+      gmv_cents: number; fee_income_cents: number;
+    }>('GET', '/admin/metrics');
+  }
+  adminReports(status = 'pending') {
+    return this.request<Array<{ id: number; reporter_id: number; target_type: string; target_id: number; reason: string; created_at: string }>>(
+      'GET', `/admin/reports?status=${status}`,
+    );
+  }
+  resolveReport(reportId: number, action: 'dismiss' | 'remove_content' | 'ban_user') {
+    return this.request<{ id: number; status: string; action: string }>(
+      'POST', `/admin/reports/${reportId}/resolve`, { action },
+    );
+  }
+  adminUsers(q = '') {
+    return this.request<Array<{ id: number; phone: string; nickname: string; is_verified: boolean; is_banned: boolean; credit_score: number; tasks_completed: number }>>(
+      'GET', `/admin/users${q ? `?q=${encodeURIComponent(q)}` : ''}`,
+    );
+  }
+  banUser(userId: number) {
+    return this.request<{ id: number; is_banned: boolean }>('POST', `/admin/users/${userId}/ban`);
+  }
+  unbanUser(userId: number) {
+    return this.request<{ id: number; is_banned: boolean }>('POST', `/admin/users/${userId}/unban`);
+  }
+
   openDispute(taskId: number, reason: string) {
     return this.request<{ id: number; status: string }>('POST', `/tasks/${taskId}/disputes`, { reason });
   }

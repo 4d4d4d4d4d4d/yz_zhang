@@ -135,6 +135,33 @@ def verify_identity(
     return {"is_verified": True}
 
 
+# ---------- 个人数据导出（ACC-031，PIPL/GDPR）----------
+@router.get("/users/me/export")
+def export_my_data(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.modules.content.models import Content
+    from app.modules.task.models import Review, Task
+    from app.modules.wallet.models import LedgerEntry
+
+    tasks = db.query(Task).filter(
+        (Task.creator_id == user.id) | (Task.executor_id == user.id)
+    ).all()
+    ledger = db.query(LedgerEntry).filter(LedgerEntry.user_id == user.id).all()
+    contents = db.query(Content).filter(Content.author_id == user.id).all()
+    reviews = db.query(Review).filter(Review.reviewer_id == user.id).all()
+    return {
+        "profile": _me(user),
+        "real_name": user.real_name,
+        "tasks": [{"id": t.id, "title": t.title, "status": t.status, "budget_cents": t.budget_cents,
+                   "role": "creator" if t.creator_id == user.id else "executor"} for t in tasks],
+        "ledger": [{"kind": e.kind, "amount_cents": e.amount_cents,
+                    "created_at": e.created_at.isoformat()} for e in ledger],
+        "contents": [{"id": c.id, "kind": c.kind, "body": c.body,
+                      "created_at": c.created_at.isoformat()} for c in contents],
+        "reviews_written": [{"task_id": r.task_id, "stars": r.stars, "comment": r.comment}
+                            for r in reviews],
+    }
+
+
 # ---------- 公开名片与信用摘要（CRED-006）----------
 @router.get("/users/{user_id}")
 def public_profile(user_id: int, db: Session = Depends(get_db)):

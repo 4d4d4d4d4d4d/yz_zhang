@@ -158,10 +158,10 @@ export default function TaskDetail() {
             </div>
           )}
           <div className="card">
-            <h3>报名列表（{apps.length}）</h3>
+            <h3>报名列表（{apps.length}）{task.pricing === 'bidding' && <span className="badge warn">竞价比选：按报价升序</span>}</h3>
             <div className="list">
               {apps.length === 0 && <p className="muted">暂无报名</p>}
-              {apps.map((a) => (
+              {(task.pricing === 'bidding' ? [...apps].sort((a, b) => a.bid_cents - b.bid_cents) : apps).map((a) => (
                 <div className="task-item" key={a.id}>
                   <div>
                     <strong>{a.nickname}</strong> <span className="muted">信用 {a.credit_score} · 评分 {a.rating_avg}</span>
