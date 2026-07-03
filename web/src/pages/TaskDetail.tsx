@@ -145,7 +145,13 @@ export default function TaskDetail() {
                       <strong>{r.nickname}</strong>
                       <p className="muted">{r.reasons.join(' · ')}</p>
                     </div>
-                    <span className="badge">匹配 {(r.score * 100).toFixed(0)}%</span>
+                    <span className="row">
+                      <span className="badge">匹配 {(r.score * 100).toFixed(0)}%</span>
+                      <button className="ghost" style={{ padding: '4px 10px' }}
+                              onClick={() => act(() => client.inviteToTask(taskId, r.user_id, '诚邀接单'))}>
+                        邀约
+                      </button>
+                    </span>
                   </div>
                 ))}
               </div>
@@ -188,8 +194,39 @@ export default function TaskDetail() {
                 托管资金 {fmtYuan(contract.amount_cents)}
               </button>
             )}
-            <span className="badge">{contract.status}{contract.frozen ? '（冻结）' : ''}</span>
+            <span className="badge">{contract.status}{contract.frozen ? '（冻结）' : ''} · v{contract.version}</span>
           </div>
+          {/* SC-004 里程碑分期 */}
+          {contract.milestones && contract.milestones.length > 1 && (
+            <table style={{ marginTop: 10 }}>
+              <thead><tr><th>里程碑</th><th>金额</th><th>状态</th><th></th></tr></thead>
+              <tbody>
+                {contract.milestones.map((m) => (
+                  <tr key={m.idx}>
+                    <td>{m.idx}. {m.title}</td>
+                    <td>{fmtYuan(m.amount_cents)}</td>
+                    <td><span className={`badge ${m.status === 'released' ? 'ok' : m.status === 'delivered' ? 'warn' : ''}`}>
+                      {m.status === 'released' ? '已放款' : m.status === 'delivered' ? '待验收' : '进行中'}
+                    </span></td>
+                    <td>
+                      {isExecutor && m.status === 'pending' && contract.status === 'funded' && (
+                        <button className="ghost" style={{ padding: '2px 10px' }}
+                                onClick={() => act(async () => setContract(await client.deliverMilestone(contract.id, m.idx)))}>
+                          交付本期
+                        </button>
+                      )}
+                      {isCreator && m.status === 'delivered' && (
+                        <button style={{ padding: '2px 10px' }}
+                                onClick={() => act(async () => setContract(await client.acceptMilestone(contract.id, m.idx)))}>
+                          验收放款
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 

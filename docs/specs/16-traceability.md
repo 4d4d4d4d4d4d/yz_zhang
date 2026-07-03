@@ -1,7 +1,34 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP 实现完成（2026-07-02）。后端 37 tests + 前端 11 tests 全绿。
-> 范围：15-roadmap.md 定义的 MVP 集合；V1/V2 项标注「未实现」。
+> 状态：MVP + V1 主体完成（2026-07-03）。后端 63 tests + 前端 16 tests 全绿。
+> 范围：15-roadmap.md 的 MVP 全集 + V1 大部分；剩余项见文末。
+
+## 已实现（V1 增量，2026-07-03）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| CNT-001/003 动态与博客（可见性/标签） | `server/app/modules/content/` | `tests/test_content_circle.py` |
+| CNT-005 内容挂载服务入口 | `content/models.py::linked_category` | 同上 |
+| CNT-006 内容/评论机审 | `content/router.py`（复用 RISK-001 词表） | 同上 |
+| CNT-010/011 关注流/最新流 | `content/router.py::feed` | 同上 |
+| CNT-020/021 点赞评论/关注粉丝 | `content/router.py` | 同上 |
+| CIR-001 三类圈层+自带群聊 | `circle/` | 同上 |
+| CIR-002 按技能/城市推荐圈层 | `circle/router.py::discover` | 同上 |
+| CIR-003 加入审核+信用门槛 | `circle/router.py::join/approve` | 同上 |
+| CIR-004/005 圈层内容流/任务板（仅成员） | `circle/router.py` + Task.visibility | 同上 |
+| CIR-006/007 群聊成员同步/移出管理 | `circle/router.py` | 同上 |
+| TASK-008 任务可见范围（公开/圈层） | `task/models.py` + router | 同上 |
+| SC-004 多里程碑分期交付/放款 | `contract/service.py::define/deliver/release_milestone` | `tests/test_contract_v1.py` |
+| SC-007/TASK-025 变更单双签改价（多退少补、版本+1） | `contract/service.py::propose/accept_change` | 同上 |
+| 取消/裁决按剩余托管额计算 | `contract/service.py::cancel/execute_verdict` | 同上 |
+| MATCH-004 定向邀约（接受即成交） | `matching/router.py` | `tests/test_admin_legal_matching.py` |
+| TASK-042 类目+城市订阅→发布通知 | `matching/models.py` + `matching/events.py` | 同上 |
+| LAW-001 法律信息 AI（免责声明/高风险拒答） | `legal/router.py` | 同上 |
+| LAW-005 证据包导出（SHA256 防篡改） | `legal/router.py::evidence_export` | 同上 |
+| RISK-006/007 举报→审核队列→处置（下架/封禁） | `admin/` + `core/deps.py` 封禁拦截 | 同上 |
+| OPS-002 用户管理（封禁/解封） | `admin/router.py` | 同上 |
+| OPS-007 指标看板（闭环率北极星/GMV/佣金/纠纷） | `admin/router.py::metrics` | 同上 |
+| Web 社区/圈层页 + 里程碑操作 + 邀约 + 订阅 | `web/src/pages/{Community,Circles}.tsx` 等 | `web/src/App.test.tsx` + SDK 单测 |
 
 ## 已实现（MVP）
 
@@ -62,12 +89,13 @@
 | IM | REST 轮询 | WebSocket/云 IM（`MessageProvider` 抽象） |
 | 定时任务 | 暴露为可调用 job 接口 | 调度器（cron/celery） |
 
-## 未实现（按路线图属 V1/V2）
+## 未实现（剩余 V1/V2 项）
 
-- 08 内容模块全部（视频/博客/朋友圈/关注流）— V1
-- 09 圈层（CIR-001~010）与群聊 — V1
-- SC-011 上链存证、SC-007 变更单、里程碑多期（当前单里程碑）— V1/V2
-- LAW-001~005 法律服务 — V1/V2
-- OPS 管理后台独立前端（当前仅 is_admin 权限位）— V1
-- 竞价模式撮合页、定向邀约、任务订阅推送 — V1
-- App 完整版（地图/打卡/推送）— V1
+- 短视频上传转码与沉浸流（CNT-002/014）— V2（转码/审核成本高）
+- 个性化推荐流排序（CNT-011 完整版：行为特征模型）— V2
+- SC-011 上链存证（当前为 SHA256 哈希雏形）— V2
+- LAW-002/003 文书生成、律师入驻市场 — V2
+- 管理后台独立前端（API 已就绪，缺 UI）— V1 收尾
+- 竞价比选页（MATCH-007 后端 bid 已支持，缺专属 UI）— V1 收尾
+- 音视频通话（IM-007）、周期任务（TASK-006）、保证金（CRED-005）— V2
+- App 完整版（地图/打卡/推送/圈层）— V1 收尾

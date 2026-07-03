@@ -59,6 +59,15 @@ export default function Square() {
         </select>
         <button onClick={() => void load()}>搜索</button>
         <button className="ghost" onClick={toggleNearby}>{nearby ? '取消附近' : '📍 附近 10km'}</button>
+        {hasToken && category && (
+          <button className="ghost" title="该类目新任务发布时通知我"
+                  onClick={async () => {
+                    await client.subscribeCategory(category).catch(() => {});
+                    alert(`已订阅「${category}」，新任务会通知你`);
+                  }}>
+            🔔 订阅类目
+          </button>
+        )}
       </div>
       <div className="list">
         {loading && <p className="muted">加载中…</p>}

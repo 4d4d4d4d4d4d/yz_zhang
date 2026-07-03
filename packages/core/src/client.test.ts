@@ -61,6 +61,52 @@ describe('PlatformClient', () => {
   });
 });
 
+describe('V1 接口', () => {
+  it('里程碑接口路径与动词正确', async () => {
+    const { client, fetchImpl } = makeClient(200, {});
+    await client.deliverMilestone(3, 2);
+    await client.acceptMilestone(3, 2);
+    const urls = fetchImpl.mock.calls.map((c) => c[0]);
+    expect(urls).toEqual([
+      'http://x/api/v1/contracts/3/milestones/2/deliver',
+      'http://x/api/v1/contracts/3/milestones/2/accept',
+    ]);
+  });
+
+  it('变更单请求体字段对齐后端 schema', async () => {
+    const { client, fetchImpl } = makeClient(201, { id: 1 });
+    await client.proposeChange(5, 120000, '加需求');
+    const [, init] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({ new_amount_cents: 120000, reason: '加需求' });
+  });
+
+  it('feed scope 与筛选参数序列化', async () => {
+    const { client, fetchImpl } = makeClient(200, []);
+    await client.contentFeed('following', { tag: '保洁' });
+    const [url] = fetchImpl.mock.calls[0];
+    expect(url).toContain('scope=following');
+    expect(url).toContain('tag=%E4%BF%9D%E6%B4%81');
+  });
+
+  it('圈层与邀约接口', async () => {
+    const { client, fetchImpl } = makeClient(200, {});
+    await client.joinCircle(7);
+    await client.inviteToTask(9, 42, '来');
+    const urls = fetchImpl.mock.calls.map((c) => c[0]);
+    expect(urls[0]).toBe('http://x/api/v1/circles/7/join');
+    expect(urls[1]).toBe('http://x/api/v1/tasks/9/invitations');
+    const [, init] = fetchImpl.mock.calls[1];
+    expect(JSON.parse(init.body)).toEqual({ user_id: 42, message: '来' });
+  });
+
+  it('举报接口字段', async () => {
+    const { client, fetchImpl } = makeClient(201, { id: 1, status: 'pending' });
+    await client.report('content', 8, '违规');
+    const [, init] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({ target_type: 'content', target_id: 8, reason: '违规' });
+  });
+});
+
 describe('helpers', () => {
   it('fmtYuan 分转元', () => {
     expect(fmtYuan(20000)).toBe('¥200.00');

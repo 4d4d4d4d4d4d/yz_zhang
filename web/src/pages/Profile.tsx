@@ -1,5 +1,5 @@
-import { ApiError } from '@platform/core';
-import { useState } from 'react';
+import { ApiError, fmtYuan, type InvitationItem } from '@platform/core';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
 
@@ -9,6 +9,11 @@ export default function Profile() {
   const [skills, setSkills] = useState(me?.skills.join('、') ?? '');
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
+  const [invitations, setInvitations] = useState<InvitationItem[]>([]);
+
+  useEffect(() => {
+    void client.myInvitations().then(setInvitations).catch(() => {});
+  }, [client]);
 
   if (!me) return <div className="page"><p className="muted">加载中…</p></div>;
 
@@ -56,6 +61,31 @@ export default function Profile() {
         {msg && <p style={{ color: 'var(--ok)' }}>{msg}</p>}
         {error && <p className="error">{error}</p>}
       </div>
+      {invitations.filter((i) => i.status === 'pending').length > 0 && (
+        <div className="card">
+          <h3>收到的任务邀约</h3>
+          <div className="list" style={{ marginTop: 8 }}>
+            {invitations.filter((i) => i.status === 'pending').map((inv) => (
+              <div className="task-item" key={inv.id}>
+                <div>
+                  <strong>{inv.task_title}</strong> <span className="price">{fmtYuan(inv.budget_cents)}</span>
+                  <p className="muted">{inv.message}</p>
+                </div>
+                <span className="row">
+                  <button onClick={async () => {
+                    const res = await client.acceptInvitation(inv.id).catch((e) => { setError(e.message); return null; });
+                    if (res) nav(`/tasks/${res.task_id}`);
+                  }}>接受</button>
+                  <button className="ghost" onClick={async () => {
+                    await client.declineInvitation(inv.id);
+                    setInvitations(await client.myInvitations());
+                  }}>婉拒</button>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="card row">
         <button className="danger" onClick={() => { setToken(null); nav('/'); }}>退出登录</button>
       </div>

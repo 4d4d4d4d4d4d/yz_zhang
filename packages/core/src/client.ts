@@ -1,9 +1,12 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
+  CircleInfo,
+  ContentItem,
   Contract,
   Decomposition,
   DecompositionItem,
   Conversation,
+  InvitationItem,
   Me,
   Message,
   Notice,
@@ -216,6 +219,117 @@ export class PlatformClient {
       'POST', '/support/ask', { question },
     );
   }
+  // ---- contract v1: milestones / change orders ----
+  defineMilestones(contractId: number, items: Array<{ title: string; amount_cents: number }>) {
+    return this.request<Contract>('POST', `/contracts/${contractId}/milestones`, { items });
+  }
+  deliverMilestone(contractId: number, idx: number) {
+    return this.request<Contract>('POST', `/contracts/${contractId}/milestones/${idx}/deliver`);
+  }
+  acceptMilestone(contractId: number, idx: number) {
+    return this.request<Contract>('POST', `/contracts/${contractId}/milestones/${idx}/accept`);
+  }
+  proposeChange(contractId: number, newAmountCents: number, reason = '') {
+    return this.request<{ id: number; status: string }>('POST', `/contracts/${contractId}/change-orders`, {
+      new_amount_cents: newAmountCents, reason,
+    });
+  }
+  acceptChange(contractId: number, orderId: number) {
+    return this.request<Contract>('POST', `/contracts/${contractId}/change-orders/${orderId}/accept`);
+  }
+
+  // ---- content / social ----
+  createContent(input: { kind?: string; title?: string; body: string; tags?: string[]; visibility?: string; circle_id?: number; linked_category?: string }) {
+    return this.request<ContentItem>('POST', '/contents', input);
+  }
+  contentFeed(scope: 'latest' | 'following' = 'latest', params: { tag?: string; kind?: string } = {}) {
+    const extra = Object.entries(params).filter(([, v]) => v).map(([k, v]) => `&${k}=${encodeURIComponent(v!)}`).join('');
+    return this.request<ContentItem[]>('GET', `/feed?scope=${scope}${extra}`);
+  }
+  likeContent(contentId: number) {
+    return this.request<{ liked: boolean; like_count: number }>('POST', `/contents/${contentId}/like`);
+  }
+  commentContent(contentId: number, body: string, replyToId?: number) {
+    return this.request<{ id: number }>('POST', `/contents/${contentId}/comments`, {
+      body, reply_to_id: replyToId ?? null,
+    });
+  }
+  contentComments(contentId: number) {
+    return this.request<Array<{ id: number; author_id: number; author_nickname: string; body: string; reply_to_id: number | null; created_at: string }>>(
+      'GET', `/contents/${contentId}/comments`,
+    );
+  }
+  followUser(userId: number) {
+    return this.request<{ following: boolean }>('POST', `/users/${userId}/follow`);
+  }
+  followStats(userId: number) {
+    return this.request<{ followers: number; following: number }>('GET', `/users/${userId}/follow-stats`);
+  }
+
+  // ---- circles ----
+  createCircle(input: { name: string; description?: string; kind?: string; join_policy?: string; skill_tag?: string; city?: string; min_credit?: number }) {
+    return this.request<CircleInfo>('POST', '/circles', input);
+  }
+  circles(params: { q?: string; kind?: string; recommended?: boolean } = {}) {
+    const qs = Object.entries(params).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
+    return this.request<CircleInfo[]>('GET', `/circles${qs ? `?${qs}` : ''}`);
+  }
+  getCircle(id: number) {
+    return this.request<CircleInfo>('GET', `/circles/${id}`);
+  }
+  joinCircle(id: number) {
+    return this.request<{ status: string }>('POST', `/circles/${id}/join`);
+  }
+  approveCircleMember(circleId: number, userId: number) {
+    return this.request<{ status: string }>('POST', `/circles/${circleId}/members/${userId}/approve`);
+  }
+  circleFeed(circleId: number) {
+    return this.request<ContentItem[]>('GET', `/circles/${circleId}/feed`);
+  }
+  circleTasks(circleId: number) {
+    return this.request<Task[]>('GET', `/circles/${circleId}/tasks`);
+  }
+
+  // ---- invitations / subscriptions ----
+  inviteToTask(taskId: number, userId: number, message = '') {
+    return this.request<{ id: number; status: string }>('POST', `/tasks/${taskId}/invitations`, {
+      user_id: userId, message,
+    });
+  }
+  myInvitations() {
+    return this.request<InvitationItem[]>('GET', '/invitations');
+  }
+  acceptInvitation(id: number) {
+    return this.request<{ contract_id: number; task_id: number }>('POST', `/invitations/${id}/accept`);
+  }
+  declineInvitation(id: number) {
+    return this.request<{ status: string }>('POST', `/invitations/${id}/decline`);
+  }
+  subscribeCategory(category: string, city = '') {
+    return this.request<{ id: number }>('POST', '/subscriptions', { category, city });
+  }
+  mySubscriptions() {
+    return this.request<Array<{ id: number; category: string; city: string }>>('GET', '/subscriptions');
+  }
+  unsubscribe(id: number) {
+    return this.request<{ ok: boolean }>('DELETE', `/subscriptions/${id}`);
+  }
+
+  // ---- legal / reports ----
+  legalAsk(question: string) {
+    return this.request<{ answer: string; disclaimer: string; refused: boolean }>('POST', '/legal/ask', { question });
+  }
+  exportEvidence(disputeId: number) {
+    return this.request<{ package: Record<string, unknown>; sha256: string }>(
+      'GET', `/legal/disputes/${disputeId}/evidence-export`,
+    );
+  }
+  report(targetType: 'task' | 'content' | 'user' | 'message', targetId: number, reason: string) {
+    return this.request<{ id: number; status: string }>('POST', '/reports', {
+      target_type: targetType, target_id: targetId, reason,
+    });
+  }
+
   openDispute(taskId: number, reason: string) {
     return this.request<{ id: number; status: string }>('POST', `/tasks/${taskId}/disputes`, { reason });
   }

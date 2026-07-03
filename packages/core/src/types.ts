@@ -55,18 +55,72 @@ export interface Task {
   distance_m?: number | null;
 }
 
+export interface Milestone {
+  idx: number;
+  title: string;
+  amount_cents: number;
+  status: 'pending' | 'delivered' | 'released';
+}
+
 export interface Contract {
   id: number;
   task_id: number;
   requester_id: number;
   executor_id: number;
   amount_cents: number;
+  released_cents: number;
   fee_bps: number;
   terms: string;
   status: string;
   signed_by_requester: boolean;
   signed_by_executor: boolean;
   frozen: boolean;
+  version: number;
+  milestones?: Milestone[];
+}
+
+export interface ContentItem {
+  id: number;
+  author_id: number;
+  author_nickname: string;
+  kind: 'post' | 'blog' | 'case';
+  title: string;
+  body: string;
+  tags: string[];
+  visibility: string;
+  circle_id: number | null;
+  linked_category: string;
+  source_task_id: number | null;
+  like_count: number;
+  comment_count: number;
+  liked_by_me: boolean;
+  created_at: string;
+}
+
+export interface CircleInfo {
+  id: number;
+  name: string;
+  description: string;
+  kind: 'interest' | 'skill' | 'local';
+  join_policy: 'open' | 'approval';
+  owner_id: number;
+  skill_tag: string;
+  city: string;
+  min_credit: number;
+  member_count: number;
+  conversation_id: number | null;
+  my_status: 'active' | 'pending' | null;
+  my_role: 'owner' | 'admin' | 'member' | null;
+}
+
+export interface InvitationItem {
+  id: number;
+  task_id: number;
+  task_title: string;
+  budget_cents: number;
+  message: string;
+  status: string;
+  task_status: string;
 }
 
 export interface Wallet {
