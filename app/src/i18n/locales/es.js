@@ -112,13 +112,13 @@ export default {
       trust:     { title: 'Trust Center', sub: 'Postura por mercado, riesgos activos, repositorio de documentos y revisión IA.' }
     },
     tabs: {
-      recommend: { inputs: 'Inputs · ranking', agents: 'Pipeline de agentes', registry: 'Registro de modelos · canary', bandit: 'Bandit en vivo', features: 'Feature store', experiments: 'Experimentos' },
-      marketing: { overview: 'Resumen', control: 'Campañas · A/B · geo', attribution: 'Atribución', audience: 'Creador de audiencias', retention: 'Retención por cohortes', forecast: 'Pronóstico what-if' },
-      partners:  { network: 'Perfil de red', pipeline: 'Tablero de pipeline', intel: 'Intel de cuentas', outreach: 'Cadencia de outreach', forecast: 'Pronóstico de ventas', territory: 'Territorio · cuota' },
-      deals:     { room: 'Sala de deal', playbook: 'Playbook · ZOPA · redline', workflow: 'Flujo de aprobación', library: 'Biblioteca de cláusulas', obligations: 'Obligaciones', analytics: 'Analítica CLM' },
+      recommend: { inputs: 'Inputs · ranking', agents: 'Pipeline de agentes', registry: 'Registro de modelos · canary', bandit: 'Bandit en vivo', features: 'Feature store', experiments: 'Experimentos', metering: 'Uso · facturación', tenant: 'Impacto por tenant' },
+      marketing: { overview: 'Resumen', control: 'Campañas · A/B · geo', attribution: 'Atribución', audience: 'Creador de audiencias', retention: 'Retención por cohortes', forecast: 'Pronóstico what-if', revenue: 'Ingresos SaaS', upsell: 'Motor de upsell' },
+      partners:  { network: 'Perfil de red', pipeline: 'Tablero de pipeline', intel: 'Intel de cuentas', outreach: 'Cadencia de outreach', forecast: 'Pronóstico de ventas', territory: 'Territorio · cuota', orders: 'Libro de pedidos', commission: 'Marketplace · comisión' },
+      deals:     { room: 'Sala de deal', playbook: 'Playbook · ZOPA · redline', workflow: 'Flujo de aprobación', library: 'Biblioteca de cláusulas', obligations: 'Obligaciones', analytics: 'Analítica CLM', cpq: 'CPQ · cotización', revrec: 'Reconocimiento de ingresos' },
       showcase:  { gallery: 'Showcase de vídeo', links: 'Trust links', verification: 'Cola de verificación', pipeline: 'Preparación del deal' },
       immersive: { avatar: 'Estudio de humano digital', meeting: 'Reunión inmersiva', tour: 'Tour virtual de fábrica', field: 'Verificación en terreno' },
-      trust:     { posture: 'Postura', controls: 'Controles · DSR', heatmap: 'Mapa de riesgos', dpia: 'Flujo DPIA', audit: 'Sala de auditoría', policies: 'Políticas · formación' }
+      trust:     { posture: 'Postura', controls: 'Controles · DSR', heatmap: 'Mapa de riesgos', dpia: 'Flujo DPIA', audit: 'Sala de auditoría', policies: 'Políticas · formación', health: 'Salud del cliente', support: 'Soporte · SLA' }
     }
   },
   footer: {

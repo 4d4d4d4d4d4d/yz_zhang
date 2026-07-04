@@ -10,13 +10,13 @@ const CATALOGS = { en, zh, ja, es }
 
 // Mirror of Console.vue's section registry (spec 14: drift fails the test).
 const CONSOLE_SECTIONS = {
-  recommend: ['inputs', 'agents', 'registry', 'bandit', 'features', 'experiments'],
-  marketing: ['overview', 'control', 'attribution', 'audience', 'retention', 'forecast'],
-  partners:  ['network', 'pipeline', 'intel', 'outreach', 'forecast', 'territory'],
-  deals:     ['room', 'playbook', 'workflow', 'library', 'obligations', 'analytics'],
+  recommend: ['inputs', 'agents', 'registry', 'bandit', 'features', 'experiments', 'metering', 'tenant'],
+  marketing: ['overview', 'control', 'attribution', 'audience', 'retention', 'forecast', 'revenue', 'upsell'],
+  partners:  ['network', 'pipeline', 'intel', 'outreach', 'forecast', 'territory', 'orders', 'commission'],
+  deals:     ['room', 'playbook', 'workflow', 'library', 'obligations', 'analytics', 'cpq', 'revrec'],
   showcase:  ['gallery', 'links', 'verification', 'pipeline'],
   immersive: ['avatar', 'meeting', 'tour', 'field'],
-  trust:     ['posture', 'controls', 'heatmap', 'dpia', 'audit', 'policies']
+  trust:     ['posture', 'controls', 'heatmap', 'dpia', 'audit', 'policies', 'health', 'support']
 }
 
 function flattenKeys(obj, prefix = '') {

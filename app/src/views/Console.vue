@@ -13,6 +13,8 @@ import ModelRegistry     from '../components/ModelRegistry.vue'
 import BanditExplorer    from '../components/BanditExplorer.vue'
 import FeatureStore      from '../components/FeatureStore.vue'
 import ExperimentManager from '../components/ExperimentManager.vue'
+import UsageMetering     from '../components/UsageMetering.vue'
+import PersonalizationDash from '../components/PersonalizationDash.vue'
 
 import MarketingHub        from '../components/MarketingHub.vue'
 import MarketingControl    from '../components/MarketingControl.vue'
@@ -20,6 +22,8 @@ import AttributionWaterfall from '../components/AttributionWaterfall.vue'
 import AudienceBuilder     from '../components/AudienceBuilder.vue'
 import CohortRetention     from '../components/CohortRetention.vue'
 import ForecastSim         from '../components/ForecastSim.vue'
+import RevenueDashboard    from '../components/RevenueDashboard.vue'
+import UpsellEngine        from '../components/UpsellEngine.vue'
 
 import BusinessMatchHub from '../components/BusinessMatchHub.vue'
 import PipelineBoard    from '../components/PipelineBoard.vue'
@@ -27,6 +31,8 @@ import AccountIntel     from '../components/AccountIntel.vue'
 import OutreachSequence from '../components/OutreachSequence.vue'
 import SalesForecast    from '../components/SalesForecast.vue'
 import TerritoryQuota   from '../components/TerritoryQuota.vue'
+import OrderBook       from '../components/OrderBook.vue'
+import MarketplaceCommission from '../components/MarketplaceCommission.vue'
 
 import DealRoom              from '../components/DealRoom.vue'
 import NegotiationPlaybook   from '../components/NegotiationPlaybook.vue'
@@ -34,6 +40,8 @@ import ApprovalFlow          from '../components/ApprovalFlow.vue'
 import ClauseLibrary         from '../components/ClauseLibrary.vue'
 import ObligationTracker     from '../components/ObligationTracker.vue'
 import ContractAnalytics     from '../components/ContractAnalytics.vue'
+import CPQEditor             from '../components/CPQEditor.vue'
+import RevenueRecognition    from '../components/RevenueRecognition.vue'
 
 import AvatarStudio      from '../components/AvatarStudio.vue'
 import ImmersiveMeeting  from '../components/ImmersiveMeeting.vue'
@@ -51,6 +59,8 @@ import RiskHeatmap      from '../components/RiskHeatmap.vue'
 import DPIAWorkflow     from '../components/DPIAWorkflow.vue'
 import AuditRoom        from '../components/AuditRoom.vue'
 import PolicyManagement from '../components/PolicyManagement.vue'
+import CustomerHealth   from '../components/CustomerHealth.vue'
+import SupportSLA       from '../components/SupportSLA.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -64,7 +74,9 @@ const sections = [
       { v: 'registry', comp: ModelRegistry },
       { v: 'bandit', comp: BanditExplorer },
       { v: 'features', comp: FeatureStore },
-      { v: 'experiments', comp: ExperimentManager }
+      { v: 'experiments', comp: ExperimentManager },
+      { v: 'metering', comp: UsageMetering },
+      { v: 'tenant', comp: PersonalizationDash }
     ]
   },
   {
@@ -75,7 +87,9 @@ const sections = [
       { v: 'attribution', comp: AttributionWaterfall },
       { v: 'audience', comp: AudienceBuilder },
       { v: 'retention', comp: CohortRetention },
-      { v: 'forecast', comp: ForecastSim }
+      { v: 'forecast', comp: ForecastSim },
+      { v: 'revenue', comp: RevenueDashboard },
+      { v: 'upsell', comp: UpsellEngine }
     ]
   },
   {
@@ -86,7 +100,9 @@ const sections = [
       { v: 'intel', comp: AccountIntel },
       { v: 'outreach', comp: OutreachSequence },
       { v: 'forecast', comp: SalesForecast },
-      { v: 'territory', comp: TerritoryQuota }
+      { v: 'territory', comp: TerritoryQuota },
+      { v: 'orders', comp: OrderBook },
+      { v: 'commission', comp: MarketplaceCommission }
     ]
   },
   {
@@ -97,7 +113,9 @@ const sections = [
       { v: 'workflow', comp: ApprovalFlow },
       { v: 'library', comp: ClauseLibrary },
       { v: 'obligations', comp: ObligationTracker },
-      { v: 'analytics', comp: ContractAnalytics }
+      { v: 'analytics', comp: ContractAnalytics },
+      { v: 'cpq', comp: CPQEditor },
+      { v: 'revrec', comp: RevenueRecognition }
     ]
   },
   {
@@ -126,7 +144,9 @@ const sections = [
       { v: 'heatmap', comp: RiskHeatmap },
       { v: 'dpia', comp: DPIAWorkflow },
       { v: 'audit', comp: AuditRoom },
-      { v: 'policies', comp: PolicyManagement }
+      { v: 'policies', comp: PolicyManagement },
+      { v: 'health', comp: CustomerHealth },
+      { v: 'support', comp: SupportSLA }
     ]
   }
 ]

@@ -112,13 +112,13 @@ export default {
       trust:     { title: 'トラストセンター', sub: '地域別ポスチャー、未解決リスク、ドキュメントリポジトリ、AI リスクレビュー。' }
     },
     tabs: {
-      recommend: { inputs: '入力 · ランキング', agents: 'エージェント基盤', registry: 'モデル登録 · カナリア', bandit: 'ライブ Bandit', features: 'フィーチャーストア', experiments: '実験管理' },
-      marketing: { overview: '概要', control: 'キャンペーン · A/B · 地域', attribution: 'アトリビューション', audience: 'オーディエンス作成', retention: 'コホート維持率', forecast: 'What-if 予測' },
-      partners:  { network: 'ネットワーク情報', pipeline: 'パイプライン', intel: 'アカウント情報', outreach: 'アウトリーチ', forecast: '売上予測', territory: 'テリトリー · 目標' },
-      deals:     { room: 'ディールルーム', playbook: 'プレイブック · ZOPA', workflow: '承認フロー', library: '条項ライブラリ', obligations: '義務トラッカー', analytics: '契約アナリティクス' },
+      recommend: { inputs: '入力 · ランキング', agents: 'エージェント基盤', registry: 'モデル登録 · カナリア', bandit: 'ライブ Bandit', features: 'フィーチャーストア', experiments: '実験管理', metering: '使用量 · 課金', tenant: 'テナント影響' },
+      marketing: { overview: '概要', control: 'キャンペーン · A/B · 地域', attribution: 'アトリビューション', audience: 'オーディエンス作成', retention: 'コホート維持率', forecast: 'What-if 予測', revenue: 'SaaS 収益', upsell: 'アップセル' },
+      partners:  { network: 'ネットワーク情報', pipeline: 'パイプライン', intel: 'アカウント情報', outreach: 'アウトリーチ', forecast: '売上予測', territory: 'テリトリー · 目標', orders: 'オーダーブック', commission: 'マーケット · 手数料' },
+      deals:     { room: 'ディールルーム', playbook: 'プレイブック · ZOPA', workflow: '承認フロー', library: '条項ライブラリ', obligations: '義務トラッカー', analytics: '契約アナリティクス', cpq: 'CPQ · 見積', revrec: '収益認識' },
       showcase:  { gallery: '映像ショーケース', links: 'トラストリンク', verification: '検証キュー', pipeline: '成約準備度' },
       immersive: { avatar: 'デジタルヒューマン', meeting: 'イマーシブ会議', tour: '工場バーチャル見学', field: '実地調査' },
-      trust:     { posture: 'ポスチャー', controls: 'コントロール · DSR', heatmap: 'リスクヒートマップ', dpia: 'DPIA ワークフロー', audit: '監査ルーム', policies: 'ポリシー · 研修' }
+      trust:     { posture: 'ポスチャー', controls: 'コントロール · DSR', heatmap: 'リスクヒートマップ', dpia: 'DPIA ワークフロー', audit: '監査ルーム', policies: 'ポリシー · 研修', health: '顧客ヘルス', support: 'サポート · SLA' }
     }
   },
   footer: {

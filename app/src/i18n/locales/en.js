@@ -114,13 +114,13 @@ export default {
       trust:     { title: 'Trust Center', sub: 'Per-market posture, active risks, document repository and live AI risk review.' }
     },
     tabs: {
-      recommend: { inputs: 'Inputs · ranking', agents: 'Agent pipeline', registry: 'Model registry · canary', bandit: 'Live bandit', features: 'Feature store', experiments: 'Experiments' },
-      marketing: { overview: 'Overview', control: 'Campaigns · A/B · geo', attribution: 'Attribution', audience: 'Audience builder', retention: 'Cohort retention', forecast: 'What-if forecast' },
-      partners:  { network: 'Network profile', pipeline: 'Pipeline board', intel: 'Account intel', outreach: 'Outreach cadence', forecast: 'Sales forecast', territory: 'Territory · quota' },
-      deals:     { room: 'Deal room', playbook: 'Playbook · ZOPA · redline', workflow: 'Approval workflow', library: 'Clause library', obligations: 'Obligations', analytics: 'CLM analytics' },
+      recommend: { inputs: 'Inputs · ranking', agents: 'Agent pipeline', registry: 'Model registry · canary', bandit: 'Live bandit', features: 'Feature store', experiments: 'Experiments', metering: 'Usage · billing', tenant: 'Tenant impact' },
+      marketing: { overview: 'Overview', control: 'Campaigns · A/B · geo', attribution: 'Attribution', audience: 'Audience builder', retention: 'Cohort retention', forecast: 'What-if forecast', revenue: 'SaaS revenue', upsell: 'Upsell engine' },
+      partners:  { network: 'Network profile', pipeline: 'Pipeline board', intel: 'Account intel', outreach: 'Outreach cadence', forecast: 'Sales forecast', territory: 'Territory · quota', orders: 'Order book', commission: 'Marketplace · commission' },
+      deals:     { room: 'Deal room', playbook: 'Playbook · ZOPA · redline', workflow: 'Approval workflow', library: 'Clause library', obligations: 'Obligations', analytics: 'CLM analytics', cpq: 'CPQ · quote', revrec: 'Rev recognition' },
       showcase:  { gallery: 'Video showcase', links: 'Trust links', verification: 'Verification queue', pipeline: 'Deal readiness' },
       immersive: { avatar: 'Digital human studio', meeting: 'Immersive meeting', tour: 'Virtual factory tour', field: 'Field verification' },
-      trust:     { posture: 'Posture', controls: 'Controls · DSR', heatmap: 'Risk heatmap', dpia: 'DPIA workflow', audit: 'Audit room', policies: 'Policies · training' }
+      trust:     { posture: 'Posture', controls: 'Controls · DSR', heatmap: 'Risk heatmap', dpia: 'DPIA workflow', audit: 'Audit room', policies: 'Policies · training', health: 'Customer health', support: 'Support · SLA' }
     }
   },
   footer: {

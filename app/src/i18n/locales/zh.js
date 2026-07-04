@@ -114,13 +114,13 @@ export default {
       trust:     { title: '风险与合规', sub: '按市场的合规状态、风险清单、文档库与实时 AI 风险审查。' }
     },
     tabs: {
-      recommend: { inputs: '输入 · 排序', agents: 'Agent 流水线', registry: '模型注册 · 金丝雀', bandit: '实时 Bandit', features: '特征仓库', experiments: '实验管理' },
-      marketing: { overview: '总览', control: '投放 · A/B · 地域', attribution: '归因分析', audience: '人群构建', retention: '留存队列', forecast: 'What-if 预测' },
-      partners:  { network: '网络档案', pipeline: '商机看板', intel: '客户情报', outreach: '触达节奏', forecast: '销售预测', territory: '区域 · 配额' },
-      deals:     { room: '洽谈室', playbook: '策略 · ZOPA · 红线', workflow: '审批流', library: '条款库', obligations: '履约跟踪', analytics: '合同分析' },
+      recommend: { inputs: '输入 · 排序', agents: 'Agent 流水线', registry: '模型注册 · 金丝雀', bandit: '实时 Bandit', features: '特征仓库', experiments: '实验管理', metering: '用量 · 计费', tenant: '租户影响' },
+      marketing: { overview: '总览', control: '投放 · A/B · 地域', attribution: '归因分析', audience: '人群构建', retention: '留存队列', forecast: 'What-if 预测', revenue: 'SaaS 收入', upsell: '增销引擎' },
+      partners:  { network: '网络档案', pipeline: '商机看板', intel: '客户情报', outreach: '触达节奏', forecast: '销售预测', territory: '区域 · 配额', orders: '订单簿', commission: '市场 · 佣金' },
+      deals:     { room: '洽谈室', playbook: '策略 · ZOPA · 红线', workflow: '审批流', library: '条款库', obligations: '履约跟踪', analytics: '合同分析', cpq: 'CPQ · 报价', revrec: '收入确认' },
       showcase:  { gallery: '视频作品集', links: '信任链接', verification: '验证队列', pipeline: '成交就绪度' },
       immersive: { avatar: '数字人工作台', meeting: '沉浸会议', tour: '厂房在线参观', field: '实地调查' },
-      trust:     { posture: '合规态势', controls: '控制项 · DSR', heatmap: '风险热力图', dpia: 'DPIA 流程', audit: '审计室', policies: '制度 · 培训' }
+      trust:     { posture: '合规态势', controls: '控制项 · DSR', heatmap: '风险热力图', dpia: 'DPIA 流程', audit: '审计室', policies: '制度 · 培训', health: '客户健康度', support: '支持 · SLA' }
     }
   },
   footer: {
