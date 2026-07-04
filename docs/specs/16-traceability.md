@@ -3,6 +3,17 @@
 > 状态：MVP + V1 + V2 + V3 + V4 全批次完成（2026-07-04）。
 > 后端 104 tests + 前端 19 tests 全绿。剩余项均依赖外部供应商/云服务，见文末。
 
+## 已实现（V5 批次：前端覆盖补齐 + 工程化交付）
+
+| 项 | 实现 | 验证 |
+|---|---|---|
+| Web 发布向导（模板填充/AI 可行性提示/多人/保证金/城市与类目下拉/受限类目提示） | `web/src/pages/Publish.tsx` | 前端测试 + tsc/vite build |
+| Web 服务设置（定价/可接单时间/隐私开关）与设备管理/注销 | `web/src/pages/Profile.tsx` | 同上 |
+| Web 合约凭证下载 + 经验帖入口 | `web/src/pages/TaskDetail.tsx` | 同上 |
+| SDK V3/V4 全量接口（澄清/模板/城市/会话/注销/导出/报价卡/圈层面板） | `packages/core/src/client.ts` | SDK 单测 |
+| Docker 交付（server 镜像 + web nginx 镜像 + compose 一键全栈） | `server/Dockerfile`, `web/Dockerfile`, `docker-compose.yml` | YAML 校验 |
+| CI 流水线（后端 pytest / 前端 vitest+build / 启动冒烟，PR 自动跑） | `.github/workflows/ci.yml` | PR #5 |
+
 ## 已实现（V4 批次）
 
 | Spec 功能点 | 实现 | 测试 |

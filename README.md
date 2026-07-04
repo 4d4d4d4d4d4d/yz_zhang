@@ -21,7 +21,16 @@ app/              # App：React Native / Expo 骨架
 tools/            # 与平台无关的历史小工具（file-organizer）
 ```
 
-## 快速开始
+## 快速开始（Docker，一键全栈）
+
+```bash
+docker compose up --build
+# Web: http://localhost:8080  /  API 文档: http://localhost:8000/docs
+```
+
+CI：`.github/workflows/ci.yml` 在每次 push/PR 自动跑后端 pytest、前端 vitest+构建、服务启动冒烟。
+
+## 快速开始（本地开发）
 
 ```bash
 # 后端（Python 3.11+）

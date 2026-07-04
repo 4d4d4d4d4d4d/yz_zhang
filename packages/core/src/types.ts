@@ -42,6 +42,7 @@ export interface Task {
   required_skills: string[];
   budget_cents: number;
   pricing: string;
+  deposit_cents?: number;
   is_remote: boolean;
   city: string;
   lat: number | null;

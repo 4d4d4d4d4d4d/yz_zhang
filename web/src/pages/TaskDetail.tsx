@@ -105,10 +105,18 @@ export default function TaskDetail() {
             </>
           )}
           {task.status === 'completed' && (isCreator || isExecutor) && (
-            <button onClick={() => {
-              const stars = Number(prompt('评分 1-5：', '5'));
-              if (stars >= 1 && stars <= 5) void act(() => client.review(taskId, stars));
-            }}>评价对方</button>
+            <>
+              <button onClick={() => {
+                const stars = Number(prompt('评分 1-5：', '5'));
+                if (stars >= 1 && stars <= 5) void act(() => client.review(taskId, stars));
+              }}>评价对方</button>
+              {isExecutor && (
+                <button className="ghost" onClick={() => {
+                  const body = prompt('写一篇完成复盘（将发布为案例帖，为你带来新订单）：');
+                  if (body) void act(() => client.createExperiencePost(taskId, body));
+                }}>发经验帖</button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -195,6 +203,15 @@ export default function TaskDetail() {
               </button>
             )}
             <span className="badge">{contract.status}{contract.frozen ? '（冻结）' : ''} · v{contract.version}</span>
+            <button className="ghost" style={{ padding: '4px 10px' }} onClick={async () => {
+              const exp = await client.exportContract(contract.id);
+              const blob = new Blob([exp.text], { type: 'text/plain;charset=utf-8' });
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = `contract-${contract.id}.txt`;
+              a.click();
+              URL.revokeObjectURL(a.href);
+            }}>导出合约凭证</button>
           </div>
           {/* SC-004 里程碑分期 */}
           {contract.milestones && contract.milestones.length > 1 && (

@@ -116,6 +116,23 @@ describe('V1 接口', () => {
     expect(JSON.parse(certInit.body)).toEqual({ name: '律师', license_no: 'A1234' });
   });
 
+  it('澄清/模板/会话/导出接口（V3/V4）', async () => {
+    const { client, fetchImpl } = makeClient(200, {});
+    await client.clarify({ title: 'x', budget_cents: 100 });
+    await client.taskTemplate('保洁');
+    await client.mySessions();
+    await client.exportContract(4);
+    await client.createExperiencePost(7, '复盘内容复盘内容');
+    const urls = fetchImpl.mock.calls.map((c) => c[0]);
+    expect(urls).toEqual([
+      'http://x/api/v1/ai/clarify',
+      'http://x/api/v1/task-templates?category=%E4%BF%9D%E6%B4%81',
+      'http://x/api/v1/auth/sessions',
+      'http://x/api/v1/contracts/4/export',
+      'http://x/api/v1/tasks/7/experience-post',
+    ]);
+  });
+
   it('举报接口字段', async () => {
     const { client, fetchImpl } = makeClient(201, { id: 1, status: 'pending' });
     await client.report('content', 8, '违规');

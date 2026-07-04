@@ -71,7 +71,11 @@ export class PlatformClient {
   me() {
     return this.request<Me>('GET', '/users/me');
   }
-  updateMe(patch: Partial<Pick<Me, 'nickname' | 'bio' | 'city' | 'lat' | 'lng' | 'skills' | 'interests'>>) {
+  updateMe(patch: Partial<Pick<Me, 'nickname' | 'bio' | 'city' | 'lat' | 'lng' | 'skills' | 'interests'>> & {
+    privacy?: { profile_public?: boolean };
+    service_rate_cents?: number;
+    available_times?: string;
+  }) {
     return this.request<Me>('PATCH', '/users/me', patch);
   }
   verifyIdentity(realName: string, idNumber: string) {
@@ -84,8 +88,13 @@ export class PlatformClient {
   }
 
   // ---- tasks ----
-  createTask(input: Partial<Task> & { title: string; category: string; publish_now?: boolean }) {
-    return this.request<Task>('POST', '/tasks', input);
+  createTask(input: Partial<Task> & {
+    title: string;
+    category: string;
+    publish_now?: boolean;
+    people_needed?: number;
+  }) {
+    return this.request<Task & { slots?: Task[] }>('POST', '/tasks', input);
   }
   listTasks(params: Record<string, string | number | undefined> = {}) {
     const qs = Object.entries(params)
@@ -313,6 +322,58 @@ export class PlatformClient {
   }
   unsubscribe(id: number) {
     return this.request<{ ok: boolean }>('DELETE', `/subscriptions/${id}`);
+  }
+
+  // ---- V3/V4: clarify / templates / cities / sessions / export ----
+  clarify(input: { title?: string; description?: string; category?: string; budget_cents?: number; city?: string; is_remote?: boolean }) {
+    return this.request<{
+      ready: boolean;
+      questions: Array<{ field: string; question: string }>;
+      feasibility: { level: string; message: string; p50_cents?: number } | null;
+    }>('POST', '/ai/clarify', input);
+  }
+  taskTemplate(category: string) {
+    return this.request<{ category: string; title: string; description: string; checklist: string[]; price_reference: PriceReference }>(
+      'GET', `/task-templates?category=${encodeURIComponent(category)}`,
+    );
+  }
+  categories() {
+    return this.request<Array<{ id: number; name: string; required_cert: string }>>('GET', '/categories');
+  }
+  cities() {
+    return this.request<Array<{ id: number; name: string }>>('GET', '/cities');
+  }
+  finalReport(taskId: number) {
+    return this.request<{ summary: string; total_cost_cents: number; children_completed: number; children_total: number; deliverables: Array<Record<string, unknown>> }>(
+      'GET', `/tasks/${taskId}/final-report`,
+    );
+  }
+  mySessions() {
+    return this.request<Array<{ id: number; device: string; created_at: string }>>('GET', '/auth/sessions');
+  }
+  revokeSession(id: number) {
+    return this.request<{ ok: boolean }>('POST', `/auth/sessions/${id}/revoke`);
+  }
+  deactivateAccount() {
+    return this.request<{ deleted: boolean }>('POST', '/users/me/deactivate');
+  }
+  exportContract(contractId: number) {
+    return this.request<{ contract_id: number; text: string; ledger_count: number; anchor_head: string | null }>(
+      'GET', `/contracts/${contractId}/export`,
+    );
+  }
+  sendQuoteCard(convId: number, taskId: number, priceCents: number, note = '') {
+    return this.request<{ id: number; kind: string }>('POST', `/conversations/${convId}/quote-cards`, {
+      task_id: taskId, price_cents: priceCents, note,
+    });
+  }
+  createExperiencePost(taskId: number, body: string, title = '') {
+    return this.request<ContentItem>('POST', `/tasks/${taskId}/experience-post`, { body, title });
+  }
+  circleStats(circleId: number) {
+    return this.request<{ member_count: number; posts: number; tasks_total: number; tasks_completed: number; gmv_cents: number }>(
+      'GET', `/circles/${circleId}/stats`,
+    );
   }
 
   // ---- block / recall / certification / anchors ----

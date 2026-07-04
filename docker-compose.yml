@@ -1,0 +1,28 @@
+# 一键起全栈：docker compose up --build
+# Web: http://localhost:8080 / API 文档: http://localhost:8000/docs
+services:
+  server:
+    build: ./server
+    ports:
+      - "8000:8000"
+    volumes:
+      - platform-data:/srv/data
+    environment:
+      PLATFORM_JWT_SECRET: change-me-in-production
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 10s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      server:
+        condition: service_healthy
+
+volumes:
+  platform-data:
