@@ -33,6 +33,8 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     # RISK-006 封禁（封禁后所有需登录操作被拒）
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
+    # ACC-006 注销（脱敏保留，登录与被检索均拒绝）
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     # CRED-001 信用分（初始 100）与评价聚合
     credit_score: Mapped[int] = mapped_column(Integer, default=100)
     rating_sum: Mapped[int] = mapped_column(Integer, default=0)
@@ -43,6 +45,18 @@ class User(Base):
     @property
     def rating_avg(self) -> float:
         return round(self.rating_sum / self.rating_count, 2) if self.rating_count else 0.0
+
+
+class LoginSession(Base):
+    """ACC-005 登录会话：设备管理与踢出。"""
+
+    __tablename__ = "login_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    device: Mapped[str] = mapped_column(String(200), default="")
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class Block(Base):

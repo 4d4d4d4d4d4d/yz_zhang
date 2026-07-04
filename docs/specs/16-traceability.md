@@ -1,7 +1,26 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1 + V2（平台内可实现部分）完成（2026-07-03）。
-> 后端 77 tests + 前端 19 tests 全绿。剩余项均依赖外部供应商/云服务，见文末。
+> 状态：MVP + V1 + V2 + V3 深度批次完成（2026-07-04）。
+> 后端 92 tests + 前端 19 tests 全绿。剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V3 批次）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| ACC-005 登录会话/设备管理（列出/踢出，token 绑定会话可吊销） | `account/models.py::LoginSession` + `core/deps.py` | `tests/test_v3_features.py` |
+| ACC-006 账号注销（未结算合约/纠纷/余额阻断，脱敏保留） | `account/router.py::deactivate_account` | 同上 |
+| TASK-007 多人任务（N 名额子任务，独立合约，母任务自动结项） | `task/router.py::create_task` + `decompose/service.py` | 同上 |
+| AI-DEC-001/002 对话式澄清 + 预算可行性预判（对照知识库中位价） | `decompose/router.py::clarify` | 同上 |
+| AI-DEC-025 母任务结项报告（成本/工期/交付清单） | `decompose/router.py::final_report` | 同上 |
+| OPS-004 类目管理（种子+CRUD+启停校验+资质挂载） | `task/models.py::Category` + `admin/router.py` | 同上 |
+| MATCH-008 匹配权重后台可配（实时生效，和为 1 校验） | `matching/models.py::MatchingConfig` + `admin/router.py` | 同上 |
+| NTF-003 通知偏好（分类开关，funds 必达不可关） | `support/models.py::NotificationPref` + `notification/` | 同上 |
+| CS-013 工单（AI 转人工自动建单→处理→通知） | `support/models.py::Ticket` + `admin/router.py` | 同上 |
+| DSP-008 申诉复核（一次，差额纠正性划转终局） | `dispute/router.py::appeal/appeal_verdict` | 同上 |
+| CRED-003 信用等级权益（S/A/B/C → 费率 6%/7%/8%） | `account/service.py::credit_level` + 合约生成 | 同上 |
+| GEO-021 行程共享（执行者开关，任务结束失效） | `task/router.py::trip-share` | 同上 |
+| GEO-023 紧急求助（留痕+通知对方） | `task/router.py::sos` | 同上 |
+| GEO-024 位置保留策略（结束 30 天清除精确坐标） | `task/router.py::purge_locations` | 同上 |
 
 ## 已实现（V2 批次）
 

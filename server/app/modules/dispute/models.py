@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -26,5 +26,8 @@ class Dispute(Base):
     verdict_executor_share_bps: Mapped[int | None] = mapped_column(Integer, nullable=True)
     verdict_reason: Mapped[str] = mapped_column(Text, default="")
     arbiter_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # DSP-008 申诉复核（一次）：记录裁决执行时的分割基数用于纠正性结算
+    split_base_cents: Mapped[int] = mapped_column(Integer, default=0)
+    appealed: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

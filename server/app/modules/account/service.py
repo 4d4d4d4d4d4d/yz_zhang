@@ -23,6 +23,21 @@ CREDIT_DISPUTE_LOSER = -10
 CREDIT_CANCEL_PENALTY = -5
 CREDIT_MIN, CREDIT_MAX = 0, 200
 
+# CRED-003 信用等级与权益：等级越高平台费率越低（SC-009 联动）
+LEVEL_THRESHOLDS = [(140, "S"), (110, "A"), (80, "B"), (0, "C")]
+FEE_BPS_BY_LEVEL = {"S": 600, "A": 700, "B": 800, "C": 800}
+
+
+def credit_level(score: int) -> str:
+    for threshold, level in LEVEL_THRESHOLDS:
+        if score >= threshold:
+            return level
+    return "C"
+
+
+def fee_bps_for(user) -> int:
+    return FEE_BPS_BY_LEVEL[credit_level(user.credit_score)]
+
 
 def adjust_credit(db: Session, user_id: int, delta: int) -> None:
     user = db.get(User, user_id)

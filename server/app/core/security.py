@@ -28,17 +28,19 @@ def _sign(payload_b64: bytes) -> str:
     return hmac.new(settings.JWT_SECRET.encode(), payload_b64, hashlib.sha256).hexdigest()
 
 
-def create_token(user_id: int) -> str:
-    payload = {"sub": user_id, "exp": int(time.time()) + settings.JWT_EXPIRE_MINUTES * 60}
+def create_token(user_id: int, session_id: int | None = None) -> str:
+    payload = {"sub": user_id, "sid": session_id,
+               "exp": int(time.time()) + settings.JWT_EXPIRE_MINUTES * 60}
     payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode())
     return payload_b64.decode() + "." + _sign(payload_b64)
 
 
-def decode_token(token: str) -> int:
+def decode_token(token: str) -> dict:
+    """返回 {sub, sid, exp}；签名或过期校验失败抛 ValueError。"""
     payload_b64, signature = token.rsplit(".", 1)
     if not hmac.compare_digest(_sign(payload_b64.encode()), signature):
         raise ValueError("bad signature")
     payload = json.loads(base64.urlsafe_b64decode(payload_b64))
     if payload["exp"] < time.time():
         raise ValueError("token expired")
-    return int(payload["sub"])
+    return payload

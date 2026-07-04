@@ -92,7 +92,7 @@ def accept_invitation(
         raise conflict("任务已不在招募中，邀约失效", "task_closed")
     from app.modules.task.service import check_category_qualification
 
-    check_category_qualification(task, user)  # ACC-022 受限类目准入
+    check_category_qualification(db, task, user)  # ACC-022 受限类目准入
     inv.status = "accepted"
     app_row = Application(
         task_id=task.id, applicant_id=user.id, bid_cents=task.budget_cents,

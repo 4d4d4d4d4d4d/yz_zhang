@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, DateTime, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -20,6 +20,15 @@ class Invitation(Base):
     message: Mapped[str] = mapped_column(String(500), default="")
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending/accepted/declined
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class MatchingConfig(Base):
+    """MATCH-008 匹配策略配置（后台调参，实时生效）。"""
+
+    __tablename__ = "matching_configs"
+
+    key: Mapped[str] = mapped_column(String(30), primary_key=True)  # "weights"
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
 class Subscription(Base):

@@ -34,9 +34,12 @@ def create_app() -> FastAPI:
     anchor_service.register_event_handlers()
     decompose_resilience.register_event_handlers()
 
-    # 冷启动种子数据（KB 模板与 FAQ）
+    # 冷启动种子数据（KB 模板与 FAQ、任务类目）
+    from app.modules.task import service as task_service
+
     with SessionLocal() as db:
         knowledge_service.seed(db)
+        task_service.seed_categories(db)
         db.commit()
 
     from app.modules.account.router import router as account_router

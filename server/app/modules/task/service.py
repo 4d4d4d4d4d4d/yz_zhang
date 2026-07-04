@@ -9,15 +9,45 @@ from .models import TRANSITIONS, Task
 # TASK-004 发布前机审违禁词（RISK-001 简化实现；生产接内容安全服务）
 BANNED_WORDS = ["代考", "刷单", "赌博", "毒品", "枪支", "色情", "洗钱"]
 
-# ACC-022 受限类目 → 所需职业资质（运营后台可配的简化版）
-# 「法律咨询」类目 = LAW-003 律师市场：持证律师方可接单
-RESTRICTED_CATEGORIES = {"法律咨询": "律师", "电工维修": "电工", "燃气维修": "燃气作业"}
+# OPS-004 类目种子（首次启动写入 Category 表，此后运营后台维护）
+SEED_CATEGORIES = [
+    {"name": "保洁"}, {"name": "跑腿"}, {"name": "维修"}, {"name": "软件开发"},
+    {"name": "设计"}, {"name": "活动策划"}, {"name": "二手交易"},
+    # LAW-003 律师市场 / 高危作业准入（ACC-022）
+    {"name": "法律咨询", "required_cert": "律师"},
+    {"name": "电工维修", "required_cert": "电工"},
+    {"name": "燃气维修", "required_cert": "燃气作业"},
+]
 
 
-def check_category_qualification(task, user) -> None:
-    required = RESTRICTED_CATEGORIES.get(task.category)
+def seed_categories(db: Session) -> None:
+    from .models import Category
+
+    if db.query(Category).first():
+        return
+    for c in SEED_CATEGORIES:
+        db.add(Category(**c))
+    db.flush()
+
+
+def get_category(db: Session, name: str):
+    from .models import Category
+
+    return db.query(Category).filter(Category.name == name).first()
+
+
+def check_category_qualification(db: Session, task, user) -> None:
+    """ACC-022 受限类目准入（读类目表，运营后台可配）。"""
+    category = get_category(db, task.category)
+    required = category.required_cert if category else ""
     if required and required not in (user.certifications or []):
         raise bad_request(f"该类目需「{required}」职业资质认证后方可接单", "certification_required")
+
+
+def validate_category(db: Session, name: str) -> None:
+    category = get_category(db, name)
+    if not category or not category.active:
+        raise bad_request(f"类目「{name}」不存在或已停用", "invalid_category")
 
 
 def machine_review(text: str) -> str | None:

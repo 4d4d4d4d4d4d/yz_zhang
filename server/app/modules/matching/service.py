@@ -11,6 +11,16 @@ from app.modules.account.models import User
 WEIGHTS = {"skill": 0.40, "credit": 0.25, "distance": 0.20, "rating": 0.15}
 
 
+def get_weights(db: Session) -> dict:
+    """MATCH-008：优先读后台配置，无配置用默认。"""
+    from .models import MatchingConfig
+
+    row = db.get(MatchingConfig, "weights")
+    if row and row.data:
+        return {**WEIGHTS, **row.data}
+    return WEIGHTS
+
+
 def _skill_score(task_skills: list[str], user_skills: list[str]) -> float:
     if not task_skills:
         return 0.5  # 无技能要求时给中性分
@@ -49,6 +59,7 @@ def recommend(db: Session, task, limit: int = 10) -> list[dict]:
         u for u in candidates
         if (task.creator_id, u.id) not in blocked_pairs and (u.id, task.creator_id) not in blocked_pairs
     ]
+    weights = get_weights(db)
     scored = []
     for user in candidates:
         skill = _skill_score(task.required_skills, user.skills)
@@ -56,10 +67,10 @@ def recommend(db: Session, task, limit: int = 10) -> list[dict]:
         distance = _distance_score(task, user)
         rating = user.rating_avg / 5 if user.rating_count else 0.4
         total = (
-            WEIGHTS["skill"] * skill
-            + WEIGHTS["credit"] * credit
-            + WEIGHTS["distance"] * distance
-            + WEIGHTS["rating"] * rating
+            weights["skill"] * skill
+            + weights["credit"] * credit
+            + weights["distance"] * distance
+            + weights["rating"] * rating
         )
         # MATCH-002 可解释推荐理由
         reasons = []

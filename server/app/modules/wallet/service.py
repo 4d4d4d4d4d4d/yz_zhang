@@ -80,6 +80,20 @@ def escrow_refund(db: Session, payer_id: int, amount: int, contract_id: int, mem
     _log(db, payer_id, "refund", amount, contract_id, memo)
 
 
+def transfer(db: Session, from_id: int, to_id: int, amount: int, contract_id=None, memo=""):
+    """可用余额间转账（申诉纠正性结算等平台内部调整）。"""
+    if amount <= 0:
+        raise bad_request("金额必须为正", "invalid_amount")
+    src = get_or_create(db, from_id)
+    if src.available_cents < amount:
+        raise bad_request("余额不足以执行调整", "insufficient_balance")
+    src.available_cents -= amount
+    _log(db, from_id, "adjust_out", -amount, contract_id, memo)
+    dst = get_or_create(db, to_id)
+    dst.available_cents += amount
+    _log(db, to_id, "adjust_in", amount, contract_id, memo)
+
+
 def freeze_deposit(db: Session, user_id: int, amount: int, contract_id: int):
     """CRED-005 保证金冻结：可用 → 冻结。"""
     acct = get_or_create(db, user_id)

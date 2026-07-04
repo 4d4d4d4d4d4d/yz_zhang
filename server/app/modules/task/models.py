@@ -19,9 +19,10 @@ TASK_STATUSES = [
 ]
 
 # 状态流转白名单（TASK 状态机 P0：非法流转一律拒绝）
+# draft→completed 仅用于容器任务（多人任务/被分解母任务）在全部子任务闭环后自动结项
 TRANSITIONS: dict[str, set[str]] = {
-    "draft": {"published", "cancelled"},
-    "published": {"matched", "cancelled"},
+    "draft": {"published", "cancelled", "completed"},
+    "published": {"matched", "cancelled", "completed"},
     "matched": {"in_progress", "cancelled", "disputed"},
     "in_progress": {"pending_acceptance", "cancelled", "disputed"},
     "pending_acceptance": {"completed", "in_progress", "disputed"},
@@ -53,6 +54,10 @@ class Task(Base):
     pricing: Mapped[str] = mapped_column(String(20), default="fixed")  # fixed 一口价 / bidding 竞价
     # CRED-005 执行者保证金（发布者设定，成交时冻结，闭环退还，违约罚没）
     deposit_cents: Mapped[int] = mapped_column(Integer, default=0)
+    # TASK-007 多人任务：>1 时发布生成 N 个名额子任务，本任务成为容器
+    people_needed: Mapped[int] = mapped_column(Integer, default=1)
+    # GEO-021 行程共享（执行者开启后发布者可见最近打卡位置，任务结束即失效）
+    trip_share_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # GEO：is_remote 线上任务不限地域；线下任务坐标 + 脱敏地址(公开) + 精确地址(成交后可见)
     is_remote: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -74,6 +79,18 @@ class Task(Base):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     reject_count: Mapped[int] = mapped_column(Integer, default=0)  # 验收驳回次数(TASK-033)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Category(Base):
+    """OPS-004 任务类目（运营维护）：准入资质与启停。"""
+
+    __tablename__ = "categories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(50), unique=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    required_cert: Mapped[str] = mapped_column(String(30), default="")  # ACC-022 准入资质
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

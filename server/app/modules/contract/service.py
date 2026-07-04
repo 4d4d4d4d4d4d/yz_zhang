@@ -33,12 +33,18 @@ def generate(db: Session, task, executor_id: int, amount_cents: int) -> Contract
         f"验收: 交付后由发布方验收，{settings.AUTO_ACCEPT_DAYS} 天未处理视为自动通过\n"
         f"争议: 按《平台争议处理规则》仲裁，裁决结果自动执行"
     )
+    # CRED-003 信用等级权益：高信用执行者享费率折扣
+    from app.modules.account import service as credit
+    from app.modules.account.models import User
+
+    executor = db.get(User, executor_id)
+    fee_bps = credit.fee_bps_for(executor) if executor else settings.PLATFORM_FEE_BPS
     contract = Contract(
         task_id=task.id,
         requester_id=task.creator_id,
         executor_id=executor_id,
         amount_cents=amount_cents,
-        fee_bps=settings.PLATFORM_FEE_BPS,
+        fee_bps=fee_bps,
         terms=terms,
         deposit_cents=task.deposit_cents or 0,
     )

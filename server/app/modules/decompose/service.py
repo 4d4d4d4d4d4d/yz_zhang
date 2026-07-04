@@ -110,6 +110,18 @@ def _on_task_completed(db: Session, payload: dict) -> None:
             status_map.get(dep) == "completed" for dep in sib.depends_on
         ):
             task_service.transition(db, sib, "published")
+    # 全部子任务闭环 → 容器母任务自动结项（TASK-036 / AI-DEC-025 / TASK-007）
+    parent = db.get(Task, done.parent_id)
+    if parent and parent.status in ("draft", "published") and all(
+        s.status == "completed" for s in siblings
+    ):
+        from app.modules.account.models import utcnow
+        from app.modules.notification.service import notify
+
+        parent.completed_at = utcnow()
+        task_service.transition(db, parent, "completed")
+        notify(db, parent.creator_id, "task", "母任务已全部完成",
+               f"《{parent.title}》的全部子任务已闭环，可查看结项报告")
 
 
 def register_event_handlers() -> None:

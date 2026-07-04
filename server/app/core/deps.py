@@ -13,14 +13,23 @@ def get_current_user(
     if not authorization.startswith("Bearer "):
         raise forbidden("未登录", "unauthenticated")
     try:
-        user_id = decode_token(authorization.removeprefix("Bearer "))
+        payload = decode_token(authorization.removeprefix("Bearer "))
     except Exception:
         raise forbidden("登录态无效", "unauthenticated")
-    user = db.get(User, user_id)
+    user = db.get(User, int(payload["sub"]))
     if not user:
         raise forbidden("用户不存在", "unauthenticated")
+    # ACC-005 会话吊销检查（旧 token 无 sid 的跳过，兼容期）
+    if payload.get("sid") is not None:
+        from app.modules.account.models import LoginSession
+
+        session = db.get(LoginSession, int(payload["sid"]))
+        if not session or session.revoked:
+            raise forbidden("登录态已失效，请重新登录", "session_revoked")
     if user.is_banned:
         raise forbidden("账号已被封禁，如有异议请申诉", "account_banned")
+    if user.is_deleted:
+        raise forbidden("账号已注销", "account_deleted")
     return user
 
 

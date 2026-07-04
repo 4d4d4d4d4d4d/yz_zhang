@@ -95,6 +95,7 @@ def _get_dispute(db: Session, dispute_id: int) -> tuple[Dispute, Task, Contract]
 
 def _execute_split(db: Session, dispute: Dispute, task: Task, contract: Contract,
                    share_bps: int, status: str, reason: str = "") -> None:
+    dispute.split_base_cents = contract.amount_cents - contract.released_cents  # DSP-008 复核基数
     contract.frozen = False
     contract_service.execute_verdict(db, contract, share_bps)
     dispute.status = status
@@ -153,6 +154,50 @@ def issue_verdict(
     loser = task.executor_id if body.executor_share_bps < 5000 else task.creator_id
     credit.adjust_credit(db, loser, credit.CREDIT_DISPUTE_LOSER)
     return _dump(dispute)
+
+
+@router.post("/disputes/{dispute_id}/appeal")
+def appeal(dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """DSP-008 申诉复核：仅仲裁结案可申诉一次，升级高级仲裁员复核。"""
+    dispute, task, _ = _get_dispute(db, dispute_id)
+    if user.id not in (task.creator_id, task.executor_id):
+        raise forbidden()
+    if dispute.status != "resolved":
+        raise conflict("仅平台仲裁结案的纠纷可申诉（和解结案不可申诉）", "not_appealable")
+    if dispute.appealed:
+        raise conflict("申诉机会已用完（每案一次）", "already_appealed")
+    dispute.appealed = True
+    dispute.status = "appealed"
+    db.add(dispute)
+    return _dump(dispute) | {"appealed": True}
+
+
+@router.post("/disputes/{dispute_id}/appeal-verdict")
+def appeal_verdict(
+    dispute_id: int, body: ShareIn, senior: User = Depends(require_admin), db: Session = Depends(get_db)
+):
+    """高级仲裁员复核终局：与原裁决的差额做纠正性划转（原分账不回滚，差额多退少补）。"""
+    from app.modules.wallet import service as wallet
+
+    dispute, task, contract = _get_dispute(db, dispute_id)
+    if dispute.status != "appealed":
+        raise conflict("纠纷不在申诉复核中", "not_in_appeal")
+    if not body.reason:
+        raise conflict("复核裁决必须给出理由", "reason_required")
+    old_share = dispute.split_base_cents * (dispute.verdict_executor_share_bps or 0) // 10000
+    new_share = dispute.split_base_cents * body.executor_share_bps // 10000
+    delta = new_share - old_share
+    if delta > 0:
+        wallet.transfer(db, task.creator_id, task.executor_id, delta, contract.id, "申诉复核补付")
+    elif delta < 0:
+        wallet.transfer(db, task.executor_id, task.creator_id, -delta, contract.id, "申诉复核退回")
+    dispute.verdict_executor_share_bps = body.executor_share_bps
+    dispute.verdict_reason = f"[复核终局] {body.reason}"
+    dispute.arbiter_id = senior.id
+    dispute.status = "resolved"
+    db.add(dispute)
+    publish(db, "dispute.resolved", {"dispute_id": dispute.id, "task_id": task.id, "appeal": True})
+    return _dump(dispute) | {"corrective_delta_cents": delta}
 
 
 @router.get("/disputes/{dispute_id}")

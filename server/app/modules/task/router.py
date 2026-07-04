@@ -42,6 +42,7 @@ class TaskIn(BaseModel):
     visibility: str = "public"
     circle_id: int | None = None
     recurrence: str = "none"
+    people_needed: int = Field(default=1, ge=1, le=50)
     publish_now: bool = True
 
 
@@ -119,6 +120,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
         raise bad_request("非法可见范围", "invalid_visibility")
     if body.recurrence not in ("none", "weekly", "monthly"):
         raise bad_request("非法周期设置", "invalid_recurrence")
+    service.validate_category(db, body.category)  # OPS-004 类目启停校验
     if body.visibility == "circle":
         # TASK-008/CIR-005 圈层定向任务：发布者必须是活跃成员
         from app.modules.circle.router import active_member
@@ -128,6 +130,32 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
     task = Task(creator_id=user.id, **body.model_dump(exclude={"publish_now"}))
     db.add(task)
     db.flush()
+    # TASK-007 多人任务：母任务为容器（不进广场），生成 N 个名额子任务分别招募
+    if body.people_needed > 1:
+        service.validate_publishable(task)
+        per_slot = body.budget_cents // body.people_needed
+        if per_slot <= 0:
+            raise bad_request("预算不足以拆分名额", "budget_too_small")
+        slots = []
+        for i in range(body.people_needed):
+            slot = Task(
+                creator_id=user.id, parent_id=task.id,
+                title=f"{task.title} · 名额{i + 1}/{body.people_needed}",
+                description=task.description, category=task.category,
+                task_type=task.task_type, required_skills=task.required_skills,
+                budget_cents=per_slot, pricing=task.pricing, deposit_cents=task.deposit_cents,
+                is_remote=task.is_remote, city=task.city, lat=task.lat, lng=task.lng,
+                address_hint=task.address_hint, address_exact=task.address_exact,
+                visibility=task.visibility, circle_id=task.circle_id,
+            )
+            db.add(slot)
+            slots.append(slot)
+        db.flush()
+        for slot in slots:
+            service.transition(db, slot, "published")
+        out = dump_task(task, user)
+        out["slots"] = [dump_task(s, user) for s in slots]
+        return out
     if body.publish_now:
         service.validate_publishable(task)
         service.transition(db, task, "published")
@@ -142,6 +170,15 @@ def publish_task(task_id: int, user: User = Depends(get_current_user), db: Sessi
     service.validate_publishable(task)
     service.transition(db, task, "published")
     return dump_task(task, user)
+
+
+@router.get("/categories")
+def list_categories(db: Session = Depends(get_db)):
+    """OPS-004 类目列表（公开，发布表单数据源）。"""
+    from .models import Category
+
+    rows = db.query(Category).filter(Category.active.is_(True)).order_by(Category.id).all()
+    return [{"id": c.id, "name": c.name, "required_cert": c.required_cert} for c in rows]
 
 
 # ---------- 广场 / 搜索 / LBS（TASK-040/041, GEO-010/011）----------
@@ -202,7 +239,7 @@ def apply(
         raise conflict("任务不在招募中", "not_recruiting")
     if task.creator_id == user.id:
         raise bad_request("不能报名自己发布的任务", "self_apply")
-    service.check_category_qualification(task, user)  # ACC-022 受限类目准入
+    service.check_category_qualification(db, task, user)  # ACC-022 受限类目准入
     from app.modules.account.service import is_blocked_between
 
     if is_blocked_between(db, user.id, task.creator_id):  # ACC-033
@@ -334,6 +371,81 @@ def list_progress(task_id: int, user: User = Depends(get_current_user), db: Sess
          "created_at": r.created_at.isoformat()}
         for r in rows
     ]
+
+
+# ---------- GEO 安全件（GEO-021/023/024）----------
+@router.post("/tasks/{task_id}/trip-share")
+def toggle_trip_share(
+    task_id: int, enabled: bool, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """GEO-021 行程共享开关（执行者，仅执行中）。"""
+    task = _get_task(db, task_id)
+    if user.id != task.executor_id:
+        raise forbidden("仅执行者可设置行程共享")
+    if task.status != "in_progress":
+        raise conflict("任务不在执行中", "not_in_progress")
+    task.trip_share_enabled = enabled
+    db.add(task)
+    return {"trip_share_enabled": enabled}
+
+
+@router.get("/tasks/{task_id}/trip")
+def get_trip(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """发布者查看执行者最近打卡位置（需执行者开启共享，任务结束即失效）。"""
+    task = _get_task(db, task_id)
+    if user.id not in (task.creator_id, task.executor_id):
+        raise forbidden()
+    if not task.trip_share_enabled or task.status != "in_progress":
+        raise forbidden("行程共享未开启或任务已结束", "trip_share_disabled")
+    last = (
+        db.query(ProgressLog)
+        .filter(ProgressLog.task_id == task_id, ProgressLog.kind == "checkin",
+                ProgressLog.lat.isnot(None))
+        .order_by(ProgressLog.id.desc())
+        .first()
+    )
+    if not last:
+        return {"lat": None, "lng": None, "at": None}
+    return {"lat": last.lat, "lng": last.lng, "at": last.created_at.isoformat()}
+
+
+@router.post("/tasks/{task_id}/sos", status_code=201)
+def sos(task_id: int, body: CheckinIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """GEO-023 紧急求助：留痕 + 通知对方与平台（生产联动 110/紧急联系人）。"""
+    task = _get_task(db, task_id)
+    if user.id not in (task.creator_id, task.executor_id):
+        raise forbidden()
+    db.add(ProgressLog(task_id=task_id, user_id=user.id, kind="sos",
+                       content="紧急求助", lat=body.lat, lng=body.lng))
+    from app.modules.notification.service import notify
+
+    other = task.executor_id if user.id == task.creator_id else task.creator_id
+    if other:
+        notify(db, other, "system", "对方发出紧急求助",
+               f"任务《{task.title}》的另一方发出紧急求助，请立即联系确认安全")
+    return {"ok": True, "guidance": "已通知平台与任务对方；如遇危险请立即拨打 110"}
+
+
+@router.post("/tasks/jobs/purge-locations")
+def purge_locations(db: Session = Depends(get_db)):
+    """GEO-024 位置保留策略：已结束任务超过 30 天，清除打卡精确坐标。"""
+    from datetime import timedelta
+
+    cutoff = utcnow() - timedelta(days=30)
+    closed_ids = [
+        t.id for t in db.query(Task)
+        .filter(Task.status.in_(["completed", "cancelled"]), Task.completed_at.isnot(None),
+                Task.completed_at <= cutoff)
+        .all()
+    ]
+    purged = 0
+    if closed_ids:
+        purged = (
+            db.query(ProgressLog)
+            .filter(ProgressLog.task_id.in_(closed_ids), ProgressLog.lat.isnot(None))
+            .update({"lat": None, "lng": None}, synchronize_session=False)
+        )
+    return {"purged_logs": purged}
 
 
 # ---------- 交付与验收（TASK-030/031/033）----------

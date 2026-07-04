@@ -7,6 +7,17 @@ from .models import Notification
 
 
 def notify(db: Session, user_id: int, category: str, title: str, body: str = "") -> None:
+    # NTF-003 偏好开关（funds 类为资金必达通知，不可关闭 —— 12.B）
+    if category != "funds":
+        from app.modules.support.models import NotificationPref
+
+        pref = (
+            db.query(NotificationPref)
+            .filter(NotificationPref.user_id == user_id, NotificationPref.category == category)
+            .first()
+        )
+        if pref and not pref.enabled:
+            return
     db.add(Notification(user_id=user_id, category=category, title=title, body=body))
 
 

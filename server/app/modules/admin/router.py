@@ -89,6 +89,43 @@ def resolve_report(
     return {"id": report.id, "status": "resolved", "action": body.action}
 
 
+# ---------- 工单处理（CS-010/013） ----------
+class TicketResolveIn(BaseModel):
+    reply: str = Field(min_length=1, max_length=2000)
+
+
+@router.get("/admin/tickets")
+def ticket_queue(status: str = "open", admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    from app.modules.support.models import Ticket
+
+    rows = db.query(Ticket).filter(Ticket.status == status).order_by(Ticket.id).limit(100).all()
+    return [
+        {"id": t.id, "user_id": t.user_id, "subject": t.subject, "body": t.body,
+         "created_at": t.created_at.isoformat()}
+        for t in rows
+    ]
+
+
+@router.post("/admin/tickets/{ticket_id}/resolve")
+def resolve_ticket(
+    ticket_id: int, body: TicketResolveIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+):
+    from app.modules.account.models import utcnow
+    from app.modules.notification.service import notify
+    from app.modules.support.models import Ticket
+
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.status != "open":
+        raise not_found("工单不存在或已处理")
+    ticket.status = "resolved"
+    ticket.reply = body.reply
+    ticket.handler_id = admin.id
+    ticket.resolved_at = utcnow()
+    db.add(ticket)
+    notify(db, ticket.user_id, "system", "工单已处理", f"「{ticket.subject}」：{body.reply[:100]}")
+    return {"id": ticket.id, "status": "resolved"}
+
+
 # ---------- 用户管理（OPS-002） ----------
 @router.get("/admin/users")
 def list_users(
@@ -126,6 +163,75 @@ def unban_user(user_id: int, admin: User = Depends(require_admin), db: Session =
     user.is_banned = False
     db.add(user)
     return {"id": user.id, "is_banned": False}
+
+
+# ---------- 类目管理（OPS-004） ----------
+class CategoryIn(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+    required_cert: str = ""
+
+
+@router.post("/admin/categories", status_code=201)
+def create_category(body: CategoryIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    from app.modules.task.models import Category
+
+    if db.query(Category).filter(Category.name == body.name).first():
+        raise bad_request("类目已存在", "category_exists")
+    row = Category(name=body.name, required_cert=body.required_cert)
+    db.add(row)
+    db.flush()
+    return {"id": row.id, "name": row.name}
+
+
+@router.patch("/admin/categories/{category_id}")
+def update_category(
+    category_id: int, active: bool | None = None, required_cert: str | None = None,
+    admin: User = Depends(require_admin), db: Session = Depends(get_db),
+):
+    from app.modules.task.models import Category
+
+    row = db.get(Category, category_id)
+    if not row:
+        raise not_found("类目不存在")
+    if active is not None:
+        row.active = active
+    if required_cert is not None:
+        row.required_cert = required_cert
+    db.add(row)
+    return {"id": row.id, "name": row.name, "active": row.active, "required_cert": row.required_cert}
+
+
+# ---------- 匹配策略配置（MATCH-008） ----------
+class WeightsIn(BaseModel):
+    skill: float = Field(ge=0, le=1)
+    credit: float = Field(ge=0, le=1)
+    distance: float = Field(ge=0, le=1)
+    rating: float = Field(ge=0, le=1)
+
+
+@router.get("/admin/matching-config")
+def get_matching_config(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    from app.modules.matching.service import get_weights
+
+    return {"weights": get_weights(db)}
+
+
+@router.put("/admin/matching-config")
+def set_matching_config(
+    body: WeightsIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+):
+    total = body.skill + body.credit + body.distance + body.rating
+    if abs(total - 1.0) > 0.001:
+        raise bad_request(f"权重之和必须为 1（当前 {total:.3f}）", "weights_sum_invalid")
+    from app.modules.matching.models import MatchingConfig
+
+    row = db.get(MatchingConfig, "weights")
+    if not row:
+        row = MatchingConfig(key="weights", data={})
+        db.add(row)
+    row.data = body.model_dump()
+    db.add(row)
+    return {"weights": row.data}
 
 
 # ---------- 数据看板（OPS-007） ----------
