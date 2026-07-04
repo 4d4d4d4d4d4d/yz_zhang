@@ -91,6 +91,41 @@ def create_content(
     return _dump(row, db, user)
 
 
+# ---------- KB-003 闭环任务一键生成经验帖 ----------
+class ExperiencePostIn(BaseModel):
+    body: str = Field(min_length=10, max_length=20000)
+    title: str = Field(default="", max_length=120)
+
+
+@router.post("/tasks/{task_id}/experience-post", status_code=201)
+def create_experience_post(
+    task_id: int, body: ExperiencePostIn,
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """执行者为闭环任务写经验复盘，自动挂类目与案例来源（内容→能力→匹配打通）。"""
+    from app.modules.task.models import Task
+
+    task = db.get(Task, task_id)
+    if not task:
+        raise not_found("任务不存在")
+    if user.id != task.executor_id:
+        raise forbidden("仅任务执行者可发布经验帖")
+    if task.status != "completed":
+        raise conflict("任务闭环后才能发经验帖", "not_completed")
+    hit = machine_review(body.title + " " + body.body)
+    if hit:
+        raise bad_request(f"内容含违禁信息（{hit}）", "content_rejected")
+    row = Content(
+        author_id=user.id, kind="case",
+        title=body.title or f"{task.title} · 完成复盘",
+        body=body.body, tags=[task.category],
+        linked_category=task.category, source_task_id=task.id,
+    )
+    db.add(row)
+    db.flush()
+    return _dump(row, db, user)
+
+
 # ---------- Feed（CNT-010/011 简化：关注流 + 最新流） ----------
 @router.get("/feed")
 def feed(

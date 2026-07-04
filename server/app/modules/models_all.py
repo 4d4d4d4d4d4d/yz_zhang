@@ -19,6 +19,7 @@ from app.modules.knowledge.models import (  # noqa: F401
 from app.modules.task.models import (  # noqa: F401
     Application,
     Category,
+    City,
     ProgressLog,
     Review,
     Task,

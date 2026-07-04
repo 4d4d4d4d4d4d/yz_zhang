@@ -20,14 +20,38 @@ SEED_CATEGORIES = [
 ]
 
 
-def seed_categories(db: Session) -> None:
-    from .models import Category
+SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
-    if db.query(Category).first():
-        return
-    for c in SEED_CATEGORIES:
-        db.add(Category(**c))
+# TASK-003 高频类目发布模板（配合 KB-021 参考价组成模板库）
+TASK_TEMPLATES = {
+    "保洁": {"title": "日常保洁（X 室 X 厅）", "description": "面积约 __ ㎡；重点：厨房/卫生间深度清洁；需自带工具", "checklist": ["确认面积与户型", "是否需要自带工具", "验收标准拍照对比"]},
+    "跑腿": {"title": "帮取/帮送（同城）", "description": "取件地址：__；送达地址：__；物品：__；时效要求：__", "checklist": ["物品是否易碎/贵重", "时效要求", "费用是否含跑腿费外的垫付"]},
+    "维修": {"title": "上门维修（品类）", "description": "故障描述：__；品牌型号：__；期望上门时间：__", "checklist": ["故障照片", "是否含配件费", "保修约定"]},
+    "软件开发": {"title": "开发需求（一句话概括）", "description": "目标用户：__；核心功能：__；交付物：源码+部署文档；验收标准：__", "checklist": ["建议用 AI 分解为里程碑", "明确验收标准", "约定源码归属"]},
+}
+
+
+def seed_categories(db: Session) -> None:
+    from .models import Category, City
+
+    if not db.query(Category).first():
+        for c in SEED_CATEGORIES:
+            db.add(Category(**c))
+    if not db.query(City).first():
+        for name in SEED_CITIES:
+            db.add(City(name=name))
     db.flush()
+
+
+def validate_city(db: Session, task) -> None:
+    """GEO-030：线下任务城市必须已开通。"""
+    from .models import City
+
+    if task.is_remote or not task.city:
+        return
+    city = db.query(City).filter(City.name == task.city).first()
+    if not city or not city.active:
+        raise bad_request(f"城市「{task.city}」尚未开通服务", "city_not_open")
 
 
 def get_category(db: Session, name: str):
@@ -69,7 +93,9 @@ def transition(db: Session, task: Task, new_status: str, event_payload: dict | N
     publish(db, f"task.{new_status}", {"task_id": task.id, "from": old, **(event_payload or {})})
 
 
-def validate_publishable(task: Task) -> None:
+def validate_publishable(task: Task, db: Session | None = None) -> None:
+    if db is not None:
+        validate_city(db, task)  # GEO-030
     if task.budget_cents <= 0:
         raise bad_request("预算必须大于 0", "budget_required")
     hit = machine_review(task.title + " " + task.description)

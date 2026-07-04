@@ -41,13 +41,15 @@ def check_stranger_limit(db: Session, conv: Conversation, sender_id: int) -> Non
         raise bad_request("对方回复前最多发送 5 条消息", "stranger_limit")
 
 
-def send(db: Session, conv: Conversation, sender_id: int, content: str) -> Message:
+def send(db: Session, conv: Conversation, sender_id: int, content: str, kind: str = "text") -> Message:
     check_stranger_limit(db, conv, sender_id)
     msg = Message(
         conversation_id=conv.id,
         sender_id=sender_id,
+        kind=kind,
         content=content,
-        risk_flagged=is_risky(content),
+        # 结构化卡片消息（IM-009）不做站外引导风控（内容为平台生成）
+        risk_flagged=is_risky(content) if kind == "text" else False,
     )
     db.add(msg)
     db.flush()

@@ -21,6 +21,14 @@ class MessageIn(BaseModel):
     content: str = Field(min_length=1, max_length=5000)
 
 
+class QuoteCardIn(BaseModel):
+    """IM-009 报价卡：结构化消息，可直达报名。"""
+
+    task_id: int
+    price_cents: int = Field(gt=0)
+    note: str = Field(default="", max_length=200)
+
+
 def _dump_conv(c: Conversation) -> dict:
     return {"id": c.id, "kind": c.kind, "task_id": c.task_id, "participants": c.participants}
 
@@ -73,12 +81,28 @@ def send_message(
     }
 
 
+@router.post("/conversations/{conv_id}/quote-cards", status_code=201)
+def send_quote_card(
+    conv_id: int, body: QuoteCardIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """IM-009 发送报价卡（结构化 JSON 内容，前端渲染为卡片）。"""
+    import json
+
+    conv = _get_conv(db, conv_id, user)
+    payload = json.dumps(
+        {"task_id": body.task_id, "price_cents": body.price_cents, "note": body.note},
+        ensure_ascii=False,
+    )
+    msg = service.send(db, conv, user.id, payload, kind="quote")
+    return {"id": msg.id, "kind": "quote"}
+
+
 @router.get("/conversations/{conv_id}/messages")
 def list_messages(conv_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     conv = _get_conv(db, conv_id, user)
     rows = db.query(Message).filter(Message.conversation_id == conv.id).order_by(Message.id).all()
     return [
-        {"id": m.id, "sender_id": m.sender_id,
+        {"id": m.id, "sender_id": m.sender_id, "kind": m.kind,
          # IM-004 撤回消息展示层隐藏（管理员仲裁时可见审计副本）
          "content": "[消息已撤回]" if m.recalled and not user.is_admin else m.content,
          "recalled": m.recalled,

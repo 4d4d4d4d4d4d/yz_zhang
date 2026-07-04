@@ -82,6 +82,16 @@ class Task(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class City(Base):
+    """GEO-030 城市开通管理：线下任务仅可发布在已开通城市。"""
+
+    __tablename__ = "cities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(50), unique=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
 class Category(Base):
     """OPS-004 任务类目（运营维护）：准入资质与启停。"""
 

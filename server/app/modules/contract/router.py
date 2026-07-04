@@ -82,6 +82,50 @@ def get_contract(
     return _dump(_get(db, contract_id, user), db)
 
 
+@router.get("/{contract_id}/export")
+def export_contract(
+    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """SC-010 合约文本与结算凭证导出（当事人；含全部资金流水与存证哈希）。"""
+    from app.modules.anchor.models import AnchorEntry
+    from app.modules.wallet.models import LedgerEntry
+
+    contract = _get(db, contract_id, user)
+    milestones = (
+        db.query(Milestone).filter(Milestone.contract_id == contract.id).order_by(Milestone.idx).all()
+    )
+    ledger = (
+        db.query(LedgerEntry).filter(LedgerEntry.contract_id == contract.id)
+        .order_by(LedgerEntry.id).all()
+    )
+    anchors = (
+        db.query(AnchorEntry)
+        .filter(AnchorEntry.ref_type == "contract", AnchorEntry.ref_id == contract.id)
+        .order_by(AnchorEntry.seq).all()
+    )
+    lines = [
+        "══════ 服务合约 ══════",
+        contract.terms,
+        f"合约版本: v{contract.version} / 状态: {contract.status}",
+        "",
+        "── 里程碑 ──",
+        *[f"{m.idx}. {m.title}  {m.amount_cents / 100:.2f} 元  [{m.status}]" for m in milestones],
+        "",
+        "── 结算凭证（资金流水） ──",
+        *[f"{e.created_at.isoformat()}  {e.kind}  {e.amount_cents / 100:+.2f} 元  {e.memo}"
+          for e in ledger],
+    ]
+    if anchors:
+        lines += ["", "── 存证记录（SHA256 链） ──",
+                  *[f"#{a.seq} {a.event_type} {a.chain_hash[:16]}…" for a in anchors]]
+    return {
+        "contract_id": contract.id,
+        "text": "\n".join(lines),
+        "ledger_count": len(ledger),
+        "anchor_head": anchors[-1].chain_hash if anchors else None,
+    }
+
+
 # ---------- SC-004 里程碑 ----------
 def _milestone(db: Session, contract: Contract, idx: int) -> Milestone:
     m = (

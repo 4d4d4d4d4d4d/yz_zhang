@@ -26,6 +26,11 @@ class User(Base):
     interests: Mapped[list] = mapped_column(JSON, default=list)
     # ACC-022 职业资质（如 律师/电工），受限类目接单准入
     certifications: Mapped[list] = mapped_column(JSON, default=list)
+    # ACC-030 隐私设置：profile_public=False 时公开名片仅显示昵称与信用
+    privacy: Mapped[dict] = mapped_column(JSON, default=dict)
+    # ACC-013 服务定价（分/次，0=面议）与可接单时间描述
+    service_rate_cents: Mapped[int] = mapped_column(Integer, default=0)
+    available_times: Mapped[str] = mapped_column(String(200), default="")
     # ACC-020 实名认证（模拟 eKYC 通过后置位；接单/提现前强制）
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     real_name: Mapped[str] = mapped_column(String(50), default="")

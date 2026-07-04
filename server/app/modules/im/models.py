@@ -25,6 +25,8 @@ class Message(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     conversation_id: Mapped[int] = mapped_column(Integer, index=True)
     sender_id: Mapped[int] = mapped_column(Integer)
+    # IM-009 消息类型：text 文本 / quote 报价卡（content 存结构化 JSON）
+    kind: Mapped[str] = mapped_column(String(10), default="text")
     content: Mapped[str] = mapped_column(Text)
     # IM-006 风控：命中站外引导/联系方式模式时标记（提示防跳单，不拦截内容本身）
     risk_flagged: Mapped[bool] = mapped_column(Boolean, default=False)

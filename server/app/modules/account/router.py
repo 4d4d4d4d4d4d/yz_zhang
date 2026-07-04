@@ -48,6 +48,9 @@ class ProfileUpdateIn(BaseModel):
     lng: float | None = None
     skills: list[str] | None = None
     interests: list[str] | None = None
+    privacy: dict | None = None
+    service_rate_cents: int | None = None
+    available_times: str | None = None
 
 
 class VerifyIn(BaseModel):
@@ -300,14 +303,25 @@ def public_profile(user_id: int, db: Session = Depends(get_db)):
     user = db.get(User, user_id)
     if not user:
         raise not_found("用户不存在")
-    return {
+    base = {
         "id": user.id,
         "nickname": user.nickname,
+        "is_verified": user.is_verified,
+        "credit_score": user.credit_score,
+        "credit_level": credit_level(user.credit_score),
+        "rating_avg": user.rating_avg,
+        "tasks_completed": user.tasks_completed,
+    }
+    # ACC-030 隐私设置：非公开档案只展示信任摘要
+    if (user.privacy or {}).get("profile_public") is False:
+        return base
+    return {
+        **base,
         "bio": user.bio,
         "city": user.city,
         "skills": user.skills,
-        "is_verified": user.is_verified,
-        "credit_score": user.credit_score,
-        "rating_avg": user.rating_avg,
-        "tasks_completed": user.tasks_completed,
+        "certifications": user.certifications,
+        # ACC-013 服务定价与可接单时间（名片页承接下单）
+        "service_rate_cents": user.service_rate_cents,
+        "available_times": user.available_times,
     }

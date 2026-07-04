@@ -234,6 +234,48 @@ def set_matching_config(
     return {"weights": row.data}
 
 
+# ---------- 城市开通管理（GEO-030） ----------
+class CityIn(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+
+
+@router.post("/admin/cities", status_code=201)
+def open_city(body: CityIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    from app.modules.task.models import City
+
+    existing = db.query(City).filter(City.name == body.name).first()
+    if existing:
+        existing.active = True
+        db.add(existing)
+        return {"id": existing.id, "name": existing.name, "active": True}
+    row = City(name=body.name)
+    db.add(row)
+    db.flush()
+    return {"id": row.id, "name": row.name, "active": True}
+
+
+@router.patch("/admin/cities/{city_id}")
+def toggle_city(
+    city_id: int, active: bool, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+):
+    from app.modules.task.models import City
+
+    row = db.get(City, city_id)
+    if not row:
+        raise not_found("城市不存在")
+    row.active = active
+    db.add(row)
+    return {"id": row.id, "name": row.name, "active": row.active}
+
+
+# ---------- 对账 job（PAY-006） ----------
+@router.post("/admin/jobs/reconcile")
+def run_reconcile(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    from app.modules.risk.service import reconcile
+
+    return reconcile(db)
+
+
 # ---------- 数据看板（OPS-007） ----------
 @router.get("/admin/metrics")
 def metrics(admin: User = Depends(require_admin), db: Session = Depends(get_db)):

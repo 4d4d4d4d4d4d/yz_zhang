@@ -132,7 +132,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
     db.flush()
     # TASK-007 多人任务：母任务为容器（不进广场），生成 N 个名额子任务分别招募
     if body.people_needed > 1:
-        service.validate_publishable(task)
+        service.validate_publishable(task, db)
         per_slot = body.budget_cents // body.people_needed
         if per_slot <= 0:
             raise bad_request("预算不足以拆分名额", "budget_too_small")
@@ -157,7 +157,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
         out["slots"] = [dump_task(s, user) for s in slots]
         return out
     if body.publish_now:
-        service.validate_publishable(task)
+        service.validate_publishable(task, db)
         service.transition(db, task, "published")
     return dump_task(task, user)
 
@@ -167,7 +167,7 @@ def publish_task(task_id: int, user: User = Depends(get_current_user), db: Sessi
     task = _get_task(db, task_id)
     if task.creator_id != user.id:
         raise forbidden()
-    service.validate_publishable(task)
+    service.validate_publishable(task, db)
     service.transition(db, task, "published")
     return dump_task(task, user)
 
@@ -179,6 +179,26 @@ def list_categories(db: Session = Depends(get_db)):
 
     rows = db.query(Category).filter(Category.active.is_(True)).order_by(Category.id).all()
     return [{"id": c.id, "name": c.name, "required_cert": c.required_cert} for c in rows]
+
+
+@router.get("/task-templates")
+def task_templates(category: str, db: Session = Depends(get_db)):
+    """TASK-003 任务模板库：模板 + 同类参考价一并返回。"""
+    from app.modules.knowledge import service as kb
+
+    template = service.TASK_TEMPLATES.get(category)
+    if not template:
+        raise not_found("该类目暂无模板")
+    return {"category": category, **template, "price_reference": kb.price_reference(db, category)}
+
+
+@router.get("/cities")
+def list_cities(db: Session = Depends(get_db)):
+    """GEO-030 已开通城市列表。"""
+    from .models import City
+
+    rows = db.query(City).filter(City.active.is_(True)).order_by(City.id).all()
+    return [{"id": c.id, "name": c.name} for c in rows]
 
 
 # ---------- 广场 / 搜索 / LBS（TASK-040/041, GEO-010/011）----------
@@ -483,14 +503,26 @@ def reject_delivery(
 
 
 def _complete_task(db: Session, task: Task) -> None:
-    """验收通过：放款（SC-005）→ 完成 → 信用更新 → task.completed 事件（经验入库等）。"""
+    """验收通过：放款（SC-005）→ 完成 → 信用更新 → task.completed 事件（经验入库等）。
+
+    RISK-003：同对手方短期高频闭环判定为刷单嫌疑 —— 正常放款（资金无损），
+    但不累计信用与完成单数，并自动生成风控工单进入人审队列。
+    """
+    from app.modules.risk import service as risk
+
     contract = db.query(Contract).filter(Contract.task_id == task.id).first()
     if contract:
         contract_service.release(db, contract)
     task.completed_at = utcnow()
+    suspicious = bool(
+        task.executor_id and risk.is_suspicious_pair(db, task.creator_id, task.executor_id)
+    )
     service.transition(db, task, "completed")
     if task.executor_id:
-        credit.record_task_completed(db, task.executor_id)
+        if suspicious:
+            risk.flag_pair(db, task)
+        else:
+            credit.record_task_completed(db, task.executor_id)
 
 
 @router.post("/tasks/jobs/deadline-alerts")

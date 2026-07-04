@@ -60,6 +60,23 @@ def recommend(db: Session, task, limit: int = 10) -> list[dict]:
         if (task.creator_id, u.id) not in blocked_pairs and (u.id, task.creator_id) not in blocked_pairs
     ]
     weights = get_weights(db)
+    # CIR-010 同圈信任加成：发布者所在圈层的活跃成员集合
+    from app.modules.circle.models import CircleMember
+
+    creator_circles = {
+        m.circle_id
+        for m in db.query(CircleMember).filter(
+            CircleMember.user_id == task.creator_id, CircleMember.status == "active"
+        )
+    }
+    same_circle_users = set()
+    if creator_circles:
+        same_circle_users = {
+            m.user_id
+            for m in db.query(CircleMember).filter(
+                CircleMember.circle_id.in_(creator_circles), CircleMember.status == "active"
+            )
+        }
     scored = []
     for user in candidates:
         skill = _skill_score(task.required_skills, user.skills)
@@ -74,6 +91,9 @@ def recommend(db: Session, task, limit: int = 10) -> list[dict]:
         )
         # MATCH-002 可解释推荐理由
         reasons = []
+        if user.id in same_circle_users:
+            total += 0.05  # CIR-010 同圈信任加成
+            reasons.append("同圈成员")
         if skill >= 0.99:
             reasons.append("技能完全匹配")
         elif skill > 0:

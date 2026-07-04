@@ -1,7 +1,25 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1 + V2 + V3 深度批次完成（2026-07-04）。
-> 后端 92 tests + 前端 19 tests 全绿。剩余项均依赖外部供应商/云服务，见文末。
+> 状态：MVP + V1 + V2 + V3 + V4 全批次完成（2026-07-04）。
+> 后端 104 tests + 前端 19 tests 全绿。剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V4 批次）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| RISK-003 反欺诈（同对手方 7 天 3 单→不计信用+进人审队列） | `risk/service.py` + `task/router.py::_complete_task` | `tests/test_v4_features.py` |
+| PAY-006 对账（守恒/托管有据/冻结有据三不变量，篡改可检出） | `risk/service.py::reconcile` + `/admin/jobs/reconcile` | 同上 |
+| MATCH-003 订阅推送频控（每人每日 5 条） | `matching/events.py` | 同上 |
+| CIR-010 同圈信任加成 + 推荐理由标识 | `matching/service.py` | 同上 |
+| CIR-009 圈层数据面板（成员/帖子/成交/GMV，管理员） | `circle/router.py::circle_stats` | 同上 |
+| IM-009 结构化报价卡消息 | `im/router.py::send_quote_card` | 同上 |
+| ACC-030 隐私设置（非公开档案仅信任摘要） | `account/` | 同上 |
+| ACC-013 服务定价与可接单时间（名片页承接下单） | `account/` | 同上 |
+| KB-003 闭环任务一键生成经验帖（case 卡挂类目与来源） | `content/router.py::create_experience_post` | 同上 |
+| KB-013 估价新鲜度（仅统计近 180 天，过期淘汰） | `knowledge/service.py::price_reference` | 同上 |
+| TASK-003 任务模板库（模板+检查清单+参考价） | `task/service.py::TASK_TEMPLATES` | 同上 |
+| GEO-030 城市开通管理（线下任务城市门禁） | `task/models.py::City` + `admin/router.py` | 同上 |
+| SC-010 合约文本与结算凭证导出（含流水与存证哈希） | `contract/router.py::export_contract` | 同上 |
 
 ## 已实现（V3 批次）
 

@@ -51,10 +51,19 @@ def seed(db: Session) -> None:
 
 
 def price_reference(db: Session, category: str, city: str | None = None) -> dict:
-    """KB-021 估价参考：返回分布而非单点值（可解释性要求）。"""
+    """KB-021 估价参考：返回分布而非单点值（可解释性要求）。
+
+    KB-013 数据新鲜度：仅统计近 180 天闭环数据，过时价格自动淘汰。
+    """
+    from datetime import timedelta
+
+    from app.modules.account.models import utcnow
+
+    freshness_cutoff = utcnow() - timedelta(days=180)
     query = db.query(KnowledgeCard).filter(
         KnowledgeCard.category == category, KnowledgeCard.outcome == "completed",
         KnowledgeCard.price_actual_cents > 0,
+        KnowledgeCard.created_at >= freshness_cutoff,
     )
     if city:
         query = query.filter(KnowledgeCard.city == city)

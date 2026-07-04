@@ -201,6 +201,38 @@ def members(circle_id: int, user: User = Depends(get_current_user), db: Session 
     return out
 
 
+@router.get("/{circle_id}/stats")
+def circle_stats(circle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """CIR-009 圈层数据面板（管理员）。"""
+    circle = db.get(Circle, circle_id)
+    if not circle:
+        raise not_found("圈层不存在")
+    me = active_member(db, circle_id, user.id)
+    if not me or me.role not in ("owner", "admin"):
+        raise forbidden("需圈层管理员权限")
+    from app.modules.content.models import Content
+    from app.modules.task.models import Task
+
+    posts = db.query(Content).filter(
+        Content.circle_id == circle_id, Content.status == "published"
+    ).count()
+    tasks_total = db.query(Task).filter(Task.circle_id == circle_id).count()
+    tasks_completed = db.query(Task).filter(
+        Task.circle_id == circle_id, Task.status == "completed"
+    ).count()
+    gmv = sum(
+        t.budget_cents
+        for t in db.query(Task).filter(Task.circle_id == circle_id, Task.status == "completed")
+    )
+    return {
+        "member_count": circle.member_count,
+        "posts": posts,
+        "tasks_total": tasks_total,
+        "tasks_completed": tasks_completed,
+        "gmv_cents": gmv,
+    }
+
+
 @router.get("/{circle_id}/feed")
 def circle_feed(circle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """CIR-004 圈层内容流（仅成员可见）。"""
