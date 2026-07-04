@@ -110,6 +110,15 @@ export default {
       showcase:  { title: 'ビデオショーケース', sub: '来歴署名付きの映像実績、検証済みメトリクス、スコープ付きトラストリンクで信頼を構築。' },
       immersive: { title: 'イマーシブスイート', sub: 'デジタルヒューマン、多言語ライブ会議、VR 風工場ツアー、現地スペシャリストによる実地調査。' },
       trust:     { title: 'トラストセンター', sub: '地域別ポスチャー、未解決リスク、ドキュメントリポジトリ、AI リスクレビュー。' }
+    },
+    tabs: {
+      recommend: { inputs: '入力 · ランキング', agents: 'エージェント基盤', registry: 'モデル登録 · カナリア', bandit: 'ライブ Bandit', features: 'フィーチャーストア', experiments: '実験管理' },
+      marketing: { overview: '概要', control: 'キャンペーン · A/B · 地域', attribution: 'アトリビューション', audience: 'オーディエンス作成', retention: 'コホート維持率', forecast: 'What-if 予測' },
+      partners:  { network: 'ネットワーク情報', pipeline: 'パイプライン', intel: 'アカウント情報', outreach: 'アウトリーチ', forecast: '売上予測', territory: 'テリトリー · 目標' },
+      deals:     { room: 'ディールルーム', playbook: 'プレイブック · ZOPA', workflow: '承認フロー', library: '条項ライブラリ', obligations: '義務トラッカー', analytics: '契約アナリティクス' },
+      showcase:  { gallery: '映像ショーケース', links: 'トラストリンク', verification: '検証キュー', pipeline: '成約準備度' },
+      immersive: { avatar: 'デジタルヒューマン', meeting: 'イマーシブ会議', tour: '工場バーチャル見学', field: '実地調査' },
+      trust:     { posture: 'ポスチャー', controls: 'コントロール · DSR', heatmap: 'リスクヒートマップ', dpia: 'DPIA ワークフロー', audit: '監査ルーム', policies: 'ポリシー · 研修' }
     }
   },
   footer: {

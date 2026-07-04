@@ -110,6 +110,15 @@ export default {
       showcase:  { title: 'Showcase de vídeo', sub: 'Trabajos con procedencia firmada, métricas verificadas y trust links con alcance controlado.' },
       immersive: { title: 'Suite inmersiva', sub: 'Presentadores digitales, reuniones multilingües en vivo, tours VR de fábrica y verificación en terreno.' },
       trust:     { title: 'Trust Center', sub: 'Postura por mercado, riesgos activos, repositorio de documentos y revisión IA.' }
+    },
+    tabs: {
+      recommend: { inputs: 'Inputs · ranking', agents: 'Pipeline de agentes', registry: 'Registro de modelos · canary', bandit: 'Bandit en vivo', features: 'Feature store', experiments: 'Experimentos' },
+      marketing: { overview: 'Resumen', control: 'Campañas · A/B · geo', attribution: 'Atribución', audience: 'Creador de audiencias', retention: 'Retención por cohortes', forecast: 'Pronóstico what-if' },
+      partners:  { network: 'Perfil de red', pipeline: 'Tablero de pipeline', intel: 'Intel de cuentas', outreach: 'Cadencia de outreach', forecast: 'Pronóstico de ventas', territory: 'Territorio · cuota' },
+      deals:     { room: 'Sala de deal', playbook: 'Playbook · ZOPA · redline', workflow: 'Flujo de aprobación', library: 'Biblioteca de cláusulas', obligations: 'Obligaciones', analytics: 'Analítica CLM' },
+      showcase:  { gallery: 'Showcase de vídeo', links: 'Trust links', verification: 'Cola de verificación', pipeline: 'Preparación del deal' },
+      immersive: { avatar: 'Estudio de humano digital', meeting: 'Reunión inmersiva', tour: 'Tour virtual de fábrica', field: 'Verificación en terreno' },
+      trust:     { posture: 'Postura', controls: 'Controles · DSR', heatmap: 'Mapa de riesgos', dpia: 'Flujo DPIA', audit: 'Sala de auditoría', policies: 'Políticas · formación' }
     }
   },
   footer: {

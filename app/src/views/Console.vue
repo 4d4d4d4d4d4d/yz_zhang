@@ -59,74 +59,74 @@ const sections = [
   {
     key: 'recommend', icon: '🧠',
     sub: [
-      { v: 'inputs',     label: 'Inputs · ranking',         comp: RecommendDeep },
-      { v: 'agents',     label: 'Agent pipeline',           comp: RecommendAdvanced },
-      { v: 'registry',   label: 'Model registry · canary',  comp: ModelRegistry },
-      { v: 'bandit',     label: 'Live bandit',              comp: BanditExplorer },
-      { v: 'features',   label: 'Feature store',            comp: FeatureStore },
-      { v: 'experiments',label: 'Experiments',              comp: ExperimentManager }
+      { v: 'inputs', comp: RecommendDeep },
+      { v: 'agents', comp: RecommendAdvanced },
+      { v: 'registry', comp: ModelRegistry },
+      { v: 'bandit', comp: BanditExplorer },
+      { v: 'features', comp: FeatureStore },
+      { v: 'experiments', comp: ExperimentManager }
     ]
   },
   {
     key: 'marketing', icon: '📈',
     sub: [
-      { v: 'overview',    label: 'Overview',              comp: MarketingHub },
-      { v: 'control',     label: 'Campaigns · A/B · geo', comp: MarketingControl },
-      { v: 'attribution', label: 'Attribution',           comp: AttributionWaterfall },
-      { v: 'audience',    label: 'Audience builder',      comp: AudienceBuilder },
-      { v: 'retention',   label: 'Cohort retention',      comp: CohortRetention },
-      { v: 'forecast',    label: 'What-if forecast',      comp: ForecastSim }
+      { v: 'overview', comp: MarketingHub },
+      { v: 'control', comp: MarketingControl },
+      { v: 'attribution', comp: AttributionWaterfall },
+      { v: 'audience', comp: AudienceBuilder },
+      { v: 'retention', comp: CohortRetention },
+      { v: 'forecast', comp: ForecastSim }
     ]
   },
   {
     key: 'partners', icon: '🤝',
     sub: [
-      { v: 'network',  label: 'Network profile', comp: BusinessMatchHub },
-      { v: 'pipeline', label: 'Pipeline board',  comp: PipelineBoard },
-      { v: 'intel',    label: 'Account intel',   comp: AccountIntel },
-      { v: 'outreach', label: 'Outreach cadence',comp: OutreachSequence },
-      { v: 'forecast', label: 'Sales forecast',  comp: SalesForecast },
-      { v: 'territory',label: 'Territory · quota', comp: TerritoryQuota }
+      { v: 'network', comp: BusinessMatchHub },
+      { v: 'pipeline', comp: PipelineBoard },
+      { v: 'intel', comp: AccountIntel },
+      { v: 'outreach', comp: OutreachSequence },
+      { v: 'forecast', comp: SalesForecast },
+      { v: 'territory', comp: TerritoryQuota }
     ]
   },
   {
     key: 'deals', icon: '📝',
     sub: [
-      { v: 'room',         label: 'Deal room',                comp: DealRoom },
-      { v: 'playbook',     label: 'Playbook · ZOPA · redline',comp: NegotiationPlaybook },
-      { v: 'workflow',     label: 'Approval workflow',        comp: ApprovalFlow },
-      { v: 'library',      label: 'Clause library',           comp: ClauseLibrary },
-      { v: 'obligations',  label: 'Obligations',              comp: ObligationTracker },
-      { v: 'analytics',    label: 'CLM analytics',            comp: ContractAnalytics }
+      { v: 'room', comp: DealRoom },
+      { v: 'playbook', comp: NegotiationPlaybook },
+      { v: 'workflow', comp: ApprovalFlow },
+      { v: 'library', comp: ClauseLibrary },
+      { v: 'obligations', comp: ObligationTracker },
+      { v: 'analytics', comp: ContractAnalytics }
     ]
   },
   {
     key: 'showcase', icon: '🎬',
     sub: [
-      { v: 'gallery',      label: 'Video showcase',        comp: ShowcaseGallery },
-      { v: 'links',        label: 'Trust links',           comp: TrustLinkBuilder },
-      { v: 'verification', label: 'Verification queue',    comp: VerificationQueue },
-      { v: 'pipeline',     label: 'Deal readiness',        comp: TrustPipeline }
+      { v: 'gallery', comp: ShowcaseGallery },
+      { v: 'links', comp: TrustLinkBuilder },
+      { v: 'verification', comp: VerificationQueue },
+      { v: 'pipeline', comp: TrustPipeline }
     ]
   },
   {
     key: 'immersive', icon: '🕶',
     sub: [
-      { v: 'avatar',  label: 'Digital human studio',  comp: AvatarStudio },
-      { v: 'meeting', label: 'Immersive meeting',     comp: ImmersiveMeeting },
-      { v: 'tour',    label: 'Virtual factory tour',  comp: VirtualTour },
-      { v: 'field',   label: 'Field verification',    comp: FieldVerification }
+      { v: 'avatar', comp: AvatarStudio },
+      { v: 'meeting', comp: ImmersiveMeeting },
+      { v: 'tour', comp: VirtualTour },
+      { v: 'field', comp: FieldVerification }
     ]
   },
   {
     key: 'trust', icon: '🛡',
     sub: [
-      { v: 'posture',  label: 'Posture',         comp: TrustCenter },
-      { v: 'controls', label: 'Controls · DSR',  comp: ControlsRegister },
-      { v: 'heatmap',  label: 'Risk heatmap',    comp: RiskHeatmap },
-      { v: 'dpia',     label: 'DPIA workflow',   comp: DPIAWorkflow },
-      { v: 'audit',    label: 'Audit room',      comp: AuditRoom },
-      { v: 'policies', label: 'Policies · training', comp: PolicyManagement }
+      { v: 'posture', comp: TrustCenter },
+      { v: 'controls', comp: ControlsRegister },
+      { v: 'heatmap', comp: RiskHeatmap },
+      { v: 'dpia', comp: DPIAWorkflow },
+      { v: 'audit', comp: AuditRoom },
+      { v: 'policies', comp: PolicyManagement }
     ]
   }
 ]
@@ -136,7 +136,7 @@ const active = computed(() => sections.find(s => s.key === route.params.tab) || 
 const subTab = ref(active.value.sub[0].v)
 watch(() => active.value.key, () => { subTab.value = active.value.sub[0].v })
 
-const subTabs = computed(() => active.value.sub.map(s => ({ v: s.v, label: s.label })))
+const subTabs = computed(() => active.value.sub.map(s => ({ v: s.v, label: t(`console.tabs.${active.value.key}.${s.v}`) })))
 const activeComp = computed(() => active.value.sub.find(s => s.v === subTab.value)?.comp)
 </script>
 
