@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { invoice } from '../logic/metering.js'
 
 const tenants = [
   { id: 'lumi',     name: 'Lumi DTC',           plan: 'Enterprise', mrr: 9800 },
@@ -39,13 +40,12 @@ const meters = {
 
 const curMeters = computed(() => meters[tenant.value])
 const baseFee = computed(() => ({ Enterprise: 5000, Growth: 999, Starter: 0 }[cur.value.plan]))
-const usageCost = computed(() => curMeters.value.reduce((s, m) => s + m.cost, 0))
-const overageCost = computed(() => curMeters.value.reduce((s, m) => {
-  if (m.used <= m.included) return s
-  const ratio = (m.used - m.included) / m.included
-  return s + Math.round(m.cost * ratio * 0.4)
-}, 0))
-const total = computed(() => baseFee.value + usageCost.value)
+// Spec-15 metering engine — invoice total includes the overage premium
+// (R1 correction: the inline version left overage out of the total).
+const inv = computed(() => invoice(baseFee.value, curMeters.value))
+const usageCost = computed(() => inv.value.usage)
+const overageCost = computed(() => inv.value.overage)
+const total = computed(() => inv.value.total)
 const dayOfMonth = 22, daysInMonth = 30
 
 const trend = computed(() => {

@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { priceQuote, approvalFor } from '../logic/cpq.js'
 
 const catalog = [
   { id: 'platform-ent', name: 'Platform · Enterprise', kind: 'subscription', list: 5000, cost: 1100, unit: 'mo' },
@@ -21,34 +22,19 @@ const lines = ref([
 
 const customer = ref({ name: 'Lumen Studios K.K.', term: 12, currency: 'USD' })
 
-const enriched = computed(() => lines.value.map(l => {
-  const p = catalog.find(c => c.id === l.sku)
-  const gross = p.list * l.qty
-  const disc = gross * l.discount / 100
-  const net = gross - disc
-  const cost = p.cost * l.qty
-  const margin = ((net - cost) / net) * 100
-  return { ...l, product: p, gross, disc, net, cost, margin: isFinite(margin) ? margin : 0 }
-}))
-
-const total = computed(() => enriched.value.reduce((s, l) => s + l.net, 0))
-const totalDisc = computed(() => enriched.value.reduce((s, l) => s + l.disc, 0))
-const totalCost = computed(() => enriched.value.reduce((s, l) => s + l.cost, 0))
-const blendedMargin = computed(() => total.value ? ((total.value - totalCost.value) / total.value * 100) : 0)
-const totalGross = computed(() => total.value + totalDisc.value)
-const blendedDisc = computed(() => totalGross.value ? totalDisc.value / totalGross.value * 100 : 0)
+// Spec-15 CPQ engine
+const quote = computed(() => priceQuote(lines.value, catalog))
+const enriched = computed(() => quote.value.lines)
+const total = computed(() => quote.value.totals.net)
+const totalDisc = computed(() => quote.value.totals.discount)
+const totalGross = computed(() => quote.value.totals.gross)
+const blendedMargin = computed(() => quote.value.totals.blendedMargin)
+const blendedDisc = computed(() => quote.value.totals.blendedDiscount)
 
 function addLine() { lines.value.push({ sku: 'seat', qty: 1, discount: 0 }) }
 function removeLine(i) { lines.value.splice(i, 1) }
 
-const approvalLevel = computed(() => {
-  const d = blendedDisc.value
-  if (d <= 5) return { level: 'Auto-approved', who: 'Self-serve', color: 'ok' }
-  if (d <= 15) return { level: 'Sales Manager', who: 'AM\'s manager', color: 'warn' }
-  if (d <= 25) return { level: 'VP Sales', who: 'CRO', color: 'risk' }
-  return { level: 'CFO + CEO', who: 'Exec committee', color: 'risk' }
-})
-
+const approvalLevel = computed(() => approvalFor(blendedDisc.value))
 const marginAlert = computed(() => blendedMargin.value < 50)
 </script>
 

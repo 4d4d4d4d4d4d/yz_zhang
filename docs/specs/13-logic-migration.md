@@ -58,7 +58,12 @@ multi-armed bandit inside `BanditExplorer.vue`.
 - ~~`RenderStudio.vue` render-plan builder → `logic/render.js`~~ (R2, done)
 - ~~`PartnerMatcher.vue` (marketing site) → reuse `logic/matching.js`~~ (R3, done)
 - ~~`ForecastSim.vue` what-if model → `logic/forecast.js`~~ (R4, done)
-- Queue empty — remaining console modules carry only presentation logic.
+- ~~`CPQEditor` / `RevenueRecognition` / `UsageMetering` (merged from the
+  parallel base branch) → `logic/cpq.js`, `logic/revrec.js`,
+  `logic/metering.js`~~ (spec 15, done)
+- Watchlist (presentation-dominant today; extract if their math grows):
+  `PersonalizationDash`, `RevenueDashboard`, `OrderBook`,
+  `MarketplaceCommission`, `UpsellEngine`, `CustomerHealth`, `SupportSLA`.
 
 ## Review record — R1
 - ✅ RNG injection made a hard policy rule (rule 2) — the whole point of
