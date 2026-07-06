@@ -25,6 +25,7 @@ the test assertions.
 | 14 | [Localization Completeness & Message Safety](14-i18n-completeness.md) | `i18n/locales/*` (`console.tabs`) | `tests/i18n.test.js` |
 | 15 | [Quote-to-Cash: CPQ · Rev-Rec · Metering](15-quote-to-cash.md) | `logic/cpq.js`, `logic/revrec.js`, `logic/metering.js` | `tests/quoteToCash.test.js` |
 | 16 | [Customer Success: Health · Churn · SLA](16-customer-success.md) | `logic/customerSuccess.js` | `tests/customerSuccess.test.js` |
+| 17 | [Marketplace Commission (+ queue close-out)](17-commission.md) | `logic/commission.js` | `tests/commission.test.js` |
 
 Capability flow across domains:
 

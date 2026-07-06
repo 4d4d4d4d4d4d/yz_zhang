@@ -64,9 +64,12 @@ multi-armed bandit inside `BanditExplorer.vue`.
 - ~~`CustomerHealth` (health score + churn) / `SupportSLA` (breach math)
   → `logic/customerSuccess.js`~~ (spec 16, done — these were misfiled on
   the watchlist; audit caught it).
-- Watchlist (audited presentation-dominant; extract if their math grows):
-  `PersonalizationDash`, `RevenueDashboard`, `OrderBook`,
-  `MarketplaceCommission`, `UpsellEngine`.
+- ~~`MarketplaceCommission` (tier commission + cap gap) →
+  `logic/commission.js`~~ (spec 17, done).
+- **Queue CLOSED** (spec 17): remaining `PersonalizationDash`,
+  `RevenueDashboard`, `OrderBook`, `UpsellEngine` audited as genuinely
+  presentation-only (hardcoded data + filter/reduce/chart-geometry, no
+  algorithm). See spec 17's audit table. Re-opens only on external merges.
 
 ## Review record — R1
 - ✅ RNG injection made a hard policy rule (rule 2) — the whole point of
