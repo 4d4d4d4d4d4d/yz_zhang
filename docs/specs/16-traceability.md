@@ -1,7 +1,21 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1 + V2 + V3 + V4 全批次完成（2026-07-04）。
-> 后端 104 tests + 前端 19 tests 全绿。剩余项均依赖外部供应商/云服务，见文末。
+> 状态：MVP + V1~V6 全批次完成（2026-07-04）。
+> 后端 109 tests + 前端 20 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V6 批次：真实 LLM 网关 + 供需看板 + 演示数据）
+
+| 项 | 实现 | 测试 |
+|---|---|---|
+| 04.E 真实 LLM 网关 AnthropicLLM（claude-opus-4-8 + adaptive thinking + JSON Schema 结构化输出） | `server/app/modules/decompose/llm.py` | `tests/test_llm_gateway.py`（mock SDK） |
+| 04.E 降级路径（无 Key/超时/输出不合规 → 自动回落模板引擎，预算守恒兜底） | `llm.py::AnthropicLLM.decompose` | 同上（三条降级/校验用例） |
+| KB-024 类目供需看板（在招需求/闭环数/GMV/供给/供需比） | `knowledge/router.py::category_demand` | 同上 |
+| 演示数据脚本（一键生成可交互样例：用户/任务/闭环/圈层/动态） | `server/scripts/seed_demo.py` | 运行验证 |
+
+> LLM 网关设计：`ANTHROPIC_API_KEY` 存在即启用真实模型；缺省与 CI 环境走
+> `TemplateLLM`，测试用 `unittest.mock` 打桩 SDK，全程离线可跑。接入真实模型
+> 不改任何业务代码——`get_gateway()` 抽象层已就位。
 
 ## 已实现（V5 批次：前端覆盖补齐 + 工程化交付）
 

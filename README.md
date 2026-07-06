@@ -14,7 +14,7 @@ server/           # 后端：FastAPI 模块化单体（Python 3.11+）
   app/core/       #   配置/DB/安全/事件总线/依赖
   app/modules/    #   account task matching contract wallet decompose knowledge
                   #   im dispute notification support content circle legal admin search anchor risk
-  tests/          #   104 个测试（含端到端闭环+对账不变量+存证链篡改检测）
+  tests/          #   109 个测试（含端到端闭环+对账不变量+存证链篡改检测+LLM网关mock）
 packages/core/    # 共享 TS SDK（Web/App 复用，12 tests）
 web/              # Web 前端：React + Vite（6 tests，含管理后台）
 app/              # App：React Native / Expo 骨架
@@ -62,5 +62,9 @@ npm run dev:web   # http://localhost:5173（代理 /api 到 8000）
 - **事件总线**：进程内领域事件（`task.completed`、`contract.funded`…）驱动
   经验入库、后继子任务发布、会话创建、通知，生产可平滑替换为 MQ。
 - **资金**：整数分记账、只增流水、三态账本（可用/托管/冻结）、E2E 资金守恒断言。
-- **LLM 网关**：`decompose/llm.py` 抽象接口 + 模板实现，接真实模型不动业务代码。
+- **LLM 网关**：`decompose/llm.py` 抽象接口 + 模板实现 + 真实 `AnthropicLLM`
+  （claude-opus-4-8，adaptive thinking，JSON Schema 结构化输出）。设 `ANTHROPIC_API_KEY`
+  即启用真实分解，失败自动降级模板；缺省与 CI 走模板引擎，接入不动业务代码。
+- **演示数据**：`cd server && python -m scripts.seed_demo` 一键生成可交互样例
+  （用户/任务/闭环/圈层/动态；密码 `pass123456`）。
 - **可解释推荐**：技能/信用/距离/评价加权，返回推荐理由。
