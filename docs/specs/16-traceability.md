@@ -1,8 +1,18 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V8 全批次完成（2026-07-04）。
-> 后端 134 tests + 前端 20 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V10 全批次完成（2026-07-06）。
+> 后端 141 tests + 前端 20 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V10 批次：并发/重复提交防重放硬化）
+
+| Spec 安全不变量 | 测试 | 说明 |
+|---|---|---|
+| 14.6 一任务一合约（重复接受报名/并发接单不产生第二份合约） | `tests/test_concurrency_guards.py` | 重复接受同一/不同报名均被 `not_recruiting` 拒绝；DB 层 `contracts.task_id UNIQUE` 为最后防线 |
+| 05.B 托管资金只扣一次（重复 fund） | 同上 | 第二次 fund 命中 `not_fundable`，托管额恒等于合约金额 |
+| 03.A 交付幂等（重复 deliver） | 同上 | 二次交付被状态机 `invalid_transition` 拒绝 |
+| 05.B 放款不重复（重复验收/重复里程碑验收） | 同上 | 二次验收命中 `not_releasable`/`invalid_milestone_state`，执行者余额不二次增加；get_db 异常整体回滚保证零副作用 |
+| MATCH 报名去重（重复报名） | 同上 | 第二次报名 `already_applied`，仅一条报名记录 |
 
 ## 已实现（V9 批次：核心不变量测试硬化）
 
