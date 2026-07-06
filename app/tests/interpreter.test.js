@@ -28,6 +28,21 @@ describe('applyGlossary', () => {
     const r = applyGlossary('plain text', [], 'zh')
     expect(r).toEqual({ text: 'plain text', protected: [] })
   })
+
+  it('skips malformed entries and missing target translations (guard branches)', () => {
+    const g = [
+      { keep: true },                                   // no term → skipped
+      { term: 'foo' },                                  // no translation for target, not keep → skipped
+      { term: 'trust link', translations: { de: 'X' } } // no zh translation → skipped
+    ]
+    const r = applyGlossary('foo trust link', g, 'zh')
+    expect(r.text).toBe('foo trust link')
+    expect(r.protected).toEqual([])
+  })
+
+  it('null/undefined text is coerced, not thrown', () => {
+    expect(applyGlossary(undefined, [], 'en').text).toBe('')
+  })
 })
 
 describe('pairLatencyMs', () => {
@@ -52,6 +67,10 @@ describe('routeCaption', () => {
     const caps = routeCaption({ speakerId: 'a', lang: 'zh', text: '你好' }, session)
     expect(caps).toHaveLength(3)
     expect(caps.map(c => c.to)).toEqual(['b', 'c', 'd'])
+  })
+
+  it('tolerates a session with no participants (guard)', () => {
+    expect(routeCaption({ speakerId: 'x', lang: 'en', text: 'hi' }, {})).toEqual([])
   })
 
   it('same-language listeners get verbatim with zero latency', () => {

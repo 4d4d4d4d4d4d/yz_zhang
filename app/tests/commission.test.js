@@ -17,10 +17,14 @@ describe('parseCap', () => {
   it('parses ∞, k, m, numbers and garbage', () => {
     expect(parseCap('∞')).toBe(Infinity)
     expect(parseCap(null)).toBe(Infinity)
+    expect(parseCap(undefined)).toBe(Infinity)
     expect(parseCap('$500k')).toBe(500000)
     expect(parseCap('$1.2m')).toBe(1200000)
     expect(parseCap('$50k')).toBe(50000)
+    expect(parseCap('750')).toBe(750)         // bare number, no suffix
     expect(parseCap(250000)).toBe(250000)
+    expect(parseCap(Infinity)).toBe(Infinity) // non-finite number guard
+    expect(parseCap(NaN)).toBe(Infinity)
     expect(parseCap('nonsense')).toBe(Infinity) // fail-open to no cap
   })
 })
@@ -57,8 +61,9 @@ describe('blendedRate', () => {
     expect(blendedRate(TIERS)).toBe(Math.round(comm / 4144000 * 10000) / 100)
   })
 
-  it('is zero-safe on empty tiers', () => {
+  it('is zero-safe on empty or zero-GMV tiers', () => {
     expect(blendedRate([])).toBe(0)
+    expect(blendedRate([{ name: 'X', rate: 10, cap: '∞', gmv: 0 }])).toBe(0)
   })
 })
 
