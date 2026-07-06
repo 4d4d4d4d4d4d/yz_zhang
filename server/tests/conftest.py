@@ -13,8 +13,11 @@ from app.main import create_app
 
 @pytest.fixture()
 def client():
+    from app.core.ratelimit import reset
+
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+    reset()  # 限流计数器进程级，测试间清空
     app = create_app()
     with TestClient(app) as c:
         yield c

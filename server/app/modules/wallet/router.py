@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.deps import get_current_user, require_verified
+from app.core.idempotency import replay_or_run
 from app.modules.account.models import User
 
 from . import service
@@ -27,17 +28,32 @@ def get_wallet(user: User = Depends(get_current_user), db: Session = Depends(get
 
 
 @router.post("/topup")
-def topup(body: AmountIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """PAY-001 支付通道的开发模拟：直接入账。生产接微信/支付宝回调。"""
-    acct = service.topup(db, user.id, body.amount_cents)
-    return {"available_cents": acct.available_cents}
+def topup(
+    body: AmountIn, user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    idempotency_key: str = Header(default=""),
+):
+    """PAY-001 支付通道的开发模拟：直接入账。生产接微信/支付宝回调。
+
+    资金操作强制幂等（14.6/05.B）：同一 Idempotency-Key 重复提交只入账一次。
+    """
+    def run():
+        acct = service.topup(db, user.id, body.amount_cents)
+        return {"available_cents": acct.available_cents}
+
+    return replay_or_run(db, user.id, idempotency_key or None, "wallet.topup", run)
 
 
 @router.post("/withdraw")
-def withdraw(body: AmountIn, user: User = Depends(require_verified), db: Session = Depends(get_db)):
-    """PAY-004 提现：实名后可提（模拟 T+0 到账）。"""
-    acct = service.withdraw(db, user.id, body.amount_cents)
-    return {"available_cents": acct.available_cents}
+def withdraw(
+    body: AmountIn, user: User = Depends(require_verified), db: Session = Depends(get_db),
+    idempotency_key: str = Header(default=""),
+):
+    """PAY-004 提现：实名后可提（模拟 T+0 到账）。幂等防重复提现。"""
+    def run():
+        acct = service.withdraw(db, user.id, body.amount_cents)
+        return {"available_cents": acct.available_cents}
+
+    return replay_or_run(db, user.id, idempotency_key or None, "wallet.withdraw", run)
 
 
 @router.get("/ledger")

@@ -89,6 +89,10 @@ def _me(user: User) -> dict:
 # ---------- auth (ACC-001/002) ----------
 @router.post("/auth/register", status_code=201)
 def register(body: RegisterIn, db: Session = Depends(get_db), user_agent: str = Header(default="")):
+    # ACC-001 防刷：同手机号 60s 内注册尝试限流
+    from app.core.ratelimit import check
+
+    check(f"register:{body.phone}", limit=3, window_seconds=60)
     if body.sms_code != settings.DEV_SMS_CODE:
         raise bad_request("验证码错误", "sms_code_invalid")
     if db.query(User).filter(User.phone == body.phone).first():
@@ -121,6 +125,9 @@ def login(body: LoginIn, db: Session = Depends(get_db), user_agent: str = Header
 @router.post("/auth/login-sms")
 def login_sms(body: SmsLoginIn, db: Session = Depends(get_db), user_agent: str = Header(default="")):
     """验证码登录，未注册自动注册（ACC-001）。"""
+    from app.core.ratelimit import check
+
+    check(f"login-sms:{body.phone}", limit=5, window_seconds=60)  # 60s 防刷
     if body.sms_code != settings.DEV_SMS_CODE:
         raise bad_request("验证码错误", "sms_code_invalid")
     user = db.query(User).filter(User.phone == body.phone).first()
