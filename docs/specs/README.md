@@ -27,6 +27,7 @@ the test assertions.
 | 16 | [Customer Success: Health · Churn · SLA](16-customer-success.md) | `logic/customerSuccess.js` | `tests/customerSuccess.test.js` |
 | 17 | [Marketplace Commission (+ queue close-out)](17-commission.md) | `logic/commission.js` | `tests/commission.test.js` |
 | 18 | [Logic-Layer Coverage Gate](18-coverage-gate.md) | `vite.config.js`, `.github/workflows/ci.yml` | enforced on the whole `tests/` suite |
+| 19 | [Cross-Domain Contract Tests](19-cross-domain-contracts.md) | composes 01/05/06/10/11 | `tests/integration.pipeline.test.js` |
 
 Capability flow across domains:
 
