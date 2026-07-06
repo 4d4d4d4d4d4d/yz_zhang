@@ -8,16 +8,11 @@ import es from '../src/i18n/locales/es.js'
 
 const CATALOGS = { en, zh, ja, es }
 
-// Mirror of Console.vue's section registry (spec 14: drift fails the test).
-const CONSOLE_SECTIONS = {
-  recommend: ['inputs', 'agents', 'registry', 'bandit', 'features', 'experiments', 'metering', 'tenant'],
-  marketing: ['overview', 'control', 'attribution', 'audience', 'retention', 'forecast', 'revenue', 'upsell'],
-  partners:  ['network', 'pipeline', 'intel', 'outreach', 'forecast', 'territory', 'orders', 'commission'],
-  deals:     ['room', 'playbook', 'workflow', 'library', 'obligations', 'analytics', 'cpq', 'revrec'],
-  showcase:  ['gallery', 'links', 'verification', 'pipeline'],
-  immersive: ['avatar', 'meeting', 'tour', 'field'],
-  trust:     ['posture', 'controls', 'heatmap', 'dpia', 'audit', 'policies', 'health', 'support']
-}
+// Spec 20: derive from the SINGLE-SOURCE registry, not a hand-mirror —
+// adding a section now automatically requires its i18n keys, checked
+// against the real Console.vue structure.
+import { SECTIONS } from '../src/console/registry.js'
+const CONSOLE_SECTIONS = Object.fromEntries(SECTIONS.map(s => [s.key, s.subs]))
 
 function flattenKeys(obj, prefix = '') {
   const keys = []

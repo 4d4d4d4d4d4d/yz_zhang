@@ -28,6 +28,7 @@ the test assertions.
 | 17 | [Marketplace Commission (+ queue close-out)](17-commission.md) | `logic/commission.js` | `tests/commission.test.js` |
 | 18 | [Logic-Layer Coverage Gate](18-coverage-gate.md) | `vite.config.js`, `.github/workflows/ci.yml` | enforced on the whole `tests/` suite |
 | 19 | [Cross-Domain Contract Tests](19-cross-domain-contracts.md) | composes 01/05/06/10/11 | `tests/integration.pipeline.test.js` |
+| 20 | [Single-Source Console Registry](20-console-registry.md) | `src/console/registry.js` | `tests/registry.test.js` (+ drives `tests/i18n.test.js`) |
 
 Capability flow across domains:
 

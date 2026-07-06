@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { SECTIONS } from '../console/registry.js'
 
 import SecurityRibbon  from '../components/SecurityRibbon.vue'
 import SubTabs         from '../components/SubTabs.vue'
@@ -65,91 +66,40 @@ import SupportSLA       from '../components/SupportSLA.vue'
 const { t } = useI18n()
 const route = useRoute()
 
-const sections = [
-  {
-    key: 'recommend', icon: '🧠',
-    sub: [
-      { v: 'inputs', comp: RecommendDeep },
-      { v: 'agents', comp: RecommendAdvanced },
-      { v: 'registry', comp: ModelRegistry },
-      { v: 'bandit', comp: BanditExplorer },
-      { v: 'features', comp: FeatureStore },
-      { v: 'experiments', comp: ExperimentManager },
-      { v: 'metering', comp: UsageMetering },
-      { v: 'tenant', comp: PersonalizationDash }
-    ]
-  },
-  {
-    key: 'marketing', icon: '📈',
-    sub: [
-      { v: 'overview', comp: MarketingHub },
-      { v: 'control', comp: MarketingControl },
-      { v: 'attribution', comp: AttributionWaterfall },
-      { v: 'audience', comp: AudienceBuilder },
-      { v: 'retention', comp: CohortRetention },
-      { v: 'forecast', comp: ForecastSim },
-      { v: 'revenue', comp: RevenueDashboard },
-      { v: 'upsell', comp: UpsellEngine }
-    ]
-  },
-  {
-    key: 'partners', icon: '🤝',
-    sub: [
-      { v: 'network', comp: BusinessMatchHub },
-      { v: 'pipeline', comp: PipelineBoard },
-      { v: 'intel', comp: AccountIntel },
-      { v: 'outreach', comp: OutreachSequence },
-      { v: 'forecast', comp: SalesForecast },
-      { v: 'territory', comp: TerritoryQuota },
-      { v: 'orders', comp: OrderBook },
-      { v: 'commission', comp: MarketplaceCommission }
-    ]
-  },
-  {
-    key: 'deals', icon: '📝',
-    sub: [
-      { v: 'room', comp: DealRoom },
-      { v: 'playbook', comp: NegotiationPlaybook },
-      { v: 'workflow', comp: ApprovalFlow },
-      { v: 'library', comp: ClauseLibrary },
-      { v: 'obligations', comp: ObligationTracker },
-      { v: 'analytics', comp: ContractAnalytics },
-      { v: 'cpq', comp: CPQEditor },
-      { v: 'revrec', comp: RevenueRecognition }
-    ]
-  },
-  {
-    key: 'showcase', icon: '🎬',
-    sub: [
-      { v: 'gallery', comp: ShowcaseGallery },
-      { v: 'links', comp: TrustLinkBuilder },
-      { v: 'verification', comp: VerificationQueue },
-      { v: 'pipeline', comp: TrustPipeline }
-    ]
-  },
-  {
-    key: 'immersive', icon: '🕶',
-    sub: [
-      { v: 'avatar', comp: AvatarStudio },
-      { v: 'meeting', comp: ImmersiveMeeting },
-      { v: 'tour', comp: VirtualTour },
-      { v: 'field', comp: FieldVerification }
-    ]
-  },
-  {
-    key: 'trust', icon: '🛡',
-    sub: [
-      { v: 'posture', comp: TrustCenter },
-      { v: 'controls', comp: ControlsRegister },
-      { v: 'heatmap', comp: RiskHeatmap },
-      { v: 'dpia', comp: DPIAWorkflow },
-      { v: 'audit', comp: AuditRoom },
-      { v: 'policies', comp: PolicyManagement },
-      { v: 'health', comp: CustomerHealth },
-      { v: 'support', comp: SupportSLA }
-    ]
-  }
-]
+// Component wiring stays in the view (it imports .vue files); the
+// structure (keys, order, sub list) comes from the single-source
+// registry (spec 20). Keyed by `section/sub`.
+const COMPONENTS = {
+  'recommend/inputs': RecommendDeep, 'recommend/agents': RecommendAdvanced, 'recommend/registry': ModelRegistry,
+  'recommend/bandit': BanditExplorer, 'recommend/features': FeatureStore, 'recommend/experiments': ExperimentManager,
+  'recommend/metering': UsageMetering, 'recommend/tenant': PersonalizationDash,
+  'marketing/overview': MarketingHub, 'marketing/control': MarketingControl, 'marketing/attribution': AttributionWaterfall,
+  'marketing/audience': AudienceBuilder, 'marketing/retention': CohortRetention, 'marketing/forecast': ForecastSim,
+  'marketing/revenue': RevenueDashboard, 'marketing/upsell': UpsellEngine,
+  'partners/network': BusinessMatchHub, 'partners/pipeline': PipelineBoard, 'partners/intel': AccountIntel,
+  'partners/outreach': OutreachSequence, 'partners/forecast': SalesForecast, 'partners/territory': TerritoryQuota,
+  'partners/orders': OrderBook, 'partners/commission': MarketplaceCommission,
+  'deals/room': DealRoom, 'deals/playbook': NegotiationPlaybook, 'deals/workflow': ApprovalFlow,
+  'deals/library': ClauseLibrary, 'deals/obligations': ObligationTracker, 'deals/analytics': ContractAnalytics,
+  'deals/cpq': CPQEditor, 'deals/revrec': RevenueRecognition,
+  'showcase/gallery': ShowcaseGallery, 'showcase/links': TrustLinkBuilder, 'showcase/verification': VerificationQueue,
+  'showcase/pipeline': TrustPipeline,
+  'immersive/avatar': AvatarStudio, 'immersive/meeting': ImmersiveMeeting, 'immersive/tour': VirtualTour,
+  'immersive/field': FieldVerification,
+  'trust/posture': TrustCenter, 'trust/controls': ControlsRegister, 'trust/heatmap': RiskHeatmap,
+  'trust/dpia': DPIAWorkflow, 'trust/audit': AuditRoom, 'trust/policies': PolicyManagement,
+  'trust/health': CustomerHealth, 'trust/support': SupportSLA
+}
+
+const sections = SECTIONS.map(s => ({
+  key: s.key,
+  icon: s.icon,
+  sub: s.subs.map(v => {
+    const comp = COMPONENTS[`${s.key}/${v}`]
+    if (!comp) throw new Error(`Console: no component wired for ${s.key}/${v}`)
+    return { v, comp }
+  })
+}))
 
 const active = computed(() => sections.find(s => s.key === route.params.tab) || sections[0])
 
