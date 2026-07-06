@@ -13,8 +13,8 @@ docs/specs/       # 功能拆分 spec（01~15）+ 追溯矩阵（16）
 server/           # 后端：FastAPI 模块化单体（Python 3.11+）
   app/core/       #   配置/DB/安全/事件总线/依赖
   app/modules/    #   account task matching contract wallet decompose knowledge
-                  #   im dispute notification support content circle legal admin search anchor risk
-  tests/          #   109 个测试（含端到端闭环+对账不变量+存证链篡改检测+LLM网关mock）
+                  #   im dispute notification support content circle legal admin search anchor risk analytics
+  tests/          #   113 个测试（含端到端闭环+对账不变量+存证链篡改+LLM网关mock+增长漏斗）
 packages/core/    # 共享 TS SDK（Web/App 复用，12 tests）
 web/              # Web 前端：React + Vite（6 tests，含管理后台）
 app/              # App：React Native / Expo 骨架

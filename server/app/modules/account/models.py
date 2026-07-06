@@ -40,6 +40,10 @@ class User(Base):
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
     # ACC-006 注销（脱敏保留，登录与被检索均拒绝）
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    # CNT-022 邀请裂变：本人邀请码 + 邀请人 id + 首单奖励是否已发放
+    referral_code: Mapped[str] = mapped_column(String(12), default="", index=True)
+    referred_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    referral_rewarded: Mapped[bool] = mapped_column(Boolean, default=False)
     # CRED-001 信用分（初始 100）与评价聚合
     credit_score: Mapped[int] = mapped_column(Integer, default=100)
     rating_sum: Mapped[int] = mapped_column(Integer, default=0)

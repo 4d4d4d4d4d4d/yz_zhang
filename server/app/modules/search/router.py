@@ -22,6 +22,9 @@ def unified_search(
     db: Session = Depends(get_db),
     limit: int = Query(default=5, le=20),
 ):
+    from app.modules.analytics.service import log_search
+
+    log_search(db, q)  # SRCH-003 记录搜索词供热词/联想
     tasks = (
         db.query(Task)
         .filter(

@@ -34,6 +34,10 @@ def create_app() -> FastAPI:
     anchor_service.register_event_handlers()
     decompose_resilience.register_event_handlers()
 
+    from app.modules.analytics import service as analytics_service
+
+    analytics_service.register_event_handlers()
+
     # 冷启动种子数据（KB 模板与 FAQ、任务类目）
     from app.modules.task import service as task_service
 
@@ -44,6 +48,7 @@ def create_app() -> FastAPI:
 
     from app.modules.account.router import router as account_router
     from app.modules.admin.router import router as admin_router
+    from app.modules.analytics.router import router as analytics_router
     from app.modules.anchor.router import router as anchor_router
     from app.modules.circle.router import router as circle_router
     from app.modules.legal.router import router as legal_router
@@ -78,6 +83,7 @@ def create_app() -> FastAPI:
         admin_router,
         search_router,
         anchor_router,
+        analytics_router,
     ):
         app.include_router(router, prefix=settings.API_PREFIX)
 

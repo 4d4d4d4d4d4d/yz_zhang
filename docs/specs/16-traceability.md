@@ -1,8 +1,16 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V6 全批次完成（2026-07-04）。
-> 后端 109 tests + 前端 20 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V7 全批次完成（2026-07-04）。
+> 后端 113 tests + 前端 20 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V7 批次：增长与分析闭环）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| 13.C 埋点事件上报 + 发布漏斗/接单漏斗看板（P0） | `analytics/service.py::funnels` + `router.py` | `tests/test_growth_analytics.py` |
+| CNT-022 邀请裂变：邀请码归因 + 首单闭环奖励邀请人（每人一次） | `analytics/service.py::_on_task_completed` + 账户注册 | 同上 |
+| SRCH-003 搜索词记录 + 热词榜 + 前缀联想 | `analytics/service.py::trending_terms/suggest_terms` | 同上 |
 
 ## 已实现（V6 批次：真实 LLM 网关 + 供需看板 + 演示数据）
 

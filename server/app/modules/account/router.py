@@ -28,6 +28,7 @@ class RegisterIn(BaseModel):
     password: str = Field(min_length=6, max_length=64)
     nickname: str = Field(default="", max_length=50)
     sms_code: str
+    referral_code: str = ""  # CNT-022 邀请码（可选）
 
 
 class LoginIn(BaseModel):
@@ -81,6 +82,7 @@ def _me(user: User) -> dict:
         "credit_level": credit_level(user.credit_score),
         "rating_avg": user.rating_avg,
         "tasks_completed": user.tasks_completed,
+        "referral_code": user.referral_code,
     }
 
 
@@ -91,13 +93,20 @@ def register(body: RegisterIn, db: Session = Depends(get_db), user_agent: str = 
         raise bad_request("验证码错误", "sms_code_invalid")
     if db.query(User).filter(User.phone == body.phone).first():
         raise conflict("手机号已注册", "phone_taken")
+    referrer = None
+    if body.referral_code:
+        referrer = db.query(User).filter(User.referral_code == body.referral_code).first()
     user = User(
         phone=body.phone,
         password_hash=hash_password(body.password),
         nickname=body.nickname or f"用户{body.phone[-4:]}",
+        referred_by=referrer.id if referrer else None,
     )
     db.add(user)
     db.flush()
+    # CNT-022 生成本人邀请码（基于 id，稳定唯一）
+    user.referral_code = f"R{user.id:06d}"
+    db.add(user)
     return {"token": _issue_token(db, user, user_agent), "user": _me(user)}
 
 
