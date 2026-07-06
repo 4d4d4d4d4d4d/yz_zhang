@@ -61,9 +61,12 @@ multi-armed bandit inside `BanditExplorer.vue`.
 - ~~`CPQEditor` / `RevenueRecognition` / `UsageMetering` (merged from the
   parallel base branch) → `logic/cpq.js`, `logic/revrec.js`,
   `logic/metering.js`~~ (spec 15, done)
-- Watchlist (presentation-dominant today; extract if their math grows):
+- ~~`CustomerHealth` (health score + churn) / `SupportSLA` (breach math)
+  → `logic/customerSuccess.js`~~ (spec 16, done — these were misfiled on
+  the watchlist; audit caught it).
+- Watchlist (audited presentation-dominant; extract if their math grows):
   `PersonalizationDash`, `RevenueDashboard`, `OrderBook`,
-  `MarketplaceCommission`, `UpsellEngine`, `CustomerHealth`, `SupportSLA`.
+  `MarketplaceCommission`, `UpsellEngine`.
 
 ## Review record — R1
 - ✅ RNG injection made a hard policy rule (rule 2) — the whole point of

@@ -72,4 +72,8 @@ Output: monthly rows per obligation + `monthlyTotals`, `cumulative`,
   RevenueDashboard, OrderBook, MarketplaceCommission, UpsellEngine,
   CustomerHealth, SupportSLA are presentation-dominant; queued in
   spec 13 for extraction only if their math grows.
+  **[Superseded by spec 16 R1: the CustomerHealth/SupportSLA half of
+  this call was wrong — both carry real untested algorithms (health
+  score, churn model, SLA breach). Extracted in spec 16. The other five
+  remain presentation-dominant.]**
 - Verdict: **approved**.

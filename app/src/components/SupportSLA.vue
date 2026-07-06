@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { slaStatus } from '../logic/customerSuccess.js'
 
 const now = Date.now()
 function inHours(h) { return new Date(now + h * 3600000).toISOString() }
@@ -18,12 +19,8 @@ const tickets = ref([
 const filter = ref('active')
 const filters = ['active', 'resolved', 'all']
 
-const enriched = computed(() => tickets.value.map(t => {
-  const hoursLeft = (new Date(t.due) - now) / 3600000
-  const pctConsumed = t.status === 'resolved' ? 100 : Math.min(100, (1 - hoursLeft / t.sla) * 100)
-  const breach = hoursLeft < 0 && t.status !== 'resolved'
-  return { ...t, hoursLeft, pctConsumed, breach }
-}))
+// Spec-16: per-ticket SLA math via the logic layer (now injected)
+const enriched = computed(() => tickets.value.map(t => slaStatus(t, now)))
 
 const filtered = computed(() => filter.value === 'all' ? enriched.value : enriched.value.filter(t => t.status === filter.value))
 

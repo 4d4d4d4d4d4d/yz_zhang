@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { enrichAccount, healthSummary, healthBand as band, HEALTH_WEIGHTS as weights } from '../logic/customerSuccess.js'
 
 const accounts = ref([
   { name: 'Lumen Studios',      mrr: 9800,  csm: 'Akiko',   signals: { usage: 92, payment: 100, support: 88, adoption: 84, sentiment: 92 }, renewalIn: 172, trend: 'up' },
@@ -12,39 +13,9 @@ const accounts = ref([
   { name: 'Verda Commerce',     mrr:  380,  csm: 'Hana',    signals: { usage: 82, payment: 100, support: 92, adoption: 76, sentiment: 84 }, renewalIn: 96,  trend: 'up' }
 ])
 
-const weights = { usage: 0.3, payment: 0.15, support: 0.15, adoption: 0.25, sentiment: 0.15 }
-
-function score(a) {
-  let s = 0
-  for (const k in weights) s += a.signals[k] * weights[k]
-  return Math.round(s)
-}
-function band(s) {
-  if (s >= 80) return 'ok'
-  if (s >= 60) return 'warn'
-  return 'risk'
-}
-function churnProb(s, renewalIn) {
-  const base = Math.max(0, 100 - s) / 100
-  const urgency = Math.max(0, (120 - renewalIn) / 120)
-  return Math.round((base * 0.7 + urgency * 0.3) * 100)
-}
-
-const enriched = computed(() => accounts.value.map(a => ({
-  ...a,
-  score: score(a),
-  band: band(score(a)),
-  churn: churnProb(score(a), a.renewalIn)
-})).sort((a, b) => a.score - b.score))
-
-const summary = computed(() => ({
-  total: accounts.value.length,
-  ok: enriched.value.filter(a => a.band === 'ok').length,
-  warn: enriched.value.filter(a => a.band === 'warn').length,
-  risk: enriched.value.filter(a => a.band === 'risk').length,
-  mrrAtRisk: enriched.value.filter(a => a.band === 'risk').reduce((s, a) => s + a.mrr, 0),
-  avgScore: Math.round(enriched.value.reduce((s, a) => s + a.score, 0) / enriched.value.length)
-}))
+// Spec-16 customer-success engine
+const enriched = computed(() => accounts.value.map(a => enrichAccount(a)).sort((a, b) => a.score - b.score))
+const summary = computed(() => healthSummary(accounts.value))
 
 const selected = ref(enriched.value[0]?.name)
 const cur = computed(() => enriched.value.find(a => a.name === selected.value))
