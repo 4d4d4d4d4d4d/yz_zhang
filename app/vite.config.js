@@ -7,6 +7,7 @@ export default defineConfig({
   // Spec 18 — logic-layer coverage gate. Scoped to src/logic (the
   // unit-tested surface); components/views are browser-smoke-tested.
   test: {
+    environment: 'happy-dom',
     coverage: {
       provider: 'v8',
       include: ['src/logic/**'],
