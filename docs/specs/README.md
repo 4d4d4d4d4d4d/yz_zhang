@@ -30,6 +30,7 @@ the test assertions.
 | 19 | [Cross-Domain Contract Tests](19-cross-domain-contracts.md) | composes 01/05/06/10/11 | `tests/integration.pipeline.test.js` |
 | 20 | [Single-Source Console Registry](20-console-registry.md) | `src/console/registry.js` | `tests/registry.test.js` (+ drives `tests/i18n.test.js`) |
 | 21 | [Automated Component Mount-Smoke](21-mount-smoke.md) | all views + section components | `tests/mount.smoke.test.js` |
+| 22 | [Architecture Conformance](22-architecture-conformance.md) | rules of specs 00 §2 · 13 R2 | `tests/architecture.test.js` |
 
 Capability flow across domains:
 
