@@ -35,6 +35,7 @@ def _dump(d: Dispute) -> dict:
         "evidence": d.evidence, "settlement_proposal": d.settlement_proposal,
         "verdict_executor_share_bps": d.verdict_executor_share_bps,
         "verdict_reason": d.verdict_reason,
+        "split_base_cents": d.split_base_cents,  # DSP-008 裁决/复核分账基数
     }
 
 
