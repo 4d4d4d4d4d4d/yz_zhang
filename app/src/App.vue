@@ -8,7 +8,13 @@ import Footer from './components/Footer.vue'
   <main>
     <router-view v-slot="{ Component }">
       <transition name="fade" mode="out-in">
-        <component :is="Component" />
+        <!-- Single-element keyed wrapper: views are multi-root, and a
+             transition child must have one element root or in-app
+             navigation renders blank (spec 23 R1). Keyed by route NAME so
+             /console/:tab switches don't remount the console shell. -->
+        <div :key="String($route.name)">
+          <component :is="Component" />
+        </div>
       </transition>
     </router-view>
   </main>

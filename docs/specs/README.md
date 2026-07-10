@@ -31,6 +31,7 @@ the test assertions.
 | 20 | [Single-Source Console Registry](20-console-registry.md) | `src/console/registry.js` | `tests/registry.test.js` (+ drives `tests/i18n.test.js`) |
 | 21 | [Automated Component Mount-Smoke](21-mount-smoke.md) | all views + section components | `tests/mount.smoke.test.js` |
 | 22 | [Architecture Conformance](22-architecture-conformance.md) | rules of specs 00 §2 · 13 R2 | `tests/architecture.test.js` |
+| 23 | [GTM Trust Journey (+ SPA nav fix)](23-gtm-trust-journey.md) | `components/TrustJourney.vue`, `App.vue` | `tests/navigation.smoke.test.js` |
 
 Capability flow across domains:
 

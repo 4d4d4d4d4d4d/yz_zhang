@@ -43,6 +43,19 @@ export default {
     s2: { title: 'Render', desc: 'Pick markets and platforms. AdForge handles localization, voice and format.' },
     s3: { title: 'Ship', desc: 'Export, push to Meta / TikTok ad accounts, or hand off to your agency.' }
   },
+  product: {
+    journey: {
+      eyebrow: 'From first look to signed deal',
+      title: 'The trust journey — built for cross-border deals',
+      subtitle: 'Buyers abroad can’t visit your office. AdForge replaces the flight with verifiable proof at every step.',
+      cta: 'See the live demo',
+      note: 'Every step links to a live console demo — the same workspace your team gets on day one.',
+      s1: { title: 'Show verified work', desc: 'A provenance-signed video showcase with platform-verified metrics — shared through scoped, expiring trust links.' },
+      s2: { title: 'Meet without borders', desc: 'Digital-human presenters, live glossary-protected interpreting, and a VR-style walk through your factory.' },
+      s3: { title: 'Verify on the ground', desc: 'Vetted local specialists audit the site and seal every piece of evidence into a tamper-evident chain.' },
+      s4: { title: 'Sign with confidence', desc: 'Compliance gates and playbook terms roll into one deal-readiness score — READY TO SIGN, or exactly what’s blocking.' }
+    }
+  },
   studio: {
     title: 'Live render preview',
     subtitle: 'Pick a sample asset, choose markets, and watch AdForge plan your render in real time.',

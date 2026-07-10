@@ -41,6 +41,19 @@ export default {
     s2: { title: 'Renderiza', desc: 'Elige mercados y plataformas. AdForge se ocupa de localización, voz y formato.' },
     s3: { title: 'Lanza', desc: 'Exporta, envía a Meta / TikTok, o entrega a tu agencia.' }
   },
+  product: {
+    journey: {
+      eyebrow: 'Del primer vistazo al contrato firmado',
+      title: 'El viaje de confianza — hecho para deals cross-border',
+      subtitle: 'Los compradores en el extranjero no pueden visitar tu oficina. AdForge reemplaza el vuelo con evidencia verificable en cada paso.',
+      cta: 'Ver la demo en vivo',
+      note: 'Cada paso enlaza a una demo real de la consola — el mismo workspace que tu equipo usa desde el día uno.',
+      s1: { title: 'Muestra trabajo verificado', desc: 'Un showcase de vídeo con procedencia firmada y métricas verificadas, compartido con trust links de alcance y expiración controlados.' },
+      s2: { title: 'Reúnete sin fronteras', desc: 'Presentadores digitales, interpretación en vivo con glosario protegido y un recorrido VR por tu fábrica.' },
+      s3: { title: 'Verifica en terreno', desc: 'Especialistas locales auditan el sitio y sellan cada evidencia en una cadena a prueba de manipulación.' },
+      s4: { title: 'Firma con confianza', desc: 'Gates de compliance y términos del playbook en un solo score de preparación — READY TO SIGN, o exactamente qué lo bloquea.' }
+    }
+  },
   studio: {
     title: 'Previsualización en vivo',
     subtitle: 'Elige un asset y mercados; mira a AdForge planear el render en tiempo real.',
