@@ -136,14 +136,17 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
         per_slot = body.budget_cents // body.people_needed
         if per_slot <= 0:
             raise bad_request("预算不足以拆分名额", "budget_too_small")
+        # 预算守恒：整除余数并入末位名额，保证 Σ名额预算 == 母任务预算
+        remainder = body.budget_cents - per_slot * body.people_needed
         slots = []
         for i in range(body.people_needed):
+            slot_budget = per_slot + (remainder if i == body.people_needed - 1 else 0)
             slot = Task(
                 creator_id=user.id, parent_id=task.id,
                 title=f"{task.title} · 名额{i + 1}/{body.people_needed}",
                 description=task.description, category=task.category,
                 task_type=task.task_type, required_skills=task.required_skills,
-                budget_cents=per_slot, pricing=task.pricing, deposit_cents=task.deposit_cents,
+                budget_cents=slot_budget, pricing=task.pricing, deposit_cents=task.deposit_cents,
                 is_remote=task.is_remote, city=task.city, lat=task.lat, lng=task.lng,
                 address_hint=task.address_hint, address_exact=task.address_exact,
                 visibility=task.visibility, circle_id=task.circle_id,
