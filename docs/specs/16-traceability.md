@@ -1,8 +1,16 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V14 全批次完成（2026-07-10）。
-> 后端 156 tests + 前端 20 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V16 全批次完成（2026-07-11）。
+> 后端 158 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V16 批次：签署有效期 + App 闭环补齐 + 操作矩阵下沉 SDK）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| SC-012 签署有效期（业界 offer 有效期惯例）：成交后 N 天未双签自动作废，释放冻结保证金，防资金卡死 | `contract/router.py::run_expire_unsigned` + `SIGN_EXPIRE_DAYS` 配置 | `tests/test_contract_expiry.py`（含半签超期作废、新鲜/已托管不动、幂等、守恒） |
+| 03/05 操作可见性矩阵单一事实来源（Web/App 共用防漂移） | `packages/core/src/actions.ts::taskActions` 纯函数 | `packages/core/src/actions.test.ts`（9 例：角色×状态全覆盖） |
+| 13 App 端闭环补齐：报名列表+选人成交+双签+托管+驳回+纠纷+取消（原断档：App 单端走不完闭环） | `app/App.tsx` TaskDetailScreen 由 taskActions 驱动 + 合约卡片（金额/费率/保证金/签署进度） | 逻辑在 SDK 层测试；web 构建通过 |
 
 ## 已实现（V14 批次：多人任务预算守恒 + 自动验收边界）
 

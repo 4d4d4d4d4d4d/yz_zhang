@@ -15,6 +15,9 @@ class Settings:
     PLATFORM_FEE_BPS = int(os.environ.get("PLATFORM_FEE_BPS", "800"))  # 8%
     # 验收超时自动通过天数（TASK-031）
     AUTO_ACCEPT_DAYS = int(os.environ.get("PLATFORM_AUTO_ACCEPT_DAYS", "3"))
+    # SC-012 签署有效期：成交后 N 天未完成双签自动作废（业界 offer 有效期惯例），
+    # 释放被冻结的执行者保证金，避免资金无限期卡死
+    SIGN_EXPIRE_DAYS = int(os.environ.get("PLATFORM_SIGN_EXPIRE_DAYS", "3"))
     # 到场打卡允许误差（米，GEO-020）
     CHECKIN_RADIUS_M = int(os.environ.get("PLATFORM_CHECKIN_RADIUS_M", "500"))
     # 陌生人私聊未获回复前的消息上限（IM-005）

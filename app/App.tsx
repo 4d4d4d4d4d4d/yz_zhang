@@ -2,8 +2,8 @@
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
 import {
-  PlatformClient, TASK_STATUS_LABEL, fmtYuan,
-  type Me, type Notice, type Task, type Wallet,
+  PlatformClient, TASK_STATUS_LABEL, fmtYuan, taskActions,
+  type Contract, type Me, type Notice, type Task, type Wallet,
 } from '@platform/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -124,18 +124,35 @@ function TasksScreen({ client, onOpen }: { client: PlatformClient; onOpen: (t: T
   );
 }
 
+type ApplicationRow = Awaited<ReturnType<PlatformClient['listApplications']>>[number];
+
 function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
   client: PlatformClient; me: Me | null; task: Task; onBack: () => void; onChanged: () => Promise<void>;
 }) {
   const [error, setError] = useState('');
-  const isCreator = me?.id === task.creator_id;
-  const isExecutor = me?.id === task.executor_id;
+  const [contract, setContract] = useState<Contract | null>(null);
+  const [apps, setApps] = useState<ApplicationRow[]>([]);
+  const meId = me?.id ?? null;
+
+  // 操作可见性由 SDK 单一事实来源决定（03/05 spec 角色×状态矩阵，与 Web 共用）
+  const actions = taskActions(task, meId, contract);
+
+  const reload = useCallback(async () => {
+    if (['matched', 'in_progress', 'pending_acceptance'].includes(task.status)) {
+      client.getContractByTask(task.id).then(setContract).catch(() => setContract(null));
+    } else setContract(null);
+    if (task.status === 'published' && meId === task.creator_id) {
+      client.listApplications(task.id).then(setApps).catch(() => setApps([]));
+    }
+  }, [client, task, meId]);
+  useEffect(() => { void reload(); }, [reload]);
 
   async function act(fn: () => Promise<unknown>) {
     setError('');
     try {
       await fn();
       await onChanged();
+      await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : '操作失败');
     }
@@ -150,17 +167,69 @@ function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
       </Text>
       {!!task.description && <Text>{task.description}</Text>}
       {!!task.address_exact && <Text style={styles.mutedLeft}>📍 {task.address_exact}</Text>}
+      {contract && (
+        <View style={styles.cardRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>合约 #{contract.id} · {contract.status}</Text>
+            <Text style={styles.mutedLeft}>
+              金额 {fmtYuan(contract.amount_cents)} · 服务费 {(contract.fee_bps / 100).toFixed(1)}%
+              {contract.deposit_cents > 0 ? ` · 保证金 ${fmtYuan(contract.deposit_cents)}` : ''}
+            </Text>
+            <Text style={styles.mutedLeft}>
+              签署：发布方{contract.signed_by_requester ? '✓' : '…'} / 执行方{contract.signed_by_executor ? '✓' : '…'}
+            </Text>
+          </View>
+        </View>
+      )}
       {!!error && <Text style={styles.error}>{error}</Text>}
-      {task.status === 'published' && !isCreator && (
+
+      {actions.includes('apply') && (
         <Button title="报名接单" onPress={() => act(() => client.apply(task.id, '我可以做'))} />
       )}
-      {task.status === 'in_progress' && isExecutor && (
+      {actions.includes('view_applications') && (
+        <View style={{ gap: 8 }}>
+          <Text style={styles.cardTitle}>报名列表（{apps.length}）</Text>
+          {apps.length === 0 && <Text style={styles.mutedLeft}>暂无报名，可稍后下拉刷新</Text>}
+          {apps.map((a) => (
+            <View key={a.id} style={styles.cardRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>{a.nickname} · 信用 {a.credit_score}</Text>
+                <Text style={styles.mutedLeft}>报价 {fmtYuan(a.bid_cents)} · {a.message || '（无留言）'}</Text>
+              </View>
+              {a.status === 'pending' && (
+                <Button title="选TA成交" onPress={() => act(() => client.acceptApplication(a.id))} />
+              )}
+            </View>
+          ))}
+        </View>
+      )}
+      {actions.includes('sign') && contract && (
+        <Button title="签署合约" onPress={() => act(() => client.signContract(contract.id))} />
+      )}
+      {actions.includes('wait_counterparty') && (
+        <Text style={styles.muted}>已签署，等待对方签字…</Text>
+      )}
+      {actions.includes('fund') && contract && (
+        <Button title={`托管资金 ${fmtYuan(contract.amount_cents)}`}
+                onPress={() => act(() => client.fundContract(contract.id))} />
+      )}
+      {actions.includes('deliver') && (
         <Button title="提交验收" onPress={() => act(() => client.deliver(task.id))} />
       )}
-      {task.status === 'pending_acceptance' && isCreator && (
+      {actions.includes('accept_delivery') && (
         <Button title="验收通过（放款）" onPress={() => act(() => client.acceptDelivery(task.id))} />
       )}
-      {task.status === 'completed' && (isCreator || isExecutor) && (
+      {actions.includes('reject_delivery') && (
+        <Button title="驳回返工" onPress={() => act(() => client.rejectDelivery(task.id, '不符合要求，请修改'))} />
+      )}
+      {actions.includes('open_dispute') && (
+        <Button title="发起纠纷（冻结资金）" color="#dc2626"
+                onPress={() => act(() => client.openDispute(task.id, '双方对交付结果有分歧，申请平台介入'))} />
+      )}
+      {actions.includes('cancel') && (
+        <Button title="取消任务" color="#6b7280" onPress={() => act(() => client.cancelTask(task.id))} />
+      )}
+      {actions.includes('review') && (
         <Button title="给对方好评（5星）" onPress={() => act(() => client.review(task.id, 5))} />
       )}
     </ScrollView>

@@ -63,6 +63,38 @@ def _dump(c: Contract, db: Session | None = None) -> dict:
     return out
 
 
+@router.post("/jobs/expire-unsigned")
+def run_expire_unsigned(db: Session = Depends(get_db)):
+    """SC-012 签署有效期 job：成交后超期未双签的合约自动作废。
+
+    业界惯例（offer 有效期）：避免一方失联导致任务永久卡在 matched、
+    执行者保证金被无限期冻结。作废 = 合约取消 + 保证金原路退还 + 任务关闭，
+    并通知双方（任务需重新发布招募，因一任务一合约约束不可原单复用）。
+    """
+    from datetime import timedelta
+
+    from app.core.config import settings
+    from app.modules.account.models import utcnow
+    from app.modules.notification.service import notify
+
+    cutoff = utcnow() - timedelta(days=settings.SIGN_EXPIRE_DAYS)
+    rows = (
+        db.query(Contract)
+        .filter(Contract.status == "pending_signatures", Contract.created_at <= cutoff)
+        .all()
+    )
+    for contract in rows:
+        service.cancel(db, contract, contract.requester_id)  # 未托管阶段：仅取消+退保证金
+        task = db.get(Task, contract.task_id)
+        if task and task.status not in ("completed", "cancelled"):
+            transition(db, task, "cancelled", {"cancelled_by": "system_sign_expired"})
+        for uid in (contract.requester_id, contract.executor_id):
+            notify(db, uid, "contract", "合约签署超期作废",
+                   f"合约 #{contract.id} 超过 {settings.SIGN_EXPIRE_DAYS} 天未完成双方签署，"
+                   "已自动作废；保证金（如有）已原路退还，任务可重新发布。")
+    return {"expired": len(rows)}
+
+
 @router.get("/by-task/{task_id}")
 def get_contract_by_task(
     task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
