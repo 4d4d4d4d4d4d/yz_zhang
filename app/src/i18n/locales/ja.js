@@ -82,6 +82,9 @@ export default {
     perMonth: ' / 月',
     cta: 'はじめる',
     contactSales: '営業に相談',
+    free: '無料',
+    custom: 'カスタム',
+    fx: '{code} の参考レートで表示 — 請求は米ドルです。',
     starter: { name: 'Starter', tag: 'まずはお試し', f1: '月 50 レンダー', f2: '4 市場', f3: 'ウォーターマーク除去', f4: 'コミュニティサポート' },
     growth: { name: 'Growth', tag: 'グローバル展開向け', f1: '月 500 レンダー', f2: '20 市場', f3: 'ブランドキット', f4: '優先レンダリング', f5: 'Slack サポート' },
     scale: { name: 'Scale', tag: '代理店・エンタープライズ', f1: '無制限レンダー', f2: '全市場', f3: 'API + 広告アカウント連携', f4: '専任カスタマーサクセス', f5: 'SLA と SSO' }

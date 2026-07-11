@@ -82,6 +82,9 @@ export default {
     perMonth: ' / mes',
     cta: 'Empezar',
     contactSales: 'Hablar con ventas',
+    free: 'Gratis',
+    custom: 'A medida',
+    fx: 'Precios en {code} a tasa de referencia — se factura en USD.',
     starter: { name: 'Starter', tag: 'Para probar', f1: '50 renders / mes', f2: '4 mercados', f3: 'Sin marca de agua', f4: 'Soporte de comunidad' },
     growth: { name: 'Growth', tag: 'Para marcas globales', f1: '500 renders / mes', f2: '20 mercados', f3: 'Brand kits', f4: 'Render prioritario', f5: 'Soporte en Slack' },
     scale: { name: 'Scale', tag: 'Agencias y enterprise', f1: 'Renders ilimitados', f2: 'Todos los mercados', f3: 'API + sync con ads', f4: 'Customer success dedicado', f5: 'SLA y SSO' }

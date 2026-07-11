@@ -84,6 +84,9 @@ export default {
     perMonth: ' / 月',
     cta: '开始使用',
     contactSales: '联系销售',
+    free: '免费',
+    custom: '定制',
+    fx: '价格以 {code} 参考汇率显示——实际以美元结算。',
     starter: { name: 'Starter', tag: '小步快跑', f1: '50 次 / 月渲染额度', f2: '4 个市场', f3: '去除水印', f4: '社区支持' },
     growth: { name: 'Growth', tag: '出海品牌优选', f1: '500 次 / 月渲染额度', f2: '20 个市场', f3: '品牌资产库', f4: '优先渲染队列', f5: 'Slack 支持' },
     scale: { name: 'Scale', tag: '代理商与企业', f1: '无限渲染', f2: '所有市场', f3: 'API + 广告账户对接', f4: '专属客户成功经理', f5: 'SLA 与 SSO' }
