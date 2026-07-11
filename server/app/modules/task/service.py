@@ -68,6 +68,22 @@ def check_category_qualification(db: Session, task, user) -> None:
         raise bad_request(f"该类目需「{required}」职业资质认证后方可接单", "certification_required")
 
 
+def check_executor_capacity(db: Session, user_id: int) -> None:
+    """TASK-011 并发接单上限：在途单（成交/执行/待验收）达上限后不可再接。"""
+    from app.core.config import settings
+
+    active = (
+        db.query(Task)
+        .filter(Task.executor_id == user_id,
+                Task.status.in_(("matched", "in_progress", "pending_acceptance")))
+        .count()
+    )
+    if active >= settings.MAX_ACTIVE_TASKS:
+        raise conflict(
+            f"在途任务已达上限（{settings.MAX_ACTIVE_TASKS} 单），请先完成现有任务", "capacity_full"
+        )
+
+
 def validate_category(db: Session, name: str) -> None:
     category = get_category(db, name)
     if not category or not category.active:

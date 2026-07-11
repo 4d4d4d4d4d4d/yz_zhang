@@ -14,7 +14,7 @@ server/           # 后端：FastAPI 模块化单体（Python 3.11+）
   app/core/       #   配置/DB/安全/事件总线/依赖
   app/modules/    #   account task matching contract wallet decompose knowledge
                   #   im dispute notification support content circle legal admin search anchor risk analytics
-  tests/          #   158 个测试（含端到端闭环+状态机穷举+资金守恒属性+变更单/分期×纠纷/多人任务守恒+签署有效期+对账不变量+越权拒绝+防重放守卫+存证链防篡改）
+  tests/          #   163 个测试（含端到端闭环+状态机穷举+资金守恒属性+变更单/分期×纠纷/多人任务守恒+签署有效期+双盲互评+接单上限+对账不变量+越权拒绝+防重放守卫+存证链防篡改）
 packages/core/    # 共享 TS SDK（Web/App 复用，23 tests，含操作可见性矩阵）
 web/              # Web 前端：React + Vite（6 tests，含管理后台）
 app/              # App：React Native / Expo 骨架

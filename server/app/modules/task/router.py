@@ -263,6 +263,7 @@ def apply(
     if task.creator_id == user.id:
         raise bad_request("不能报名自己发布的任务", "self_apply")
     service.check_category_qualification(db, task, user)  # ACC-022 受限类目准入
+    service.check_executor_capacity(db, user.id)  # TASK-011 并发接单上限
     from app.modules.account.service import is_blocked_between
 
     if is_blocked_between(db, user.id, task.creator_id):  # ACC-033
@@ -334,6 +335,7 @@ def accept_application(
         raise forbidden()
     if task.status != "published":
         raise conflict("任务不在招募中", "not_recruiting")
+    service.check_executor_capacity(db, app_row.applicant_id)  # TASK-011 成交时复核在途上限
     app_row.status = "accepted"
     task.executor_id = app_row.applicant_id
     db.add_all([app_row, task])
@@ -579,6 +581,9 @@ def create_review(
         raise conflict("任务完成后才能评价", "not_completed")
     if user.id not in (task.creator_id, task.executor_id):
         raise forbidden()
+    # CRED-002 评价窗口：结项后 N 天内可评，到期不可补评（业界惯例）
+    if task.completed_at and utcnow() > task.completed_at + timedelta(days=settings.REVIEW_WINDOW_DAYS):
+        raise conflict("评价期已过", "review_window_closed")
     target_id = task.executor_id if user.id == task.creator_id else task.creator_id
     dup = db.query(Review).filter(Review.task_id == task_id, Review.reviewer_id == user.id).first()
     if dup:
@@ -595,16 +600,22 @@ def create_review(
 
 @router.get("/tasks/{task_id}/reviews")
 def list_reviews(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """盲评（CRED-002）：双方都评完前，当事人只能看到自己提交的评价。"""
+    """双盲互评（CRED-002）：双方都评完或窗口到期前，评价只有作者本人（和管理员）
+    可见——包括对第三方隐藏，否则换个账号即可偷看，盲评失效。"""
     task = _get_task(db, task_id)
     rows = db.query(Review).filter(Review.task_id == task_id).all()
     both_done = len(rows) >= 2
+    window_expired = bool(
+        task.completed_at
+        and utcnow() > task.completed_at + timedelta(days=settings.REVIEW_WINDOW_DAYS)
+    )
+    revealed = both_done or window_expired
     out = []
     for r in rows:
-        if user.id in (task.creator_id, task.executor_id) and not both_done and r.reviewer_id != user.id:
+        if not revealed and r.reviewer_id != user.id and not user.is_admin:
             continue
         out.append(
             {"reviewer_id": r.reviewer_id, "target_id": r.target_id, "stars": r.stars,
-             "tags": r.tags, "comment": r.comment}
+             "tags": r.tags, "comment": r.comment, "revealed": revealed}
         )
     return out

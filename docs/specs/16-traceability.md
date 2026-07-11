@@ -1,8 +1,15 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V16 全批次完成（2026-07-11）。
-> 后端 158 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V17 全批次完成（2026-07-11）。
+> 后端 163 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V17 批次：双盲互评完整落地 + 并发接单上限）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| CRED-002 双盲互评（Upwork 惯例）：修复路人泄露——盲窗内评价对第三方也隐藏（否则换号偷看即破防）；新增 14 天评价窗口，到期单方评价自动公开且不可补评（防看到差评后报复） | `task/router.py::list_reviews/create_review` + `REVIEW_WINDOW_DAYS` | `tests/test_blind_review.py` |
+| TASK-011 执行者并发接单上限（零工平台惯例，防过度接单违约）：在途单达上限后报名/选人/接受邀约均拒；完成释放额度；上限以成交时点复核 | `task/service.py::check_executor_capacity` + 三个入口守卫 + `MAX_ACTIVE_TASKS` | `tests/test_executor_capacity.py` |
 
 ## 已实现（V16 批次：签署有效期 + App 闭环补齐 + 操作矩阵下沉 SDK）
 

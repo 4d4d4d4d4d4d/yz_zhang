@@ -90,9 +90,10 @@ def accept_invitation(
         inv.status = "declined"
         db.add(inv)
         raise conflict("任务已不在招募中，邀约失效", "task_closed")
-    from app.modules.task.service import check_category_qualification
+    from app.modules.task.service import check_category_qualification, check_executor_capacity
 
     check_category_qualification(db, task, user)  # ACC-022 受限类目准入
+    check_executor_capacity(db, user.id)  # TASK-011 并发接单上限
     inv.status = "accepted"
     app_row = Application(
         task_id=task.id, applicant_id=user.id, bid_cents=task.budget_cents,
