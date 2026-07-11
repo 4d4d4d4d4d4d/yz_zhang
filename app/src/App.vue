@@ -1,10 +1,12 @@
 <script setup>
 import Navbar from './components/Navbar.vue'
 import Footer from './components/Footer.vue'
+import CommandPalette from './components/CommandPalette.vue'
 </script>
 
 <template>
   <Navbar />
+  <CommandPalette />
   <main>
     <router-view v-slot="{ Component }">
       <transition name="fade" mode="out-in">

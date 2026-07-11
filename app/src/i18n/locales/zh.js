@@ -136,6 +136,11 @@ export default {
       trust:     { posture: '合规态势', controls: '控制项 · DSR', heatmap: '风险热力图', dpia: 'DPIA 流程', audit: '审计室', policies: '制度 · 培训', health: '客户健康度', support: '支持 · SLA' }
     }
   },
+  palette: {
+    placeholder: '跳转到任意模块…（如「实地调查」「收入确认」「bandit」）',
+    empty: '没有匹配的模块——试试更短的关键词。',
+    hint: '⌘K / Ctrl+K 打开 · ↑↓ 选择 · Enter 跳转 · Esc 关闭'
+  },
   footer: {
     tagline: '为出海品牌打造的 AI 广告渲染引擎。',
     product: '产品',

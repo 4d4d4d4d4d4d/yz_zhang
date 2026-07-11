@@ -103,8 +103,13 @@ const sections = SECTIONS.map(s => ({
 
 const active = computed(() => sections.find(s => s.key === route.params.tab) || sections[0])
 
-const subTab = ref(active.value.sub[0].v)
-watch(() => active.value.key, () => { subTab.value = active.value.sub[0].v })
+// ?sub= deep link (spec 24): palette hits and share links can target a sub-tab.
+const requestedSub = () => {
+  const q = route.query.sub
+  return active.value.sub.some(s => s.v === q) ? q : active.value.sub[0].v
+}
+const subTab = ref(requestedSub())
+watch(() => [active.value.key, route.query.sub], () => { subTab.value = requestedSub() })
 
 const subTabs = computed(() => active.value.sub.map(s => ({ v: s.v, label: t(`console.tabs.${active.value.key}.${s.v}`) })))
 const activeComp = computed(() => active.value.sub.find(s => s.v === subTab.value)?.comp)

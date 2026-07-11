@@ -1,0 +1,105 @@
+<script setup>
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { SECTIONS } from '../console/registry.js'
+import { buildIndex, searchModules } from '../logic/search.js'
+
+const { t, locale } = useI18n()
+const router = useRouter()
+
+const open = ref(false)
+const query = ref('')
+const active = ref(0)
+const inputEl = ref(null)
+
+// Rebuild the index when the locale changes so labels match the operator's language.
+const index = computed(() => {
+  void locale.value
+  return buildIndex(SECTIONS, (kind, path) =>
+    kind === 'section' ? t(`console.s.${path}.title`) : t(`console.tabs.${path}`))
+})
+
+const results = computed(() => searchModules(query.value, index.value))
+
+watch(results, () => { active.value = 0 })
+watch(open, async v => {
+  if (v) { query.value = ''; active.value = 0; await nextTick(); inputEl.value?.focus() }
+})
+
+function onKey(e) {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault()
+    open.value = !open.value
+  } else if (open.value && e.key === 'Escape') {
+    open.value = false
+  }
+}
+onMounted(() => window.addEventListener('keydown', onKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+
+function move(d) {
+  if (!results.value.length) return
+  active.value = (active.value + d + results.value.length) % results.value.length
+}
+
+function go(entry = results.value[active.value]) {
+  if (!entry) return
+  open.value = false
+  router.push(entry.route)
+}
+
+defineExpose({ open })
+</script>
+
+<template>
+  <button class="pal-btn" type="button" @click="open = true" :title="t('palette.hint')">
+    <span>⌘K</span>
+  </button>
+
+  <Teleport to="body">
+    <div v-if="open" class="pal-back" @click.self="open = false">
+      <div class="pal card" role="dialog" aria-modal="true">
+        <input
+          ref="inputEl"
+          v-model="query"
+          class="pal-in"
+          :placeholder="t('palette.placeholder')"
+          @keydown.down.prevent="move(1)"
+          @keydown.up.prevent="move(-1)"
+          @keydown.enter.prevent="go()"
+        />
+        <div v-if="results.length" class="pal-list">
+          <button
+            v-for="(r, i) in results" :key="r.id" type="button"
+            class="pal-row" :class="{ on: i === active }"
+            @mouseenter="active = i" @click="go(r)"
+          >
+            <span class="pr-label">{{ r.label }}</span>
+            <span class="pr-section" v-if="r.sub">{{ r.sectionLabel }}</span>
+            <span class="pr-kbd" v-if="i === active">↵</span>
+          </button>
+        </div>
+        <div v-else class="pal-empty">{{ t('palette.empty') }}</div>
+        <div class="pal-foot">{{ t('palette.hint') }}</div>
+      </div>
+    </div>
+  </Teleport>
+</template>
+
+<style scoped>
+.pal-btn { position: fixed; right: 18px; bottom: 18px; z-index: 60; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text-dim); font-size: 12px; font-weight: 700; cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+.pal-btn:hover { color: var(--text); border-color: rgba(124, 92, 255, .5); }
+
+.pal-back { position: fixed; inset: 0; z-index: 70; background: rgba(8, 10, 18, .6); backdrop-filter: blur(4px); display: flex; justify-content: center; padding-top: 12vh; }
+.pal { width: min(560px, 92vw); height: fit-content; padding: 10px; }
+.pal-in { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 15px; outline: none; }
+.pal-in:focus { border-color: rgba(124, 92, 255, .55); }
+.pal-list { margin-top: 8px; display: flex; flex-direction: column; }
+.pal-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; text-align: left; padding: 10px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font-size: 13.5px; cursor: pointer; }
+.pal-row.on { background: rgba(124, 92, 255, .16); }
+.pr-section { font-size: 11px; color: var(--text-dim); }
+.pr-kbd { font-size: 11px; color: var(--text-dim); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; }
+.pal-empty { padding: 18px 12px; font-size: 13px; color: var(--text-dim); text-align: center; }
+.pal-foot { margin-top: 8px; padding: 8px 12px 4px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-dim); }
+</style>

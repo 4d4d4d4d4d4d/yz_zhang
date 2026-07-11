@@ -134,6 +134,11 @@ export default {
       trust:     { posture: 'Postura', controls: 'Controles · DSR', heatmap: 'Mapa de riesgos', dpia: 'Flujo DPIA', audit: 'Sala de auditoría', policies: 'Políticas · formación', health: 'Salud del cliente', support: 'Soporte · SLA' }
     }
   },
+  palette: {
+    placeholder: 'Salta a cualquier módulo… (p. ej. "bandit", "rev rec")',
+    empty: 'Ningún módulo coincide — prueba una consulta más corta.',
+    hint: '⌘K / Ctrl+K para abrir · ↑↓ para elegir · Enter para saltar · Esc para cerrar'
+  },
   footer: {
     tagline: 'Renderizado de anuncios con IA para marcas globales.',
     product: 'Producto',

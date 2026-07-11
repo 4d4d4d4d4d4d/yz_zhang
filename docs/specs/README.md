@@ -32,6 +32,7 @@ the test assertions.
 | 21 | [Automated Component Mount-Smoke](21-mount-smoke.md) | all views + section components | `tests/mount.smoke.test.js` |
 | 22 | [Architecture Conformance](22-architecture-conformance.md) | rules of specs 00 §2 · 13 R2 | `tests/architecture.test.js` |
 | 23 | [GTM Trust Journey (+ SPA nav fix)](23-gtm-trust-journey.md) | `components/TrustJourney.vue`, `App.vue` | `tests/navigation.smoke.test.js` |
+| 24 | [⌘K Command Palette](24-command-palette.md) | `logic/search.js`, `components/CommandPalette.vue` | `tests/search.test.js` |
 
 Capability flow across domains:
 

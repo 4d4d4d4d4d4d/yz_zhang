@@ -136,6 +136,11 @@ export default {
       trust:     { posture: 'Posture', controls: 'Controls · DSR', heatmap: 'Risk heatmap', dpia: 'DPIA workflow', audit: 'Audit room', policies: 'Policies · training', health: 'Customer health', support: 'Support · SLA' }
     }
   },
+  palette: {
+    placeholder: 'Jump to any module… (e.g. "bandit", "rev rec", "tour")',
+    empty: 'No modules match — try a shorter query.',
+    hint: '⌘K / Ctrl+K to open · ↑↓ to select · Enter to jump · Esc to close'
+  },
   footer: {
     tagline: 'AI ad rendering for global brands.',
     product: 'Product',

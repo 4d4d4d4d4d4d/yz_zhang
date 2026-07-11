@@ -134,6 +134,11 @@ export default {
       trust:     { posture: 'ポスチャー', controls: 'コントロール · DSR', heatmap: 'リスクヒートマップ', dpia: 'DPIA ワークフロー', audit: '監査ルーム', policies: 'ポリシー · 研修', health: '顧客ヘルス', support: 'サポート · SLA' }
     }
   },
+  palette: {
+    placeholder: '任意のモジュールへジャンプ…（例:「実地調査」「収益認識」）',
+    empty: '一致するモジュールがありません。短いキーワードをお試しください。',
+    hint: '⌘K / Ctrl+K で開く · ↑↓ で選択 · Enter で移動 · Esc で閉じる'
+  },
   footer: {
     tagline: 'グローバルブランドのための AI 広告レンダリング。',
     product: 'プロダクト',
