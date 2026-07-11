@@ -139,6 +139,18 @@ export default {
       trust:     { posture: 'Posture', controls: 'Controls · DSR', heatmap: 'Risk heatmap', dpia: 'DPIA workflow', audit: 'Audit room', policies: 'Policies · training', health: 'Customer health', support: 'Support · SLA' }
     }
   },
+  notify: {
+    title: 'Notifications',
+    empty: 'All clear — nothing needs your attention.',
+    markAll: 'Mark all read',
+    msg: {
+      sla: '{count} support ticket(s) past SLA — breach in progress.',
+      churn: '{count} account(s) at churn risk · ${mrr} MRR exposed.',
+      compliance: 'Compliance gate not passing · {findings} open finding(s).',
+      overage: 'Usage overage accruing · +${amount} this cycle.',
+      readiness: 'Deal readiness at {score}/100 · {blockers} blocker(s) open.'
+    }
+  },
   palette: {
     placeholder: 'Jump to any module… (e.g. "bandit", "rev rec", "tour")',
     empty: 'No modules match — try a shorter query.',

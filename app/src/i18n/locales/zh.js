@@ -139,6 +139,18 @@ export default {
       trust:     { posture: '合规态势', controls: '控制项 · DSR', heatmap: '风险热力图', dpia: 'DPIA 流程', audit: '审计室', policies: '制度 · 培训', health: '客户健康度', support: '支持 · SLA' }
     }
   },
+  notify: {
+    title: '通知中心',
+    empty: '一切正常——暂无需要处理的事项。',
+    markAll: '全部标为已读',
+    msg: {
+      sla: '{count} 个工单已超出 SLA——正在违约。',
+      churn: '{count} 个客户存在流失风险 · ${mrr} MRR 暴露。',
+      compliance: '合规闸门未通过 · {findings} 项待处理发现。',
+      overage: '用量超额累积中 · 本周期 +${amount}。',
+      readiness: '成交就绪度 {score}/100 · {blockers} 项阻塞待解。'
+    }
+  },
   palette: {
     placeholder: '跳转到任意模块…（如「实地调查」「收入确认」「bandit」）',
     empty: '没有匹配的模块——试试更短的关键词。',

@@ -34,6 +34,7 @@ the test assertions.
 | 23 | [GTM Trust Journey (+ SPA nav fix)](23-gtm-trust-journey.md) | `components/TrustJourney.vue`, `App.vue` | `tests/navigation.smoke.test.js` |
 | 24 | [⌘K Command Palette](24-command-palette.md) | `logic/search.js`, `components/CommandPalette.vue` | `tests/search.test.js` |
 | 25 | [Multi-Currency Pricing](25-multi-currency.md) | `logic/currency.js`, `views/Pricing.vue` | `tests/currency.test.js` |
+| 26 | [Notification Center](26-notification-center.md) | `logic/notifications.js`, `components/NotificationCenter.vue` | `tests/notifications.test.js` |
 
 Capability flow across domains:
 

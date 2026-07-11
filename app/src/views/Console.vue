@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { SECTIONS } from '../console/registry.js'
 
 import SecurityRibbon  from '../components/SecurityRibbon.vue'
+import NotificationCenter from '../components/NotificationCenter.vue'
 import SubTabs         from '../components/SubTabs.vue'
 import LiveActivityFeed from '../components/LiveActivityFeed.vue'
 
@@ -147,7 +148,10 @@ const activeComp = computed(() => active.value.sub.find(s => s.v === subTab.valu
         <SecurityRibbon />
 
         <div class="m-head">
-          <h2 class="grad-text">{{ t(`console.s.${active.key}.title`) }}</h2>
+          <div class="m-title">
+            <h2 class="grad-text">{{ t(`console.s.${active.key}.title`) }}</h2>
+            <NotificationCenter />
+          </div>
           <p>{{ t(`console.s.${active.key}.sub`) }}</p>
         </div>
 
@@ -183,6 +187,7 @@ const activeComp = computed(() => active.value.sub.find(s => s.v === subTab.valu
 
 .main { min-width: 0; }
 .m-head { margin-bottom: 20px; }
+.m-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .m-head h2 { font-size: 32px; }
 .m-head p { margin: 6px 0 0; color: var(--text-dim); }
 

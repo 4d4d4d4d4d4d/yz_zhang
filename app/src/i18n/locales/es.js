@@ -137,6 +137,18 @@ export default {
       trust:     { posture: 'Postura', controls: 'Controles · DSR', heatmap: 'Mapa de riesgos', dpia: 'Flujo DPIA', audit: 'Sala de auditoría', policies: 'Políticas · formación', health: 'Salud del cliente', support: 'Soporte · SLA' }
     }
   },
+  notify: {
+    title: 'Notificaciones',
+    empty: 'Todo en orden — nada requiere tu atención.',
+    markAll: 'Marcar todo leído',
+    msg: {
+      sla: '{count} ticket(s) fuera de SLA — incumplimiento en curso.',
+      churn: '{count} cuenta(s) en riesgo de churn · ${mrr} de MRR expuesto.',
+      compliance: 'Gate de compliance sin pasar · {findings} hallazgo(s) abiertos.',
+      overage: 'Sobreuso acumulándose · +${amount} este ciclo.',
+      readiness: 'Preparación del deal en {score}/100 · {blockers} bloqueo(s).'
+    }
+  },
   palette: {
     placeholder: 'Salta a cualquier módulo… (p. ej. "bandit", "rev rec")',
     empty: 'Ningún módulo coincide — prueba una consulta más corta.',

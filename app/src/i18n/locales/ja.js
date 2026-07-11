@@ -137,6 +137,18 @@ export default {
       trust:     { posture: 'ポスチャー', controls: 'コントロール · DSR', heatmap: 'リスクヒートマップ', dpia: 'DPIA ワークフロー', audit: '監査ルーム', policies: 'ポリシー · 研修', health: '顧客ヘルス', support: 'サポート · SLA' }
     }
   },
+  notify: {
+    title: '通知',
+    empty: 'すべて正常です。対応が必要な項目はありません。',
+    markAll: 'すべて既読にする',
+    msg: {
+      sla: '{count} 件のチケットが SLA 超過 — 違反進行中。',
+      churn: '{count} 社が解約リスク · ${mrr} の MRR が露出。',
+      compliance: 'コンプライアンスゲート未通過 · 未解決 {findings} 件。',
+      overage: '超過利用が累積中 · 今サイクル +${amount}。',
+      readiness: '成約準備度 {score}/100 · ブロッカー {blockers} 件。'
+    }
+  },
   palette: {
     placeholder: '任意のモジュールへジャンプ…（例:「実地調査」「収益認識」）',
     empty: '一致するモジュールがありません。短いキーワードをお試しください。',
