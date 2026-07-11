@@ -83,14 +83,23 @@ def reconcile(db: Session) -> dict:
                            "escrow_total": escrow_total, "expected": escrow_expected})
 
     frozen_total = sum(a.frozen_cents for a in accounts)
-    frozen_expected = (
+    deposit_frozen = (
         db.query(func.coalesce(func.sum(Contract.deposit_cents), 0))
         .filter(Contract.deposit_status == "held")
         .scalar()
     )
+    # PAY-007：待审大额提现也占用冻结（批准划出/驳回解冻）
+    from app.modules.wallet.models import WithdrawRequest
+
+    withdraw_frozen = (
+        db.query(func.coalesce(func.sum(WithdrawRequest.amount_cents), 0))
+        .filter(WithdrawRequest.status == "pending")
+        .scalar()
+    )
+    frozen_expected = int(deposit_frozen) + int(withdraw_frozen)
     if frozen_total != frozen_expected:
         mismatches.append({"invariant": "deposit_backing",
-                           "frozen_total": frozen_total, "expected": int(frozen_expected)})
+                           "frozen_total": frozen_total, "expected": frozen_expected})
 
     return {"ok": not mismatches, "mismatches": mismatches,
             "accounts_checked": len(accounts), "total_holdings_cents": holdings}

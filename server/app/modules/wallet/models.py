@@ -32,3 +32,17 @@ class LedgerEntry(Base):
     contract_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     memo: Mapped[str] = mapped_column(String(200), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class WithdrawRequest(Base):
+    """PAY-007 大额提现人审：申请即冻结，批准划出/驳回解冻（业界 T+人审惯例）。"""
+
+    __tablename__ = "withdraw_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(12), default="pending")  # pending/approved/rejected
+    decided_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

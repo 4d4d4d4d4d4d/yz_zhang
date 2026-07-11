@@ -1,8 +1,19 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V17 全批次完成（2026-07-11）。
-> 后端 163 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V19 全批次完成（2026-07-11）。
+> 后端 173 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V19 批次：批判性扫描——提现风控 + 密码管理 + 报名撤回）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| PAY-007 提现风控（业界惯例）：单日限额硬拒（含待审计入）；大额冻结进人审队列，批准划出/驳回解冻；对账冻结口径扩展（保证金+待审提现） | `wallet/service.py::withdraw/decide_withdraw` + `WithdrawRequest` 模型 + 管理端路由 + `risk.reconcile` 口径 | `tests/test_withdraw_risk.py` |
+| ACC-004 密码管理：改密验旧密码、忘记密码短信重置，均吊销全部旧会话（防盗号后旧 token 续命）+ 重置限流防爆破 | `account/router.py::change_password/reset_password` | `tests/test_password_and_apply_withdraw.py` |
+| TASK-012 报名撤回：pending 可撤、撤后可重报；**修复：撤回的报名仍可被发布者成交（替人签约）**——成交守卫补 `application_closed` | `task/router.py::withdraw_application` + accept 守卫 | 同上 |
+| SDK 同步：withdraw 富返回/withdrawRequests/decideWithdraw/changePassword/resetPassword/withdrawApplication | `packages/core/src/client.ts` | web 构建通过 |
+
+## 已实现（V18 批次：纠纷 SLA + 申诉窗口，见提交记录）
 
 ## 已实现（V17 批次：双盲互评完整落地 + 并发接单上限）
 

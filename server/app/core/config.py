@@ -27,6 +27,9 @@ class Settings:
     DISPUTE_SLA_DAYS = int(os.environ.get("PLATFORM_DISPUTE_SLA_DAYS", "7"))
     # DSP-010 申诉窗口：仲裁结案后 N 天内可申诉，逾期裁决终局
     APPEAL_WINDOW_DAYS = int(os.environ.get("PLATFORM_APPEAL_WINDOW_DAYS", "7"))
+    # PAY-007 提现风控（业界惯例）：单日累计限额；大额提现冻结进人审队列
+    WITHDRAW_DAILY_LIMIT_CENTS = int(os.environ.get("PLATFORM_WITHDRAW_DAILY_LIMIT_CENTS", "5000000"))  # ¥5万/日
+    LARGE_WITHDRAW_CENTS = int(os.environ.get("PLATFORM_LARGE_WITHDRAW_CENTS", "1000000"))  # ≥¥1万人审
     # 到场打卡允许误差（米，GEO-020）
     CHECKIN_RADIUS_M = int(os.environ.get("PLATFORM_CHECKIN_RADIUS_M", "500"))
     # 陌生人私聊未获回复前的消息上限（IM-005）

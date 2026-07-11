@@ -34,13 +34,79 @@ def topup(db: Session, user_id: int, amount: int) -> WalletAccount:
     return acct
 
 
-def withdraw(db: Session, user_id: int, amount: int) -> WalletAccount:
+def _today_withdrawn(db: Session, user_id: int) -> int:
+    """当日已提现（含出账流水与待审冻结）总额，用于日限额（PAY-007）。"""
+    from sqlalchemy import func
+
+    from app.modules.account.models import utcnow
+
+    from .models import WithdrawRequest
+
+    day_start = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    done = -(
+        db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0))
+        .filter(LedgerEntry.user_id == user_id, LedgerEntry.kind == "withdraw",
+                LedgerEntry.created_at >= day_start)
+        .scalar()
+    )
+    pending = (
+        db.query(func.coalesce(func.sum(WithdrawRequest.amount_cents), 0))
+        .filter(WithdrawRequest.user_id == user_id, WithdrawRequest.status == "pending",
+                WithdrawRequest.created_at >= day_start)
+        .scalar()
+    )
+    return int(done) + int(pending)
+
+
+def withdraw(db: Session, user_id: int, amount: int) -> dict:
+    """PAY-007 提现风控：日限额硬拒；大额冻结进人审；小额即时出账。"""
+    from app.core.config import settings
+
+    from .models import WithdrawRequest
+
     acct = get_or_create(db, user_id)
     if amount <= 0 or amount > acct.available_cents:
         raise bad_request("可用余额不足", "insufficient_balance")
+    if _today_withdrawn(db, user_id) + amount > settings.WITHDRAW_DAILY_LIMIT_CENTS:
+        raise bad_request(
+            f"超出单日提现限额（{settings.WITHDRAW_DAILY_LIMIT_CENTS / 100:.0f} 元）",
+            "daily_limit_exceeded",
+        )
+    if amount >= settings.LARGE_WITHDRAW_CENTS:
+        # 大额：可用 → 冻结，生成人审申请（批准划出 / 驳回解冻）
+        acct.available_cents -= amount
+        acct.frozen_cents += amount
+        req = WithdrawRequest(user_id=user_id, amount_cents=amount)
+        db.add(req)
+        db.flush()
+        _log(db, user_id, "withdraw_hold", -amount, memo=f"大额提现待审 #{req.id}")
+        return {"status": "pending_review", "request_id": req.id,
+                "available_cents": acct.available_cents, "frozen_cents": acct.frozen_cents}
     acct.available_cents -= amount
     _log(db, user_id, "withdraw", -amount)
-    return acct
+    return {"status": "done", "available_cents": acct.available_cents,
+            "frozen_cents": acct.frozen_cents}
+
+
+def decide_withdraw(db: Session, req, approve: bool, admin_id: int) -> dict:
+    """PAY-007 人审裁决：批准=冻结划出（落 withdraw 流水），驳回=解冻退回。"""
+    from app.modules.account.models import utcnow
+
+    if req.status != "pending":
+        raise bad_request("该提现申请已处理", "request_closed")
+    acct = get_or_create(db, req.user_id)
+    acct.frozen_cents -= req.amount_cents
+    if approve:
+        _log(db, req.user_id, "withdraw", -req.amount_cents, memo=f"大额提现批准 #{req.id}")
+        req.status = "approved"
+    else:
+        acct.available_cents += req.amount_cents
+        _log(db, req.user_id, "withdraw_refund", req.amount_cents, memo=f"大额提现驳回退回 #{req.id}")
+        req.status = "rejected"
+    req.decided_by = admin_id
+    req.decided_at = utcnow()
+    db.add_all([acct, req])
+    return {"status": req.status, "amount_cents": req.amount_cents}
 
 
 def escrow_hold(db: Session, user_id: int, amount: int, contract_id: int):

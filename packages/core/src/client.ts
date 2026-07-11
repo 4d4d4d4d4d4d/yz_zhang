@@ -174,7 +174,32 @@ export class PlatformClient {
     return this.request<{ available_cents: number }>('POST', '/wallet/topup', { amount_cents: amountCents });
   }
   withdraw(amountCents: number) {
-    return this.request<{ available_cents: number }>('POST', '/wallet/withdraw', { amount_cents: amountCents });
+    return this.request<{ status: 'done' | 'pending_review'; request_id?: number; available_cents: number; frozen_cents: number }>(
+      'POST', '/wallet/withdraw', { amount_cents: amountCents },
+    );
+  }
+  withdrawRequests(status = 'pending') {
+    return this.request<Array<{ id: number; user_id: number; amount_cents: number; status: string; created_at: string }>>(
+      'GET', `/wallet/withdraw-requests?status=${status}`,
+    );
+  }
+  decideWithdraw(requestId: number, approve: boolean) {
+    return this.request<{ status: string; amount_cents: number }>(
+      'POST', `/wallet/withdraw-requests/${requestId}/${approve ? 'approve' : 'reject'}`,
+    );
+  }
+  changePassword(oldPassword: string, newPassword: string) {
+    return this.request<{ token: string }>('POST', '/auth/change-password', {
+      old_password: oldPassword, new_password: newPassword,
+    });
+  }
+  resetPassword(phone: string, smsCode: string, newPassword: string) {
+    return this.request<{ ok: boolean }>('POST', '/auth/reset-password', {
+      phone, sms_code: smsCode, new_password: newPassword,
+    });
+  }
+  withdrawApplication(applicationId: number) {
+    return this.request<{ id: number; status: string }>('POST', `/applications/${applicationId}/withdraw`);
   }
   ledger() {
     return this.request<Array<{ id: number; kind: string; amount_cents: number; contract_id: number | null; memo: string; created_at: string }>>(

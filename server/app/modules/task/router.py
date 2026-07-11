@@ -270,7 +270,8 @@ def apply(
         raise forbidden("无法报名该任务", "blocked")
     dup = (
         db.query(Application)
-        .filter(Application.task_id == task_id, Application.applicant_id == user.id)
+        .filter(Application.task_id == task_id, Application.applicant_id == user.id,
+                Application.status != "withdrawn")  # TASK-012 撤回后允许重新报名
         .first()
     )
     if dup:
@@ -335,6 +336,8 @@ def accept_application(
         raise forbidden()
     if task.status != "published":
         raise conflict("任务不在招募中", "not_recruiting")
+    if app_row.status != "pending":  # TASK-012 已撤回/已拒的报名不可成交（防替人签约）
+        raise conflict("该报名已撤回或已处理", "application_closed")
     service.check_executor_capacity(db, app_row.applicant_id)  # TASK-011 成交时复核在途上限
     app_row.status = "accepted"
     task.executor_id = app_row.applicant_id
@@ -345,6 +348,23 @@ def accept_application(
         Application.task_id == task.id, Application.id != app_row.id
     ).update({"status": "rejected"})
     return {"contract_id": contract.id, "task": dump_task(task, user)}
+
+
+@router.post("/applications/{application_id}/withdraw")
+def withdraw_application(
+    application_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """TASK-012 报名撤回（业界标配）：仅本人、仅 pending 可撤；撤回后可重新报名。"""
+    app_row = db.get(Application, application_id)
+    if not app_row:
+        raise not_found("报名不存在")
+    if app_row.applicant_id != user.id:
+        raise forbidden()
+    if app_row.status != "pending":
+        raise conflict("该报名已处理，不可撤回", "application_closed")
+    app_row.status = "withdrawn"
+    db.add(app_row)
+    return {"id": app_row.id, "status": "withdrawn"}
 
 
 # ---------- 执行留痕（TASK-022, GEO-020）----------

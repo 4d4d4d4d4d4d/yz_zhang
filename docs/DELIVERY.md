@@ -1,7 +1,7 @@
 # 交付总览（Final Delivery Overview）
 
-> 截至 2026-07-11：MVP + V1~V17 全批次完成。
-> 后端 **163 tests** + 前端 **29 tests**（core 23 + web 6）全绿。
+> 截至 2026-07-11：MVP + V1~V19 全批次完成。
+> 后端 **173 tests** + 前端 **29 tests**（core 23 + web 6）全绿。
 > 本文档是对 [docs/specs/](specs/README.md)（功能拆分）与
 > [16-traceability.md](specs/16-traceability.md)（逐条追溯）的收口汇总。
 

@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, require_verified
+from app.core.deps import get_current_user, require_admin, require_verified
 from app.core.idempotency import replay_or_run
 from app.modules.account.models import User
 
@@ -48,12 +48,58 @@ def withdraw(
     body: AmountIn, user: User = Depends(require_verified), db: Session = Depends(get_db),
     idempotency_key: str = Header(default=""),
 ):
-    """PAY-004 提现：实名后可提（模拟 T+0 到账）。幂等防重复提现。"""
+    """PAY-004/007 提现：小额即时（模拟 T+0），大额冻结人审，日限额硬拒。幂等防重复。"""
     def run():
-        acct = service.withdraw(db, user.id, body.amount_cents)
-        return {"available_cents": acct.available_cents}
+        return service.withdraw(db, user.id, body.amount_cents)
 
     return replay_or_run(db, user.id, idempotency_key or None, "wallet.withdraw", run)
+
+
+# ---------- PAY-007 大额提现人审（管理端） ----------
+@router.get("/withdraw-requests")
+def list_withdraw_requests(
+    status: str = "pending",
+    admin: User = Depends(require_admin), db: Session = Depends(get_db),
+):
+    from .models import WithdrawRequest
+
+    rows = (
+        db.query(WithdrawRequest).filter(WithdrawRequest.status == status)
+        .order_by(WithdrawRequest.id).limit(200).all()
+    )
+    return [
+        {"id": r.id, "user_id": r.user_id, "amount_cents": r.amount_cents,
+         "status": r.status, "created_at": r.created_at.isoformat()}
+        for r in rows
+    ]
+
+
+@router.post("/withdraw-requests/{request_id}/approve")
+def approve_withdraw(
+    request_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db),
+):
+    from .models import WithdrawRequest
+
+    req = db.get(WithdrawRequest, request_id)
+    if not req:
+        from app.core.errors import not_found
+
+        raise not_found("提现申请不存在")
+    return service.decide_withdraw(db, req, approve=True, admin_id=admin.id)
+
+
+@router.post("/withdraw-requests/{request_id}/reject")
+def reject_withdraw(
+    request_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db),
+):
+    from .models import WithdrawRequest
+
+    req = db.get(WithdrawRequest, request_id)
+    if not req:
+        from app.core.errors import not_found
+
+        raise not_found("提现申请不存在")
+    return service.decide_withdraw(db, req, approve=False, admin_id=admin.id)
 
 
 @router.get("/ledger")

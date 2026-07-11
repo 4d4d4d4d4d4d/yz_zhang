@@ -140,6 +140,53 @@ def login_sms(body: SmsLoginIn, db: Session = Depends(get_db), user_agent: str =
     return {"token": _issue_token(db, user, user_agent), "user": _me(user)}
 
 
+# ---------- 密码管理（ACC-004）----------
+class ChangePasswordIn(BaseModel):
+    old_password: str
+    new_password: str = Field(min_length=6, max_length=64)
+
+
+class ResetPasswordIn(BaseModel):
+    phone: str
+    sms_code: str
+    new_password: str = Field(min_length=6, max_length=64)
+
+
+@router.post("/auth/change-password")
+def change_password(
+    body: ChangePasswordIn, user: User = Depends(get_current_user),
+    db: Session = Depends(get_db), user_agent: str = Header(default=""),
+):
+    """ACC-004 修改密码：验证旧密码；成功后吊销全部会话并签发新 token（业界惯例）。"""
+    if not user.password_hash or not verify_password(body.old_password, user.password_hash):
+        raise bad_request("原密码错误", "bad_old_password")
+    user.password_hash = hash_password(body.new_password)
+    db.add(user)
+    db.query(LoginSession).filter(
+        LoginSession.user_id == user.id, LoginSession.revoked.is_(False)
+    ).update({"revoked": True})
+    return {"token": _issue_token(db, user, user_agent)}
+
+
+@router.post("/auth/reset-password")
+def reset_password(body: ResetPasswordIn, db: Session = Depends(get_db)):
+    """ACC-004 忘记密码：短信码重置；吊销全部会话，需重新登录（业界惯例）。"""
+    from app.core.ratelimit import check
+
+    check(f"reset-pwd:{body.phone}", limit=3, window_seconds=60)  # 防爆破
+    if body.sms_code != settings.DEV_SMS_CODE:
+        raise bad_request("验证码错误", "sms_code_invalid")
+    user = db.query(User).filter(User.phone == body.phone).first()
+    if not user or user.is_deleted:
+        raise bad_request("账号不存在", "no_such_account")
+    user.password_hash = hash_password(body.new_password)
+    db.add(user)
+    db.query(LoginSession).filter(
+        LoginSession.user_id == user.id, LoginSession.revoked.is_(False)
+    ).update({"revoked": True})
+    return {"ok": True}
+
+
 # ---------- 会话/设备管理（ACC-005）----------
 @router.get("/auth/sessions")
 def my_sessions(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
