@@ -29,5 +29,7 @@ class Dispute(Base):
     # DSP-008 申诉复核（一次）：记录裁决执行时的分割基数用于纠正性结算
     split_base_cents: Mapped[int] = mapped_column(Integer, default=0)
     appealed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # DSP-009 SLA 升级标记：超期未结案已进人审队列（幂等去重）
+    escalated: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

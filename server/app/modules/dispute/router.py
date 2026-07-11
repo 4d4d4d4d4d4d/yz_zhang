@@ -36,6 +36,7 @@ def _dump(d: Dispute) -> dict:
         "verdict_executor_share_bps": d.verdict_executor_share_bps,
         "verdict_reason": d.verdict_reason,
         "split_base_cents": d.split_base_cents,  # DSP-008 裁决/复核分账基数
+        "escalated": d.escalated,  # DSP-009 SLA 超期升级标记
     }
 
 
@@ -167,6 +168,15 @@ def appeal(dispute_id: int, user: User = Depends(get_current_user), db: Session 
         raise conflict("仅平台仲裁结案的纠纷可申诉（和解结案不可申诉）", "not_appealable")
     if dispute.appealed:
         raise conflict("申诉机会已用完（每案一次）", "already_appealed")
+    # DSP-010 申诉窗口：逾期裁决终局（业界惯例，防裁决永不生效）
+    from datetime import timedelta
+
+    from app.core.config import settings
+
+    if dispute.resolved_at and utcnow() > dispute.resolved_at + timedelta(
+        days=settings.APPEAL_WINDOW_DAYS
+    ):
+        raise conflict("申诉期已过，裁决已终局", "appeal_window_closed")
     dispute.appealed = True
     dispute.status = "appealed"
     db.add(dispute)
@@ -199,6 +209,42 @@ def appeal_verdict(
     db.add(dispute)
     publish(db, "dispute.resolved", {"dispute_id": dispute.id, "task_id": task.id, "appeal": True})
     return _dump(dispute) | {"corrective_delta_cents": delta}
+
+
+@router.post("/disputes/jobs/escalate-overdue")
+def run_escalate_overdue(db: Session = Depends(get_db)):
+    """DSP-009 纠纷 SLA job：开立超期未结案的纠纷自动升级。
+
+    纠纷冻结着托管资金，业界（支付宝/Upwork）对处理时限有硬性 SLA——
+    超期自动进人审队列：标记 escalated + 通知全体管理员 + 生成客服工单，
+    幂等（已升级的不重复）。不做自动裁决：资金裁决必须有人类经手。
+    """
+    from datetime import timedelta
+
+    from app.core.config import settings
+    from app.modules.notification.service import notify
+    from app.modules.support.models import Ticket
+
+    cutoff = utcnow() - timedelta(days=settings.DISPUTE_SLA_DAYS)
+    rows = (
+        db.query(Dispute)
+        .filter(Dispute.status == "open", Dispute.escalated.is_(False),
+                Dispute.created_at <= cutoff)
+        .all()
+    )
+    admins = db.query(User).filter(User.is_admin.is_(True)).all()
+    for d in rows:
+        d.escalated = True
+        db.add(d)
+        db.add(Ticket(
+            user_id=d.opened_by, subject=f"[SLA超期] 纠纷 #{d.id} 超 {settings.DISPUTE_SLA_DAYS} 天未结案",
+            body=f"任务 #{d.task_id} / 合约 #{d.contract_id}：{d.reason[:200]}。托管资金冻结中，请优先仲裁。",
+        ))
+        for a in admins:
+            notify(db, a.id, "dispute", "纠纷处理超期升级",
+                   f"纠纷 #{d.id}（任务 #{d.task_id}）已超 {settings.DISPUTE_SLA_DAYS} 天未结案，"
+                   "托管资金冻结中，已进入人审队列。")
+    return {"escalated": len(rows)}
 
 
 @router.get("/disputes/{dispute_id}")
