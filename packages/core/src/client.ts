@@ -201,6 +201,15 @@ export class PlatformClient {
   withdrawApplication(applicationId: number) {
     return this.request<{ id: number; status: string }>('POST', `/applications/${applicationId}/withdraw`);
   }
+  bookmark(taskId: number) {
+    return this.request<{ ok: boolean; already?: boolean }>('POST', `/tasks/${taskId}/bookmark`);
+  }
+  unbookmark(taskId: number) {
+    return this.request<{ ok: boolean }>('DELETE', `/tasks/${taskId}/bookmark`);
+  }
+  myBookmarks() {
+    return this.request<Task[]>('GET', '/users/me/bookmarks');
+  }
   ledger() {
     return this.request<Array<{ id: number; kind: string; amount_cents: number; contract_id: number | null; memo: string; created_at: string }>>(
       'GET', '/wallet/ledger',

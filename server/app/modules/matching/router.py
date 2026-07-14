@@ -40,6 +40,8 @@ def invite(
     invitee = db.get(User, body.user_id)
     if not invitee or not invitee.is_verified:
         raise bad_request("被邀请人不存在或未实名", "invalid_invitee")
+    if not invitee.accepting_orders:  # ACC-014 已下线不可被邀约
+        raise bad_request("对方已暂停接单", "invitee_unavailable")
     if body.user_id == user.id:
         raise bad_request("不能邀请自己", "self_invite")
     if db.query(Invitation).filter(

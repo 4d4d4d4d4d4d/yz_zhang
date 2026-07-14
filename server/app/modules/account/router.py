@@ -15,10 +15,24 @@ router = APIRouter(tags=["account"])
 
 
 def _issue_token(db: Session, user: User, device: str) -> str:
-    """ACC-005：每次登录建立会话，token 绑定会话可被吊销。"""
-    session = LoginSession(user_id=user.id, device=device[:200])
+    """ACC-005：每次登录建立会话，token 绑定会话可被吊销。
+    ACC-007：老账号在陌生设备登录 → 站内通知提醒（业界安全惯例）。"""
+    device = device[:200]
+    known = db.query(LoginSession).filter(LoginSession.user_id == user.id).count()
+    seen_device = (
+        db.query(LoginSession)
+        .filter(LoginSession.user_id == user.id, LoginSession.device == device)
+        .first()
+    )
+    session = LoginSession(user_id=user.id, device=device)
     db.add(session)
     db.flush()
+    if known and not seen_device:
+        from app.modules.notification.service import notify
+
+        notify(db, user.id, "account", "新设备登录提醒",
+               f"你的账号刚在新设备登录（{device[:60] or '未知设备'}）。"
+               "若非本人操作，请立即修改密码并在「登录设备」中下线该会话。")
     return create_token(user.id, session.id)
 
 
@@ -52,6 +66,7 @@ class ProfileUpdateIn(BaseModel):
     privacy: dict | None = None
     service_rate_cents: int | None = None
     available_times: str | None = None
+    accepting_orders: bool | None = None  # ACC-014 接单开关（下线不进推荐/不可被邀约）
 
 
 class VerifyIn(BaseModel):
@@ -387,4 +402,5 @@ def public_profile(user_id: int, db: Session = Depends(get_db)):
         # ACC-013 服务定价与可接单时间（名片页承接下单）
         "service_rate_cents": user.service_rate_cents,
         "available_times": user.available_times,
+        "accepting_orders": user.accepting_orders,
     }

@@ -350,6 +350,44 @@ def accept_application(
     return {"contract_id": contract.id, "task": dump_task(task, user)}
 
 
+# ---------- TASK-013 收藏 ----------
+@router.post("/tasks/{task_id}/bookmark", status_code=201)
+def add_bookmark(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from .models import Bookmark
+
+    _get_task(db, task_id)  # 任务需存在
+    dup = db.query(Bookmark).filter(
+        Bookmark.user_id == user.id, Bookmark.task_id == task_id
+    ).first()
+    if dup:
+        return {"ok": True, "already": True}  # 幂等
+    db.add(Bookmark(user_id=user.id, task_id=task_id))
+    return {"ok": True}
+
+
+@router.delete("/tasks/{task_id}/bookmark")
+def remove_bookmark(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from .models import Bookmark
+
+    db.query(Bookmark).filter(
+        Bookmark.user_id == user.id, Bookmark.task_id == task_id
+    ).delete()
+    return {"ok": True}
+
+
+@router.get("/users/me/bookmarks")
+def my_bookmarks(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from .models import Bookmark
+
+    rows = (
+        db.query(Bookmark).filter(Bookmark.user_id == user.id)
+        .order_by(Bookmark.id.desc()).limit(100).all()
+    )
+    ids = [r.task_id for r in rows]
+    tasks = {t.id: t for t in db.query(Task).filter(Task.id.in_(ids))} if ids else {}
+    return [dump_task(tasks[i], user) for i in ids if i in tasks]
+
+
 @router.post("/applications/{application_id}/withdraw")
 def withdraw_application(
     application_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)

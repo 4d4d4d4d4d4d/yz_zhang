@@ -146,3 +146,14 @@ class Review(Base):
     tags: Mapped[list] = mapped_column(JSON, default=list)
     comment: Mapped[str] = mapped_column(String(500), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Bookmark(Base):
+    """TASK-013 任务收藏（业界标配）：同一用户对同一任务唯一。"""
+
+    __tablename__ = "task_bookmarks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    task_id: Mapped[int] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

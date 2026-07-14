@@ -268,12 +268,23 @@ def toggle_city(
     return {"id": row.id, "name": row.name, "active": row.active}
 
 
-# ---------- 对账 job（PAY-006） ----------
+# ---------- 对账 job（PAY-006/008） ----------
 @router.post("/admin/jobs/reconcile")
 def run_reconcile(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """PAY-008 告警闭环：对账不平不能只返回结果——自动开差错工单 + 通知全体管理员。"""
+    from app.modules.notification.service import notify
     from app.modules.risk.service import reconcile
+    from app.modules.support.models import Ticket
 
-    return reconcile(db)
+    result = reconcile(db)
+    if not result["ok"]:
+        detail = "; ".join(str(m) for m in result["mismatches"])[:1500]
+        db.add(Ticket(user_id=admin.id, subject="[对账差错] 资金不变量校验失败",
+                      body=f"日终对账发现差错，请立即核查：{detail}"))
+        for a in db.query(User).filter(User.is_admin.is_(True)).all():
+            notify(db, a.id, "risk", "对账差错告警",
+                   "资金对账不变量校验失败，差错工单已生成，请立即处理。")
+    return result
 
 
 # ---------- 数据看板（OPS-007） ----------

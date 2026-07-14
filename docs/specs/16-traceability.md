@@ -1,8 +1,18 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V19 全批次完成（2026-07-11）。
-> 后端 173 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V20 全批次完成（2026-07-14）。
+> 后端 177 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V20 批次：批判性扫描——收藏/接单开关/新设备提醒/对账告警闭环）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| TASK-013 任务收藏（幂等添加/列表/移除） | `task/router.py` bookmark 路由 + `Bookmark` 模型 | `tests/test_v20_ops_features.py` |
+| ACC-014 接单开关（业界「上线/下线」）：关闭后不进推荐、不可被邀约；主动报名不受限 | `User.accepting_orders` + 推荐召回过滤 + 邀约守卫 | 同上 |
+| ACC-007 新设备登录提醒：陌生 UA 登录触发站内通知，已知设备静默 | `account/router.py::_issue_token` | 同上 |
+| PAY-008 对账告警闭环：不变量校验失败自动开差错工单 + 通知全体管理员（原来只返回结果没人看） | `admin/router.py::run_reconcile` | 同上 |
+| SDK 同步：bookmark/unbookmark/myBookmarks | `packages/core/src/client.ts` | web 构建通过 |
 
 ## 已实现（V19 批次：批判性扫描——提现风控 + 密码管理 + 报名撤回）
 

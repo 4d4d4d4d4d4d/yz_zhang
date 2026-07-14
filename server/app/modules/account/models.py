@@ -31,6 +31,8 @@ class User(Base):
     # ACC-013 服务定价（分/次，0=面议）与可接单时间描述
     service_rate_cents: Mapped[int] = mapped_column(Integer, default=0)
     available_times: Mapped[str] = mapped_column(String(200), default="")
+    # ACC-014 接单开关（业界「上线/下线」）：关闭后不进推荐、不可被邀约；主动报名不受限
+    accepting_orders: Mapped[bool] = mapped_column(Boolean, default=True)
     # ACC-020 实名认证（模拟 eKYC 通过后置位；接单/提现前强制）
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     real_name: Mapped[str] = mapped_column(String(50), default="")
