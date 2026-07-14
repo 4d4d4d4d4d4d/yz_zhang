@@ -1,58 +1,24 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { deriveAlerts, createInbox } from '../logic/notifications.js'
-import { slaSummary, healthSummary } from '../logic/customerSuccess.js'
-import { assessCampaign } from '../logic/riskLegal.js'
-import { invoice } from '../logic/metering.js'
-import { dealReadiness } from '../logic/pipeline.js'
-import { trustScore } from '../logic/showcase.js'
+import { useInbox } from '../store/workspace.js'
 
 const { t } = useI18n()
 const router = useRouter()
 
-// Demo inputs run through the REAL engines — the bell reflects the truth
-// of the workspace's demo data, not hand-written alerts (spec 26).
-const now = Date.now()
-const hrs = n => new Date(now + n * 3600000).toISOString()
-
-const inputs = {
-  sla: slaSummary([
-    { due: hrs(-0.5), sla: 1, status: 'active', csat: null },
-    { due: hrs(-2), sla: 8, status: 'active', csat: null },
-    { due: hrs(4), sla: 8, status: 'active', csat: null }
-  ], now),
-  health: healthSummary([
-    { name: 'Mizu Logistics', mrr: 980, signals: { usage: 38, payment: 68, support: 52, adoption: 34, sentiment: 42 }, renewalIn: 42 },
-    { name: 'Lumen Studios', mrr: 9800, signals: { usage: 92, payment: 100, support: 88, adoption: 84, sentiment: 92 }, renewalIn: 172 }
-  ]),
-  compliance: assessCampaign({ markets: ['JP', 'EU'], attributes: { consent: true, dpa: true, localization: true, adDisclosure: true, provenance: true } }),
-  invoice: invoice(5000, [{ used: 12480, included: 10000, cost: 2246 }]),
-  readiness: dealReadiness({
-    reels: [trustScore({ provenance: true, complianceGate: true })],
-    fieldCase: { state: 'evidence-collected', chainValid: true },
-    compliance: { gate: 'pass' }, diligence: { gate: 'pass' }, terms: { verdict: 'counter' }
-  })
-}
-
-const inbox = createInbox()
-for (const a of deriveAlerts(inputs)) inbox.push(a, now)
+// Spec 27: the inbox is a shared, persisted store — the bell shows the
+// same facts as the module pages, and read-state survives reloads.
+const { items, unread, markRead, markAllRead } = useInbox()
 
 const open = ref(false)
-const version = ref(0)
-const items = computed(() => { void version.value; return inbox.list() })
-const unread = computed(() => { void version.value; return inbox.unreadCount() })
-
 const DOT = { critical: '#f87171', warning: '#fbbf24', info: '#22d3ee' }
 
 function go(item) {
-  inbox.markRead(item.key)
-  version.value++
+  markRead(item.key)
   open.value = false
   router.push(item.route)
 }
-function markAll() { inbox.markAllRead(); version.value++ }
 </script>
 
 <template>
@@ -64,7 +30,7 @@ function markAll() { inbox.markAllRead(); version.value++ }
     <div v-if="open" class="panel card">
       <div class="p-head">
         <strong>{{ t('notify.title') }}</strong>
-        <button v-if="unread" class="mark" type="button" @click="markAll">{{ t('notify.markAll') }}</button>
+        <button v-if="unread" class="mark" type="button" @click="markAllRead">{{ t('notify.markAll') }}</button>
       </div>
       <div v-if="!items.length" class="empty">{{ t('notify.empty') }}</div>
       <button v-for="i in items" :key="i.key" type="button" class="row" :class="{ read: i.read }" @click="go(i)">

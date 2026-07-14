@@ -139,6 +139,10 @@ export default {
       trust:     { posture: 'Posture', controls: 'Controls · DSR', heatmap: 'Risk heatmap', dpia: 'DPIA workflow', audit: 'Audit room', policies: 'Policies · training', health: 'Customer health', support: 'Support · SLA' }
     }
   },
+  boundary: {
+    title: 'This module hit an error',
+    retry: 'Try again'
+  },
   notify: {
     title: 'Notifications',
     empty: 'All clear — nothing needs your attention.',

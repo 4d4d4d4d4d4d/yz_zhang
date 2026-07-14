@@ -1,17 +1,9 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { enrichAccount, healthSummary, healthBand as band, HEALTH_WEIGHTS as weights } from '../logic/customerSuccess.js'
+import { ACCOUNTS } from '../data/workspace.js'
 
-const accounts = ref([
-  { name: 'Lumen Studios',      mrr: 9800,  csm: 'Akiko',   signals: { usage: 92, payment: 100, support: 88, adoption: 84, sentiment: 92 }, renewalIn: 172, trend: 'up' },
-  { name: 'Northwave Partners', mrr: 12400, csm: 'Akiko',   signals: { usage: 74, payment: 100, support: 82, adoption: 68, sentiment: 78 }, renewalIn: 68,  trend: 'flat' },
-  { name: 'Aurora Media',       mrr: 6200,  csm: 'Kenji',   signals: { usage: 88, payment: 92,  support: 84, adoption: 76, sentiment: 84 }, renewalIn: 240, trend: 'up' },
-  { name: 'Kaito Beauty',       mrr: 2400,  csm: 'Hana',    signals: { usage: 96, payment: 100, support: 76, adoption: 82, sentiment: 88 }, renewalIn: 316, trend: 'up' },
-  { name: 'Cobalt Legal',       mrr: 1800,  csm: 'Diego',   signals: { usage: 62, payment: 100, support: 72, adoption: 58, sentiment: 62 }, renewalIn: 124, trend: 'down' },
-  { name: 'Mizu Logistics',     mrr:  980,  csm: 'Hana',    signals: { usage: 38, payment: 68,  support: 52, adoption: 34, sentiment: 42 }, renewalIn: 42,  trend: 'down' },
-  { name: 'Helio Network',      mrr:  420,  csm: 'Diego',   signals: { usage: 54, payment: 100, support: 68, adoption: 48, sentiment: 62 }, renewalIn: 220, trend: 'flat' },
-  { name: 'Verda Commerce',     mrr:  380,  csm: 'Hana',    signals: { usage: 82, payment: 100, support: 92, adoption: 76, sentiment: 84 }, renewalIn: 96,  trend: 'up' }
-])
+const accounts = ref(ACCOUNTS)
 
 // Spec-16 customer-success engine
 const enriched = computed(() => accounts.value.map(a => enrichAccount(a)).sort((a, b) => a.score - b.score))

@@ -137,6 +137,10 @@ export default {
       trust:     { posture: 'ポスチャー', controls: 'コントロール · DSR', heatmap: 'リスクヒートマップ', dpia: 'DPIA ワークフロー', audit: '監査ルーム', policies: 'ポリシー · 研修', health: '顧客ヘルス', support: 'サポート · SLA' }
     }
   },
+  boundary: {
+    title: 'このモジュールでエラーが発生しました',
+    retry: '再試行'
+  },
   notify: {
     title: '通知',
     empty: 'すべて正常です。対応が必要な項目はありません。',

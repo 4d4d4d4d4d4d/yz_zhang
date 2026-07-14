@@ -139,6 +139,10 @@ export default {
       trust:     { posture: '合规态势', controls: '控制项 · DSR', heatmap: '风险热力图', dpia: 'DPIA 流程', audit: '审计室', policies: '制度 · 培训', health: '客户健康度', support: '支持 · SLA' }
     }
   },
+  boundary: {
+    title: '该模块出现错误',
+    retry: '重试'
+  },
   notify: {
     title: '通知中心',
     empty: '一切正常——暂无需要处理的事项。',

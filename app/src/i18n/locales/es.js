@@ -137,6 +137,10 @@ export default {
       trust:     { posture: 'Postura', controls: 'Controles · DSR', heatmap: 'Mapa de riesgos', dpia: 'Flujo DPIA', audit: 'Sala de auditoría', policies: 'Políticas · formación', health: 'Salud del cliente', support: 'Soporte · SLA' }
     }
   },
+  boundary: {
+    title: 'Este módulo encontró un error',
+    retry: 'Reintentar'
+  },
   notify: {
     title: 'Notificaciones',
     empty: 'Todo en orden — nada requiere tu atención.',

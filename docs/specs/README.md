@@ -35,6 +35,7 @@ the test assertions.
 | 24 | [⌘K Command Palette](24-command-palette.md) | `logic/search.js`, `components/CommandPalette.vue` | `tests/search.test.js` |
 | 25 | [Multi-Currency Pricing](25-multi-currency.md) | `logic/currency.js`, `views/Pricing.vue` | `tests/currency.test.js` |
 | 26 | [Notification Center](26-notification-center.md) | `logic/notifications.js`, `components/NotificationCenter.vue` | `tests/notifications.test.js` |
+| 27 | [Workspace Data Layer (batch)](27-workspace-data-layer.md) | `data/workspace.js`, `store/workspace.js`, `components/ModuleBoundary.vue` | `tests/workspace.test.js` |
 
 Capability flow across domains:
 

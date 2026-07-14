@@ -6,6 +6,7 @@ import { SECTIONS } from '../console/registry.js'
 
 import SecurityRibbon  from '../components/SecurityRibbon.vue'
 import NotificationCenter from '../components/NotificationCenter.vue'
+import ModuleBoundary     from '../components/ModuleBoundary.vue'
 import SubTabs         from '../components/SubTabs.vue'
 import LiveActivityFeed from '../components/LiveActivityFeed.vue'
 
@@ -157,7 +158,9 @@ const activeComp = computed(() => active.value.sub.find(s => s.v === subTab.valu
 
         <SubTabs v-model="subTab" :tabs="subTabs" />
 
-        <component :is="activeComp" :key="active.key + '/' + subTab" />
+        <ModuleBoundary :key="active.key + '/' + subTab">
+          <component :is="activeComp" />
+        </ModuleBoundary>
 
         <LiveActivityFeed />
       </main>

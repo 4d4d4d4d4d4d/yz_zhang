@@ -1,45 +1,14 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { invoice } from '../logic/metering.js'
+import { TENANTS as tenants, METERS as meters, PLAN_BASE_FEES } from '../data/workspace.js'
 
-const tenants = [
-  { id: 'lumi',     name: 'Lumi DTC',           plan: 'Enterprise', mrr: 9800 },
-  { id: 'kaito',    name: 'Kaito Beauty',       plan: 'Growth',     mrr: 2400 },
-  { id: 'aurora',   name: 'Aurora Media',       plan: 'Enterprise', mrr: 6200 },
-  { id: 'verda',    name: 'Verda Commerce',     plan: 'Starter',    mrr: 0    }
-]
 const tenant = ref('lumi')
 const cur = computed(() => tenants.find(t => t.id === tenant.value))
 
-const meters = {
-  lumi: [
-    { k: 'API calls',    used: 2840000, included: 3000000, unit: 'req',  rate: '$0.0008 / 1K', cost: 2272 },
-    { k: 'GPU seconds',  used: 184000, included: 200000,  unit: 's',    rate: '$0.024 / s',    cost: 4416 },
-    { k: 'Renders',      used: 12480, included: 10000,    unit: 'job',  rate: '$0.18 / job',   cost: 2246 },
-    { k: 'Storage',      used: 4.2,   included: 5,        unit: 'TB',   rate: '$28 / TB-mo',   cost: 118 }
-  ],
-  kaito: [
-    { k: 'API calls',    used: 460000, included: 500000,  unit: 'req',  rate: '$0.0012 / 1K', cost: 552 },
-    { k: 'GPU seconds',  used: 38000, included: 40000,    unit: 's',    rate: '$0.026 / s',    cost: 988 },
-    { k: 'Renders',      used: 1840,  included: 2000,     unit: 'job',  rate: '$0.22 / job',   cost: 405 },
-    { k: 'Storage',      used: 0.8,   included: 1,        unit: 'TB',   rate: '$32 / TB-mo',   cost: 26 }
-  ],
-  aurora: [
-    { k: 'API calls',    used: 1680000, included: 2000000,unit: 'req',  rate: '$0.0009 / 1K', cost: 1512 },
-    { k: 'GPU seconds',  used: 128000,  included: 150000, unit: 's',    rate: '$0.025 / s',    cost: 3200 },
-    { k: 'Renders',      used: 7820,    included: 8000,   unit: 'job',  rate: '$0.20 / job',   cost: 1564 },
-    { k: 'Storage',      used: 2.4,     included: 3,      unit: 'TB',   rate: '$30 / TB-mo',   cost: 72 }
-  ],
-  verda: [
-    { k: 'API calls',    used: 28000,  included: 50000,   unit: 'req',  rate: '$0.0015 / 1K', cost: 42 },
-    { k: 'GPU seconds',  used: 1800,   included: 2000,    unit: 's',    rate: '$0.030 / s',    cost: 54 },
-    { k: 'Renders',      used: 142,    included: 200,     unit: 'job',  rate: '$0.25 / job',   cost: 36 },
-    { k: 'Storage',      used: 0.04,   included: 0.1,     unit: 'TB',   rate: '$40 / TB-mo',   cost: 2 }
-  ]
-}
 
 const curMeters = computed(() => meters[tenant.value])
-const baseFee = computed(() => ({ Enterprise: 5000, Growth: 999, Starter: 0 }[cur.value.plan]))
+const baseFee = computed(() => PLAN_BASE_FEES[cur.value.plan])
 // Spec-15 metering engine — invoice total includes the overage premium
 // (R1 correction: the inline version left overage out of the total).
 const inv = computed(() => invoice(baseFee.value, curMeters.value))

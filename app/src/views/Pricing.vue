@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SectionHeader from '../components/SectionHeader.vue'
 import { CURRENCIES, formatPrice, defaultCurrencyFor } from '../logic/currency.js'
+import { prefs, setCurrencyPref } from '../store/workspace.js'
 const { t, locale } = useI18n()
 
 const cycle = ref('monthly')
@@ -13,11 +14,10 @@ const prices = {
 }
 
 // Spec 25: currency defaults from the locale, follows locale switches
-// until the visitor overrides manually.
-const currency = ref(defaultCurrencyFor(locale.value))
-const overridden = ref(false)
-watch(locale, l => { if (!overridden.value) currency.value = defaultCurrencyFor(l) })
-function pickCurrency(code) { currency.value = code; overridden.value = true }
+// until the visitor overrides manually. Spec 27: the override persists.
+const currency = ref(prefs.currency || defaultCurrencyFor(locale.value))
+watch(locale, l => { if (!prefs.currency) currency.value = defaultCurrencyFor(l) })
+function pickCurrency(code) { currency.value = code; setCurrencyPref(code) }
 
 function price(plan) {
   const v = prices[plan][cycle.value]

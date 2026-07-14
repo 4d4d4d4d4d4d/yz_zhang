@@ -1,20 +1,10 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { slaStatus } from '../logic/customerSuccess.js'
+import { ticketsAt } from '../data/workspace.js'
 
 const now = Date.now()
-function inHours(h) { return new Date(now + h * 3600000).toISOString() }
-
-const tickets = ref([
-  { id: 'T-8241', title: 'Render queue stuck · JP region',           account: 'Lumen Studios',   sev: 'SEV1', assignee: 'On-call', due: inHours(-0.5), status: 'active',  sla: 1,  age: '3h 24m', csat: null },
-  { id: 'T-8240', title: 'API returning 429 on burst',               account: 'Aurora Media',    sev: 'SEV2', assignee: 'Priya',   due: inHours(4.2),   status: 'active',  sla: 8,  age: '5h 12m', csat: null },
-  { id: 'T-8239', title: 'How to enable multi-market rendering',     account: 'Kaito Beauty',    sev: 'SEV3', assignee: 'Marcus',  due: inHours(38),    status: 'active',  sla: 48, age: '10h',    csat: null },
-  { id: 'T-8238', title: 'SSO SAML metadata rotation',               account: 'Cobalt Legal',    sev: 'SEV2', assignee: 'Priya',   due: inHours(-2),    status: 'active',  sla: 8,  age: '11h',    csat: null },
-  { id: 'T-8237', title: 'Invoice charge dispute · overage',         account: 'Mizu Logistics',  sev: 'SEV3', assignee: 'Sofia',   due: inHours(52),    status: 'active',  sla: 48, age: '4h',     csat: null },
-  { id: 'T-8236', title: 'Bulk export missing 6 renders',            account: 'Northwave',       sev: 'SEV2', assignee: 'Marcus',  due: inHours(6),     status: 'resolved',sla: 8,  age: '2d',     csat: 5 },
-  { id: 'T-8235', title: 'Onboarding walkthrough scheduling',        account: 'Verda Commerce',  sev: 'SEV3', assignee: 'Sofia',   due: inHours(72),    status: 'resolved',sla: 48, age: '2d',     csat: 5 },
-  { id: 'T-8234', title: 'Brand kit sync failed',                    account: 'Lumen Studios',   sev: 'SEV2', assignee: 'Priya',   due: inHours(6),     status: 'resolved',sla: 8,  age: '2d',     csat: 4 }
-])
+const tickets = ref(ticketsAt(now))
 
 const filter = ref('active')
 const filters = ['active', 'resolved', 'all']
