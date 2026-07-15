@@ -37,10 +37,10 @@ function makeApp() {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/', name: 'home', component: Home },
-      { path: '/product', name: 'product', component: Product },
-      { path: '/pricing', name: 'pricing', component: Pricing },
-      { path: '/console/:tab?', name: 'console', component: Console }
+      { path: '/', name: 'home', component: Home, meta: { titleKey: 'title.home' } },
+      { path: '/product', name: 'product', component: Product, meta: { titleKey: 'title.product' } },
+      { path: '/pricing', name: 'pricing', component: Pricing, meta: { titleKey: 'title.pricing' } },
+      { path: '/console/:tab?', name: 'console', component: Console, meta: { titleKey: 'title.console' } }
     ]
   })
   const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en, zh, ja, es } })
@@ -86,6 +86,8 @@ describe('in-app SPA navigation renders every destination', () => {
     await router.push('/pricing')
     await settle(wrapper)
     expect(wrapper.text(), 'pricing should render plans').toContain('Starter')
+    // spec 28: document.title is localized + route-synced
+    expect(document.title).toBe('Pricing · AdForge')
 
     await router.push('/console/showcase')
     await settle(wrapper)

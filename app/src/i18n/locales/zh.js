@@ -145,6 +145,7 @@ export default {
   },
   notify: {
     title: '通知中心',
+    aria: '通知中心，{n} 条未读',
     empty: '一切正常——暂无需要处理的事项。',
     markAll: '全部标为已读',
     msg: {
@@ -155,7 +156,19 @@ export default {
       readiness: '成交就绪度 {score}/100 · {blockers} 项阻塞待解。'
     }
   },
+  title: {
+    home: '首页',
+    product: '产品',
+    studio: '在线 Demo',
+    console: '工作台',
+    cases: '客户案例',
+    pricing: '价格',
+    about: '关于我们',
+    contact: '商务合作'
+  },
   palette: {
+    title: '命令面板',
+    count: '{n} 个结果',
     placeholder: '跳转到任意模块…（如「实地调查」「收入确认」「bandit」）',
     empty: '没有匹配的模块——试试更短的关键词。',
     hint: '⌘K / Ctrl+K 打开 · ↑↓ 选择 · Enter 跳转 · Esc 关闭'

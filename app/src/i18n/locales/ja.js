@@ -143,6 +143,7 @@ export default {
   },
   notify: {
     title: '通知',
+    aria: '通知、未読 {n} 件',
     empty: 'すべて正常です。対応が必要な項目はありません。',
     markAll: 'すべて既読にする',
     msg: {
@@ -153,7 +154,19 @@ export default {
       readiness: '成約準備度 {score}/100 · ブロッカー {blockers} 件。'
     }
   },
+  title: {
+    home: 'ホーム',
+    product: 'プロダクト',
+    studio: 'スタジオ',
+    console: 'コンソール',
+    cases: '導入事例',
+    pricing: '料金',
+    about: '会社情報',
+    contact: 'パートナー'
+  },
   palette: {
+    title: 'コマンドパレット',
+    count: '{n} 件の結果',
     placeholder: '任意のモジュールへジャンプ…（例:「実地調査」「収益認識」）',
     empty: '一致するモジュールがありません。短いキーワードをお試しください。',
     hint: '⌘K / Ctrl+K で開く · ↑↓ で選択 · Enter で移動 · Esc で閉じる'

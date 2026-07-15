@@ -12,6 +12,7 @@ const open = ref(false)
 const query = ref('')
 const active = ref(0)
 const inputEl = ref(null)
+let lastFocused = null // element focused when the palette opened (focus return)
 
 // Rebuild the index when the locale changes so labels match the operator's language.
 const index = computed(() => {
@@ -24,7 +25,15 @@ const results = computed(() => searchModules(query.value, index.value))
 
 watch(results, () => { active.value = 0 })
 watch(open, async v => {
-  if (v) { query.value = ''; active.value = 0; await nextTick(); inputEl.value?.focus() }
+  if (v) {
+    lastFocused = typeof document !== 'undefined' ? document.activeElement : null
+    query.value = ''; active.value = 0
+    await nextTick(); inputEl.value?.focus()
+  } else {
+    // Focus return: back to wherever the user was when they opened it.
+    lastFocused?.focus?.()
+    lastFocused = null
+  }
 })
 
 function onKey(e) {
@@ -53,34 +62,41 @@ defineExpose({ open })
 </script>
 
 <template>
-  <button class="pal-btn" type="button" @click="open = true" :title="t('palette.hint')">
+  <button class="pal-btn" type="button" @click="open = true" :aria-label="t('palette.title')" :title="t('palette.hint')">
     <span>⌘K</span>
   </button>
 
   <Teleport to="body">
     <div v-if="open" class="pal-back" @click.self="open = false">
-      <div class="pal card" role="dialog" aria-modal="true">
+      <div class="pal card" role="dialog" aria-modal="true" :aria-label="t('palette.title')">
         <input
           ref="inputEl"
           v-model="query"
           class="pal-in"
+          role="combobox"
+          aria-controls="pal-listbox"
+          aria-expanded="true"
+          :aria-activedescendant="results[active] ? 'pal-opt-' + results[active].id : undefined"
           :placeholder="t('palette.placeholder')"
+          :aria-label="t('palette.placeholder')"
           @keydown.down.prevent="move(1)"
           @keydown.up.prevent="move(-1)"
           @keydown.enter.prevent="go()"
         />
-        <div v-if="results.length" class="pal-list">
-          <button
-            v-for="(r, i) in results" :key="r.id" type="button"
+        <ul v-if="results.length" id="pal-listbox" class="pal-list" role="listbox">
+          <li
+            v-for="(r, i) in results" :key="r.id"
+            :id="'pal-opt-' + r.id" role="option" :aria-selected="i === active"
             class="pal-row" :class="{ on: i === active }"
             @mouseenter="active = i" @click="go(r)"
           >
             <span class="pr-label">{{ r.label }}</span>
             <span class="pr-section" v-if="r.sub">{{ r.sectionLabel }}</span>
             <span class="pr-kbd" v-if="i === active">↵</span>
-          </button>
-        </div>
+          </li>
+        </ul>
         <div v-else class="pal-empty">{{ t('palette.empty') }}</div>
+        <div class="pal-count" role="status" aria-live="polite">{{ t('palette.count', { n: results.length }) }}</div>
         <div class="pal-foot">{{ t('palette.hint') }}</div>
       </div>
     </div>
@@ -95,7 +111,8 @@ defineExpose({ open })
 .pal { width: min(560px, 92vw); height: fit-content; padding: 10px; }
 .pal-in { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 15px; outline: none; }
 .pal-in:focus { border-color: rgba(124, 92, 255, .55); }
-.pal-list { margin-top: 8px; display: flex; flex-direction: column; }
+.pal-list { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.pal-count { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .pal-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; text-align: left; padding: 10px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font-size: 13.5px; cursor: pointer; }
 .pal-row.on { background: rgba(124, 92, 255, .16); }
 .pr-section { font-size: 11px; color: var(--text-dim); }

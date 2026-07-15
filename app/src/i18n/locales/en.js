@@ -145,6 +145,7 @@ export default {
   },
   notify: {
     title: 'Notifications',
+    aria: 'Notifications, {n} unread',
     empty: 'All clear — nothing needs your attention.',
     markAll: 'Mark all read',
     msg: {
@@ -155,7 +156,19 @@ export default {
       readiness: 'Deal readiness at {score}/100 · {blockers} blocker(s) open.'
     }
   },
+  title: {
+    home: 'Home',
+    product: 'Product',
+    studio: 'Studio',
+    console: 'Console',
+    cases: 'Customers',
+    pricing: 'Pricing',
+    about: 'About',
+    contact: 'Partner with us'
+  },
   palette: {
+    title: 'Command palette',
+    count: '{n} result(s)',
     placeholder: 'Jump to any module… (e.g. "bandit", "rev rec", "tour")',
     empty: 'No modules match — try a shorter query.',
     hint: '⌘K / Ctrl+K to open · ↑↓ to select · Enter to jump · Esc to close'

@@ -2,6 +2,9 @@
 import Navbar from './components/Navbar.vue'
 import Footer from './components/Footer.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import { useDocumentTitle } from './composables/useDocumentTitle.js'
+
+useDocumentTitle()
 </script>
 
 <template>

@@ -143,6 +143,7 @@ export default {
   },
   notify: {
     title: 'Notificaciones',
+    aria: 'Notificaciones, {n} sin leer',
     empty: 'Todo en orden — nada requiere tu atención.',
     markAll: 'Marcar todo leído',
     msg: {
@@ -153,7 +154,19 @@ export default {
       readiness: 'Preparación del deal en {score}/100 · {blockers} bloqueo(s).'
     }
   },
+  title: {
+    home: 'Inicio',
+    product: 'Producto',
+    studio: 'Estudio',
+    console: 'Consola',
+    cases: 'Clientes',
+    pricing: 'Precios',
+    about: 'Nosotros',
+    contact: 'Sé partner'
+  },
   palette: {
+    title: 'Paleta de comandos',
+    count: '{n} resultado(s)',
     placeholder: 'Salta a cualquier módulo… (p. ej. "bandit", "rev rec")',
     empty: 'Ningún módulo coincide — prueba una consulta más corta.',
     hint: '⌘K / Ctrl+K para abrir · ↑↓ para elegir · Enter para saltar · Esc para cerrar'

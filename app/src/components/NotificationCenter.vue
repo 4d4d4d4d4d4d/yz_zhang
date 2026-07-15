@@ -12,7 +12,10 @@ const router = useRouter()
 const { items, unread, markRead, markAllRead } = useInbox()
 
 const open = ref(false)
+const bellEl = ref(null)
 const DOT = { critical: '#f87171', warning: '#fbbf24', info: '#22d3ee' }
+
+function close() { open.value = false; bellEl.value?.focus?.() } // focus return
 
 function go(item) {
   markRead(item.key)
@@ -22,12 +25,13 @@ function go(item) {
 </script>
 
 <template>
-  <div class="nc">
-    <button class="bell" type="button" @click="open = !open" :title="t('notify.title')">
+  <div class="nc" @keydown.esc="open && close()">
+    <button ref="bellEl" class="bell" type="button" @click="open = !open"
+      :aria-label="t('notify.aria', { n: unread })" :aria-expanded="open" :title="t('notify.title')">
       🔔<span v-if="unread" class="badge">{{ unread }}</span>
     </button>
 
-    <div v-if="open" class="panel card">
+    <div v-if="open" class="panel card" role="dialog" :aria-label="t('notify.title')">
       <div class="p-head">
         <strong>{{ t('notify.title') }}</strong>
         <button v-if="unread" class="mark" type="button" @click="markAllRead">{{ t('notify.markAll') }}</button>
