@@ -268,6 +268,29 @@ def toggle_city(
     return {"id": row.id, "name": row.name, "active": row.active}
 
 
+class AnnouncementIn(BaseModel):
+    title: str = Field(min_length=2, max_length=120)
+    body: str = Field(default="", max_length=2000)
+    verified_only: bool = False  # 仅通知已实名用户（如资金/合规类公告）
+
+
+@router.post("/admin/announcements")
+def broadcast_announcement(
+    body: AnnouncementIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+):
+    """OPS-009 平台公告：向全体（或已实名）活跃用户广播站内通知。"""
+    from app.modules.notification.service import notify
+
+    q = db.query(User).filter(User.is_deleted.is_(False), User.is_banned.is_(False))
+    if body.verified_only:
+        q = q.filter(User.is_verified.is_(True))
+    count = 0
+    for u in q:
+        notify(db, u.id, "announcement", body.title, body.body)
+        count += 1
+    return {"delivered": count}
+
+
 # ---------- 对账 job（PAY-006/008） ----------
 @router.post("/admin/jobs/reconcile")
 def run_reconcile(admin: User = Depends(require_admin), db: Session = Depends(get_db)):

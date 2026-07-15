@@ -198,6 +198,16 @@ export class PlatformClient {
       phone, sms_code: smsCode, new_password: newPassword,
     });
   }
+  changePhone(newPhone: string, smsCode: string, password: string) {
+    return this.request<{ ok: boolean; phone: string }>('POST', '/auth/change-phone', {
+      new_phone: newPhone, sms_code: smsCode, password,
+    });
+  }
+  broadcastAnnouncement(title: string, body = '', verifiedOnly = false) {
+    return this.request<{ delivered: number }>('POST', '/admin/announcements', {
+      title, body, verified_only: verifiedOnly,
+    });
+  }
   withdrawApplication(applicationId: number) {
     return this.request<{ id: number; status: string }>('POST', `/applications/${applicationId}/withdraw`);
   }

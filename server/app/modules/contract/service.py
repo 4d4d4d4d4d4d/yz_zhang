@@ -239,8 +239,15 @@ def accept_change(db: Session, contract: Contract, user_id: int, order: ChangeOr
             wallet.escrow_hold(db, contract.requester_id, diff, contract.id)
         else:
             wallet.escrow_refund(db, contract.requester_id, -diff, contract.id, "变更单减价退款")
+    old_amount = contract.amount_cents
     contract.amount_cents = order.new_amount_cents
     contract.version += 1
+    # SC-007 变更以附录形式追加到条款，保证导出文书与实际金额一致（不篡改原始条款）
+    contract.terms = (
+        f"{contract.terms}\n\n── 变更附录 v{contract.version}（{utcnow().date().isoformat()}）──\n"
+        f"金额由 {old_amount / 100:.2f} 元变更为 {order.new_amount_cents / 100:.2f} 元"
+        f"（提案人 用户{order.proposed_by}）。事由：{order.reason or '（未填写）'}"
+    )
     if milestones:
         milestones[0].amount_cents = order.new_amount_cents
         db.add(milestones[0])

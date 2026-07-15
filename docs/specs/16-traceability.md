@@ -1,8 +1,18 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V20 全批次完成（2026-07-14）。
-> 后端 177 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V21 全批次完成（2026-07-15）。
+> 后端 182 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V21 批次：批判性扫描——真双盲评分/变更单文书/换绑手机/平台公告）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| CRED-002 真双盲评分（**修复旁道泄露**）：原评分提交即更新对方 rating_avg/信用分，对方看主页分数变化可反推星级并窗口内报复；改为评分聚合延迟到公开时点（双评完/窗口到期）结算，加 `settle-reviews` 兜底 job | `task/router.py::create_review/list_reviews/_settle_reviews` + `Review.rating_applied` | `tests/test_v21_critical.py` |
+| SC-007 变更单条款附录（**修复文书矛盾**）：改价后 terms 仍是原金额，导出合约与实际不符；改为以带事由的变更附录追加，导出文书体现新金额 | `contract/service.py::accept_change` | 同上 |
+| ACC-008 换绑手机：新号验证码 + 旧密码双重校验，新号查重，限流防刷 | `account/router.py::change_phone` | 同上 |
+| OPS-009 平台公告广播：向全体/仅实名活跃用户群发站内通知，非管理员拒绝 | `admin/router.py::broadcast_announcement` | 同上 |
+| SDK 同步：changePhone/broadcastAnnouncement | `packages/core/src/client.ts` | web 构建通过 |
 
 ## 已实现（V20 批次：批判性扫描——收藏/接单开关/新设备提醒/对账告警闭环）
 

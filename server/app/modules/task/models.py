@@ -145,6 +145,8 @@ class Review(Base):
     stars: Mapped[int] = mapped_column(Integer)  # 1..5
     tags: Mapped[list] = mapped_column(JSON, default=list)
     comment: Mapped[str] = mapped_column(String(500), default="")
+    # CRED-002 真双盲：评分聚合延迟到公开时点结算，防 rating_avg 变化旁道泄露星级
+    rating_applied: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

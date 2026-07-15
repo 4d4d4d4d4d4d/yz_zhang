@@ -183,6 +183,38 @@ def change_password(
     return {"token": _issue_token(db, user, user_agent)}
 
 
+class ChangePhoneIn(BaseModel):
+    new_phone: str = Field(min_length=5, max_length=20)
+    sms_code: str  # 发往新号的验证码
+    password: str  # 旧密码二次确认（业界惯例：改绑登录身份需强校验）
+
+
+@router.post("/auth/change-phone")
+def change_phone(
+    body: ChangePhoneIn, user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """ACC-008 换绑手机：新号验证码 + 旧密码双重校验；新号不可已被占用。"""
+    from app.core.ratelimit import check
+
+    check(f"change-phone:{user.id}", limit=3, window_seconds=60)
+    if body.sms_code != settings.DEV_SMS_CODE:
+        raise bad_request("验证码错误", "sms_code_invalid")
+    if not user.password_hash or not verify_password(body.password, user.password_hash):
+        raise bad_request("密码错误", "bad_password")
+    if body.new_phone == user.phone:
+        raise bad_request("新手机号与当前一致", "same_phone")
+    if db.query(User).filter(User.phone == body.new_phone).first():
+        raise conflict("该手机号已被占用", "phone_taken")
+    user.phone = body.new_phone
+    db.add(user)
+    from app.modules.notification.service import notify
+
+    notify(db, user.id, "account", "手机号已换绑",
+           f"你的登录手机号已成功换绑为 {body.new_phone[:3]}****{body.new_phone[-4:]}。"
+           "若非本人操作，请立即联系客服。")
+    return {"ok": True, "phone": user.phone[:3] + "****" + user.phone[-4:]}
+
+
 @router.post("/auth/reset-password")
 def reset_password(body: ResetPasswordIn, db: Session = Depends(get_db)):
     """ACC-004 忘记密码：短信码重置；吊销全部会话，需重新登录（业界惯例）。"""

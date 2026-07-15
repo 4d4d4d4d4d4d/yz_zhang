@@ -596,6 +596,26 @@ def run_deadline_alerts(db: Session = Depends(get_db)):
     return {"alerted": deadline_alerts(db, utcnow())}
 
 
+@router.post("/tasks/jobs/settle-reviews")
+def run_settle_reviews(db: Session = Depends(get_db)):
+    """CRED-002 评价窗口结算 job：窗口到期的未入账评分统一聚合并公开，
+    保证即使无人读取，评分也会在窗口到期后按时入账（真双盲的兜底结算）。"""
+    cutoff = utcnow() - timedelta(days=settings.REVIEW_WINDOW_DAYS)
+    expired_task_ids = [
+        t.id for t in db.query(Task).filter(
+            Task.status == "completed", Task.completed_at <= cutoff
+        )
+    ]
+    settled = 0
+    if expired_task_ids:
+        pending = db.query(Review).filter(
+            Review.task_id.in_(expired_task_ids), Review.rating_applied.is_(False)
+        ).all()
+        _settle_reviews(db, pending)
+        settled = len(pending)
+    return {"settled": settled}
+
+
 @router.post("/tasks/jobs/auto-accept")
 def run_auto_accept(db: Session = Depends(get_db)):
     """TASK-031 超时自动验收（生产为定时任务，这里同时暴露为可调用 job）。"""
@@ -651,9 +671,23 @@ def create_review(
         stars=body.stars, tags=body.tags, comment=body.comment,
     )
     db.add(review)
-    credit.record_review(db, target_id, body.stars)
+    db.flush()
+    # CRED-002 真双盲：评分聚合延迟到公开时点，避免对方通过 rating_avg/信用分变化
+    # 反推我打了几星后在窗口内报复。此处仅在双方都评完时才结算两条。
+    rows = db.query(Review).filter(Review.task_id == task_id).all()
+    if len(rows) >= 2:
+        _settle_reviews(db, rows)
     publish(db, "review.submitted", {"task_id": task_id, "target_id": target_id, "stars": body.stars})
     return {"ok": True}
+
+
+def _settle_reviews(db: Session, rows: list[Review]) -> None:
+    """把尚未入账的评分聚合到目标用户（幂等：rating_applied 去重）。"""
+    for r in rows:
+        if not r.rating_applied:
+            credit.record_review(db, r.target_id, r.stars)
+            r.rating_applied = True
+            db.add(r)
 
 
 @router.get("/tasks/{task_id}/reviews")
@@ -668,6 +702,9 @@ def list_reviews(task_id: int, user: User = Depends(get_current_user), db: Sessi
         and utcnow() > task.completed_at + timedelta(days=settings.REVIEW_WINDOW_DAYS)
     )
     revealed = both_done or window_expired
+    # 窗口到期公开时：把单边评价补记入账（真双盲下评分同样延迟到公开时点）
+    if revealed:
+        _settle_reviews(db, rows)
     out = []
     for r in rows:
         if not revealed and r.reviewer_id != user.id and not user.is_admin:
