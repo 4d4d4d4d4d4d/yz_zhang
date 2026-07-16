@@ -115,6 +115,7 @@ export default {
     sending: 'Sending…',
     success: 'Thanks — we’ll be in touch within one business day.',
     error: 'Please fill in the required fields.',
+    err: { required: 'This field is required.', email: 'Please enter a valid email address.' },
     or: 'Or reach us directly',
     email_us: "partners{'@'}adforge.ai",
     book_call: 'Book a 30-min intro call'

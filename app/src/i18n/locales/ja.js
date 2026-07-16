@@ -113,6 +113,7 @@ export default {
     sending: '送信中…',
     success: '受領しました。1 営業日以内にご連絡します。',
     error: '必須項目を入力してください。',
+    err: { required: 'この項目は必須です。', email: '有効なメールアドレスを入力してください。' },
     or: 'または直接ご連絡',
     email_us: "partners{'@'}adforge.ai",
     book_call: '30 分の紹介ミーティング'

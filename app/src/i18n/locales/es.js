@@ -113,6 +113,7 @@ export default {
     sending: 'Enviando…',
     success: 'Gracias — te contactamos en un día hábil.',
     error: 'Completa los campos requeridos.',
+    err: { required: 'Este campo es obligatorio.', email: 'Introduce un email válido.' },
     or: 'O contáctanos directo',
     email_us: "partners{'@'}adforge.ai",
     book_call: 'Reserva una intro de 30 min'

@@ -37,6 +37,7 @@ the test assertions.
 | 26 | [Notification Center](26-notification-center.md) | `logic/notifications.js`, `components/NotificationCenter.vue` | `tests/notifications.test.js` |
 | 27 | [Workspace Data Layer (batch)](27-workspace-data-layer.md) | `data/workspace.js`, `store/workspace.js`, `components/ModuleBoundary.vue` | `tests/workspace.test.js` |
 | 28 | [A11y · Bundle Budget · Titles (batch)](28-a11y-budget-titles.md) | overlays a11y, `logic/bundleBudget.js`, `composables/useDocumentTitle.js` | `tests/a11y.test.js`, `tests/bundleBudget.test.js` |
+| 29 | [Conversion Surface Hardening (batch)](29-conversion-surface.md) | `logic/validation.js`, `logic/analytics.js`, `views/Contact.vue` | `tests/conversion.test.js` |
 
 Capability flow across domains:
 
