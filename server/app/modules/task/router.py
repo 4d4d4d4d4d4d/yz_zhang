@@ -175,6 +175,70 @@ def publish_task(task_id: int, user: User = Depends(get_current_user), db: Sessi
     return dump_task(task, user)
 
 
+class TaskEditIn(BaseModel):
+    title: str | None = Field(default=None, min_length=2, max_length=120)
+    description: str | None = None
+    budget_cents: int | None = Field(default=None, gt=0)
+    required_skills: list[str] | None = None
+    address_hint: str | None = None
+    address_exact: str | None = None
+    deadline: datetime | None = None
+
+
+# 已发布任务上「实质性」字段（影响报名者决策），有人报名后受保护（TASK-014 防调包）
+_MATERIAL_FIELDS = {"budget_cents", "required_skills"}
+
+
+@router.patch("/tasks/{task_id}")
+def edit_task(
+    task_id: int, body: TaskEditIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """TASK-014 任务编辑 + 防调包（bait-and-switch）保护。
+
+    draft 阶段可自由改；已发布后一旦有人报名，实质性条款（预算、技能要求）
+    受保护：预算只可上调不可下调，技能要求锁定——防止「高价招人、低价成交」；
+    非实质字段（标题/描述/地址提示）始终可改。实质变更会通知已报名者。
+    """
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden()
+    if task.status not in ("draft", "published"):
+        raise conflict("任务已进入执行阶段，不可编辑（请走合约变更单）", "not_editable")
+    changes = body.model_dump(exclude_none=True)
+    if not changes:
+        return dump_task(task, user)
+
+    has_applicants = db.query(Application).filter(
+        Application.task_id == task_id, Application.status == "pending"
+    ).count() > 0
+    protected = task.status == "published" and has_applicants
+    material_changed = False
+
+    for field, value in changes.items():
+        if field == "budget_cents" and value != task.budget_cents:
+            if protected and value < task.budget_cents:
+                raise conflict("已有报名者，预算不可下调（防调包），只能上调", "budget_locked")
+            material_changed = material_changed or field in _MATERIAL_FIELDS
+        if field == "required_skills" and value != task.required_skills:
+            if protected:
+                raise conflict("已有报名者，技能要求已锁定", "skills_locked")
+            material_changed = material_changed or field in _MATERIAL_FIELDS
+        setattr(task, field, value)
+    db.add(task)
+
+    # 实质性上调 → 通知已报名者，可重新评估（业界惯例：透明变更）
+    if protected and material_changed:
+        from app.modules.notification.service import notify
+
+        apps = db.query(Application).filter(
+            Application.task_id == task_id, Application.status == "pending"
+        ).all()
+        for a in apps:
+            notify(db, a.applicant_id, "task", "报名的任务有更新",
+                   f"《{task.title}》发布方上调了预算至 {task.budget_cents / 100:.2f} 元，请留意。")
+    return dump_task(task, user)
+
+
 @router.get("/categories")
 def list_categories(db: Session = Depends(get_db)):
     """OPS-004 类目列表（公开，发布表单数据源）。"""

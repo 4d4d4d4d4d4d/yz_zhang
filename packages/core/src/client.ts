@@ -106,6 +106,12 @@ export class PlatformClient {
   getTask(id: number) {
     return this.request<Task>('GET', `/tasks/${id}`);
   }
+  editTask(id: number, patch: Partial<{
+    title: string; description: string; budget_cents: number;
+    required_skills: string[]; address_hint: string; address_exact: string; deadline: string;
+  }>) {
+    return this.request<Task>('PATCH', `/tasks/${id}`, patch);
+  }
   apply(taskId: number, message = '', bidCents?: number) {
     return this.request<{ id: number }>('POST', `/tasks/${taskId}/applications`, {
       message, ...(bidCents ? { bid_cents: bidCents } : {}),

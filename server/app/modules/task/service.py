@@ -119,3 +119,11 @@ def validate_publishable(task: Task, db: Session | None = None) -> None:
         raise bad_request(f"内容含违禁信息（{hit}），发布被拒绝", "content_rejected")
     if not task.is_remote and (task.lat is None or task.lng is None):
         raise bad_request("线下任务必须提供位置", "location_required")
+    if task.deadline is not None:
+        from app.modules.account.models import utcnow
+
+        deadline = task.deadline
+        if deadline.tzinfo is not None:
+            deadline = deadline.replace(tzinfo=None)
+        if deadline <= utcnow():
+            raise bad_request("截止时间必须晚于当前时间", "deadline_in_past")
