@@ -130,7 +130,7 @@ export default {
     },
     tabs: {
       recommend: { inputs: '入力 · ランキング', agents: 'エージェント基盤', registry: 'モデル登録 · カナリア', bandit: 'ライブ Bandit', features: 'フィーチャーストア', experiments: '実験管理', metering: '使用量 · 課金', tenant: 'テナント影響' },
-      marketing: { overview: '概要', control: 'キャンペーン · A/B · 地域', attribution: 'アトリビューション', audience: 'オーディエンス作成', retention: 'コホート維持率', forecast: 'What-if 予測', revenue: 'SaaS 収益', upsell: 'アップセル' },
+      marketing: { overview: '概要', control: 'キャンペーン · A/B · 地域', attribution: 'アトリビューション', audience: 'オーディエンス作成', retention: 'コホート維持率', forecast: 'What-if 予測', revenue: 'SaaS 収益', upsell: 'アップセル', funnel: 'ファネル' },
       partners:  { network: 'ネットワーク情報', pipeline: 'パイプライン', intel: 'アカウント情報', outreach: 'アウトリーチ', forecast: '売上予測', territory: 'テリトリー · 目標', orders: 'オーダーブック', commission: 'マーケット · 手数料' },
       deals:     { room: 'ディールルーム', playbook: 'プレイブック · ZOPA', workflow: '承認フロー', library: '条項ライブラリ', obligations: '義務トラッカー', analytics: '契約アナリティクス', cpq: 'CPQ · 見積', revrec: '収益認識' },
       showcase:  { gallery: '映像ショーケース', links: 'トラストリンク', verification: '検証キュー', pipeline: '成約準備度' },
@@ -171,6 +171,16 @@ export default {
     placeholder: '任意のモジュールへジャンプ…（例:「実地調査」「収益認識」）',
     empty: '一致するモジュールがありません。短いキーワードをお試しください。',
     hint: '⌘K / Ctrl+K で開く · ↑↓ で選択 · Enter で移動 · Esc で閉じる'
+  },
+  funnel: {
+    kicker: 'コンバージョンファネル · GTM',
+    title: '初回訪問から契約パートナーまで',
+    sub: '獲得ファネルの段階別コンバージョン（今セッションのライブ）。',
+    overall: '全体コンバージョン',
+    entry: 'ファネル最上部',
+    fromPrev: '前段比',
+    leak: '最大の離脱は「{stage}」— 通過はわずか {rate}。まずここを改善。',
+    stage: { page_view: '訪問', form_view: 'フォーム到達', form_submit: '送信', form_success: '有効リード' }
   },
   footer: {
     tagline: 'グローバルブランドのための AI 広告レンダリング。',

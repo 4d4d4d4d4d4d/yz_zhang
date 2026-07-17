@@ -130,7 +130,7 @@ export default {
     },
     tabs: {
       recommend: { inputs: 'Inputs · ranking', agents: 'Pipeline de agentes', registry: 'Registro de modelos · canary', bandit: 'Bandit en vivo', features: 'Feature store', experiments: 'Experimentos', metering: 'Uso · facturación', tenant: 'Impacto por tenant' },
-      marketing: { overview: 'Resumen', control: 'Campañas · A/B · geo', attribution: 'Atribución', audience: 'Creador de audiencias', retention: 'Retención por cohortes', forecast: 'Pronóstico what-if', revenue: 'Ingresos SaaS', upsell: 'Motor de upsell' },
+      marketing: { overview: 'Resumen', control: 'Campañas · A/B · geo', attribution: 'Atribución', audience: 'Creador de audiencias', retention: 'Retención por cohortes', forecast: 'Pronóstico what-if', revenue: 'Ingresos SaaS', upsell: 'Motor de upsell', funnel: 'Embudo' },
       partners:  { network: 'Perfil de red', pipeline: 'Tablero de pipeline', intel: 'Intel de cuentas', outreach: 'Cadencia de outreach', forecast: 'Pronóstico de ventas', territory: 'Territorio · cuota', orders: 'Libro de pedidos', commission: 'Marketplace · comisión' },
       deals:     { room: 'Sala de deal', playbook: 'Playbook · ZOPA · redline', workflow: 'Flujo de aprobación', library: 'Biblioteca de cláusulas', obligations: 'Obligaciones', analytics: 'Analítica CLM', cpq: 'CPQ · cotización', revrec: 'Reconocimiento de ingresos' },
       showcase:  { gallery: 'Showcase de vídeo', links: 'Trust links', verification: 'Cola de verificación', pipeline: 'Preparación del deal' },
@@ -171,6 +171,16 @@ export default {
     placeholder: 'Salta a cualquier módulo… (p. ej. "bandit", "rev rec")',
     empty: 'Ningún módulo coincide — prueba una consulta más corta.',
     hint: '⌘K / Ctrl+K para abrir · ↑↓ para elegir · Enter para saltar · Esc para cerrar'
+  },
+  funnel: {
+    kicker: 'Embudo de conversión · GTM',
+    title: 'De la primera visita al partner firmado',
+    sub: 'Conversión por etapa del embudo de adquisición, en vivo esta sesión.',
+    overall: 'Conversión total',
+    entry: 'tope del embudo',
+    fromPrev: 'desde el anterior',
+    leak: 'Mayor caída en {stage} — solo {rate} avanza. Corrige este paso primero.',
+    stage: { page_view: 'Visita', form_view: 'Llegó al form', form_submit: 'Envió', form_success: 'Lead calificado' }
   },
   footer: {
     tagline: 'Renderizado de anuncios con IA para marcas globales.',

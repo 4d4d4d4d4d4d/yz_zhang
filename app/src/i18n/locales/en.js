@@ -132,7 +132,7 @@ export default {
     },
     tabs: {
       recommend: { inputs: 'Inputs · ranking', agents: 'Agent pipeline', registry: 'Model registry · canary', bandit: 'Live bandit', features: 'Feature store', experiments: 'Experiments', metering: 'Usage · billing', tenant: 'Tenant impact' },
-      marketing: { overview: 'Overview', control: 'Campaigns · A/B · geo', attribution: 'Attribution', audience: 'Audience builder', retention: 'Cohort retention', forecast: 'What-if forecast', revenue: 'SaaS revenue', upsell: 'Upsell engine' },
+      marketing: { overview: 'Overview', control: 'Campaigns · A/B · geo', attribution: 'Attribution', audience: 'Audience builder', retention: 'Cohort retention', forecast: 'What-if forecast', revenue: 'SaaS revenue', upsell: 'Upsell engine', funnel: 'Funnel' },
       partners:  { network: 'Network profile', pipeline: 'Pipeline board', intel: 'Account intel', outreach: 'Outreach cadence', forecast: 'Sales forecast', territory: 'Territory · quota', orders: 'Order book', commission: 'Marketplace · commission' },
       deals:     { room: 'Deal room', playbook: 'Playbook · ZOPA · redline', workflow: 'Approval workflow', library: 'Clause library', obligations: 'Obligations', analytics: 'CLM analytics', cpq: 'CPQ · quote', revrec: 'Rev recognition' },
       showcase:  { gallery: 'Video showcase', links: 'Trust links', verification: 'Verification queue', pipeline: 'Deal readiness' },
@@ -173,6 +173,16 @@ export default {
     placeholder: 'Jump to any module… (e.g. "bandit", "rev rec", "tour")',
     empty: 'No modules match — try a shorter query.',
     hint: '⌘K / Ctrl+K to open · ↑↓ to select · Enter to jump · Esc to close'
+  },
+  funnel: {
+    kicker: 'Conversion funnel · GTM',
+    title: 'From first visit to signed partner',
+    sub: 'Stage-by-stage conversion across the acquisition funnel, live this session.',
+    overall: 'Overall conversion',
+    entry: 'top of funnel',
+    fromPrev: 'from previous',
+    leak: 'Biggest drop-off at {stage} — only {rate} carry through. Fix this step first.',
+    stage: { page_view: 'Site visit', form_view: 'Reached form', form_submit: 'Submitted', form_success: 'Qualified lead' }
   },
   footer: {
     tagline: 'AI ad rendering for global brands.',

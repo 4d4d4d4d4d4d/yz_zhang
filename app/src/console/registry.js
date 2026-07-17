@@ -4,7 +4,7 @@
 
 export const SECTIONS = [
   { key: 'recommend', icon: '🧠', subs: ['inputs', 'agents', 'registry', 'bandit', 'features', 'experiments', 'metering', 'tenant'] },
-  { key: 'marketing', icon: '📈', subs: ['overview', 'control', 'attribution', 'audience', 'retention', 'forecast', 'revenue', 'upsell'] },
+  { key: 'marketing', icon: '📈', subs: ['overview', 'control', 'attribution', 'audience', 'retention', 'forecast', 'revenue', 'upsell', 'funnel'] },
   { key: 'partners',  icon: '🤝', subs: ['network', 'pipeline', 'intel', 'outreach', 'forecast', 'territory', 'orders', 'commission'] },
   { key: 'deals',     icon: '📝', subs: ['room', 'playbook', 'workflow', 'library', 'obligations', 'analytics', 'cpq', 'revrec'] },
   { key: 'showcase',  icon: '🎬', subs: ['gallery', 'links', 'verification', 'pipeline'] },

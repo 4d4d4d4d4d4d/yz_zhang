@@ -38,6 +38,7 @@ the test assertions.
 | 27 | [Workspace Data Layer (batch)](27-workspace-data-layer.md) | `data/workspace.js`, `store/workspace.js`, `components/ModuleBoundary.vue` | `tests/workspace.test.js` |
 | 28 | [A11y · Bundle Budget · Titles (batch)](28-a11y-budget-titles.md) | overlays a11y, `logic/bundleBudget.js`, `composables/useDocumentTitle.js` | `tests/a11y.test.js`, `tests/bundleBudget.test.js` |
 | 29 | [Conversion Surface Hardening (batch)](29-conversion-surface.md) | `logic/validation.js`, `logic/analytics.js`, `views/Contact.vue` | `tests/conversion.test.js` |
+| 30 | [Funnel Analytics (closes the recorder loop)](30-funnel-analytics.md) | `logic/funnel.js`, `components/FunnelView.vue` | `tests/funnel.test.js` |
 
 Capability flow across domains:
 

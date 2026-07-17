@@ -25,6 +25,7 @@ import AttributionWaterfall from '../components/AttributionWaterfall.vue'
 import AudienceBuilder     from '../components/AudienceBuilder.vue'
 import CohortRetention     from '../components/CohortRetention.vue'
 import ForecastSim         from '../components/ForecastSim.vue'
+import FunnelView          from '../components/FunnelView.vue'
 import RevenueDashboard    from '../components/RevenueDashboard.vue'
 import UpsellEngine        from '../components/UpsellEngine.vue'
 
@@ -77,7 +78,7 @@ const COMPONENTS = {
   'recommend/metering': UsageMetering, 'recommend/tenant': PersonalizationDash,
   'marketing/overview': MarketingHub, 'marketing/control': MarketingControl, 'marketing/attribution': AttributionWaterfall,
   'marketing/audience': AudienceBuilder, 'marketing/retention': CohortRetention, 'marketing/forecast': ForecastSim,
-  'marketing/revenue': RevenueDashboard, 'marketing/upsell': UpsellEngine,
+  'marketing/revenue': RevenueDashboard, 'marketing/upsell': UpsellEngine, 'marketing/funnel': FunnelView,
   'partners/network': BusinessMatchHub, 'partners/pipeline': PipelineBoard, 'partners/intel': AccountIntel,
   'partners/outreach': OutreachSequence, 'partners/forecast': SalesForecast, 'partners/territory': TerritoryQuota,
   'partners/orders': OrderBook, 'partners/commission': MarketplaceCommission,

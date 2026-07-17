@@ -132,7 +132,7 @@ export default {
     },
     tabs: {
       recommend: { inputs: '输入 · 排序', agents: 'Agent 流水线', registry: '模型注册 · 金丝雀', bandit: '实时 Bandit', features: '特征仓库', experiments: '实验管理', metering: '用量 · 计费', tenant: '租户影响' },
-      marketing: { overview: '总览', control: '投放 · A/B · 地域', attribution: '归因分析', audience: '人群构建', retention: '留存队列', forecast: 'What-if 预测', revenue: 'SaaS 收入', upsell: '增销引擎' },
+      marketing: { overview: '总览', control: '投放 · A/B · 地域', attribution: '归因分析', audience: '人群构建', retention: '留存队列', forecast: 'What-if 预测', revenue: 'SaaS 收入', upsell: '增销引擎', funnel: '转化漏斗' },
       partners:  { network: '网络档案', pipeline: '商机看板', intel: '客户情报', outreach: '触达节奏', forecast: '销售预测', territory: '区域 · 配额', orders: '订单簿', commission: '市场 · 佣金' },
       deals:     { room: '洽谈室', playbook: '策略 · ZOPA · 红线', workflow: '审批流', library: '条款库', obligations: '履约跟踪', analytics: '合同分析', cpq: 'CPQ · 报价', revrec: '收入确认' },
       showcase:  { gallery: '视频作品集', links: '信任链接', verification: '验证队列', pipeline: '成交就绪度' },
@@ -173,6 +173,16 @@ export default {
     placeholder: '跳转到任意模块…（如「实地调查」「收入确认」「bandit」）',
     empty: '没有匹配的模块——试试更短的关键词。',
     hint: '⌘K / Ctrl+K 打开 · ↑↓ 选择 · Enter 跳转 · Esc 关闭'
+  },
+  funnel: {
+    kicker: '转化漏斗 · GTM',
+    title: '从初次到访到签约合作',
+    sub: '获客漏斗逐阶段转化，含本次会话实时数据。',
+    overall: '整体转化率',
+    entry: '漏斗顶部',
+    fromPrev: '较上一步',
+    leak: '最大流失在「{stage}」——仅 {rate} 通过。优先修这一步。',
+    stage: { page_view: '到访', form_view: '进入表单', form_submit: '提交', form_success: '合格线索' }
   },
   footer: {
     tagline: '为出海品牌打造的 AI 广告渲染引擎。',
