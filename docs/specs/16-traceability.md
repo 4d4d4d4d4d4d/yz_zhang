@@ -1,8 +1,17 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V22 全批次完成（2026-07-16）。
-> 后端 187 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V23 全批次完成（2026-07-16）。
+> 后端 190 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V23 批次：平台佣金收入实收口径 + 结算 + 对账不变量）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| SC-009 佣金收入口径修复（**真实缺陷**）：metrics.fee_income 原按 Σ(released×费率) 估算，漏计纠纷/取消场景佣金且有逐笔取整漂移；改为以平台账户实收（fee 流水）为唯一事实来源 | `wallet/service.py::platform_finance` + `admin/metrics` | `tests/test_platform_finance.py` |
+| OPS-010 平台收入总览 + 结算：累计佣金/已结算/可结算余额；结算划出（模拟对公），超额拒绝 | `admin/router.py::platform_finance/settle` + `wallet::settle_platform` | 同上 |
+| PAY-006 对账新增第 4 条不变量：平台账户可用 == Σ佣金 - Σ平台结算；全局守恒出账口径纳入平台结算 | `risk/service.py::reconcile` | 同上（结算后守恒仍成立） |
+| SDK 同步：platformFinance/settlePlatform | `packages/core/src/client.ts` | web 构建通过 |
 
 ## 已实现（V22 批次：任务编辑防调包 + 截止时间校验）
 

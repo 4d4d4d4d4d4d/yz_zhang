@@ -291,6 +291,30 @@ def broadcast_announcement(
     return {"delivered": count}
 
 
+# ---------- 平台收入结算（OPS-010） ----------
+class SettleIn(BaseModel):
+    amount_cents: int = Field(gt=0)
+    memo: str = "平台收入结算"
+
+
+@router.get("/admin/platform-finance")
+def platform_finance(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """平台收入总览：累计佣金（实收）、已结算、可结算余额。"""
+    from app.modules.wallet import service as wallet
+
+    return wallet.platform_finance(db)
+
+
+@router.post("/admin/platform-finance/settle")
+def settle_platform(
+    body: SettleIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+):
+    """OPS-010 平台收入结算：把平台账户余额划出（模拟对公结算）。"""
+    from app.modules.wallet import service as wallet
+
+    return wallet.settle_platform(db, body.amount_cents, body.memo)
+
+
 # ---------- 对账 job（PAY-006/008） ----------
 @router.post("/admin/jobs/reconcile")
 def run_reconcile(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
@@ -320,12 +344,11 @@ def metrics(admin: User = Depends(require_admin), db: Session = Depends(get_db))
     completed = db.query(Task).filter(Task.status == "completed").count()
     disputed = db.query(Dispute).count()
     gmv = db.query(func.coalesce(func.sum(Contract.released_cents), 0)).scalar()
-    fee_income = (
-        db.query(Contract)
-        .filter(Contract.released_cents > 0)
-        .with_entities(func.coalesce(func.sum(Contract.released_cents * Contract.fee_bps / 10000), 0))
-        .scalar()
-    )
+    # SC-009 佣金收入以平台账户实收为准（含纠纷/取消场景、无取整漂移），
+    # 而非按 Σreleased×费率估算（会漏计纠纷/取消佣金）
+    from app.modules.wallet import service as wallet
+
+    fee_income = wallet.platform_finance(db)["total_fee_cents"]
     closed_loop_rate = round(completed / total_tasks, 4) if total_tasks else 0.0
     return {
         "total_users": total_users,

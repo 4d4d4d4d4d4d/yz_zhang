@@ -55,18 +55,21 @@ def flag_pair(db: Session, task) -> None:
 def reconcile(db: Session) -> dict:
     """PAY-006 对账：三条硬不变量，差错返回明细（生产为日终任务+差错工单）。
 
-    1. 全局资金守恒：Σ(可用+托管+冻结) == Σ充值 - Σ提现
+    1. 全局资金守恒：Σ(可用+托管+冻结) == Σ充值 - Σ(提现 + 平台结算)
     2. 托管有据：Σ escrow == Σ funded 合约的 (金额 - 已放款)
-    3. 冻结有据：Σ frozen == Σ 保证金 held 状态合约的保证金
+    3. 冻结有据：Σ frozen == Σ(保证金 held + 待审大额提现)
+    4. 平台佣金有据：平台账户可用 == Σ佣金 - Σ平台结算
     """
     from app.modules.contract.models import Contract
     from app.modules.wallet.models import LedgerEntry, WalletAccount
+    from app.modules.wallet.service import PLATFORM_USER_ID
 
     total_in = db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0)).filter(
         LedgerEntry.kind == "topup"
     ).scalar()
+    # 离开系统的钱：用户提现 + 平台收入对公结算
     total_out = -db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0)).filter(
-        LedgerEntry.kind == "withdraw"
+        LedgerEntry.kind.in_(("withdraw", "platform_settle"))
     ).scalar()
     accounts = db.query(WalletAccount).all()
     holdings = sum(a.available_cents + a.escrow_cents + a.frozen_cents for a in accounts)
@@ -100,6 +103,24 @@ def reconcile(db: Session) -> dict:
     if frozen_total != frozen_expected:
         mismatches.append({"invariant": "deposit_backing",
                            "frozen_total": frozen_total, "expected": frozen_expected})
+
+    # 4. 平台佣金有据：平台账户可用余额 == 累计佣金 - 已结算
+    platform = next((a for a in accounts if a.user_id == PLATFORM_USER_ID), None)
+    platform_balance = platform.available_cents if platform else 0
+    total_fee = (
+        db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0))
+        .filter(LedgerEntry.user_id == PLATFORM_USER_ID, LedgerEntry.kind == "fee")
+        .scalar()
+    )
+    platform_settled = -(
+        db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0))
+        .filter(LedgerEntry.user_id == PLATFORM_USER_ID, LedgerEntry.kind == "platform_settle")
+        .scalar()
+    )
+    platform_expected = int(total_fee) - int(platform_settled)
+    if platform_balance != platform_expected:
+        mismatches.append({"invariant": "platform_fee_backing",
+                           "platform_balance": platform_balance, "expected": platform_expected})
 
     return {"ok": not mismatches, "mismatches": mismatches,
             "accounts_checked": len(accounts), "total_holdings_cents": holdings}

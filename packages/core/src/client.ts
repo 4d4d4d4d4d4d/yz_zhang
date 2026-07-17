@@ -214,6 +214,16 @@ export class PlatformClient {
       title, body, verified_only: verifiedOnly,
     });
   }
+  platformFinance() {
+    return this.request<{ balance_cents: number; total_fee_cents: number; settled_cents: number; fee_count: number }>(
+      'GET', '/admin/platform-finance',
+    );
+  }
+  settlePlatform(amountCents: number, memo = '平台收入结算') {
+    return this.request<{ settled_cents: number; balance_cents: number }>(
+      'POST', '/admin/platform-finance/settle', { amount_cents: amountCents, memo },
+    );
+  }
   withdrawApplication(applicationId: number) {
     return this.request<{ id: number; status: string }>('POST', `/applications/${applicationId}/withdraw`);
   }

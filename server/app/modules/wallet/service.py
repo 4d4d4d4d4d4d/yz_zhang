@@ -146,6 +146,49 @@ def escrow_refund(db: Session, payer_id: int, amount: int, contract_id: int, mem
     _log(db, payer_id, "refund", amount, contract_id, memo)
 
 
+def platform_finance(db: Session) -> dict:
+    """SC-009/OPS-010 平台收入：以平台账户实际入账为唯一事实来源。
+
+    佣金按每笔放款/裁决分账整数向下取整实收（含纠纷/取消场景），
+    与「Σ released×费率」的估算口径不同——后者会漏计纠纷/取消佣金且有取整漂移。
+    """
+    from sqlalchemy import func
+
+    platform = get_or_create(db, PLATFORM_USER_ID)
+    # fee 流水为正数入账（见 escrow_release/dispute_split），直接求和即累计佣金
+    total_fee = (
+        db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0))
+        .filter(LedgerEntry.user_id == PLATFORM_USER_ID, LedgerEntry.kind == "fee")
+        .scalar()
+    )
+    settled = -(
+        db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0))
+        .filter(LedgerEntry.user_id == PLATFORM_USER_ID, LedgerEntry.kind == "platform_settle")
+        .scalar()
+    )
+    fee_count = (
+        db.query(func.count(LedgerEntry.id))
+        .filter(LedgerEntry.user_id == PLATFORM_USER_ID, LedgerEntry.kind == "fee")
+        .scalar()
+    )
+    return {
+        "balance_cents": platform.available_cents,      # 可结算余额
+        "total_fee_cents": int(total_fee),              # 累计佣金收入（实收）
+        "settled_cents": int(settled),                  # 已结算提走
+        "fee_count": int(fee_count),
+    }
+
+
+def settle_platform(db: Session, amount: int, memo: str = "平台收入结算") -> dict:
+    """OPS-010 平台收入结算：把平台账户余额划出（模拟对公结算/提现）。"""
+    platform = get_or_create(db, PLATFORM_USER_ID)
+    if amount <= 0 or amount > platform.available_cents:
+        raise bad_request("结算金额超出平台可用余额", "insufficient_platform_balance")
+    platform.available_cents -= amount
+    _log(db, PLATFORM_USER_ID, "platform_settle", -amount, memo=memo)
+    return {"settled_cents": amount, "balance_cents": platform.available_cents}
+
+
 def transfer(db: Session, from_id: int, to_id: int, amount: int, contract_id=None, memo=""):
     """可用余额间转账（申诉纠正性结算等平台内部调整）。"""
     if amount <= 0:
