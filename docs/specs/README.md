@@ -4,6 +4,14 @@
 最后更新：2026-05-22
 Owners：架构组
 
+## 使用手册(先看这个)
+
+| 文档 | 用途 |
+|---|---|
+| [架构 YAML 编写指南](../YAML-Authoring-Guide.md) | **怎么写评估 YAML** — 骨架、base/overrides、全模块 config/端口参考、CLI、常见坑、完整配方 |
+| [评估报告](../EVALUATION_REPORT.md) | 40+ use case 的实测 delta 表(`scripts/run_all_evaluations.py` 一键重跑) |
+| [QEMU 对标分析](../QEMU-Benchmark-Analysis.md) | 平台定位 + 4 项改进空间 |
+
 ## 目录
 
 | 文档 | 范围 | 状态 |
