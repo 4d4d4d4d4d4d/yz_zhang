@@ -2,6 +2,9 @@
 import { ref, computed } from 'vue'
 import { invoice } from '../logic/metering.js'
 import { TENANTS as tenants, METERS as meters, PLAN_BASE_FEES } from '../data/workspace.js'
+import { useFormat } from '../composables/useFormat.js'
+
+const { money, num, pct } = useFormat()
 
 const tenant = ref('lumi')
 const cur = computed(() => tenants.find(t => t.id === tenant.value))
@@ -44,10 +47,10 @@ const trendMax = computed(() => Math.max(...trend.value))
         <div>
           <div class="kicker">{{ cur.name }} · {{ cur.plan }} plan</div>
           <h3>Current invoice · day {{ dayOfMonth }} of {{ daysInMonth }}</h3>
-          <p class="meta">Forecast end-of-cycle: <strong>${{ Math.round(total / dayOfMonth * daysInMonth).toLocaleString() }}</strong></p>
+          <p class="meta">Forecast end-of-cycle: <strong>{{ money(total / dayOfMonth * daysInMonth) }}</strong></p>
         </div>
         <div class="inv-amt">
-          <div class="ia-num grad-text">${{ total.toLocaleString() }}</div>
+          <div class="ia-num grad-text">{{ money(total) }}</div>
           <div class="ia-lbl">accrued so far</div>
         </div>
       </div>
@@ -55,19 +58,19 @@ const trendMax = computed(() => Math.max(...trend.value))
       <div class="line-items">
         <div class="li">
           <span class="li-name">Platform fee · {{ cur.plan }}</span>
-          <span class="li-val">${{ baseFee.toLocaleString() }}</span>
+          <span class="li-val">{{ money(baseFee) }}</span>
         </div>
         <div v-for="m in curMeters" :key="m.k" class="li">
           <span class="li-name">{{ m.k }} <span class="dimc-i">· {{ m.rate }}</span></span>
-          <span class="li-val">${{ m.cost.toLocaleString() }}</span>
+          <span class="li-val">{{ money(m.cost) }}</span>
         </div>
         <div class="li li-sub">
           <span class="li-name">Subtotal</span>
-          <span class="li-val">${{ (baseFee + usageCost).toLocaleString() }}</span>
+          <span class="li-val">{{ money(baseFee + usageCost) }}</span>
         </div>
         <div class="li li-warn" v-if="overageCost > 0">
           <span class="li-name">Overage · projected at month-end</span>
-          <span class="li-val">+${{ overageCost.toLocaleString() }}</span>
+          <span class="li-val">+{{ money(overageCost) }}</span>
         </div>
       </div>
     </div>
@@ -86,9 +89,9 @@ const trendMax = computed(() => Math.max(...trend.value))
             <div class="m-line" :style="{ left: Math.min(100, (dayOfMonth / daysInMonth) * 100) + '%' }" title="Pro-rata expected"></div>
           </div>
           <div class="m-foot">
-            <span><strong>{{ m.used.toLocaleString() }}</strong> {{ m.unit }} used</span>
-            <span class="dimc-i">/ {{ m.included.toLocaleString() }} included</span>
-            <span class="m-cost">${{ m.cost.toLocaleString() }}</span>
+            <span><strong>{{ num(m.used) }}</strong> {{ m.unit }} used</span>
+            <span class="dimc-i">/ {{ num(m.included) }} included</span>
+            <span class="m-cost">{{ money(m.cost) }}</span>
           </div>
         </div>
       </div>
@@ -103,8 +106,8 @@ const trendMax = computed(() => Math.max(...trend.value))
           </div>
         </div>
         <div class="t-foot">
-          <span>${{ trend[0] }} → ${{ trend[trend.length - 1] }}</span>
-          <span class="up">+{{ Math.round((trend[trend.length-1] - trend[0]) / trend[0] * 100) }}%</span>
+          <span>{{ money(trend[0]) }} → {{ money(trend[trend.length - 1]) }}</span>
+          <span class="up">+{{ pct((trend[trend.length-1] - trend[0]) / trend[0], { digits: 0 }) }}</span>
         </div>
       </div>
 
@@ -113,11 +116,11 @@ const trendMax = computed(() => Math.max(...trend.value))
         <div class="opt">
           <div class="op">
             <span class="op-tag save">SAVE</span>
-            <div><strong>Cache hit on Vision Agent</strong> · raising threshold from 86% → 94% would cut GPU seconds by ~12% (≈ <strong>${{ Math.round(curMeters[1].cost * 0.12).toLocaleString() }}/mo</strong>)</div>
+            <div><strong>Cache hit on Vision Agent</strong> · raising threshold from 86% → 94% would cut GPU seconds by ~12% (≈ <strong>{{ money(curMeters[1].cost * 0.12) }}/mo</strong>)</div>
           </div>
           <div class="op">
             <span class="op-tag tier">UPGRADE</span>
-            <div><strong>Renders</strong> · projected {{ Math.round(curMeters[2].used / dayOfMonth * daysInMonth).toLocaleString() }} jobs. Upgrade to Scale tier saves ~$420/mo vs overage.</div>
+            <div><strong>Renders</strong> · projected {{ num(curMeters[2].used / dayOfMonth * daysInMonth) }} jobs. Upgrade to Scale tier saves ~$420/mo vs overage.</div>
           </div>
           <div class="op">
             <span class="op-tag commit">COMMIT</span>

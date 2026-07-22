@@ -24,8 +24,9 @@ i18n locale, plus a staged migration of the surfaces onto it.
   `pct` (fraction → percentage). Non-finite input renders `—`, never `NaN`/`$NaN`.
 - `composables/useFormat.js` — binds those to the live i18n locale so a
   component writes `money(x)` and never touches Intl or a hardcoded `$`.
-- **Flagship adoption:** `RevenueDashboard.vue` fully migrated (every visible
-  MRR/ARR/ACV/ARPU/share figure) and the `$$` ARPU bug fixed.
+- **Adoption (in progress):**
+  - `RevenueDashboard.vue` — fully migrated; `$$` ARPU bug fixed.
+  - `UsageMetering.vue` — fully migrated (invoice, line items, meters, trend).
 
 ## 3. Migration policy (per spec 13 precedent)
 
