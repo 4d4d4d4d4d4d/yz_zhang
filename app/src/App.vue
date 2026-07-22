@@ -1,16 +1,21 @@
 <script setup>
+import { useI18n } from 'vue-i18n'
 import Navbar from './components/Navbar.vue'
 import Footer from './components/Footer.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import GotoShortcuts from './components/GotoShortcuts.vue'
 import { useDocumentTitle } from './composables/useDocumentTitle.js'
 
+const { t } = useI18n()
 useDocumentTitle()
 </script>
 
 <template>
+  <a class="skip-link" href="#main">{{ t('nav.skip') }}</a>
   <Navbar />
   <CommandPalette />
-  <main>
+  <GotoShortcuts />
+  <main id="main" tabindex="-1">
     <router-view v-slot="{ Component }">
       <transition name="fade" mode="out-in">
         <!-- Single-element keyed wrapper: views are multi-root, and a
@@ -25,3 +30,14 @@ useDocumentTitle()
   </main>
   <Footer />
 </template>
+
+<style scoped>
+.skip-link {
+  position: fixed; top: -60px; left: 12px; z-index: 100;
+  padding: 10px 16px; border-radius: 10px;
+  background: var(--primary); color: #fff; font-size: 13px; font-weight: 700;
+  transition: top .15s;
+}
+.skip-link:focus { top: 12px; outline: 2px solid #fff; outline-offset: 2px; }
+main:focus { outline: none; }
+</style>

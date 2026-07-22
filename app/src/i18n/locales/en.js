@@ -8,7 +8,8 @@ export default {
     cases: 'Customers',
     pricing: 'Pricing',
     about: 'About',
-    contact: 'Partner with us'
+    contact: 'Partner with us',
+    skip: 'Skip to content'
   },
   cta: {
     primary: 'Start free trial',

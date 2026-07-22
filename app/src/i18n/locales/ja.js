@@ -8,7 +8,8 @@ export default {
     cases: '導入事例',
     pricing: '料金',
     about: '会社情報',
-    contact: 'パートナー'
+    contact: 'パートナー',
+    skip: 'コンテンツへスキップ'
   },
   cta: {
     primary: '無料で試す',

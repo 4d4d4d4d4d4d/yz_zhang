@@ -8,7 +8,8 @@ export default {
     cases: '客户案例',
     pricing: '价格',
     about: '关于我们',
-    contact: '商务合作'
+    contact: '商务合作',
+    skip: '跳到主要内容'
   },
   cta: {
     primary: '免费试用',
