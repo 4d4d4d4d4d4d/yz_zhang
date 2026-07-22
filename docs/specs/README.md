@@ -41,6 +41,7 @@ the test assertions.
 | 30 | [Funnel Analytics (closes the recorder loop)](30-funnel-analytics.md) | `logic/funnel.js`, `components/FunnelView.vue` | `tests/funnel.test.js` |
 | 31 | [Keyboard Nav & A11y (batch)](31-keyboard-nav-a11y.md) | `logic/shortcuts.js`, `components/{SubTabs,GotoShortcuts}.vue`, `App.vue` skip-link | `tests/shortcuts.test.js`, `tests/subtabs.test.js` |
 | 32 | [Operator Velocity (batch)](32-operator-velocity.md) | `logic/recents.js`, `shortcutRows()`, `components/ShortcutHelp.vue`, recents in `CommandPalette.vue` | `tests/recents.test.js`, `tests/shortcutHelp.test.js`, `tests/shortcuts.test.js` |
+| 33 | [Locale-Aware Figures (staged)](33-locale-figures.md) | `logic/format.js`, `composables/useFormat.js`, `RevenueDashboard.vue` (flagship) | `tests/format.test.js` |
 
 Capability flow across domains:
 
