@@ -1,0 +1,60 @@
+schema_version: "1.0"
+name: "Datapath chip running a real attention layer (trace-driven)"
+description: |
+  SPEC-012 §4 集成:一条真实数据通路(DAGC→DSB→MAC→VAU→AVP)由
+  TraceProducer 播放的真实 attention block 算子序列驱动,而非合成 token。
+  每个算子按 shape 生成异质 token,穿过整条通路到 sink。
+
+  与合成激励的 usecase_npu_full_baseline 相比,这里激活面跑的是"真实模型层
+  负载",端到端 valid 且 sink 收齐所有算子。
+
+clock_domains:
+  - { id: main_clk, period_ps: 1000 }
+
+modules:
+  - id: trace_src
+    type: TraceProducer
+    clock: main_clk
+    config:
+      ops:
+        - { op_type: matmul,  m: 32, k: 32, n: 32, precision: int8 }   # q_proj
+        - { op_type: matmul,  m: 32, k: 32, n: 32, precision: int8 }   # k_proj
+        - { op_type: matmul,  m: 32, k: 32, n: 32, precision: int8 }   # v_proj
+        - { op_type: matmul,  m: 32, k: 32, n: 32, precision: int8 }   # scores
+        - { op_type: softmax, n_elements: 256 }                        # softmax
+        - { op_type: matmul,  m: 32, k: 32, n: 32, precision: int8 }   # attn
+        - { op_type: matmul,  m: 32, k: 32, n: 32, precision: int8 }   # out_proj
+      send_rate_cycles_per_token: 1
+      repeat: 1
+  - id: dagc
+    type: DAGC
+    clock: main_clk
+    config: { bfp8_unpack_throughput: 8, bfp16_unpack_throughput: 4, bfp_ratio: "2:1" }
+  - id: dsb
+    type: DSB
+    clock: main_clk
+    config: { buffer_kb: 64, read_throughput: 8, enable_double_buffer: true }
+  - id: mac
+    type: MAC
+    clock: main_clk
+    config: { array_rows: 32, array_cols: 32, support_bfp16: true }
+  - id: vau
+    type: VAU
+    clock: main_clk
+    config: { lanes: 16 }
+  - id: avp
+    type: AVP
+    clock: main_clk
+    config: { vector_width: 16 }
+  - id: sink
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+
+connections:
+  - { from: trace_src.out,     to: dagc.in_packed, fifo_depth: 8, latency_cycles: 1 }
+  - { from: dagc.out_unpacked, to: dsb.in_data,    fifo_depth: 8, latency_cycles: 1 }
+  - { from: dsb.out_data,      to: mac.in_act,     fifo_depth: 8, latency_cycles: 1 }
+  - { from: mac.out_psum,      to: vau.in_a,       fifo_depth: 8, latency_cycles: 1 }
+  - { from: vau.out,           to: avp.in_data,    fifo_depth: 8, latency_cycles: 1 }
+  - { from: avp.out_data,      to: sink.in,        fifo_depth: 8, latency_cycles: 1 }

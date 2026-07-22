@@ -27,6 +27,7 @@ Owners：架构组
 | [SPEC-009 工作负载形变与互连](./SPEC-009-Workload-Interconnect.md) | IM2COL / RDC / NoC / CDE / Transpose | v0.1 Draft（全 5 §§ 实现 + 测试）|
 | [SPEC-010 系统基础设施](./SPEC-010-System-Infrastructure.md) | PMU / SYNC | v0.1 Draft（全 2 §§ 实现 + 测试）|
 | [SPEC-011 DRAM 子系统与专用计算](./SPEC-011-DRAM-Specialized.md) | MC / L2 / SE / TLU / CMDQ / MMU | v0.1 Draft（全 6 §§ 实现 + 测试）|
+| [SPEC-012 Trace-Driven 激励](./SPEC-012-Trace-Driven-Stimulus.md) | TraceProducer — 播放真实模型算子序列 | v0.1 Draft（实现 + 测试）|
 | [SPEC-001 v1.1 增订](./SPEC-001-v1.1-amendment.md) | Area 维度 + clock_domain | v1.1 Draft（Review pending）|
 | [SPEC-003 v1.1 增订](./SPEC-003-v1.1-amendment.md) | `__relocate__` / `clock_domains` / `physical_dimension` | v1.1 Draft（Review pending）|
 | [SPEC-005 v1.1 增订](./SPEC-005-v1.1-amendment.md) | 现存模块 area 系数 + UNPACK capability | v1.1 Draft（Review pending）|
