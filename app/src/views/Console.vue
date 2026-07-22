@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { SECTIONS } from '../console/registry.js'
+import { recordSection } from '../store/workspace.js'
 
 import SecurityRibbon  from '../components/SecurityRibbon.vue'
 import NotificationCenter from '../components/NotificationCenter.vue'
@@ -113,6 +114,9 @@ const requestedSub = () => {
 }
 const subTab = ref(requestedSub())
 watch(() => [active.value.key, route.query.sub], () => { subTab.value = requestedSub() })
+
+// Spec 32 — remember visited sections for the ⌘K empty-query jump list.
+watch(() => active.value.key, k => recordSection(k), { immediate: true })
 
 const subTabs = computed(() => active.value.sub.map(s => ({ v: s.v, label: t(`console.tabs.${active.value.key}.${s.v}`) })))
 const activeComp = computed(() => active.value.sub.find(s => s.v === subTab.value)?.comp)

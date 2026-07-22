@@ -2,6 +2,7 @@
 // Vue `reactive` + localStorage only: one new concept, zero new deps.
 
 import { reactive, computed } from 'vue'
+import { pushRecent } from '../logic/recents.js'
 import { deriveAlerts, createInbox } from '../logic/notifications.js'
 import { slaSummary, healthSummary } from '../logic/customerSuccess.js'
 import { assessCampaign } from '../logic/riskLegal.js'
@@ -18,11 +19,12 @@ function loadPrefs() {
     const parsed = raw ? JSON.parse(raw) : {}
     return {
       currency: typeof parsed.currency === 'string' ? parsed.currency : null,
-      readKeys: Array.isArray(parsed.readKeys) ? parsed.readKeys : []
+      readKeys: Array.isArray(parsed.readKeys) ? parsed.readKeys : [],
+      recents: Array.isArray(parsed.recents) ? parsed.recents.filter(k => typeof k === 'string') : []
     }
   } catch {
     // Malformed storage falls back to defaults — never throw at import time.
-    return { currency: null, readKeys: [] }
+    return { currency: null, readKeys: [], recents: [] }
   }
 }
 
@@ -32,13 +34,23 @@ function persist() {
   try {
     globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify({
       currency: prefs.currency,
-      readKeys: prefs.readKeys
+      readKeys: prefs.readKeys,
+      recents: prefs.recents
     }))
   } catch { /* storage unavailable (private mode) — stay in-memory */ }
 }
 
 export function setCurrencyPref(code) {
   prefs.currency = code
+  persist()
+}
+
+// Spec 32 — record the most-recently-visited console section (MRU) so the
+// ⌘K palette can offer them on an empty query. Keys are opaque; the view
+// filters to registry-valid ones on read.
+export function recordSection(key) {
+  const next = pushRecent(prefs.recents, key)
+  prefs.recents.splice(0, prefs.recents.length, ...next)
   persist()
 }
 
@@ -98,4 +110,5 @@ export function __resetForTests() {
   const fresh = loadPrefs()
   prefs.currency = fresh.currency
   prefs.readKeys = fresh.readKeys
+  prefs.recents = fresh.recents
 }

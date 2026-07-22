@@ -171,7 +171,17 @@ export default {
     count: '{n} resultado(s)',
     placeholder: 'Salta a cualquier módulo… (p. ej. "bandit", "rev rec")',
     empty: 'Ningún módulo coincide — prueba una consulta más corta.',
+    recent: 'Recientes',
     hint: '⌘K / Ctrl+K para abrir · ↑↓ para elegir · Enter para saltar · Esc para cerrar'
+  },
+  shortcuts: {
+    title: 'Atajos de teclado',
+    close: 'Cerrar',
+    global: 'General',
+    jump: 'Ir a',
+    palette: 'Abrir la paleta de comandos',
+    help: 'Mostrar esta ayuda',
+    tabs: 'Moverse entre pestañas'
   },
   funnel: {
     kicker: 'Embudo de conversión · GTM',

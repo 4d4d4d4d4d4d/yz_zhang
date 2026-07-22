@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { SECTIONS } from '../console/registry.js'
 import { buildIndex, searchModules } from '../logic/search.js'
+import { prefs } from '../store/workspace.js'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -21,7 +22,17 @@ const index = computed(() => {
     kind === 'section' ? t(`console.s.${path}.title`) : t(`console.tabs.${path}`))
 })
 
-const results = computed(() => searchModules(query.value, index.value))
+// Recent sections (spec 32): map persisted section keys to their section-level
+// index entries, dropping any key no longer in the registry.
+const recents = computed(() => {
+  const byId = new Map(index.value.map(e => [e.id, e]))
+  return prefs.recents.map(k => byId.get(k)).filter(Boolean)
+})
+
+// Empty query → offer recents if we have any; otherwise browse the index.
+const showingRecents = computed(() => !query.value.trim() && recents.value.length > 0)
+const results = computed(() =>
+  showingRecents.value ? recents.value : searchModules(query.value, index.value))
 
 watch(results, () => { active.value = 0 })
 watch(open, async v => {
@@ -83,6 +94,7 @@ defineExpose({ open })
           @keydown.up.prevent="move(-1)"
           @keydown.enter.prevent="go()"
         />
+        <div v-if="showingRecents" class="pal-cap">{{ t('palette.recent') }}</div>
         <ul v-if="results.length" id="pal-listbox" class="pal-list" role="listbox">
           <li
             v-for="(r, i) in results" :key="r.id"
@@ -117,6 +129,7 @@ defineExpose({ open })
 .pal-row.on { background: rgba(124, 92, 255, .16); }
 .pr-section { font-size: 11px; color: var(--text-dim); }
 .pr-kbd { font-size: 11px; color: var(--text-dim); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; }
+.pal-cap { padding: 10px 12px 2px; font-size: 10.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim); }
 .pal-empty { padding: 18px 12px; font-size: 13px; color: var(--text-dim); text-align: center; }
 .pal-foot { margin-top: 8px; padding: 8px 12px 4px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-dim); }
 </style>

@@ -173,7 +173,17 @@ export default {
     count: '{n} result(s)',
     placeholder: 'Jump to any module… (e.g. "bandit", "rev rec", "tour")',
     empty: 'No modules match — try a shorter query.',
+    recent: 'Recent',
     hint: '⌘K / Ctrl+K to open · ↑↓ to select · Enter to jump · Esc to close'
+  },
+  shortcuts: {
+    title: 'Keyboard shortcuts',
+    close: 'Close',
+    global: 'General',
+    jump: 'Jump to',
+    palette: 'Open command palette',
+    help: 'Show this help',
+    tabs: 'Move between tabs'
   },
   funnel: {
     kicker: 'Conversion funnel · GTM',

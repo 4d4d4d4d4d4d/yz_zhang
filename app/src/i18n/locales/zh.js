@@ -173,7 +173,17 @@ export default {
     count: '{n} 个结果',
     placeholder: '跳转到任意模块…（如「实地调查」「收入确认」「bandit」）',
     empty: '没有匹配的模块——试试更短的关键词。',
+    recent: '最近访问',
     hint: '⌘K / Ctrl+K 打开 · ↑↓ 选择 · Enter 跳转 · Esc 关闭'
+  },
+  shortcuts: {
+    title: '键盘快捷键',
+    close: '关闭',
+    global: '通用',
+    jump: '跳转到',
+    palette: '打开命令面板',
+    help: '显示本帮助',
+    tabs: '在标签间切换'
   },
   funnel: {
     kicker: '转化漏斗 · GTM',

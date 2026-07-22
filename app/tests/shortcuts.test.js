@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveGoto, GOTO_MAP } from '../src/logic/shortcuts.js'
+import { resolveGoto, GOTO_MAP, shortcutRows } from '../src/logic/shortcuts.js'
 import { SECTIONS } from '../src/console/registry.js'
 
 describe('g-goto shortcut map', () => {
@@ -28,5 +28,29 @@ describe('g-goto shortcut map', () => {
     expect(resolveGoto('')).toBeNull()
     expect(resolveGoto(' ')).toBeNull()
     expect(resolveGoto(undefined)).toBeNull()
+  })
+})
+
+describe('shortcutRows — cheat-sheet generation', () => {
+  it('generates one goto row per GOTO_MAP key, each with its route', () => {
+    const { goto } = shortcutRows()
+    expect(goto).toHaveLength(Object.keys(GOTO_MAP).length)
+    for (const row of goto) {
+      expect(row.keys[0]).toBe('g')
+      expect(GOTO_MAP[row.keys[1]]).toEqual(row.route)
+    }
+  })
+
+  it('every goto row targets a real destination (home or a live section)', () => {
+    const tabs = new Set(SECTIONS.map(s => s.key))
+    for (const row of shortcutRows().goto) {
+      if (row.route.name === 'home') continue
+      expect(tabs.has(row.route.params.tab)).toBe(true)
+    }
+  })
+
+  it('lists the global shortcuts (palette, help, tabs)', () => {
+    const ids = shortcutRows().global.map(r => r.id)
+    expect(ids).toEqual(expect.arrayContaining(['palette', 'help', 'tabs']))
   })
 })

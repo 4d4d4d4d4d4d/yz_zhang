@@ -4,6 +4,7 @@ import Navbar from './components/Navbar.vue'
 import Footer from './components/Footer.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import GotoShortcuts from './components/GotoShortcuts.vue'
+import ShortcutHelp from './components/ShortcutHelp.vue'
 import { useDocumentTitle } from './composables/useDocumentTitle.js'
 
 const { t } = useI18n()
@@ -15,6 +16,7 @@ useDocumentTitle()
   <Navbar />
   <CommandPalette />
   <GotoShortcuts />
+  <ShortcutHelp />
   <main id="main" tabindex="-1">
     <router-view v-slot="{ Component }">
       <transition name="fade" mode="out-in">

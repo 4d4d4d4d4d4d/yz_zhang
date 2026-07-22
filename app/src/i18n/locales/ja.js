@@ -171,7 +171,17 @@ export default {
     count: '{n} 件の結果',
     placeholder: '任意のモジュールへジャンプ…（例:「実地調査」「収益認識」）',
     empty: '一致するモジュールがありません。短いキーワードをお試しください。',
+    recent: '最近使った項目',
     hint: '⌘K / Ctrl+K で開く · ↑↓ で選択 · Enter で移動 · Esc で閉じる'
+  },
+  shortcuts: {
+    title: 'キーボードショートカット',
+    close: '閉じる',
+    global: '一般',
+    jump: '移動先',
+    palette: 'コマンドパレットを開く',
+    help: 'このヘルプを表示',
+    tabs: 'タブ間を移動'
   },
   funnel: {
     kicker: 'コンバージョンファネル · GTM',
