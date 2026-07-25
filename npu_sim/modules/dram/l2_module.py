@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import random
 from typing import Iterator, Optional
 
 from npu_sim.core.module_registry import ModuleRegistry
@@ -62,7 +61,11 @@ class L2(IModule):
         self._active_caps: list[str] = []
         self._busy = False; self._stage = "idle"
         self._hits = 0; self._misses = 0
-        self._rng = random.Random(0xC0FFEE)
+        # Deterministic hit/miss: no RNG. A running miss-credit accumulator
+        # emits exactly floor(N * miss_rate) misses over N accesses,
+        # independent of module scheduling order → bit-for-bit reproducible.
+        self._miss_credit = 0.0
+        self._access_count = 0
         self._req_port = None; self._data_port = None
         self._out_port = None; self._mc_port = None
 
@@ -90,7 +93,8 @@ class L2(IModule):
     def reset(self):
         self._busy = False; self._stage = "idle"
         self._hits = self._misses = 0
-        self._rng = random.Random(0xC0FFEE)
+        self._miss_credit = 0.0
+        self._access_count = 0
     def destroy(self): self._req_port = self._data_port = self._out_port = self._mc_port = None
     def input_ports(self):
         return {"req_in": self._req_port, "data_in": self._data_port} if self._configured else {}
@@ -139,17 +143,24 @@ class L2(IModule):
             if req is None:
                 yield; continue
             self._busy = True; self._stage = "lookup"; yield
-            # Hit/miss decision: static random per hit_rate.
-            if self._rng.random() < self._hit_rate:
-                self._stage = "hit_serve"
-                for _ in range(self._hit_c - 1):
-                    yield
-                self._hits += 1
-            else:
+            # Deterministic hit/miss (SPEC-011 §2 + QEMU-analysis §3.3):
+            # accumulate miss-credit each access; when it crosses 1.0, this
+            # access is a miss. Over N accesses → floor(N × miss_rate)
+            # misses, exactly, with no RNG and no scheduling dependence.
+            self._access_count += 1
+            self._miss_credit += (1.0 - self._hit_rate)
+            is_miss = self._miss_credit >= 1.0
+            if is_miss:
+                self._miss_credit -= 1.0
                 self._stage = "miss_pass"
                 for _ in range(self._miss_c - 1):
                     yield
                 self._misses += 1
+            else:
+                self._stage = "hit_serve"
+                for _ in range(self._hit_c - 1):
+                    yield
+                self._hits += 1
 
             out = TransportToken(
                 payload=req.payload, size_bytes=int(req.metadata.get("bytes", 64)),

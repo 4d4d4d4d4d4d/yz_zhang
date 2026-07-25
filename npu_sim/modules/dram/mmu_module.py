@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import random
 from typing import Iterator, Optional
 
 from npu_sim.core.module_registry import ModuleRegistry
@@ -57,7 +56,9 @@ class MMU(IModule):
         self._tlb_entries = 64; self._hit_rate = 0.95; self._walk_cycles = 20
         self._busy = False; self._stage = "idle"
         self._hits = 0; self._misses = 0
-        self._rng = random.Random(0xBEEF)
+        # Deterministic TLB hit/miss: miss-credit accumulator, no RNG.
+        self._miss_credit = 0.0
+        self._access_count = 0
         self._vaddr_port = None; self._paddr_port = None
         self._walk_req_port = None; self._walk_resp_port = None
 
@@ -80,7 +81,8 @@ class MMU(IModule):
     def reset(self):
         self._busy = False; self._stage = "idle"
         self._hits = self._misses = 0
-        self._rng = random.Random(0xBEEF)
+        self._miss_credit = 0.0
+        self._access_count = 0
     def destroy(self):
         self._vaddr_port = self._paddr_port = None
         self._walk_req_port = self._walk_resp_port = None
@@ -126,14 +128,19 @@ class MMU(IModule):
             if req is None:
                 yield; continue
             self._busy = True; self._stage = "tlb_lookup"; yield
-            if self._rng.random() < self._hit_rate:
-                self._stage = "tlb_hit"
-                self._hits += 1
-            else:
+            # Deterministic hit/miss (QEMU-analysis §3.3): miss-credit
+            # accumulator → floor(N × miss_rate) misses, no RNG.
+            self._access_count += 1
+            self._miss_credit += (1.0 - self._hit_rate)
+            if self._miss_credit >= 1.0:
+                self._miss_credit -= 1.0
                 self._stage = "tlb_miss_walk"
                 for _ in range(self._walk_cycles):
                     yield
                 self._misses += 1
+            else:
+                self._stage = "tlb_hit"
+                self._hits += 1
             self._stage = "emit_paddr"
             out = TransportToken(
                 payload=req.payload, size_bytes=8,

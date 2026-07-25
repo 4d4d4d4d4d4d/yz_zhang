@@ -98,12 +98,12 @@ workload 预计 10–100× 提速,语义完全等价(反压唤醒点不变)。
 
 ## 5. 路线建议(按 ROI 排序)
 
-| # | 改进 | 价值 | 工作量 | 建议 |
+| # | 改进 | 价值 | 工作量 | 状态 |
 |---|---|---|---|---|
-| 1 | SPEC-012 Trace-driven 激励(§3.1) | 评估可信度质变 | 中 | **立项** |
-| 2 | WAIT(n) 跳步调度(§3.4) | 大 workload 10–100× | 中高 | trace 落地后做(那时才有长 workload) |
-| 3 | RNG 确定性收口(§3.3) | 可复现性 | 低 | 顺手修,一个 PR |
-| 4 | Checkpoint/restore(§3.2) | 长 trace 评估提效 | 中 | 跟随 #1/#2 |
+| 1 | SPEC-012 Trace-driven 激励(§3.1) | 评估可信度质变 | 中 | ✅ **已落地**(SPEC-012 + TraceProducer,跑真实 attention 层) |
+| 2 | WAIT(n) 跳步调度(§3.4) | 大 workload 10–100× | 中高 | 待做(trace 长 workload 需要时) |
+| 3 | RNG 确定性收口(§3.3) | 可复现性 | 低 | ✅ **已落地**(L2/MMU 改确定性 miss-credit,零 random,`test_determinism.py` 锁 bit-identical) |
+| 4 | Checkpoint/restore(§3.2) | 长 trace 评估提效 | 中 | 待做(跟随 #2) |
 
 ## 6. 与既有决策的一致性
 
