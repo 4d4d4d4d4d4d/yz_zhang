@@ -43,6 +43,7 @@ the test assertions.
 | 32 | [Operator Velocity (batch)](32-operator-velocity.md) | `logic/recents.js`, `shortcutRows()`, `components/ShortcutHelp.vue`, recents in `CommandPalette.vue` | `tests/recents.test.js`, `tests/shortcutHelp.test.js`, `tests/shortcuts.test.js` |
 | 33 | [Locale-Aware Figures (staged)](33-locale-figures.md) | `logic/format.js`, `composables/useFormat.js`; adopted in `RevenueDashboard.vue`, `UsageMetering.vue` | `tests/format.test.js` |
 | 34 | [Exportable Deal Readiness Report](34-deal-report.md) | `logic/dealReport.js`, `components/DealReportCard.vue`, `showcase/report` sub-tab | `tests/dealReport.test.js` |
+| 35 | [Sortable & Exportable Tables](35-sortable-export-tables.md) | `logic/sortRows.js`, `logic/csv.js`, `composables/useSortable.js`; adopted in `OrderBook.vue` | `tests/sortRows.test.js`, `tests/csv.test.js` |
 
 Capability flow across domains:
 
