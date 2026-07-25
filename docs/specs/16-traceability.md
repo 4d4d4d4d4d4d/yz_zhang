@@ -1,8 +1,15 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V24 全批次完成（2026-07-17）。
-> 后端 195 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V25 全批次完成（2026-07-17）。
+> 后端 198 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V25 批次：过期任务自动下架）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| TASK-015 过期任务自动下架（**补执行缺口**：deadline 发布时校验、发布后从不执行 → 僵尸挂单永占广场）：published 且过截止时间未成交 → 转 cancelled，通知发布者与全部待处理报名者；已成交/无 deadline 不受影响；幂等 | `task/router.py::run_expire_tasks` (`/tasks/jobs/expire-tasks`) | `tests/test_task_expiry.py` |
+| SDK 同步：expireTasks | `packages/core/src/client.ts` | web 构建通过 |
 
 ## 已实现（V24 批次：收款账户绑定——提现前置）
 

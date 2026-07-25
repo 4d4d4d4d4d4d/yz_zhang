@@ -680,6 +680,36 @@ def run_settle_reviews(db: Session = Depends(get_db)):
     return {"settled": settled}
 
 
+@router.post("/tasks/jobs/expire-tasks")
+def run_expire_tasks(db: Session = Depends(get_db)):
+    """TASK-015 过期任务自动下架：已发布但过了截止时间仍无人成交的任务自动关闭。
+
+    发布时校验了 deadline 必须在未来，但发布后从不执行——僵尸挂单会永远占据广场。
+    此 job 把过期未成交的 published 任务转 cancelled，并通知发布者与全部待处理报名者。
+    """
+    now = utcnow()
+    rows = (
+        db.query(Task)
+        .filter(Task.status == "published", Task.deadline.isnot(None), Task.deadline <= now)
+        .all()
+    )
+    from app.modules.notification.service import notify
+
+    for task in rows:
+        service.transition(db, task, "cancelled", {"cancelled_by": "system_expired"})
+        notify(db, task.creator_id, "task", "任务已过期下架",
+               f"《{task.title}》已过截止时间仍无人成交，已自动下架，可重新发布。")
+        apps = db.query(Application).filter(
+            Application.task_id == task.id, Application.status == "pending"
+        ).all()
+        for a in apps:
+            a.status = "rejected"
+            db.add(a)
+            notify(db, a.applicant_id, "task", "报名的任务已下架",
+                   f"《{task.title}》已过期下架，你的报名已自动关闭。")
+    return {"expired": len(rows)}
+
+
 @router.post("/tasks/jobs/auto-accept")
 def run_auto_accept(db: Session = Depends(get_db)):
     """TASK-031 超时自动验收（生产为定时任务，这里同时暴露为可调用 job）。"""

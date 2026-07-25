@@ -106,6 +106,9 @@ export class PlatformClient {
   getTask(id: number) {
     return this.request<Task>('GET', `/tasks/${id}`);
   }
+  expireTasks() {
+    return this.request<{ expired: number }>('POST', '/tasks/jobs/expire-tasks');
+  }
   editTask(id: number, patch: Partial<{
     title: string; description: string; budget_cents: number;
     required_skills: string[]; address_hint: string; address_exact: string; deadline: string;
