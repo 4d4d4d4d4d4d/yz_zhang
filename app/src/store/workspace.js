@@ -58,6 +58,19 @@ export function recordSection(key) {
 
 // Derive alerts by running the REAL engines over the single-source
 // workspace data — the bell shows the same facts as the module pages.
+// Single-source deal readiness: the notification bell (via deriveWorkspaceAlerts)
+// and the exportable deal report (spec 34) run the SAME engine over the SAME
+// workspace deal, so the shared verdict can never disagree with itself.
+export function dealReadinessSnapshot() {
+  return dealReadiness({
+    reels: [trustScore(DEAL.reelEvidence)],
+    fieldCase: DEAL.fieldCase,
+    compliance: DEAL.compliance,
+    diligence: DEAL.diligence,
+    terms: DEAL.terms
+  })
+}
+
 export function deriveWorkspaceAlerts(now = Date.now()) {
   const flagship = TENANTS[0]
   return deriveAlerts({
@@ -65,13 +78,7 @@ export function deriveWorkspaceAlerts(now = Date.now()) {
     health: healthSummary(ACCOUNTS),
     compliance: assessCampaign(CAMPAIGN),
     invoice: invoice(PLAN_BASE_FEES[flagship.plan], METERS[flagship.id]),
-    readiness: dealReadiness({
-      reels: [trustScore(DEAL.reelEvidence)],
-      fieldCase: DEAL.fieldCase,
-      compliance: DEAL.compliance,
-      diligence: DEAL.diligence,
-      terms: DEAL.terms
-    })
+    readiness: dealReadinessSnapshot()
   })
 }
 

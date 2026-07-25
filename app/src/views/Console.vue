@@ -57,6 +57,7 @@ import ShowcaseGallery   from '../components/ShowcaseGallery.vue'
 import TrustLinkBuilder  from '../components/TrustLinkBuilder.vue'
 import VerificationQueue from '../components/VerificationQueue.vue'
 import TrustPipeline     from '../components/TrustPipeline.vue'
+import DealReportCard    from '../components/DealReportCard.vue'
 
 import TrustCenter      from '../components/TrustCenter.vue'
 import ControlsRegister from '../components/ControlsRegister.vue'
@@ -87,7 +88,7 @@ const COMPONENTS = {
   'deals/library': ClauseLibrary, 'deals/obligations': ObligationTracker, 'deals/analytics': ContractAnalytics,
   'deals/cpq': CPQEditor, 'deals/revrec': RevenueRecognition,
   'showcase/gallery': ShowcaseGallery, 'showcase/links': TrustLinkBuilder, 'showcase/verification': VerificationQueue,
-  'showcase/pipeline': TrustPipeline,
+  'showcase/pipeline': TrustPipeline, 'showcase/report': DealReportCard,
   'immersive/avatar': AvatarStudio, 'immersive/meeting': ImmersiveMeeting, 'immersive/tour': VirtualTour,
   'immersive/field': FieldVerification,
   'trust/posture': TrustCenter, 'trust/controls': ControlsRegister, 'trust/heatmap': RiskHeatmap,

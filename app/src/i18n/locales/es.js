@@ -134,7 +134,7 @@ export default {
       marketing: { overview: 'Resumen', control: 'Campañas · A/B · geo', attribution: 'Atribución', audience: 'Creador de audiencias', retention: 'Retención por cohortes', forecast: 'Pronóstico what-if', revenue: 'Ingresos SaaS', upsell: 'Motor de upsell', funnel: 'Embudo' },
       partners:  { network: 'Perfil de red', pipeline: 'Tablero de pipeline', intel: 'Intel de cuentas', outreach: 'Cadencia de outreach', forecast: 'Pronóstico de ventas', territory: 'Territorio · cuota', orders: 'Libro de pedidos', commission: 'Marketplace · comisión' },
       deals:     { room: 'Sala de deal', playbook: 'Playbook · ZOPA · redline', workflow: 'Flujo de aprobación', library: 'Biblioteca de cláusulas', obligations: 'Obligaciones', analytics: 'Analítica CLM', cpq: 'CPQ · cotización', revrec: 'Reconocimiento de ingresos' },
-      showcase:  { gallery: 'Showcase de vídeo', links: 'Trust links', verification: 'Cola de verificación', pipeline: 'Preparación del deal' },
+      showcase:  { gallery: 'Showcase de vídeo', links: 'Trust links', verification: 'Cola de verificación', pipeline: 'Preparación del deal', report: 'Informe del deal' },
       immersive: { avatar: 'Estudio de humano digital', meeting: 'Reunión inmersiva', tour: 'Tour virtual de fábrica', field: 'Verificación en terreno' },
       trust:     { posture: 'Postura', controls: 'Controles · DSR', heatmap: 'Mapa de riesgos', dpia: 'Flujo DPIA', audit: 'Sala de auditoría', policies: 'Políticas · formación', health: 'Salud del cliente', support: 'Soporte · SLA' }
     }
@@ -182,6 +182,23 @@ export default {
     palette: 'Abrir la paleta de comandos',
     help: 'Mostrar esta ayuda',
     tabs: 'Moverse entre pestañas'
+  },
+  report: {
+    kicker: 'Preparación del deal · compartible',
+    title: 'Informe de preparación del deal',
+    sub: 'Un resumen de una página, verificable, para compartir con tu contraparte.',
+    verdict: 'Veredicto',
+    stages: 'Etapas de preparación',
+    blockers: 'Qué bloquea la firma',
+    progress: '{done} de {total} etapas completas',
+    generated: 'Generado',
+    copy: 'Copiar resumen',
+    copied: 'Copiado ✓',
+    print: 'Imprimir / PDF',
+    v: { ready: 'Listo para firmar', blocked: 'Bloqueado', progress: 'En curso' },
+    stage: { evidence: 'Trabajo verificado', verification: 'Verificación in situ', compliance: 'Cumplimiento', commercial: 'Términos comerciales' },
+    status: { complete: 'Completo', partial: 'Parcial', open: 'Abierto' },
+    sev: { zero: 'Bloqueante', half: 'Requiere trabajo' }
   },
   funnel: {
     kicker: 'Embudo de conversión · GTM',

@@ -134,7 +134,7 @@ export default {
       marketing: { overview: '概要', control: 'キャンペーン · A/B · 地域', attribution: 'アトリビューション', audience: 'オーディエンス作成', retention: 'コホート維持率', forecast: 'What-if 予測', revenue: 'SaaS 収益', upsell: 'アップセル', funnel: 'ファネル' },
       partners:  { network: 'ネットワーク情報', pipeline: 'パイプライン', intel: 'アカウント情報', outreach: 'アウトリーチ', forecast: '売上予測', territory: 'テリトリー · 目標', orders: 'オーダーブック', commission: 'マーケット · 手数料' },
       deals:     { room: 'ディールルーム', playbook: 'プレイブック · ZOPA', workflow: '承認フロー', library: '条項ライブラリ', obligations: '義務トラッカー', analytics: '契約アナリティクス', cpq: 'CPQ · 見積', revrec: '収益認識' },
-      showcase:  { gallery: '映像ショーケース', links: 'トラストリンク', verification: '検証キュー', pipeline: '成約準備度' },
+      showcase:  { gallery: '映像ショーケース', links: 'トラストリンク', verification: '検証キュー', pipeline: '成約準備度', report: '成約レポート' },
       immersive: { avatar: 'デジタルヒューマン', meeting: 'イマーシブ会議', tour: '工場バーチャル見学', field: '実地調査' },
       trust:     { posture: 'ポスチャー', controls: 'コントロール · DSR', heatmap: 'リスクヒートマップ', dpia: 'DPIA ワークフロー', audit: '監査ルーム', policies: 'ポリシー · 研修', health: '顧客ヘルス', support: 'サポート · SLA' }
     }
@@ -182,6 +182,23 @@ export default {
     palette: 'コマンドパレットを開く',
     help: 'このヘルプを表示',
     tabs: 'タブ間を移動'
+  },
+  report: {
+    kicker: '成約準備度 · 共有可能',
+    title: '成約準備度レポート',
+    sub: '相手先と共有できる、一枚で検証可能な準備度サマリー。',
+    verdict: '判定',
+    stages: '準備ステージ',
+    blockers: '署名を妨げている要因',
+    progress: '{total} ステージ中 {done} 完了',
+    generated: '生成日時',
+    copy: 'サマリーをコピー',
+    copied: 'コピー済み ✓',
+    print: '印刷 / PDF',
+    v: { ready: '署名可能', blocked: 'ブロック', progress: '進行中' },
+    stage: { evidence: '検証済み実績', verification: '現地検証', compliance: 'コンプライアンス', commercial: '商務条件' },
+    status: { complete: '完了', partial: '一部', open: '未完了' },
+    sev: { zero: 'ブロッカー', half: '要対応' }
   },
   funnel: {
     kicker: 'コンバージョンファネル · GTM',

@@ -136,7 +136,7 @@ export default {
       marketing: { overview: 'Overview', control: 'Campaigns · A/B · geo', attribution: 'Attribution', audience: 'Audience builder', retention: 'Cohort retention', forecast: 'What-if forecast', revenue: 'SaaS revenue', upsell: 'Upsell engine', funnel: 'Funnel' },
       partners:  { network: 'Network profile', pipeline: 'Pipeline board', intel: 'Account intel', outreach: 'Outreach cadence', forecast: 'Sales forecast', territory: 'Territory · quota', orders: 'Order book', commission: 'Marketplace · commission' },
       deals:     { room: 'Deal room', playbook: 'Playbook · ZOPA · redline', workflow: 'Approval workflow', library: 'Clause library', obligations: 'Obligations', analytics: 'CLM analytics', cpq: 'CPQ · quote', revrec: 'Rev recognition' },
-      showcase:  { gallery: 'Video showcase', links: 'Trust links', verification: 'Verification queue', pipeline: 'Deal readiness' },
+      showcase:  { gallery: 'Video showcase', links: 'Trust links', verification: 'Verification queue', pipeline: 'Deal readiness', report: 'Deal report' },
       immersive: { avatar: 'Digital human studio', meeting: 'Immersive meeting', tour: 'Virtual factory tour', field: 'Field verification' },
       trust:     { posture: 'Posture', controls: 'Controls · DSR', heatmap: 'Risk heatmap', dpia: 'DPIA workflow', audit: 'Audit room', policies: 'Policies · training', health: 'Customer health', support: 'Support · SLA' }
     }
@@ -184,6 +184,23 @@ export default {
     palette: 'Open command palette',
     help: 'Show this help',
     tabs: 'Move between tabs'
+  },
+  report: {
+    kicker: 'Deal readiness · shareable',
+    title: 'Deal readiness report',
+    sub: 'A one-page, verifiable readiness summary to share with your counterparty.',
+    verdict: 'Verdict',
+    stages: 'Readiness stages',
+    blockers: 'What is blocking signature',
+    progress: '{done} of {total} stages complete',
+    generated: 'Generated',
+    copy: 'Copy summary',
+    copied: 'Copied ✓',
+    print: 'Print / PDF',
+    v: { ready: 'Ready to sign', blocked: 'Blocked', progress: 'In progress' },
+    stage: { evidence: 'Verified work', verification: 'On-the-ground verification', compliance: 'Compliance', commercial: 'Commercial terms' },
+    status: { complete: 'Complete', partial: 'Partial', open: 'Open' },
+    sev: { zero: 'Blocker', half: 'Needs work' }
   },
   funnel: {
     kicker: 'Conversion funnel · GTM',

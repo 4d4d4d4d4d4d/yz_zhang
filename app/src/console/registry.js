@@ -7,7 +7,7 @@ export const SECTIONS = [
   { key: 'marketing', icon: '📈', subs: ['overview', 'control', 'attribution', 'audience', 'retention', 'forecast', 'revenue', 'upsell', 'funnel'] },
   { key: 'partners',  icon: '🤝', subs: ['network', 'pipeline', 'intel', 'outreach', 'forecast', 'territory', 'orders', 'commission'] },
   { key: 'deals',     icon: '📝', subs: ['room', 'playbook', 'workflow', 'library', 'obligations', 'analytics', 'cpq', 'revrec'] },
-  { key: 'showcase',  icon: '🎬', subs: ['gallery', 'links', 'verification', 'pipeline'] },
+  { key: 'showcase',  icon: '🎬', subs: ['gallery', 'links', 'verification', 'pipeline', 'report'] },
   { key: 'immersive', icon: '🕶', subs: ['avatar', 'meeting', 'tour', 'field'] },
   { key: 'trust',     icon: '🛡', subs: ['posture', 'controls', 'heatmap', 'dpia', 'audit', 'policies', 'health', 'support'] }
 ]

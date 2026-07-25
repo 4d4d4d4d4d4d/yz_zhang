@@ -136,7 +136,7 @@ export default {
       marketing: { overview: '总览', control: '投放 · A/B · 地域', attribution: '归因分析', audience: '人群构建', retention: '留存队列', forecast: 'What-if 预测', revenue: 'SaaS 收入', upsell: '增销引擎', funnel: '转化漏斗' },
       partners:  { network: '网络档案', pipeline: '商机看板', intel: '客户情报', outreach: '触达节奏', forecast: '销售预测', territory: '区域 · 配额', orders: '订单簿', commission: '市场 · 佣金' },
       deals:     { room: '洽谈室', playbook: '策略 · ZOPA · 红线', workflow: '审批流', library: '条款库', obligations: '履约跟踪', analytics: '合同分析', cpq: 'CPQ · 报价', revrec: '收入确认' },
-      showcase:  { gallery: '视频作品集', links: '信任链接', verification: '验证队列', pipeline: '成交就绪度' },
+      showcase:  { gallery: '视频作品集', links: '信任链接', verification: '验证队列', pipeline: '成交就绪度', report: '成交报告' },
       immersive: { avatar: '数字人工作台', meeting: '沉浸会议', tour: '厂房在线参观', field: '实地调查' },
       trust:     { posture: '合规态势', controls: '控制项 · DSR', heatmap: '风险热力图', dpia: 'DPIA 流程', audit: '审计室', policies: '制度 · 培训', health: '客户健康度', support: '支持 · SLA' }
     }
@@ -184,6 +184,23 @@ export default {
     palette: '打开命令面板',
     help: '显示本帮助',
     tabs: '在标签间切换'
+  },
+  report: {
+    kicker: '交易就绪度 · 可分享',
+    title: '交易就绪度报告',
+    sub: '可分享给对方的一页式、可核验的就绪度摘要。',
+    verdict: '结论',
+    stages: '就绪阶段',
+    blockers: '签约受阻因素',
+    progress: '{total} 个阶段中已完成 {done} 个',
+    generated: '生成时间',
+    copy: '复制摘要',
+    copied: '已复制 ✓',
+    print: '打印 / PDF',
+    v: { ready: '可以签约', blocked: '受阻', progress: '进行中' },
+    stage: { evidence: '已核验作品', verification: '实地核查', compliance: '合规', commercial: '商务条款' },
+    status: { complete: '已完成', partial: '部分完成', open: '未完成' },
+    sev: { zero: '阻断项', half: '待完善' }
   },
   funnel: {
     kicker: '转化漏斗 · GTM',

@@ -42,6 +42,7 @@ the test assertions.
 | 31 | [Keyboard Nav & A11y (batch)](31-keyboard-nav-a11y.md) | `logic/shortcuts.js`, `components/{SubTabs,GotoShortcuts}.vue`, `App.vue` skip-link | `tests/shortcuts.test.js`, `tests/subtabs.test.js` |
 | 32 | [Operator Velocity (batch)](32-operator-velocity.md) | `logic/recents.js`, `shortcutRows()`, `components/ShortcutHelp.vue`, recents in `CommandPalette.vue` | `tests/recents.test.js`, `tests/shortcutHelp.test.js`, `tests/shortcuts.test.js` |
 | 33 | [Locale-Aware Figures (staged)](33-locale-figures.md) | `logic/format.js`, `composables/useFormat.js`; adopted in `RevenueDashboard.vue`, `UsageMetering.vue` | `tests/format.test.js` |
+| 34 | [Exportable Deal Readiness Report](34-deal-report.md) | `logic/dealReport.js`, `components/DealReportCard.vue`, `showcase/report` sub-tab | `tests/dealReport.test.js` |
 
 Capability flow across domains:
 
