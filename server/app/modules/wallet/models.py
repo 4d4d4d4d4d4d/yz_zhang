@@ -46,3 +46,15 @@ class WithdrawRequest(Base):
     decided_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PayoutAccount(Base):
+    """PAY-005 收款账户绑定：提现前置（业界必备，模拟银行卡/支付宝绑定）。"""
+
+    __tablename__ = "payout_accounts"
+
+    user_id: Mapped[int] = mapped_column(Integer, primary_key=True)  # 一人一账户（MVP）
+    kind: Mapped[str] = mapped_column(String(12), default="bank")  # bank/alipay
+    account_no: Mapped[str] = mapped_column(String(64))
+    holder_name: Mapped[str] = mapped_column(String(50))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

@@ -22,6 +22,9 @@ def test_topup_idempotency(client, requester):
 
 
 def test_withdraw_idempotency(client, requester):
+    from .conftest import bind_payout
+
+    bind_payout(client, requester)
     topup(client, requester, 20000)
     key = "wd-1"
     r1 = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 8000},

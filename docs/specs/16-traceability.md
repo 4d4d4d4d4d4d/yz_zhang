@@ -1,8 +1,17 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V23 全批次完成（2026-07-16）。
-> 后端 190 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V24 全批次完成（2026-07-17）。
+> 后端 195 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V24 批次：收款账户绑定——提现前置）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| PAY-005 收款账户绑定（**补齐能力缺口**：原提现无收款目标，凭空到账）：绑卡/支付宝、账号脱敏展示、可改绑 | `wallet/router.py::bind/get_payout_account` + `PayoutAccount` 模型 | `tests/test_payout_account.py` |
+| PAY-005 提现前置守卫：未绑收款账户不可提现（`no_payout_account`） | `wallet/service.py::withdraw` | 同上 + test_wallet |
+| PAY-005 收款人实名一致校验（防代提/洗钱）：holder_name 须等于实名 | `wallet/router.py::bind_payout_account` | 同上 |
+| SDK 同步：getPayoutAccount/bindPayoutAccount | `packages/core/src/client.ts` | web 构建通过 |
 
 ## 已实现（V23 批次：平台佣金收入实收口径 + 结算 + 对账不变量）
 

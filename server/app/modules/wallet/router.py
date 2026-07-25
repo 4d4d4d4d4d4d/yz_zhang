@@ -17,6 +17,48 @@ class AmountIn(BaseModel):
     amount_cents: int = Field(gt=0)
 
 
+class PayoutAccountIn(BaseModel):
+    kind: str = Field(default="bank", pattern="^(bank|alipay)$")
+    account_no: str = Field(min_length=6, max_length=64)
+    holder_name: str = Field(min_length=2, max_length=50)
+
+
+def _mask(no: str) -> str:
+    return no[:4] + "****" + no[-4:] if len(no) >= 8 else "****"
+
+
+@router.get("/payout-account")
+def get_payout_account(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from .models import PayoutAccount
+
+    acct = db.get(PayoutAccount, user.id)
+    if not acct:
+        return {"bound": False}
+    return {"bound": True, "kind": acct.kind, "account_no": _mask(acct.account_no),
+            "holder_name": acct.holder_name}
+
+
+@router.put("/payout-account")
+def bind_payout_account(
+    body: PayoutAccountIn, user: User = Depends(require_verified), db: Session = Depends(get_db)
+):
+    """PAY-005 绑定收款账户：实名后可绑；收款人须与实名一致（防代提/洗钱）。"""
+    from app.core.errors import bad_request
+
+    from .models import PayoutAccount
+
+    if user.real_name and body.holder_name != user.real_name:
+        raise bad_request("收款人姓名须与实名认证一致", "holder_name_mismatch")
+    acct = db.get(PayoutAccount, user.id)
+    if not acct:
+        acct = PayoutAccount(user_id=user.id)
+    acct.kind = body.kind
+    acct.account_no = body.account_no
+    acct.holder_name = body.holder_name
+    db.add(acct)
+    return {"bound": True, "kind": acct.kind, "account_no": _mask(acct.account_no)}
+
+
 @router.get("")
 def get_wallet(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     acct = service.get_or_create(db, user.id)

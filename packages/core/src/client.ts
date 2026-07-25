@@ -179,6 +179,16 @@ export class PlatformClient {
   topup(amountCents: number) {
     return this.request<{ available_cents: number }>('POST', '/wallet/topup', { amount_cents: amountCents });
   }
+  getPayoutAccount() {
+    return this.request<{ bound: boolean; kind?: string; account_no?: string; holder_name?: string }>(
+      'GET', '/wallet/payout-account',
+    );
+  }
+  bindPayoutAccount(accountNo: string, holderName: string, kind: 'bank' | 'alipay' = 'bank') {
+    return this.request<{ bound: boolean; kind: string; account_no: string }>(
+      'PUT', '/wallet/payout-account', { kind, account_no: accountNo, holder_name: holderName },
+    );
+  }
   withdraw(amountCents: number) {
     return this.request<{ status: 'done' | 'pending_review'; request_id?: number; available_cents: number; frozen_cents: number }>(
       'POST', '/wallet/withdraw', { amount_cents: amountCents },

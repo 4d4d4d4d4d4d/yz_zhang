@@ -22,8 +22,11 @@ def _make_admin(client, phone):
 
 
 def _rich_user(client, phone, amount=20_000_000):
+    from .conftest import bind_payout
+
     u = register(client, phone, "有钱人")
     verify_user(client, u, "富户")
+    bind_payout(client, u, holder="富户")
     topup(client, u, amount)
     return u
 

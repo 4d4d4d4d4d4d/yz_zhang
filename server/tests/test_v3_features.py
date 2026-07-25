@@ -45,9 +45,13 @@ def test_acc006_deactivate_blocked_then_succeeds(client, requester, worker):
     # 闭环 + 清空余额后可注销
     client.post(f"/api/v1/tasks/{task['id']}/deliver", headers=auth(worker))
     client.post(f"/api/v1/tasks/{task['id']}/accept-delivery", headers=auth(requester))
+    from .conftest import bind_payout
+
+    bind_payout(client, requester)
     wallet = client.get("/api/v1/wallet", headers=auth(requester)).json()
-    client.post("/api/v1/wallet/withdraw", json={"amount_cents": wallet["available_cents"]},
-                headers=auth(requester))
+    if wallet["available_cents"] > 0:
+        client.post("/api/v1/wallet/withdraw", json={"amount_cents": wallet["available_cents"]},
+                    headers=auth(requester))
     r = client.post("/api/v1/users/me/deactivate", headers=auth(requester))
     assert r.status_code == 200 and r.json()["deleted"] is True
     # 注销后登录态与密码登录均失效

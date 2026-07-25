@@ -52,6 +52,14 @@ def topup(client, user, amount):
     assert r.status_code == 200, r.text
 
 
+def bind_payout(client, user, holder="张三"):
+    """PAY-005 提现前置：绑定收款账户（默认收款人与 verify_user 实名一致）。"""
+    r = client.put("/api/v1/wallet/payout-account",
+                   json={"kind": "bank", "account_no": "6222020000123456", "holder_name": holder},
+                   headers=auth(user))
+    assert r.status_code == 200, r.text
+
+
 @pytest.fixture()
 def requester(client):
     user = register(client, "13800000001", "发布者")

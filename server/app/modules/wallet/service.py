@@ -59,11 +59,13 @@ def _today_withdrawn(db: Session, user_id: int) -> int:
 
 
 def withdraw(db: Session, user_id: int, amount: int) -> dict:
-    """PAY-007 提现风控：日限额硬拒；大额冻结进人审；小额即时出账。"""
+    """PAY-005/007 提现：须先绑收款账户；日限额硬拒；大额冻结进人审；小额即时出账。"""
     from app.core.config import settings
 
-    from .models import WithdrawRequest
+    from .models import PayoutAccount, WithdrawRequest
 
+    if not db.get(PayoutAccount, user_id):  # PAY-005 提现前置：必须已绑收款账户
+        raise bad_request("请先绑定收款账户", "no_payout_account")
     acct = get_or_create(db, user_id)
     if amount <= 0 or amount > acct.available_cents:
         raise bad_request("可用余额不足", "insufficient_balance")
