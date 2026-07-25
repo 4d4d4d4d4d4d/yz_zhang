@@ -233,8 +233,7 @@ class TraceProducer(IModule):
                     self._busy = False
                     self._stage = "idle"
                     yield
-        # trace exhausted — idle forever (keeps scheduler alive for peers)
-        while True:
-            self._busy = False
-            self._stage = "idle"
-            yield
+        # Trace exhausted → finish (StopIteration). Other processes keep the
+        # scheduler alive; a finished source lets quiescence detection fire.
+        self._busy = False
+        self._stage = "idle"

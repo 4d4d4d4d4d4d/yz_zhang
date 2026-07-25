@@ -101,9 +101,30 @@ workload 预计 10–100× 提速,语义完全等价(反压唤醒点不变)。
 | # | 改进 | 价值 | 工作量 | 状态 |
 |---|---|---|---|---|
 | 1 | SPEC-012 Trace-driven 激励(§3.1) | 评估可信度质变 | 中 | ✅ **已落地**(SPEC-012 + TraceProducer,跑真实 attention 层) |
-| 2 | WAIT(n) 跳步调度(§3.4) | 大 workload 10–100× | 中高 | 待做(trace 长 workload 需要时) |
+| 2 | 调度加速(§3.4) | 大 max_cycles 4–336× | 中 | ✅ **部分落地**:见下方修正 |
 | 3 | RNG 确定性收口(§3.3) | 可复现性 | 低 | ✅ **已落地**(L2/MMU 改确定性 miss-credit,零 random,`test_determinism.py` 锁 bit-identical) |
 | 4 | Checkpoint/restore(§3.2) | 长 trace 评估提效 | 中 | 待做(跟随 #2) |
+
+## 5.1 §3.4 调度加速的实测修正(重要)
+
+原设想的"WAIT(n) 跳步调度"(把 `for _ in range(N): yield` 换成 `yield N`,
+跳过纯延迟拍)**经实测在本平台是 no-op**:
+
+> 实测:4000 拍中 3999 拍至少有一个模块 busy;即使"全 idle"的那 1 拍,
+> Producer/Consumer 仍在 `yield None` 逐拍轮询输入。只要有一个轮询进程,
+> 调度器每拍都得步进它 → 无法跳步。
+
+真正的 event-skip 需要**端口级事件通知**(sensitivity list:token 入队时
+唤醒下游、空输入时休眠),这要改写所有模块的 idle 路径 + 端口 + 调度器,
+风险极高,且当前无长 workload 痛点 —— **应留给 Phase 5 SystemC**
+(ADR-001.1),SystemC 内核天然是 event-driven。
+
+**但**发现并落地了一个安全的等价加速:**quiescence 早退**。调度器会跑满
+`max_cycles` 即使 sim 早已排空(实测某 fixture 在 cycle 4232 排空却被要求
+跑 100000 拍,96% 是排空后的空轮询)。`run_simulation(stop_at_quiescence=
+True)`(默认开)在"无模块 busy + 所有 FIFO 空 + 无存活激励源"时提前停。
+所有指标在排空点已定型 → 结果与跑满 bit-identical(592 测试全绿即证明),
+实测加速 **4.6×–336×**(取决于 max_cycles 相对排空点的余量)。
 
 ## 6. 与既有决策的一致性
 

@@ -12,7 +12,7 @@ One scheduler step:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterable, Iterator, Optional
+from typing import Callable, Iterable, Iterator, Optional
 
 from npu_sim.architecture.clock import SimpleClock
 
@@ -46,7 +46,25 @@ class SimpleScheduler:
         for behavior, mid in pairs:
             self.spawn(behavior, mid)
 
-    def run(self, max_cycles: int = 10_000) -> SchedulerResult:
+    def alive_ids(self) -> list[str]:
+        """Module ids whose behavior generator is still running."""
+        return [p.module_id for p in self._processes]
+
+    def run(
+        self,
+        max_cycles: int = 10_000,
+        activity_probe: Optional[Callable[[], bool]] = None,
+    ) -> SchedulerResult:
+        """Advance the simulation up to max_cycles.
+
+        ``activity_probe`` (optional): a side-effect-free predicate checked
+        after each fully-stepped cycle. When it returns False the simulation
+        has quiesced (nothing busy, nothing in flight, no live source), so
+        remaining cycles would only spin idle pollers — the loop breaks
+        early. All recorded metrics are already final at quiescence, so the
+        result is bit-identical to running to max_cycles. Default None ⇒
+        legacy behavior (run to max_cycles / all-finished).
+        """
         cycle = 0
         finished = 0
         while cycle < max_cycles and self._processes:
@@ -62,6 +80,8 @@ class SimpleScheduler:
                 break
             self._clock.wait_cycles(1)
             cycle += 1
+            if activity_probe is not None and not activity_probe():
+                break
         return SchedulerResult(
             cycles_run=cycle,
             finished=finished,

@@ -60,6 +60,7 @@ def run_simulation(
     arch: IArchitecture,
     max_cycles: int = 10_000,
     per_cycle_hook: Optional[Callable[[int, IArchitecture], None]] = None,
+    stop_at_quiescence: bool = True,
 ) -> SimulationResult:
     """Drive every behavior()-bearing module and produce a SimulationResult.
 
@@ -72,6 +73,13 @@ def run_simulation(
     ``per_cycle_hook(cycle_index, arch)`` is invoked AFTER each scheduled
     tick advances; pass :class:`npu_sim.reporting.waveform.WaveformRecorder`
     to capture cycle-by-cycle state for waveform rendering.
+
+    ``stop_at_quiescence`` (default True): break the scheduler early once the
+    simulation has provably drained — no module busy, no token in any
+    connection FIFO, and no live source generator that could emit more. All
+    metrics are final at that point, so results are bit-identical to running
+    to ``max_cycles``, but post-drain idle spinning (often the large majority
+    of cycles) is skipped. Set False to force running to ``max_cycles``.
     """
 
     main_clock: SimpleClock = arch.clocks[next(iter(arch.clocks))]
@@ -89,8 +97,10 @@ def run_simulation(
         if hasattr(module, "behavior"):
             scheduler.spawn(module.behavior(), module_id=mid)
 
+    probe = _make_quiescence_probe(arch, scheduler) if stop_at_quiescence else None
+
     if per_cycle_hook is None:
-        sched_result = scheduler.run(max_cycles=max_cycles)
+        sched_result = scheduler.run(max_cycles=max_cycles, activity_probe=probe)
     else:
         # Tick the scheduler one cycle at a time so we can sample state.
         # SimpleScheduler.run() advances *by* its max_cycles argument (not
@@ -175,6 +185,37 @@ def run_simulation(
 # ============================================================
 # helpers
 # ============================================================
+
+
+def _make_quiescence_probe(arch, scheduler):
+    """Return a predicate: True while the sim may still do work.
+
+    Provably-safe quiescence = (no module busy) AND (no token in any
+    connection FIFO) AND (no live *source* generator that could emit).
+    A source = a module with output ports and no input ports; once its
+    generator finishes it is no longer in ``scheduler.alive_ids()``.
+    When this returns False, no future cycle can change any metric.
+    """
+    conns = [c for c in arch.connections if isinstance(c.runtime, TlmConnection)]
+    source_ids = [
+        mid for mid, m in arch.modules.items()
+        if m.output_ports() and not m.input_ports()
+    ]
+
+    def is_active() -> bool:
+        for m in arch.modules.values():
+            if m.snapshot_state().busy:
+                return True
+        for c in conns:
+            if c.runtime.current_in_flight() > 0:
+                return True
+        alive = set(scheduler.alive_ids())
+        for sid in source_ids:
+            if sid in alive:            # a source may still emit
+                return True
+        return False
+
+    return is_active
 
 
 def _extract_stat_sink(arch: IArchitecture) -> InMemoryStatSink:
