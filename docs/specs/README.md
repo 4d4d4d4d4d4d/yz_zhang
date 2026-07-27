@@ -44,6 +44,7 @@ the test assertions.
 | 33 | [Locale-Aware Figures (staged)](33-locale-figures.md) | `logic/format.js`, `composables/useFormat.js`; adopted in `RevenueDashboard.vue`, `UsageMetering.vue` | `tests/format.test.js` |
 | 34 | [Exportable Deal Readiness Report](34-deal-report.md) | `logic/dealReport.js`, `components/DealReportCard.vue`, `showcase/report` sub-tab | `tests/dealReport.test.js` |
 | 35 | [Sortable & Exportable Tables](35-sortable-export-tables.md) | `logic/sortRows.js`, `logic/csv.js`, `composables/useSortable.js`; adopted in `OrderBook.vue` | `tests/sortRows.test.js`, `tests/csv.test.js` |
+| 36 | [Cross-Timezone Meeting Planner](36-timezone-planner.md) | `logic/timezones.js`, `components/MeetingPlanner.vue`, `immersive/planner` sub-tab | `tests/timezones.test.js` |
 
 Capability flow across domains:
 

@@ -135,7 +135,7 @@ export default {
       partners:  { network: 'Perfil de red', pipeline: 'Tablero de pipeline', intel: 'Intel de cuentas', outreach: 'Cadencia de outreach', forecast: 'Pronóstico de ventas', territory: 'Territorio · cuota', orders: 'Libro de pedidos', commission: 'Marketplace · comisión' },
       deals:     { room: 'Sala de deal', playbook: 'Playbook · ZOPA · redline', workflow: 'Flujo de aprobación', library: 'Biblioteca de cláusulas', obligations: 'Obligaciones', analytics: 'Analítica CLM', cpq: 'CPQ · cotización', revrec: 'Reconocimiento de ingresos' },
       showcase:  { gallery: 'Showcase de vídeo', links: 'Trust links', verification: 'Cola de verificación', pipeline: 'Preparación del deal', report: 'Informe del deal' },
-      immersive: { avatar: 'Estudio de humano digital', meeting: 'Reunión inmersiva', tour: 'Tour virtual de fábrica', field: 'Verificación en terreno' },
+      immersive: { avatar: 'Estudio de humano digital', meeting: 'Reunión inmersiva', planner: 'Planificador de reuniones', tour: 'Tour virtual de fábrica', field: 'Verificación en terreno' },
       trust:     { posture: 'Postura', controls: 'Controles · DSR', heatmap: 'Mapa de riesgos', dpia: 'Flujo DPIA', audit: 'Sala de auditoría', policies: 'Políticas · formación', health: 'Salud del cliente', support: 'Soporte · SLA' }
     }
   },
@@ -182,6 +182,18 @@ export default {
     palette: 'Abrir la paleta de comandos',
     help: 'Mostrar esta ayuda',
     tabs: 'Moverse entre pestañas'
+  },
+  planner: {
+    kicker: 'Agenda transfronteriza',
+    title: 'Planificador de reuniones',
+    sub: 'Encuentra el solape de horario laboral para una llamada entre dos zonas horarias.',
+    host: 'Tu zona horaria',
+    partner: 'Zona horaria del socio',
+    overlap: '{n} hora(s) laborable(s) en común',
+    none: 'Sin horario laboral en común — considera un traspaso asíncrono o una llamada fuera de horario.',
+    suggest: 'Franja sugerida',
+    working: 'Horario 09:00–18:00 local · verde = ambos disponibles',
+    utc: 'UTC'
   },
   report: {
     kicker: 'Preparación del deal · compartible',

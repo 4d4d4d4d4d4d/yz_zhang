@@ -137,7 +137,7 @@ export default {
       partners:  { network: 'Network profile', pipeline: 'Pipeline board', intel: 'Account intel', outreach: 'Outreach cadence', forecast: 'Sales forecast', territory: 'Territory · quota', orders: 'Order book', commission: 'Marketplace · commission' },
       deals:     { room: 'Deal room', playbook: 'Playbook · ZOPA · redline', workflow: 'Approval workflow', library: 'Clause library', obligations: 'Obligations', analytics: 'CLM analytics', cpq: 'CPQ · quote', revrec: 'Rev recognition' },
       showcase:  { gallery: 'Video showcase', links: 'Trust links', verification: 'Verification queue', pipeline: 'Deal readiness', report: 'Deal report' },
-      immersive: { avatar: 'Digital human studio', meeting: 'Immersive meeting', tour: 'Virtual factory tour', field: 'Field verification' },
+      immersive: { avatar: 'Digital human studio', meeting: 'Immersive meeting', planner: 'Meeting planner', tour: 'Virtual factory tour', field: 'Field verification' },
       trust:     { posture: 'Posture', controls: 'Controls · DSR', heatmap: 'Risk heatmap', dpia: 'DPIA workflow', audit: 'Audit room', policies: 'Policies · training', health: 'Customer health', support: 'Support · SLA' }
     }
   },
@@ -184,6 +184,18 @@ export default {
     palette: 'Open command palette',
     help: 'Show this help',
     tabs: 'Move between tabs'
+  },
+  planner: {
+    kicker: 'Cross-border scheduling',
+    title: 'Meeting planner',
+    sub: 'Find the working-hours overlap for a call across two time zones.',
+    host: 'Your time zone',
+    partner: 'Partner time zone',
+    overlap: '{n} overlapping working hour(s)',
+    none: 'No shared working hours — consider an async handoff or an off-hours call.',
+    suggest: 'Suggested slot',
+    working: 'Working hours 09:00–18:00 local · green = both available',
+    utc: 'UTC'
   },
   report: {
     kicker: 'Deal readiness · shareable',

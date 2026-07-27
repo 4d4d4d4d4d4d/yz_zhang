@@ -137,7 +137,7 @@ export default {
       partners:  { network: '网络档案', pipeline: '商机看板', intel: '客户情报', outreach: '触达节奏', forecast: '销售预测', territory: '区域 · 配额', orders: '订单簿', commission: '市场 · 佣金' },
       deals:     { room: '洽谈室', playbook: '策略 · ZOPA · 红线', workflow: '审批流', library: '条款库', obligations: '履约跟踪', analytics: '合同分析', cpq: 'CPQ · 报价', revrec: '收入确认' },
       showcase:  { gallery: '视频作品集', links: '信任链接', verification: '验证队列', pipeline: '成交就绪度', report: '成交报告' },
-      immersive: { avatar: '数字人工作台', meeting: '沉浸会议', tour: '厂房在线参观', field: '实地调查' },
+      immersive: { avatar: '数字人工作台', meeting: '沉浸会议', planner: '会议排期', tour: '厂房在线参观', field: '实地调查' },
       trust:     { posture: '合规态势', controls: '控制项 · DSR', heatmap: '风险热力图', dpia: 'DPIA 流程', audit: '审计室', policies: '制度 · 培训', health: '客户健康度', support: '支持 · SLA' }
     }
   },
@@ -184,6 +184,18 @@ export default {
     palette: '打开命令面板',
     help: '显示本帮助',
     tabs: '在标签间切换'
+  },
+  planner: {
+    kicker: '跨国排期',
+    title: '会议排期',
+    sub: '在两个时区之间找出工作时间的重叠区间来安排通话。',
+    host: '你的时区',
+    partner: '对方时区',
+    overlap: '有 {n} 个重叠的工作小时',
+    none: '没有共同的工作时间——可考虑异步交接或非工作时段通话。',
+    suggest: '建议时段',
+    working: '工作时间 09:00–18:00（当地）· 绿色 = 双方都有空',
+    utc: 'UTC'
   },
   report: {
     kicker: '交易就绪度 · 可分享',

@@ -50,6 +50,7 @@ import RevenueRecognition    from '../components/RevenueRecognition.vue'
 
 import AvatarStudio      from '../components/AvatarStudio.vue'
 import ImmersiveMeeting  from '../components/ImmersiveMeeting.vue'
+import MeetingPlanner    from '../components/MeetingPlanner.vue'
 import VirtualTour       from '../components/VirtualTour.vue'
 import FieldVerification from '../components/FieldVerification.vue'
 
@@ -89,8 +90,8 @@ const COMPONENTS = {
   'deals/cpq': CPQEditor, 'deals/revrec': RevenueRecognition,
   'showcase/gallery': ShowcaseGallery, 'showcase/links': TrustLinkBuilder, 'showcase/verification': VerificationQueue,
   'showcase/pipeline': TrustPipeline, 'showcase/report': DealReportCard,
-  'immersive/avatar': AvatarStudio, 'immersive/meeting': ImmersiveMeeting, 'immersive/tour': VirtualTour,
-  'immersive/field': FieldVerification,
+  'immersive/avatar': AvatarStudio, 'immersive/meeting': ImmersiveMeeting, 'immersive/planner': MeetingPlanner,
+  'immersive/tour': VirtualTour, 'immersive/field': FieldVerification,
   'trust/posture': TrustCenter, 'trust/controls': ControlsRegister, 'trust/heatmap': RiskHeatmap,
   'trust/dpia': DPIAWorkflow, 'trust/audit': AuditRoom, 'trust/policies': PolicyManagement,
   'trust/health': CustomerHealth, 'trust/support': SupportSLA

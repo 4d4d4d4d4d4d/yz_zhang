@@ -135,7 +135,7 @@ export default {
       partners:  { network: 'ネットワーク情報', pipeline: 'パイプライン', intel: 'アカウント情報', outreach: 'アウトリーチ', forecast: '売上予測', territory: 'テリトリー · 目標', orders: 'オーダーブック', commission: 'マーケット · 手数料' },
       deals:     { room: 'ディールルーム', playbook: 'プレイブック · ZOPA', workflow: '承認フロー', library: '条項ライブラリ', obligations: '義務トラッカー', analytics: '契約アナリティクス', cpq: 'CPQ · 見積', revrec: '収益認識' },
       showcase:  { gallery: '映像ショーケース', links: 'トラストリンク', verification: '検証キュー', pipeline: '成約準備度', report: '成約レポート' },
-      immersive: { avatar: 'デジタルヒューマン', meeting: 'イマーシブ会議', tour: '工場バーチャル見学', field: '実地調査' },
+      immersive: { avatar: 'デジタルヒューマン', meeting: 'イマーシブ会議', planner: '会議スケジューラ', tour: '工場バーチャル見学', field: '実地調査' },
       trust:     { posture: 'ポスチャー', controls: 'コントロール · DSR', heatmap: 'リスクヒートマップ', dpia: 'DPIA ワークフロー', audit: '監査ルーム', policies: 'ポリシー · 研修', health: '顧客ヘルス', support: 'サポート · SLA' }
     }
   },
@@ -182,6 +182,18 @@ export default {
     palette: 'コマンドパレットを開く',
     help: 'このヘルプを表示',
     tabs: 'タブ間を移動'
+  },
+  planner: {
+    kicker: '国をまたぐ日程調整',
+    title: '会議スケジューラ',
+    sub: '2つのタイムゾーンで勤務時間が重なる時間帯を見つけて通話を設定します。',
+    host: 'あなたのタイムゾーン',
+    partner: '相手のタイムゾーン',
+    overlap: '重なる勤務時間 {n} 時間',
+    none: '共通の勤務時間がありません。非同期の引き継ぎか時間外の通話をご検討ください。',
+    suggest: '推奨スロット',
+    working: '勤務時間 09:00–18:00（現地）· 緑 = 双方が対応可能',
+    utc: 'UTC'
   },
   report: {
     kicker: '成約準備度 · 共有可能',
