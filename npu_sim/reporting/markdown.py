@@ -13,6 +13,7 @@ from typing import Iterable, Optional
 
 from npu_sim.evaluation.comparator import ComparisonReport
 from npu_sim.evaluation.runner import SimulationResult
+from npu_sim.mapping import MappingPlan
 from npu_sim.runtime.invariants import InvariantReport
 
 
@@ -243,6 +244,58 @@ def _comparison_invariants_section(report: ComparisonReport) -> str:
         for f in report.variant.invariant_report.failures:
             lines.append(f"- **{f.invariant_id}**: {f.description}")
     return "\n".join(lines)
+
+
+def render_mapping_report(plan: MappingPlan, arch_name: str = "") -> str:
+    """Render a Mapper MappingPlan (SPEC-006) as Markdown.
+
+    Shows the op→module routing, per-op latency/energy, aggregate static
+    estimate, and any unmapped ops. Pure function of the plan.
+    """
+    parts: list[str] = []
+    title = f"Mapping estimate — `{arch_name}`" if arch_name else "Mapping estimate"
+    parts.append(f"# {title}")
+
+    n = len(plan.decisions)
+    status = "✅ all ops mapped" if not plan.unmapped else (
+        f"⚠️ {len(plan.unmapped)} op(s) unmapped"
+    )
+    parts.append(_two_col_table("Metric", "Value", [
+        ("ops mapped", str(n)),
+        ("total typical cycles", f"{plan.total_typical_cycles:,}"),
+        ("total dynamic energy", f"{plan.total_dynamic_pj:,.1f} pJ"),
+        ("status", status),
+    ]))
+
+    if plan.decisions:
+        rows = []
+        for d in plan.decisions:
+            alts = ", ".join(d.alternatives) if d.alternatives else "—"
+            rows.append((
+                str(d.op_index),
+                f"`{d.op_type}`",
+                f"**{d.module_id}**",
+                f"{d.latency.typical_cycles} cyc",
+                f"{d.energy.dynamic_pj:.1f} pJ",
+                alts,
+            ))
+        lines = [
+            "| # | op | → module | latency | energy | alternatives |",
+            "|---|---|---|---:|---:|---|",
+        ]
+        for r in rows:
+            lines.append("| " + " | ".join(r) + " |")
+        parts.append("## Routing\n\n" + "\n".join(lines))
+
+    if plan.unmapped:
+        parts.append(
+            "## Unmapped ops\n\n"
+            + ", ".join(str(i) for i in plan.unmapped)
+            + "\n\n> No module's active capabilities cover these ops' "
+            "required capabilities."
+        )
+
+    return "\n\n".join(parts)
 
 
 # ============================================================

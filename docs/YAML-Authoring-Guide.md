@@ -313,6 +313,11 @@ python -m npu_sim compare base.yaml variant.yaml
 # 波形:逐拍状态机 + FIFO 占用 + 反压归因(见每个模块在干什么)
 python -m npu_sim trace my_chip.yaml --show-cycles 160
 
+# 静态映射估算:把一串算子(trace)映射到架构模块,出 op→module 路由表
+#   ops 文件是 { ops: [ {op_type: matmul, m:32,k:32,n:32,precision:int8}, ... ] }
+#   也可直接传一个含 TraceProducer 的 fixture(复用其 config.ops)
+python -m npu_sim estimate my_chip.yaml attn_ops.yaml
+
 # 列出所有可用模块类型
 python -m npu_sim list-modules
 ```

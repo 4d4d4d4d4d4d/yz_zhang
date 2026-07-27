@@ -7,6 +7,9 @@ Subcommands:
                                 as Markdown to stdout (or --out file).
     compare <baseline> <variant>
                                 Run both; print a ComparisonReport.
+    trace <dsl>                 Render an ASCII cycle-by-cycle waveform.
+    estimate <arch> <ops>       Map an operator trace onto an architecture
+                                (SPEC-006 static Mapper estimate).
 
 Designed for the SPEC-003 §7 R7 workflow: researcher edits a YAML, runs
 `python -m npu_sim compare base.yaml variant.yaml`, pastes the output into
@@ -115,6 +118,35 @@ def _cmd_trace(args: argparse.Namespace, out: TextIO) -> int:
     return 0
 
 
+def _cmd_estimate(args: argparse.Namespace, out: TextIO) -> int:
+    from npu_sim.evaluation import elaborate, estimate_plan
+    from npu_sim.evaluation.trace_ops import load_ops
+    from npu_sim.reporting import render_mapping_report
+    from npu_sim.core.errors import NoMappingError
+
+    arch_path = _require_path(args.arch)
+    ops_path = _require_path(args.ops)
+    try:
+        arch = elaborate(str(arch_path))
+        ops = load_ops(str(ops_path))
+    except NpuSimError as exc:
+        sys.stderr.write(f"elaboration error: {exc}\n")
+        return 2
+    except (ValueError, FileNotFoundError) as exc:
+        sys.stderr.write(f"ops load error: {exc}\n")
+        return 2
+
+    try:
+        plan = estimate_plan(ops, arch, strict=not args.non_strict)
+    except NoMappingError as exc:
+        sys.stderr.write(f"mapping error: {exc}\n")
+        return 1
+
+    md = render_mapping_report(plan, arch_name=arch.name)
+    _write_output(md, args.out, out)
+    return 0 if not plan.unmapped else 1
+
+
 # ============================================================
 # Argparse wiring
 # ============================================================
@@ -198,6 +230,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional output file; defaults to stdout.",
     )
     p_trc.set_defaults(handler=_cmd_trace)
+
+    p_est = subparsers.add_parser(
+        "estimate",
+        help="Map an operator trace onto an architecture (SPEC-006 static estimate).",
+    )
+    p_est.add_argument("arch", help="Path to the architecture YAML.")
+    p_est.add_argument(
+        "ops",
+        help="Path to an ops YAML (top-level `ops:` list, or a fixture with a "
+        "TraceProducer whose config.ops is reused).",
+    )
+    p_est.add_argument(
+        "--non-strict",
+        action="store_true",
+        help="Skip unmappable ops instead of erroring.",
+    )
+    p_est.add_argument(
+        "--out",
+        default=None,
+        help="Optional output file; defaults to stdout.",
+    )
+    p_est.set_defaults(handler=_cmd_estimate)
 
     return parser
 
