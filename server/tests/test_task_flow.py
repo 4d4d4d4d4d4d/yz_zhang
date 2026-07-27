@@ -1,5 +1,5 @@
 """03/05/07 任务闭环：发布→报名→推荐→成交→合约→托管→执行→验收→放款→评价"""
-from .conftest import auth, register, topup, verify_user
+from .conftest import JOB_HEADERS, auth, register, topup, verify_user
 
 CLEAN_TASK = {
     "title": "周末大扫除",
@@ -172,7 +172,7 @@ def test_task031_auto_accept_after_timeout(client, requester, worker):
             sa.text("UPDATE tasks SET delivered_at = datetime('now', '-4 days') WHERE id = :id"),
             {"id": task["id"]},
         )
-    r = client.post("/api/v1/tasks/jobs/auto-accept")
+    r = client.post("/api/v1/tasks/jobs/auto-accept", headers=JOB_HEADERS)
     assert r.json()["auto_accepted"] == 1
     detail = client.get(f"/api/v1/tasks/{task['id']}", headers=auth(worker)).json()
     assert detail["status"] == "completed"

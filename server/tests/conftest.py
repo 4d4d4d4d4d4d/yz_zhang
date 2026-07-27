@@ -52,6 +52,10 @@ def topup(client, user, amount):
     assert r.status_code == 200, r.text
 
 
+# OPS-011 内部 job 端点需携带共享密钥（与 settings.JOB_TOKEN 一致）
+JOB_HEADERS = {"X-Job-Token": "dev-job-token-change-me"}
+
+
 def bind_payout(client, user, holder="张三"):
     """PAY-005 提现前置：绑定收款账户（默认收款人与 verify_user 实名一致）。"""
     r = client.put("/api/v1/wallet/payout-account",

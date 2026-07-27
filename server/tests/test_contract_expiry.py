@@ -13,7 +13,7 @@ from app.core.db import SessionLocal, engine
 from app.modules.account.models import utcnow
 from app.modules.risk.service import reconcile
 
-from .conftest import auth, register, topup, verify_user
+from .conftest import JOB_HEADERS, auth, register, topup, verify_user
 from .test_task_flow import publish_task
 
 
@@ -46,7 +46,7 @@ def test_expired_unsigned_contract_released_with_deposit(client, requester, work
     assert w["frozen_cents"] == 3000  # 成交即冻结保证金
 
     _backdate_contract(cid, settings.SIGN_EXPIRE_DAYS + 0.1)
-    r = client.post("/api/v1/contracts/jobs/expire-unsigned")
+    r = client.post("/api/v1/contracts/jobs/expire-unsigned", headers=JOB_HEADERS)
     assert r.json()["expired"] == 1
     _assert_conserved()
 
@@ -81,7 +81,7 @@ def test_half_signed_also_expires_but_fresh_and_funded_untouched(client, request
     client.post(f"/api/v1/contracts/{cid_funded}/fund", headers=auth(requester))
     _backdate_contract(cid_funded, settings.SIGN_EXPIRE_DAYS + 5)
 
-    r = client.post("/api/v1/contracts/jobs/expire-unsigned")
+    r = client.post("/api/v1/contracts/jobs/expire-unsigned", headers=JOB_HEADERS)
     assert r.json()["expired"] == 1  # 只作废半签超期那单
     _assert_conserved()
 
@@ -95,5 +95,5 @@ def test_half_signed_also_expires_but_fresh_and_funded_untouched(client, request
     assert client.get("/api/v1/wallet", headers=auth(requester)).json()["escrow_cents"] == 20000
 
     # 重跑幂等：无新超期单
-    assert client.post("/api/v1/contracts/jobs/expire-unsigned").json()["expired"] == 0
+    assert client.post("/api/v1/contracts/jobs/expire-unsigned", headers=JOB_HEADERS).json()["expired"] == 0
     _assert_conserved()

@@ -44,3 +44,15 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     if not user.is_admin:
         raise forbidden("需要管理员权限", "admin_required")
     return user
+
+
+def require_job_auth(x_job_token: str = Header(default="")) -> None:
+    """内部定时任务鉴权：cron 端点必须携带共享密钥（OPS-011）。
+
+    这些 job（自动放款/合约作废/任务下架/对账等）会改动资金与状态，
+    绝不能对外公开裸调用；生产由调度器带 X-Job-Token 触发。
+    """
+    from app.core.config import settings
+
+    if not settings.JOB_TOKEN or x_job_token != settings.JOB_TOKEN:
+        raise forbidden("无效的任务令牌", "invalid_job_token")

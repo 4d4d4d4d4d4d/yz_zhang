@@ -4,7 +4,7 @@ import sqlalchemy as sa
 
 from app.core.db import engine
 
-from .conftest import auth, register, topup, verify_user
+from .conftest import JOB_HEADERS, auth, register, topup, verify_user
 from .test_task_flow import match_and_fund, publish_task
 
 
@@ -175,7 +175,7 @@ def test_aidec022_deadline_alert_job(client, requester, worker):
     with engine.begin() as conn:
         conn.execute(sa.text("UPDATE tasks SET deadline = datetime('now', '-1 day') WHERE id = :id"),
                      {"id": task["id"]})
-    r = client.post("/api/v1/tasks/jobs/deadline-alerts")
+    r = client.post("/api/v1/tasks/jobs/deadline-alerts", headers=JOB_HEADERS)
     assert r.json()["alerted"] == 1
     notes = client.get("/api/v1/notifications", headers=auth(worker)).json()
     assert any("任务已逾期" == n["title"] for n in notes)

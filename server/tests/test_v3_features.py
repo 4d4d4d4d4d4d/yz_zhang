@@ -4,7 +4,7 @@ import sqlalchemy as sa
 
 from app.core.db import engine
 
-from .conftest import auth, register, topup, verify_user
+from .conftest import JOB_HEADERS, auth, register, topup, verify_user
 from .test_task_flow import match_and_fund, publish_task
 
 
@@ -297,7 +297,7 @@ def test_geo024_location_purge_job(client, requester, worker):
     with engine.begin() as conn:
         conn.execute(sa.text("UPDATE tasks SET completed_at = datetime('now', '-31 days') WHERE id = :id"),
                      {"id": task["id"]})
-    r = client.post("/api/v1/tasks/jobs/purge-locations")
+    r = client.post("/api/v1/tasks/jobs/purge-locations", headers=JOB_HEADERS)
     assert r.json()["purged_logs"] == 1
     logs = client.get(f"/api/v1/tasks/{task['id']}/progress", headers=auth(worker)).json()
     assert all("打卡" in log["content"] or log["kind"] != "checkin" for log in logs)  # 记录仍在

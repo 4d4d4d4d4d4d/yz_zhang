@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import get_current_user, require_admin, require_job_auth
 from app.core.errors import conflict, forbidden, not_found
 from app.core.events import publish
 from app.modules.account import service as credit
@@ -212,7 +212,7 @@ def appeal_verdict(
 
 
 @router.post("/disputes/jobs/escalate-overdue")
-def run_escalate_overdue(db: Session = Depends(get_db)):
+def run_escalate_overdue(db: Session = Depends(get_db), _=Depends(require_job_auth)):
     """DSP-009 纠纷 SLA job：开立超期未结案的纠纷自动升级。
 
     纠纷冻结着托管资金，业界（支付宝/Upwork）对处理时限有硬性 SLA——

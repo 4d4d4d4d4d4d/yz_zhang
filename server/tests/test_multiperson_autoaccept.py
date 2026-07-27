@@ -15,7 +15,7 @@ from app.core.db import SessionLocal, engine
 from app.modules.account.models import utcnow
 from app.modules.risk.service import reconcile
 
-from .conftest import auth, register, topup, verify_user
+from .conftest import JOB_HEADERS, auth, register, topup, verify_user
 from .test_task_flow import match_and_fund, publish_task
 
 
@@ -91,7 +91,7 @@ def test_auto_accept_boundary_and_conservation(client, requester, worker):
                       utcnow() - timedelta(days=settings.AUTO_ACCEPT_DAYS) + timedelta(hours=1))
 
     before = client.get("/api/v1/wallet", headers=auth(worker)).json()["available_cents"]
-    r = client.post("/api/v1/tasks/jobs/auto-accept")
+    r = client.post("/api/v1/tasks/jobs/auto-accept", headers=JOB_HEADERS)
     assert r.json()["auto_accepted"] == 1  # 只动到期的那单
     _assert_conserved()
 
@@ -103,7 +103,7 @@ def test_auto_accept_boundary_and_conservation(client, requester, worker):
                       headers=auth(requester)).json()["status"] == "pending_acceptance"
 
     # job 重跑幂等：无新到期单则零动作，余额不变
-    r = client.post("/api/v1/tasks/jobs/auto-accept")
+    r = client.post("/api/v1/tasks/jobs/auto-accept", headers=JOB_HEADERS)
     assert r.json()["auto_accepted"] == 0
     assert client.get("/api/v1/wallet", headers=auth(worker)).json()["available_cents"] == after
     _assert_conserved()

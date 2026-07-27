@@ -34,6 +34,8 @@ class Settings:
     CHECKIN_RADIUS_M = int(os.environ.get("PLATFORM_CHECKIN_RADIUS_M", "500"))
     # 陌生人私聊未获回复前的消息上限（IM-005）
     STRANGER_MSG_LIMIT = 5
+    # OPS-011 内部定时任务共享密钥：cron 端点必须携带 X-Job-Token（生产改强随机值）
+    JOB_TOKEN = os.environ.get("PLATFORM_JOB_TOKEN", "dev-job-token-change-me")
 
 
 settings = Settings()

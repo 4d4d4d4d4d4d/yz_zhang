@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.modules.account.models import utcnow
 
-from .conftest import auth, register, topup, verify_user
+from .conftest import JOB_HEADERS, auth, register, topup, verify_user
 from .test_task_flow import match_and_fund, publish_task
 
 
@@ -64,11 +64,11 @@ def test_rating_settles_on_window_expiry_single_review(client, requester, worker
                      {"d": utcnow() - timedelta(days=settings.REVIEW_WINDOW_DAYS + 1),
                       "t": task["id"]})
     # 兜底 job 结算（无人读取也按时入账）
-    r = client.post("/api/v1/tasks/jobs/settle-reviews")
+    r = client.post("/api/v1/tasks/jobs/settle-reviews", headers=JOB_HEADERS)
     assert r.json()["settled"] == 1
     assert _rating(client, worker) == 2.0
     # 幂等：重跑不重复入账
-    assert client.post("/api/v1/tasks/jobs/settle-reviews").json()["settled"] == 0
+    assert client.post("/api/v1/tasks/jobs/settle-reviews", headers=JOB_HEADERS).json()["settled"] == 0
     assert _rating(client, worker) == 2.0
 
 

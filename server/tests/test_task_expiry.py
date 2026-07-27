@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from app.core.db import engine
 from app.modules.account.models import utcnow
 
-from .conftest import auth, register, verify_user
+from .conftest import JOB_HEADERS, auth, register, verify_user
 from .test_task_flow import match_and_fund, publish_task
 
 
@@ -36,7 +36,7 @@ def test_expired_unmatched_task_auto_closed(client, requester, worker):
     # 一个仍在有效期内的任务，不应被动
     fresh = _publish_with_future_deadline(client, requester, "有效挂单")
 
-    r = client.post("/api/v1/tasks/jobs/expire-tasks")
+    r = client.post("/api/v1/tasks/jobs/expire-tasks", headers=JOB_HEADERS)
     assert r.json()["expired"] == 1
 
     assert client.get(f"/api/v1/tasks/{expired['id']}",
@@ -51,7 +51,7 @@ def test_expired_unmatched_task_auto_closed(client, requester, worker):
     assert any("已下架" in n["title"] for n in worker_notices)
 
     # 幂等：重跑无新过期
-    assert client.post("/api/v1/tasks/jobs/expire-tasks").json()["expired"] == 0
+    assert client.post("/api/v1/tasks/jobs/expire-tasks", headers=JOB_HEADERS).json()["expired"] == 0
 
 
 def test_matched_task_not_expired(client, requester, worker):
@@ -63,7 +63,7 @@ def test_matched_task_not_expired(client, requester, worker):
     match_and_fund(client, requester, worker, task)  # → matched
     _backdate_deadline(task["id"])
 
-    assert client.post("/api/v1/tasks/jobs/expire-tasks").json()["expired"] == 0
+    assert client.post("/api/v1/tasks/jobs/expire-tasks", headers=JOB_HEADERS).json()["expired"] == 0
     # 未被下架（仍处于履约态，非 cancelled）
     assert client.get(f"/api/v1/tasks/{task['id']}",
                       headers=auth(requester)).json()["status"] in ("matched", "in_progress")
@@ -71,6 +71,6 @@ def test_matched_task_not_expired(client, requester, worker):
 
 def test_task_without_deadline_never_expires(client, requester):
     task = publish_task(client, requester, title="无截止任务")  # 无 deadline
-    assert client.post("/api/v1/tasks/jobs/expire-tasks").json()["expired"] == 0
+    assert client.post("/api/v1/tasks/jobs/expire-tasks", headers=JOB_HEADERS).json()["expired"] == 0
     assert client.get(f"/api/v1/tasks/{task['id']}",
                       headers=auth(requester)).json()["status"] == "published"

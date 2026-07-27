@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.modules.account.models import utcnow
 
-from .conftest import auth, register, topup, verify_user
+from .conftest import JOB_HEADERS, auth, register, topup, verify_user
 from .test_task_flow import match_and_fund, publish_task
 
 
@@ -49,7 +49,7 @@ def test_overdue_dispute_escalates_once_fresh_untouched(client, requester, worke
     verify_user(client, w2, "执行者乙")
     _, d_new = _open_dispute(client, requester, w2, title="新鲜纠纷")
 
-    r = client.post("/api/v1/disputes/jobs/escalate-overdue")
+    r = client.post("/api/v1/disputes/jobs/escalate-overdue", headers=JOB_HEADERS)
     assert r.json()["escalated"] == 1  # 只升级超期的
 
     got = client.get(f"/api/v1/disputes/{d_old['id']}", headers=auth(requester)).json()
@@ -63,7 +63,7 @@ def test_overdue_dispute_escalates_once_fresh_untouched(client, requester, worke
     assert any("SLA超期" in t["subject"] for t in tickets)
 
     # 幂等：重跑不重复升级
-    assert client.post("/api/v1/disputes/jobs/escalate-overdue").json()["escalated"] == 0
+    assert client.post("/api/v1/disputes/jobs/escalate-overdue", headers=JOB_HEADERS).json()["escalated"] == 0
 
 
 def test_appeal_window_closes_verdict_becomes_final(client, requester, worker):
