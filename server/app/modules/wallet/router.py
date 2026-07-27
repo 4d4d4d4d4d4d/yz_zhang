@@ -82,7 +82,8 @@ def topup(
         acct = service.topup(db, user.id, body.amount_cents)
         return {"available_cents": acct.available_cents}
 
-    return replay_or_run(db, user.id, idempotency_key or None, "wallet.topup", run)
+    return replay_or_run(db, user.id, idempotency_key or None, "wallet.topup", run,
+                         params={"amount_cents": body.amount_cents})
 
 
 @router.post("/withdraw")
@@ -94,7 +95,8 @@ def withdraw(
     def run():
         return service.withdraw(db, user.id, body.amount_cents)
 
-    return replay_or_run(db, user.id, idempotency_key or None, "wallet.withdraw", run)
+    return replay_or_run(db, user.id, idempotency_key or None, "wallet.withdraw", run,
+                         params={"amount_cents": body.amount_cents})
 
 
 # ---------- PAY-007 大额提现人审（管理端） ----------

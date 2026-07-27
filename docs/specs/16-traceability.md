@@ -1,8 +1,14 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V26 全批次完成（2026-07-18）。
-> 后端 206 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V27 全批次完成（2026-07-18）。
+> 后端 210 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V27 批次：幂等键请求指纹——修复串味/吞单）
+
+| Spec 安全项 | 实现 | 测试 |
+|---|---|---|
+| 14.6/05.B 幂等键请求指纹（参照 Stripe，**修复两处真实缺陷**）：① 同 key 复用不同金额原返回旧结果（吞单）；② 同 key 跨操作（topup vs withdraw）原按 (user,key) 命中会串味 → 记录 scope+参数指纹，指纹不符 409 `idempotency_key_conflict`；完全相同请求仍正常重放 | `core/idempotency.py::replay_or_run` + `fingerprint` 列 + wallet 路由传参 | `tests/test_idempotency_fingerprint.py` |
 
 ## 已实现（V26 批次：内部定时任务鉴权——修复未授权访问漏洞）
 
