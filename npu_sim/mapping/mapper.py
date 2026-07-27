@@ -139,9 +139,21 @@ class RuleBasedMapper(IMapper):
         op: IOperation,
         modules: dict[str, IModule],
     ) -> list[tuple[str, IModule]]:
-        """Return (module_id, module) pairs sorted by SPEC-006 §3.2 keys."""
+        """Return (module_id, module) pairs sorted by SPEC-006 §3.2 keys.
+
+        A module is a candidate iff every required capability of the op is in
+        the module's active_capabilities (SPEC-001 §3.1 / SPEC-006 §3.2 — the
+        authoritative Mapper↔Module contract). This is checked directly
+        rather than via can_execute() because stimulus / infrastructure
+        modules (TraceProducer, Producer, NoC, PMU, ...) implement
+        can_execute() loosely (return True), which would wrongly make them
+        compute targets.
+        """
+        required = set(op.required_capabilities)
         candidates = [
-            (mid, mod) for mid, mod in modules.items() if mod.can_execute(op)
+            (mid, mod)
+            for mid, mod in modules.items()
+            if required.issubset(set(mod.active_capabilities()))
         ]
         return sorted(
             candidates,

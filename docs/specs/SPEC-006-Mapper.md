@@ -146,12 +146,18 @@ class IMapper(ABC):
 - 算子图升级为 DAG(支持 dependency edges、partial pipeline mapping)。
 - Cost-model mapper:加入 throughput、area pressure、共享模块串行化代价。
 - 多模块算子(一个 op 跨多个模块)、空间映射(systolic tile sharding)。
-- `reporting.markdown` 增加 MappingPlan 渲染。
+- ✅ `reporting.markdown` 增加 MappingPlan 渲染(`render_mapping_report`,
+  CLI `estimate` 子命令)。
 - mapping_hints(SPEC-003 §3.4)消歧:用户指定首选 module_id 时优先采纳。
-- **估算 vs 实测对账(精度)**:目前 `npu_sim.evaluation.estimate_plan` 与
-  `run_simulation` 已在同一架构实例上共存(见
-  `tests/integration/test_mapper_pipeline_integration.py`),但仅做"两者均可
-  跑通且对 config 同步响应"级别的一致性检查。v1.1 需要规范化"静态估算应是
-  动态 drain_time 的下界,误差不超过 N%"的契约,这要求 mapper 把每个 op
-  的估算与 sim 测得的 per-op 完成时间进行 join 比对(目前 SPEC-001 §3.2 未
-  要求 sim 暴露 per-op 完成时间)。
+- **估算 vs 实测对账(精度)** — ✅ **一级对账已落地**:
+  `npu_sim.evaluation.reconcile(ops, arch, measured_drain_ps, clock_period_ps)`
+  把 Mapper 静态估的 `total_typical_cycles` 与仿真实测 drain(cycles)join,
+  产出 `ReconcileReport`(estimate / measured / ratio / abs_error)。实测
+  attention trace:静态估 665 cycles(op-serial,无 overlap/反压),实测 4232,
+  ratio 6.36×;`test_estimate_vs_measured.py` 断言"静态估是实测的下界
+  (ratio ≥ 1)"。
+  同时修复了一个 Mapper bug:候选过滤原用各模块松散实现的 `can_execute()`
+  (激励/基础设施模块无脑返回 True),导致算子被误映射到 TraceProducer;
+  现改用 SPEC-001 §3.1 权威判据 `required_capabilities ⊆ active_capabilities`。
+  v1.1 进一步:规范化"误差不超过 N%"契约,需要 sim 暴露 **per-op 完成时间**
+  以做逐算子 join(目前 SPEC-001 §3.2 只暴露整链 drain,故对账在链级)。
