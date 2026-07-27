@@ -45,6 +45,7 @@ the test assertions.
 | 34 | [Exportable Deal Readiness Report](34-deal-report.md) | `logic/dealReport.js`, `components/DealReportCard.vue`, `showcase/report` sub-tab | `tests/dealReport.test.js` |
 | 35 | [Sortable & Exportable Tables](35-sortable-export-tables.md) | `logic/sortRows.js`, `logic/csv.js`, `composables/useSortable.js`; adopted in `OrderBook.vue` | `tests/sortRows.test.js`, `tests/csv.test.js` |
 | 36 | [Cross-Timezone Meeting Planner](36-timezone-planner.md) | `logic/timezones.js`, `components/MeetingPlanner.vue`, `immersive/planner` sub-tab | `tests/timezones.test.js` |
+| 37 | [Calendar Export & Adjustable Hours](37-ics-calendar.md) | `logic/ics.js`, `MeetingPlanner.vue` (shift presets + .ics download) | `tests/ics.test.js` |
 
 Capability flow across domains:
 

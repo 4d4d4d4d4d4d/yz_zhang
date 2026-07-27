@@ -194,7 +194,10 @@ export default {
     overlap: '有 {n} 个重叠的工作小时',
     none: '没有共同的工作时间——可考虑异步交接或非工作时段通话。',
     suggest: '建议时段',
-    working: '工作时间 09:00–18:00（当地）· 绿色 = 双方都有空',
+    working: '绿色 = 双方均在工作时间内',
+    hours: '工作时间',
+    add: '加入日历',
+    shift: { early: '早班 · 07–16', standard: '标准 · 09–18', late: '晚班 · 11–20' },
     utc: 'UTC'
   },
   report: {

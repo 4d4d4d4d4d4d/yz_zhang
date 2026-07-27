@@ -194,7 +194,10 @@ export default {
     overlap: '{n} overlapping working hour(s)',
     none: 'No shared working hours — consider an async handoff or an off-hours call.',
     suggest: 'Suggested slot',
-    working: 'Working hours 09:00–18:00 local · green = both available',
+    working: 'Green = both parties inside working hours',
+    hours: 'Working hours',
+    add: 'Add to calendar',
+    shift: { early: 'Early · 07–16', standard: 'Standard · 09–18', late: 'Late · 11–20' },
     utc: 'UTC'
   },
   report: {

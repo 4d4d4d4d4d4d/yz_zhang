@@ -192,7 +192,10 @@ export default {
     overlap: '{n} hora(s) laborable(s) en común',
     none: 'Sin horario laboral en común — considera un traspaso asíncrono o una llamada fuera de horario.',
     suggest: 'Franja sugerida',
-    working: 'Horario 09:00–18:00 local · verde = ambos disponibles',
+    working: 'Verde = ambas partes en horario laboral',
+    hours: 'Horario laboral',
+    add: 'Añadir al calendario',
+    shift: { early: 'Temprano · 07–16', standard: 'Estándar · 09–18', late: 'Tarde · 11–20' },
     utc: 'UTC'
   },
   report: {

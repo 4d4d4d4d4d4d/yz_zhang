@@ -192,7 +192,10 @@ export default {
     overlap: '重なる勤務時間 {n} 時間',
     none: '共通の勤務時間がありません。非同期の引き継ぎか時間外の通話をご検討ください。',
     suggest: '推奨スロット',
-    working: '勤務時間 09:00–18:00（現地）· 緑 = 双方が対応可能',
+    working: '緑 = 双方が勤務時間内',
+    hours: '勤務時間',
+    add: 'カレンダーに追加',
+    shift: { early: '早番 · 07–16', standard: '標準 · 09–18', late: '遅番 · 11–20' },
     utc: 'UTC'
   },
   report: {
