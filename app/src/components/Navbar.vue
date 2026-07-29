@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LangSwitcher from './LangSwitcher.vue'
+import MotionToggle from './MotionToggle.vue'
 
 const { t } = useI18n()
 const open = ref(false)
@@ -34,6 +35,7 @@ const links = [
           @click="open = false"
         >{{ t(l.key) }}</router-link>
         <div class="nav-actions">
+          <MotionToggle />
           <LangSwitcher />
           <router-link to="/contact" class="btn btn-primary" @click="open = false">
             {{ t('nav.contact') }}

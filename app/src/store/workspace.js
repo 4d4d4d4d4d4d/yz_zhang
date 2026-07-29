@@ -20,11 +20,12 @@ function loadPrefs() {
     return {
       currency: typeof parsed.currency === 'string' ? parsed.currency : null,
       readKeys: Array.isArray(parsed.readKeys) ? parsed.readKeys : [],
-      recents: Array.isArray(parsed.recents) ? parsed.recents.filter(k => typeof k === 'string') : []
+      recents: Array.isArray(parsed.recents) ? parsed.recents.filter(k => typeof k === 'string') : [],
+      motion: typeof parsed.motion === 'string' ? parsed.motion : 'system'
     }
   } catch {
     // Malformed storage falls back to defaults — never throw at import time.
-    return { currency: null, readKeys: [], recents: [] }
+    return { currency: null, readKeys: [], recents: [], motion: 'system' }
   }
 }
 
@@ -35,7 +36,8 @@ function persist() {
     globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify({
       currency: prefs.currency,
       readKeys: prefs.readKeys,
-      recents: prefs.recents
+      recents: prefs.recents,
+      motion: prefs.motion
     }))
   } catch { /* storage unavailable (private mode) — stay in-memory */ }
 }
@@ -51,6 +53,12 @@ export function setCurrencyPref(code) {
 export function recordSection(key) {
   const next = pushRecent(prefs.recents, key)
   prefs.recents.splice(0, prefs.recents.length, ...next)
+  persist()
+}
+
+// Spec 38 — persisted motion preference ('system' | 'reduce' | 'full').
+export function setMotionPref(value) {
+  prefs.motion = value
   persist()
 }
 
@@ -118,4 +126,5 @@ export function __resetForTests() {
   prefs.currency = fresh.currency
   prefs.readKeys = fresh.readKeys
   prefs.recents = fresh.recents
+  prefs.motion = fresh.motion
 }

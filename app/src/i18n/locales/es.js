@@ -1,5 +1,6 @@
 export default {
   brand: 'AdForge',
+  motion: { label: 'Movimiento', system: 'Sistema', reduce: 'Reducido', full: 'Completo' },
   nav: {
     home: 'Inicio',
     product: 'Producto',

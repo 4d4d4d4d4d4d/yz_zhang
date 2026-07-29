@@ -1,5 +1,6 @@
 export default {
   brand: 'AdForge',
+  motion: { label: '动效', system: '跟随系统', reduce: '减弱', full: '完整' },
   nav: {
     home: '首页',
     product: '产品',

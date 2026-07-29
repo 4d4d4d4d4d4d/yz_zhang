@@ -1,5 +1,10 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useReducedMotion } from '../composables/useReducedMotion.js'
+
+// Spec 38 — the hero orb loop is the app's most prominent motion; suppress it
+// (draw a single static frame) when the viewer prefers reduced motion.
+const { reduced } = useReducedMotion()
 
 const canvasRef = ref(null)
 let raf = 0
@@ -50,12 +55,22 @@ onMounted(() => {
       ctx.beginPath(); ctx.arc(cx, cy, o.r, 0, Math.PI * 2); ctx.fill()
     }
     ctx.globalCompositeOperation = 'source-over'
-    raf = requestAnimationFrame(frame)
+    // Reduced motion: render one still frame and stop scheduling.
+    raf = reduced.value ? 0 : requestAnimationFrame(frame)
   }
   frame()
+
+  // Restart the loop if the viewer re-enables motion; redraw once on resize
+  // while paused so the static frame tracks the new size.
+  const stopWatch = watch(reduced, v => {
+    if (!v && !raf) frame()
+    else if (v && raf) { cancelAnimationFrame(raf); raf = 0; frame() }
+  })
+
   onBeforeUnmount(() => {
     cancelAnimationFrame(raf)
     window.removeEventListener('resize', resize)
+    stopWatch()
   })
 })
 </script>

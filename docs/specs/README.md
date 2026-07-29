@@ -46,6 +46,7 @@ the test assertions.
 | 35 | [Sortable & Exportable Tables](35-sortable-export-tables.md) | `logic/sortRows.js`, `logic/csv.js`, `composables/useSortable.js`; adopted in `OrderBook.vue` | `tests/sortRows.test.js`, `tests/csv.test.js` |
 | 36 | [Cross-Timezone Meeting Planner](36-timezone-planner.md) | `logic/timezones.js`, `components/MeetingPlanner.vue`, `immersive/planner` sub-tab | `tests/timezones.test.js` |
 | 37 | [Calendar Export & Adjustable Hours](37-ics-calendar.md) | `logic/ics.js`, `MeetingPlanner.vue` (shift presets + .ics download) | `tests/ics.test.js` |
+| 38 | [Reduced Motion (OS + user toggle)](38-reduced-motion.md) | `logic/motion.js`, `composables/useReducedMotion.js`, `MotionToggle.vue`, `VideoHero.vue`, global CSS | `tests/motion.test.js` |
 
 Capability flow across domains:
 
