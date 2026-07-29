@@ -260,12 +260,20 @@ def render_mapping_report(plan: MappingPlan, arch_name: str = "") -> str:
     status = "✅ all ops mapped" if not plan.unmapped else (
         f"⚠️ {len(plan.unmapped)} op(s) unmapped"
     )
-    parts.append(_two_col_table("Metric", "Value", [
+    rows = [
         ("ops mapped", str(n)),
-        ("total typical cycles", f"{plan.total_typical_cycles:,}"),
+        ("op-serial cycles (sum)", f"{plan.total_typical_cycles:,}"),
+    ]
+    if plan.bottleneck_module:
+        rows.append((
+            "bottleneck cycles",
+            f"{plan.bottleneck_cycles:,} (busiest module `{plan.bottleneck_module}`)",
+        ))
+    rows += [
         ("total dynamic energy", f"{plan.total_dynamic_pj:,.1f} pJ"),
         ("status", status),
-    ]))
+    ]
+    parts.append(_two_col_table("Metric", "Value", rows))
 
     if plan.decisions:
         rows = []

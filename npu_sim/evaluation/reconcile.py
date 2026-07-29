@@ -73,15 +73,21 @@ def reconcile(
     ratio = (measured / est) if est > 0 else float("nan")
     abs_err = measured - est
 
+    bn = plan.bottleneck_cycles
+    bn_ratio = (measured / bn) if bn > 0 else float("nan")
     lines = [
         "Estimate vs measured (SPEC-006 §8):",
         f"  ops mapped:      {len(plan.decisions)}"
         + (f"  (unmapped: {list(plan.unmapped)})" if plan.unmapped else ""),
-        f"  static estimate: {est:,} cycles (op-serial, no overlap/backpressure)",
+        f"  op-serial est:   {est:,} cycles (sum, no overlap/backpressure)",
+        f"  bottleneck est:  {bn:,} cycles "
+        f"(busiest module {plan.bottleneck_module!r}, models module overlap)",
         f"  measured drain:  {measured:,} cycles",
-        f"  ratio measured/estimate: "
+        f"  ratio measured/op-serial:  "
         + (f"{ratio:.2f}×" if ratio == ratio else "n/a"),
-        f"  abs error:       {abs_err:+,} cycles",
+        f"  ratio measured/bottleneck: "
+        + (f"{bn_ratio:.2f}×" if bn_ratio == bn_ratio else "n/a"),
+        f"  abs error (op-serial):     {abs_err:+,} cycles",
     ]
     return ReconcileReport(
         plan=plan,

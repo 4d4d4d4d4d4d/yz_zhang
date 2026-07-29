@@ -91,7 +91,7 @@ class TestReconcile:
 
     def test_summary_mentions_both_numbers(self, report):
         s = report.summary_text
-        assert "static estimate" in s
+        assert "op-serial est" in s
         assert "measured drain" in s
         assert "ratio" in s
 

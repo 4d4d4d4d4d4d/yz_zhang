@@ -145,6 +145,14 @@ class IMapper(ABC):
 
 - 算子图升级为 DAG(支持 dependency edges、partial pipeline mapping)。
 - Cost-model mapper:加入 throughput、area pressure、共享模块串行化代价。
+  ✅ **共享模块串行化已落地**:`MappingPlan` 除 `total_typical_cycles`
+  (op-serial 求和)外,新增 `bottleneck_cycles` / `bottleneck_module` /
+  `per_module_cycles` —— 路由到同一模块的算子在该模块串行,busiest 模块的
+  串行总量是比"求和"更紧的吞吐下界,且建模了跨模块 overlap。实测 MLP
+  (3 matmul→MAC=315,3 relu→VAU=48):bottleneck 315 < op-serial 363,
+  因 relu 与 matmul 在不同模块可并行(`test_bottleneck_estimate.py`)。
+  `reconcile` 同时报告两个估算 vs 实测。v1.1 进一步:throughput / area
+  pressure 权重。
 - 多模块算子(一个 op 跨多个模块)、空间映射(systolic tile sharding)。
 - ✅ `reporting.markdown` 增加 MappingPlan 渲染(`render_mapping_report`,
   CLI `estimate` 子命令)。

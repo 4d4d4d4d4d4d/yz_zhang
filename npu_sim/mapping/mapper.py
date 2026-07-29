@@ -40,10 +40,17 @@ class MappingPlan:
     """Aggregate result of an IMapper.map() call. Reference: SPEC-006 §2.1."""
 
     decisions: tuple[MappingDecision, ...]
-    total_typical_cycles: int
+    total_typical_cycles: int          # op-serial sum (no overlap)
     total_dynamic_pj: float
     unmapped: tuple[int, ...] = ()
     summary_text: str = ""
+    # SPEC-006 §8 cost-model: shared-module serialization. Ops routed to the
+    # same module serialize on it; the busiest module's serial total is a
+    # tighter throughput floor than the op-serial sum, and models overlap
+    # across distinct modules. bottleneck_module = that module.
+    bottleneck_cycles: int = 0
+    bottleneck_module: str = ""
+    per_module_cycles: tuple[tuple[str, int], ...] = ()
 
 
 # ============================================================
@@ -124,12 +131,30 @@ class RuleBasedMapper(IMapper):
         total_cycles = sum(d.latency.typical_cycles for d in decisions)
         total_pj = sum(d.energy.dynamic_pj for d in decisions)
 
+        # SPEC-006 §8: per-module serial totals → bottleneck (shared-module
+        # serialization). Ops on the same module serialize; distinct modules
+        # overlap. The busiest module's total is a tighter throughput floor.
+        per_module: dict[str, int] = {}
+        for d in decisions:
+            per_module[d.module_id] = per_module.get(d.module_id, 0) + d.latency.typical_cycles
+        if per_module:
+            bottleneck_module = max(per_module, key=lambda m: (per_module[m], m))
+            bottleneck_cycles = per_module[bottleneck_module]
+        else:
+            bottleneck_module, bottleneck_cycles = "", 0
+        per_module_sorted = tuple(
+            sorted(per_module.items(), key=lambda kv: (-kv[1], kv[0]))
+        )
+
         return MappingPlan(
             decisions=tuple(decisions),
             total_typical_cycles=total_cycles,
             total_dynamic_pj=total_pj,
             unmapped=tuple(unmapped),
             summary_text=_format_summary(decisions, total_cycles, total_pj, unmapped),
+            bottleneck_cycles=bottleneck_cycles,
+            bottleneck_module=bottleneck_module,
+            per_module_cycles=per_module_sorted,
         )
 
     # ============== helpers ==============
