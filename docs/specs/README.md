@@ -47,6 +47,7 @@ the test assertions.
 | 36 | [Cross-Timezone Meeting Planner](36-timezone-planner.md) | `logic/timezones.js`, `components/MeetingPlanner.vue`, `immersive/planner` sub-tab | `tests/timezones.test.js` |
 | 37 | [Calendar Export & Adjustable Hours](37-ics-calendar.md) | `logic/ics.js`, `MeetingPlanner.vue` (shift presets + .ics download) | `tests/ics.test.js` |
 | 38 | [Reduced Motion (OS + user toggle)](38-reduced-motion.md) | `logic/motion.js`, `composables/useReducedMotion.js`, `MotionToggle.vue`, `VideoHero.vue`, global CSS | `tests/motion.test.js` |
+| 39 | [Command Palette Actions](39-palette-actions.md) | `logic/commands.js`, `CommandPalette.vue` (runs locale/motion actions) | `tests/commands.test.js` |
 
 Capability flow across domains:
 

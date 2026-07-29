@@ -177,6 +177,7 @@ export default {
     recent: '最近访问',
     hint: '⌘K / Ctrl+K 打开 · ↑↓ 选择 · Enter 跳转 · Esc 关闭'
   },
+  cmd: { action: '操作', language: '语言', motion: '动效' },
   shortcuts: {
     title: '键盘快捷键',
     close: '关闭',

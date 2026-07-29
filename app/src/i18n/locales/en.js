@@ -177,6 +177,7 @@ export default {
     recent: 'Recent',
     hint: '⌘K / Ctrl+K to open · ↑↓ to select · Enter to jump · Esc to close'
   },
+  cmd: { action: 'Action', language: 'Language', motion: 'Motion' },
   shortcuts: {
     title: 'Keyboard shortcuts',
     close: 'Close',

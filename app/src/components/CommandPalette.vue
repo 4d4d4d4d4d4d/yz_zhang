@@ -4,7 +4,10 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { SECTIONS } from '../console/registry.js'
 import { buildIndex, searchModules } from '../logic/search.js'
-import { prefs } from '../store/workspace.js'
+import { buildActionCommands } from '../logic/commands.js'
+import { MOTION_PREFS } from '../logic/motion.js'
+import { prefs, setMotionPref } from '../store/workspace.js'
+import { locales as LOCALES, setLocale } from '../i18n'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -22,6 +25,29 @@ const index = computed(() => {
     kind === 'section' ? t(`console.s.${path}.title`) : t(`console.tabs.${path}`))
 })
 
+// Action commands (spec 39): global store-backed operations — switch language,
+// set motion — searchable alongside modules. Labels rebuild with the locale.
+const actionEntries = computed(() => {
+  void locale.value
+  return buildActionCommands({ locales: LOCALES.map(l => l.code), motionPrefs: MOTION_PREFS }).map(a => {
+    const label = a.kind === 'locale'
+      ? `${t('cmd.language')}: ${LOCALES.find(l => l.code === a.arg)?.label ?? a.arg}`
+      : `${t('cmd.motion')}: ${t('motion.' + a.arg)}`
+    return {
+      id: a.id,
+      label,
+      sub: 'action',
+      sectionLabel: t('cmd.action'),
+      route: null,
+      action: a,
+      haystack: `${label} ${a.kind} ${a.arg} ${t('cmd.language')} ${t('cmd.motion')} command action`.toLowerCase()
+    }
+  })
+})
+
+// Modules first, then actions — one searchable index.
+const fullIndex = computed(() => [...index.value, ...actionEntries.value])
+
 // Recent sections (spec 32): map persisted section keys to their section-level
 // index entries, dropping any key no longer in the registry.
 const recents = computed(() => {
@@ -32,7 +58,7 @@ const recents = computed(() => {
 // Empty query → offer recents if we have any; otherwise browse the index.
 const showingRecents = computed(() => !query.value.trim() && recents.value.length > 0)
 const results = computed(() =>
-  showingRecents.value ? recents.value : searchModules(query.value, index.value))
+  showingRecents.value ? recents.value : searchModules(query.value, fullIndex.value))
 
 watch(results, () => { active.value = 0 })
 watch(open, async v => {
@@ -66,7 +92,13 @@ function move(d) {
 function go(entry = results.value[active.value]) {
   if (!entry) return
   open.value = false
+  if (entry.action) return runAction(entry.action)
   router.push(entry.route)
+}
+
+function runAction(a) {
+  if (a.kind === 'locale') setLocale(a.arg)
+  else if (a.kind === 'motion') setMotionPref(a.arg)
 }
 
 defineExpose({ open })

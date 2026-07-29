@@ -175,6 +175,7 @@ export default {
     recent: 'Recientes',
     hint: '⌘K / Ctrl+K para abrir · ↑↓ para elegir · Enter para saltar · Esc para cerrar'
   },
+  cmd: { action: 'Acción', language: 'Idioma', motion: 'Movimiento' },
   shortcuts: {
     title: 'Atajos de teclado',
     close: 'Cerrar',

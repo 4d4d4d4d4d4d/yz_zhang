@@ -175,6 +175,7 @@ export default {
     recent: '最近使った項目',
     hint: '⌘K / Ctrl+K で開く · ↑↓ で選択 · Enter で移動 · Esc で閉じる'
   },
+  cmd: { action: '操作', language: '言語', motion: 'モーション' },
   shortcuts: {
     title: 'キーボードショートカット',
     close: '閉じる',
