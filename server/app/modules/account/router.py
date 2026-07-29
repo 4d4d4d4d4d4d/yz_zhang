@@ -131,6 +131,10 @@ def register(body: RegisterIn, db: Session = Depends(get_db), user_agent: str = 
 
 @router.post("/auth/login")
 def login(body: LoginIn, db: Session = Depends(get_db), user_agent: str = Header(default="")):
+    # ACC-002 密码登录防暴力破解：同手机号 60s 内尝试限流（原缺失，可无限撞库）
+    from app.core.ratelimit import check
+
+    check(f"login-pwd:{body.phone}", limit=5, window_seconds=60)
     user = db.query(User).filter(User.phone == body.phone).first()
     if not user or user.is_deleted or not verify_password(body.password, user.password_hash):
         raise bad_request("手机号或密码错误", "bad_credentials")
