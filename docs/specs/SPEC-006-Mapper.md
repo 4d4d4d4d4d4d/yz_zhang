@@ -159,5 +159,12 @@ class IMapper(ABC):
   同时修复了一个 Mapper bug:候选过滤原用各模块松散实现的 `can_execute()`
   (激励/基础设施模块无脑返回 True),导致算子被误映射到 TraceProducer;
   现改用 SPEC-001 §3.1 权威判据 `required_capabilities ⊆ active_capabilities`。
-  v1.1 进一步:规范化"误差不超过 N%"契约,需要 sim 暴露 **per-op 完成时间**
-  以做逐算子 join(目前 SPEC-001 §3.2 只暴露整链 drain,故对账在链级)。
+  ✅ **逐算子对账已落地**:`reconcile_per_op(ops, arch, arrivals, period)` +
+  `sink_op_arrivals(arch, sink_id)` 利用 SPEC-012 trace token 携带的
+  `op_index`(穿过整条通路被各模块 `{**metadata}` 保留)在 sink 还原每个
+  算子的到达拍,把 Mapper 逐 op 估算与 sink 到达间隔 join。实测 attention:
+  matmul 估 105 拍 / 稳态实测 512 拍(ratio 4.88×),softmax 估 35 拍 / 实测
+  512 拍(14.6×)—— 揭示核心 gap:**pipeline 稳态吞吐由最慢 stage 决定,
+  不是各 op 独立 latency**,`test_per_op_reconcile.py` 断言稳态到达间隔一致。
+  v1.1 进一步:把这个观察规范成 cost-model(§8 顶部第 2 条),让 Mapper 估算
+  考虑 pipeline throughput 而非纯 op-serial。

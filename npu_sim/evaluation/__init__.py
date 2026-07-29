@@ -14,7 +14,13 @@ from npu_sim.evaluation.runner import (
     elaborate_and_run,
     run_simulation,
 )
-from npu_sim.evaluation.reconcile import ReconcileReport, reconcile
+from npu_sim.evaluation.reconcile import (
+    PerOpReconcileReport,
+    ReconcileReport,
+    reconcile,
+    reconcile_per_op,
+    sink_op_arrivals,
+)
 from npu_sim.interfaces.operation import IOperation
 from npu_sim.interfaces.services import InMemoryEventBus, InMemoryStatSink
 from npu_sim.mapping import MappingPlan, RuleBasedMapper
@@ -46,6 +52,7 @@ def estimate_plan(
 __all__ = [
     "ComparisonReport",
     "MappingPlan",
+    "PerOpReconcileReport",
     "ReconcileReport",
     "SimulationResult",
     "compare",
@@ -54,5 +61,7 @@ __all__ = [
     "elaborate_and_run",
     "estimate_plan",
     "reconcile",
+    "reconcile_per_op",
     "run_simulation",
+    "sink_op_arrivals",
 ]
