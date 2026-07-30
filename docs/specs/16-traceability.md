@@ -1,8 +1,15 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V29 全批次完成（2026-07-19）。
-> 后端 215 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V30 全批次完成（2026-07-20）。
+> 后端 219 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V30 批次：我的任务中心）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| TASK-016 我的任务中心（**补能力缺口**）：广场只展示 published+public，用户无法列出自己的草稿/执行中/已完成任务、也看不到自己执行的单 → 新增 `/tasks/mine`：posted（我发布）/working（我执行）/all，可按状态筛选，offset 分页，用户隔离 | `task/router.py::my_tasks` | `tests/test_my_tasks.py` |
+| SDK 同步：myTasks | `packages/core/src/client.ts` | web 构建通过 |
 
 ## 已实现（V29 批次：任务广场分页）
 

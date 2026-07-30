@@ -106,6 +106,13 @@ export class PlatformClient {
   getTask(id: number) {
     return this.request<Task>('GET', `/tasks/${id}`);
   }
+  myTasks(params: { role?: 'all' | 'posted' | 'working'; status?: string; limit?: number; offset?: number } = {}) {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v !== undefined && v !== '')
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+      .join('&');
+    return this.request<Task[]>('GET', `/tasks/mine${qs ? `?${qs}` : ''}`);
+  }
   expireTasks() {
     return this.request<{ expired: number }>('POST', '/tasks/jobs/expire-tasks');
   }

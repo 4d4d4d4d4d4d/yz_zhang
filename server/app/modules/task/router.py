@@ -239,6 +239,34 @@ def edit_task(
     return dump_task(task, user)
 
 
+@router.get("/tasks/mine")
+def my_tasks(
+    role: str = Query(default="all", pattern="^(all|posted|working)$"),
+    status: str | None = None,
+    limit: int = Query(default=20, le=100),
+    offset: int = Query(default=0, ge=0),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """TASK-016 我的任务：我发布的（posted）/ 我执行的（working）/ 全部（all），可按状态筛选。
+
+    广场只展示 published+public，用户无法在其中看到自己的草稿/执行中/已完成任务，
+    此端点补齐个人任务中心（订单页）能力。含多人任务的名额子任务。
+    """
+    from sqlalchemy import or_
+
+    query = db.query(Task)
+    if role == "posted":
+        query = query.filter(Task.creator_id == user.id)
+    elif role == "working":
+        query = query.filter(Task.executor_id == user.id)
+    else:
+        query = query.filter(or_(Task.creator_id == user.id, Task.executor_id == user.id))
+    if status:
+        query = query.filter(Task.status == status)
+    rows = query.order_by(Task.id.desc()).offset(offset).limit(limit).all()
+    return [dump_task(t, user) for t in rows]
+
+
 @router.get("/categories")
 def list_categories(db: Session = Depends(get_db)):
     """OPS-004 类目列表（公开，发布表单数据源）。"""
