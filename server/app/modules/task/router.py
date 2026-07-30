@@ -281,6 +281,7 @@ def list_tasks(
     lng: float | None = None,
     max_km: float = Query(default=0, ge=0),
     limit: int = Query(default=20, le=100),
+    offset: int = Query(default=0, ge=0),
 ):
     # 公开广场不展示圈层定向任务（TASK-008）
     query = db.query(Task).filter(Task.status == status, Task.visibility == "public")
@@ -292,20 +293,25 @@ def list_tasks(
         query = query.filter(Task.task_type == task_type)
     if city:
         query = query.filter(Task.city == city)
-    rows = query.order_by(Task.id.desc()).limit(500).all()
+    query = query.order_by(Task.id.desc())
+    # 非地理浏览：DB 层 offset/limit 分页，可翻至任意页且不拉全表（TASK-003）
+    if lat is None or lng is None:
+        rows = query.offset(offset).limit(limit).all()
+        return [dump_task(t) | {"distance_m": None} for t in rows]
+    # 地理检索：取候选窗口按距离过滤+排序后再分页（规模化替换为空间索引）
+    rows = query.limit(500).all()
     items = []
     for task in rows:
         distance_m = None
-        if lat is not None and lng is not None and task.lat is not None:
+        if task.lat is not None:
             distance_m = round(haversine_m(lat, lng, task.lat, task.lng))
             if max_km and distance_m > max_km * 1000:
                 continue
         item = dump_task(task)
         item["distance_m"] = distance_m
         items.append(item)
-    if lat is not None:
-        items.sort(key=lambda x: (x["distance_m"] is None, x["distance_m"] or 0))
-    return items[:limit]
+    items.sort(key=lambda x: (x["distance_m"] is None, x["distance_m"] or 0))
+    return items[offset:offset + limit]
 
 
 @router.get("/tasks/{task_id}")
