@@ -1,12 +1,12 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { createTrustLink, validateTrustLink, revokeTrustLink, MAX_LINK_DAYS } from '../logic/showcase.js'
+import { createTrustLink, validateTrustLink, revokeTrustLink, resolveTrustLinkView, MAX_LINK_DAYS } from '../logic/showcase.js'
 
 const REELS = [
-  { id: 'r1', title: 'Lumi Serum — Tokyo Launch' },
-  { id: 'r2', title: 'Northwave — LATAM Signup' },
-  { id: 'r3', title: 'Kaito Beauty — SEA UGC Wave' },
-  { id: 'r6', title: 'Aria Audio — KR Before/After' }
+  { id: 'r1', title: 'Lumi Serum — Tokyo Launch', asset: 'lumi-jp.mp4', metrics: { roas: '4.2×', ctr: '3.1%' }, provenance: { c2pa: true, signer: 'AdForge' }, pricing: { cpm: '$12' } },
+  { id: 'r2', title: 'Northwave — LATAM Signup', asset: 'northwave-br.mp4', metrics: { roas: '2.8×', cpa: '−68%' }, provenance: { c2pa: true, signer: 'AdForge' }, pricing: { cpm: '$9' } },
+  { id: 'r3', title: 'Kaito Beauty — SEA UGC Wave', asset: 'kaito-sea.mp4', metrics: { roas: '5.1×', ctr: '4.4%' }, provenance: { c2pa: true, signer: 'AdForge' }, pricing: { cpm: '$14' } },
+  { id: 'r6', title: 'Aria Audio — KR Before/After', asset: 'aria-kr.mp4', metrics: { roas: '3.3×', ctr: '2.7%' }, provenance: { c2pa: false, signer: '—' }, pricing: { cpm: '$7' } }
 ]
 const SCOPES = [
   { id: 'assets',     label: 'Video assets',        note: 'Watch the reels (watermarked)' },
@@ -54,6 +54,10 @@ function statusOf(link) {
 
 const daysClamped = computed(() => Math.min(MAX_LINK_DAYS, Math.max(1, days.value || 1)))
 const fmtDate = ts => new Date(ts).toISOString().slice(0, 10)
+
+// Recipient preview (spec 40): exactly what the counterparty sees through the
+// most-recently-issued link — the redaction enforced, not just claimed.
+const preview = computed(() => links.value.length ? resolveTrustLinkView(links.value[0], REELS, nowTick.value) : null)
 </script>
 
 <template>
@@ -115,6 +119,25 @@ const fmtDate = ts => new Date(ts).toISOString().slice(0, 10)
         </div>
       </div>
     </div>
+
+    <div class="card preview" v-if="preview">
+      <div class="kicker">Recipient preview · newest link</div>
+      <h3>What the counterparty actually sees</h3>
+      <p v-if="!preview.ok" class="meta pv-blocked">Link {{ preview.reason }} — nothing is exposed.</p>
+      <template v-else>
+        <p class="meta">Scopes granted: <strong>{{ preview.scopes.join(' · ') || 'none' }}</strong>{{ preview.scopes.includes('assets') && preview.watermark ? ' · assets watermarked' : '' }}</p>
+        <div v-for="r in preview.reels" :key="r.id" class="pv-reel">
+          <div class="pv-title">{{ r.title }}</div>
+          <ul class="pv-fields">
+            <li v-if="r.asset">🎬 asset: <code>{{ r.asset.ref }}</code>{{ r.asset.watermarked ? ' (watermarked)' : '' }}</li>
+            <li v-if="r.metrics">📊 metrics: {{ Object.entries(r.metrics).map(([k, v]) => k + ' ' + v).join(', ') }}</li>
+            <li v-if="r.provenance">🔏 provenance: C2PA {{ r.provenance.c2pa ? '✓' : '✗' }} · {{ r.provenance.signer }}</li>
+            <li v-if="r.pricing">💲 pricing: CPM {{ r.pricing.cpm }}</li>
+          </ul>
+          <p class="pv-hidden">Hidden by scope: {{ ['assets','metrics','provenance','pricing'].filter(s => !preview.scopes.includes(s)).join(', ') || 'nothing' }}</p>
+        </div>
+      </template>
+    </div>
   </div>
 </template>
 
@@ -147,6 +170,15 @@ const fmtDate = ts => new Date(ts).toISOString().slice(0, 10)
 .link.revoked .st, .link.expired .st { background: rgba(248, 113, 113, .15); color: #f87171; }
 .l-meta { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 10px; font-size: 11px; color: var(--text-dim); }
 .btn.sm { padding: 5px 12px; font-size: 11px; }
+
+.preview { border-left: 3px solid var(--primary); }
+.preview h3 { margin: 4px 0 8px; }
+.pv-blocked { color: #fbbf24; }
+.pv-reel { border-top: 1px solid var(--border); padding: 10px 0; }
+.pv-title { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+.pv-fields { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.pv-fields code { color: var(--primary-2); }
+.pv-hidden { font-size: 11px; color: var(--text-dim); margin: 8px 0 0; }
 
 @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 </style>

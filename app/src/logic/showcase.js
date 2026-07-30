@@ -72,6 +72,33 @@ export function revokeTrustLink(link) {
   return link
 }
 
+// Enforce least-privilege ON READ. Given a link and the full reel dataset,
+// return only what the link actually permits — the recipient's view. A field
+// absent from the link's scopes is never included (not just hidden in the UI),
+// and an invalid/expired/revoked link exposes nothing. This is the counterpart
+// to createTrustLink: declaring a scope means nothing unless read enforces it.
+const SCOPE_FIELD = { metrics: 'metrics', provenance: 'provenance', pricing: 'pricing' }
+
+export function resolveTrustLinkView(link, reels = [], now = Date.now()) {
+  const v = validateTrustLink(link, now)
+  if (!v.valid) return { ok: false, reason: v.reason }
+
+  const ids = new Set(Array.isArray(link.reelIds) ? link.reelIds : [])
+  const scopes = Array.isArray(link.scopes) ? link.scopes : []
+  const source = Array.isArray(reels) ? reels : []
+
+  const view = source.filter(r => ids.has(r?.id)).map(reel => {
+    const out = { id: reel.id, title: reel.title } // identity is always visible
+    if (scopes.includes('assets')) out.asset = { ref: reel.asset ?? null, watermarked: Boolean(link.watermark) }
+    for (const scope of ['metrics', 'provenance', 'pricing']) {
+      if (scopes.includes(scope)) out[SCOPE_FIELD[scope]] = reel[SCOPE_FIELD[scope]] ?? null
+    }
+    return out
+  })
+
+  return { ok: true, watermark: Boolean(link.watermark), scopes: [...scopes], reels: view }
+}
+
 // --------------------------------------------------- Verification queue
 
 // Bounded-concurrency scheduler: at most `limit` tasks in flight,

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  trustScore, createTrustLink, validateTrustLink, revokeTrustLink,
+  trustScore, createTrustLink, validateTrustLink, revokeTrustLink, resolveTrustLinkView,
   generateToken, createQueue, MAX_LINK_DAYS
 } from '../src/logic/showcase.js'
 
@@ -58,6 +58,51 @@ describe('trust links', () => {
     let s2 = 42
     const lcg2 = () => (s2 = (s2 * 1664525 + 1013904223) % 4294967296) / 4294967296
     expect(generateToken(lcg)).toBe(generateToken(lcg2))
+  })
+})
+
+describe('resolveTrustLinkView — least-privilege enforced on read', () => {
+  const REELS = [
+    { id: 'r1', title: 'Reel One', asset: 'a1.mp4', metrics: { roas: 4.2 }, provenance: { c2pa: true }, pricing: { cpm: 12 } },
+    { id: 'r2', title: 'Reel Two', asset: 'a2.mp4', metrics: { roas: 2.1 }, provenance: { c2pa: true }, pricing: { cpm: 8 } }
+  ]
+
+  it('exposes ONLY the scoped fields — absent scopes are omitted entirely', () => {
+    const link = createTrustLink({ reelIds: ['r1'], scopes: ['metrics'], now: 0 })
+    const view = resolveTrustLinkView(link, REELS, 1000)
+    expect(view.ok).toBe(true)
+    expect(view.reels).toHaveLength(1)
+    const r = view.reels[0]
+    expect(r.metrics).toEqual({ roas: 4.2 })
+    expect(r).not.toHaveProperty('asset')       // 'assets' not in scope
+    expect(r).not.toHaveProperty('provenance')
+    expect(r).not.toHaveProperty('pricing')
+    expect(r.title).toBe('Reel One')            // identity always visible
+  })
+
+  it('marks assets watermarked per the link', () => {
+    const link = createTrustLink({ reelIds: ['r1'], scopes: ['assets'], watermark: true, now: 0 })
+    const view = resolveTrustLinkView(link, REELS, 1000)
+    expect(view.reels[0].asset).toEqual({ ref: 'a1.mp4', watermarked: true })
+  })
+
+  it('only returns reels the link lists', () => {
+    const link = createTrustLink({ reelIds: ['r2'], scopes: ['pricing'], now: 0 })
+    const view = resolveTrustLinkView(link, REELS, 1000)
+    expect(view.reels.map(r => r.id)).toEqual(['r2'])
+    expect(view.reels[0].pricing).toEqual({ cpm: 8 })
+  })
+
+  it('exposes nothing for an expired or revoked link', () => {
+    const link = createTrustLink({ reelIds: ['r1'], scopes: ['metrics'], expiresInDays: 1, now: 0 })
+    expect(resolveTrustLinkView(link, REELS, 2 * 86400000)).toEqual({ ok: false, reason: 'expired' })
+    revokeTrustLink(link)
+    expect(resolveTrustLinkView(link, REELS, 1000).ok).toBe(false)
+  })
+
+  it('tolerates missing reel fields and a non-array dataset', () => {
+    const link = createTrustLink({ reelIds: ['r1'], scopes: ['provenance'], now: 0 })
+    expect(resolveTrustLinkView(link, null, 1000)).toEqual({ ok: true, watermark: true, scopes: ['provenance'], reels: [] })
   })
 })
 
