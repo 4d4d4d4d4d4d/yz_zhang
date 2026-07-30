@@ -323,6 +323,10 @@ python -m npu_sim estimate my_chip.yaml attn_ops.yaml
 #   (SPEC-006 §8;--sink 可指定 sink 模块,省略则自动探测 Consumer)
 python -m npu_sim reconcile my_chip.yaml attn_ops.yaml
 
+# 全片状态快照:某一拍冻结所有模块(busy/stage/stall)+ 连接 FIFO 占用 + clock
+#   (QEMU §3.2 savevm 的只读数据视图;因运行时确定,restore = 确定性重放)
+python -m npu_sim snapshot my_chip.yaml --at-cycle 20
+
 # 列出所有可用模块类型
 python -m npu_sim list-modules
 ```

@@ -9,11 +9,14 @@ re-elaboration happens here.
 
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from typing import TYPE_CHECKING, Iterable, Optional
 
 from npu_sim.evaluation.comparator import ComparisonReport
 from npu_sim.evaluation.reconcile import PerOpReconcileReport, ReconcileReport
 from npu_sim.evaluation.runner import SimulationResult
+
+if TYPE_CHECKING:
+    from npu_sim.evaluation.snapshot import StateSnapshot
 from npu_sim.mapping import MappingPlan
 from npu_sim.runtime.invariants import InvariantReport
 
@@ -361,6 +364,50 @@ def render_reconcile_report(
             "pipeline throughput period, set by the busiest stage, not each op's "
             "own latency."
         )
+
+    return "\n\n".join(parts)
+
+
+def render_state_snapshot(snap: "StateSnapshot", arch_name: str = "") -> str:
+    """Render a whole-chip StateSnapshot (QEMU §3.2 savevm data view) as Markdown.
+
+    Shows the cycle/time, every module's busy/stage/stall state, and every
+    connection's FIFO occupancy — the read-only half of a checkpoint.
+    """
+    name = arch_name or snap.architecture_name
+    title = f"Chip state snapshot — `{name}`" if name else "Chip state snapshot"
+    parts: list[str] = [f"# {title}"]
+
+    parts.append(_two_col_table("Metric", "Value", [
+        ("cycle", f"{snap.cycle:,}"),
+        ("sim time", f"{snap.time_ps:,} ps"),
+        ("busy modules", f"{len(snap.busy_modules())} / {len(snap.modules)}"),
+        ("tokens in flight", str(snap.total_in_flight())),
+    ]))
+
+    mod_lines = [
+        "| module | type | busy | stage | fifos | stall |",
+        "|---|---|:-:|---|---|---|",
+    ]
+    for m in snap.modules:
+        fifos = ", ".join(f"{k}={v}" for k, v in m.internal_fifo_levels) or "—"
+        mod_lines.append(
+            f"| `{m.module_id}` | {m.module_type} | {'●' if m.busy else '·'} | "
+            f"{m.current_op or '—'} | {fifos} | {m.last_stall_reason or '—'} |"
+        )
+    parts.append("## Modules\n\n" + "\n".join(mod_lines))
+
+    if snap.connections:
+        conn_lines = [
+            "| connection | in-flight | capacity | util | dequeued |",
+            "|---|---:|---:|---:|---:|",
+        ]
+        for c in snap.connections:
+            conn_lines.append(
+                f"| `{c.key}` | {c.in_flight} | {c.capacity} | "
+                f"{c.utilization * 100:.0f}% | {c.tokens_dequeued} |"
+            )
+        parts.append("## Connection FIFOs\n\n" + "\n".join(conn_lines))
 
     return "\n\n".join(parts)
 

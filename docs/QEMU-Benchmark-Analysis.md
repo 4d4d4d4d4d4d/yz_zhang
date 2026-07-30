@@ -64,6 +64,8 @@ workload 表达力 = "多少个包、每个多大"。
 **QEMU 对应物**:savevm/loadvm。
 **改进**:序列化 modules 状态 + FIFO 内容 + clock;支持"warmup 完成点存
 档,N 个 variant 都从 checkpoint 起跑"。配合 §3.1 的长 trace 是刚需。
+**实测修正见 §5.2** —— 二进制 loadvm 被生成器帧结构性阻断,留给 Phase 5;
+savevm 的数据视图(只读全片快照)与"确定性重放即 restore"已落地。
 
 ### 3.3 确定性收口(record/replay)
 
@@ -103,7 +105,7 @@ workload 预计 10–100× 提速,语义完全等价(反压唤醒点不变)。
 | 1 | SPEC-012 Trace-driven 激励(§3.1) | 评估可信度质变 | 中 | ✅ **已落地**(SPEC-012 + TraceProducer,跑真实 attention 层) |
 | 2 | 调度加速(§3.4) | 大 max_cycles 4–336× | 中 | ✅ **部分落地**:见下方修正 |
 | 3 | RNG 确定性收口(§3.3) | 可复现性 | 低 | ✅ **已落地**(L2/MMU 改确定性 miss-credit,零 random,`test_determinism.py` 锁 bit-identical) |
-| 4 | Checkpoint/restore(§3.2) | 长 trace 评估提效 | 中 | 待做(跟随 #2) |
+| 4 | Checkpoint/restore(§3.2) | 长 trace 评估提效 | 中 | ✅ **部分落地**:见 §5.2(savevm 数据视图 + 重放式 restore 落地;二进制 loadvm → Phase 5) |
 
 ## 5.1 §3.4 调度加速的实测修正(重要)
 
@@ -125,6 +127,33 @@ workload 预计 10–100× 提速,语义完全等价(反压唤醒点不变)。
 True)`(默认开)在"无模块 busy + 所有 FIFO 空 + 无存活激励源"时提前停。
 所有指标在排空点已定型 → 结果与跑满 bit-identical(592 测试全绿即证明),
 实测加速 **4.6×–336×**(取决于 max_cycles 相对排空点的余量)。
+
+## 5.2 §3.2 Checkpoint/restore 的实测修正(重要)
+
+原设想的"二进制 checkpoint/restore"(序列化全片状态,N 个 variant 从存档
+点起跑)**在本平台的 Python 运行时被结构性阻断**:
+
+> 每个模块的在途时序状态活在其 `behavior()` **生成器帧**里 —— 例如 MAC 的
+> `for _ in range(fill_n): yield` 倒计数,以及 `act` / `total` 等帧内局部
+> 变量。`snapshot_state()`(SPEC-001 §3.1 ModuleState)**不暴露**这些;而
+> 运行的 Python 生成器**不可 pickle**。要做真正的 loadvm,必须把每个
+> `behavior()` 重写成把倒计数外化到实例属性的显式状态机 —— 这是 Phase 5
+> 级别的改写,ADR-001.1 已把它交给 SystemC 内核(天然可 checkpoint)。
+> `test_state_snapshot.py::TestBinaryCheckpointBlocker` 锁死该发现。
+
+**但**落地了 savevm 的**可行子集**与一个零成本的等价 restore:
+
+1. **只读全片快照(savevm 数据视图)**:`capture_state(arch, cycle)` /
+   `snapshot_at_cycle(arch, at_cycle)` 冻结每个模块的 `snapshot_state()` +
+   每条连接的 FIFO 占用 + clock,产出可逐字段比较的 `StateSnapshot`。CLI
+   `snapshot <arch> --at-cycle N`。这是调试 / 跨版本同拍对比的实用工具,
+   不需要 pickle 生成器。
+2. **确定性重放即 restore**:因为运行时现已完全确定(§3.3 移除 RNG),
+   "restore 到第 N 拍"= 从 cycle 0 确定性重放到 N —— 两次独立重放到同一拍
+   产出**逐字段相同**的 `StateSnapshot`(`test_state_snapshot.py::
+   TestRestoreIsDeterministicReplay` 证明)。重放到 warmup 点仅需
+   ~微秒/拍(实测 107k 拍/s),所以在本平台上重放是二进制 checkpoint 的
+   诚实、零风险替代品 —— 后者只多省墙钟,不多给正确性。
 
 ## 6. 与既有决策的一致性
 

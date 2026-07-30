@@ -21,6 +21,13 @@ from npu_sim.evaluation.reconcile import (
     reconcile_per_op,
     sink_op_arrivals,
 )
+from npu_sim.evaluation.snapshot import (
+    ConnectionSnapshot,
+    ModuleSnapshot,
+    StateSnapshot,
+    capture_state,
+    snapshot_at_cycle,
+)
 from npu_sim.interfaces.operation import IOperation
 from npu_sim.interfaces.services import InMemoryEventBus, InMemoryStatSink
 from npu_sim.mapping import MappingPlan, RuleBasedMapper
@@ -51,10 +58,14 @@ def estimate_plan(
 
 __all__ = [
     "ComparisonReport",
+    "ConnectionSnapshot",
     "MappingPlan",
+    "ModuleSnapshot",
     "PerOpReconcileReport",
     "ReconcileReport",
     "SimulationResult",
+    "StateSnapshot",
+    "capture_state",
     "compare",
     "compare_tensors",
     "elaborate",
@@ -64,4 +75,5 @@ __all__ = [
     "reconcile_per_op",
     "run_simulation",
     "sink_op_arrivals",
+    "snapshot_at_cycle",
 ]

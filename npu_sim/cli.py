@@ -13,6 +13,9 @@ Subcommands:
     reconcile <arch> <ops>      Join the static Mapper estimate against the
                                 simulated measured drain (SPEC-006 §8
                                 estimate-vs-measured reconciliation).
+    snapshot <arch>             Capture whole-chip state (modules + FIFOs +
+                                clock) at a cycle — the QEMU §3.2 savevm data
+                                view; restore = deterministic replay.
 
 Designed for the SPEC-003 §7 R7 workflow: researcher edits a YAML, runs
 `python -m npu_sim compare base.yaml variant.yaml`, pastes the output into
@@ -199,6 +202,23 @@ def _cmd_reconcile(args: argparse.Namespace, out: TextIO) -> int:
     return 0
 
 
+def _cmd_snapshot(args: argparse.Namespace, out: TextIO) -> int:
+    from npu_sim.evaluation import elaborate, snapshot_at_cycle
+    from npu_sim.reporting import render_state_snapshot
+
+    arch_path = _require_path(args.arch)
+    try:
+        arch = elaborate(str(arch_path))
+    except NpuSimError as exc:
+        sys.stderr.write(f"elaboration error: {exc}\n")
+        return 2
+
+    snap = snapshot_at_cycle(arch, at_cycle=args.at_cycle, max_cycles=args.max_cycles)
+    md = render_state_snapshot(snap, arch_name=arch.name)
+    _write_output(md, args.out, out)
+    return 0
+
+
 def _autodetect_sink(arch) -> Optional[str]:
     """Find a module that exposes received_tokens (a Consumer)."""
     for mid, m in arch.modules.items():
@@ -342,6 +362,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional output file; defaults to stdout.",
     )
     p_rec.set_defaults(handler=_cmd_reconcile)
+
+    p_snap = subparsers.add_parser(
+        "snapshot",
+        help="Capture whole-chip state at a cycle (QEMU §3.2 savevm data view; "
+        "restore = deterministic replay).",
+    )
+    p_snap.add_argument("arch", help="Path to the architecture YAML.")
+    p_snap.add_argument(
+        "--at-cycle",
+        type=int,
+        default=0,
+        help="0-based cycle index to capture state at (default: 0). If the "
+        "sim drains earlier, the final stable state is captured.",
+    )
+    p_snap.add_argument(
+        "--max-cycles",
+        type=int,
+        default=100_000,
+        help="Scheduler step cap for the replay (default: 100000).",
+    )
+    p_snap.add_argument(
+        "--out",
+        default=None,
+        help="Optional output file; defaults to stdout.",
+    )
+    p_snap.set_defaults(handler=_cmd_snapshot)
 
     return parser
 
