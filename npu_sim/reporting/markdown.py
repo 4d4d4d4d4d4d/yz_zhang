@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Iterable, Optional
 
 from npu_sim.evaluation.comparator import ComparisonReport
+from npu_sim.evaluation.reconcile import PerOpReconcileReport, ReconcileReport
 from npu_sim.evaluation.runner import SimulationResult
 from npu_sim.mapping import MappingPlan
 from npu_sim.runtime.invariants import InvariantReport
@@ -301,6 +302,64 @@ def render_mapping_report(plan: MappingPlan, arch_name: str = "") -> str:
             + ", ".join(str(i) for i in plan.unmapped)
             + "\n\n> No module's active capabilities cover these ops' "
             "required capabilities."
+        )
+
+    return "\n\n".join(parts)
+
+
+def render_reconcile_report(
+    chain: ReconcileReport,
+    per_op: Optional[PerOpReconcileReport] = None,
+    arch_name: str = "",
+) -> str:
+    """Render an estimate-vs-measured reconciliation (SPEC-006 §8) as Markdown.
+
+    Shows both static estimates (op-serial sum and bottleneck), the measured
+    drain, the two ratios, and — if ``per_op`` is given — the per-op table.
+    """
+    parts: list[str] = []
+    title = f"Estimate vs measured — `{arch_name}`" if arch_name else "Estimate vs measured"
+    parts.append(f"# {title}")
+
+    plan = chain.plan
+    def _r(x: float) -> str:
+        return f"{x:.2f}×" if x == x else "n/a"
+    bn_ratio = (
+        chain.measured_cycles / plan.bottleneck_cycles
+        if plan.bottleneck_cycles > 0 else float("nan")
+    )
+    parts.append(_two_col_table("Metric", "Value", [
+        ("ops mapped", str(len(plan.decisions))
+            + (f" (unmapped: {list(plan.unmapped)})" if plan.unmapped else "")),
+        ("op-serial estimate", f"{chain.estimate_cycles:,} cyc (sum, no overlap)"),
+        ("bottleneck estimate",
+            f"{plan.bottleneck_cycles:,} cyc (busiest module `{plan.bottleneck_module}`)"),
+        ("measured drain", f"{chain.measured_cycles:,} cyc"),
+        ("ratio measured / op-serial", _r(chain.ratio)),
+        ("ratio measured / bottleneck", _r(bn_ratio)),
+    ]))
+
+    if plan.per_module_cycles:
+        rows = [(f"`{mid}`", f"{cyc:,} cyc") for mid, cyc in plan.per_module_cycles]
+        parts.append("## Per-module serial work\n\n"
+                     + _two_col_table("module", "serial cycles", rows))
+
+    if per_op is not None and per_op.rows:
+        lines = [
+            "| # | op | module | est cyc | measured cyc | ratio |",
+            "|---|---|---|---:|---:|---:|",
+        ]
+        for r in per_op.rows:
+            rr = f"{r.ratio:.2f}×" if r.ratio == r.ratio else "n/a"
+            lines.append(
+                f"| {r.op_index} | `{r.op_type}` | **{r.module_id}** | "
+                f"{r.estimate_cycles} | {r.measured_cycles} | {rr} |"
+            )
+        parts.append("## Per-op estimate vs measured\n\n" + "\n".join(lines))
+        parts.append(
+            "> Steady-state measured cycles are the sink inter-arrival gap — the "
+            "pipeline throughput period, set by the busiest stage, not each op's "
+            "own latency."
         )
 
     return "\n\n".join(parts)

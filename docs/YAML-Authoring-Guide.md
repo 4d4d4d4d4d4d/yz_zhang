@@ -318,6 +318,11 @@ python -m npu_sim trace my_chip.yaml --show-cycles 160
 #   也可直接传一个含 TraceProducer 的 fixture(复用其 config.ops)
 python -m npu_sim estimate my_chip.yaml attn_ops.yaml
 
+# 估算 vs 实测对账:静态估(op-serial / bottleneck)对上仿真实测 drain,
+#   再按 sink 逐 op 到达间隔拆出每个算子的估算 vs 实测周期,量化估算 gap
+#   (SPEC-006 §8;--sink 可指定 sink 模块,省略则自动探测 Consumer)
+python -m npu_sim reconcile my_chip.yaml attn_ops.yaml
+
 # 列出所有可用模块类型
 python -m npu_sim list-modules
 ```

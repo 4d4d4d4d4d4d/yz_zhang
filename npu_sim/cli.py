@@ -10,6 +10,9 @@ Subcommands:
     trace <dsl>                 Render an ASCII cycle-by-cycle waveform.
     estimate <arch> <ops>       Map an operator trace onto an architecture
                                 (SPEC-006 static Mapper estimate).
+    reconcile <arch> <ops>      Join the static Mapper estimate against the
+                                simulated measured drain (SPEC-006 §8
+                                estimate-vs-measured reconciliation).
 
 Designed for the SPEC-003 §7 R7 workflow: researcher edits a YAML, runs
 `python -m npu_sim compare base.yaml variant.yaml`, pastes the output into
@@ -147,6 +150,63 @@ def _cmd_estimate(args: argparse.Namespace, out: TextIO) -> int:
     return 0 if not plan.unmapped else 1
 
 
+def _cmd_reconcile(args: argparse.Namespace, out: TextIO) -> int:
+    from npu_sim.evaluation import (
+        elaborate,
+        reconcile,
+        reconcile_per_op,
+        sink_op_arrivals,
+    )
+    from npu_sim.evaluation.runner import run_simulation
+    from npu_sim.evaluation.trace_ops import load_ops
+    from npu_sim.reporting import render_reconcile_report
+
+    arch_path = _require_path(args.arch)
+    ops_path = _require_path(args.ops)
+    try:
+        arch = elaborate(str(arch_path))
+        ops = load_ops(str(ops_path))
+    except NpuSimError as exc:
+        sys.stderr.write(f"elaboration error: {exc}\n")
+        return 2
+    except (ValueError, FileNotFoundError) as exc:
+        sys.stderr.write(f"ops load error: {exc}\n")
+        return 2
+
+    main_clock = arch.clocks[next(iter(arch.clocks))]
+    result = run_simulation(arch, max_cycles=args.max_cycles)
+    chain = reconcile(
+        ops, arch,
+        measured_drain_ps=result.drain_time_ps,
+        clock_period_ps=main_clock.period_ps,
+        strict=False,
+    )
+
+    # Per-op needs a sink Consumer exposing received_tokens; auto-detect or use --sink.
+    per_op = None
+    sink_id = args.sink or _autodetect_sink(arch)
+    if sink_id is not None:
+        try:
+            arrivals = sink_op_arrivals(arch, sink_id)
+            per_op = reconcile_per_op(
+                ops, arch, arrivals, main_clock.period_ps, strict=False
+            )
+        except (ValueError, KeyError):
+            per_op = None
+
+    md = render_reconcile_report(chain, per_op, arch_name=arch.name)
+    _write_output(md, args.out, out)
+    return 0
+
+
+def _autodetect_sink(arch) -> Optional[str]:
+    """Find a module that exposes received_tokens (a Consumer)."""
+    for mid, m in arch.modules.items():
+        if hasattr(m, "received_tokens"):
+            return mid
+    return None
+
+
 # ============================================================
 # Argparse wiring
 # ============================================================
@@ -252,6 +312,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional output file; defaults to stdout.",
     )
     p_est.set_defaults(handler=_cmd_estimate)
+
+    p_rec = subparsers.add_parser(
+        "reconcile",
+        help="Join Mapper static estimate against simulated measured drain "
+        "(SPEC-006 §8 estimate-vs-measured reconciliation).",
+    )
+    p_rec.add_argument("arch", help="Path to the architecture YAML.")
+    p_rec.add_argument(
+        "ops",
+        help="Path to an ops YAML (top-level `ops:` list, or a fixture with a "
+        "TraceProducer whose config.ops is reused).",
+    )
+    p_rec.add_argument(
+        "--sink",
+        default=None,
+        help="Sink module_id whose received_tokens carry op_index arrivals "
+        "(for the per-op table). Auto-detected if omitted.",
+    )
+    p_rec.add_argument(
+        "--max-cycles",
+        type=int,
+        default=100_000,
+        help="Scheduler step cap for the measured run (default: 100000).",
+    )
+    p_rec.add_argument(
+        "--out",
+        default=None,
+        help="Optional output file; defaults to stdout.",
+    )
+    p_rec.set_defaults(handler=_cmd_reconcile)
 
     return parser
 
