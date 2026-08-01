@@ -312,6 +312,12 @@ export class PlatformClient {
   markRead(id: number) {
     return this.request<{ ok: boolean }>('POST', `/notifications/${id}/read`);
   }
+  unreadCount() {
+    return this.request<{ unread: number }>('GET', '/notifications/unread-count');
+  }
+  markAllRead() {
+    return this.request<{ marked: number }>('POST', '/notifications/read-all');
+  }
   askSupport(question: string) {
     return this.request<{ answer: string; source: string | null; escalate_to_human: boolean; account_context: { available_cents: number } | null }>(
       'POST', '/support/ask', { question },

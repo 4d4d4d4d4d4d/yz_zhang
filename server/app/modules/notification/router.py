@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -14,18 +15,42 @@ router = APIRouter(prefix="/notifications", tags=["notification"])
 @router.get("")
 def list_notifications(
     unread_only: bool = False,
+    limit: int = Query(default=20, le=100),
+    offset: int = Query(default=0, ge=0),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     query = db.query(Notification).filter(Notification.user_id == user.id)
     if unread_only:
         query = query.filter(Notification.is_read.is_(False))
-    rows = query.order_by(Notification.id.desc()).limit(100).all()
+    rows = query.order_by(Notification.id.desc()).offset(offset).limit(limit).all()
     return [
         {"id": n.id, "category": n.category, "title": n.title, "body": n.body,
          "is_read": n.is_read, "created_at": n.created_at.isoformat()}
         for n in rows
     ]
+
+
+@router.get("/unread-count")
+def unread_count(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """NTF-005 未读徽章计数（应用红点标准能力）。"""
+    count = (
+        db.query(func.count(Notification.id))
+        .filter(Notification.user_id == user.id, Notification.is_read.is_(False))
+        .scalar()
+    )
+    return {"unread": int(count)}
+
+
+@router.post("/read-all")
+def mark_all_read(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """NTF-005 一键全部已读。"""
+    marked = (
+        db.query(Notification)
+        .filter(Notification.user_id == user.id, Notification.is_read.is_(False))
+        .update({"is_read": True})
+    )
+    return {"marked": int(marked)}
 
 
 @router.get("/prefs")

@@ -1,8 +1,15 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V31 全批次完成（2026-07-20）。
-> 后端 222 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V32 全批次完成（2026-07-21）。
+> 后端 225 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V32 批次：通知中心——未读徽章 + 全部已读 + 分页）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| NTF-005 未读徽章计数 + 一键全部已读（应用红点标准能力，此前缺失）：`/notifications/unread-count`、`/notifications/read-all`；通知列表补 offset 分页 | `notification/router.py` | `tests/test_notification_center.py` |
+| SDK 同步：unreadCount/markAllRead | `packages/core/src/client.ts` | web 构建通过 |
 
 ## 已实现（V31 批次：我的报名/投标）
 
