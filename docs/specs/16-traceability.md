@@ -1,8 +1,15 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V30 全批次完成（2026-07-20）。
-> 后端 219 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V31 全批次完成（2026-07-20）。
+> 后端 222 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V31 批次：我的报名/投标）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| MATCH-010 我的报名（**补配套缺口**）：`/tasks/mine?role=working` 只含已成交单，等待选人的报名无处可查 → 新增 `/users/me/applications`：列出本人投出的报名及所报任务当前状态，可按报名状态筛选、offset 分页、用户隔离 | `task/router.py::my_applications` | `tests/test_my_applications.py` |
+| SDK 同步：myApplications | `packages/core/src/client.ts` | web 构建通过 |
 
 ## 已实现（V30 批次：我的任务中心）
 

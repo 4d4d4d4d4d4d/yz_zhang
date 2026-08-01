@@ -247,6 +247,15 @@ export class PlatformClient {
   withdrawApplication(applicationId: number) {
     return this.request<{ id: number; status: string }>('POST', `/applications/${applicationId}/withdraw`);
   }
+  myApplications(params: { status?: string; limit?: number; offset?: number } = {}) {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v !== undefined && v !== '')
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+      .join('&');
+    return this.request<Array<{ application_id: number; task_id: number; status: string; bid_cents: number; message: string; created_at: string; task_title: string | null; task_status: string | null; task_budget_cents: number | null }>>(
+      'GET', `/users/me/applications${qs ? `?${qs}` : ''}`,
+    );
+  }
   bookmark(taskId: number) {
     return this.request<{ ok: boolean; already?: boolean }>('POST', `/tasks/${taskId}/bookmark`);
   }

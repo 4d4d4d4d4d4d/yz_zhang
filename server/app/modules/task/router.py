@@ -267,6 +267,37 @@ def my_tasks(
     return [dump_task(t, user) for t in rows]
 
 
+@router.get("/users/me/applications")
+def my_applications(
+    status: str | None = None,
+    limit: int = Query(default=20, le=100),
+    offset: int = Query(default=0, ge=0),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """MATCH-010 我的报名：列出本人投出的报名及所报任务的当前状态。
+
+    /tasks/mine?role=working 只含已成交单，等待选人的报名无处可查——此端点补齐。
+    """
+    query = db.query(Application).filter(Application.applicant_id == user.id)
+    if status:
+        query = query.filter(Application.status == status)
+    rows = query.order_by(Application.id.desc()).offset(offset).limit(limit).all()
+    task_ids = [a.task_id for a in rows]
+    tasks = {t.id: t for t in db.query(Task).filter(Task.id.in_(task_ids))} if task_ids else {}
+    out = []
+    for a in rows:
+        t = tasks.get(a.task_id)
+        out.append({
+            "application_id": a.id, "task_id": a.task_id, "status": a.status,
+            "bid_cents": a.bid_cents, "message": a.message,
+            "created_at": a.created_at.isoformat(),
+            "task_title": t.title if t else None,
+            "task_status": t.status if t else None,
+            "task_budget_cents": t.budget_cents if t else None,
+        })
+    return out
+
+
 @router.get("/categories")
 def list_categories(db: Session = Depends(get_db)):
     """OPS-004 类目列表（公开，发布表单数据源）。"""
