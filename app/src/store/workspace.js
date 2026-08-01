@@ -3,6 +3,7 @@
 
 import { reactive, computed } from 'vue'
 import { pushRecent } from '../logic/recents.js'
+import { normalizeConsent, defaultConsent } from '../logic/consent.js'
 import { deriveAlerts, createInbox } from '../logic/notifications.js'
 import { slaSummary, healthSummary } from '../logic/customerSuccess.js'
 import { assessCampaign } from '../logic/riskLegal.js'
@@ -21,11 +22,12 @@ function loadPrefs() {
       currency: typeof parsed.currency === 'string' ? parsed.currency : null,
       readKeys: Array.isArray(parsed.readKeys) ? parsed.readKeys : [],
       recents: Array.isArray(parsed.recents) ? parsed.recents.filter(k => typeof k === 'string') : [],
-      motion: typeof parsed.motion === 'string' ? parsed.motion : 'system'
+      motion: typeof parsed.motion === 'string' ? parsed.motion : 'system',
+      consent: normalizeConsent(parsed.consent)
     }
   } catch {
     // Malformed storage falls back to defaults — never throw at import time.
-    return { currency: null, readKeys: [], recents: [], motion: 'system' }
+    return { currency: null, readKeys: [], recents: [], motion: 'system', consent: defaultConsent() }
   }
 }
 
@@ -37,7 +39,8 @@ function persist() {
       currency: prefs.currency,
       readKeys: prefs.readKeys,
       recents: prefs.recents,
-      motion: prefs.motion
+      motion: prefs.motion,
+      consent: prefs.consent
     }))
   } catch { /* storage unavailable (private mode) — stay in-memory */ }
 }
@@ -59,6 +62,12 @@ export function recordSection(key) {
 // Spec 38 — persisted motion preference ('system' | 'reduce' | 'full').
 export function setMotionPref(value) {
   prefs.motion = value
+  persist()
+}
+
+// Spec 41 — persisted GDPR consent record.
+export function setConsent(next) {
+  prefs.consent = normalizeConsent(next)
   persist()
 }
 
@@ -127,4 +136,5 @@ export function __resetForTests() {
   prefs.readKeys = fresh.readKeys
   prefs.recents = fresh.recents
   prefs.motion = fresh.motion
+  prefs.consent = fresh.consent
 }

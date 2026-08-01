@@ -178,6 +178,13 @@ export default {
     hint: '⌘K / Ctrl+K 打开 · ↑↓ 选择 · Enter 跳转 · Esc 关闭'
   },
   cmd: { action: '操作', language: '语言', motion: '动效' },
+  consent: {
+    title: '你的隐私',
+    body: '我们使用必要 Cookie 以运行网站，并使用可选的分析来改进它。在你接受之前，分析保持关闭。',
+    accept: '接受分析',
+    reject: '仅必要',
+    manage: '隐私选择'
+  },
   shortcuts: {
     title: '键盘快捷键',
     close: '关闭',

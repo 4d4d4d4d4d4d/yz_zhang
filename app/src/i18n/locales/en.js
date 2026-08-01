@@ -178,6 +178,13 @@ export default {
     hint: '⌘K / Ctrl+K to open · ↑↓ to select · Enter to jump · Esc to close'
   },
   cmd: { action: 'Action', language: 'Language', motion: 'Motion' },
+  consent: {
+    title: 'Your privacy',
+    body: 'We use necessary cookies to run the site and optional analytics to improve it. Analytics stay off until you accept.',
+    accept: 'Accept analytics',
+    reject: 'Necessary only',
+    manage: 'Privacy choices'
+  },
   shortcuts: {
     title: 'Keyboard shortcuts',
     close: 'Close',

@@ -5,6 +5,7 @@ import Footer from './components/Footer.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import GotoShortcuts from './components/GotoShortcuts.vue'
 import ShortcutHelp from './components/ShortcutHelp.vue'
+import ConsentBanner from './components/ConsentBanner.vue'
 import { useDocumentTitle } from './composables/useDocumentTitle.js'
 
 const { t } = useI18n()
@@ -31,6 +32,7 @@ useDocumentTitle()
     </router-view>
   </main>
   <Footer />
+  <ConsentBanner />
 </template>
 
 <style scoped>

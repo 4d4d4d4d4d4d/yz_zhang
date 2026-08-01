@@ -176,6 +176,13 @@ export default {
     hint: '⌘K / Ctrl+K para abrir · ↑↓ para elegir · Enter para saltar · Esc para cerrar'
   },
   cmd: { action: 'Acción', language: 'Idioma', motion: 'Movimiento' },
+  consent: {
+    title: 'Tu privacidad',
+    body: 'Usamos cookies necesarias para el sitio y analíticas opcionales para mejorarlo. Las analíticas están apagadas hasta que aceptes.',
+    accept: 'Aceptar analíticas',
+    reject: 'Solo necesarias',
+    manage: 'Opciones de privacidad'
+  },
   shortcuts: {
     title: 'Atajos de teclado',
     close: 'Cerrar',

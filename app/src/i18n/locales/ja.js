@@ -176,6 +176,13 @@ export default {
     hint: '⌘K / Ctrl+K で開く · ↑↓ で選択 · Enter で移動 · Esc で閉じる'
   },
   cmd: { action: '操作', language: '言語', motion: 'モーション' },
+  consent: {
+    title: 'プライバシー設定',
+    body: 'サイト運営に必要な Cookie と、改善のための任意の分析を使用します。分析は同意するまでオフのままです。',
+    accept: '分析を許可',
+    reject: '必要なもののみ',
+    manage: 'プライバシー設定'
+  },
   shortcuts: {
     title: 'キーボードショートカット',
     close: '閉じる',
