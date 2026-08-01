@@ -78,6 +78,83 @@ class StateSnapshot:
         return sum(c.in_flight for c in self.connections)
 
 
+@dataclass(frozen=True)
+class FieldDiff:
+    """One field that differs between two snapshots' matching entities."""
+
+    entity: str          # module_id or connection key
+    field: str
+    value_a: object
+    value_b: object
+
+
+@dataclass(frozen=True)
+class SnapshotDiff:
+    """Structural diff of two whole-chip snapshots at the same cycle.
+
+    The `compare` command diffs only aggregate metrics; this diffs the
+    *internal* state so an A/B pair (same topology, different params) can be
+    inspected for exactly where — which module stage, which FIFO — the two
+    runs diverge at a chosen cycle.
+    """
+
+    cycle_a: int
+    cycle_b: int
+    name_a: str
+    name_b: str
+    only_in_a: tuple[str, ...]          # module_ids present only in A
+    only_in_b: tuple[str, ...]
+    module_diffs: tuple[FieldDiff, ...]
+    connection_diffs: tuple[FieldDiff, ...]
+
+    @property
+    def identical(self) -> bool:
+        return not (
+            self.only_in_a or self.only_in_b
+            or self.module_diffs or self.connection_diffs
+        )
+
+
+def diff_snapshots(a: StateSnapshot, b: StateSnapshot) -> SnapshotDiff:
+    """Diff two snapshots field-by-field, matching modules by id and
+    connections by key. Entities present in only one side are reported
+    separately; the rest yield a :class:`FieldDiff` per differing field.
+    """
+    a_mods = {m.module_id: m for m in a.modules}
+    b_mods = {m.module_id: m for m in b.modules}
+    only_a = tuple(sorted(set(a_mods) - set(b_mods)))
+    only_b = tuple(sorted(set(b_mods) - set(a_mods)))
+
+    mod_diffs: list[FieldDiff] = []
+    for mid in sorted(set(a_mods) & set(b_mods)):
+        ma, mb = a_mods[mid], b_mods[mid]
+        for field in ("busy", "current_op", "internal_fifo_levels", "last_stall_reason"):
+            va, vb = getattr(ma, field), getattr(mb, field)
+            if va != vb:
+                mod_diffs.append(FieldDiff(mid, field, va, vb))
+
+    a_conns = {c.key: c for c in a.connections}
+    b_conns = {c.key: c for c in b.connections}
+    conn_diffs: list[FieldDiff] = []
+    for key in sorted(set(a_conns) & set(b_conns)):
+        ca, cb = a_conns[key], b_conns[key]
+        for field in ("in_flight", "utilization", "tokens_dequeued"):
+            va, vb = getattr(ca, field), getattr(cb, field)
+            if va != vb:
+                conn_diffs.append(FieldDiff(key, field, va, vb))
+
+    return SnapshotDiff(
+        cycle_a=a.cycle,
+        cycle_b=b.cycle,
+        name_a=a.architecture_name,
+        name_b=b.architecture_name,
+        only_in_a=only_a,
+        only_in_b=only_b,
+        module_diffs=tuple(mod_diffs),
+        connection_diffs=tuple(conn_diffs),
+    )
+
+
 def capture_state(arch: IArchitecture, cycle: int) -> StateSnapshot:
     """Snapshot the *current* live state of an elaborated architecture.
 

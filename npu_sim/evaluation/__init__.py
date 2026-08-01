@@ -23,9 +23,12 @@ from npu_sim.evaluation.reconcile import (
 )
 from npu_sim.evaluation.snapshot import (
     ConnectionSnapshot,
+    FieldDiff,
     ModuleSnapshot,
+    SnapshotDiff,
     StateSnapshot,
     capture_state,
+    diff_snapshots,
     snapshot_at_cycle,
 )
 from npu_sim.interfaces.operation import IOperation
@@ -59,15 +62,18 @@ def estimate_plan(
 __all__ = [
     "ComparisonReport",
     "ConnectionSnapshot",
+    "FieldDiff",
     "MappingPlan",
     "ModuleSnapshot",
     "PerOpReconcileReport",
     "ReconcileReport",
     "SimulationResult",
+    "SnapshotDiff",
     "StateSnapshot",
     "capture_state",
     "compare",
     "compare_tensors",
+    "diff_snapshots",
     "elaborate",
     "elaborate_and_run",
     "estimate_plan",

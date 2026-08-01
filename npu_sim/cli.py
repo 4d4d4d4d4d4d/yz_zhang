@@ -16,6 +16,9 @@ Subcommands:
     snapshot <arch>             Capture whole-chip state (modules + FIFOs +
                                 clock) at a cycle — the QEMU §3.2 savevm data
                                 view; restore = deterministic replay.
+    snapshot-diff <a> <b>       Diff two architectures' whole-chip state at
+                                the same cycle (where inside the chip an A/B
+                                pair diverges).
 
 Designed for the SPEC-003 §7 R7 workflow: researcher edits a YAML, runs
 `python -m npu_sim compare base.yaml variant.yaml`, pastes the output into
@@ -219,6 +222,27 @@ def _cmd_snapshot(args: argparse.Namespace, out: TextIO) -> int:
     return 0
 
 
+def _cmd_snapshot_diff(args: argparse.Namespace, out: TextIO) -> int:
+    from npu_sim.evaluation import diff_snapshots, elaborate, snapshot_at_cycle
+    from npu_sim.reporting import render_snapshot_diff
+
+    arch_a = _require_path(args.arch_a)
+    arch_b = _require_path(args.arch_b)
+    try:
+        a = elaborate(str(arch_a))
+        b = elaborate(str(arch_b))
+    except NpuSimError as exc:
+        sys.stderr.write(f"elaboration error: {exc}\n")
+        return 2
+
+    snap_a = snapshot_at_cycle(a, at_cycle=args.at_cycle, max_cycles=args.max_cycles)
+    snap_b = snapshot_at_cycle(b, at_cycle=args.at_cycle, max_cycles=args.max_cycles)
+    diff = diff_snapshots(snap_a, snap_b)
+    md = render_snapshot_diff(diff)
+    _write_output(md, args.out, out)
+    return 0 if diff.identical else 1
+
+
 def _autodetect_sink(arch) -> Optional[str]:
     """Find a module that exposes received_tokens (a Consumer)."""
     for mid, m in arch.modules.items():
@@ -388,6 +412,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional output file; defaults to stdout.",
     )
     p_snap.set_defaults(handler=_cmd_snapshot)
+
+    p_sdiff = subparsers.add_parser(
+        "snapshot-diff",
+        help="Diff two architectures' whole-chip state at the same cycle "
+        "(where inside the chip an A/B pair diverges).",
+    )
+    p_sdiff.add_argument("arch_a", help="Path to architecture A YAML.")
+    p_sdiff.add_argument("arch_b", help="Path to architecture B YAML.")
+    p_sdiff.add_argument(
+        "--at-cycle",
+        type=int,
+        default=0,
+        help="0-based cycle index to capture both states at (default: 0).",
+    )
+    p_sdiff.add_argument(
+        "--max-cycles",
+        type=int,
+        default=100_000,
+        help="Scheduler step cap for each replay (default: 100000).",
+    )
+    p_sdiff.add_argument(
+        "--out",
+        default=None,
+        help="Optional output file; defaults to stdout.",
+    )
+    p_sdiff.set_defaults(handler=_cmd_snapshot_diff)
 
     return parser
 

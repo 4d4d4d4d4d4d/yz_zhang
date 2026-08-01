@@ -16,7 +16,7 @@ from npu_sim.evaluation.reconcile import PerOpReconcileReport, ReconcileReport
 from npu_sim.evaluation.runner import SimulationResult
 
 if TYPE_CHECKING:
-    from npu_sim.evaluation.snapshot import StateSnapshot
+    from npu_sim.evaluation.snapshot import SnapshotDiff, StateSnapshot
 from npu_sim.mapping import MappingPlan
 from npu_sim.runtime.invariants import InvariantReport
 
@@ -408,6 +408,49 @@ def render_state_snapshot(snap: "StateSnapshot", arch_name: str = "") -> str:
                 f"{c.utilization * 100:.0f}% | {c.tokens_dequeued} |"
             )
         parts.append("## Connection FIFOs\n\n" + "\n".join(conn_lines))
+
+    return "\n\n".join(parts)
+
+
+def render_snapshot_diff(diff: "SnapshotDiff") -> str:
+    """Render a SnapshotDiff (two whole-chip states at a cycle) as Markdown."""
+    parts: list[str] = ["# Chip state diff"]
+    parts.append(_two_col_table("side", "architecture / cycle", [
+        ("A", f"`{diff.name_a}` @ cycle {diff.cycle_a:,}"),
+        ("B", f"`{diff.name_b}` @ cycle {diff.cycle_b:,}"),
+    ]))
+
+    if diff.cycle_a != diff.cycle_b:
+        parts.append(
+            f"> ⚠ compared at different cycles ({diff.cycle_a} vs {diff.cycle_b}) — "
+            "one side drained earlier."
+        )
+
+    if diff.identical:
+        parts.append("**Chip state is identical.**")
+        return "\n\n".join(parts)
+
+    if diff.only_in_a or diff.only_in_b:
+        parts.append(_two_col_table("only in A", "only in B", [
+            (", ".join(f"`{m}`" for m in diff.only_in_a) or "—",
+             ", ".join(f"`{m}`" for m in diff.only_in_b) or "—"),
+        ]))
+
+    if diff.module_diffs:
+        rows = [
+            (f"`{d.entity}`", d.field, f"`{d.value_a}`", f"`{d.value_b}`")
+            for d in diff.module_diffs
+        ]
+        parts.append("## Module state differences\n\n"
+                     + _four_col_table("module", "field", "A", "B", rows))
+
+    if diff.connection_diffs:
+        rows = [
+            (f"`{d.entity}`", d.field, f"`{d.value_a}`", f"`{d.value_b}`")
+            for d in diff.connection_diffs
+        ]
+        parts.append("## Connection FIFO differences\n\n"
+                     + _four_col_table("connection", "field", "A", "B", rows))
 
     return "\n\n".join(parts)
 

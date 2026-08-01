@@ -327,6 +327,11 @@ python -m npu_sim reconcile my_chip.yaml attn_ops.yaml
 #   (QEMU §3.2 savevm 的只读数据视图;因运行时确定,restore = 确定性重放)
 python -m npu_sim snapshot my_chip.yaml --at-cycle 20
 
+# 全片状态 A/B 差异:同一拍对比两个架构的内部状态(compare 只比聚合指标,
+#   这个比每个模块的 stage/FIFO、每条连接的占用 —— 定位 A/B 在芯片内哪里分叉)
+#   退出码 1 = 有差异,0 = 逐字段相同
+python -m npu_sim snapshot-diff base.yaml variant.yaml --at-cycle 20
+
 # 列出所有可用模块类型
 python -m npu_sim list-modules
 ```
