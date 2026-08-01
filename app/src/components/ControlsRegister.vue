@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { createDSR, dsrStatus, hoursRemaining, summarizeDSR } from '../logic/dsr.js'
 
 const frameworks = ['GDPR', 'CCPA', 'APPI', 'LGPD', 'SOC2', 'ISO27001']
 
@@ -42,16 +43,24 @@ const vendors = [
   { name: 'AWS · ap-northeast-1', kind: 'Cloud', region: 'JP', score: 96, residual: 'low', last: 'Dec 2025' }
 ]
 
-function hoursLeft(dueIso) {
-  return Math.max(0, Math.round((new Date(dueIso) - Date.now()) / 36e5))
-}
-const dsrs = [
-  { id: 'DSR-2841', kind: 'access',  region: 'EU', from: 'k.m**l@gmx.de',      due: '2026-06-28T10:00:00Z', sla: 720 },
-  { id: 'DSR-2842', kind: 'delete',  region: 'EU', from: 'a.s**a@protonmail.com', due: '2026-06-26T12:00:00Z', sla: 720 },
-  { id: 'DSR-2843', kind: 'export',  region: 'US', from: 'm**ria@x.example',   due: '2026-07-02T09:00:00Z', sla: 1080 },
-  { id: 'DSR-2844', kind: 'access',  region: 'JP', from: 't.t****a@i.example', due: '2026-06-30T08:00:00Z', sla: 1440 },
-  { id: 'DSR-2845', kind: 'delete',  region: 'BR', from: 'r.s****a@u.example', due: '2026-07-05T15:00:00Z', sla: 360 }
+// Spec 42 — deadlines derive from the regime + when the request arrived,
+// relative to `now`, so the queue never goes stale like a hardcoded date does.
+const now = Date.now()
+const DAY = 86400000
+const RAW_DSR = [
+  { id: 'DSR-2841', type: 'access',      regime: 'GDPR', region: 'EU', from: 'k.m**l@gmx.de',         receivedDaysAgo: 12 },
+  { id: 'DSR-2842', type: 'erasure',     regime: 'GDPR', region: 'EU', from: 'a.s**a@protonmail.com', receivedDaysAgo: 26 },
+  { id: 'DSR-2843', type: 'portability', regime: 'CCPA', region: 'US', from: 'm**ria@x.example',      receivedDaysAgo: 9 },
+  { id: 'DSR-2844', type: 'access',      regime: 'APPI', region: 'JP', from: 't.t****a@i.example',    receivedDaysAgo: 16 },
+  { id: 'DSR-2845', type: 'erasure',     regime: 'LGPD', region: 'BR', from: 'r.s****a@u.example',    receivedDaysAgo: 3 }
 ]
+const dsrs = computed(() => RAW_DSR.map(r => {
+  const rec = createDSR({ id: r.id, type: r.type, regime: r.regime, subject: r.from, receivedAt: now - r.receivedDaysAgo * DAY })
+  const totalHours = (rec.dueAt - rec.receivedAt) / 3600000
+  const left = hoursRemaining(rec, now)
+  return { ...rec, region: r.region, from: r.from, status: dsrStatus(rec, now), hoursLeft: left, pct: Math.min(100, Math.max(0, (1 - left / totalHours) * 100)) }
+}))
+const dsrSummary = computed(() => summarizeDSR(dsrs.value, now))
 
 const incident = {
   id: 'INC-104',
@@ -145,16 +154,16 @@ const sevScore = (r) => ({ low: 'ok', med: 'warn', high: 'risk' }[r])
       <div class="card">
         <div class="h-row">
           <h3>DSR queue</h3>
-          <span class="meta">{{ dsrs.length }} open · SLA per region</span>
+          <span class="meta">{{ dsrSummary.total }} open · {{ dsrSummary.overdue }} overdue · statutory SLA per regime</span>
         </div>
         <div class="dsr">
-          <div v-for="d in dsrs" :key="d.id" class="dsr-row">
+          <div v-for="d in dsrs" :key="d.id" class="dsr-row" :class="d.status">
             <div class="d-id">{{ d.id }}</div>
-            <div class="d-kind" :class="d.kind">{{ d.kind }}</div>
-            <div class="d-from">{{ d.from }}<span class="d-reg">{{ d.region }}</span></div>
+            <div class="d-kind" :class="d.type">{{ d.type }}</div>
+            <div class="d-from">{{ d.from }}<span class="d-reg">{{ d.region }} · {{ d.regime }}</span></div>
             <div class="d-sla">
-              <div class="d-sla-bar"><div class="d-sla-fill" :style="{ width: Math.min(100, (1 - hoursLeft(d.due) / d.sla) * 100) + '%' }"></div></div>
-              <span class="d-sla-num">{{ hoursLeft(d.due) }}h left</span>
+              <div class="d-sla-bar"><div class="d-sla-fill" :class="d.status" :style="{ width: d.pct + '%' }"></div></div>
+              <span class="d-sla-num" :class="d.status">{{ d.status === 'overdue' ? 'overdue' : d.hoursLeft + 'h left' }}</span>
             </div>
           </div>
         </div>
@@ -234,6 +243,11 @@ const sevScore = (r) => ({ low: 'ok', med: 'warn', high: 'risk' }[r])
 .sb.risk { background: rgba(248, 113, 113, .15); color: #fca5a5; }
 
 .dsr { display: flex; flex-direction: column; gap: 8px; }
+.d-sla-fill.overdue { background: var(--danger) !important; }
+.d-sla-fill.due_soon { background: #fbbf24 !important; }
+.d-sla-num.overdue { color: var(--danger); font-weight: 700; }
+.d-sla-num.due_soon { color: #fbbf24; }
+.dsr-row.overdue { border-color: rgba(248, 113, 113, .4); }
 .dsr-row { display: grid; grid-template-columns: 90px 70px 1fr 1.2fr; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px; }
 .d-id { font-family: ui-monospace, monospace; font-size: 11px; color: var(--primary-2); }
 .d-kind { font-size: 10px; padding: 3px 8px; border-radius: 6px; font-weight: 700; text-transform: uppercase; text-align: center; }
