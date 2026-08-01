@@ -332,6 +332,11 @@ python -m npu_sim snapshot my_chip.yaml --at-cycle 20
 #   退出码 1 = 有差异,0 = 逐字段相同
 python -m npu_sim snapshot-diff base.yaml variant.yaml --at-cycle 20
 
+# 流水线瓶颈(实测):每个 token 串过整条链,吞吐由路径上最慢的级决定。
+#   跑一遍仿真,算每级 II=busy拍/token数,报瓶颈级 + 流水线公式建模 drain vs 实测
+#   (这是"改哪个器件能提吞吐"的直接答案 —— 比静态 estimate 的路由瓶颈更准)
+python -m npu_sim bottleneck my_chip.yaml
+
 # 列出所有可用模块类型
 python -m npu_sim list-modules
 ```

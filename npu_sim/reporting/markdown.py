@@ -16,6 +16,7 @@ from npu_sim.evaluation.reconcile import PerOpReconcileReport, ReconcileReport
 from npu_sim.evaluation.runner import SimulationResult
 
 if TYPE_CHECKING:
+    from npu_sim.evaluation.pipeline import PipelineBottleneckReport
     from npu_sim.evaluation.snapshot import SnapshotDiff, StateSnapshot
 from npu_sim.mapping import MappingPlan
 from npu_sim.runtime.invariants import InvariantReport
@@ -408,6 +409,44 @@ def render_state_snapshot(snap: "StateSnapshot", arch_name: str = "") -> str:
                 f"{c.utilization * 100:.0f}% | {c.tokens_dequeued} |"
             )
         parts.append("## Connection FIFOs\n\n" + "\n".join(conn_lines))
+
+    return "\n\n".join(parts)
+
+
+def render_pipeline_bottleneck(
+    report: "PipelineBottleneckReport", arch_name: str = ""
+) -> str:
+    """Render a measured pipeline-bottleneck attribution (SPEC-006 §8)."""
+    title = f"Pipeline bottleneck — `{arch_name}`" if arch_name else "Pipeline bottleneck"
+    parts: list[str] = [f"# {title}"]
+
+    parts.append(_two_col_table("Metric", "Value", [
+        ("bottleneck stage",
+            f"`{report.bottleneck_module}` @ II={report.bottleneck_ii:.0f} cyc/token"),
+        ("tokens through", str(report.n_tokens)),
+        ("pipe latency (fill)", f"{report.pipe_latency_cycles:.0f} cyc"),
+        ("modeled drain", f"{report.modeled_drain_cycles:.0f} cyc"),
+        ("measured drain", f"{report.measured_drain_cycles:,} cyc"),
+        ("model error", f"{report.model_error_pct:.1f}%"),
+    ]))
+
+    if report.stages:
+        lines = [
+            "| stage (module) | dominant | busy cyc | tokens | II (cyc/tok) |",
+            "|---|---|---:|---:|---:|",
+        ]
+        for i, s in enumerate(report.stages):
+            marker = " ⟵ bottleneck" if i == 0 else ""
+            lines.append(
+                f"| `{s.module_id}`{marker} | {s.dominant_stage or '—'} | "
+                f"{s.busy_cycles:,} | {s.tokens_through} | {s.service_ii:.0f} |"
+            )
+        parts.append("## Per-stage service time\n\n" + "\n".join(lines))
+        parts.append(
+            "> Modeled drain = Σ per-stage II (first-token fill) + (N−1)·II_bottleneck. "
+            "Every token streams through every stage, so throughput is set by the "
+            "slowest stage on the path — not by where a Mapper routes the op."
+        )
 
     return "\n\n".join(parts)
 

@@ -120,6 +120,13 @@ def run_simulation(
             per_cycle_hook(c, arch)
             if step.cycles_run == 0:  # scheduler exhausted (all behaviors done)
                 break
+            if probe is not None and not probe():
+                # Quiesced: sim has provably drained, so all recorded state is
+                # final. Stop sampling post-drain idle cycles (bit-identical to
+                # running on, just as in the batched path). Keeps hook-driven
+                # runs — snapshot / bottleneck / waveform — from spinning to
+                # max_cycles after the last token lands.
+                break
         sched_result = cumulative
 
     sim_time_ps = main_clock.current_time_ps()

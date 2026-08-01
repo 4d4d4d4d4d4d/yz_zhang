@@ -19,6 +19,9 @@ Subcommands:
     snapshot-diff <a> <b>       Diff two architectures' whole-chip state at
                                 the same cycle (where inside the chip an A/B
                                 pair diverges).
+    bottleneck <arch>           Measure the pipeline throughput bottleneck —
+                                the slowest stage on the datapath, with a
+                                pipeline-model drain reconciled to measured.
 
 Designed for the SPEC-003 §7 R7 workflow: researcher edits a YAML, runs
 `python -m npu_sim compare base.yaml variant.yaml`, pastes the output into
@@ -218,6 +221,23 @@ def _cmd_snapshot(args: argparse.Namespace, out: TextIO) -> int:
 
     snap = snapshot_at_cycle(arch, at_cycle=args.at_cycle, max_cycles=args.max_cycles)
     md = render_state_snapshot(snap, arch_name=arch.name)
+    _write_output(md, args.out, out)
+    return 0
+
+
+def _cmd_bottleneck(args: argparse.Namespace, out: TextIO) -> int:
+    from npu_sim.evaluation import analyze_pipeline_bottleneck, elaborate
+    from npu_sim.reporting import render_pipeline_bottleneck
+
+    arch_path = _require_path(args.arch)
+    try:
+        arch = elaborate(str(arch_path))
+    except NpuSimError as exc:
+        sys.stderr.write(f"elaboration error: {exc}\n")
+        return 2
+
+    report = analyze_pipeline_bottleneck(arch, max_cycles=args.max_cycles)
+    md = render_pipeline_bottleneck(report, arch_name=arch.name)
     _write_output(md, args.out, out)
     return 0
 
@@ -438,6 +458,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional output file; defaults to stdout.",
     )
     p_sdiff.set_defaults(handler=_cmd_snapshot_diff)
+
+    p_bn = subparsers.add_parser(
+        "bottleneck",
+        help="Measure the pipeline throughput bottleneck — the slowest stage "
+        "on the datapath (SPEC-006 §8 throughput attribution).",
+    )
+    p_bn.add_argument("arch", help="Path to the architecture YAML.")
+    p_bn.add_argument(
+        "--max-cycles",
+        type=int,
+        default=100_000,
+        help="Scheduler step cap for the measured run (default: 100000).",
+    )
+    p_bn.add_argument(
+        "--out",
+        default=None,
+        help="Optional output file; defaults to stdout.",
+    )
+    p_bn.set_defaults(handler=_cmd_bottleneck)
 
     return parser
 

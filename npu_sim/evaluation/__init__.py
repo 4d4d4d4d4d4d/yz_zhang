@@ -21,6 +21,11 @@ from npu_sim.evaluation.reconcile import (
     reconcile_per_op,
     sink_op_arrivals,
 )
+from npu_sim.evaluation.pipeline import (
+    PipelineBottleneckReport,
+    StageProfile,
+    analyze_pipeline_bottleneck,
+)
 from npu_sim.evaluation.snapshot import (
     ConnectionSnapshot,
     FieldDiff,
@@ -66,10 +71,13 @@ __all__ = [
     "MappingPlan",
     "ModuleSnapshot",
     "PerOpReconcileReport",
+    "PipelineBottleneckReport",
     "ReconcileReport",
     "SimulationResult",
     "SnapshotDiff",
+    "StageProfile",
     "StateSnapshot",
+    "analyze_pipeline_bottleneck",
     "capture_state",
     "compare",
     "compare_tensors",

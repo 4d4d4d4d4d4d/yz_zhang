@@ -176,3 +176,15 @@ class IMapper(ABC):
   不是各 op 独立 latency**,`test_per_op_reconcile.py` 断言稳态到达间隔一致。
   v1.1 进一步:把这个观察规范成 cost-model(§8 顶部第 2 条),让 Mapper 估算
   考虑 pipeline throughput 而非纯 op-serial。
+  ✅ **拓扑感知的实测瓶颈归因已落地**:`analyze_pipeline_bottleneck(arch)`
+  (`evaluation/pipeline.py`,CLI `bottleneck`)不再*估算*而是*实测* —— 跑一遍
+  仿真,统计每个模块的 busy 拍与流经 token 数,得每级 **initiation interval**
+  `II = busy_cycles / tokens_through`,瓶颈 = 最大 II 的那一级,建模 drain =
+  `Σ per-stage II(首 token 填充)+ (N−1)·II_bottleneck`(经典流水线公式)。
+  实测 attention chip:瓶颈是 **avp @ II=512**(`lut_lookup`),建模 drain 4226
+  vs 实测 4232(**误差 0.1%**),`test_pipeline_bottleneck.py` 锁死。**关键发现**:
+  静态 Mapper 因只看 op→module 路由(不读连接拓扑)把 **mac** 当瓶颈(6 个
+  matmul × 105),但真实数据通路把**每个 token 串过整条链**,吞吐由路径上最慢
+  的**级**(avp)决定,而只有 1 个 softmax 被"路由"到 avp —— Mapper 结构性看不见
+  它。见 README v1.1 候选"Mapper 拓扑盲"与"estimate_latency 形状敏感 vs 运行时
+  形状无关"两条。
