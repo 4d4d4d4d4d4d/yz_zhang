@@ -8,6 +8,7 @@ from npu_sim.reporting.markdown import (
     render_simulation_report,
     render_snapshot_diff,
     render_state_snapshot,
+    render_sweep_report,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "render_simulation_report",
     "render_snapshot_diff",
     "render_state_snapshot",
+    "render_sweep_report",
 ]

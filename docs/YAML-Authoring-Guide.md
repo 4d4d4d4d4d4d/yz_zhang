@@ -337,6 +337,11 @@ python -m npu_sim snapshot-diff base.yaml variant.yaml --at-cycle 20
 #   (这是"改哪个器件能提吞吐"的直接答案 —— 比静态 estimate 的路由瓶颈更准)
 python -m npu_sim bottleneck my_chip.yaml
 
+# 设计空间扫描:把某个模块的一个配置旋钮扫一组值,报 PPA 响应 + 瓶颈迁移
+#   —— 直接回答"改这个器件值多少"。每个值都是真跑一遍(临时 override 叠在 base 上)
+#   例:扫 AVP 向量宽度 16/32/64 —— 16→32 drain -42%,32→64 几乎不动(瓶颈迁到 dsb)
+python -m npu_sim sweep my_chip.yaml avp.vector_width 16,32,64
+
 # 列出所有可用模块类型
 python -m npu_sim list-modules
 ```

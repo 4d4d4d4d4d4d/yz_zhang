@@ -18,6 +18,7 @@ from npu_sim.evaluation.runner import SimulationResult
 if TYPE_CHECKING:
     from npu_sim.evaluation.pipeline import PipelineBottleneckReport
     from npu_sim.evaluation.snapshot import SnapshotDiff, StateSnapshot
+    from npu_sim.evaluation.sweep import SweepReport
 from npu_sim.mapping import MappingPlan
 from npu_sim.runtime.invariants import InvariantReport
 
@@ -410,6 +411,40 @@ def render_state_snapshot(snap: "StateSnapshot", arch_name: str = "") -> str:
             )
         parts.append("## Connection FIFOs\n\n" + "\n".join(conn_lines))
 
+    return "\n\n".join(parts)
+
+
+def render_sweep_report(report: "SweepReport") -> str:
+    """Render a design-space sweep (PPA vs one config knob) as Markdown."""
+    parts: list[str] = [f"# Design-space sweep — `{report.param_path}`"]
+    parts.append(f"Base: `{report.base_name}`")
+
+    base = report.baseline_drain_cycles
+    lines = [
+        "| value | drain (cyc) | Δ drain | area (um²) | static µW | bottleneck |",
+        "|---|---:|---:|---:|---:|---|",
+    ]
+    for p in report.points:
+        dpct = (p.drain_cycles - base) / base * 100 if base else 0.0
+        best = " ⭐" if p.value == report.best_value else ""
+        lines.append(
+            f"| {p.value}{best} | {p.drain_cycles:,} | {dpct:+.0f}% | "
+            f"{p.total_area_um2:,.0f} | {p.static_power_uw:,.0f} | "
+            f"`{p.bottleneck_module}`@{p.bottleneck_ii:.0f} |"
+        )
+    parts.append("\n".join(lines))
+
+    if report.bottleneck_shifted:
+        parts.append(
+            "> ⚠ The bottleneck **shifted** during the sweep: once the swept "
+            "stage is no longer the slowest, widening it further yields "
+            "diminishing returns — chase the new bottleneck instead."
+        )
+    else:
+        parts.append(
+            f"> Best drain at `{report.param_path}` = {report.best_value}. "
+            "The bottleneck stayed on the same module across the sweep."
+        )
     return "\n\n".join(parts)
 
 

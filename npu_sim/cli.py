@@ -22,6 +22,9 @@ Subcommands:
     bottleneck <arch>           Measure the pipeline throughput bottleneck —
                                 the slowest stage on the datapath, with a
                                 pipeline-model drain reconciled to measured.
+    sweep <base> <m.key> <vals> Sweep one module config knob over values and
+                                report the PPA response + bottleneck shift
+                                (design-space exploration).
 
 Designed for the SPEC-003 §7 R7 workflow: researcher edits a YAML, runs
 `python -m npu_sim compare base.yaml variant.yaml`, pastes the output into
@@ -221,6 +224,43 @@ def _cmd_snapshot(args: argparse.Namespace, out: TextIO) -> int:
 
     snap = snapshot_at_cycle(arch, at_cycle=args.at_cycle, max_cycles=args.max_cycles)
     md = render_state_snapshot(snap, arch_name=arch.name)
+    _write_output(md, args.out, out)
+    return 0
+
+
+def _coerce_value(raw: str) -> object:
+    """Coerce a CLI sweep value string to int, then float, else keep as str."""
+    for caster in (int, float):
+        try:
+            return caster(raw)
+        except ValueError:
+            continue
+    return raw
+
+
+def _cmd_sweep(args: argparse.Namespace, out: TextIO) -> int:
+    from npu_sim.evaluation import sweep_config
+    from npu_sim.reporting import render_sweep_report
+
+    _require_path(args.base)
+    if "." not in args.param:
+        sys.stderr.write("param must be '<module_id>.<config_key>'\n")
+        return 3
+    module_id, config_key = args.param.split(".", 1)
+    values = [_coerce_value(v.strip()) for v in args.values.split(",") if v.strip()]
+    if not values:
+        sys.stderr.write("no sweep values given\n")
+        return 3
+
+    try:
+        report = sweep_config(
+            args.base, module_id, config_key, values, max_cycles=args.max_cycles
+        )
+    except NpuSimError as exc:
+        sys.stderr.write(f"sweep error: {exc}\n")
+        return 2
+
+    md = render_sweep_report(report)
     _write_output(md, args.out, out)
     return 0
 
@@ -477,6 +517,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional output file; defaults to stdout.",
     )
     p_bn.set_defaults(handler=_cmd_bottleneck)
+
+    p_sw = subparsers.add_parser(
+        "sweep",
+        help="Sweep one module config knob over values and report the PPA "
+        "response + bottleneck shift (design-space exploration).",
+    )
+    p_sw.add_argument("base", help="Path to the base architecture YAML.")
+    p_sw.add_argument(
+        "param",
+        help="Knob to sweep, as '<module_id>.<config_key>' (e.g. avp.vector_width).",
+    )
+    p_sw.add_argument(
+        "values",
+        help="Comma-separated values to try (e.g. '16,32,64').",
+    )
+    p_sw.add_argument(
+        "--max-cycles",
+        type=int,
+        default=100_000,
+        help="Scheduler step cap for each run (default: 100000).",
+    )
+    p_sw.add_argument(
+        "--out",
+        default=None,
+        help="Optional output file; defaults to stdout.",
+    )
+    p_sw.set_defaults(handler=_cmd_sweep)
 
     return parser
 

@@ -36,6 +36,7 @@ from npu_sim.evaluation.snapshot import (
     diff_snapshots,
     snapshot_at_cycle,
 )
+from npu_sim.evaluation.sweep import SweepPoint, SweepReport, sweep_config
 from npu_sim.interfaces.operation import IOperation
 from npu_sim.interfaces.services import InMemoryEventBus, InMemoryStatSink
 from npu_sim.mapping import MappingPlan, RuleBasedMapper
@@ -77,11 +78,14 @@ __all__ = [
     "SnapshotDiff",
     "StageProfile",
     "StateSnapshot",
+    "SweepPoint",
+    "SweepReport",
     "analyze_pipeline_bottleneck",
     "capture_state",
     "compare",
     "compare_tensors",
     "diff_snapshots",
+    "sweep_config",
     "elaborate",
     "elaborate_and_run",
     "estimate_plan",
