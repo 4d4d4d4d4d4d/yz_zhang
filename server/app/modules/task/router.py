@@ -375,7 +375,30 @@ def list_tasks(
 
 @router.get("/tasks/{task_id}")
 def get_task(task_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    return dump_task(_get_task(db, task_id), user)
+    """TASK-017 任务详情附「我与此任务的关系」上下文：是否已报名/收藏，
+    发布者可见报名数——避免用户重复报名后才被 409 拒绝的糟糕体验。"""
+    from sqlalchemy import func
+
+    task = _get_task(db, task_id)
+    out = dump_task(task, user)
+    from .models import Bookmark
+
+    my_app = (
+        db.query(Application)
+        .filter(Application.task_id == task_id, Application.applicant_id == user.id)
+        .order_by(Application.id.desc()).first()
+    )
+    out["my_application_status"] = my_app.status if my_app else None
+    out["bookmarked"] = db.query(Bookmark).filter(
+        Bookmark.user_id == user.id, Bookmark.task_id == task_id
+    ).first() is not None
+    if task.creator_id == user.id:
+        out["applications_count"] = (
+            db.query(func.count(Application.id))
+            .filter(Application.task_id == task_id, Application.status == "pending")
+            .scalar()
+        )
+    return out
 
 
 # ---------- 报名与推荐（MATCH-001/002）----------

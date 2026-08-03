@@ -1,8 +1,15 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V32 全批次完成（2026-07-21）。
-> 后端 225 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V33 全批次完成（2026-07-21）。
+> 后端 228 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V33 批次：任务详情视角上下文）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| TASK-017 详情「我与此任务的关系」（**修复体验缺口**）：worker 报名后详情仍显示报名按钮、点了才 409 → GET /tasks/{id} 附 my_application_status / bookmarked；发布者附 applications_count | `task/router.py::get_task` | `tests/test_task_detail_context.py` |
+| SDK 同步：Task 类型补视角字段 | `packages/core/src/types.ts` | web 构建通过 |
 
 ## 已实现（V32 批次：通知中心——未读徽章 + 全部已读 + 分页）
 

@@ -58,6 +58,10 @@ export interface Task {
   reject_count: number;
   created_at: string;
   distance_m?: number | null;
+  // TASK-017 详情视角上下文（仅 GET /tasks/{id} 返回）
+  my_application_status?: 'pending' | 'accepted' | 'rejected' | 'withdrawn' | null;
+  bookmarked?: boolean;
+  applications_count?: number; // 仅发布者可见
 }
 
 export interface Milestone {
