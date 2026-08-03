@@ -51,6 +51,7 @@ the test assertions.
 | 40 | [Trust-Link Enforced on Read](40-trustlink-enforcement.md) | `logic/showcase.js` `resolveTrustLinkView`, `TrustLinkBuilder.vue` recipient preview | `tests/showcase.test.js` |
 | 41 | [Consent-Gated Analytics (GDPR)](41-consent-analytics.md) | `logic/consent.js`, `useAnalytics` gate, `ConsentBanner.vue`, footer reopen | `tests/consent.test.js` |
 | 42 | [Data Subject Requests (deadlines)](42-dsr-workflow.md) | `logic/dsr.js`, `ControlsRegister.vue` DSR queue | `tests/dsr.test.js` |
+| 43 | [Availability SLA Service Credits](43-sla-credits.md) | `logic/slaCredit.js`, `SupportSLA.vue` availability panel | `tests/slaCredit.test.js` |
 
 Capability flow across domains:
 

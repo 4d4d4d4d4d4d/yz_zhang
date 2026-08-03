@@ -1,10 +1,26 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { slaStatus } from '../logic/customerSuccess.js'
+import { slaReport, uptimeFromDowntime, DEFAULT_SCHEDULE } from '../logic/slaCredit.js'
+import { useFormat } from '../composables/useFormat.js'
 import { ticketsAt } from '../data/workspace.js'
 
+const { money } = useFormat()
 const now = Date.now()
 const tickets = ref(ticketsAt(now))
+
+// Spec 43 — availability SLA & service credits for the flagship enterprise
+// contract. Downtime this billing period breaches the 99.9% commitment,
+// so a tiered service credit is owed.
+const PERIOD_MIN = 30 * 24 * 60
+const downtimeMin = ref(65) // observed this period
+const commitment = 99.9
+const monthlyFee = 12000
+const availability = computed(() => slaReport({
+  uptimePct: uptimeFromDowntime(downtimeMin.value, PERIOD_MIN),
+  commitment,
+  monthlyFee
+}))
 
 const filter = ref('active')
 const filters = ['active', 'resolved', 'all']
@@ -58,6 +74,27 @@ const agents = [
       <div class="card kpi">
         <div class="cn">{{ summary.csat }}</div>
         <div class="cl">CSAT rolling</div>
+      </div>
+    </div>
+
+    <div class="card avail" :class="{ breached: !availability.met }">
+      <div class="av-head">
+        <div>
+          <div class="kicker">Availability SLA · this billing period</div>
+          <h3>Uptime {{ availability.uptimePct.toFixed(3) }}% · commitment {{ commitment }}%</h3>
+          <p class="meta">{{ downtimeMin }} min downtime over 30 days. Service credits are applied automatically to the next invoice.</p>
+        </div>
+        <div class="av-credit">
+          <div class="av-pct" :class="availability.met ? 'ok' : 'risk'">{{ availability.met ? 'SLA met' : availability.creditPct + '%' }}</div>
+          <div class="av-amt" v-if="!availability.met">{{ money(availability.creditAmount) }} credit owed</div>
+        </div>
+      </div>
+      <div class="av-tiers">
+        <div v-for="t in DEFAULT_SCHEDULE" :key="t.minUptime" class="av-tier"
+          :class="{ active: !availability.met && availability.creditPct === t.credit }">
+          <span class="av-band">{{ t.minUptime > 0 ? '≥ ' + t.minUptime + '%' : '< 95%' }}</span>
+          <span class="av-cr">{{ t.credit }}% credit</span>
+        </div>
       </div>
     </div>
 
@@ -189,4 +226,18 @@ const agents = [
   .t th:nth-child(2), .t td:nth-child(2),
   .t th:nth-child(4), .t td:nth-child(4) { display: none; }
 }
+
+.avail { border-left: 3px solid var(--success); }
+.avail.breached { border-left-color: var(--danger); }
+.av-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.av-credit { text-align: right; flex-shrink: 0; }
+.av-pct { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.av-pct.ok { color: var(--success); }
+.av-pct.risk { color: var(--danger); }
+.av-amt { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.av-tiers { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.av-tier { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px; }
+.av-tier.active { border-color: var(--danger); background: rgba(248, 113, 113, .12); }
+.av-band { color: var(--text-dim); }
+.av-cr { font-weight: 700; }
 </style>
