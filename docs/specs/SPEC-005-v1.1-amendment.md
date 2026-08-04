@@ -84,3 +84,34 @@ modules:
   返回值范围检查(±20% bound,因 calibration knob)。
 - **§T.2** `tests/integration/test_unpack_area_tradeoff.py`:用 baseline vs
   variant 验证 §U.2 不等式 + §U.3 functional 等价。
+
+## 5. 提案:size-aware area(面积随规模缩放)— 实现期发现
+
+**背景发现**(`test_area_model_sensitivity.py`,实现期):当前面积模型
+(SPEC-001 §3.1 聚合)是**能力"有无"求和** —— `total_area_um2 =
+Σ active capability.area_cost_um2`,`area_cost_um2` 是每能力**常数**。
+系统实测:能力开关改面积(开 fp16 +18,000、关 double_buffer −9,000),但
+**规模参数完全不改面积** —— MAC 阵列 32×32→64×64(4× PE)、VAU lanes
+16→32、DSB buffer_kb→64、AVP vector_width→64,面积 Δ 全为 0。
+
+**问题**:真实硅面积随数据通路规模缩放。当前模型下"加宽提吞吐"被建模为
+**零面积代价**(`optimize` 实测 −48% drain 全来自零成本加宽),PPA 的
+area 轴对 sizing 决策**不可用**。这不是标定误差,是模型**缺项**。
+
+**§5.1 提案**:capability 的 area 从常数升级为**规模函数**。每个 SPEC-005
+模块声明其 area 驱动项:
+
+| 模块 | 面积驱动项 | 建议形式(Phase 5 标定系数) |
+|---|---|---|
+| MAC | PE 数 = `array_rows × array_cols` | `a0 + a_pe × rows × cols` |
+| VAU | `lanes` | `a0 + a_lane × lanes` |
+| DSB | SRAM 字节 = `buffer_kb × n_banks` | `a0 + a_sram × buffer_kb × n_banks` |
+| AVP | `vector_width` + `lut_entries` | `a0 + a_vw × vector_width + a_lut × lut_entries` |
+| DAGC | unpack 寄存器宽度(受 compact_unpack 调制) | 现 §2 常数 → 加 throughput 项 |
+
+**§5.2 兼容性**:`a0` 取现有常数、缩放系数默认 0 → 逐字段等价于今日行为
+(渐进迁移,不破坏现有 area 断言)。Phase 5 标定把缩放系数从 0 抬起。
+
+**§5.3 tripwire**:`test_area_model_sensitivity.py::
+TestScalingParamsDoNotChangeArea` 断言当前 size-blind 行为;本提案落地后
+该测试会失败,即为"gap 已修复"的信号,届时改断言为"面积随规模单调增"。

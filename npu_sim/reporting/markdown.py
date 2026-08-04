@@ -444,6 +444,7 @@ def render_optimize_report(report: "OptimizeReport") -> str:
         "Each round widened the current bottleneck stage; the search stopped "
         "when widening stopped paying off."
     )
+    parts.append(_AREA_MODEL_CAVEAT)
     return "\n\n".join(parts)
 
 
@@ -478,7 +479,21 @@ def render_sweep_report(report: "SweepReport") -> str:
             f"> Best drain at `{report.param_path}` = {report.best_value}. "
             "The bottleneck stayed on the same module across the sweep."
         )
+    parts.append(_AREA_MODEL_CAVEAT)
     return "\n\n".join(parts)
+
+
+# Area is capability-presence-based, not size-based (see
+# test_area_model_sensitivity.py / docs/specs/README.md). Scaling knobs
+# (array size, lanes, buffer_kb, vector_width) are modeled area-free, so a
+# flat area column across such a sweep is a known model gap, not a real
+# "free" speed-up. Surfaced in reports so results aren't misread.
+_AREA_MODEL_CAVEAT = (
+    "> ℹ️ **Area caveat:** the area model sums active-capability costs and is "
+    "currently *size-blind* — scaling knobs (array size, lanes, buffer, vector "
+    "width) are modeled as area-free, so a flat area column is a known gap "
+    "(Phase 5 calibration), not a real zero-cost win."
+)
 
 
 def render_pipeline_bottleneck(
