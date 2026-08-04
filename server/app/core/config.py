@@ -23,6 +23,8 @@ class Settings:
     REVIEW_WINDOW_DAYS = int(os.environ.get("PLATFORM_REVIEW_WINDOW_DAYS", "14"))
     # TASK-011 执行者并发接单上限（零工平台惯例）：防过度接单导致履约违约
     MAX_ACTIVE_TASKS = int(os.environ.get("PLATFORM_MAX_ACTIVE_TASKS", "5"))
+    # TASK-033 验收驳回上限：超过后不得再单方驳回，须验收或走仲裁（防无限返工变相欠薪）
+    MAX_REJECT_ROUNDS = int(os.environ.get("PLATFORM_MAX_REJECT_ROUNDS", "3"))
     # DSP-009 纠纷处理 SLA：开立超 N 天未结案自动升级进人审队列（防托管资金无限期冻结）
     DISPUTE_SLA_DAYS = int(os.environ.get("PLATFORM_DISPUTE_SLA_DAYS", "7"))
     # DSP-010 申诉窗口：仲裁结案后 N 天内可申诉，逾期裁决终局

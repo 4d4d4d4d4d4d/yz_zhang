@@ -711,9 +711,22 @@ def reject_delivery(
     task = _get_task(db, task_id)
     if task.creator_id != user.id:
         raise forbidden()
+    # TASK-033 驳回上限：超过后禁止再单方驳回，须验收或发起纠纷仲裁（防无限返工变相欠薪）
+    if task.reject_count >= settings.MAX_REJECT_ROUNDS:
+        raise conflict(
+            f"已达驳回上限（{settings.MAX_REJECT_ROUNDS} 次），请验收或发起纠纷仲裁",
+            "reject_limit_reached",
+        )
     task.reject_count += 1
     db.add(ProgressLog(task_id=task_id, user_id=user.id, kind="note", content=f"验收驳回：{body.reason}"))
     service.transition(db, task, "in_progress")
+    # 通知执行者被驳回原因，避免其不知情空等（TASK-033）
+    if task.executor_id:
+        from app.modules.notification.service import notify
+
+        notify(db, task.executor_id, "task", "交付被驳回",
+               f"《{task.title}》第 {task.reject_count} 次验收未通过：{body.reason[:80]}。"
+               f"剩余可驳回 {settings.MAX_REJECT_ROUNDS - task.reject_count} 次，超限后须验收或仲裁。")
     return dump_task(task, user)
 
 
