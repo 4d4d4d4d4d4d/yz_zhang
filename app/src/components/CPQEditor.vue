@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { priceQuote, approvalFor } from '../logic/cpq.js'
+import { crossBorderQuote } from '../logic/quote.js'
+import { CURRENCIES } from '../logic/currency.js'
 
 const catalog = [
   { id: 'platform-ent', name: 'Platform · Enterprise', kind: 'subscription', list: 5000, cost: 1100, unit: 'mo' },
@@ -20,7 +22,7 @@ const lines = ref([
   { sku: 'onboarding',   qty: 1,   discount: 0 }
 ])
 
-const customer = ref({ name: 'Lumen Studios K.K.', term: 12, currency: 'USD' })
+const customer = ref({ name: 'Lumen Studios K.K.', term: 12, currency: 'JPY' })
 
 // Spec-15 CPQ engine
 const quote = computed(() => priceQuote(lines.value, catalog))
@@ -36,6 +38,17 @@ function removeLine(i) { lines.value.splice(i, 1) }
 
 const approvalLevel = computed(() => approvalFor(blendedDisc.value))
 const marginAlert = computed(() => blendedMargin.value < 50)
+
+// Spec 44 — show the TCV in the buyer's currency (Lumen K.K. is a JP entity).
+// Billed in USD; partner currency is a reference at the pegged rate.
+const CURRENCY_CODES = Object.keys(CURRENCIES)
+const partnerQuote = computed(() => crossBorderQuote(total.value, {
+  code: customer.value.currency,
+  rate: CURRENCIES[customer.value.currency]?.rate ?? 1
+}))
+const partnerTotalFmt = computed(() => new Intl.NumberFormat('en', {
+  style: 'currency', currency: partnerQuote.value.code, maximumFractionDigits: 0
+}).format(partnerQuote.value.net))
 </script>
 
 <template>
@@ -44,10 +57,19 @@ const marginAlert = computed(() => blendedMargin.value < 50)
       <div>
         <div class="kicker">CPQ · configure → price → quote</div>
         <h3>Quote · {{ customer.name }}</h3>
-        <p class="meta">{{ customer.term }}-mo term · {{ customer.currency }} · discount &amp; margin checked against guardrails on every keystroke.</p>
+        <p class="meta">{{ customer.term }}-mo term · discount &amp; margin checked against guardrails on every keystroke.</p>
+        <label class="cur-pick">Buyer currency
+          <select v-model="customer.currency">
+            <option v-for="c in CURRENCY_CODES" :key="c" :value="c">{{ c }}</option>
+          </select>
+        </label>
       </div>
       <div class="totals">
-        <div><div class="tn grad-text">${{ Math.round(total).toLocaleString() }}</div><div class="tl">TCV (net)</div></div>
+        <div>
+          <div class="tn grad-text">${{ Math.round(total).toLocaleString() }}</div>
+          <div class="tl">TCV (net)</div>
+          <div v-if="!partnerQuote.isUsd" class="tcv-fx">≈ {{ partnerTotalFmt }} · 1 USD = {{ partnerQuote.rate }} {{ partnerQuote.code }} · billed in USD</div>
+        </div>
         <div><div class="tn" :class="marginAlert ? 'risk' : ''">{{ blendedMargin.toFixed(1) }}%</div><div class="tl">Margin</div></div>
         <div><div class="tn">{{ blendedDisc.toFixed(1) }}%</div><div class="tl">Blended discount</div></div>
       </div>
@@ -141,6 +163,10 @@ const marginAlert = computed(() => blendedMargin.value < 50)
 .tn { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
 .tn.risk { color: var(--danger); }
 .tl { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .08em; margin-top: 4px; }
+.tcv-fx { font-size: 11px; color: var(--primary-2); margin-top: 5px; font-variant-numeric: tabular-nums; }
+.cur-pick { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--text-dim); }
+.cur-pick select { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+.cur-pick select:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 .th-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .btn.sm { padding: 6px 12px; font-size: 12px; }
