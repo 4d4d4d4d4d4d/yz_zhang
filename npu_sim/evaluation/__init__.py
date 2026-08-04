@@ -36,6 +36,11 @@ from npu_sim.evaluation.snapshot import (
     diff_snapshots,
     snapshot_at_cycle,
 )
+from npu_sim.evaluation.optimize import (
+    OptimizeReport,
+    OptimizeStep,
+    optimize_bottleneck,
+)
 from npu_sim.evaluation.sweep import SweepPoint, SweepReport, sweep_config
 from npu_sim.interfaces.operation import IOperation
 from npu_sim.interfaces.services import InMemoryEventBus, InMemoryStatSink
@@ -71,6 +76,8 @@ __all__ = [
     "FieldDiff",
     "MappingPlan",
     "ModuleSnapshot",
+    "OptimizeReport",
+    "OptimizeStep",
     "PerOpReconcileReport",
     "PipelineBottleneckReport",
     "ReconcileReport",
@@ -85,6 +92,7 @@ __all__ = [
     "compare",
     "compare_tensors",
     "diff_snapshots",
+    "optimize_bottleneck",
     "sweep_config",
     "elaborate",
     "elaborate_and_run",

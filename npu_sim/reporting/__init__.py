@@ -3,6 +3,7 @@
 from npu_sim.reporting.markdown import (
     render_comparison_report,
     render_mapping_report,
+    render_optimize_report,
     render_pipeline_bottleneck,
     render_reconcile_report,
     render_simulation_report,
@@ -14,6 +15,7 @@ from npu_sim.reporting.markdown import (
 __all__ = [
     "render_comparison_report",
     "render_mapping_report",
+    "render_optimize_report",
     "render_pipeline_bottleneck",
     "render_reconcile_report",
     "render_simulation_report",

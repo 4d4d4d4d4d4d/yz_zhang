@@ -25,6 +25,9 @@ Subcommands:
     sweep <base> <m.key> <vals> Sweep one module config knob over values and
                                 report the PPA response + bottleneck shift
                                 (design-space exploration).
+    optimize <base> --knob ...  Greedily widen the bottleneck stage across
+                                config knobs until drain stops improving
+                                (automated design search).
 
 Designed for the SPEC-003 §7 R7 workflow: researcher edits a YAML, runs
 `python -m npu_sim compare base.yaml variant.yaml`, pastes the output into
@@ -236,6 +239,41 @@ def _coerce_value(raw: str) -> object:
         except ValueError:
             continue
     return raw
+
+
+def _cmd_optimize(args: argparse.Namespace, out: TextIO) -> int:
+    from npu_sim.evaluation import optimize_bottleneck
+    from npu_sim.reporting import render_optimize_report
+
+    _require_path(args.base)
+    knobs: dict[str, list] = {}
+    for spec in args.knob or []:
+        if "=" not in spec or "." not in spec.split("=", 1)[0]:
+            sys.stderr.write(
+                f"bad --knob {spec!r}; expected '<module>.<key>=v1,v2,...'\n"
+            )
+            return 3
+        path, vals = spec.split("=", 1)
+        values = [_coerce_value(v.strip()) for v in vals.split(",") if v.strip()]
+        if len(values) < 2:
+            sys.stderr.write(f"--knob {path} needs at least two values\n")
+            return 3
+        knobs[path.strip()] = values
+    if not knobs:
+        sys.stderr.write("at least one --knob is required\n")
+        return 3
+
+    try:
+        report = optimize_bottleneck(
+            args.base, knobs, max_cycles=args.max_cycles, max_rounds=args.max_rounds
+        )
+    except NpuSimError as exc:
+        sys.stderr.write(f"optimize error: {exc}\n")
+        return 2
+
+    md = render_optimize_report(report)
+    _write_output(md, args.out, out)
+    return 0
 
 
 def _cmd_sweep(args: argparse.Namespace, out: TextIO) -> int:
@@ -544,6 +582,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional output file; defaults to stdout.",
     )
     p_sw.set_defaults(handler=_cmd_sweep)
+
+    p_opt = subparsers.add_parser(
+        "optimize",
+        help="Greedily widen the bottleneck stage across config knobs until "
+        "drain stops improving (automated design search).",
+    )
+    p_opt.add_argument("base", help="Path to the base architecture YAML.")
+    p_opt.add_argument(
+        "--knob",
+        action="append",
+        metavar="MODULE.KEY=v1,v2,...",
+        help="A knob to search: module config field + ascending candidate "
+        "values (cheap→wide). Repeatable. E.g. --knob avp.vector_width=16,32,64.",
+    )
+    p_opt.add_argument(
+        "--max-rounds",
+        type=int,
+        default=20,
+        help="Cap on greedy search rounds (default: 20).",
+    )
+    p_opt.add_argument(
+        "--max-cycles",
+        type=int,
+        default=100_000,
+        help="Scheduler step cap for each run (default: 100000).",
+    )
+    p_opt.add_argument(
+        "--out",
+        default=None,
+        help="Optional output file; defaults to stdout.",
+    )
+    p_opt.set_defaults(handler=_cmd_optimize)
 
     return parser
 

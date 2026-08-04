@@ -16,6 +16,7 @@ from npu_sim.evaluation.reconcile import PerOpReconcileReport, ReconcileReport
 from npu_sim.evaluation.runner import SimulationResult
 
 if TYPE_CHECKING:
+    from npu_sim.evaluation.optimize import OptimizeReport
     from npu_sim.evaluation.pipeline import PipelineBottleneckReport
     from npu_sim.evaluation.snapshot import SnapshotDiff, StateSnapshot
     from npu_sim.evaluation.sweep import SweepReport
@@ -411,6 +412,38 @@ def render_state_snapshot(snap: "StateSnapshot", arch_name: str = "") -> str:
             )
         parts.append("## Connection FIFOs\n\n" + "\n".join(conn_lines))
 
+    return "\n\n".join(parts)
+
+
+def render_optimize_report(report: "OptimizeReport") -> str:
+    """Render a greedy bottleneck-chasing optimization as Markdown."""
+    parts: list[str] = [f"# Bottleneck optimization — `{report.base_name}`"]
+    parts.append(_two_col_table("Metric", "Value", [
+        ("knobs", ", ".join(f"`{k}`" for k in report.knobs)),
+        ("initial drain", f"{report.initial_drain_cycles:,} cyc"),
+        ("final drain", f"{report.final_drain_cycles:,} cyc"),
+        ("improvement", f"{report.drain_improvement_pct:+.0f}%"),
+        ("stop reason", report.stop_reason),
+    ]))
+
+    lines = [
+        "| round | knob | change | drain (cyc) | bottleneck | kept |",
+        "|---:|---|---|---:|---|:-:|",
+    ]
+    for s in report.steps:
+        lines.append(
+            f"| {s.round_index} | `{s.knob}` | {s.from_value}→{s.to_value} | "
+            f"{s.drain_cycles:,} | `{s.bottleneck_module}` | "
+            f"{'✓' if s.accepted else '✗'} |"
+        )
+    parts.append("## Search trace\n\n" + "\n".join(lines))
+
+    parts.append(
+        f"**Final design:** `{report.final_selection}` — "
+        f"{report.drain_improvement_pct:+.0f}% drain vs the initial config. "
+        "Each round widened the current bottleneck stage; the search stopped "
+        "when widening stopped paying off."
+    )
     return "\n\n".join(parts)
 
 

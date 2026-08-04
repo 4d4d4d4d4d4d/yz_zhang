@@ -67,11 +67,7 @@ def sweep_config(
     flagging any bottleneck shift.
     """
     # Local import keeps evaluation.__init__ import order simple.
-    from npu_sim.evaluation import (
-        analyze_pipeline_bottleneck,
-        elaborate,
-        elaborate_and_run,
-    )
+    from npu_sim.evaluation import analyze_pipeline_bottleneck, elaborate
 
     base_abs = str(Path(base_path).resolve())
     base_name = elaborate(base_abs).name  # the untouched base's identity
@@ -89,16 +85,17 @@ def sweep_config(
         with tempfile.TemporaryDirectory() as d:
             vpath = Path(d) / "variant.yaml"
             vpath.write_text(yaml.safe_dump(override), encoding="utf-8")
-            result = elaborate_and_run(str(vpath), max_cycles=max_cycles)
             arch = elaborate(str(vpath))
-            clk = arch.clocks[next(iter(arch.clocks))]
+            # One sim: analyze returns the measured drain; area/power are static.
             bn = analyze_pipeline_bottleneck(arch, max_cycles=max_cycles)
+            area = sum(m.total_area_um2() for m in arch.modules.values())
+            power = sum(m.static_power_uw() for m in arch.modules.values())
 
         points.append(SweepPoint(
             value=value,
-            drain_cycles=result.drain_time_ps // max(1, clk.period_ps),
-            total_area_um2=result.total_area_um2,
-            static_power_uw=result.total_static_power_uw,
+            drain_cycles=bn.measured_drain_cycles,
+            total_area_um2=area,
+            static_power_uw=power,
             bottleneck_module=bn.bottleneck_module,
             bottleneck_ii=bn.bottleneck_ii,
         ))
