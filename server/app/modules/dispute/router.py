@@ -155,6 +155,10 @@ def issue_verdict(
     # 败诉方信用惩罚：比例低于 50% 视为执行者败诉，反之发布者败诉
     loser = task.executor_id if body.executor_share_bps < 5000 else task.creator_id
     credit.adjust_credit(db, loser, credit.CREDIT_DISPUTE_LOSER)
+    from app.modules.admin.router import record_audit
+
+    record_audit(db, arbiter.id, "dispute_verdict", "dispute", dispute.id,
+                 f"执行者分成 {body.executor_share_bps}bps：{body.reason[:200]}")
     return _dump(dispute)
 
 
@@ -208,6 +212,10 @@ def appeal_verdict(
     dispute.status = "resolved"
     db.add(dispute)
     publish(db, "dispute.resolved", {"dispute_id": dispute.id, "task_id": task.id, "appeal": True})
+    from app.modules.admin.router import record_audit
+
+    record_audit(db, senior.id, "dispute_appeal_verdict", "dispute", dispute.id,
+                 f"复核终局 {body.executor_share_bps}bps，纠正 {delta} 分")
     return _dump(dispute) | {"corrective_delta_cents": delta}
 
 

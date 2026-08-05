@@ -129,7 +129,12 @@ def approve_withdraw(
         from app.core.errors import not_found
 
         raise not_found("提现申请不存在")
-    return service.decide_withdraw(db, req, approve=True, admin_id=admin.id)
+    result = service.decide_withdraw(db, req, approve=True, admin_id=admin.id)
+    from app.modules.admin.router import record_audit
+
+    record_audit(db, admin.id, "withdraw_approve", "withdraw_request", request_id,
+                 f"批准提现 {req.amount_cents} 分")
+    return result
 
 
 @router.post("/withdraw-requests/{request_id}/reject")
@@ -143,7 +148,12 @@ def reject_withdraw(
         from app.core.errors import not_found
 
         raise not_found("提现申请不存在")
-    return service.decide_withdraw(db, req, approve=False, admin_id=admin.id)
+    result = service.decide_withdraw(db, req, approve=False, admin_id=admin.id)
+    from app.modules.admin.router import record_audit
+
+    record_audit(db, admin.id, "withdraw_reject", "withdraw_request", request_id,
+                 f"驳回提现 {req.amount_cents} 分")
+    return result
 
 
 @router.get("/ledger")

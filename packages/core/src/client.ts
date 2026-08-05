@@ -541,6 +541,15 @@ export class PlatformClient {
       'GET', `/admin/reports?status=${status}`,
     );
   }
+  adminAuditLog(params: { action?: string; limit?: number; offset?: number } = {}) {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v !== undefined && v !== '')
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+      .join('&');
+    return this.request<Array<{ id: number; admin_id: number; action: string; target_type: string; target_id: number | null; detail: string; created_at: string }>>(
+      'GET', `/admin/audit-log${qs ? `?${qs}` : ''}`,
+    );
+  }
   resolveReport(reportId: number, action: 'dismiss' | 'remove_content' | 'ban_user') {
     return this.request<{ id: number; status: string; action: string }>(
       'POST', `/admin/reports/${reportId}/resolve`, { action },

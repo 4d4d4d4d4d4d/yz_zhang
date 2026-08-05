@@ -1,8 +1,15 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V34 全批次完成（2026-07-22）。
-> 后端 231 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V35 全批次完成（2026-07-22）。
+> 后端 234 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V35 批次：管理员操作审计——合规留痕）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| OPS-012 管理员操作审计（**补合规缺口**）：~20 个高权限端点原无任何操作留痕，无法回答「哪个管理员何时对谁封禁/裁决/放款」→ 新增 `AdminAudit` 只增审计表 + `record_audit` 助手，接入封禁/解封/纠纷裁决/申诉复核/平台结算/大额提现审批；`/admin/audit-log` 可按动作筛选、分页，管理员限定 | `admin/models.py::AdminAudit` + `admin/router.py::record_audit/audit_log` + 各高权限端点 | `tests/test_admin_audit.py` |
+| SDK 同步：adminAuditLog | `packages/core/src/client.ts` | web 构建通过 |
 
 ## 已实现（V34 批次：验收驳回上限——防无限返工欠薪）
 

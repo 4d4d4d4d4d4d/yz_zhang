@@ -13,9 +13,36 @@ from app.modules.contract.models import Contract
 from app.modules.dispute.models import Dispute
 from app.modules.task.models import Task
 
-from .models import Report
+from .models import AdminAudit, Report
 
 router = APIRouter(tags=["admin"])
+
+
+def record_audit(db, admin_id: int, action: str, target_type: str = "",
+                 target_id: int | None = None, detail: str = "") -> None:
+    """OPS-012 管理员操作审计留痕（高权限动作统一调用）。"""
+    db.add(AdminAudit(admin_id=admin_id, action=action, target_type=target_type,
+                      target_id=target_id, detail=detail[:500]))
+
+
+@router.get("/admin/audit-log")
+def audit_log(
+    action: str | None = None,
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    admin: User = Depends(require_admin), db: Session = Depends(get_db),
+):
+    """OPS-012 审计日志查询（管理员）。"""
+    query = db.query(AdminAudit)
+    if action:
+        query = query.filter(AdminAudit.action == action)
+    rows = query.order_by(AdminAudit.id.desc()).offset(offset).limit(limit).all()
+    return [
+        {"id": r.id, "admin_id": r.admin_id, "action": r.action,
+         "target_type": r.target_type, "target_id": r.target_id,
+         "detail": r.detail, "created_at": r.created_at.isoformat()}
+        for r in rows
+    ]
 
 
 class ReportIn(BaseModel):
@@ -152,6 +179,7 @@ def ban_user(user_id: int, admin: User = Depends(require_admin), db: Session = D
         raise bad_request("不能封禁管理员", "cannot_ban_admin")
     user.is_banned = True
     db.add(user)
+    record_audit(db, admin.id, "ban_user", "user", user_id)
     return {"id": user.id, "is_banned": True}
 
 
@@ -162,6 +190,7 @@ def unban_user(user_id: int, admin: User = Depends(require_admin), db: Session =
         raise not_found("用户不存在")
     user.is_banned = False
     db.add(user)
+    record_audit(db, admin.id, "unban_user", "user", user_id)
     return {"id": user.id, "is_banned": False}
 
 
@@ -312,7 +341,10 @@ def settle_platform(
     """OPS-010 平台收入结算：把平台账户余额划出（模拟对公结算）。"""
     from app.modules.wallet import service as wallet
 
-    return wallet.settle_platform(db, body.amount_cents, body.memo)
+    result = wallet.settle_platform(db, body.amount_cents, body.memo)
+    record_audit(db, admin.id, "platform_settle", "platform", None,
+                 f"结算 {body.amount_cents} 分：{body.memo}")
+    return result
 
 
 # ---------- 对账 job（PAY-006/008） ----------
