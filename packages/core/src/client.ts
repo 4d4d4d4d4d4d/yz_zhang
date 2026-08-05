@@ -541,6 +541,13 @@ export class PlatformClient {
       'GET', `/admin/reports?status=${status}`,
     );
   }
+  banImpact(userId: number) {
+    return this.request<{
+      in_flight_contracts: Array<{ contract_id: number; task_id: number; status: string; amount_cents: number; counterparty_id: number }>;
+      in_flight_count: number; escrow_at_risk_cents: number;
+      wallet: { available_cents: number; escrow_cents: number; frozen_cents: number };
+    }>('GET', `/admin/users/${userId}/ban-impact`);
+  }
   adminAuditLog(params: { action?: string; limit?: number; offset?: number } = {}) {
     const qs = Object.entries(params)
       .filter(([, v]) => v !== undefined && v !== '')

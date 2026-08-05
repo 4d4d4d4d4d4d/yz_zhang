@@ -170,6 +170,47 @@ def list_users(
     ]
 
 
+def _ban_impact(db, user_id: int) -> dict:
+    """OPS-013 封禁影响面：在途合约 / 托管资金 / 钱包余额。
+
+    封禁会让该用户无法交付或验收，其对手方的托管资金将被无限期困住——
+    封禁前必须让管理员看见这个爆炸半径。
+    """
+    from app.modules.wallet.service import get_or_create
+
+    in_flight = (
+        db.query(Contract)
+        .filter(
+            (Contract.requester_id == user_id) | (Contract.executor_id == user_id),
+            Contract.status.in_(("pending_signatures", "signed", "funded")),
+        )
+        .all()
+    )
+    acct = get_or_create(db, user_id)
+    return {
+        "in_flight_contracts": [
+            {"contract_id": c.id, "task_id": c.task_id, "status": c.status,
+             "amount_cents": c.amount_cents,
+             "counterparty_id": c.executor_id if c.requester_id == user_id else c.requester_id}
+            for c in in_flight
+        ],
+        "in_flight_count": len(in_flight),
+        "escrow_at_risk_cents": sum(
+            c.amount_cents - c.released_cents for c in in_flight if c.status == "funded"
+        ),
+        "wallet": {"available_cents": acct.available_cents,
+                   "escrow_cents": acct.escrow_cents, "frozen_cents": acct.frozen_cents},
+    }
+
+
+@router.get("/admin/users/{user_id}/ban-impact")
+def ban_impact(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """OPS-013 封禁前预览影响面（不产生副作用）。"""
+    if not db.get(User, user_id):
+        raise not_found("用户不存在")
+    return _ban_impact(db, user_id)
+
+
 @router.post("/admin/users/{user_id}/ban")
 def ban_user(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     user = db.get(User, user_id)
@@ -177,10 +218,20 @@ def ban_user(user_id: int, admin: User = Depends(require_admin), db: Session = D
         raise not_found("用户不存在")
     if user.is_admin:
         raise bad_request("不能封禁管理员", "cannot_ban_admin")
+    impact = _ban_impact(db, user_id)
     user.is_banned = True
     db.add(user)
-    record_audit(db, admin.id, "ban_user", "user", user_id)
-    return {"id": user.id, "is_banned": True}
+    # OPS-013 通知在途合约的对手方：被封用户无法再交付/验收，
+    # 请及时取消或发起纠纷，避免托管资金无限期困住。
+    from app.modules.notification.service import notify
+
+    for c in impact["in_flight_contracts"]:
+        notify(db, c["counterparty_id"], "task", "对方账号已被封禁",
+               f"任务 #{c['task_id']}（合约 #{c['contract_id']}）的对方账号已被平台封禁，"
+               "无法继续履约。请尽快取消任务或发起纠纷，以便结清托管资金。")
+    record_audit(db, admin.id, "ban_user", "user", user_id,
+                 f"在途合约 {impact['in_flight_count']} 笔，涉险托管 {impact['escrow_at_risk_cents']} 分")
+    return {"id": user.id, "is_banned": True, "impact": impact}
 
 
 @router.post("/admin/users/{user_id}/unban")
