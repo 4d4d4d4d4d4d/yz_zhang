@@ -54,6 +54,7 @@ the test assertions.
 | 43 | [Availability SLA Service Credits](43-sla-credits.md) | `logic/slaCredit.js`, `SupportSLA.vue` availability panel | `tests/slaCredit.test.js` |
 | 44 | [Cross-Border Quote (partner currency)](44-cross-border-quote.md) | `logic/quote.js`, `CPQEditor.vue` currency picker | `tests/quote.test.js` |
 | 45 | [A/B Statistical Significance](45-ab-significance.md) | `logic/significance.js`, `ExperimentManager.vue` calculator | `tests/significance.test.js` |
+| 46 | [Multi-Touch Attribution (computed)](46-attribution-models.md) | `logic/attribution.js`, `AttributionWaterfall.vue` (bars + paths + delta) | `tests/attribution.test.js` |
 
 Capability flow across domains:
 
