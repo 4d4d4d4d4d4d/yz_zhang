@@ -149,21 +149,33 @@ class TestMACCapabilityQueries:
 
 
 class TestMACAreaPower:
-    """SPEC-001 §3.1 area = sum over active capabilities."""
+    """SPEC-013 physical model: area = PE count × per-PE gates × cell area."""
 
-    def test_total_area_equals_active_sum(self):
+    def test_area_matches_physical_model(self):
+        from npu_sim import physical
         m = MAC()
         m.configure(_default_config())
-        expected = sum(
-            c.area_cost_um2 for c in MAC.declared_capabilities()
-            if c.name in m.active_capabilities()
-        )
-        assert m.total_area_um2() == expected
+        expected = physical.mac_array_area_um2(32, 32, m.active_capabilities())
+        assert m.total_area_um2() == pytest.approx(expected)
+        assert expected > 0  # grounded, non-zero
+
+    def test_area_scales_with_pe_count(self):
+        small = MAC(); small.configure(_default_config(array_rows=16, array_cols=16))
+        big = MAC(); big.configure(_default_config(array_rows=32, array_cols=32))
+        # 4× the PEs → 4× the area (physically ∝ PE count)
+        assert big.total_area_um2() == pytest.approx(4 * small.total_area_um2())
 
     def test_dropping_bfp16_reduces_area(self):
         full = MAC(); full.configure(_default_config())
         lean = MAC(); lean.configure(_default_config(support_bfp16=False))
         assert lean.total_area_um2() < full.total_area_um2()
+
+    def test_energy_per_mac_is_horowitz_grounded(self):
+        from npu_sim import physical
+        m = MAC(); m.configure(_default_config())
+        op = _make_op(m=8, k=8, n=8, kind=PrecisionKind.INT8)  # 512 MACs
+        e = m.estimate_energy(op)
+        assert e.dynamic_pj == pytest.approx(512 * physical.energy_per_mac_pj("int8"))
 
 
 class TestMACState:

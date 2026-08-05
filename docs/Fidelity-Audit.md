@@ -27,6 +27,13 @@ calibration")、SPEC-005 v1.1 amendment §A.2、review-v1.1-proposal §30
 一句话:**这是一个"时序/数据流机制真实、绝对 PPA 系数是占位"的仿真器。**
 拿它做**相对架构权衡**是可信的;拿它报**这颗芯片多少 μm²/多少 pJ** 不可信。
 
+> **更新(2026-08-05,本次起):** 已开始把占位系数**逐模块换成 literature-
+> grounded 物理模型**(SPEC-013)。**MAC 已迁移**:面积 = PE 数 × per-PE 门数
+> × 单元面积(@45nm),能量 = MACs × per-MAC(Horowitz ISSCC'14),面积随
+> array_rows×cols 真实缩放(16×16→32×32→64×64 = 217k→867k→3.47M µm²)。
+> 其余 compute 模块(VAU/DSB/AVP/DAGC)按 SPEC-013 §5 路线逐个跟进。下表的
+> "compute 面积/能量"结论对**已迁移模块不再适用**。
+
 ## 1. 信任矩阵(TL;DR 速查)
 
 | 你想得到的结论 | 可信? | 原因 |
@@ -68,7 +75,8 @@ from|calibrat` 全模块搜索,**没有任何一处**把面积/能量常数关�
 
 | 轴 | 取值方式 | 可信度 |
 |---|---|---|
-| 面积(compute:MAC/DSB/VAU/AVP/DAGC) | 每 capability 固定圆整常数(18000/9000/3500…),**与规模无关** | ❌ 占位 + 结构缺口(§4) |
+| 面积(compute:**MAC 已迁移**) | PE 数 × per-PE 门 × 单元面积 @45nm(SPEC-013) | ✅ 物理正确形式 + 引用单位成本(±30%,待综合) |
+| 面积(compute:DSB/VAU/AVP/DAGC,未迁移) | 每 capability 固定圆整常数,**与规模无关** | ❌ 占位 + 结构缺口(§4) |
 | 面积(memory/DRAM:L2/TLU/MMU) | **随容量缩放** `capacity_kb × 800` (`l2_module.py`) | 🟡 形式对,系数 800 是拍的 |
 | 面积(control:OGU/MCU/MTU/TAU/AGU/DMA) | 固定常数,**已标 `[calibration knob]`** | 🟡 明示占位 |
 | 能量 | 部分固定(DAGC 0.8pJ),部分按架构因子缩放(OGU `0.25×_T_BUFFSIZE`、MCU `0.4×_T_OPCFG`) | 🟡 结构半对,乘子是拍的 |

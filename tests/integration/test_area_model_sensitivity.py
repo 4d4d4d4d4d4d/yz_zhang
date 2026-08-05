@@ -40,12 +40,22 @@ def _areas(module: str, key: str, values):
     return [p.total_area_um2 for p in rep.points]
 
 
-class TestScalingParamsDoNotChangeArea:
-    """KNOWN GAP: size knobs leave area unchanged (should scale in Phase 5)."""
+class TestMacAreaIsSizeAware:
+    """MAC has been migrated to the physical model (SPEC-013): area scales."""
 
-    def test_mac_array_rows_area_flat(self):
-        areas = _areas("mac", "array_rows", [32, 64])  # 2× the PE rows
-        assert len(set(areas)) == 1, f"expected flat area (gap), got {areas}"
+    def test_mac_array_rows_area_now_scales(self):
+        # Migrated: doubling the array rows must increase area (∝ PE count).
+        areas = _areas("mac", "array_rows", [32, 64])
+        assert len(set(areas)) == 2, f"MAC area should scale with rows, got {areas}"
+        assert areas[1] > areas[0]
+
+
+class TestScalingParamsDoNotChangeArea:
+    """KNOWN GAP: remaining modules' size knobs leave area unchanged.
+
+    Tripwire — as each module migrates to the physical model (SPEC-013 §5),
+    move it out of this group (like MAC above).
+    """
 
     def test_vau_lanes_area_flat(self):
         areas = _areas("vau", "lanes", [16, 32])

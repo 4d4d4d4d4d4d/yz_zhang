@@ -9,9 +9,11 @@ from __future__ import annotations
 
 from typing import Iterator, Optional
 
+from npu_sim import physical
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.clock import IClock
 from npu_sim.interfaces.module import (
+    AreaModel,
     Capability,
     EnergyEstimate,
     IModule,
@@ -68,12 +70,17 @@ class MAC(IModule):
 
     @classmethod
     def declared_capabilities(cls) -> list[Capability]:
+        # Area / static-power / energy for MAC are computed from the physical
+        # model (SPEC-013, see estimate_area / static_power_uw / estimate_energy),
+        # which scales with the PE array size. The per-capability numeric fields
+        # below are retained only for the capability-presence contract and are
+        # NOT used for MAC's PPA — the physical model supersedes them.
         return [
-            Capability("int8_matmul", "INT8 GEMM.", 42000.0, 90.0, 0.05),
-            Capability("accumulate_fp32", "FP32 partial-sum accumulation.", 8000.0, 20.0, 0.02),
-            Capability("bfp16_matmul", "BFP16 GEMM.", 15000.0, 35.0, 0.08,
+            Capability("int8_matmul", "INT8 GEMM.", 0.0, 0.0, 0.0),
+            Capability("accumulate_fp32", "FP32 partial-sum accumulation.", 0.0, 0.0, 0.0),
+            Capability("bfp16_matmul", "BFP16 GEMM.", 0.0, 0.0, 0.0,
                        depends_on=("accumulate_fp32",)),
-            Capability("fp16_matmul", "FP16 GEMM.", 18000.0, 40.0, 0.1,
+            Capability("fp16_matmul", "FP16 GEMM.", 0.0, 0.0, 0.0,
                        depends_on=("accumulate_fp32",)),
         ]
 
@@ -206,18 +213,48 @@ class MAC(IModule):
         )
 
     def estimate_energy(self, operation: IOperation) -> EnergyEstimate:
+        """Dynamic energy = MACs × per-MAC energy (SPEC-013, Horowitz ISSCC'14).
+
+        Per-MAC energy is the multiply + FP32-accumulate cost at the op's
+        precision (physical.energy_per_mac_pj), not a hand-picked constant.
+        """
         shape = operation.shape_info
         macs = shape.get("m", 1) * shape.get("k", 1) * shape.get("n", 1) \
             if ("m" in shape or "k" in shape or "n" in shape) \
             else shape.get("n_elements", 0)
-        per_mac_pj = sum(
-            c.dynamic_energy_pj for c in self.declared_capabilities()
-            if c.name in self._active_caps
-        )
+        per_mac_pj = physical.energy_per_mac_pj(operation.precision.kind)
         return EnergyEstimate(
             dynamic_pj=per_mac_pj * macs,
             static_pj_per_cycle=self.static_power_uw() * 1e-6,
             confidence=0.6,
+        )
+
+    def estimate_area(self) -> AreaModel:
+        """PE-array area from the physical model (SPEC-013): area scales with
+        the PE count (array_rows × array_cols) and the per-PE gate count of the
+        active precision lanes — no longer a size-blind capability constant.
+        """
+        um2 = physical.mac_array_area_um2(self._rows, self._cols, self._active_caps)
+        return AreaModel(
+            um2=um2,
+            breakdown={"pe_array": um2},
+            notes=(
+                f"SPEC-013 physical @{physical.REFERENCE_NODE_NM}nm: "
+                f"{self._rows}×{self._cols} PEs × "
+                f"{physical.mac_pe_gates(self._active_caps)} gates/PE "
+                f"× {physical.A_GATE_UM2} µm²/gate"
+            ),
+        )
+
+    def total_area_um2(self) -> float:
+        """Physical PE-array area (µm²). Overrides the capability-sum default
+        so the reported area tracks the array size (SPEC-013)."""
+        return self.estimate_area().um2
+
+    def static_power_uw(self) -> float:
+        """Leakage from the physical model: total PE gate count × per-gate leak."""
+        return physical.mac_array_static_power_uw(
+            self._rows, self._cols, self._active_caps
         )
 
     # ============== Runtime state ==============

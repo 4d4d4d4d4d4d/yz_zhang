@@ -66,14 +66,19 @@ class TestCoefficientProvenanceDisclosure:
         assert "[calibration knob]" in self._src("dram", "l2_module.py")
         assert "[calibration knob]" in self._src("control", "mcu_module.py")
 
-    def test_compute_modules_currently_lack_the_marker(self):
-        # Tripwire (finding #5): compute-module coefficients are placeholders
-        # too, but say so only in the SPEC-005 amendment, not in code. When the
-        # markers are added, flip these assertions.
-        for area, mod in [("mac", "mac_module.py"), ("vau", "vau_module.py"),
-                          ("avp", "avp_module.py")]:
-            assert "[calibration knob]" not in self._src(area, mod), (
-                f"{mod} now carries the marker — update finding #5 / this test"
+    def test_mac_is_physically_grounded(self):
+        # MAC has been migrated to the physical model (SPEC-013): its area/
+        # energy cite a literature-derived basis instead of a placeholder.
+        src = self._src("mac", "mac_module.py")
+        assert "physical" in src and "SPEC-013" in src
+
+    def test_remaining_compute_modules_still_lack_grounding(self):
+        # Tripwire: VAU/AVP/DSB/DAGC are not yet migrated (SPEC-013 §5 rollout).
+        # As each is grounded, move it to the grounded assertion above.
+        for area, mod in [("vau", "vau_module.py"), ("avp", "avp_module.py")]:
+            src = self._src(area, mod)
+            assert "SPEC-013" not in src, (
+                f"{mod} now references SPEC-013 — move it to the grounded test"
             )
 
 
