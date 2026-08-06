@@ -885,6 +885,58 @@ def _settle_reviews(db: Session, rows: list[Review]) -> None:
             db.add(r)
 
 
+@router.get("/users/{user_id}/reviews")
+def user_reviews(
+    user_id: int,
+    limit: int = Query(default=20, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """CRED-006 用户收到的评价（口碑消费端）。
+
+    此前评语/标签只写不读：主页仅有 rating_avg 聚合，选人时看不到「为什么是 4.5 分」。
+    严格复用双盲揭晓规则——盲窗内（双方未评完且未到窗口期）的评价一律不返回，
+    避免绕过 /tasks/{id}/reviews 的保护从用户维度偷看。
+    """
+    rows = (
+        db.query(Review).filter(Review.target_id == user_id)
+        .order_by(Review.id.desc()).all()
+    )
+    if not rows:
+        return {"total": 0, "tag_counts": {}, "items": []}
+    task_ids = {r.task_id for r in rows}
+    tasks = {t.id: t for t in db.query(Task).filter(Task.id.in_(task_ids))}
+    counts: dict[int, int] = {}
+    for r in db.query(Review).filter(Review.task_id.in_(task_ids)):
+        counts[r.task_id] = counts.get(r.task_id, 0) + 1
+
+    now = utcnow()
+    visible = []
+    for r in rows:
+        t = tasks.get(r.task_id)
+        window_expired = bool(
+            t and t.completed_at
+            and now > t.completed_at + timedelta(days=settings.REVIEW_WINDOW_DAYS)
+        )
+        if counts.get(r.task_id, 0) >= 2 or window_expired:  # 与单任务视图同一揭晓条件
+            visible.append(r)
+
+    tag_counts: dict[str, int] = {}
+    for r in visible:
+        for tag in (r.tags or []):
+            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+    page = visible[offset:offset + limit]
+    return {
+        "total": len(visible),
+        "tag_counts": tag_counts,
+        "items": [
+            {"task_id": r.task_id, "reviewer_id": r.reviewer_id, "stars": r.stars,
+             "tags": r.tags, "comment": r.comment, "created_at": r.created_at.isoformat()}
+            for r in page
+        ],
+    }
+
+
 @router.get("/tasks/{task_id}/reviews")
 def list_reviews(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """双盲互评（CRED-002）：双方都评完或窗口到期前，评价只有作者本人（和管理员）

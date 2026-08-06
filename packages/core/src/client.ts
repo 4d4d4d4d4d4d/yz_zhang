@@ -169,6 +169,16 @@ export class PlatformClient {
       'GET', `/tasks/${taskId}/reviews`,
     );
   }
+  userReviews(userId: number, params: { limit?: number; offset?: number } = {}) {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v !== undefined)
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+      .join('&');
+    return this.request<{
+      total: number; tag_counts: Record<string, number>;
+      items: Array<{ task_id: number; reviewer_id: number; stars: number; tags: string[]; comment: string; created_at: string }>;
+    }>('GET', `/users/${userId}/reviews${qs ? `?${qs}` : ''}`);
+  }
 
   // ---- contract / wallet ----
   getContract(id: number) {
