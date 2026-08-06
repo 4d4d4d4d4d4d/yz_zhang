@@ -77,3 +77,28 @@ class TestAreaScalesWithSize:
 
     def test_reference_node_is_stated(self):
         assert P.REFERENCE_NODE_NM == 45
+
+
+class TestVauPhysical:
+    """SPEC-013 §5 — VAU area ∝ lanes, energy from Horowitz FP figures."""
+
+    CAPS = ["vector_add", "vector_mul", "vector_max", "relu"]
+
+    def test_area_is_lanes_times_lane_gates_times_cell(self):
+        a = P.vau_area_um2(16, self.CAPS)
+        assert a == pytest.approx(16 * P.vau_lane_gates(self.CAPS) * P.A_GATE_UM2)
+
+    def test_doubling_lanes_doubles_area(self):
+        assert P.vau_area_um2(32, self.CAPS) == pytest.approx(2 * P.vau_area_um2(16, self.CAPS))
+
+    def test_multiplier_lane_dominates(self):
+        # An FP multiplier lane is far larger than an adder lane.
+        assert P._VAU_LANE_GATES["vector_mul"] > 5 * P._VAU_LANE_GATES["vector_add"]
+
+    def test_energy_sums_active_op_horowitz_values(self):
+        assert P.vau_energy_per_elem_pj(["vector_add"]) == P.E_ADD_FP32_PJ
+        assert P.vau_energy_per_elem_pj(["vector_mul"]) == P.E_MUL_FP32_PJ
+        assert P.vau_energy_per_elem_pj(["relu"]) == P.E_ADD_INT32_PJ
+
+    def test_fp_multiplier_costs_more_gates_than_fp_adder(self):
+        assert P.fp_mul_gates(24) > P.fp_add_gates(24)

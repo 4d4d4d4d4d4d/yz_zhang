@@ -132,21 +132,38 @@ class TestVAUCapabilityQueries:
 
 
 class TestVAUAreaPower:
-    """SPEC-001 §3.1 area = sum over active capabilities."""
+    """SPEC-013 physical model: area = lanes × per-lane FP-ALU gates × cell area."""
 
-    def test_total_area_equals_active_sum(self):
+    def test_area_matches_physical_model(self):
+        from npu_sim import physical
         m = VAU()
         m.configure(_default_config())
-        expected = sum(
-            c.area_cost_um2 for c in VAU.declared_capabilities()
-            if c.name in m.active_capabilities()
-        )
-        assert m.total_area_um2() == expected
+        expected = physical.vau_area_um2(16, m.active_capabilities())
+        assert m.total_area_um2() == pytest.approx(expected)
+        assert expected > 0
+
+    def test_area_scales_with_lanes(self):
+        small = VAU(); small.configure(_default_config(lanes=16))
+        big = VAU(); big.configure(_default_config(lanes=32))
+        assert big.total_area_um2() == pytest.approx(2 * small.total_area_um2())
 
     def test_dropping_optional_reduces_area(self):
         full = VAU(); full.configure(_default_config())
         lean = VAU(); lean.configure(_default_config(support_max=False, support_relu=False))
         assert lean.total_area_um2() < full.total_area_um2()
+
+    def test_energy_is_horowitz_grounded(self):
+        from npu_sim import physical
+        from npu_sim.interfaces.operation import Precision, PrecisionKind, StaticOperation
+        m = VAU(); m.configure(_default_config())
+        op = StaticOperation(
+            _op_type="relu", _required_capabilities=("relu",),
+            _shape_info=(("n_elements", 100),),
+            _precision=Precision(kind=PrecisionKind.FP16),
+        )
+        e = m.estimate_energy(op)
+        expected = 100 * physical.vau_energy_per_elem_pj(m.active_capabilities())
+        assert e.dynamic_pj == pytest.approx(expected)
 
 
 class TestVAUState:

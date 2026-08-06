@@ -82,6 +82,28 @@ def reg_gates(n_bits: int) -> int:
     return n_bits * _GATES_PER_FF
 
 
+def mux_gates(n_bits: int) -> int:
+    """2:1 multiplexer gate count over ``n_bits`` (≈3 gates/bit)."""
+    return n_bits * 3
+
+
+def fp_add_gates(mantissa_bits: int, exp_bits: int = 8) -> int:
+    """Floating-point adder: exponent compare + mantissa align-shift + add +
+    normalize. Analytical (SPEC-013 §2): mantissa add + 2× mantissa for the
+    align/normalize barrel shifters + an exponent adder."""
+    return add_gates(mantissa_bits) + 2 * mantissa_bits * _GATES_PER_FA + add_gates(exp_bits)
+
+
+def fp_mul_gates(mantissa_bits: int, exp_bits: int = 8) -> int:
+    """Floating-point multiplier: mantissa array multiply + exponent add +
+    normalize."""
+    return mult_gates(mantissa_bits) + add_gates(exp_bits) + add_gates(mantissa_bits)
+
+
+# FP32 datapath: 1 sign + 8 exponent + 23 stored mantissa (24 with implicit 1).
+_FP32_MANT = 24
+
+
 # Per-PE gate contribution of each MAC capability (SPEC-013 §3). A MAC PE is a
 # multiplier feeding an accumulator; each precision the array supports adds its
 # own multiplier lane, and FP32 accumulation adds a 32-bit adder + psum reg.
@@ -137,3 +159,46 @@ def energy_per_mac_pj(precision_kind: str) -> float:
 def sram_area_um2(n_bytes: float) -> float:
     """6T-SRAM array area (µm²) for ``n_bytes`` of storage."""
     return n_bytes * 8 * A_SRAM_BIT_UM2
+
+
+# ============================================================
+# VAU — vector arithmetic unit (SPEC-013 §5, second migrated module).
+# A VAU has `lanes` parallel FP ALUs; each lane carries the logic for every
+# op the unit supports, so per-lane gates = Σ active-capability lane logic.
+# ============================================================
+_VAU_LANE_GATES = {
+    "vector_add": fp_add_gates(_FP32_MANT),                 # FP32 adder
+    "vector_mul": fp_mul_gates(_FP32_MANT),                 # FP32 multiplier
+    "vector_max": fp_add_gates(_FP32_MANT),                 # compare ≈ subtractor
+    "relu": mux_gates(32),                                  # max(0,x): sign + 2:1 mux
+}
+
+# Energy per element per op @ 45 nm (Horowitz). An element does one op; the
+# per-element estimate sums the active ops as a conservative upper bound
+# (matches the pre-existing VAU semantics), each term now literature-grounded.
+_VAU_ENERGY_PJ = {
+    "vector_add": E_ADD_FP32_PJ,     # 0.9
+    "vector_mul": E_MUL_FP32_PJ,     # 3.7
+    "vector_max": E_ADD_FP32_PJ,     # 0.9  (compare ≈ subtract)
+    "relu": E_ADD_INT32_PJ,          # 0.1  (compare-with-0 + select)
+}
+
+
+def vau_lane_gates(active_caps) -> int:
+    """Total per-lane gate count for the active VAU capabilities."""
+    return sum(_VAU_LANE_GATES.get(c, 0) for c in active_caps)
+
+
+def vau_area_um2(lanes: int, active_caps) -> float:
+    """VAU ALU-array area (µm²): lanes × per-lane gates × gate area."""
+    return lanes * vau_lane_gates(active_caps) * A_GATE_UM2
+
+
+def vau_static_power_uw(lanes: int, active_caps) -> float:
+    """VAU leakage (µW): total lane gate count × per-gate leakage."""
+    return lanes * vau_lane_gates(active_caps) * P_LEAK_PER_GATE_UW
+
+
+def vau_energy_per_elem_pj(active_caps) -> float:
+    """Dynamic energy per processed element (pJ), summed over active ops."""
+    return sum(_VAU_ENERGY_PJ.get(c, 0.0) for c in active_caps)

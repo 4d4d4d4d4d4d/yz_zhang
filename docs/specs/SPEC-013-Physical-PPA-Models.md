@@ -80,6 +80,25 @@ MAC PE = 乘法器 + 累加器。每支持一种精度就多一条乘法器 lane
 (严格 ∝ PE 数)。对比旧的 size-blind 常数 65,000——旧值不随阵列变,新值随
 PE 数线性缩放,这才是"真模拟"。
 
+## 3.1 VAU 物理模型(第二个落地模块)
+
+VAU 有 `lanes` 条并行 FP ALU;每条 lane 携带所支持全部 op 的逻辑,故
+**每 lane 门数** = Σ active capability 的 lane 逻辑门:
+
+| capability | lane 门(FP32) | 依据 |
+|---|---|---|
+| vector_add | `fp_add_gates(24)` = 400 | 尾数加 + 对齐/规格化移位器 + 指数加 |
+| vector_mul | `fp_mul_gates(24)` = 3496 | 尾数阵列乘 + 指数加 + 规格化 |
+| vector_max | `fp_add_gates(24)` = 400 | 比较 ≈ 减法器 |
+| relu | `mux_gates(32)` = 96 | max(0,x):符号判断 + 2:1 mux |
+
+- **面积** = `lanes × (Σ per-lane 门) × 0.8 µm²`(默认 16 lanes、全 op = 4392
+  门/lane → 56,218 µm²;32 lanes → 112,435,严格 ∝ lanes)。
+- **动态能量/元素** = Σ active op 的 Horowitz 值(add 0.9、mul 3.7、max 0.9、
+  relu 0.1 pJ)——保留原"sum active"语义(保守上界),每项换成文献值。
+- FP 乘法器 lane 比加法器 lane 大 ~8×(`fp_mul_gates ≫ fp_add_gates`),这
+  也是真实的(FP 乘法昂贵)。
+
 ## 4. 契约变更
 
 - MAC 覆盖 `estimate_area()` / `total_area_um2()` / `static_power_uw()` /
@@ -93,8 +112,8 @@ PE 数线性缩放,这才是"真模拟"。
 
 | 模块 | 面积驱动项 | 能量驱动项 | 状态 |
 |---|---|---|---|
-| **MAC** | PE 数 × per-PE 门 | MACs × per-MAC(Horowitz) | ✅ 本规范 |
-| VAU | lanes × per-lane 门 | elems × fp add/mul | 待做 |
+| **MAC** | PE 数 × per-PE 门 | MACs × per-MAC(Horowitz) | ✅ §3 |
+| **VAU** | lanes × per-lane FP-ALU 门 | elems × Σ active fp op(Horowitz) | ✅ §3.1 |
 | DSB | buffer_kb × SRAM bit | bytes × SRAM read | 待做 |
 | AVP | vector_width + LUT entries | elems × (transcendental≈几×fp) | 待做 |
 | DAGC | unpack 数据通路宽度 | bytes × 移位/对齐 | 待做 |

@@ -9,9 +9,11 @@ from __future__ import annotations
 
 from typing import Iterator, Optional
 
+from npu_sim import physical
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.clock import IClock
 from npu_sim.interfaces.module import (
+    AreaModel,
     Capability,
     EnergyEstimate,
     IModule,
@@ -57,11 +59,15 @@ class VAU(IModule):
 
     @classmethod
     def declared_capabilities(cls) -> list[Capability]:
+        # Area / static-power / energy come from the physical model (SPEC-013:
+        # estimate_area / static_power_uw / estimate_energy), scaling with the
+        # lane count. The numeric fields below are retained only for the
+        # capability-presence contract and are NOT used for VAU's PPA.
         return [
-            Capability("vector_add", "Elementwise add.", 4000.0, 9.0, 0.04),
-            Capability("vector_mul", "Elementwise multiply.", 5200.0, 11.0, 0.06),
-            Capability("vector_max", "Elementwise max.", 2100.0, 5.0, 0.03),
-            Capability("relu", "Rectified linear unit.", 900.0, 2.0, 0.01),
+            Capability("vector_add", "Elementwise add.", 0.0, 0.0, 0.0),
+            Capability("vector_mul", "Elementwise multiply.", 0.0, 0.0, 0.0),
+            Capability("vector_max", "Elementwise max.", 0.0, 0.0, 0.0),
+            Capability("relu", "Rectified linear unit.", 0.0, 0.0, 0.0),
         ]
 
     @classmethod
@@ -165,16 +171,38 @@ class VAU(IModule):
         )
 
     def estimate_energy(self, operation: IOperation) -> EnergyEstimate:
+        """Dynamic energy = elements × per-element op energy (SPEC-013,
+        Horowitz ISSCC'14 FP-op figures), not hand-picked constants."""
         n = operation.shape_info.get("n_elements", 0)
-        per_elem_pj = sum(
-            c.dynamic_energy_pj for c in self.declared_capabilities()
-            if c.name in self._active_caps
-        )
+        per_elem_pj = physical.vau_energy_per_elem_pj(self._active_caps)
         return EnergyEstimate(
             dynamic_pj=per_elem_pj * n,
             static_pj_per_cycle=self.static_power_uw() * 1e-6,
             confidence=0.8,
         )
+
+    def estimate_area(self) -> AreaModel:
+        """ALU-array area from the physical model (SPEC-013): area scales with
+        the lane count and the per-lane FP-ALU gate count."""
+        um2 = physical.vau_area_um2(self._lanes, self._active_caps)
+        return AreaModel(
+            um2=um2,
+            breakdown={"alu_array": um2},
+            notes=(
+                f"SPEC-013 physical @{physical.REFERENCE_NODE_NM}nm: "
+                f"{self._lanes} lanes × "
+                f"{physical.vau_lane_gates(self._active_caps)} gates/lane "
+                f"× {physical.A_GATE_UM2} µm²/gate"
+            ),
+        )
+
+    def total_area_um2(self) -> float:
+        """Physical ALU-array area (µm²); overrides the capability-sum default."""
+        return self.estimate_area().um2
+
+    def static_power_uw(self) -> float:
+        """Leakage from the physical model: total lane gate count × per-gate leak."""
+        return physical.vau_static_power_uw(self._lanes, self._active_caps)
 
     # ============== Runtime state ==============
 
