@@ -99,6 +99,21 @@ VAU 有 `lanes` 条并行 FP ALU;每条 lane 携带所支持全部 op 的逻辑,
 - FP 乘法器 lane 比加法器 lane 大 ~8×(`fp_mul_gates ≫ fp_add_gates`),这
   也是真实的(FP 乘法昂贵)。
 
+## 3.2 DSB 物理模型(第三个落地模块,SRAM-dominated)
+
+DSB 是暂存 SRAM,面积/漏电由 SRAM macro 主导——这是**最扎实可引用**的一档
+(SRAM 面积/能量文献值最多)。
+
+- **面积** = SRAM macro = `存储字节 × 8 × 0.25 µm²/bit ÷ 0.7`(cell array
+  除以阵列效率;45nm 6T ~0.25µm²/bit,array efficiency ~0.7)。double-buffer
+  保留两份 ping-pong → 存储 ×2。实测 64KB double-buf = 374,491 µm²
+  (128KB 有效存储的 45nm SRAM,合理);32→64→128 KB = 187k→374k→749k
+  (∝ buffer_kb),double-buffer 精确 ×2。旧值是常数 27,000(size-blind)。
+- **漏电** = `存储位 × 1e-4 µW/bit`(45nm 6T 保持漏电 ~0.1 nW/cell 量级)。
+- **动态能量/元素** = SRAM 读能量(Horowitz 32b read 5pJ → 按字节缩放);
+  double-buffer 再加一次写访问(×2);broadcast_factor 复制到 N 个 sink。
+- broadcast 布线 / banking 外围相对 SRAM 很小,并入 macro efficiency,不单列。
+
 ## 4. 契约变更
 
 - MAC 覆盖 `estimate_area()` / `total_area_um2()` / `static_power_uw()` /
@@ -114,7 +129,7 @@ VAU 有 `lanes` 条并行 FP ALU;每条 lane 携带所支持全部 op 的逻辑,
 |---|---|---|---|
 | **MAC** | PE 数 × per-PE 门 | MACs × per-MAC(Horowitz) | ✅ §3 |
 | **VAU** | lanes × per-lane FP-ALU 门 | elems × Σ active fp op(Horowitz) | ✅ §3.1 |
-| DSB | buffer_kb × SRAM bit | bytes × SRAM read | 待做 |
+| **DSB** | SRAM macro(buffer_kb × bitcell / eff) | elems × SRAM read(Horowitz) | ✅ §3.2 |
 | AVP | vector_width + LUT entries | elems × (transcendental≈几×fp) | 待做 |
 | DAGC | unpack 数据通路宽度 | bytes × 移位/对齐 | 待做 |
 | L2/TLU/MMU | 已 size-aware(`capacity_kb×800`),但 800 待换 SRAM bit 模型 | — | 部分 |

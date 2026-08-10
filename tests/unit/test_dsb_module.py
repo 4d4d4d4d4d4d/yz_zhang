@@ -143,21 +143,38 @@ class TestDSBCapabilityQueries:
 
 
 class TestDSBAreaPower:
-    """SPEC-001 §3.1 area = sum over active capabilities."""
+    """SPEC-013 physical model: area = SRAM macro of the (double-)buffered bytes."""
 
-    def test_total_area_equals_active_sum(self):
+    def test_area_matches_physical_sram_model(self):
+        from npu_sim import physical
         m = DSB()
         m.configure(_default_config())
-        expected = sum(
-            c.area_cost_um2 for c in DSB.declared_capabilities()
-            if c.name in m.active_capabilities()
-        )
-        assert m.total_area_um2() == expected
+        expected = physical.dsb_area_um2(64, True)
+        assert m.total_area_um2() == pytest.approx(expected)
+        assert expected > 0
 
-    def test_dropping_double_buffer_reduces_area(self):
+    def test_area_scales_with_buffer_kb(self):
+        small = DSB(); small.configure(_default_config(buffer_kb=32))
+        big = DSB(); big.configure(_default_config(buffer_kb=64))
+        assert big.total_area_um2() == pytest.approx(2 * small.total_area_um2())
+
+    def test_dropping_double_buffer_halves_area(self):
         full = DSB(); full.configure(_default_config())
         lean = DSB(); lean.configure(_default_config(enable_double_buffer=False))
-        assert lean.total_area_um2() < full.total_area_um2()
+        assert lean.total_area_um2() == pytest.approx(0.5 * full.total_area_um2())
+
+    def test_energy_is_sram_read_grounded(self):
+        from npu_sim import physical
+        from npu_sim.interfaces.operation import Precision, PrecisionKind, StaticOperation
+        m = DSB(); m.configure(_default_config())
+        op = StaticOperation(
+            _op_type="stage", _required_capabilities=("tile_buffer",),
+            _shape_info=(("n_elements", 50),),
+            _precision=Precision(kind=PrecisionKind.FP16),
+        )
+        e = m.estimate_energy(op)
+        expected = 50 * physical.dsb_energy_per_elem_pj(True, 1)
+        assert e.dynamic_pj == pytest.approx(expected)
 
 
 class TestDSBState:

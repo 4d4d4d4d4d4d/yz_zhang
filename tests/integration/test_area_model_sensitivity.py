@@ -55,17 +55,19 @@ class TestMigratedModulesAreSizeAware:
         assert len(set(areas)) == 2, f"VAU area should scale with lanes, got {areas}"
         assert areas[1] > areas[0]
 
+    def test_dsb_buffer_kb_area_now_scales(self):
+        # Doubling the SRAM buffer must increase area (∝ bytes).
+        areas = _areas("dsb", "buffer_kb", [32, 64])
+        assert len(set(areas)) == 2, f"DSB area should scale with buffer_kb, got {areas}"
+        assert areas[1] > areas[0]
+
 
 class TestScalingParamsDoNotChangeArea:
     """KNOWN GAP: remaining modules' size knobs leave area unchanged.
 
     Tripwire — as each module migrates to the physical model (SPEC-013 §5),
-    move it out of this group (like MAC / VAU above).
+    move it out of this group (like MAC / VAU / DSB above).
     """
-
-    def test_dsb_buffer_kb_area_flat(self):
-        areas = _areas("dsb", "buffer_kb", [32, 64])
-        assert len(set(areas)) == 1
 
     def test_avp_vector_width_area_flat(self):
         areas = _areas("avp", "vector_width", [16, 32, 64])

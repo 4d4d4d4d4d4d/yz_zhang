@@ -102,3 +102,38 @@ class TestVauPhysical:
 
     def test_fp_multiplier_costs_more_gates_than_fp_adder(self):
         assert P.fp_mul_gates(24) > P.fp_add_gates(24)
+
+
+class TestDsbPhysical:
+    """SPEC-013 §5 — DSB SRAM macro area/energy from published SRAM figures."""
+
+    def test_sram_read_energy_scales_from_horowitz_32b(self):
+        # 4 bytes = one 32-bit read = 5 pJ.
+        assert P.sram_read_energy_pj(4) == pytest.approx(P.E_SRAM_RD_32B_PJ)
+        assert P.sram_read_energy_pj(8) == pytest.approx(2 * P.E_SRAM_RD_32B_PJ)
+
+    def test_macro_area_includes_peripheral_overhead(self):
+        # Macro > raw cell array (decoders/sense-amps), by 1/efficiency.
+        cells = P.sram_area_um2(64 * 1024)
+        macro = P.sram_macro_area_um2(64 * 1024)
+        assert macro == pytest.approx(cells / P.SRAM_ARRAY_EFFICIENCY)
+        assert macro > cells
+
+    def test_area_scales_with_buffer_kb(self):
+        assert P.dsb_area_um2(64, True) == pytest.approx(2 * P.dsb_area_um2(32, True))
+
+    def test_double_buffering_doubles_storage(self):
+        assert P.dsb_storage_bytes(64, True) == 2 * P.dsb_storage_bytes(64, False)
+        assert P.dsb_area_um2(64, True) == pytest.approx(2 * P.dsb_area_um2(64, False))
+
+    def test_double_buffered_energy_is_read_plus_write(self):
+        # double-buffer adds the write access → 2× a read-only element.
+        assert P.dsb_energy_per_elem_pj(True, 1) == pytest.approx(
+            2 * P.dsb_energy_per_elem_pj(False, 1)
+        )
+
+    def test_broadcast_replicates_energy(self):
+        # broadcast_factor=2 → element read replicated to 2 sinks.
+        assert P.dsb_energy_per_elem_pj(False, 2) == pytest.approx(
+            2 * P.dsb_energy_per_elem_pj(False, 1)
+        )

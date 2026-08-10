@@ -14,9 +14,11 @@ from __future__ import annotations
 
 from typing import Iterator, Optional
 
+from npu_sim import physical
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.clock import IClock
 from npu_sim.interfaces.module import (
+    AreaModel,
     Capability,
     EnergyEstimate,
     IModule,
@@ -76,28 +78,27 @@ class DSB(IModule):
 
     @classmethod
     def declared_capabilities(cls) -> list[Capability]:
+        # Area / static-power / energy come from the physical model (SPEC-013:
+        # estimate_area / static_power_uw / estimate_energy), scaling with the
+        # SRAM size (buffer_kb, double-buffering). The numeric fields below are
+        # retained only for the capability-presence contract and are NOT used
+        # for DSB's PPA.
         return [
             Capability(
                 name="tile_buffer",
                 description="Basic tile staging + forward.",
-                area_cost_um2=18000.0,
-                static_power_uw=40.0,
-                dynamic_energy_pj=0.3,
+                area_cost_um2=0.0, static_power_uw=0.0, dynamic_energy_pj=0.0,
             ),
             Capability(
                 name="double_buffer",
                 description="Overlapped read/write across banks.",
-                area_cost_um2=9000.0,
-                static_power_uw=22.0,
-                dynamic_energy_pj=0.1,
+                area_cost_um2=0.0, static_power_uw=0.0, dynamic_energy_pj=0.0,
                 depends_on=("tile_buffer",),
             ),
             Capability(
                 name="broadcast",
                 description="Replicate one tile to multiple sinks.",
-                area_cost_um2=3200.0,
-                static_power_uw=7.0,
-                dynamic_energy_pj=0.15,
+                area_cost_um2=0.0, static_power_uw=0.0, dynamic_energy_pj=0.0,
                 depends_on=("tile_buffer",),
             ),
         ]
@@ -204,17 +205,40 @@ class DSB(IModule):
         )
 
     def estimate_energy(self, operation: IOperation) -> EnergyEstimate:
+        """Dynamic energy = elements × per-element SRAM-access energy (SPEC-013,
+        Horowitz 32b SRAM read 5 pJ), not hand-picked constants."""
         n = operation.shape_info.get("n_elements", 0)
-        per_elem_pj = sum(
-            c.dynamic_energy_pj
-            for c in self.declared_capabilities()
-            if c.name in self._active_caps
+        per_elem_pj = physical.dsb_energy_per_elem_pj(
+            self._double_buffer, self._broadcast_factor
         )
         return EnergyEstimate(
             dynamic_pj=per_elem_pj * n,
             static_pj_per_cycle=self.static_power_uw() * 1e-6,
             confidence=0.7,
         )
+
+    def estimate_area(self) -> AreaModel:
+        """SRAM-macro area from the physical model (SPEC-013): area scales with
+        buffer_kb (and doubles under double-buffering)."""
+        um2 = physical.dsb_area_um2(self._buffer_kb, self._double_buffer)
+        return AreaModel(
+            um2=um2,
+            breakdown={"sram_macro": um2},
+            notes=(
+                f"SPEC-013 physical @{physical.REFERENCE_NODE_NM}nm: "
+                f"{physical.dsb_storage_bytes(self._buffer_kb, self._double_buffer):,} B "
+                f"SRAM @ {physical.A_SRAM_BIT_UM2} µm²/bit / "
+                f"{physical.SRAM_ARRAY_EFFICIENCY} eff"
+            ),
+        )
+
+    def total_area_um2(self) -> float:
+        """Physical SRAM-macro area (µm²); overrides the capability-sum default."""
+        return self.estimate_area().um2
+
+    def static_power_uw(self) -> float:
+        """SRAM retention leakage from the physical model."""
+        return physical.dsb_static_power_uw(self._buffer_kb, self._double_buffer)
 
     # ============== Runtime state ==============
 

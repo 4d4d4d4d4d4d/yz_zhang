@@ -157,8 +157,67 @@ def energy_per_mac_pj(precision_kind: str) -> float:
 
 
 def sram_area_um2(n_bytes: float) -> float:
-    """6T-SRAM array area (µm²) for ``n_bytes`` of storage."""
+    """6T-SRAM *cell* array area (µm²) for ``n_bytes`` of storage."""
     return n_bytes * 8 * A_SRAM_BIT_UM2
+
+
+# SRAM macro efficiency = cell area / full macro area (decoders + sense amps +
+# row/col drivers). Published 45 nm SRAM arrays run ~65–75% efficient.
+SRAM_ARRAY_EFFICIENCY = 0.7
+# 6T SRAM cell retention leakage @ 45 nm (~0.1 nW/cell order of magnitude).
+P_SRAM_LEAK_PER_BIT_UW = 1e-4
+
+
+def sram_macro_area_um2(n_bytes: float, efficiency: float = SRAM_ARRAY_EFFICIENCY) -> float:
+    """Full SRAM macro area (µm²): cell array inflated by peripheral overhead."""
+    return sram_area_um2(n_bytes) / efficiency
+
+
+def sram_read_energy_pj(n_bytes: float) -> float:
+    """Energy of an SRAM read of ``n_bytes`` (pJ). Horowitz gives a 32-bit
+    (4-byte) SRAM read ≈ 5 pJ; scale linearly with bytes."""
+    return E_SRAM_RD_32B_PJ * (n_bytes / 4.0)
+
+
+def sram_static_power_uw(n_bytes: float) -> float:
+    """SRAM retention leakage (µW) for ``n_bytes`` of storage."""
+    return n_bytes * 8 * P_SRAM_LEAK_PER_BIT_UW
+
+
+# ============================================================
+# DSB — data-staging buffer (SPEC-013 §5, third migrated module).
+# Area/leakage are dominated by the SRAM macro; double-buffering keeps two
+# ping-pong copies (2× storage). Energy per staged element is an SRAM read
+# (+ a write when double-buffered), replicated across broadcast sinks.
+# ============================================================
+def dsb_storage_bytes(buffer_kb: int, double_buffer: bool) -> int:
+    """Physical SRAM bytes: the buffer, doubled for ping-pong double-buffering."""
+    return buffer_kb * 1024 * (2 if double_buffer else 1)
+
+
+def dsb_area_um2(buffer_kb: int, double_buffer: bool) -> float:
+    """DSB area (µm²) = SRAM macro area of the (double-)buffered storage.
+
+    Broadcast wiring and banking overhead are small relative to the SRAM and
+    are folded into the macro efficiency factor.
+    """
+    return sram_macro_area_um2(dsb_storage_bytes(buffer_kb, double_buffer))
+
+
+def dsb_static_power_uw(buffer_kb: int, double_buffer: bool) -> float:
+    """DSB leakage (µW) = SRAM retention leakage of the buffered storage."""
+    return sram_static_power_uw(dsb_storage_bytes(buffer_kb, double_buffer))
+
+
+def dsb_energy_per_elem_pj(
+    double_buffer: bool, broadcast_factor: int = 1, bytes_per_elem: int = 2
+) -> float:
+    """Energy to stage one element (pJ): an SRAM read (+ a write when
+    double-buffered), replicated to ``broadcast_factor`` sinks."""
+    e = sram_read_energy_pj(bytes_per_elem)
+    if double_buffer:
+        e += sram_read_energy_pj(bytes_per_elem)   # write side of the ping-pong
+    return e * broadcast_factor
 
 
 # ============================================================
