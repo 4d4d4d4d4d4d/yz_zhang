@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { saturatingRevenue, project, rebalanceAllocations, optimalAllocation } from '../logic/forecast.js'
+import { saturatingRevenue, project, rebalanceAllocations, optimalAllocation, projectWithUncertainty } from '../logic/forecast.js'
 
 // Each channel: saturating ROAS — diminishing returns model
 const channels = ref([
@@ -26,6 +26,17 @@ const projections = computed(() => {
 
 const totalRev = computed(() => project(channels.value, totalBudget.value).totalRevenue)
 const totalRoas = computed(() => project(channels.value, totalBudget.value).totalRoas)
+
+// Spec 48 — a point forecast invites overconfidence. Response coefficients
+// carry ~20% relative uncertainty; channels are partly correlated (shared
+// seasonality/macro), so the portfolio band is narrower than the naive sum.
+const CHANNEL_CV = 0.2
+const CHANNEL_CORRELATION = 0.3
+const level = ref('p80')
+const forecast = computed(() => projectWithUncertainty(channels.value, totalBudget.value, {
+  cv: CHANNEL_CV, correlation: CHANNEL_CORRELATION, level: level.value
+}))
+const kFmt = v => '$' + Math.round(v / 1000).toLocaleString() + 'k'
 
 function applyOptimal() {
   const next = optimalAllocation(channels.value, totalBudget.value)
@@ -66,8 +77,44 @@ function dotPos(ch) {
       </div>
       <div class="kpis">
         <div><div class="kn grad-text">{{ totalRoas.toFixed(2) }}×</div><div class="kl">Total ROAS</div></div>
-        <div><div class="kn">${{ Math.round(totalRev / 1000).toLocaleString() }}k</div><div class="kl">Projected revenue</div></div>
+        <div>
+          <div class="kn">{{ kFmt(totalRev) }}</div>
+          <div class="kl">Projected revenue</div>
+          <div class="band">{{ kFmt(forecast.band.lo) }} – {{ kFmt(forecast.band.hi) }}</div>
+        </div>
         <div><div class="kn">${{ (totalBudget / 1000).toLocaleString() }}k</div><div class="kl">Total budget</div></div>
+      </div>
+    </div>
+
+    <div class="card unc">
+      <div class="unc-head">
+        <div>
+          <div class="kicker">Prediction interval</div>
+          <h3>{{ kFmt(forecast.band.lo) }} – {{ kFmt(forecast.band.hi) }}</h3>
+          <p class="meta">
+            ±{{ (forecast.relativeCv * forecast.band.z * 100).toFixed(1) }}% around
+            {{ kFmt(forecast.band.mid) }} · {{ (CHANNEL_CV * 100).toFixed(0) }}% response-curve uncertainty,
+            {{ CHANNEL_CORRELATION }} channel correlation. Portfolio CV
+            {{ (forecast.relativeCv * 100).toFixed(1) }}% — diversified below the
+            {{ (CHANNEL_CV * 100).toFixed(0) }}% per-channel figure.
+          </p>
+        </div>
+        <div class="lvl">
+          <button v-for="l in ['p80', 'p90', 'p95']" :key="l" type="button"
+            :class="{ on: level === l }" @click="level = l">{{ l.toUpperCase() }}</button>
+        </div>
+      </div>
+      <div class="unc-bar" :title="`${kFmt(forecast.band.lo)} – ${kFmt(forecast.band.hi)}`">
+        <div class="unc-range" :style="{
+          left: (forecast.band.lo / forecast.band.hi * 100) + '%',
+          right: '0%'
+        }"></div>
+        <div class="unc-mid" :style="{ left: (forecast.band.mid / forecast.band.hi * 100) + '%' }"></div>
+      </div>
+      <div class="unc-scale">
+        <span>{{ kFmt(forecast.band.lo) }}</span>
+        <span class="unc-mid-lbl">{{ kFmt(forecast.band.mid) }}</span>
+        <span>{{ kFmt(forecast.band.hi) }}</span>
       </div>
     </div>
 
@@ -115,6 +162,19 @@ function dotPos(ch) {
 
 <style scoped>
 .fc { display: flex; flex-direction: column; gap: 16px; }
+.band { font-size: 11px; color: var(--primary-2); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.unc { padding: 16px 18px; }
+.unc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.unc-head h3 { margin: 4px 0 6px; font-variant-numeric: tabular-nums; }
+.lvl { display: flex; gap: 4px; flex-shrink: 0; }
+.lvl button { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text-dim); font-size: 11px; font-weight: 700; cursor: pointer; }
+.lvl button.on { border-color: var(--primary); background: rgba(124, 92, 255, .18); color: #fff; }
+.lvl button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.unc-bar { position: relative; height: 12px; border-radius: 999px; background: var(--surface-2); margin-top: 14px; overflow: hidden; }
+.unc-range { position: absolute; top: 0; bottom: 0; background: linear-gradient(90deg, rgba(124,92,255,.35), rgba(34,211,238,.45)); }
+.unc-mid { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); }
+.unc-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 6px; font-variant-numeric: tabular-nums; }
+.unc-mid-lbl { color: var(--text); font-weight: 700; }
 .head { padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .kicker { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .1em; }
 .meta { color: var(--text-dim); font-size: 13px; margin: 4px 0 0; }

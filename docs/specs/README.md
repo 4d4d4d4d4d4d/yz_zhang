@@ -56,6 +56,7 @@ the test assertions.
 | 45 | [A/B Statistical Significance](45-ab-significance.md) | `logic/significance.js`, `ExperimentManager.vue` calculator | `tests/significance.test.js` |
 | 46 | [Multi-Touch Attribution (computed)](46-attribution-models.md) | `logic/attribution.js`, `AttributionWaterfall.vue` (bars + paths + delta) | `tests/attribution.test.js` |
 | 47 | [Sales Forecast (double-count fix + coverage)](47-sales-forecast.md) | `logic/salesForecast.js`, `SalesForecast.vue` | `tests/salesForecast.test.js` |
+| 48 | [Forecast Prediction Intervals](48-forecast-uncertainty.md) | `logic/forecast.js` (uncertainty), `ForecastSim.vue` band panel | `tests/forecastUncertainty.test.js` |
 
 Capability flow across domains:
 

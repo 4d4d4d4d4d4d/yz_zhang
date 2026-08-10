@@ -52,6 +52,48 @@ export function rebalanceAllocations(channels, id, val) {
   return next
 }
 
+// ------------------------------------------------- Spec 48 — uncertainty
+// A point forecast invites overconfidence. Revenue is linear in each channel's
+// response coefficient k, so a relative uncertainty (CV) on k carries straight
+// through to revenue. Portfolio spread depends on how correlated the channels
+// are: independent channels diversify (√ of summed variances), perfectly
+// correlated ones do not (variances add linearly).
+
+export const Z_SCORES = { p80: 1.2816, p90: 1.6449, p95: 1.96 }
+
+export function portfolioSd(revenues, { cv = 0.15, correlation = 0 } = {}) {
+  const sds = (Array.isArray(revenues) ? revenues : [])
+    .map(r => Math.abs(Number(r) || 0) * (Number(cv) || 0))
+  const rho = Math.min(1, Math.max(0, Number(correlation) || 0))
+  let variance = 0
+  for (let i = 0; i < sds.length; i++) {
+    for (let j = 0; j < sds.length; j++) {
+      variance += (i === j ? 1 : rho) * sds[i] * sds[j]
+    }
+  }
+  return Math.sqrt(Math.max(0, variance))
+}
+
+// Revenue cannot go negative, so the low edge clamps at 0.
+export function forecastBand(mean, sd, level = 'p80') {
+  const z = Z_SCORES[level] ?? Z_SCORES.p80
+  const m = Number(mean) || 0
+  const s = Math.max(0, Number(sd) || 0)
+  return { lo: Math.max(0, m - z * s), mid: m, hi: m + z * s, z, level }
+}
+
+// Projection plus a prediction interval on portfolio revenue.
+export function projectWithUncertainty(channels, totalBudget, opts = {}) {
+  const p = project(channels, totalBudget)
+  const sd = portfolioSd(p.rows.map(r => r.revenue), opts)
+  return {
+    ...p,
+    sd,
+    relativeCv: p.totalRevenue > 0 ? sd / p.totalRevenue : 0,
+    band: forecastBand(p.totalRevenue, sd, opts.level)
+  }
+}
+
 // λ-sweep water-fill: budget each channel to sat·ln(k/λ) (0 when λ ≥ k),
 // scan λ for the split matching the total, keep the best-revenue hit.
 // Falls back to the current allocation shape only if no λ lands within
