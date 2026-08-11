@@ -61,16 +61,22 @@ class TestMigratedModulesAreSizeAware:
         assert len(set(areas)) == 2, f"DSB area should scale with buffer_kb, got {areas}"
         assert areas[1] > areas[0]
 
+    def test_avp_vector_width_area_now_scales(self):
+        # Resolves the original finding: AVP area was insensitive to vector_width.
+        areas = _areas("avp", "vector_width", [16, 32, 64])
+        assert len(set(areas)) == 3, f"AVP area should scale with vector_width, got {areas}"
+        assert areas[0] < areas[1] < areas[2]
+
 
 class TestScalingParamsDoNotChangeArea:
-    """KNOWN GAP: remaining modules' size knobs leave area unchanged.
+    """KNOWN GAP: the last unmigrated module (DAGC) leaves area unchanged.
 
-    Tripwire — as each module migrates to the physical model (SPEC-013 §5),
-    move it out of this group (like MAC / VAU / DSB above).
+    Tripwire — when DAGC migrates to the physical model (SPEC-013 §5), this
+    group empties and should become an "all migrated" assertion.
     """
 
-    def test_avp_vector_width_area_flat(self):
-        areas = _areas("avp", "vector_width", [16, 32, 64])
+    def test_dagc_join_fifo_depth_area_flat(self):
+        areas = _areas("dagc", "join_fifo_depth", [16, 32])
         assert len(set(areas)) == 1
 
 

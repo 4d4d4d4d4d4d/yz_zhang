@@ -148,16 +148,26 @@ class TestAVPCapabilityQueries:
 
 
 class TestAVPAreaPower:
-    """SPEC-001 §3.1 area = sum over active capabilities."""
+    """SPEC-013 physical model: area = FP-ALU array (∝ vector_width) + LUT SRAM."""
 
-    def test_total_area_equals_active_sum(self):
+    def test_area_matches_physical_model(self):
+        from npu_sim import physical
         m = AVP()
         m.configure(_default_config())
-        expected = sum(
-            c.area_cost_um2 for c in AVP.declared_capabilities()
-            if c.name in m.active_capabilities()
-        )
-        assert m.total_area_um2() == expected
+        expected = physical.avp_area_um2(16, 256, m.active_capabilities())
+        assert m.total_area_um2() == pytest.approx(expected)
+        assert expected > 0
+
+    def test_area_scales_with_vector_width(self):
+        # Resolves the original finding: AVP area was insensitive to vector_width.
+        small = AVP(); small.configure(_default_config(vector_width=16))
+        big = AVP(); big.configure(_default_config(vector_width=32))
+        assert big.total_area_um2() > small.total_area_um2()
+
+    def test_area_grows_with_lut_entries(self):
+        few = AVP(); few.configure(_default_config(lut_entries=256))
+        many = AVP(); many.configure(_default_config(lut_entries=1024))
+        assert many.total_area_um2() > few.total_area_um2()
 
     def test_dropping_optional_reduces_area(self):
         full = AVP(); full.configure(_default_config())

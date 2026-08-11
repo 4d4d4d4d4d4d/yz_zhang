@@ -114,6 +114,20 @@ DSB 是暂存 SRAM,面积/漏电由 SRAM macro 主导——这是**最扎实可�
   double-buffer 再加一次写访问(×2);broadcast_factor 复制到 N 个 sink。
 - broadcast 布线 / banking 外围相对 SRAM 很小,并入 macro efficiency,不单列。
 
+## 3.3 AVP 物理模型(第四个落地模块,ALU + LUT 双组件)
+
+AVP 做超越函数(softmax/gelu/layernorm),面积两部分:**FP-ALU 阵列**(每
+lane 做 LUT 插值)+ **LUT SRAM**(存函数采样)。
+
+- **面积** = `vector_width × Σ active per-lane 门 × 0.8 µm²`(ALU,复用 §3.1
+  的 FP 门模型:每个超越 ≈ fp_mul + fp_add + LUT 选择 mux)+
+  `sram_macro(lut_entries × 2 B)`(LUT,FP16 采样,复用 §3.2 SRAM 模型)。
+  实测:vector_width 16→32→64 = 152k→302k→602k µm²(ALU 主导,∝ vw);
+  lut_entries 256→1024 时面积微增(LUT 是小 SRAM)。
+- **动态能量/元素** = Σ active 超越 的(LUT 读 + 插值 fp mul + fp add)。
+- **直接修复了最早的 finding**:"AVP 面积对 vector_width 不敏感" —— 现在
+  ALU 阵列随 vector_width 线性缩放。
+
 ## 4. 契约变更
 
 - MAC 覆盖 `estimate_area()` / `total_area_um2()` / `static_power_uw()` /
@@ -130,7 +144,7 @@ DSB 是暂存 SRAM,面积/漏电由 SRAM macro 主导——这是**最扎实可�
 | **MAC** | PE 数 × per-PE 门 | MACs × per-MAC(Horowitz) | ✅ §3 |
 | **VAU** | lanes × per-lane FP-ALU 门 | elems × Σ active fp op(Horowitz) | ✅ §3.1 |
 | **DSB** | SRAM macro(buffer_kb × bitcell / eff) | elems × SRAM read(Horowitz) | ✅ §3.2 |
-| AVP | vector_width + LUT entries | elems × (transcendental≈几×fp) | 待做 |
+| **AVP** | FP-ALU 阵列(vector_width)+ LUT SRAM(lut_entries) | elems × (LUT read + fp interp) | ✅ §3.3 |
 | DAGC | unpack 数据通路宽度 | bytes × 移位/对齐 | 待做 |
 | L2/TLU/MMU | 已 size-aware(`capacity_kb×800`),但 800 待换 SRAM bit 模型 | — | 部分 |
 

@@ -137,3 +137,28 @@ class TestDsbPhysical:
         assert P.dsb_energy_per_elem_pj(False, 2) == pytest.approx(
             2 * P.dsb_energy_per_elem_pj(False, 1)
         )
+
+
+class TestAvpPhysical:
+    """SPEC-013 §5 — AVP = FP-ALU array (∝ vector_width) + LUT SRAM (∝ entries)."""
+
+    CAPS = ["gelu", "softmax", "layernorm"]
+
+    def test_area_is_alu_plus_lut(self):
+        alu = 16 * P.avp_lane_gates(self.CAPS) * P.A_GATE_UM2
+        lut = P.sram_macro_area_um2(P.avp_lut_bytes(256))
+        assert P.avp_area_um2(16, 256, self.CAPS) == pytest.approx(alu + lut)
+
+    def test_area_grows_with_vector_width(self):
+        assert P.avp_area_um2(32, 256, self.CAPS) > P.avp_area_um2(16, 256, self.CAPS)
+
+    def test_area_grows_with_lut_entries(self):
+        assert P.avp_area_um2(16, 1024, self.CAPS) > P.avp_area_um2(16, 256, self.CAPS)
+
+    def test_energy_per_elem_is_lut_read_plus_fp_interp(self):
+        one = P.avp_energy_per_elem_pj(["softmax"])
+        assert one == pytest.approx(
+            P.sram_read_energy_pj(P.AVP_LUT_ENTRY_BYTES) + P.E_MUL_FP32_PJ + P.E_ADD_FP32_PJ
+        )
+        # summed over active ops
+        assert P.avp_energy_per_elem_pj(["softmax", "gelu"]) == pytest.approx(2 * one)

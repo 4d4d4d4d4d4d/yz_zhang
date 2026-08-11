@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from typing import Iterator, Optional
 
+from npu_sim import physical
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.clock import IClock
 from npu_sim.interfaces.module import (
+    AreaModel,
     Capability,
     EnergyEstimate,
     IModule,
@@ -62,11 +64,15 @@ class AVP(IModule):
 
     @classmethod
     def declared_capabilities(cls) -> list[Capability]:
+        # Area / static-power / energy come from the physical model (SPEC-013:
+        # estimate_area / static_power_uw / estimate_energy), scaling with
+        # vector_width and lut_entries. The numeric fields below are retained
+        # only for the capability-presence contract and are NOT used for AVP PPA.
         return [
-            Capability("gelu", "GELU activation (tanh approximation).", 6000.0, 14.0, 0.07),
-            Capability("softmax", "Softmax along last axis.", 7400.0, 17.0, 0.09),
-            Capability("layernorm", "Layer normalization.", 8100.0, 19.0, 0.1),
-            Capability("pooling", "Spatial pooling.", 3000.0, 7.0, 0.04),
+            Capability("gelu", "GELU activation (tanh approximation).", 0.0, 0.0, 0.0),
+            Capability("softmax", "Softmax along last axis.", 0.0, 0.0, 0.0),
+            Capability("layernorm", "Layer normalization.", 0.0, 0.0, 0.0),
+            Capability("pooling", "Spatial pooling.", 0.0, 0.0, 0.0),
         ]
 
     @classmethod
@@ -175,15 +181,40 @@ class AVP(IModule):
         )
 
     def estimate_energy(self, operation: IOperation) -> EnergyEstimate:
+        """Dynamic energy = elements × per-element (LUT read + FP interpolation)
+        energy (SPEC-013, Horowitz SRAM read + FP ops), not hand-picked."""
         n = operation.shape_info.get("n_elements", 0)
-        per_elem_pj = sum(
-            c.dynamic_energy_pj for c in self.declared_capabilities()
-            if c.name in self._active_caps
-        )
+        per_elem_pj = physical.avp_energy_per_elem_pj(self._active_caps)
         return EnergyEstimate(
             dynamic_pj=per_elem_pj * n,
             static_pj_per_cycle=self.static_power_uw() * 1e-6,
             confidence=0.6,
+        )
+
+    def estimate_area(self) -> AreaModel:
+        """Area from the physical model (SPEC-013): FP-ALU array (∝ vector_width)
+        + transcendental LUT SRAM macro (∝ lut_entries)."""
+        alu = self._vw * physical.avp_lane_gates(self._active_caps) * physical.A_GATE_UM2
+        lut = physical.sram_macro_area_um2(physical.avp_lut_bytes(self._lut_entries))
+        um2 = physical.avp_area_um2(self._vw, self._lut_entries, self._active_caps)
+        return AreaModel(
+            um2=um2,
+            breakdown={"alu_array": alu, "lut_sram": lut},
+            notes=(
+                f"SPEC-013 physical @{physical.REFERENCE_NODE_NM}nm: "
+                f"{self._vw}-wide ALU ({physical.avp_lane_gates(self._active_caps)} "
+                f"gates/lane) + {self._lut_entries}-entry LUT"
+            ),
+        )
+
+    def total_area_um2(self) -> float:
+        """Physical AVP area (µm²); overrides the capability-sum default."""
+        return self.estimate_area().um2
+
+    def static_power_uw(self) -> float:
+        """Leakage from the physical model: ALU gates + LUT SRAM retention."""
+        return physical.avp_static_power_uw(
+            self._vw, self._lut_entries, self._active_caps
         )
 
     # ============== Runtime state ==============

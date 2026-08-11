@@ -221,6 +221,60 @@ def dsb_energy_per_elem_pj(
 
 
 # ============================================================
+# AVP — activation / vector processor (SPEC-013 §5, fourth migrated module).
+# Two area components: a `vector_width`-wide FP ALU array (transcendental
+# compute via LUT interpolation) + a LUT SRAM holding function samples.
+# ============================================================
+# FP16 samples in the transcendental LUT.
+AVP_LUT_ENTRY_BYTES = 2
+
+# Per-lane gate contribution of each AVP transcendental. Each does a LUT
+# lookup then interpolates — an FP multiply + FP add — plus (for gelu) a
+# select mux; pooling is just a compare/add.
+_AVP_LANE_GATES = {
+    "gelu": fp_mul_gates(_FP32_MANT) + fp_add_gates(_FP32_MANT) + mux_gates(16),
+    "softmax": fp_mul_gates(_FP32_MANT) + fp_add_gates(_FP32_MANT),
+    "layernorm": fp_mul_gates(_FP32_MANT) + fp_add_gates(_FP32_MANT),
+    "pooling": fp_add_gates(_FP32_MANT),
+}
+
+# Energy per element per active transcendental @ 45 nm: a LUT read + the
+# interpolation (FP multiply + FP add). Summed over active ops (conservative,
+# matches the pre-existing AVP semantics).
+def _avp_op_energy_pj() -> float:
+    return sram_read_energy_pj(AVP_LUT_ENTRY_BYTES) + E_MUL_FP32_PJ + E_ADD_FP32_PJ
+
+
+def avp_lane_gates(active_caps) -> int:
+    """Total per-lane gate count for the active AVP transcendentals."""
+    return sum(_AVP_LANE_GATES.get(c, 0) for c in active_caps)
+
+
+def avp_lut_bytes(lut_entries: int) -> int:
+    """LUT storage in bytes for ``lut_entries`` FP16 samples."""
+    return lut_entries * AVP_LUT_ENTRY_BYTES
+
+
+def avp_area_um2(vector_width: int, lut_entries: int, active_caps) -> float:
+    """AVP area (µm²) = FP-ALU array + transcendental LUT SRAM macro."""
+    alu = vector_width * avp_lane_gates(active_caps) * A_GATE_UM2
+    lut = sram_macro_area_um2(avp_lut_bytes(lut_entries))
+    return alu + lut
+
+
+def avp_static_power_uw(vector_width: int, lut_entries: int, active_caps) -> float:
+    """AVP leakage (µW) = ALU gate leakage + LUT SRAM retention leakage."""
+    alu = vector_width * avp_lane_gates(active_caps) * P_LEAK_PER_GATE_UW
+    lut = sram_static_power_uw(avp_lut_bytes(lut_entries))
+    return alu + lut
+
+
+def avp_energy_per_elem_pj(active_caps) -> float:
+    """Dynamic energy per processed element (pJ), summed over active ops."""
+    return sum(_avp_op_energy_pj() for c in active_caps if c in _AVP_LANE_GATES)
+
+
+# ============================================================
 # VAU — vector arithmetic unit (SPEC-013 §5, second migrated module).
 # A VAU has `lanes` parallel FP ALUs; each lane carries the logic for every
 # op the unit supports, so per-lane gates = Σ active-capability lane logic.
