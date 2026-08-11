@@ -187,6 +187,12 @@ def _ban_impact(db, user_id: int) -> dict:
         .all()
     )
     acct = get_or_create(db, user_id)
+    # 未成交的挂单：封禁后无人能选人，须下架，否则工人白报名空等
+    open_tasks = (
+        db.query(Task)
+        .filter(Task.creator_id == user_id, Task.status.in_(("draft", "published")))
+        .all()
+    )
     return {
         "in_flight_contracts": [
             {"contract_id": c.id, "task_id": c.task_id, "status": c.status,
@@ -198,6 +204,8 @@ def _ban_impact(db, user_id: int) -> dict:
         "escrow_at_risk_cents": sum(
             c.amount_cents - c.released_cents for c in in_flight if c.status == "funded"
         ),
+        "open_task_ids": [t.id for t in open_tasks],
+        "open_task_count": len(open_tasks),
         "wallet": {"available_cents": acct.available_cents,
                    "escrow_cents": acct.escrow_cents, "frozen_cents": acct.frozen_cents},
     }
@@ -229,8 +237,26 @@ def ban_user(user_id: int, admin: User = Depends(require_admin), db: Session = D
         notify(db, c["counterparty_id"], "task", "对方账号已被封禁",
                f"任务 #{c['task_id']}（合约 #{c['contract_id']}）的对方账号已被平台封禁，"
                "无法继续履约。请尽快取消任务或发起纠纷，以便结清托管资金。")
+    # OPS-013 下架未成交挂单：封禁后无人能选人，留在广场只会让工人白报名空等
+    from app.modules.task.models import Application
+    from app.modules.task.service import transition
+
+    for task_id in impact["open_task_ids"]:
+        task = db.get(Task, task_id)
+        if not task:
+            continue
+        pending = db.query(Application).filter(
+            Application.task_id == task_id, Application.status == "pending"
+        ).all()
+        for a in pending:
+            a.status = "rejected"
+            db.add(a)
+            notify(db, a.applicant_id, "task", "报名的任务已下架",
+                   f"《{task.title}》的发布方账号已被封禁，任务已下架，你的报名已自动关闭。")
+        transition(db, task, "cancelled", {"cancelled_by": "system_creator_banned"})
     record_audit(db, admin.id, "ban_user", "user", user_id,
-                 f"在途合约 {impact['in_flight_count']} 笔，涉险托管 {impact['escrow_at_risk_cents']} 分")
+                 f"在途合约 {impact['in_flight_count']} 笔，涉险托管 {impact['escrow_at_risk_cents']} 分，"
+                 f"下架挂单 {impact['open_task_count']} 个")
     return {"id": user.id, "is_banned": True, "impact": impact}
 
 

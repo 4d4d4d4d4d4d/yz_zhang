@@ -342,8 +342,16 @@ def list_tasks(
     limit: int = Query(default=20, le=100),
     offset: int = Query(default=0, ge=0),
 ):
-    # 公开广场不展示圈层定向任务（TASK-008）
+    # 公开广场不展示圈层定向任务（TASK-008）；
+    # 也不展示被封禁/已注销发布者的任务——他们无法选人，留着只会让工人白报名（OPS-013）
+    banned_ids = [
+        u.id for u in db.query(User.id).filter(
+            (User.is_banned.is_(True)) | (User.is_deleted.is_(True))
+        )
+    ]
     query = db.query(Task).filter(Task.status == status, Task.visibility == "public")
+    if banned_ids:
+        query = query.filter(Task.creator_id.notin_(banned_ids))
     if q:
         query = query.filter(Task.title.contains(q) | Task.description.contains(q))
     if category:
@@ -414,6 +422,9 @@ def apply(
         raise conflict("任务不在招募中", "not_recruiting")
     if task.creator_id == user.id:
         raise bad_request("不能报名自己发布的任务", "self_apply")
+    creator = db.get(User, task.creator_id)  # OPS-013 发布方已封禁/注销则无人能选人
+    if creator and (creator.is_banned or creator.is_deleted):
+        raise conflict("该任务发布方账号已失效，无法报名", "creator_unavailable")
     service.check_category_qualification(db, task, user)  # ACC-022 受限类目准入
     service.check_executor_capacity(db, user.id)  # TASK-011 并发接单上限
     from app.modules.account.service import is_blocked_between
