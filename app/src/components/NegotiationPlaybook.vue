@@ -1,18 +1,27 @@
 <script setup>
 import { ref, computed } from 'vue'
 import WorkerSwarm from './WorkerSwarm.vue'
+import { discountZopa, surplusSplit, discountAnchor } from '../logic/negotiation.js'
 
+// Spec 49 — the zone is defined by the two RESERVATIONS (walk-away points);
+// targets are aspirations and sit outside it. Computed by the logic layer:
+// the previous inline formula mixed targets with reservations and multiplied
+// by 1.1, so the band's v-if was always false and it never rendered.
 const zopa = {
-  yourReservation: 38,    // lowest you accept (% off MSRP)
-  yourTarget: 44,
-  theirTarget: 52,
-  theirReservation: 58,   // highest they accept
+  yourTarget: 38,        // seller aspiration — smallest discount you'd love
+  yourReservation: 52,   // seller walk-away — most discount you'll concede
+  theirReservation: 44,  // buyer walk-away — least discount they'll accept
+  theirTarget: 58,       // buyer aspiration
   scale: { min: 30, max: 65, unit: '% off MSRP', label: 'Wholesale discount' }
 }
 function pct(v) { return ((v - zopa.scale.min) / (zopa.scale.max - zopa.scale.min)) * 100 }
-const zopaOverlap = computed(() => ({
-  start: Math.max(zopa.yourReservation, zopa.theirTarget),
-  end: Math.min(zopa.yourTarget * 1.1, zopa.theirReservation)
+
+const zone = computed(() => discountZopa(zopa.theirReservation, zopa.yourReservation))
+const settlement = ref(zone.value.midpoint ?? 48)
+const split = computed(() => surplusSplit(zone.value, settlement.value))
+const anchors = computed(() => ({
+  seller: discountAnchor(zone.value, 'seller'),
+  buyer: discountAnchor(zone.value, 'buyer')
 }))
 
 const presence = [
@@ -76,10 +85,12 @@ function postComment() {
         <div class="kicker">BATNA · ZOPA · Target / Reservation</div>
         <div class="z-scale">
           <div class="z-track">
-            <div class="z-zopa" v-if="zopaOverlap.end > zopaOverlap.start"
-              :style="{ left: pct(zopaOverlap.start) + '%', width: (pct(zopaOverlap.end) - pct(zopaOverlap.start)) + '%' }">
+            <div class="z-zopa" v-if="zone.exists && zone.width > 0"
+              :style="{ left: pct(zone.low) + '%', width: (pct(zone.high) - pct(zone.low)) + '%' }">
               <span>ZOPA</span>
             </div>
+            <div class="z-settle" :style="{ left: pct(split ? split.settlement : zone.midpoint) + '%' }"
+              :title="`Settlement ${settlement}%`"></div>
             <div class="z-mk you-res" :style="{ left: pct(zopa.yourReservation) + '%' }"><span>Your reservation</span></div>
             <div class="z-mk you-tar" :style="{ left: pct(zopa.yourTarget) + '%' }"><span>Your target</span></div>
             <div class="z-mk them-tar" :style="{ left: pct(zopa.theirTarget) + '%' }"><span>Their target</span></div>
@@ -91,11 +102,29 @@ function postComment() {
             <span>{{ zopa.scale.max }}%</span>
           </div>
         </div>
+
+        <div class="surplus" v-if="split">
+          <label class="s-slider">
+            Settlement
+            <input type="range" :min="zone.low" :max="zone.high" step="0.5" v-model.number="settlement" />
+            <strong>{{ settlement }}%</strong>
+          </label>
+          <div class="s-bar" :title="`You ${(split.sellerShare*100).toFixed(0)}% · Partner ${(split.buyerShare*100).toFixed(0)}%`">
+            <div class="s-you" :style="{ width: (split.sellerShare * 100) + '%' }"></div>
+            <div class="s-them" :style="{ width: (split.buyerShare * 100) + '%' }"></div>
+          </div>
+          <div class="s-legend">
+            <span>You capture <strong>{{ (split.sellerShare * 100).toFixed(0) }}%</strong> of the zone</span>
+            <span class="dimc">Zone {{ zone.low }}–{{ zone.high }}% · width {{ zone.width }}pt</span>
+            <span>Partner <strong>{{ (split.buyerShare * 100).toFixed(0) }}%</strong></span>
+          </div>
+          <p class="s-anchor">Suggested opening anchors — you {{ anchors.seller.toFixed(1) }}% · partner {{ anchors.buyer.toFixed(1) }}%</p>
+        </div>
         <div class="z-legend">
           <span><span class="dot you"></span>You</span>
           <span><span class="dot them"></span>Partner</span>
           <span><span class="dot zopa"></span>Overlap (ZOPA)</span>
-          <span class="zhint">Aim for {{ Math.round((zopaOverlap.start + zopaOverlap.end) / 2) }}% — mid of overlap zone.</span>
+          <span class="zhint">Aim for {{ zone.exists ? zone.midpoint : '—' }}% — mid of overlap zone.</span>
         </div>
       </div>
     </div>
@@ -164,6 +193,17 @@ function postComment() {
 .av.idle { opacity: .4; }
 
 .zopa { padding-top: 14px; border-top: 1px solid var(--border); margin-top: 4px; }
+.z-settle { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text); z-index: 3; }
+.surplus { margin-top: 22px; padding-top: 14px; border-top: 1px dashed var(--border); }
+.s-slider { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-dim); }
+.s-slider input { flex: 1; accent-color: var(--primary); }
+.s-slider strong { color: var(--text); font-variant-numeric: tabular-nums; min-width: 48px; text-align: right; }
+.s-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; margin-top: 10px; background: var(--surface-2); }
+.s-you { background: linear-gradient(90deg, var(--primary), var(--primary-2)); }
+.s-them { background: rgba(255, 122, 217, .6); }
+.s-legend { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; margin-top: 6px; flex-wrap: wrap; }
+.s-legend .dimc { color: var(--text-dim); }
+.s-anchor { font-size: 11px; color: var(--text-dim); margin: 8px 0 0; }
 .z-scale { padding: 60px 0 8px; position: relative; }
 .z-track { position: relative; height: 6px; background: var(--surface-2); border-radius: 999px; }
 .z-zopa { position: absolute; top: -10px; bottom: -10px; background: linear-gradient(135deg, rgba(124,92,255,.3), rgba(34,211,238,.3)); border: 1px solid rgba(124,92,255,.5); border-radius: 8px; display: grid; place-items: center; font-size: 11px; color: #fff; font-weight: 700; letter-spacing: .08em; }

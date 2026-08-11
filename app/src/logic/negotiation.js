@@ -8,12 +8,39 @@ export function zopa(buyer, seller) {
   return { exists: true, low: min, high: max, width: max - min, midpoint: (max + min) / 2 }
 }
 
+// Spec 49 — discount-axis ZOPA. A higher discount favours the buyer, so the
+// zone runs from the buyer's MINIMUM acceptable discount up to the seller's
+// MAXIMUM tolerable discount. Both bounds are reservations (walk-away points);
+// targets are aspirations and never define the zone. Delegates to zopa() so
+// there is exactly one implementation of the overlap rule.
+export function discountZopa(buyerMinDiscount, sellerMaxDiscount) {
+  return zopa({ max: sellerMaxDiscount }, { min: buyerMinDiscount })
+}
+
+// Value capture: where a settlement lands inside the zone. On the discount
+// axis a higher settlement favours the buyer. Settlements outside the zone are
+// clamped to it — you cannot capture surplus that does not exist.
+export function surplusSplit(zone, settlement) {
+  if (!zone?.exists || !(zone.width > 0)) return null
+  const s = Math.min(zone.high, Math.max(zone.low, Number(settlement) || 0))
+  const buyerShare = (s - zone.low) / zone.width
+  return { settlement: s, buyerShare, sellerShare: 1 - buyerShare }
+}
+
+// NOTE: framed in PRICE space — the seller favours the high end.
 export function suggestAnchor(zone, side, aggressiveness = 0.7) {
   if (!zone?.exists) return null
   const a = Math.min(1, Math.max(0, aggressiveness))
   return side === 'seller'
     ? zone.high - (1 - a) * zone.width * 0.5
     : zone.low + (1 - a) * zone.width * 0.5
+}
+
+// Spec 49 — on the DISCOUNT axis the preferences invert: the seller favours
+// the low end (small discount) and the buyer the high end. Mapping the flip
+// here stops every caller from having to remember it.
+export function discountAnchor(zone, side, aggressiveness = 0.7) {
+  return suggestAnchor(zone, side === 'seller' ? 'buyer' : 'seller', aggressiveness)
 }
 
 // Evaluate a proposal against playbook rules.
