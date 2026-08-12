@@ -303,7 +303,18 @@ export class PlatformClient {
 
   // ---- im / notifications / support / dispute ----
   conversations() {
-    return this.request<Conversation[]>('GET', '/conversations');
+    return this.request<Array<Conversation & {
+      unread_count: number;
+      last_message: { id: number; sender_id: number; kind: string; content: string; created_at: string } | null;
+    }>>('GET', '/conversations');
+  }
+  imUnreadCount() {
+    return this.request<{ unread: number }>('GET', '/conversations/unread-count');
+  }
+  markConversationRead(convId: number) {
+    return this.request<{ conversation_id: number; last_read_message_id: number }>(
+      'POST', `/conversations/${convId}/read`,
+    );
   }
   openDirect(userId: number) {
     return this.request<Conversation>('POST', '/conversations/direct', { user_id: userId });

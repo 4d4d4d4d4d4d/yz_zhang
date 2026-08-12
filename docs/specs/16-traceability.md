@@ -1,8 +1,15 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V38 全批次完成（2026-07-24）。
-> 后端 244 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V39 全批次完成（2026-07-24）。
+> 后端 247 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V39 批次：IM 已读位点——未读数与红点）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| IM-010 聊天已读位点（**补聊天标配缺口**）：IM 此前零已读状态，用户无从知道哪个会话有新消息 → 新增 `ConversationRead` 已读位点表；会话列表附 `unread_count` 与最后一条消息预览、有未读优先排序；`/conversations/unread-count` 全局红点；`/conversations/{id}/read` 标记已读（复用参与者鉴权，自己发的消息不计未读） | `im/models.py::ConversationRead` + `im/router.py` | `tests/test_im_unread.py` |
+| SDK 同步：conversations 富返回 / imUnreadCount / markConversationRead | `packages/core/src/client.ts` | web 构建通过 |
 
 ## 已实现（V38 批次：被封发布者挂单下架）
 
