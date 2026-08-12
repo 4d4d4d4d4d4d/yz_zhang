@@ -16,6 +16,41 @@ function clamp01(v) {
   return Math.min(1, Math.max(0, n))
 }
 
+// Spec 50 — map a concept plus the operator's brief to the 0..1 signal vector
+// the scorer consumes. This is what makes the console's inputs actually drive
+// the ranking: goal selects which performance metric matters, audience drives
+// affinity, voice drives brand fit, and a budget that cannot fund a concept
+// discounts the performance it could realistically deliver.
+export const GOAL_METRIC = {
+  roas:  { key: 'roas', cap: 7 },
+  cpa:   { key: 'cvr',  cap: 5 },
+  reach: { key: 'ctr',  cap: 6 }
+}
+
+export function conceptSignals(concept = {}, ctx = {}) {
+  const { audience = [], voice = null, goal = 'roas', budget = Infinity } = ctx
+  const metric = GOAL_METRIC[goal] ?? GOAL_METRIC.roas
+  const rawPerf = clamp01((Number(concept[metric.key]) || 0) / metric.cap)
+
+  // A concept the brief cannot fund cannot deliver its headline performance.
+  const needed = Number(concept.minBudget) || 0
+  const fundable = needed <= 0 ? 1 : clamp01((Number(budget) || 0) / needed)
+
+  const targets = Array.isArray(concept.audiences) ? concept.audiences : []
+  const wanted = Array.isArray(audience) ? audience : []
+  const affinity = wanted.length
+    ? wanted.filter(a => targets.includes(a)).length / wanted.length
+    : 0.5 // no audience selected → neutral, not zero
+
+  return {
+    affinity,
+    freshness: clamp01((concept.scores?.creativity ?? 0) / 100),
+    performance: rawPerf * fundable,
+    brandFit: concept.voice === voice ? 1 : 0.45,
+    localization: clamp01((concept.scores?.fit ?? 0) / 100)
+  }
+}
+
 export function scoreCandidate(candidate, weights = DEFAULT_WEIGHTS) {
   const signals = candidate.signals || {}
   const totalW = SIGNAL_KEYS.reduce((s, k) => s + (weights[k] ?? 0), 0) || 1

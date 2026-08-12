@@ -58,6 +58,7 @@ the test assertions.
 | 47 | [Sales Forecast (double-count fix + coverage)](47-sales-forecast.md) | `logic/salesForecast.js`, `SalesForecast.vue` | `tests/salesForecast.test.js` |
 | 48 | [Forecast Prediction Intervals](48-forecast-uncertainty.md) | `logic/forecast.js` (uncertainty), `ForecastSim.vue` band panel | `tests/forecastUncertainty.test.js` |
 | 49 | [ZOPA Band Fix + Surplus Split](49-zopa-surplus.md) | `logic/negotiation.js` (discountZopa/surplusSplit/discountAnchor), `NegotiationPlaybook.vue` | `tests/zopa.test.js` |
+| 50 | [Explainable Recommender Wired Up](50-explainable-recommend.md) | `logic/recommend.js` (conceptSignals), `RecommendDeep.vue` | `tests/conceptSignals.test.js` |
 
 Capability flow across domains:
 
