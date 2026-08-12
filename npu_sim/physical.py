@@ -275,6 +275,90 @@ def avp_energy_per_elem_pj(active_caps) -> float:
 
 
 # ============================================================
+# DAGC — BFP unpack / align (SPEC-013 §5, fifth and final compute module).
+# Area = BFP-unpack shift/align logic (∝ unpack throughput) + a staging
+# register file (a small SRAM) + a join FIFO. `compact_unpack` replaces the
+# wide staging register file with dynamic decode, saving most of that SRAM
+# (SPEC-005 v1.1 §U.1: a real −area lever, preserved here).
+# ============================================================
+# Unpack staging depth per throughput-lane (microarchitectural choice, not a
+# fabricated PPA coefficient): how many elements the align pipeline stages.
+DAGC_STAGE_ELEMS = 256
+DAGC_OUT_BYTES = 2                 # BF16 unpacked output
+DAGC_JOIN_BYTES = 4                # FP32-wide join FIFO entries
+# compact_unpack keeps only this fraction of the staging register file
+# (dynamic decode replaces the wide RF).
+DAGC_COMPACT_RETENTION = 0.4
+
+
+def barrel_shifter_gates(n_bits: int) -> int:
+    """Log-depth barrel shifter over ``n_bits`` (≈2 gates-equiv per bit)."""
+    return 2 * n_bits * _GATES_PER_FA
+
+
+def bfp_unpack_lane_gates(out_bits: int) -> int:
+    """One BFP→float unpack lane: exponent barrel-shift align + output reg."""
+    return barrel_shifter_gates(out_bits) + reg_gates(out_bits)
+
+
+def dagc_staging_bytes(bfp8_tp: int, bfp16_tp: int) -> int:
+    """Unpack staging register-file size (bytes) before compact-unpack."""
+    return (bfp8_tp + bfp16_tp) * DAGC_STAGE_ELEMS * DAGC_OUT_BYTES
+
+
+def dagc_area_um2(
+    bfp8_tp: int, bfp16_tp: int, join_fifo_depth: int, active_caps
+) -> float:
+    """DAGC area (µm²) = unpack shift logic + staging RF (SRAM, reduced by
+    compact_unpack) + join FIFO."""
+    active = set(active_caps)
+    # Shift/align logic scales with unpack throughput (parallel lanes).
+    logic_gates = (
+        bfp8_tp * bfp_unpack_lane_gates(16) + bfp16_tp * bfp_unpack_lane_gates(32)
+    )
+    if "bfp8_bfp16_mix" in active:
+        logic_gates += 4 * mux_gates(32)     # mixed-precision aligner
+    if "int4_reorder" in active:
+        logic_gates += 2 * mux_gates(32)     # 4-bit reorder mux network
+    logic_area = logic_gates * A_GATE_UM2
+
+    staging = sram_macro_area_um2(dagc_staging_bytes(bfp8_tp, bfp16_tp))
+    if "compact_unpack" in active:
+        staging *= DAGC_COMPACT_RETENTION    # dynamic decode drops the wide RF
+
+    join = sram_macro_area_um2(join_fifo_depth * DAGC_JOIN_BYTES)
+    return logic_area + staging + join
+
+
+def dagc_static_power_uw(
+    bfp8_tp: int, bfp16_tp: int, join_fifo_depth: int, active_caps
+) -> float:
+    """DAGC leakage (µW): logic-gate leakage + staging/join SRAM retention."""
+    active = set(active_caps)
+    logic_gates = (
+        bfp8_tp * bfp_unpack_lane_gates(16) + bfp16_tp * bfp_unpack_lane_gates(32)
+    )
+    staging_bytes = dagc_staging_bytes(bfp8_tp, bfp16_tp)
+    if "compact_unpack" in active:
+        staging_bytes = int(staging_bytes * DAGC_COMPACT_RETENTION)
+    return (
+        logic_gates * P_LEAK_PER_GATE_UW
+        + sram_static_power_uw(staging_bytes)
+        + sram_static_power_uw(join_fifo_depth * DAGC_JOIN_BYTES)
+    )
+
+
+def dagc_energy_per_elem_pj(active_caps) -> float:
+    """Energy to unpack one element (pJ): barrel-shift align (int op), plus a
+    mix-align op when the mixed-precision path is active."""
+    active = set(active_caps)
+    e = E_ADD_INT32_PJ                       # exponent align / shift
+    if "bfp8_bfp16_mix" in active:
+        e += E_ADD_INT32_PJ                  # extra align for mixed precision
+    return e
+
+
+# ============================================================
 # VAU — vector arithmetic unit (SPEC-013 §5, second migrated module).
 # A VAU has `lanes` parallel FP ALUs; each lane carries the logic for every
 # op the unit supports, so per-lane gates = Σ active-capability lane logic.

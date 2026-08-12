@@ -162,3 +162,33 @@ class TestAvpPhysical:
         )
         # summed over active ops
         assert P.avp_energy_per_elem_pj(["softmax", "gelu"]) == pytest.approx(2 * one)
+
+
+class TestDagcPhysical:
+    """SPEC-013 §5 — DAGC unpack logic (∝ throughput) + staging RF + join FIFO."""
+
+    CAPS = ["bfp8_unpack", "bfp16_unpack", "bfp8_bfp16_mix", "int4_reorder"]
+
+    def test_area_scales_with_unpack_throughput(self):
+        a2 = P.dagc_area_um2(2, 1, 16, self.CAPS)
+        a8 = P.dagc_area_um2(8, 1, 16, self.CAPS)
+        assert a8 > a2
+
+    def test_area_grows_with_join_fifo_depth(self):
+        assert P.dagc_area_um2(2, 1, 64, self.CAPS) > P.dagc_area_um2(2, 1, 16, self.CAPS)
+
+    def test_compact_unpack_shrinks_staging(self):
+        full = P.dagc_area_um2(4, 2, 16, self.CAPS)
+        compact = P.dagc_area_um2(4, 2, 16, self.CAPS + ["compact_unpack"])
+        assert compact < full
+        assert full - compact >= 1500   # preserves the SPEC-005 §U.1 tradeoff
+
+    def test_staging_reflects_throughput(self):
+        assert P.dagc_staging_bytes(4, 2) > P.dagc_staging_bytes(2, 1)
+
+    def test_energy_is_int_shift_grounded(self):
+        assert P.dagc_energy_per_elem_pj(["bfp8_unpack"]) == pytest.approx(P.E_ADD_INT32_PJ)
+        # mixed precision adds an extra align op
+        assert P.dagc_energy_per_elem_pj(["bfp8_unpack", "bfp8_bfp16_mix"]) == pytest.approx(
+            2 * P.E_ADD_INT32_PJ
+        )

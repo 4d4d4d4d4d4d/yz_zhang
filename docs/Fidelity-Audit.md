@@ -28,12 +28,13 @@ calibration")、SPEC-005 v1.1 amendment §A.2、review-v1.1-proposal §30
 拿它做**相对架构权衡**是可信的;拿它报**这颗芯片多少 μm²/多少 pJ** 不可信。
 
 > **更新(2026-08-05,本次起):** 已开始把占位系数**逐模块换成 literature-
-> grounded 物理模型**(SPEC-013)。**MAC、VAU、DSB、AVP 已迁移**(5 个 compute
-> 模块中的 4 个):面积 = 规模(PE 数 / lanes / SRAM 字节 / vector_width+LUT)
-> × 单位成本(@45nm),能量 = 运算数 × per-op(Horowitz ISSCC'14),面积随规模
-> 真实缩放(MAC 16²→64² = 217k→3.47M;VAU 56k→225k;DSB 187k→749k;AVP
-> vw 16→64 = 152k→602k µm²)。只剩 **DAGC** 一个按 SPEC-013 §5 跟进。下表的
-> "compute 面积/能量" 结论对**已迁移模块不再适用**。
+> grounded 物理模型**(SPEC-013)。**5 个 compute 模块(MAC/VAU/DSB/AVP/DAGC)
+> 全部迁移完成**:面积 = 规模(PE 数 / lanes / SRAM 字节 / vector_width+LUT /
+> unpack throughput)× 单位成本(@45nm),能量 = 运算数 × per-op(Horowitz
+> ISSCC'14),面积随规模真实缩放(MAC 16²→64² = 217k→3.47M;VAU 56k→225k;DSB
+> 187k→749k;AVP 152k→602k;DAGC ∝ throughput)。**compute 数据通路已全部脱离
+> 经验拍值**。剩余占位系数在 control(SPEC-007)/ DRAM(SPEC-011),已标
+> `[calibration knob]`。下表的 "compute 面积/能量" 结论**不再适用**(已全部修复)。
 
 ## 1. 信任矩阵(TL;DR 速查)
 
@@ -76,8 +77,8 @@ from|calibrat` 全模块搜索,**没有任何一处**把面积/能量常数关�
 
 | 轴 | 取值方式 | 可信度 |
 |---|---|---|
-| 面积(compute:**MAC/VAU/DSB/AVP 已迁移**) | 规模 × 单位成本 @45nm(SPEC-013;DSB/AVP-LUT 用 SRAM macro) | ✅ 物理正确形式 + 引用单位成本(±30%,待综合) |
-| 面积(compute:DAGC,未迁移) | 每 capability 固定圆整常数,**与规模无关** | ❌ 占位 + 结构缺口(§4) |
+| 面积(compute:**全部 5 个已迁移**) | 规模 × 单位成本 @45nm(SPEC-013;SRAM 用 macro 模型) | ✅ 物理正确形式 + 引用单位成本(±30%,待综合) |
+| 面积(control/DRAM) | `[calibration knob]` 占位常数(部分 size-aware) | 🟡 明示占位,待 Phase 5 |
 | 面积(memory/DRAM:L2/TLU/MMU) | **随容量缩放** `capacity_kb × 800` (`l2_module.py`) | 🟡 形式对,系数 800 是拍的 |
 | 面积(control:OGU/MCU/MTU/TAU/AGU/DMA) | 固定常数,**已标 `[calibration knob]`** | 🟡 明示占位 |
 | 能量 | 部分固定(DAGC 0.8pJ),部分按架构因子缩放(OGU `0.25×_T_BUFFSIZE`、MCU `0.4×_T_OPCFG`) | 🟡 结构半对,乘子是拍的 |

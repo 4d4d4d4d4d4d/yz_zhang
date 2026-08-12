@@ -128,6 +128,23 @@ lane 做 LUT 插值)+ **LUT SRAM**(存函数采样)。
 - **直接修复了最早的 finding**:"AVP 面积对 vector_width 不敏感" —— 现在
   ALU 阵列随 vector_width 线性缩放。
 
+## 3.4 DAGC 物理模型(第五个,BFP 解包,保留 compact_unpack 权衡)
+
+DAGC 把 BFP 解包成 float。面积三部分:
+
+- **解包移位逻辑**(∝ throughput):每条 unpack lane = 指数 barrel shifter +
+  输出寄存器(`bfp_unpack_lane_gates`)。bfp8_tp / bfp16_tp 是并行 lane 数 →
+  面积 ∝ throughput。mix 对齐器 / int4 reorder 是额外 mux 网络。
+- **staging 寄存器堆**(SRAM):暂存解包 tile。`compact_unpack` 用动态解码
+  替换宽寄存器堆 → 只保留 40%(`DAGC_COMPACT_RETENTION`),这就是 SPEC-005
+  v1.1 §U.1 的 −area 杠杆,**物理化保留**(实测省 ≥1500 µm²,
+  `test_unpack_area_tradeoff.py` + `test_dagc_module.py` 双重锁)。
+- **join FIFO**(SRAM,∝ join_fifo_depth)。
+
+**能量/元素** = 移位/对齐 int op(Horowitz int32 add 0.1pJ),mix 再加一次。
+实测:bfp8_tp 2→8 面积 ∝ 增大;join_fifo 16→32 微增;compact off/on 实测省
+~10.5k µm²(> 文献 20% 占位,因 staging RF 随 throughput 变大)。
+
 ## 4. 契约变更
 
 - MAC 覆盖 `estimate_area()` / `total_area_um2()` / `static_power_uw()` /
@@ -145,8 +162,12 @@ lane 做 LUT 插值)+ **LUT SRAM**(存函数采样)。
 | **VAU** | lanes × per-lane FP-ALU 门 | elems × Σ active fp op(Horowitz) | ✅ §3.1 |
 | **DSB** | SRAM macro(buffer_kb × bitcell / eff) | elems × SRAM read(Horowitz) | ✅ §3.2 |
 | **AVP** | FP-ALU 阵列(vector_width)+ LUT SRAM(lut_entries) | elems × (LUT read + fp interp) | ✅ §3.3 |
-| DAGC | unpack 数据通路宽度 | bytes × 移位/对齐 | 待做 |
+| **DAGC** | unpack 逻辑(∝throughput)+ staging RF + join FIFO | elems × 移位/对齐(int) | ✅ §3.4 |
 | L2/TLU/MMU | 已 size-aware(`capacity_kb×800`),但 800 待换 SRAM bit 模型 | — | 部分 |
+
+**5 个 compute 模块(MAC/VAU/DSB/AVP/DAGC)全部迁移完成** —— compute 数据通路
+的 PPA 已全部脱离"经验拍值",改为规模驱动 + 文献引用单位成本。剩余占位系数
+集中在 control(SPEC-007)/ DRAM(SPEC-011)模块,已标 `[calibration knob]`。
 
 迁移每个模块:先在本规范加一节推导 + 引用 → 加 `physical.py` 函数 →
 覆盖模块 PPA 方法 → 更新该模块测试 → flip

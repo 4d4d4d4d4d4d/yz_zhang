@@ -66,21 +66,14 @@ class TestCoefficientProvenanceDisclosure:
         assert "[calibration knob]" in self._src("dram", "l2_module.py")
         assert "[calibration knob]" in self._src("control", "mcu_module.py")
 
-    def test_migrated_modules_are_physically_grounded(self):
-        # MAC, VAU, DSB and AVP cite a literature-derived physical basis
-        # (SPEC-013) instead of placeholder constants.
+    def test_all_compute_modules_are_physically_grounded(self):
+        # All five compute modules (MAC/VAU/DSB/AVP/DAGC) cite a literature-
+        # derived physical basis (SPEC-013) instead of placeholder constants.
         for area, mod in [("mac", "mac_module.py"), ("vau", "vau_module.py"),
-                          ("dsb", "dsb_module.py"), ("avp", "avp_module.py")]:
+                          ("dsb", "dsb_module.py"), ("avp", "avp_module.py"),
+                          ("dagc", "dagc_module.py")]:
             src = self._src(area, mod)
             assert "physical" in src and "SPEC-013" in src
-
-    def test_remaining_compute_modules_still_lack_grounding(self):
-        # Tripwire: DAGC is the last compute module not yet migrated
-        # (SPEC-013 §5 rollout). When grounded, move it above.
-        src = self._src("dagc", "dagc_module.py")
-        assert "SPEC-013" not in src, (
-            "dagc_module.py now references SPEC-013 — move it to the grounded test"
-        )
 
 
 def test_audit_doc_exists():

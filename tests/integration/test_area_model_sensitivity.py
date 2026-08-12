@@ -67,17 +67,29 @@ class TestMigratedModulesAreSizeAware:
         assert len(set(areas)) == 3, f"AVP area should scale with vector_width, got {areas}"
         assert areas[0] < areas[1] < areas[2]
 
+    def test_dagc_throughput_area_now_scales(self):
+        # DAGC unpack logic scales with bfp8 unpack throughput (parallel lanes).
+        areas = _areas("dagc", "bfp8_unpack_throughput", [2, 8])
+        assert len(set(areas)) == 2, f"DAGC area should scale with throughput, got {areas}"
+        assert areas[1] > areas[0]
 
-class TestScalingParamsDoNotChangeArea:
-    """KNOWN GAP: the last unmigrated module (DAGC) leaves area unchanged.
 
-    Tripwire — when DAGC migrates to the physical model (SPEC-013 §5), this
-    group empties and should become an "all migrated" assertion.
-    """
+class TestAllComputeModulesMigrated:
+    """All five compute modules (MAC/VAU/DSB/AVP/DAGC) are now on the physical
+    model — the size-blind area gap is closed. This asserts none remains flat
+    across its scaling knob (the former tripwire, now a completeness check)."""
 
-    def test_dagc_join_fifo_depth_area_flat(self):
-        areas = _areas("dagc", "join_fifo_depth", [16, 32])
-        assert len(set(areas)) == 1
+    def test_no_compute_module_is_size_blind(self):
+        checks = [
+            ("mac", "array_rows", [32, 64]),
+            ("vau", "lanes", [16, 32]),
+            ("dsb", "buffer_kb", [32, 64]),
+            ("avp", "vector_width", [16, 32]),
+            ("dagc", "bfp8_unpack_throughput", [2, 8]),
+        ]
+        for mod, knob, vals in checks:
+            areas = _areas(mod, knob, vals)
+            assert len(set(areas)) > 1, f"{mod}.{knob} left area flat: {areas}"
 
 
 class TestCapabilityTogglesChangeArea:

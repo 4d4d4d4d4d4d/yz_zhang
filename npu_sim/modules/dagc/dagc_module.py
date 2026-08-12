@@ -20,7 +20,9 @@ from typing import Iterator, Optional
 
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.clock import IClock
+from npu_sim import physical
 from npu_sim.interfaces.module import (
+    AreaModel,
     Capability,
     EnergyEstimate,
     IModule,
@@ -109,46 +111,41 @@ class DAGC(IModule):
 
     @classmethod
     def declared_capabilities(cls) -> list[Capability]:
+        # Area / static-power / energy come from the physical model (SPEC-013:
+        # estimate_area / static_power_uw / estimate_energy), scaling with the
+        # unpack throughput + join FIFO depth; compact_unpack shrinks the
+        # staging register file there. The numeric fields below are retained
+        # only for the capability-presence contract and are NOT used for PPA.
         return [
             Capability(
                 name="bfp8_unpack",
                 description="BFP8 format unpack.",
-                area_cost_um2=3500.0,
-                static_power_uw=12.0,
-                dynamic_energy_pj=0.8,
+                area_cost_um2=0.0, static_power_uw=0.0, dynamic_energy_pj=0.0,
             ),
             Capability(
                 name="bfp16_unpack",
                 description="BFP16 format unpack.",
-                area_cost_um2=6200.0,
-                static_power_uw=18.0,
-                dynamic_energy_pj=1.5,
+                area_cost_um2=0.0, static_power_uw=0.0, dynamic_energy_pj=0.0,
             ),
             Capability(
                 name="bfp8_bfp16_mix",
                 description="BFP8 x BFP16 mixed-precision alignment.",
-                area_cost_um2=4100.0,
-                static_power_uw=8.0,
-                dynamic_energy_pj=1.2,
+                area_cost_um2=0.0, static_power_uw=0.0, dynamic_energy_pj=0.0,
                 depends_on=("bfp8_unpack", "bfp16_unpack"),
             ),
             Capability(
                 name="int4_reorder",
                 description="INT4 data reorder.",
-                area_cost_um2=2300.0,
-                static_power_uw=6.0,
-                dynamic_energy_pj=0.5,
+                area_cost_um2=0.0, static_power_uw=0.0, dynamic_energy_pj=0.0,
             ),
             Capability(
                 name="compact_unpack",
                 description=(
                     "SPEC-005 v1.1 §2: compact unpack mode (dynamic decode "
-                    "instead of wide register file). Negative area_cost_um2 "
-                    "is the optimization delta vs full-unpack baseline."
+                    "instead of wide register file). The area saving is modeled "
+                    "physically in SPEC-013 (staging register-file reduction)."
                 ),
-                area_cost_um2=-1980.0,  # 20% of 3500+6200=9700 → -1940; rounded
-                static_power_uw=-2.0,
-                dynamic_energy_pj=-0.2,
+                area_cost_um2=0.0, static_power_uw=0.0, dynamic_energy_pj=0.0,
             ),
         ]
 
@@ -287,16 +284,42 @@ class DAGC(IModule):
         )
 
     def estimate_energy(self, operation: IOperation) -> EnergyEstimate:
+        """Dynamic energy = elements × per-element unpack (barrel-shift align)
+        energy (SPEC-013, Horowitz int-op figures), not hand-picked constants."""
         n = operation.shape_info.get("n_elements", 0)
-        per_elem_pj = sum(
-            c.dynamic_energy_pj
-            for c in self.declared_capabilities()
-            if c.name in self._active_caps
-        )
+        per_elem_pj = physical.dagc_energy_per_elem_pj(self._active_caps)
         return EnergyEstimate(
             dynamic_pj=per_elem_pj * n,
             static_pj_per_cycle=self.static_power_uw() * 1e-6,
             confidence=0.7,
+        )
+
+    def estimate_area(self) -> AreaModel:
+        """Area from the physical model (SPEC-013): BFP-unpack shift logic
+        (∝ throughput) + staging register file (reduced by compact_unpack) +
+        join FIFO (∝ join_fifo_depth)."""
+        um2 = physical.dagc_area_um2(
+            self._bfp8_tp, self._bfp16_tp, self._join_fifo_depth, self._active_caps
+        )
+        return AreaModel(
+            um2=um2,
+            breakdown={"dagc": um2},
+            notes=(
+                f"SPEC-013 physical @{physical.REFERENCE_NODE_NM}nm: "
+                f"unpack tp {self._bfp8_tp}/{self._bfp16_tp}, "
+                f"join_fifo {self._join_fifo_depth}"
+                + (", compact_unpack" if self._compact_unpack else "")
+            ),
+        )
+
+    def total_area_um2(self) -> float:
+        """Physical DAGC area (µm²); overrides the capability-sum default."""
+        return self.estimate_area().um2
+
+    def static_power_uw(self) -> float:
+        """Leakage from the physical model: unpack logic + staging/join SRAM."""
+        return physical.dagc_static_power_uw(
+            self._bfp8_tp, self._bfp16_tp, self._join_fifo_depth, self._active_caps
         )
 
     # ============== Runtime state ==============

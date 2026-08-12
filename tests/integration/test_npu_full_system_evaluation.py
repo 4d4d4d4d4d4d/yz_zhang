@@ -72,14 +72,16 @@ class TestSystemLevelAreaSaving:
             f"Stacked saving {report.area_delta_um2:+.0f} µm² below ~52k expected"
         )
 
-    def test_savings_match_sum_of_individual_levers(self, report):
-        """≈ OGU saving (50k) + compact_unpack saving (1.98k) ≈ 52k μm²."""
-        expected = 50_000 + 1_980
+    def test_savings_decompose_into_ogu_plus_compact(self, report):
+        """≈ OGU offload saving (~50k, capability-level) + compact_unpack
+        staging-RF saving. compact_unpack is now modeled physically (SPEC-013:
+        the saving scales with the unpack datapath), so it is larger than the
+        old placeholder −1.98k constant. The OGU floor is unchanged."""
         actual = -report.area_delta_um2
-        assert abs(actual - expected) <= 200, (
-            f"Area saving {actual:.1f} μm² differs from expected "
-            f"{expected:.1f} by more than 200 μm²"
-        )
+        assert actual >= 50_000, "OGU-offload saving floor (~50k) not met"
+        compact_saving = actual - 50_000
+        # physical staging-RF reduction, ≥ the SPEC-005 §U.1 calibration floor
+        assert compact_saving >= 1_500
 
 
 class TestSystemLevelLatencyPenalty:

@@ -163,17 +163,31 @@ class TestDAGCCapabilityQueries:
 
 
 class TestDAGCAreaPowerAggregation:
-    """SPEC-001 §3.1 area / power = sum over active capabilities."""
+    """SPEC-013 physical model: unpack logic (∝ throughput) + staging RF +
+    join FIFO; compact_unpack shrinks the staging register file."""
 
-    def test_total_area_equals_active_capability_sum(self):
+    def test_area_matches_physical_model(self):
+        from npu_sim import physical
         m = DAGC()
         m.configure(_default_config())
-        expected = sum(
-            c.area_cost_um2
-            for c in DAGC.declared_capabilities()
-            if c.name in m.active_capabilities()
-        )
-        assert m.total_area_um2() == expected
+        expected = physical.dagc_area_um2(4, 2, 16, m.active_capabilities())
+        assert m.total_area_um2() == pytest.approx(expected)
+        assert expected > 0
+
+    def test_area_scales_with_unpack_throughput(self):
+        cfg = _default_config(); cfg["bfp8_unpack_throughput"] = 8
+        fast = DAGC(); fast.configure(cfg)
+        base = DAGC(); base.configure(_default_config())
+        assert fast.total_area_um2() > base.total_area_um2()
+
+    def test_compact_unpack_saves_staging_area(self):
+        # SPEC-005 v1.1 §U.1 preserved physically: dynamic decode shrinks the
+        # wide staging register file.
+        cfg = _default_config(); cfg["enable_compact_unpack"] = True
+        compact = DAGC(); compact.configure(cfg)
+        full = DAGC(); full.configure(_default_config())
+        assert compact.total_area_um2() < full.total_area_um2()
+        assert full.total_area_um2() - compact.total_area_um2() >= 1500
 
     def test_dropping_optional_capabilities_reduces_area(self):
         full = DAGC()
