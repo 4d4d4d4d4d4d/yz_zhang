@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from app.core.db import SessionLocal, engine
 from app.modules.risk.service import reconcile
 
-from .conftest import auth, register, topup, verify_user
+from .conftest import auth, register, respond_dispute, topup, verify_user
 from .test_task_flow import match_and_fund, publish_task
 
 
@@ -42,6 +42,7 @@ def test_dispute_fee_counted_in_platform_revenue(client, requester, worker):
     match_and_fund(client, requester, worker, t2)
     d = client.post(f"/api/v1/tasks/{t2['id']}/disputes",
                     json={"reason": "交付质量有争议需仲裁"}, headers=auth(requester)).json()
+    respond_dispute(client, d["id"], worker)
     client.post(f"/api/v1/disputes/{d['id']}/verdict",
                 json={"executor_share_bps": 5000, "reason": "各担一半"}, headers=auth(admin))
 

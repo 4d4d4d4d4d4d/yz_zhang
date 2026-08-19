@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.modules.account.models import utcnow
 
-from .conftest import JOB_HEADERS, auth, register, topup, verify_user
+from .conftest import JOB_HEADERS, auth, register, respond_dispute, topup, verify_user
 from .test_task_flow import match_and_fund, publish_task
 
 
@@ -69,6 +69,7 @@ def test_overdue_dispute_escalates_once_fresh_untouched(client, requester, worke
 def test_appeal_window_closes_verdict_becomes_final(client, requester, worker):
     admin = _make_admin(client, "21000000010")
     _, d = _open_dispute(client, requester, worker, title="申诉窗口单")
+    respond_dispute(client, d["id"], worker)
     client.post(f"/api/v1/disputes/{d['id']}/verdict",
                 json={"executor_share_bps": 5000, "reason": "各担一半"},
                 headers=auth(admin))
@@ -86,6 +87,7 @@ def test_appeal_window_closes_verdict_becomes_final(client, requester, worker):
 def test_appeal_within_window_still_works(client, requester, worker):
     admin = _make_admin(client, "21000000020")
     _, d = _open_dispute(client, requester, worker, title="窗口内申诉单")
+    respond_dispute(client, d["id"], worker)
     client.post(f"/api/v1/disputes/{d['id']}/verdict",
                 json={"executor_share_bps": 3000, "reason": "规则裁决"},
                 headers=auth(admin))

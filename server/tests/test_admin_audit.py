@@ -3,7 +3,7 @@ import sqlalchemy as sa
 
 from app.core.db import engine
 
-from .conftest import auth, bind_payout, register, topup, verify_user
+from .conftest import auth, bind_payout, register, respond_dispute, topup, verify_user
 from .test_task_flow import match_and_fund, publish_task
 
 
@@ -27,6 +27,7 @@ def test_ban_and_verdict_and_settle_audited(client, requester, worker):
     match_and_fund(client, requester, worker, task)
     d = client.post(f"/api/v1/tasks/{task['id']}/disputes",
                     json={"reason": "交付质量有争议需仲裁"}, headers=auth(requester)).json()
+    respond_dispute(client, d["id"], worker)  # DSP-005 保障被诉方答辩权
     client.post(f"/api/v1/disputes/{d['id']}/verdict",
                 json={"executor_share_bps": 5000, "reason": "各担一半"}, headers=auth(admin))
 

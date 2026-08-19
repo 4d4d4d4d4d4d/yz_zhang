@@ -1,8 +1,15 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V39 全批次完成（2026-07-24）。
-> 后端 247 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V40 全批次完成（2026-07-25）。
+> 后端 251 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V40 批次：纠纷答辩举证——两造兼听）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| DSP-005 答辩/举证（**修复程序正义硬伤**）：开纠纷仅有发起方 reason + 系统快照，被诉方全程无发声渠道，仲裁员据一面之词即裁决分钱 → 新增 `DisputeStatement` 陈述表（只增）、`POST/GET /disputes/{id}/statements`（当事人可附证据，对方收通知，结案后禁言，仅当事人+管理员可见） | `dispute/models.py::DisputeStatement` + `dispute/router.py` | `tests/test_dispute_statements.py` |
+| DSP-005 两造兼听守卫：被诉方未答辩且答辩期（`DISPUTE_RESPONSE_HOURS`，默认 48h）未过 → 裁决被拒（`response_window_open`）；逾期未答辩可缺席裁决，防一方不出面拖死流程 | `dispute/router.py::_respondent_had_voice` + `issue_verdict` | 同上（含缺席裁决路径）；7 个既有裁决测试同步补答辩前置 |
 
 ## 已实现（V39 批次：IM 已读位点——未读数与红点）
 

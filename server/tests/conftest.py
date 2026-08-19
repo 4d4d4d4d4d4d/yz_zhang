@@ -56,6 +56,13 @@ def topup(client, user, amount):
 JOB_HEADERS = {"X-Job-Token": "dev-job-token-change-me"}
 
 
+def respond_dispute(client, dispute_id, user, content="我方对交付情况作如下说明与举证。"):
+    """DSP-005 被诉方答辩：裁决前需保障其陈述机会（两造兼听），测试通用前置。"""
+    r = client.post(f"/api/v1/disputes/{dispute_id}/statements",
+                    json={"content": content}, headers=auth(user))
+    assert r.status_code == 201, r.text
+
+
 def bind_payout(client, user, holder="张三"):
     """PAY-005 提现前置：绑定收款账户（默认收款人与 verify_user 实名一致）。"""
     r = client.put("/api/v1/wallet/payout-account",

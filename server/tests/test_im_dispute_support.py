@@ -1,5 +1,5 @@
 """09 IM / 10 客服 / 11 纠纷 / 12 通知"""
-from .conftest import auth, register, topup, verify_user
+from .conftest import auth, register, respond_dispute, topup, verify_user
 from .test_task_flow import CLEAN_TASK, match_and_fund, publish_task
 
 
@@ -140,6 +140,7 @@ def test_dsp006_007_verdict_executes_and_penalizes_loser(client, requester, work
 
     with engine.begin() as conn:
         conn.execute(sa.text("UPDATE users SET is_admin = 1 WHERE id = :id"), {"id": arbiter["id"]})
+    respond_dispute(client, dispute["id"], worker)  # DSP-005 保障被诉方答辩权
     r = client.post(
         f"/api/v1/disputes/{dispute['id']}/verdict",
         json={"executor_share_bps": 3000, "reason": "依据《平台争议处理规则》4.2：部分履约按比例结算"},

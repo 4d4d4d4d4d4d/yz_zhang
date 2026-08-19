@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from app.core.db import engine
 
-from .conftest import auth, register, topup, verify_user
+from .conftest import auth, register, respond_dispute, topup, verify_user
 from .test_task_flow import publish_task
 
 
@@ -65,6 +65,7 @@ def test_verdict_after_partial_release_splits_only_remaining(client):
     # 纠纷 → 冻结 → 裁决 50%：只分割剩余 8000
     d = client.post(f"/api/v1/tasks/{task['id']}/disputes",
                     json={"reason": "尾期交付质量有争议"}, headers=auth(boss)).json()
+    respond_dispute(client, d["id"], worker)
     r = client.post(f"/api/v1/disputes/{d['id']}/verdict",
                     json={"executor_share_bps": 5000, "reason": "各担一半"},
                     headers=auth(admin))

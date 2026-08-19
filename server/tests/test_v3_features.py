@@ -4,7 +4,7 @@ import sqlalchemy as sa
 
 from app.core.db import engine
 
-from .conftest import JOB_HEADERS, auth, register, topup, verify_user
+from .conftest import JOB_HEADERS, auth, register, respond_dispute, topup, verify_user
 from .test_task_flow import match_and_fund, publish_task
 
 
@@ -221,6 +221,7 @@ def test_dsp008_appeal_corrective_settlement(client, requester, worker):
     match_and_fund(client, requester, worker, task)
     dispute = client.post(f"/api/v1/tasks/{task['id']}/disputes",
                           json={"reason": "只完成一半"}, headers=auth(requester)).json()
+    respond_dispute(client, dispute["id"], worker)  # DSP-005 被诉方答辩后方可裁决
     # 原裁决：执行者 30%（6000-佣金）
     client.post(f"/api/v1/disputes/{dispute['id']}/verdict",
                 json={"executor_share_bps": 3000, "reason": "规则4.2"}, headers=auth(admin))

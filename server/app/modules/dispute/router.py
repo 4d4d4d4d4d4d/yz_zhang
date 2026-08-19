@@ -109,6 +109,82 @@ def _execute_split(db: Session, dispute: Dispute, task: Task, contract: Contract
     publish(db, "dispute.resolved", {"dispute_id": dispute.id, "task_id": task.id})
 
 
+class StatementIn(BaseModel):
+    content: str = Field(min_length=5, max_length=2000)
+    attachments: list[str] = Field(default_factory=list)
+
+
+@router.post("/disputes/{dispute_id}/statements", status_code=201)
+def add_statement(
+    dispute_id: int, body: StatementIn,
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """DSP-005 答辩/举证：双方当事人在结案前均可陈述并附证据。"""
+    from .models import DisputeStatement
+
+    dispute, task, _ = _get_dispute(db, dispute_id)
+    if user.id not in (task.creator_id, task.executor_id):
+        raise forbidden()
+    if dispute.status not in ("open", "appealed"):
+        raise conflict("纠纷已结案，不可再提交陈述", "dispute_closed")
+    role = "opener" if user.id == dispute.opened_by else "respondent"
+    row = DisputeStatement(dispute_id=dispute_id, user_id=user.id, role=role,
+                           content=body.content, attachments=body.attachments)
+    db.add(row)
+    db.flush()
+    # 告知对方与仲裁员有新陈述
+    from app.modules.notification.service import notify
+
+    other = task.executor_id if user.id == task.creator_id else task.creator_id
+    if other:
+        notify(db, other, "task", "纠纷有新陈述",
+               f"任务 #{task.id} 的纠纷中对方提交了新的答辩/举证，请及时查看并回应。")
+    return {"id": row.id, "role": role, "created_at": row.created_at.isoformat()}
+
+
+@router.get("/disputes/{dispute_id}/statements")
+def list_statements(
+    dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """DSP-005 陈述列表：仅当事人与管理员可见。"""
+    from .models import DisputeStatement
+
+    dispute, task, _ = _get_dispute(db, dispute_id)
+    if user.id not in (task.creator_id, task.executor_id) and not user.is_admin:
+        raise forbidden()
+    rows = (
+        db.query(DisputeStatement)
+        .filter(DisputeStatement.dispute_id == dispute_id)
+        .order_by(DisputeStatement.id).all()
+    )
+    return [
+        {"id": r.id, "user_id": r.user_id, "role": r.role, "content": r.content,
+         "attachments": r.attachments, "created_at": r.created_at.isoformat()}
+        for r in rows
+    ]
+
+
+def _respondent_had_voice(db: Session, dispute: Dispute, task: Task) -> bool:
+    """DSP-005 两造兼听：被诉方已答辩，或答辩期已过（可缺席裁决）。"""
+    from datetime import timedelta
+
+    from app.core.config import settings
+
+    from .models import DisputeStatement
+
+    respondent_id = task.executor_id if dispute.opened_by == task.creator_id else task.creator_id
+    spoke = (
+        db.query(DisputeStatement)
+        .filter(DisputeStatement.dispute_id == dispute.id,
+                DisputeStatement.user_id == respondent_id)
+        .first()
+    )
+    if spoke:
+        return True
+    deadline = dispute.created_at + timedelta(hours=settings.DISPUTE_RESPONSE_HOURS)
+    return utcnow() >= deadline
+
+
 @router.post("/disputes/{dispute_id}/settlement")
 def propose_settlement(
     dispute_id: int, body: ShareIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
@@ -150,6 +226,14 @@ def issue_verdict(
         raise conflict("纠纷已结案", "dispute_closed")
     if not body.reason:
         raise conflict("裁决必须给出理由（引用平台规则条款）", "reason_required")
+    # DSP-005 两造兼听：被诉方未答辩且答辩期未过 → 不得裁决（逾期可缺席裁决）
+    if not _respondent_had_voice(db, dispute, task):
+        from app.core.config import settings
+
+        raise conflict(
+            f"被诉方尚未答辩且答辩期（{settings.DISPUTE_RESPONSE_HOURS} 小时）未过，暂不可裁决",
+            "response_window_open",
+        )
     dispute.arbiter_id = arbiter.id
     _execute_split(db, dispute, task, contract, body.executor_share_bps, "resolved", body.reason)
     # 败诉方信用惩罚：比例低于 50% 视为执行者败诉，反之发布者败诉

@@ -33,3 +33,17 @@ class Dispute(Base):
     escalated: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class DisputeStatement(Base):
+    """DSP-005 答辩/举证陈述：两造兼听的载体，只增不改（证据链要求）。"""
+
+    __tablename__ = "dispute_statements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    dispute_id: Mapped[int] = mapped_column(Integer, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    role: Mapped[str] = mapped_column(String(12))  # opener 发起方 / respondent 被诉方
+    content: Mapped[str] = mapped_column(Text)
+    attachments: Mapped[list] = mapped_column(JSON, default=list)  # 图片/文件 URL
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
