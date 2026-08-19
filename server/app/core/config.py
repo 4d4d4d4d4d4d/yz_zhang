@@ -29,6 +29,9 @@ class Settings:
     DISPUTE_SLA_DAYS = int(os.environ.get("PLATFORM_DISPUTE_SLA_DAYS", "7"))
     # DSP-010 申诉窗口：仲裁结案后 N 天内可申诉，逾期裁决终局
     APPEAL_WINDOW_DAYS = int(os.environ.get("PLATFORM_APPEAL_WINDOW_DAYS", "7"))
+    # ORC-004 编排规划预留：规划阶段只用上限的 (1-预留)，其余留给失败重试，
+    # 否则首轮就把预算用满、修复步永远无钱可发（agent 必须自带重试余量）
+    ORC_PLAN_RESERVE_BPS = int(os.environ.get("PLATFORM_ORC_PLAN_RESERVE_BPS", "3000"))
     # DSP-005 答辩期（小时）：被诉方未答辩且答辩期未过时不得裁决（两造兼听），
     # 逾期未答辩可缺席裁决，避免一方不出面就拖死流程
     DISPUTE_RESPONSE_HOURS = int(os.environ.get("PLATFORM_DISPUTE_RESPONSE_HOURS", "48"))

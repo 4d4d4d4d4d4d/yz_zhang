@@ -211,3 +211,51 @@ export interface PriceReference {
   max_cents?: number;
   message?: string;
 }
+
+// ---- ORC 编排（Agent Harness）----
+export type MissionStatus = 'planning' | 'running' | 'blocked' | 'succeeded' | 'failed' | 'cancelled';
+
+export interface Mission {
+  id: number;
+  owner_id: number;
+  goal: string;
+  detail: string;
+  category: string;
+  status: MissionStatus;
+  budget_cap_cents: number;
+  spent_cents: number;
+  iteration: number;
+  max_iterations: number;
+  completion_pct: number;
+  acceptance_criteria: string[];
+  last_error: string;
+  created_at: string;
+}
+
+export interface MissionStep {
+  id: number;
+  iteration: number;
+  tool: string;          // publish_task：把任务发给平台上的其他人
+  title: string;
+  task_id: number | null;
+  status: 'pending' | 'dispatched' | 'done' | 'failed' | 'superseded';
+  observation: string;
+  is_remedy: boolean;
+  budget_cents?: number;
+}
+
+export interface MissionTickResult {
+  action: 'dispatched' | 'waiting' | 'completed' | 'blocked' | 'give_up';
+  status: MissionStatus;
+  total_steps: number;
+  done: number;
+  failed: number;
+  superseded: number;
+  completion_pct: number;
+  planned?: number;
+  dispatched?: number;
+  remedies?: number;
+  error?: string;
+  issues: Array<{ step_id: number; title: string; observation: string }>;
+  observations: Array<{ step_id: number; task_id: number; task_status: string; observation: string }>;
+}

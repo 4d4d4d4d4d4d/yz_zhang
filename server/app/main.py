@@ -60,6 +60,7 @@ def create_app() -> FastAPI:
     from app.modules.im.router import router as im_router
     from app.modules.knowledge.router import router as knowledge_router
     from app.modules.notification.router import router as notification_router
+    from app.modules.orchestrator.router import router as orchestrator_router
     from app.modules.search.router import router as search_router
     from app.modules.support.router import router as support_router
     from app.modules.task.router import router as task_router
@@ -84,6 +85,7 @@ def create_app() -> FastAPI:
         search_router,
         anchor_router,
         analytics_router,
+        orchestrator_router,
     ):
         app.include_router(router, prefix=settings.API_PREFIX)
 

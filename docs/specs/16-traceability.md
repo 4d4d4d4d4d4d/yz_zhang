@@ -1,8 +1,20 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V40 全批次完成（2026-07-25）。
-> 后端 251 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V41 全批次完成（2026-07-26）。
+> 后端 258 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V41 批次：编排循环 Agent Harness——发任务给人 = 工具调用）
+
+> 新增模块 spec：[17-orchestrator.md](17-orchestrator.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| ORC-001/002 Mission/MissionStep 与一次 tick：plan（复用 AI 分解网关）→ observe（读任务真实状态为 observation）→ evaluate（完成度）→ dispatch（真实发布任务 = 调用「人」这个工具）→ 停机判定 | `orchestrator/{models,service,router}.py` | `tests/test_orchestrator.py` |
+| ORC-003 编排状态机白名单（planning/running/blocked/succeeded/failed/cancelled），非法流转 409 | `service.transition` + `MISSION_TRANSITIONS` | 同上（结束后不可再 tick） |
+| ORC-004 护栏（第一性要求）：预算硬上限超出即 `blocked` 挂起、规划预留金 `ORC_PLAN_RESERVE_BPS`（默认 30%）留给重试、迭代上限触顶 `failed`、人工停机并下架未成交挂单、所有权隔离、心跳 job 需令牌 | 同上 + `config.ORC_PLAN_RESERVE_BPS` | 同上（预算越界挂起、迭代上限放弃、cancel 下架、403 隔离） |
+| ORC-005 失败步 → 自动生成修复步再分发（幂等去重）；原步标记 `superseded` 不计入分母，否则一次失败会让编排永远无法 100% | `service._make_remedy_steps` + `evaluate` | 同上（修复步完成后 succeeded） |
+| SDK 同步：createMission/myMissions/getMission/tickMission/cancelMission + Mission 类型 | `packages/core/src/{client,types}.ts` | web 构建通过 |
 
 ## 已实现（V40 批次：纠纷答辩举证——两造兼听）
 

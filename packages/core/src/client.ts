@@ -9,6 +9,9 @@ import type {
   InvitationItem,
   Me,
   Message,
+  Mission,
+  MissionStep,
+  MissionTickResult,
   Notice,
   PriceReference,
   Recommendation,
@@ -279,6 +282,25 @@ export class PlatformClient {
     return this.request<Array<{ id: number; kind: string; amount_cents: number; contract_id: number | null; memo: string; created_at: string }>>(
       'GET', '/wallet/ledger',
     );
+  }
+
+  // ---- orchestrator（Agent Harness：发任务给人=工具调用）----
+  createMission(body: { goal: string; detail?: string; category?: string; budget_cap_cents: number; max_iterations?: number; acceptance_criteria?: string[] }) {
+    return this.request<Mission>('POST', '/missions', body);
+  }
+  myMissions(params: { status?: string; limit?: number; offset?: number } = {}) {
+    const qs = Object.entries(params).filter(([, v]) => v !== undefined)
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
+    return this.request<Mission[]>('GET', `/missions${qs ? `?${qs}` : ''}`);
+  }
+  getMission(id: number) {
+    return this.request<Mission & { steps: MissionStep[] }>('GET', `/missions/${id}`);
+  }
+  tickMission(id: number) {
+    return this.request<MissionTickResult>('POST', `/missions/${id}/tick`);
+  }
+  cancelMission(id: number) {
+    return this.request<Mission & { closed_open_tasks: number }>('POST', `/missions/${id}/cancel`);
   }
 
   // ---- decompose / knowledge ----
