@@ -5,6 +5,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("PLATFORM_DATABASE_URL", "sqlite:///./test_platform.db")
 # 测试里访问日志只会淹没失败信息；DEP-040 的脱敏与格式由 test_deployment 直接验证
 os.environ.setdefault("PLATFORM_LOG_LEVEL", "WARNING")
+# SEC-012 全局写限流是按 IP 的粗粒度兜底；测试里所有请求共享 "testclient" 这一个
+# 来源，等价于「几百人挤在同一个 NAT 后面」，会把整套测试误杀。
+# 中间件本身的行为由 test_security_hardening 用 monkeypatch 调低阈值单独验证。
+os.environ.setdefault("PLATFORM_WRITE_RATE_PER_MINUTE", "100000")
 
 import pytest
 import sqlalchemy as sa
@@ -16,6 +20,7 @@ from app.main import create_app
 
 @pytest.fixture()
 def client():
+    from app.core.guard import reset as guard_reset
     from app.core.ratelimit import reset
 
     Base.metadata.drop_all(engine)
@@ -24,7 +29,10 @@ def client():
     with engine.begin() as conn:
         conn.execute(sa.text("DROP TABLE IF EXISTS alembic_version"))
     Base.metadata.create_all(engine)
-    reset()  # 限流计数器进程级，测试间清空
+    reset()        # 限流计数器进程级，测试间清空
+    guard_reset()  # SEC-020 失败计数与 IP 封禁同样进程级：
+                   # 否则某个测试的错误登录会把 testclient 这个共享 IP 封掉，
+                   # 之后所有测试全挂
     app = create_app()
     with TestClient(app) as c:
         yield c

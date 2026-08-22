@@ -37,6 +37,8 @@ echo "配置自检（DEP-002）…"
   && note "PLATFORM_KYC_PROVIDER 仍是 mock —— 实名形同虚设"
 [[ "${PLATFORM_MODERATION_PROVIDER:-local}" == "local" ]] \
   && note "PLATFORM_MODERATION_PROVIDER 仍是 local —— 只有本地词表，看不了图片视频"
+[[ -f "${TLS_CERT_DIR:-./certs}/fullchain.pem" ]] \
+  || note "缺少 TLS 证书 ${TLS_CERT_DIR:-./certs}/fullchain.pem —— 明文传密码等于没有安全"
 
 if (( fail )); then
   echo
@@ -57,7 +59,7 @@ for _ in $(seq 1 60); do
   if docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" \
        exec -T api python -c "import urllib.request;urllib.request.urlopen('http://localhost:8000/readyz')" \
        >/dev/null 2>&1; then
-    echo "就绪。Web: http://localhost:${WEB_PORT:-8080}  /  API: /docs"
+    echo "就绪。Web: https://localhost:${WEB_HTTPS_PORT:-443}"
     exit 0
   fi
   sleep 2

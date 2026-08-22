@@ -4,6 +4,22 @@
 > 后端 268 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
 
+## 已实现（V47 批次：抗攻击硬化——从「按账号限流」到「换号也挡得住」）
+
+> 新增模块 spec：[23-network-security.md](23-network-security.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| SEC-011 **客户端 IP 解析（本批次最关键的一小段代码）**：常见错误是取 `X-Forwarded-For` 第一个 IP——那是客户端可伪造的，攻击者每次带一个不同的假 IP 就能让按 IP 的限流与封禁彻底失效。改为只信任反代注入的**最后一跳**（`TRUSTED_PROXY_HOPS`），XFF 比预期短则退回 socket 对端 | `core/clientip.py` | `tests/test_security_hardening.py`（伪造 XFF 绕不过；取右侧跳不取左侧） |
+| SEC-011 **账号 + IP 双维度限流**：原实现只按手机号限，攻击者每次换号计数器永远是 1，批量注册完全不受影响。所有认证类端点（注册/登录/短信码/改密/换绑/重置）改走 `guard()`，任一维度超限即拒 | `core/guard.py::guard`、`account/router.py` | 同上（换号不换 IP 被拦；同号高频仍被拦） |
+| SEC-012 **全局写限流兜底**：此前限流是「在每个敏感端点手写一行 check()」，只有 7 处，新端点默认裸奔。改为中间件按 IP 限所有写操作——**新端点默认受保护**；读请求与探针不受影响 | `core/guard.py::WriteRateLimitMiddleware` | 同上（未单独加限流的端点也被兜住；GET 不误杀） |
+| SEC-020/023 认证失败自动封禁：窗口内失败达阈值临时封禁 IP，封禁期内正确密码也拒；**成功登录清零计数**（偶发手滑不该累积成封禁）；管理端安全看板与**人工解封**（误封公司出口 IP 会挡住一整栋楼） | `core/guard.py::{note_auth_failure,ban_remaining,unban}`、`admin/router.py` | 同上 |
+| SEC-002 安全响应头：nosniff / frame DENY / CSP（`frame-ancestors 'none'`）/ Referrer-Policy / Permissions-Policy；**HSTS 只在 prod 下发**（开发环境发了会把本地浏览器锁死在 HTTPS） | `core/headers.py` | 同上 |
+| SEC-003 生产关闭 API 文档：`/docs`、`/redoc`、`/openapi.json` 在 `ENV=prod` 且未显式开启时不挂载——把全部端点与模型结构送给攻击者是没必要的慷慨 | `main.py` | 同上（dev 下仍可访问） |
+| SEC-033 上传响应加固：读取端点补 `nosniff` + `Content-Disposition` + `CSP: default-src 'none'; sandbox`，即便有人构造出「既是合法图片又是合法脚本」的文件也无法在本源执行 | `files/router.py` | 同上 |
+| SEC-001/004/010/013 生产 Nginx：强制 TLS（≥1.2、HSTS、OCSP stapling）、三档 IP 令牌桶（普通/写/认证，认证类最严）、资金类端点单独收紧、`limit_conn` 与超时防慢速攻击、`/metrics` `/jobz` 仅内网、SW 不缓存 | `deploy/{nginx.prod.conf,proxy_common.conf,docker-compose.prod.yml}` | 配置随栈交付；应用侧行为由上述用例覆盖 |
+| SEC-030/053 生产自检扩展：CORS 为 `*`、暴露 API 文档、`TRUSTED_PROXY_HOPS` 未设（反代后取不到真实 IP，限流全失效）→ **拒绝启动**；`up.sh` 增加缺 TLS 证书的拦截 | `vendors/registry.py::startup_check`、`deploy/up.sh` | 同上 |
+
 ## 已实现（V46 批次：增长、运营与市场——把运营手册落成功能）
 
 > 新增模块 spec：[22-growth-ops.md](22-growth-ops.md)

@@ -77,7 +77,7 @@ App 与 Web 共用同一个 TS SDK（`packages/core`），
 | **限流（滑动窗口）** | `core/ratelimit.py` | 注册/登录/改密/换绑的暴力尝试 |
 | **对账不变量** | `risk/service.py::reconcile` | 四条硬不变量兜底，不平自动开工单+告警 |
 
-这套组合已被 **333 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
+这套组合已被 **349 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
 「重复接受报名 / 重复托管 / 重复交付 / 重复验收 / 重复里程碑放款」全部拒绝且零副作用。
 
 ### 2.2 多副本并发安全（V42 已补齐，见 [18-concurrency.md](specs/18-concurrency.md)）
@@ -153,26 +153,47 @@ App 与 Web 共用同一个 TS SDK（`packages/core`），
 - IM 站外引导识别（防跳单）、陌生人私聊条数上限、消息撤回保留审计副本
 - 位置脱敏（精确地址仅成交双方可见）、30 天后清除打卡坐标
 
-### 3.2 ⚠️ 上线前必须补
+### 3.2 边界防护（V47 已补齐）
+
+此前最大的洞不是「没加密」，而是**限流只按账号维度**——攻击者每次换手机号，
+计数器永远是 1，批量注册与撞库完全不受影响；而且限流只有 7 个手写调用点，
+新端点默认裸奔。现在补齐三层：
+
+| 层 | 位置 | 挡什么 |
+|---|---|---|
+| 网关 | `deploy/nginx.prod.conf` | 建连洪水、慢速攻击；三档 IP 令牌桶（普通/写/**认证最严**） |
+| 中间件 | `core/guard.py::WriteRateLimitMiddleware` | 所有写操作按 IP 兜底——**新端点默认受保护** |
+| 端点 | `core/guard.py::guard` | 认证类端点账号 + IP **双维度**，任一超限即拒 |
+
+**客户端 IP 必须取对**（`core/clientip.py`）：常见错误是取
+`X-Forwarded-For` 的第一个 IP，那是客户端可以随便伪造的——攻击者每次带一个
+不同的假 IP，按 IP 的限流与封禁就全废了。正确做法是只信任反代注入的**最后一跳**。
+因此生产必须设 `PLATFORM_TRUSTED_PROXY_HOPS=1`（prod 自检会强制检查），
+否则应用只看到容器网关 IP，会把全站用户当成同一个人限流。
+
+**自动封禁**：认证失败窗口内达阈值即临时封禁 IP，封禁期内正确密码也拒；
+成功登录清零计数（偶发手滑不该累积成封禁）；`/admin/security` 可查看并**人工解封**
+——误封一个公司出口 IP 会挡住一整栋楼的用户。
+
+**其余已就位**：TLS 强制跳转 + HSTS（仅 prod 下发）、安全响应头
+（nosniff / frame DENY / CSP / Referrer-Policy）、生产关闭 `/docs`、
+`/metrics` 与 `/jobz` 仅内网可达、上传文件带 `nosniff` + sandbox CSP。
+
+### 3.3 ⚠️ 仍需补的
 
 | 项 | 现状 | 要做什么 |
 |---|---|---|
-| **JWT 密钥** | compose 里写死 `change-me-in-production` | 换强随机值，走 secrets 管理 |
-| **Job 令牌** | 默认 `dev-job-token-change-me` | 同上 |
-| **HTTPS** | 无 | Nginx/网关加 TLS，强制 HSTS |
-| **短信验证码** | `SmsProvider` 抽象已就位，缺省 Mock 固定 `123456` | 设 `PLATFORM_SMS_PROVIDER` 接真实服务商（代码不动） |
-| **实名认证** | `KycProvider` 抽象已就位，证件号已只存摘要 | 设 `PLATFORM_KYC_PROVIDER` 接 eKYC |
-| **支付** | `PaymentProvider` 抽象 + 两阶段订单 + 回调验签已就位 | 设 `PLATFORM_PAYMENT_PROVIDER` 接持牌通道 |
-| **全局限流** | 认证接口已支持 Redis 后端 | 网关层再加一层 IP 限流 |
-| **CORS** | 已配 middleware | 生产收紧到白名单域名 |
+| **TLS 证书** | 配置已就位 | 证书需你提供（ACME/Certbot 或云厂商），`up.sh` 会检查 |
+| **WAF / CC 防护** | 无 | 云厂商 WAF 或 CDN 层防护，应用层挡不住大流量 DDoS |
+| **人机验证** | 抽象位已留（SEC-021） | 接第三方验证码，触发风控阈值后要求 |
 | **依赖扫描** | 无 | CI 加 `pip-audit` / `npm audit` |
-| **日志脱敏** | 外部调用留痕已脱敏（`VendorCall.request_digest`） | 应用日志统一打码中间件（DEP-040） |
+| **跨副本封禁共享** | 进程内 | 配 Redis 后由共享计数承担（SEC-040 同批） |
 
 > V43 起，生产环境（`PLATFORM_ENV=prod`）若 P0 能力仍是模拟实现、
-> 或密钥仍是默认值、或数据库仍是 SQLite，**启动即失败**并打印缺失清单
-> （`app/vendors/registry.py::startup_check`）——把上线前必须完成的对接
-> 变成硬拦截，而不是一行没人看的日志。管理后台 `/admin/vendors` 可查
-> 各能力当前实现、熔断状态与近 24h 成功率。
+> 或密钥仍是默认值、或数据库仍是 SQLite、或 CORS 为 `*`、或暴露 API 文档、
+> 或未设可信代理跳数，**启动即失败**并打印缺失清单
+> （`app/vendors/registry.py::startup_check`）。管理后台 `/admin/vendors`
+> 可查各能力当前实现、熔断状态与近 24h 成功率。
 
 ---
 
@@ -264,7 +285,7 @@ docker compose -f deploy/docker-compose.prod.yml run --rm migrate
 - [ ] 告警接入值班系统（PagerDuty / 电话）
 - [ ] 定期做恢复演练并记录 RTO/RPO
 
-CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 333 测试、
+CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 349 测试、
 前端 40 测试与构建、**alembic 迁移漂移检查**、**真实 HTTP 主闭环冒烟**。
 
 ---
@@ -368,7 +389,7 @@ CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 333 测试、
 ## 六、诚实的差距总结
 
 **已经很扎实的**：交易闭环、资金安全与守恒、纠纷程序正义、账号安全、审计留痕、
-多副本并发安全、外部供应商可替换性。这些有 333 个测试钉着。
+多副本并发安全、外部供应商可替换性。这些有 349 个测试钉着。
 
 **离真正上线还差的**（按紧迫度）：
 1. ~~Postgres + 行锁/乐观锁~~ —— **V42 已完成**（切库只改环境变量）

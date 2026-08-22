@@ -3,7 +3,7 @@
 上传前置：必须登录 + 限流。图片是交付凭证与打卡证据的载体，
 匿名可传等于给平台开了一个免费图床，也给内容风险开了后门。
 """
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -25,16 +25,17 @@ class UploadIn(BaseModel):
 
 
 @router.post("/files", status_code=201)
-def upload_file(body: UploadIn, user: User = Depends(get_current_user),
+def upload_file(request: Request, body: UploadIn, user: User = Depends(get_current_user),
                 db: Session = Depends(get_db)):
     """MOB-021 上传图片（客户端压缩后的 base64）。
 
     校验三件事：类型白名单、大小上限、**魔数与声明类型一致**——
     只信 Content-Type 等于让上传方自证清白。
     """
-    from app.core.ratelimit import check
+    from app.core.guard import guard
 
-    check(f"upload:{user.id}", limit=20, window_seconds=60)
+    # SEC-011：上传要占存储、要过内容审核，都是花钱的动作 → 账号 + IP 双维度
+    guard(request, "upload", str(user.id), limit=20, ip_limit=40)
     provider = get_provider("storage")
     try:
         raw = decode_upload(body.data_base64, body.content_type)
@@ -56,6 +57,14 @@ def read_file(name: str):
     if not got:
         raise not_found("文件不存在")
     data, content_type = got
-    # 内容寻址的文件不可变，可长期缓存
-    return Response(content=data, media_type=content_type,
-                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
+    # SEC-033：即便有人想办法传了个「既是合法图片又是合法脚本」的文件，
+    # nosniff + attachment 也让它无法被当作脚本在我们的源上执行
+    return Response(
+        content=data, media_type=content_type,
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Disposition": f'inline; filename="{name}"',
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+        },
+    )

@@ -20,6 +20,9 @@ x-app-env: &app-env
   PLATFORM_KYC_PROVIDER: ${PLATFORM_KYC_PROVIDER}
   PLATFORM_MODERATION_PROVIDER: ${PLATFORM_MODERATION_PROVIDER}
   PLATFORM_GIT_SHA: ${PLATFORM_GIT_SHA:-unknown}
+  # SEC-011 必须为 1：Nginx 会把真实对端 IP 追加到 XFF 末尾，
+  # 不设的话应用只会看到容器网关 IP，按 IP 的限流与封禁会误伤全站
+  PLATFORM_TRUSTED_PROXY_HOPS: "1"
   PLATFORM_LOG_LEVEL: ${PLATFORM_LOG_LEVEL:-INFO}
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
 
@@ -96,7 +99,15 @@ services:
       dockerfile: web/Dockerfile
     restart: unless-stopped
     ports:
-      - "${WEB_PORT:-8080}:80"
+      - "${WEB_HTTP_PORT:-80}:80"
+      - "${WEB_HTTPS_PORT:-443}:443"
+    volumes:
+      # SEC-001 生产 Nginx：TLS + 网关限流 + 攻击面收敛
+      - ./nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./proxy_common.conf:/etc/nginx/proxy_common.conf:ro
+      # 证书由你提供（ACME/Certbot 或云厂商签发）
+      - ${TLS_CERT_DIR:-./certs}:/etc/nginx/certs:ro
+      - ./certbot-www:/var/www/certbot
     depends_on:
       api:
         condition: service_healthy

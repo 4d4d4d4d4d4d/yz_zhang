@@ -72,6 +72,16 @@ def startup_check() -> None:
         problems.append("PLATFORM_JOB_TOKEN 仍是默认值")
     if settings.DATABASE_URL.startswith("sqlite"):
         problems.append("生产不得使用 SQLite，请配置 PLATFORM_DATABASE_URL 指向 Postgres")
+    # SEC-030/003 边界配置
+    if settings.CORS_ORIGINS.strip() == "*":
+        problems.append("PLATFORM_CORS_ORIGINS 不得为 *，请收紧到白名单域名")
+    if settings.EXPOSE_DOCS:
+        problems.append("生产不应暴露 API 文档（PLATFORM_EXPOSE_DOCS=1）")
+    if settings.TRUSTED_PROXY_HOPS <= 0:
+        problems.append(
+            "PLATFORM_TRUSTED_PROXY_HOPS 未设置：反代后取不到真实客户端 IP，"
+            "按 IP 的限流与封禁将全部失效"
+        )
     if problems:
         raise RuntimeError("生产环境配置自检未通过：\n- " + "\n- ".join(problems))
 

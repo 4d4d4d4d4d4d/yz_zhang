@@ -1,7 +1,7 @@
 # 交付总览（Final Delivery Overview）
 
-> 截至 2026-08-22：MVP + V1~V46 全批次完成。
-> 后端 **333 tests** + 前端 **40 tests**（core 23 + web 17）全绿。
+> 截至 2026-08-22：MVP + V1~V47 全批次完成。
+> 后端 **349 tests** + 前端 **40 tests**（core 23 + web 17）全绿。
 > 本文档是对 [docs/specs/](specs/README.md)（功能拆分）与
 > [16-traceability.md](specs/16-traceability.md)（逐条追溯）的收口汇总。
 
@@ -78,6 +78,7 @@ cp deploy/.env.example deploy/.env && ./deploy/up.sh   # 生产栈（自检 → 
 | V44 DEP | Alembic 成为生产唯一建表路径；探针/指标/结构化日志（脱敏）；备份恢复演练脚本 |
 | V45 MOB | 响应式 + 底部 Tab + PWA（API 不缓存）；拍照取证与对象存储抽象 |
 | V46 GRW | 优惠券/邀请/活动/新人任务/供需健康度，补贴全部纳入资金四不变量 |
+| V47 SEC | 账号+IP 双维度限流、全局写兜底、失败自动封禁、TLS 与安全响应头 |
 
 **剩下的都不是代码问题**：HTTPS 证书与域名、供应商签约与密钥、
 法律与合规意见、应用商店开发者账号。

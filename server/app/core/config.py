@@ -73,6 +73,22 @@ class Settings:
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")
     # 生产收紧到白名单域名（逗号分隔）；缺省 * 仅适用于开发
     CORS_ORIGINS = os.environ.get("PLATFORM_CORS_ORIGINS", "*")
+    # ── SEC 抗攻击（23 号 spec）────────────────────────────────────
+    # SEC-011 可信代理跳数：从 X-Forwarded-For 右侧数第 N 跳才是可信 IP。
+    # 设 0 表示无反代（直接用 socket 对端地址）。**绝不能取 XFF 第一个 IP**，
+    # 那是客户端可伪造的，会让按 IP 的限流与封禁完全失效。
+    TRUSTED_PROXY_HOPS = int(os.environ.get("PLATFORM_TRUSTED_PROXY_HOPS", "0"))
+    # SEC-012 全局写操作 IP 限速（次/分钟）。
+    # 这是**粗粒度防洪水兜底**，不是精细限流——阈值必须给得宽：
+    # 公司出口、校园网、运营商 NAT 后面共享同一个公网 IP 的可能是成百上千人，
+    # 定得太紧会把正常用户整片误杀。精细限流交给端点级的 guard()（账号+IP 双维度）。
+    WRITE_RATE_PER_MINUTE = int(os.environ.get("PLATFORM_WRITE_RATE_PER_MINUTE", "600"))
+    # SEC-020 认证失败自动封禁：窗口内失败达阈值即临时封禁该 IP
+    AUTH_FAIL_WINDOW_SECONDS = int(os.environ.get("PLATFORM_AUTH_FAIL_WINDOW_SECONDS", "300"))
+    AUTH_FAIL_BAN_THRESHOLD = int(os.environ.get("PLATFORM_AUTH_FAIL_BAN_THRESHOLD", "10"))
+    AUTH_FAIL_BAN_SECONDS = int(os.environ.get("PLATFORM_AUTH_FAIL_BAN_SECONDS", "900"))
+    # SEC-003 生产关闭 API 文档（避免把全部端点与模型结构直接送给攻击者）
+    EXPOSE_DOCS = os.environ.get("PLATFORM_EXPOSE_DOCS", "") == "1"
 
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]

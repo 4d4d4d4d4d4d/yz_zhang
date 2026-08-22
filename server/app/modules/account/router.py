@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -109,15 +109,16 @@ class SendCodeIn(BaseModel):
 
 
 @router.post("/auth/send-code")
-def send_sms_code(body: SendCodeIn, db: Session = Depends(get_db)):
+def send_sms_code(request: Request, body: SendCodeIn, db: Session = Depends(get_db)):
     """VND-020 请求短信验证码。模拟通道回显 `dev_code` 便于开发；真实通道不回显。
 
     限流与注册/登录同级，防被当作短信轰炸机（费用与骚扰双重风险）。
     """
-    from app.core.ratelimit import check
+    from app.core.guard import guard
     from app.vendors.base import VendorError
 
-    check(f"send-code:{body.phone}", limit=3, window_seconds=60)
+    # SEC-011 双维度：换号不换 IP 也挡得住（短信费与骚扰是双重代价）
+    guard(request, "send-code", body.phone, limit=3, ip_limit=10)
     try:
         return sms_service.send_code(db, body.phone, body.scene)
     except VendorError as exc:
@@ -125,11 +126,12 @@ def send_sms_code(body: SendCodeIn, db: Session = Depends(get_db)):
 
 
 @router.post("/auth/register", status_code=201)
-def register(body: RegisterIn, db: Session = Depends(get_db), user_agent: str = Header(default="")):
-    # ACC-001 防刷：同手机号 60s 内注册尝试限流
-    from app.core.ratelimit import check
+def register(request: Request, body: RegisterIn, db: Session = Depends(get_db), user_agent: str = Header(default="")):
+    # ACC-001/SEC-011 防刷：账号 + IP 双维度。只按手机号限挡不住批量注册——
+    # 攻击者每次换号，账号维度的计数器永远是 1
+    from app.core.guard import guard
 
-    check(f"register:{body.phone}", limit=3, window_seconds=60)
+    guard(request, "register", body.phone, limit=3, ip_limit=10)
     sms_service.verify_code(db, body.phone, body.sms_code)
     if db.query(User).filter(User.phone == body.phone).first():
         raise conflict("手机号已注册", "phone_taken")
@@ -151,23 +153,26 @@ def register(body: RegisterIn, db: Session = Depends(get_db), user_agent: str = 
 
 
 @router.post("/auth/login")
-def login(body: LoginIn, db: Session = Depends(get_db), user_agent: str = Header(default="")):
-    # ACC-002 密码登录防暴力破解：同手机号 60s 内尝试限流（原缺失，可无限撞库）
-    from app.core.ratelimit import check
+def login(request: Request, body: LoginIn, db: Session = Depends(get_db), user_agent: str = Header(default="")):
+    # ACC-002/SEC-011/020 防撞库：双维度限流 + 失败计数自动封禁 IP
+    from app.core.clientip import client_ip
+    from app.core.guard import guard, note_auth_failure, note_auth_success
 
-    check(f"login-pwd:{body.phone}", limit=5, window_seconds=60)
+    guard(request, "login-pwd", body.phone, limit=5, ip_limit=20)
     user = db.query(User).filter(User.phone == body.phone).first()
     if not user or user.is_deleted or not verify_password(body.password, user.password_hash):
+        note_auth_failure(client_ip(request))
         raise bad_request("手机号或密码错误", "bad_credentials")
+    note_auth_success(client_ip(request))
     return {"token": _issue_token(db, user, user_agent), "user": _me(user)}
 
 
 @router.post("/auth/login-sms")
-def login_sms(body: SmsLoginIn, db: Session = Depends(get_db), user_agent: str = Header(default="")):
+def login_sms(request: Request, body: SmsLoginIn, db: Session = Depends(get_db), user_agent: str = Header(default="")):
     """验证码登录，未注册自动注册（ACC-001）。"""
-    from app.core.ratelimit import check
+    from app.core.guard import guard
 
-    check(f"login-sms:{body.phone}", limit=5, window_seconds=60)  # 60s 防刷
+    guard(request, "login-sms", body.phone, limit=5, ip_limit=20)
     sms_service.verify_code(db, body.phone, body.sms_code)
     user = db.query(User).filter(User.phone == body.phone).first()
     if user and user.is_deleted:
@@ -192,7 +197,7 @@ class ResetPasswordIn(BaseModel):
 
 
 @router.post("/auth/change-password")
-def change_password(
+def change_password(request: Request, 
     body: ChangePasswordIn, user: User = Depends(get_current_user),
     db: Session = Depends(get_db), user_agent: str = Header(default=""),
 ):
@@ -214,13 +219,13 @@ class ChangePhoneIn(BaseModel):
 
 
 @router.post("/auth/change-phone")
-def change_phone(
+def change_phone(request: Request, 
     body: ChangePhoneIn, user: User = Depends(get_current_user), db: Session = Depends(get_db),
 ):
     """ACC-008 换绑手机：新号验证码 + 旧密码双重校验；新号不可已被占用。"""
-    from app.core.ratelimit import check
+    from app.core.guard import guard
 
-    check(f"change-phone:{user.id}", limit=3, window_seconds=60)
+    guard(request, "change-phone", str(user.id), limit=3, ip_limit=10)
     sms_service.verify_code(db, body.new_phone, body.sms_code, scene="change_phone")
     if not user.password_hash or not verify_password(body.password, user.password_hash):
         raise bad_request("密码错误", "bad_password")
@@ -239,11 +244,11 @@ def change_phone(
 
 
 @router.post("/auth/reset-password")
-def reset_password(body: ResetPasswordIn, db: Session = Depends(get_db)):
+def reset_password(request: Request, body: ResetPasswordIn, db: Session = Depends(get_db)):
     """ACC-004 忘记密码：短信码重置；吊销全部会话，需重新登录（业界惯例）。"""
-    from app.core.ratelimit import check
+    from app.core.guard import guard
 
-    check(f"reset-pwd:{body.phone}", limit=3, window_seconds=60)  # 防爆破
+    guard(request, "reset-pwd", body.phone, limit=3, ip_limit=10)
     sms_service.verify_code(db, body.phone, body.sms_code)
     user = db.query(User).filter(User.phone == body.phone).first()
     if not user or user.is_deleted:

@@ -7,12 +7,26 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import SessionLocal, get_db, init_db
 from app.core.deps import require_job_auth
+from app.core.guard import WriteRateLimitMiddleware
+from app.core.headers import SecurityHeadersMiddleware
 from app.core.observability import ObservabilityMiddleware, render_metrics, setup_logging
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title=settings.APP_NAME)
+    # SEC-003 生产默认关闭 API 文档：把全部端点与模型结构直接送给攻击者
+    # 是没有必要的慷慨（需要时显式设 PLATFORM_EXPOSE_DOCS=1）
+    docs_on = settings.EXPOSE_DOCS or settings.ENV != "prod"
+    app = FastAPI(
+        title=settings.APP_NAME,
+        docs_url="/docs" if docs_on else None,
+        redoc_url="/redoc" if docs_on else None,
+        openapi_url="/openapi.json" if docs_on else None,
+    )
     setup_logging(settings.LOG_LEVEL)
+    # 中间件自外向内：可观测 → 安全响应头 → 全局写限流
+    # （限流命中也要被记录与带上安全头，所以它在最内层）
+    app.add_middleware(WriteRateLimitMiddleware)   # SEC-012
+    app.add_middleware(SecurityHeadersMiddleware)  # SEC-002
     # DEP-041 request_id 与访问日志放在最外层，确保任何请求都被记录
     app.add_middleware(ObservabilityMiddleware)
     app.add_middleware(
