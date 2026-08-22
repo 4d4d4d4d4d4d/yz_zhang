@@ -38,6 +38,13 @@
 | 13 | 客户端功能点（Web / App） | [13-clients.md](./13-clients.md) | P0 |
 | 14 | 后端架构与数据模型概要 | [14-backend-architecture.md](./14-backend-architecture.md) | P0 |
 | 15 | 阶段规划（MVP → V1 → V2） | [15-roadmap.md](./15-roadmap.md) | — |
+| 16 | Spec → 实现 → 测试 追溯矩阵 | [16-traceability.md](./16-traceability.md) | — |
+| 17 | 编排循环 Agent Harness（发任务即调工具） | [17-orchestrator.md](./17-orchestrator.md) | P1 |
+| 18 | 并发与生产化硬化 | [18-concurrency.md](./18-concurrency.md) | P0 |
+| 19 | 外部供应商接入抽象层 | [19-vendor-integration.md](./19-vendor-integration.md) | P0 |
+| 20 | 部署、可观测与运维 | [20-deployment.md](./20-deployment.md) | P0 |
+| 21 | 移动端与 PWA | [21-mobile-pwa.md](./21-mobile-pwa.md) | P0 |
+| 22 | 增长、运营与市场 | [22-growth-ops.md](./22-growth-ops.md) | P0 |
 
 ## 功能点编号与优先级约定
 
