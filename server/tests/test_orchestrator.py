@@ -81,7 +81,9 @@ def test_failed_step_triggers_remedy_iteration(client, requester, worker):
 
     detail = client.get(f"/api/v1/missions/{m['id']}", headers=auth(requester)).json()
     remedy = [s for s in detail["steps"] if s["is_remedy"]]
-    assert remedy and remedy[0]["title"].startswith("[修复]")
+    # AIO-021/022 标题保持稳定（不再层层加「[修复]」前缀），轮次由 attempt 表达
+    assert remedy and remedy[0]["title"] == first["title"]
+    assert remedy[0]["attempt"] == 2 and remedy[0]["parent_step_id"] == first["id"]
     assert remedy[0]["status"] == "dispatched" and remedy[0]["task_id"]
     assert detail["iteration"] == 1
 
@@ -91,26 +93,70 @@ def test_failed_step_triggers_remedy_iteration(client, requester, worker):
     assert r["status"] == "succeeded"
 
 
-def test_budget_cap_blocks_remedy_dispatch(client, requester):
-    """ORC-004 预算护栏：规划已用满上限时，修复步会超支 → 挂起等待人工，而非继续烧钱。
+def test_cancelled_step_releases_budget_and_remedy_dispatches(client, requester):
+    """AIO-045 取消的任务钱没花出去，占用额度必须释放。
 
-    这正是 agent 自动重试最危险的地方：失败重发会不断追加真实支出。
+    此前 `spent_cents` 在**发布任务时**就累加且从不退还，语义上把
+    「已承诺」和「累计尝试」混成了一件事——结果是一堆已经不存在的占用
+    把 agent 饿死，首轮全部流单后循环就再也走不下去。这是循环能收敛的前提。
     """
     topup(client, requester, 300000)
-    m = _mission(client, requester, cap=100000, goal="超预算统筹")
+    m = _mission(client, requester, cap=100000, goal="流单重试统筹")
     client.post(f"/api/v1/missions/{m['id']}/tick", headers=auth(requester))
     detail = client.get(f"/api/v1/missions/{m['id']}", headers=auth(requester)).json()
-    # 规划只用上限的 70%（其余为重试预留金）
-    assert detail["spent_cents"] == detail["budget_cap_cents"] * 7 // 10
+    # 规划只用上限的 70%（其余为重试预留金），此时是「占用」而非「已花」
+    assert detail["committed_cents"] == detail["budget_cap_cents"] * 7 // 10
+    assert detail["spent_cents"] == 0
 
-    # 全部流单 → 修复步总额（70%）超过剩余预留（30%）→ 挂起等待人工
     for s in detail["steps"]:
         client.post(f"/api/v1/tasks/{s['task_id']}/cancel", headers=auth(requester))
     r = client.post(f"/api/v1/missions/{m['id']}/tick", headers=auth(requester)).json()
-    assert r["status"] == "blocked" and "预算" in r["error"]
 
+    assert r["status"] == "running", f"取消后额度未释放，编排被虚耗的占用卡死：{r}"
+    assert r["remedies"] >= 1 and r["dispatched"] >= 1
     after = client.get(f"/api/v1/missions/{m['id']}", headers=auth(requester)).json()
-    assert after["spent_cents"] <= after["budget_cap_cents"]  # 绝不越过上限
+    assert after["spent_cents"] == 0  # 全程没有任何任务完成放款
+    assert after["committed_cents"] <= after["budget_cap_cents"]
+
+
+def test_real_overspend_still_blocks(client, requester, worker):
+    """AIO-046 真正会超预算时仍必须挂起。
+
+    与上一个用例的区别是钱**真的花出去了**：任务完成放款后重发，
+    实付 + 新占用会突破上限。已付出去的钱不可逆，必须占额度，
+    否则「完成 → 评审不达标 → 重发」会让实际支出翻倍。
+    """
+    topup(client, requester, 300000)
+    m = _mission(client, requester, cap=100000, goal="实付超预算统筹")
+    client.post(f"/api/v1/missions/{m['id']}/tick", headers=auth(requester))
+    detail = client.get(f"/api/v1/missions/{m['id']}", headers=auth(requester)).json()
+
+    # 评审判为不达标（AIO-012：判定不达标**不动钱**，钱已按合约正常放款）
+    from app.modules.orchestrator.review import ReviewResult, set_review_gateway
+
+    class FailingReview:
+        name = "rule"
+
+        def review(self, criteria, evidence):
+            return ReviewResult("fail", 10, ["缺少现场凭证"], ["现场照片"], "rule")
+
+    set_review_gateway(FailingReview())
+    try:
+        # 全部走完闭环真实放款（实付 = 上限的 70%）
+        for s in detail["steps"]:
+            _finish_task(client, requester, worker, s["task_id"])
+
+        r = client.post(f"/api/v1/missions/{m['id']}/tick", headers=auth(requester)).json()
+        # 实付 70% + 修复步再发 70% > 上限 → 挂起，绝不静默继续花钱
+        assert r["status"] == "blocked", r
+        assert "预算" in r["error"]
+    finally:
+        set_review_gateway(None)
+
+    final = client.get(f"/api/v1/missions/{m['id']}", headers=auth(requester)).json()
+    assert final["spent_cents"] == final["budget_cap_cents"] * 7 // 10  # 完成后占用转实付
+    # 剩余额度能发几步就发几步，发不下才挂起——但**总额永不越线**
+    assert final["spent_cents"] + final["committed_cents"] <= final["budget_cap_cents"]
 
 
 def test_max_iterations_gives_up(client, requester):

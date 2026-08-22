@@ -32,6 +32,8 @@ class Settings:
     # ORC-004 编排规划预留：规划阶段只用上限的 (1-预留)，其余留给失败重试，
     # 否则首轮就把预算用满、修复步永远无钱可发（agent 必须自带重试余量）
     ORC_PLAN_RESERVE_BPS = int(os.environ.get("PLATFORM_ORC_PLAN_RESERVE_BPS", "3000"))
+    # AIO-034 单个编排的模型调用次数上限：达上限降级规则评审，不静默烧 API 账单
+    ORC_MAX_MODEL_CALLS = int(os.environ.get("PLATFORM_ORC_MAX_MODEL_CALLS", "50"))
     # DSP-005 答辩期（小时）：被诉方未答辩且答辩期未过时不得裁决（两造兼听），
     # 逾期未答辩可缺席裁决，避免一方不出面就拖死流程
     DISPUTE_RESPONSE_HOURS = int(os.environ.get("PLATFORM_DISPUTE_RESPONSE_HOURS", "48"))

@@ -30,4 +30,9 @@ from app.modules.task.models import (  # noqa: F401
     Task,
 )
 from app.modules.wallet.models import LedgerEntry, WalletAccount  # noqa: F401
-from app.modules.orchestrator.models import Mission, MissionStep  # noqa: F401
+from app.modules.orchestrator.models import (  # noqa: F401
+    Mission,
+    MissionEvent,
+    MissionStep,
+    StepReview,
+)

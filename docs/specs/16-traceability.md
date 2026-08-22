@@ -4,6 +4,28 @@
 > 后端 268 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
 
+## 已实现（V48 批次：AI 编排闭环——从「数状态」到「看成果」）
+
+> 模块 spec：[24-ai-orchestration.md](24-ai-orchestration.md)（已按代码检视结论重写）
+
+本批次的四项修改都来自对 `orchestrator/service.py` 的逐行复查，
+每一项对应一个让循环**闭不上**的具体缺陷：
+
+| Spec 功能点 | 检视发现的缺陷 → 实现 | 测试 |
+|---|---|---|
+| **AIO-024/025/026 预算语义拆分（先修地基）** | `_dispatch_step` 在**发布任务时**就 `spent_cents += budget` 且流单后**从不退还**——字段注释写「已承诺」，行为却是「累计尝试」。两个语义混在一起的后果是取消的任务永久占着额度，首轮全部流单后 agent 就被一堆**已经不存在的占用**饿死。拆成 `committed_cents`（占用，取消即释放）与 `spent_cents`（实付，完成放款才计）。护栏改为 `spent + committed + 本步 <= cap`——**已付出去的钱不可逆，必须占额度**，否则「完成→评审不达标→重发」会让实际支出翻倍 | `test_orchestrator.py::test_cancelled_step_releases_budget_and_remedy_dispatches`（取消后能继续）、`::test_real_overspend_still_blocks`（真超支仍挂起） |
+| **AIO-001/002/003 验收要点显式化** | `acceptance_criteria` 字段**存了但从不使用**，执行者不知道怎样算做完 → 规划为每步产出验收要点，写入任务描述并随合约条款留痕；模板引擎路径同样有要点，不依赖 Key | `test_orchestrator_review.py::test_acceptance_criteria_reach_the_worker` |
+| **AIO-010/011/013 成果评审网关** | `evaluate()` 只数 `task.status == "completed"`——交一句「做完了」和交合格产出**没有区别** → `ReviewGateway` 抽象；`RuleReview` **基于可观测事实真打分**（留痕条数、图片凭证、打卡、交付说明、驳回次数），不是占位符；`ModelReview` 走 JSON Schema 强约束，异常降级；`StepReview` 留痕（模型、提示词版本、脱敏输入摘要、耗时） | 同上（`test_rule_review_distinguishes_evidence_quality` 证明有凭证的交付得分更高、`test_review_is_recorded_with_provenance`、`test_model_review_falls_back_on_bad_output`） |
+| **AIO-012 模型永远不能单独动钱（第一性约束）** | `pass` 只作建议，放款仍由发布方确认；`revise`/`fail` 生成整改要点与人工复核，**零资金动作**。模型会错，而资金操作不可逆——AI 只做「谁该看一眼」的分诊 | 同上（`test_review_verdict_never_moves_money`：判 fail 时双方钱包与合约状态逐字段不变） |
+| **AIO-020/047 质量闸门** | 达标条件从「全部完成」改为「全部完成**且**均分过线」，低分步转整改而非直接算完成；新增 `quality_pct` | 同上（`test_low_quality_does_not_count_as_success`、`test_quality_pct_reported`） |
+| **AIO-021 修复步带整改要点** | `_make_remedy_steps` 是**同规格重发**（`args=dict(s.args)`）——同样的标题、预算、技能要求再发一次，凭什么这次会成功 → 把上一轮 `missing` 写进任务描述；连续两轮不达标则**上浮预算重新招募** | 同上（`test_remedy_carries_fixup_notes`、`test_repeated_failure_boosts_budget`） |
+| **AIO-022 修复步幂等改用外键** | 原先靠标题字符串匹配 `title == f"[修复] {s.title}"`，脆且多轮后标题变成 `[修复] [修复] [修复] X` → 改用 `parent_step_id`，标题保持稳定，轮次由 `attempt` 表达 | 同上（`test_remedy_is_idempotent_by_parent_fk`） |
+| **AIO-023/049 迭代时间线** | `MissionEvent` 记录每轮「做了什么 / 现在怎样 / 下一步」——**agent 必须可解释，否则没人敢授权它自动花钱** | 同上（`test_timeline_is_human_readable`） |
+| **AIO-034/043 模型调用配额** | Mission 级上限，达上限降级规则评审，不静默烧 API 账单 | 同上（`test_model_call_quota_degrades_to_rule`） |
+| **AIO-033/044 送模型脱敏** | 证据只取结构化事实、不取聊天记录；留痕摘要复用日志同一套 `redact` | 同上 |
+| **闭环验收** | 「首轮全部流单 → 整改 → 真正 succeeded」——此前会因预算被虚耗卡在 `blocked` | `test_full_loop_recovers_from_first_round_failure` |
+| SDK 同步：`committed_cents`/`quality_pct`/`timeline`/`stepReviews` | `packages/core/src/{client,types}.ts` | web 构建通过 |
+
 ## 已实现（V47 批次：抗攻击硬化——从「按账号限流」到「换号也挡得住」）
 
 > 新增模块 spec：[23-network-security.md](23-network-security.md)

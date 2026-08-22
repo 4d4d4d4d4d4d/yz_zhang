@@ -13,7 +13,9 @@ import type {
   Me,
   Message,
   Mission,
+  MissionEvent,
   MissionStep,
+  StepReviewRecord,
   MissionTickResult,
   Notice,
   PriceReference,
@@ -322,8 +324,17 @@ export class PlatformClient {
       .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
     return this.request<Mission[]>('GET', `/missions${qs ? `?${qs}` : ''}`);
   }
+  /** AIO-013 某一步的评审留痕（谁判的、依据什么、多久）。 */
+  stepReviews(missionId: number, stepId: number) {
+    return this.request<{ reviews: StepReviewRecord[] }>(
+      'GET', `/missions/${missionId}/steps/${stepId}/reviews`,
+    );
+  }
+
   getMission(id: number) {
-    return this.request<Mission & { steps: MissionStep[] }>('GET', `/missions/${id}`);
+    return this.request<Mission & { steps: MissionStep[]; timeline: MissionEvent[] }>(
+      'GET', `/missions/${id}`,
+    );
   }
   tickMission(id: number) {
     return this.request<MissionTickResult>('POST', `/missions/${id}/tick`);

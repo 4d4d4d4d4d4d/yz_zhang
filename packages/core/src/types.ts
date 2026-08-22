@@ -223,13 +223,41 @@ export interface Mission {
   category: string;
   status: MissionStatus;
   budget_cap_cents: number;
+  /** AIO-024 当前占用额度：分发时增加，任务取消/流单时释放（钱没花出去）。 */
+  committed_cents: number;
+  /** AIO-024 真实花费：任务完成放款后才计入，可与钱包账本交叉核对。 */
   spent_cents: number;
   iteration: number;
   max_iterations: number;
   completion_pct: number;
+  /** AIO-020 已完成步的平均评审分。达标要求「全部完成」且「均分过线」。 */
+  quality_pct: number;
+  model_calls: number;
   acceptance_criteria: string[];
   last_error: string;
   created_at: string;
+}
+
+/** AIO-023 编排时间线的一条：做了什么 / 现在怎样 / 下一步。 */
+export interface MissionEvent {
+  iteration: number;
+  action: string;
+  summary: string;
+  at: string;
+}
+
+/** AIO-013 一次评审的留痕（谁判的、用哪版提示词、依据什么）。 */
+export interface StepReviewRecord {
+  id: number;
+  reviewer: string;        // rule | anthropic:<model>
+  prompt_version: string;
+  verdict: 'pass' | 'revise' | 'fail';
+  score: number;
+  reasons: string[];
+  missing: string[];
+  input_digest: string;
+  duration_ms: number;
+  at: string;
 }
 
 export interface MissionStep {
@@ -242,6 +270,13 @@ export interface MissionStep {
   observation: string;
   is_remedy: boolean;
   budget_cents?: number;
+  /** AIO-022 修复步指向被它接续的原步（幂等键，取代原先的标题匹配）。 */
+  parent_step_id: number | null;
+  attempt: number;
+  acceptance: string[];
+  review_verdict: '' | 'pass' | 'revise' | 'fail';
+  review_score: number;
+  review_missing: string[];
 }
 
 export interface MissionTickResult {
@@ -252,11 +287,12 @@ export interface MissionTickResult {
   failed: number;
   superseded: number;
   completion_pct: number;
+  quality_pct: number;
   planned?: number;
   dispatched?: number;
   remedies?: number;
   error?: string;
-  issues: Array<{ step_id: number; title: string; observation: string }>;
+  issues: Array<{ step_id: number; title: string; observation: string; missing: string[] }>;
   observations: Array<{ step_id: number; task_id: number; task_status: string; observation: string }>;
 }
 

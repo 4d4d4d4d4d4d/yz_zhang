@@ -14,7 +14,7 @@ from app.core.errors import forbidden, not_found
 from app.modules.account.models import User
 
 from . import service
-from .models import Mission, MissionStep
+from .models import Mission, MissionEvent, MissionStep, StepReview
 
 router = APIRouter(tags=["orchestrator"])
 
@@ -32,9 +32,13 @@ def _dump(m: Mission) -> dict:
     return {
         "id": m.id, "owner_id": m.owner_id, "goal": m.goal, "detail": m.detail,
         "category": m.category, "status": m.status,
-        "budget_cap_cents": m.budget_cap_cents, "spent_cents": m.spent_cents,
+        "budget_cap_cents": m.budget_cap_cents,
+        # AIO-024 两个量语义不同：committed 是当前占用（取消会释放），
+        # spent 是任务完成放款后的真实花费
+        "committed_cents": m.committed_cents, "spent_cents": m.spent_cents,
         "iteration": m.iteration, "max_iterations": m.max_iterations,
-        "completion_pct": m.completion_pct,
+        "completion_pct": m.completion_pct, "quality_pct": m.quality_pct,
+        "model_calls": m.model_calls,
         "acceptance_criteria": m.acceptance_criteria,
         "last_error": m.last_error, "created_at": m.created_at.isoformat(),
     }
@@ -91,10 +95,46 @@ def get_mission(
         "steps": [
             {"id": s.id, "iteration": s.iteration, "tool": s.tool, "title": s.title,
              "task_id": s.task_id, "status": s.status, "observation": s.observation,
-             "is_remedy": bool(s.is_remedy), "budget_cents": s.args.get("budget_cents")}
+             "is_remedy": bool(s.is_remedy), "budget_cents": s.args.get("budget_cents"),
+             "parent_step_id": s.parent_step_id, "attempt": s.attempt,
+             "acceptance": s.acceptance or [],
+             "review_verdict": s.review_verdict, "review_score": s.review_score,
+             "review_missing": s.review_missing or []}
             for s in steps
         ],
+        # AIO-023 时间线：人类可读的「做了什么 / 卡在哪 / 下一步」
+        "timeline": [
+            {"iteration": e.iteration, "action": e.action, "summary": e.summary,
+             "at": e.created_at.isoformat()}
+            for e in db.query(MissionEvent)
+            .filter(MissionEvent.mission_id == mission_id)
+            .order_by(MissionEvent.id).all()
+        ],
     }
+
+
+@router.get("/missions/{mission_id}/steps/{step_id}/reviews")
+def step_reviews(
+    mission_id: int, step_id: int,
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """AIO-013 评审留痕：谁判的、用哪版提示词、依据什么、多久。
+
+    没有留痕的自动判定在纠纷里毫无价值——这是它能被拿出来说事的前提。
+    """
+    _get_mission(db, mission_id, user)
+    step = db.get(MissionStep, step_id)
+    if not step or step.mission_id != mission_id:
+        raise not_found("步骤不存在")
+    rows = db.query(StepReview).filter(StepReview.step_id == step_id) \
+             .order_by(StepReview.id).all()
+    return {"reviews": [
+        {"id": r.id, "reviewer": r.reviewer, "prompt_version": r.prompt_version,
+         "verdict": r.verdict, "score": r.score, "reasons": r.reasons,
+         "missing": r.missing, "input_digest": r.input_digest,
+         "duration_ms": r.duration_ms, "at": r.created_at.isoformat()}
+        for r in rows
+    ]}
 
 
 @router.post("/missions/{mission_id}/tick")
@@ -126,7 +166,9 @@ def cancel_mission(
             task_transition(db, task, "cancelled", {"cancelled_by": "mission_cancelled"})
             s.status = "failed"
             s.observation = "编排已中止，挂单下架"
-            db.add(s)
+            # AIO-024 下架 = 钱没花出去，释放占用额度
+            m.committed_cents = max(0, m.committed_cents - int(s.args.get("budget_cents", 0)))
+            db.add_all([s, m])
             closed += 1
     return {**_dump(m), "closed_open_tasks": closed}
 
