@@ -3,6 +3,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("PLATFORM_DATABASE_URL", "sqlite:///./test_platform.db")
+# 测试里访问日志只会淹没失败信息；DEP-040 的脱敏与格式由 test_deployment 直接验证
+os.environ.setdefault("PLATFORM_LOG_LEVEL", "WARNING")
 
 import pytest
 import sqlalchemy as sa

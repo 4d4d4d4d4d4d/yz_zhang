@@ -278,6 +278,7 @@ def cancel(db: Session, contract: Contract, cancelled_by: int) -> dict:
         contract.closed_at = utcnow()
         db.add(contract)
         _settle_deposit(db, contract)  # 未托管阶段取消：保证金原路退还
+        _release_coupon(db, contract.id)
         return {"executor_compensation_cents": 0}
     if contract.status != "funded":
         raise conflict("合约不在可取消状态", "not_cancellable")
@@ -303,7 +304,18 @@ def cancel(db: Session, contract: Contract, cancelled_by: int) -> dict:
     db.add(contract)
     # CRED-005：执行者违约取消 → 罚没保证金；发布者取消 → 退还
     _settle_deposit(db, contract, forfeit=(who == "executor"))
+    _release_coupon(db, contract.id)
     return {"executor_compensation_cents": comp, "cancelled_by": who}
+
+
+def _release_coupon(db: Session, contract_id: int) -> None:
+    """GRW-002 合约取消 → 券退回可再用、补贴款退回平台账户。
+
+    不退券等于因为平台侧/对方原因让用户白丢一张券；不退款等于用户白拿一笔钱。
+    """
+    from app.modules.growth import service as growth
+
+    growth.release_on_cancel(db, contract_id)
 
 
 def freeze(db: Session, contract: Contract) -> None:

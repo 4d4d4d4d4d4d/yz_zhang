@@ -4,6 +4,24 @@
 > 后端 268 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
 
+## 已实现（V46 批次：增长、运营与市场——把运营手册落成功能）
+
+> 新增模块 spec：[22-growth-ops.md](22-growth-ops.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| GRW-001/005 券模板：定额/比例二选一，**比例券必须带封顶**（没封顶的比例券遇大额单会烧光预算）；发放/核销/成本报表；可暂停发放且不追溯作废已领权益 | `growth/{models,service}.py`、`growth/router.py::{create_coupon,coupon_report,pause_coupon}` | `tests/test_growth.py` |
+| GRW-002 领取与核销：一人限领、一单一券（`UniqueConstraint(contract_id)` DB 层兜底）、满减门槛、类目限制、有效期；**合约取消 → 券退回可再用且补贴款退回平台** | `growth/service.py::{claim,redeem,release_on_cancel}` + `contract/service.py::_release_coupon` | 同上 |
+| GRW-003 **补贴资金口径（本批次最关键）**：补贴不凭空产生，一律「平台账户 → 用户可用余额」走既有账本（`subsidy_out/in` 科目）；平台余额不足即核销失败绝不透支；新增补贴池注资 `platform_topup`（冷启动时平台还没佣金收入）。**同步扩展资金第 4 不变量**为「平台可用 == Σ佣金 + Σ注资 - Σ结算 + Σ补贴净额 + Σ调整净额」——不改口径的话每发一张券日终对账就误报一次 | `wallet/service.py::{transfer(kind=),fund_platform}`、`risk/service.py::reconcile` | 同上（每个用例结尾都断言四不变量成立） |
+| GRW-004 反刷：未实名不得领券（否则批量注册即可薅）、限量与限领 | `growth/service.py::claim` | 同上 |
+| GRW-010~014 邀请裂变：**完成首单才发现金奖励**（注册即奖是刷号的邀请函）；一人一次（`invitee_id` 唯一）；反作弊（同收款账户 / 同实名 / 互为邀请 → blocked 转人工不发钱）；邀请战绩页 | `growth/service.py::{grant_referral,_fraud_reason,referral_stats}`、`analytics/service.py` | 同上 |
+| GRW-060 合规红线：**奖励仅一级**，邀请人的邀请人不获任何奖励（代码层面就不去追溯上级）；战绩接口显式返回 `levels: 1` | 同上 | 同上（A→B→C 三层，C 成单时 A 得 0） |
+| GRW-020 新人任务清单（完善资料/实名/技能/首发/首报/首单）与进度 | `growth/service.py::newcomer_progress` | 同上 |
+| GRW-022/023 供需健康度：按城市×类目统计发布数/接单人数/成单率，标出 `supply`（有需求没人接）与 `demand`（有人没活干）两类缺口；发布页供给不足提示 | `growth/service.py::{market_health,supply_hint_text}` | 同上 |
+| GRW-030 活动预算硬顶：`spent_cents` 随核销累加，超顶自动停投——没有硬顶的补贴活动是运营事故的标准形态 | `growth/models.py::Campaign` + `service._check_campaign` | 同上（预算 30 元、券 20 元 → 第二张即被拒） |
+| GRW-052 北极星指标：成单数与成单 GMV；次级看新用户首单转化与纠纷率 | `growth/service.py::north_star` | 同上 |
+| Web 优惠页（新人任务进度 / 领券 / 我的券 / 邀请战绩，含「仅一级」规则说明）+ SDK 同步 | `web/src/pages/Rewards.tsx`、`packages/core/src/{client,types}.ts` | web 构建通过 |
+
 ## 已实现（V45 批次：移动端与 PWA——让手机用户真的能用）
 
 > 新增模块 spec：[21-mobile-pwa.md](21-mobile-pwa.md)

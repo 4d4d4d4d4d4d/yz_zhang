@@ -13,5 +13,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // 打开 CSS 处理，否则 `import '*.css?raw'` 会被短路成空串，
+    // 移动端样式约束（MOB-001/003）就无从断言
+    css: true,
   },
 });

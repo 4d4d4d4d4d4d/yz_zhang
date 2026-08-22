@@ -2,6 +2,9 @@
 import type {
   CircleInfo,
   ContentItem,
+  CouponTemplate,
+  MarketCell,
+  MyCoupon,
   Contract,
   Decomposition,
   DecompositionItem,
@@ -202,8 +205,12 @@ export class PlatformClient {
   signContract(id: number) {
     return this.request<Contract>('POST', `/contracts/${id}/sign`);
   }
-  fundContract(id: number) {
-    return this.request<Contract>('POST', `/contracts/${id}/fund`);
+  /** SC-003 托管；可带 GRW 优惠券（补贴先到账再托管，发布方净掏钱变少）。 */
+  fundContract(id: number, userCouponId?: number) {
+    const q = userCouponId ? `?user_coupon_id=${userCouponId}` : '';
+    return this.request<Contract & { coupon_discount_cents?: number }>(
+      'POST', `/contracts/${id}/fund${q}`,
+    );
   }
   wallet() {
     return this.request<Wallet>('GET', '/wallet');
@@ -352,6 +359,57 @@ export class PlatformClient {
       last_message: { id: number; sender_id: number; kind: string; content: string; created_at: string } | null;
     }>>('GET', '/conversations');
   }
+  // ── GRW 增长运营（22 号 spec）────────────────────────────────
+  /** 可领取的券（已领满/已领完的不返回）。 */
+  availableCoupons() {
+    return this.request<{ coupons: CouponTemplate[] }>('GET', '/coupons');
+  }
+  claimCoupon(couponId: number) {
+    return this.request<{ id: number; coupon_id: number; status: string; expires_at: string }>(
+      'POST', `/coupons/${couponId}/claim`,
+    );
+  }
+  myCoupons() {
+    return this.request<{ coupons: MyCoupon[] }>('GET', '/me/coupons');
+  }
+  /** 下单前查这一单能用哪张券、能省多少。 */
+  couponsForContract(contractId: number) {
+    return this.request<{ usable: Array<{ user_coupon_id: number; title: string; discount_cents: number }> }>(
+      'GET', `/contracts/${contractId}/coupons`,
+    );
+  }
+  /** GRW-014 邀请战绩。levels 恒为 1：奖励仅一级。 */
+  myReferrals() {
+    return this.request<{
+      referral_code: string; invited_count: number; achieved_count: number;
+      blocked_count: number; earned_cents: number; levels: number;
+    }>('GET', '/me/referrals');
+  }
+  /** GRW-020 新人任务进度。 */
+  newcomerProgress() {
+    return this.request<{
+      steps: Array<{ key: string; label: string; done: boolean }>;
+      finished: number; total: number; completed: boolean;
+    }>('GET', '/me/newcomer');
+  }
+  /** GRW-023 发布前的供给提示（该区域执行人少时提前告知）。 */
+  supplyHint(city: string, category: string) {
+    return this.request<{ hint: string }>(
+      'GET', `/market/supply-hint?city=${encodeURIComponent(city)}&category=${encodeURIComponent(category)}`,
+    );
+  }
+  marketHealth(days = 30) {
+    return this.request<{ window_days: number; min_supply: number; cells: MarketCell[] }>(
+      'GET', `/admin/market-health?days=${days}`,
+    );
+  }
+  northStar(days = 30) {
+    return this.request<{
+      window_days: number; orders_completed: number; gmv_cents: number;
+      new_users: number; new_user_first_order_rate: number; dispute_rate: number;
+    }>('GET', `/admin/north-star?days=${days}`);
+  }
+
   imUnreadCount() {
     return this.request<{ unread: number }>('GET', '/conversations/unread-count');
   }

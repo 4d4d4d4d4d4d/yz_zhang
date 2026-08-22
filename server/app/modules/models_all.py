@@ -11,6 +11,7 @@ from app.modules.contract.models import ChangeOrder, Contract, Milestone  # noqa
 from app.modules.decompose.models import Decomposition  # noqa: F401
 from app.modules.admin.models import Report  # noqa: F401
 from app.modules.dispute.models import Dispute  # noqa: F401
+from app.modules.growth.models import Campaign, Coupon, ReferralReward, UserCoupon  # noqa: F401
 from app.modules.matching.models import Invitation, MatchingConfig, Subscription  # noqa: F401
 from app.modules.support.models import NotificationPref, Ticket  # noqa: F401
 from app.modules.im.models import Conversation, Message  # noqa: F401

@@ -101,7 +101,6 @@ REFERRAL_BONUS = 5  # 信用分奖励
 def _on_task_completed(db: Session, payload: dict) -> None:
     from app.modules.account import service as credit
     from app.modules.account.models import User
-    from app.modules.notification.service import notify
     from app.modules.task.models import Task
 
     task = db.get(Task, payload["task_id"])
@@ -110,14 +109,14 @@ def _on_task_completed(db: Session, payload: dict) -> None:
     executor = db.get(User, task.executor_id)
     if not executor or not executor.referred_by or executor.referral_rewarded:
         return
-    # 被邀请人完成首单 → 邀请人得信用奖励（每人一次）
+    # 被邀请人完成首单 → 邀请人得信用奖励 + 现金奖励（GRW-012，每人一次）
     inviter = db.get(User, executor.referred_by)
     if inviter:
         credit.adjust_credit(db, inviter.id, REFERRAL_BONUS)
-        notify(db, inviter.id, "system", "邀请奖励到账",
-               f"你邀请的「{executor.nickname}」完成首单，信用分 +{REFERRAL_BONUS}")
-    executor.referral_rewarded = True
-    db.add(executor)
+    from app.modules.growth import service as growth
+
+    # 现金奖励由 growth 负责：仅一级、反作弊命中转人工、平台账户出资
+    growth.grant_referral(db, executor)
 
 
 def register_event_handlers() -> None:

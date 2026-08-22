@@ -212,8 +212,14 @@ def settle_platform(db: Session, amount: int, memo: str = "平台收入结算") 
     return {"settled_cents": amount, "balance_cents": platform.available_cents}
 
 
-def transfer(db: Session, from_id: int, to_id: int, amount: int, contract_id=None, memo=""):
-    """可用余额间转账（申诉纠正性结算等平台内部调整）。"""
+def transfer(db: Session, from_id: int, to_id: int, amount: int, contract_id=None, memo="",
+             kind: str = "adjust"):
+    """可用余额间转账（申诉纠正性结算、GRW 补贴等平台内部调整）。
+
+    `kind` 决定流水科目：`adjust`（默认，内部调整）/ `subsidy`（GRW 补贴）。
+    补贴单独成科目的理由是对账口径不同——补贴会减少平台账户余额，
+    必须计入平台账户不变量，否则日终对账会报「平台佣金不符」。
+    """
     if amount <= 0:
         raise bad_request("金额必须为正", "invalid_amount")
     lock_wallets(db, from_id, to_id)  # CONC-011 按 user_id 升序加锁，避免对向转账死锁
@@ -221,10 +227,26 @@ def transfer(db: Session, from_id: int, to_id: int, amount: int, contract_id=Non
     if src.available_cents < amount:
         raise bad_request("余额不足以执行调整", "insufficient_balance")
     src.available_cents -= amount
-    _log(db, from_id, "adjust_out", -amount, contract_id, memo)
+    _log(db, from_id, f"{kind}_out", -amount, contract_id, memo)
     dst = get_or_create(db, to_id)
     dst.available_cents += amount
-    _log(db, to_id, "adjust_in", amount, contract_id, memo)
+    _log(db, to_id, f"{kind}_in", amount, contract_id, memo)
+
+
+def fund_platform(db: Session, amount: int, memo: str = "平台补贴金注资") -> dict:
+    """GRW-003 平台补贴池注资：从平台外部注入资金到平台账户。
+
+    冷启动时平台还没有佣金收入，补贴池必须先注资才能发券——
+    这笔钱同样进账本（`platform_topup`），因此全局守恒与平台账户不变量
+    都能继续成立，补贴永远能追到出资方。
+    """
+    if amount <= 0:
+        raise bad_request("注资金额必须为正", "invalid_amount")
+    lock_wallets(db, PLATFORM_USER_ID)
+    platform = get_or_create(db, PLATFORM_USER_ID)
+    platform.available_cents += amount
+    _log(db, PLATFORM_USER_ID, "platform_topup", amount, memo=memo)
+    return {"balance_cents": platform.available_cents, "funded_cents": amount}
 
 
 def freeze_deposit(db: Session, user_id: int, amount: int, contract_id: int):

@@ -9,6 +9,7 @@ import Messages from './pages/Messages';
 import Notifications from './pages/Notifications';
 import Profile from './pages/Profile';
 import Publish from './pages/Publish';
+import Rewards from './pages/Rewards';
 import Square from './pages/Square';
 import Support from './pages/Support';
 import TaskDetail from './pages/TaskDetail';
@@ -42,6 +43,7 @@ export default function App() {
         <Link to="/circles">圈层</Link>
         <Link to="/messages">消息</Link>
         <Link to="/wallet">钱包</Link>
+        <Link to="/rewards">优惠</Link>
         <Link to="/support">客服</Link>
         <span className="spacer" />
         {me ? (
@@ -67,6 +69,7 @@ export default function App() {
         <Route path="/messages" element={hasToken ? <Messages /> : <Navigate to="/login" />} />
         <Route path="/notifications" element={hasToken ? <Notifications /> : <Navigate to="/login" />} />
         <Route path="/profile" element={hasToken ? <Profile /> : <Navigate to="/login" />} />
+        <Route path="/rewards" element={hasToken ? <Rewards /> : <Navigate to="/login" />} />
         <Route path="/support" element={hasToken ? <Support /> : <Navigate to="/login" />} />
         <Route path="/admin" element={hasToken ? <Admin /> : <Navigate to="/login" />} />
       </Routes>

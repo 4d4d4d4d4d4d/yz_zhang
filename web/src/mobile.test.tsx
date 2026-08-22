@@ -5,16 +5,20 @@
 // 真实视口渲染需要浏览器环境，由人工/E2E 覆盖，不在此假装验证。
 import { PlatformClient } from '@platform/core';
 import { render, screen, waitFor } from '@testing-library/react';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { dismissInstall, isInstallDismissed } from './pwa';
 import { AppProvider } from './store';
-
-const ROOT = resolve(__dirname, '..');
-const read = (p: string) => readFileSync(resolve(ROOT, p), 'utf-8');
+// 用 Vite 的 ?raw 读静态产物，避免测试依赖 node 类型
+import indexHtml from '../index.html?raw';
+import manifestRaw from '../public/manifest.webmanifest?raw';
+import swSource from '../public/sw.js?raw';
+// vitest 默认关闭 CSS 处理，直接 import '*.css?raw' 会得到空串；
+// import.meta.glob 显式带 query 才能拿到真实文本
+const cssSource = Object.values(
+  import.meta.glob('./styles.css', { query: '?raw', import: 'default', eager: true }),
+)[0] as string;
 
 function clientWith(unread: number): PlatformClient {
   const fetchImpl = vi.fn(async (url: string) => ({
@@ -31,7 +35,7 @@ function clientWith(unread: number): PlatformClient {
 
 describe('PWA 静态产物（MOB-010/011）', () => {
   it('manifest 声明 standalone、主题色与 maskable 图标', () => {
-    const manifest = JSON.parse(read('public/manifest.webmanifest'));
+    const manifest = JSON.parse(manifestRaw);
     expect(manifest.display).toBe('standalone');
     expect(manifest.start_url).toBe('/');
     expect(manifest.theme_color).toMatch(/^#/);
@@ -40,14 +44,14 @@ describe('PWA 静态产物（MOB-010/011）', () => {
   });
 
   it('index.html 链接 manifest 且 viewport 带 viewport-fit=cover', () => {
-    const html = read('index.html');
+    const html = indexHtml;
     expect(html).toContain('rel="manifest"');
     expect(html).toContain('viewport-fit=cover'); // 没有它 safe-area-inset 恒为 0
     expect(html).toContain('name="theme-color"');
   });
 
   it('Service Worker 绝不缓存 /api——资金与状态数据不能读到陈旧值', () => {
-    const sw = read('public/sw.js');
+    const sw = swSource;
     expect(sw).toContain("url.pathname.startsWith('/api/')");
     // 预缓存清单里不得出现任何 API 路径
     const precache = sw.slice(sw.indexOf('const PRECACHE'), sw.indexOf('self.addEventListener'));
@@ -57,12 +61,12 @@ describe('PWA 静态产物（MOB-010/011）', () => {
   });
 
   it('SW 支持 SKIP_WAITING，页面确认后能立刻换新版本（MOB-013）', () => {
-    expect(read('public/sw.js')).toContain('SKIP_WAITING');
+    expect(swSource).toContain('SKIP_WAITING');
   });
 });
 
 describe('移动端样式约束（MOB-001/003）', () => {
-  const css = read('src/styles.css');
+  const css = cssSource;
 
   it('输入框 ≥16px，防 iOS 聚焦时整页缩放', () => {
     expect(css).toMatch(/input, textarea, select \{ font-size: 16px; \}/);

@@ -263,11 +263,24 @@ def sign_contract(
 
 @router.post("/{contract_id}/fund")
 def fund_contract(
-    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user_coupon_id: int | None = None,
 ):
+    """SC-003 托管；可选带 GRW 优惠券。
+
+    补贴先到账再托管：平台把优惠额打给发布方，发布方再托管全额。
+    净效果是发布方少掏钱，而托管口径（Σescrow == Σ未放款合约额）不受影响——
+    这是刻意选的形态，避免为了打折去改动托管账目本身。
+    """
+    from app.modules.growth import service as growth
+
     contract = _get(db, contract_id, user)
+    task = db.get(Task, contract.task_id)
+    discount = 0
+    if user_coupon_id:
+        discount = growth.redeem(db, user_coupon_id, user.id, contract,
+                                 task.category if task else "")
     service.fund(db, contract, user.id)
     # 资金托管完成 → 任务进入执行中（03 状态机联动）
-    task = db.get(Task, contract.task_id)
     transition(db, task, "in_progress")
-    return _dump(contract)
+    return {**_dump(contract), "coupon_discount_cents": discount}

@@ -259,3 +259,49 @@ export interface MissionTickResult {
   issues: Array<{ step_id: number; title: string; observation: string }>;
   observations: Array<{ step_id: number; task_id: number; task_status: string; observation: string }>;
 }
+
+// ── GRW 增长运营（22 号 spec）────────────────────────────────
+export interface CouponTemplate {
+  id: number;
+  title: string;
+  kind: 'requester_discount' | 'worker_bonus';
+  amount_cents: number;
+  percent_bps: number;
+  max_discount_cents: number;
+  min_order_cents: number;
+  category: string;
+  newcomer_only: boolean;
+  total_quota: number;
+  issued_count: number;
+  per_user_limit: number;
+  valid_days: number;
+  active: boolean;
+  ends_at: string;
+  campaign_id: number | null;
+}
+
+export interface MyCoupon {
+  id: number;
+  status: 'unused' | 'used' | 'expired';
+  title: string;
+  kind: string;
+  min_order_cents: number;
+  amount_cents: number;
+  percent_bps: number;
+  max_discount_cents: number;
+  category: string;
+  expires_at: string;
+  discount_cents: number;
+  contract_id: number | null;
+}
+
+/** GRW-022 供需健康度的一个「城市×类目」格子。gap 标出缺口方向。 */
+export interface MarketCell {
+  city: string;
+  category: string;
+  published: number;
+  active_workers: number;
+  matched: number;
+  fill_rate: number;
+  gap: '' | 'supply' | 'demand';
+}
