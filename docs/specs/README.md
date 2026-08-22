@@ -45,6 +45,10 @@
 | 20 | 部署、可观测与运维 | [20-deployment.md](./20-deployment.md) | P0 |
 | 21 | 移动端与 PWA | [21-mobile-pwa.md](./21-mobile-pwa.md) | P0 |
 | 22 | 增长、运营与市场 | [22-growth-ops.md](./22-growth-ops.md) | P0 |
+| 23 | 分布式部署与抗攻击 | [23-network-security.md](./23-network-security.md) | P0 |
+| 24 | AI 编排增强：模型驱动的验收与迭代 | [24-ai-orchestration.md](./24-ai-orchestration.md) | P0 |
+| 25 | 资金合规与分账（含**上线红线**） | [25-financial-compliance.md](./25-financial-compliance.md) | P0 |
+| 26 | 智能合约的法律效力与纠纷解决 | [26-legal-enforceability.md](./26-legal-enforceability.md) | P0 |
 
 ## 功能点编号与优先级约定
 
