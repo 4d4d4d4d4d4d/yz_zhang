@@ -17,19 +17,25 @@ server/           # 后端：FastAPI 模块化单体（Python 3.11+）
   app/vendors/    #   外部供应商抽象层（支付/短信/eKYC/内容审核，缺省 Mock）
   app/modules/    #   account task matching contract wallet decompose knowledge
                   #   im dispute notification support content circle legal admin search anchor risk analytics orchestrator
-  tests/          #   285 个测试（端到端闭环+状态机穷举+资金守恒 fuzz+各交叉路径守恒+平台佣金实收对账+收款账户绑定+任务过期下架+广场/我的任务/我的报名分页+通知中心+cron 端点鉴权+幂等指纹+登录限流+签署/纠纷 SLA+真双盲评分+任务编辑防调包+接单上限/开关+提现风控+对账告警+密码/换绑/设备安全+防重放+越权+存证链防篡改+管理员审计+封禁影响面+口碑页双盲防旁路+封禁挂单下架+IM未读位点+纠纷答辩期+编排循环护栏+并发放款/托管/提现真并发+乐观锁防丢失更新+job单实例锁+健康就绪探针+限流降级+支付回调验签/重放/金额不符+供应商幂等熔断+验证码只存哈希+证件号脱敏防一人多号+生产启动自检）
+  tests/          #   301 个测试（端到端闭环+状态机穷举+资金守恒 fuzz+各交叉路径守恒+平台佣金实收对账+收款账户绑定+任务过期下架+广场/我的任务/我的报名分页+通知中心+cron 端点鉴权+幂等指纹+登录限流+签署/纠纷 SLA+真双盲评分+任务编辑防调包+接单上限/开关+提现风控+对账告警+密码/换绑/设备安全+防重放+越权+存证链防篡改+管理员审计+封禁影响面+口碑页双盲防旁路+封禁挂单下架+IM未读位点+纠纷答辩期+编排循环护栏+并发放款/托管/提现真并发+乐观锁防丢失更新+job单实例锁+健康就绪探针+限流降级+支付回调验签/重放/金额不符+供应商幂等熔断+验证码只存哈希+证件号脱敏防一人多号+生产启动自检+迁移与模型不漂移+日志脱敏+指标基数+job健康反查排期）
 packages/core/    # 共享 TS SDK（Web/App 复用，23 tests，含操作可见性矩阵）
 web/              # Web 前端：React + Vite（6 tests，含管理后台）
 app/              # App：React Native / Expo 骨架
+deploy/           # 生产部署：prod compose + 自检启动 + 备份/恢复脚本
 tools/            # 与平台无关的历史小工具（file-organizer）
 ```
 
 ## 快速开始（Docker，一键全栈）
 
 ```bash
-docker compose up --build
+docker compose up --build          # 开发栈（SQLite 单副本）
 # Web: http://localhost:8080  /  API 文档: http://localhost:8000/docs
+
+cp deploy/.env.example deploy/.env && ./deploy/up.sh   # 生产栈（Postgres+Redis+多副本）
 ```
+
+生产栈起栈前会做配置自检（弱密钥、CORS 为 `*`、供应商仍是 mock 一律拒绝启动），
+详见 [docs/OPERATIONS.md](docs/OPERATIONS.md) 第四节。
 
 CI：`.github/workflows/ci.yml` 在每次 push/PR 自动跑后端 pytest、前端 vitest+构建、服务启动冒烟。
 

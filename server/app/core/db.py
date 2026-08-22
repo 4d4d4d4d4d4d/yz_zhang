@@ -1,6 +1,6 @@
 import os
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import settings
@@ -59,10 +59,51 @@ def supports_row_lock() -> bool:
 
 
 def init_db() -> None:
-    # 导入全部模型后建表
+    """开发/测试建表。
+
+    DEP-020：**生产唯一建表路径是 `alembic upgrade head`**，
+    多副本下并发 create_all 会互相踩；这里显式拒绝，避免误用。
+    """
     from app.modules import models_all  # noqa: F401
 
+    if settings.ENV == "prod":
+        raise RuntimeError("生产环境禁止 create_all，请执行 alembic upgrade head")
     Base.metadata.create_all(engine)
+
+
+def migration_status() -> dict:
+    """DEP-022 代码期望的迁移版本 vs 库里实际版本。
+
+    库里没有 alembic_version 表 → 说明是 create_all 建的开发库，
+    返回 not_applicable（开发环境不因此不就绪）。
+    """
+    from sqlalchemy import inspect
+
+    try:
+        insp = inspect(engine)
+        if "alembic_version" not in insp.get_table_names():
+            return {"state": "not_applicable", "db": None, "head": _script_head()}
+        with engine.connect() as conn:
+            current = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+    except Exception as exc:  # pragma: no cover - 依赖故障路径
+        return {"state": "unknown", "error": type(exc).__name__}
+    head = _script_head()
+    if head is None:
+        return {"state": "unknown", "db": current, "head": None}
+    return {"state": "ok" if current == head else "mismatch", "db": current, "head": head}
+
+
+def _script_head() -> str | None:
+    try:
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        cfg = Config(os.path.join(root, "alembic.ini"))
+        cfg.set_main_option("script_location", os.path.join(root, "migrations"))
+        return ScriptDirectory.from_config(cfg).get_current_head()
+    except Exception:  # alembic 未安装或脚本目录缺失时不阻塞启动
+        return None
 
 
 def get_db():

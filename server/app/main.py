@@ -1,17 +1,23 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.db import SessionLocal, init_db
+from app.core.db import SessionLocal, get_db, init_db
+from app.core.deps import require_job_auth
+from app.core.observability import ObservabilityMiddleware, render_metrics, setup_logging
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title=settings.APP_NAME)
+    setup_logging(settings.LOG_LEVEL)
+    # DEP-041 request_id 与访问日志放在最外层，确保任何请求都被记录
+    app.add_middleware(ObservabilityMiddleware)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.cors_origins(),
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -111,6 +117,26 @@ def create_app() -> FastAPI:
             },
         )
 
+    @app.get("/version")
+    def version():
+        """DEP-012 构建信息：出问题时第一件事是确认线上跑的到底是哪个版本。"""
+        return {"version": settings.APP_VERSION, "git_sha": settings.GIT_SHA,
+                "built_at": settings.BUILT_AT, "env": settings.ENV}
+
+    @app.get("/metrics")
+    def metrics(db: Session = Depends(get_db), _=Depends(require_job_auth)):
+        """DEP-042 Prometheus 指标。与 cron 端点同一把令牌保护——
+        资金口径指标（托管中金额、未结纠纷）不该对公网裸奔。"""
+        return PlainTextResponse(render_metrics(db), media_type="text/plain; version=0.0.4")
+
+    @app.get("/jobz")
+    def jobz(db: Session = Depends(get_db), _=Depends(require_job_auth)):
+        """DEP-051 定时任务健康：上次成功时间与最近错误。
+        job「静默不跑」比报错更危险，监控盯的就是这里的 seconds_since_success。"""
+        from app.core.locks import job_health
+
+        return {"jobs": job_health(db)}
+
     @app.get("/healthz")
     def healthz():
         """DEP-010 存活探针：不查任何外部依赖，永远快速返回。"""
@@ -131,6 +157,13 @@ def create_app() -> FastAPI:
         from app.core.ratelimit import backend_status
 
         checks["ratelimit"] = backend_status()
+        # DEP-022 代码与库的迁移版本必须一致，否则不导流量
+        from app.core.db import migration_status
+
+        migration = migration_status()
+        checks["migration"] = migration["state"]
+        if migration["state"] == "mismatch":
+            ok = False
         return JSONResponse(
             status_code=200 if ok else 503,
             content={"ready": ok, "env": settings.ENV, "checks": checks},

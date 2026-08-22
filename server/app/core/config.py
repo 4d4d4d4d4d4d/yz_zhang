@@ -66,6 +66,16 @@ class Settings:
     SMS_PROVIDER = os.environ.get("PLATFORM_SMS_PROVIDER", "mock")
     KYC_PROVIDER = os.environ.get("PLATFORM_KYC_PROVIDER", "mock")
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
+    # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.44.0")
+    GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
+    BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
+    LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")
+    # 生产收紧到白名单域名（逗号分隔）；缺省 * 仅适用于开发
+    CORS_ORIGINS = os.environ.get("PLATFORM_CORS_ORIGINS", "*")
+
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
 
 settings = Settings()

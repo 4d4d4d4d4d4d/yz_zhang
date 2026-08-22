@@ -21,3 +21,7 @@ class JobLock(Base):
     holder: Mapped[str] = mapped_column(String(64), default="")
     locked_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # DEP-051 job 健康：上次成功完成时间。超过预期周期 2 倍未成功即告警——
+    # 定时任务「静默不跑」比报错更危险（自动验收停摆 = 资金永久卡在托管）
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_error: Mapped[str] = mapped_column(String(200), default="")

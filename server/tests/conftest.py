@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("PLATFORM_DATABASE_URL", "sqlite:///./test_platform.db")
 
 import pytest
+import sqlalchemy as sa
 from fastapi.testclient import TestClient
 
 from app.core.db import Base, engine
@@ -16,6 +17,10 @@ def client():
     from app.core.ratelimit import reset
 
     Base.metadata.drop_all(engine)
+    # 测试库由 create_all 建；若本地残留过 alembic 印记（如手工跑过 upgrade），
+    # 会让 /readyz 误报版本不一致，这里一并清掉
+    with engine.begin() as conn:
+        conn.execute(sa.text("DROP TABLE IF EXISTS alembic_version"))
     Base.metadata.create_all(engine)
     reset()  # 限流计数器进程级，测试间清空
     app = create_app()

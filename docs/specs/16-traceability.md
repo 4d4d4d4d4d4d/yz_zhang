@@ -4,6 +4,21 @@
 > 后端 268 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
 
+## 已实现（V44 批次：生产部署、迁移与可观测）
+
+> 新增模块 spec：[20-deployment.md](20-deployment.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| DEP-001/002/003 生产栈 compose（Postgres + Redis + 可扩副本 api + **固定单副本 worker** + Nginx）；`deploy/.env.example` 标注全部「必须修改」项；`deploy/up.sh` **先自检再启动**（弱密钥/默认 token/CORS 为 `*`/四个 mock 供应商全部拦下）；镜像非 root 运行 | `deploy/{docker-compose.prod.yml,.env.example,up.sh}`、`server/Dockerfile` | 自检逻辑与 `startup_check` 同源，见 VND-042 用例 |
+| DEP-010/011/012 探针：`/healthz` 存活（不查依赖）、`/readyz` 就绪（DB + 限流后端 + **迁移版本**，不满足 503）、`/version` 构建信息 | `main.py` | `tests/test_deployment.py` |
+| DEP-020/021/022 **Alembic 成为生产唯一建表路径**：`init_db` 在 `ENV=prod` 下直接拒绝 `create_all`（多副本并发建表会互相踩）；迁移由一次性 `migrate` 容器执行；库版本与代码 head 不一致则 `/readyz` 不就绪 | `migrations/`、`alembic.ini`、`core/db.py::{init_db,migration_status}` | 同上 + **迁移与模型不漂移**用例（两条建表路径的表/列集合必须一致）+ CI `alembic check` |
+| DEP-030/031/032 备份与恢复：`backup.sh`（pg_dump + **存证链 head 单独快照**——只备份库的话，被篡改后再备份就没有独立证据了）；`restore.sh` 导入后**强制跑资金四不变量 + 存证链校验**，不过就明确报失败，不给「大概好了」的错觉 | `deploy/{backup.sh,restore.sh}` | 校验逻辑复用既有 `reconcile` / `verify_chain` 用例 |
+| DEP-040/041 结构化 JSON 日志 + `request_id` 贯穿（入站生成或**透传**，随响应头返回）；日志**脱敏**手机号/证件号/银行卡——出事时不能因为日志本身再泄一次 | `core/observability.py` | 同上（三类敏感串各一例、formatter 带 request_id） |
+| DEP-042 `/metrics` Prometheus：请求量/延迟直方图 + **资金关键计数**（托管中、待提现、未结纠纷）；用路由模板而非真实路径，避免任务 id 打爆指标基数；与 cron 同一把令牌保护，不对公网裸奔 | 同上 + `main.py` | 同上（含基数用例、鉴权用例） |
+| DEP-050/051 worker 驱动全部 job（周期按「延迟一个周期的业务代价」定）；`JobLock.last_success_at` 记录 job 健康，`/jobz` 暴露——job「静默不跑」比报错更危险 | `scripts/cron.py`、`core/locks.py::{_note_job_result,job_health}` | 同上 + **反查路由表**用例：新增 job 端点却忘了排期直接测试失败 |
+| DEP-060 冒烟脚本：对已启动实例跑真实 HTTP 主闭环（注册→实名→充值→发布→报名→选人→双签→托管→交付→验收→核对分账→**托管清零**），CI 中执行 | `scripts/smoke.py`、`.github/workflows/ci.yml` | CI 作业 `boot-smoke` |
+
 ## 已实现（V43 批次：外部供应商接入抽象层——把「模拟」换成「可换」）
 
 > 新增模块 spec：[19-vendor-integration.md](19-vendor-integration.md)

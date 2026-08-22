@@ -261,7 +261,7 @@ def test_moderation_still_blocks_banned_words(client):
     verify_user(client, user)
     topup(client, user, 100000)
     r = client.post("/api/v1/tasks",
-                    json={"title": "帮忙刷单", "description": "刷单任务", "category": "跑腿代办",
+                    json={"title": "帮忙刷单", "description": "刷单任务", "category": "跑腿",
                           "budget_cents": 10000, "city": "杭州"},
                     headers=auth(user))
     assert r.status_code == 400

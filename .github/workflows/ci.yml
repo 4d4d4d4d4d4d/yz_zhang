@@ -36,7 +36,7 @@ jobs:
       - run: npm run build:web
 
   boot-smoke:
-    name: 服务启动冒烟
+    name: 服务启动 + 主闭环冒烟（DEP-060）
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -47,11 +47,36 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
+      - name: 迁移建库（验证 alembic 路径真的能建出可用的库）
+        run: alembic upgrade head
+        env:
+          PLATFORM_DATABASE_URL: sqlite:///./ci.db
       - name: 启动并探活
         run: |
           uvicorn app.main:app --port 8000 &
-          for i in $(seq 1 20); do
+          for i in $(seq 1 30); do
             sleep 1
-            if curl -sf http://localhost:8000/healthz; then exit 0; fi
+            if curl -sf http://localhost:8000/readyz; then break; fi
+            if [ "$i" = "30" ]; then echo "server failed to boot"; exit 1; fi
           done
-          echo "server failed to boot" && exit 1
+      - name: 主闭环冒烟（真实 HTTP，跑完一笔交易并核对分账）
+        run: python -m scripts.smoke
+
+  migration-drift:
+    name: 迁移与模型一致性（DEP-020）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: 检查是否有未生成迁移的模型改动
+        run: |
+          alembic upgrade head
+          alembic check
+        env:
+          PLATFORM_DATABASE_URL: sqlite:///./drift.db

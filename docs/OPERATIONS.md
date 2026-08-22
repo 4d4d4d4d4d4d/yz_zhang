@@ -176,48 +176,80 @@ docker compose exec server python -m scripts.seed_demo
 # 生成用户/任务/闭环/圈层/动态，账号密码 pass123456
 ```
 
-### 4.2 生产部署（推荐配置）
+### 4.2 生产部署（一条命令，DEP-001~003）
 
-```yaml
-# docker-compose.prod.yml 关键差异
-services:
-  db:
-    image: postgres:16
-    environment:
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes: [pgdata:/var/lib/postgresql/data]
-
-  server:
-    environment:
-      PLATFORM_DATABASE_URL: postgresql+psycopg://postgres:${DB_PASSWORD}@db/platform
-      PLATFORM_JWT_SECRET: ${JWT_SECRET}          # 强随机
-      PLATFORM_JOB_TOKEN: ${JOB_TOKEN}            # 强随机
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}     # 启用真实 AI 分解
-    command: uvicorn app.main:app --host 0.0.0.0 --workers 4
-    deploy: { replicas: 2 }
-
-  cron:                       # 单实例跑定时任务，避免多副本重复执行
-    image: curlimages/curl
-    command: >
-      sh -c 'while true; do
-        for j in tasks/jobs/auto-accept tasks/jobs/expire-tasks
-                 tasks/jobs/settle-reviews contracts/jobs/expire-unsigned
-                 disputes/jobs/escalate-overdue missions/jobs/tick-all; do
-          curl -sX POST -H "X-Job-Token: $$JOB_TOKEN" http://server:8000/api/v1/$$j;
-        done; sleep 3600; done'
+```bash
+cp deploy/.env.example deploy/.env   # 逐项填写，标【必须修改】的不改会被拒绝
+./deploy/up.sh                       # 自检 → 迁移 → 起栈 → 等 /readyz
+./deploy/up.sh --scale 3             # API 起 3 副本（worker 仍固定 1 副本）
 ```
 
-**上线检查清单**：
-- [ ] 换掉 JWT_SECRET / JOB_TOKEN
-- [ ] 切 Postgres，关键写路径加 `with_for_update()`（见 §2.2）
-- [ ] 限流改 Redis
-- [ ] 配 HTTPS + 域名 + CORS 白名单
-- [ ] 接短信 / eKYC / 支付
-- [ ] 配置备份（Postgres 每日全备 + WAL 归档）
-- [ ] 接监控告警（对账差错工单要能推到值班手机）
+`deploy/up.sh` 起栈**前**会拦下这些错误上线：弱 JWT 密钥、默认 job token、
+弱数据库密码、CORS 仍是 `*`、四个供应商仍是 mock/local。这些不是建议，是红线；
+预发演练确需跳过时用 `ALLOW_INSECURE=1`，且脚本会显式警告。
 
-CI 已就绪：`.github/workflows/ci.yml` 每次 push 自动跑后端 258 测试 +
-前端 29 测试 + 构建 + 启动冒烟。
+栈的构成（`deploy/docker-compose.prod.yml`）：
+
+| 服务 | 说明 |
+|---|---|
+| `db` | Postgres 16，数据在 `pgdata` volume |
+| `redis` | 分布式限流后端（CONC-021） |
+| `migrate` | **一次性**容器跑 `alembic upgrade head`，避免多副本并发建表 |
+| `api` | 可 `--scale N`；健康检查用 `/readyz` 而非 `/healthz`，未就绪不导流量 |
+| `worker` | **固定 1 副本**跑 `scripts/cron.py`；即便误起多份，job 端点还有 DB 执行锁兜底 |
+| `web` | Nginx 托管前端 + 反代 API |
+
+### 4.3 迁移、备份与恢复
+
+```bash
+# 迁移（生产唯一建表路径；ENV=prod 下 create_all 会直接报错）
+docker compose -f deploy/docker-compose.prod.yml run --rm migrate
+
+# 备份（建议 crontab 每日）：pg_dump + 存证链 head 快照
+./deploy/backup.sh
+
+# 恢复：导入后**强制**跑资金四不变量 + 存证链校验，不过则明确失败
+./deploy/restore.sh backups/db-20260822T030000Z.sql.gz
+```
+
+存证链 head 单独存一份的理由：它是「历史未被篡改」的独立锚点。
+只备份数据库的话，一旦数据被篡改后又备份，你手里就没有能反驳的证据了。
+
+**恢复演练**是这套东西唯一有意义的验证方式——没演练过的备份等于没有备份。
+
+### 4.4 可观测与告警
+
+| 端点 | 用途 | 鉴权 |
+|---|---|---|
+| `/healthz` | 存活探针，不查任何依赖 | 无 |
+| `/readyz` | 就绪探针：DB + 限流后端 + 迁移版本 | 无 |
+| `/version` | git sha / 版本 / 环境 | 无 |
+| `/metrics` | Prometheus：请求量、延迟分位、**托管中金额 / 待提现 / 未结纠纷** | `X-Job-Token` |
+| `/jobz` | 各 job 上次成功时间与最近错误 | `X-Job-Token` |
+
+指标带令牌的理由：资金口径数字不该对公网裸奔。
+
+**必配告警**（DEP-043）：
+- 资金对账不平 / 存证链断裂 —— 最高优先级，直接推值班手机
+- `/jobz` 中任一 job `seconds_since_success` 超过其周期 2 倍
+  —— job「静默不跑」比报错更危险（自动验收停摆＝资金永久卡在托管）
+- 提现失败率突增、5xx 突增、`/readyz` 连续失败
+
+日志是结构化 JSON，带 `request_id`（入站生成或透传），
+并对手机号 / 证件号 / 银行卡自动打码——出事时排查日志，不能因为日志本身再泄一次。
+
+**上线检查清单**：
+- [x] JWT_SECRET / JOB_TOKEN 强随机 —— `up.sh` 自检强制
+- [x] Postgres + 行锁/乐观锁 —— V42
+- [x] Redis 限流 —— V42（配 `PLATFORM_REDIS_URL` 即启用）
+- [x] 迁移、备份、恢复校验、探针、指标 —— V44
+- [ ] HTTPS + 域名（Nginx/网关加 TLS 与 HSTS，本仓库不含证书管理）
+- [ ] 接短信 / eKYC / 支付**真实账号** —— 抽象层已就位，缺的是签约与密钥
+- [ ] 告警接入值班系统（PagerDuty / 电话）
+- [ ] 定期做恢复演练并记录 RTO/RPO
+
+CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 301 测试、
+前端 29 测试与构建、**alembic 迁移漂移检查**、**真实 HTTP 主闭环冒烟**。
 
 ---
 

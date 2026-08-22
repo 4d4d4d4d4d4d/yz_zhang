@@ -119,10 +119,54 @@ def job_slot(job_name: str):
             raise conflict(f"任务 {job_name} 正在其它实例执行", "job_running")
         try:
             yield
-        finally:
-            release_job_lock(db, job_name, INSTANCE_ID)
+        except Exception as exc:
+            # DEP-051 失败也要留痕：先回滚丢弃 job 的部分改动（同时释放写锁），
+            # 再单独提交这条失败记录——否则它会跟着 get_db 的回滚一起消失。
+            db.rollback()
+            _note_job_result(db, job_name, ok=False, error=type(exc).__name__)
+            db.commit()
+            raise
+        release_job_lock(db, job_name, INSTANCE_ID)
+        _note_job_result(db, job_name, ok=True)
 
     return dependency
+
+
+def _note_job_result(db: Session, job_name: str, ok: bool, error: str = "") -> None:
+    """DEP-051 job 健康落库（在调用方的会话里，避免第二条连接与之争锁）。"""
+    from app.core.models_infra import JobLock
+    from app.modules.account.models import utcnow
+
+    row = db.get(JobLock, job_name)
+    if row is None:
+        row = JobLock(job_name=job_name, holder=INSTANCE_ID)
+        db.add(row)
+    if ok:
+        row.last_success_at = utcnow()
+        row.last_error = ""
+    else:
+        row.last_error = error[:200]
+    db.add(row)
+    db.flush()
+
+
+def job_health(db: Session) -> list[dict]:
+    """DEP-051 各 job 的上次成功时间与最近错误，供监控与后台展示。"""
+    from app.core.models_infra import JobLock
+    from app.modules.account.models import utcnow
+
+    now = utcnow()
+    out = []
+    for row in db.query(JobLock).all():
+        age = (now - row.last_success_at).total_seconds() if row.last_success_at else None
+        out.append({
+            "job": row.job_name,
+            "last_success_at": row.last_success_at.isoformat() if row.last_success_at else None,
+            "seconds_since_success": int(age) if age is not None else None,
+            "last_error": row.last_error,
+            "holder": row.holder,
+        })
+    return sorted(out, key=lambda r: r["job"])
 
 
 def release_job_lock(db: Session, job_name: str, holder: str) -> None:
