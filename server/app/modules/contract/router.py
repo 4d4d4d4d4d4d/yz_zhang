@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
+from app.core.locks import job_slot
 from app.core.deps import get_current_user, require_job_auth
 from app.core.errors import forbidden, not_found
 from app.modules.account.models import User
@@ -64,7 +65,8 @@ def _dump(c: Contract, db: Session | None = None) -> dict:
 
 
 @router.post("/jobs/expire-unsigned")
-def run_expire_unsigned(db: Session = Depends(get_db), _=Depends(require_job_auth)):
+def run_expire_unsigned(db: Session = Depends(get_db), _=Depends(require_job_auth),
+        __=Depends(job_slot("expire_unsigned"))):
     """SC-012 签署有效期 job：成交后超期未双签的合约自动作废。
 
     业界惯例（offer 有效期）：避免一方失联导致任务永久卡在 matched、

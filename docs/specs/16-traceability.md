@@ -1,8 +1,23 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V41 全批次完成（2026-07-26）。
-> 后端 258 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V42 全批次完成（2026-08-22）。
+> 后端 268 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V42 批次：并发与生产化硬化——从「单进程正确」到「多副本正确」）
+
+> 新增模块 spec：[18-concurrency.md](18-concurrency.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| CONC-001/002 Postgres 支持与连接池参数化（`pool_size`/`max_overflow`/`pool_recycle`/`pool_pre_ping`），SQLite 分支自动跳过池参数；切库只改 `PLATFORM_DATABASE_URL`，业务代码零改动 | `core/db.py::_make_engine` + `core/config.py` | 全量既有测试（同一套代码跑 SQLite） |
+| CONC-003 SQLite WAL + `busy_timeout` + 外键约束 PRAGMA：本地并发写不再直接报 `database is locked` | `core/db.py` connect 事件 | 并发用例（多线程打同一端点不报锁错） |
+| CONC-004 方言探测 `supports_row_lock()`：Postgres/MySQL 启用真实行锁，SQLite 自动降级 | `core/db.py` | 同上 |
+| CONC-010/011/012 **资金写路径行锁**（最关键缺口）：多副本下两进程可同时读到 `funded` 各自放款 → `lock_contract`/`lock_wallets` 取 `SELECT ... FOR UPDATE`；多钱包按 `user_id` **升序**加锁杜绝死锁；接入 fund/release/release_milestone/cancel/execute_verdict/accept_change/withdraw/decide_withdraw/settle_platform/transfer | `core/locks.py` + `contract/service.py` + `wallet/service.py` | `tests/test_conc_hardening.py`（并发验收只放款一次、并发托管只扣一次、并发提现不透支） |
+| CONC-013 **乐观锁兜底**：`Contract.lock_version` / `WalletAccount.lock_version` 走 SQLAlchemy `version_id_col`，并发 UPDATE 第二个提交 `StaleDataError`；API 边界统一翻译为 `409 concurrent_modification` 而非 500。与业务版本号 `Contract.version`（条款版本，对外展示）**刻意分离** | `contract/models.py`、`wallet/models.py`、`main.py` 异常处理器 | 同上（丢失更新被拒、409 语义） |
+| CONC-020/021/022 分布式限流：`RateLimiter` 协议 + `MemoryRateLimiter`（现状）+ `RedisRateLimiter`（`INCR`+`EXPIRE` 原子窗口）；配 `PLATFORM_REDIS_URL` 自动切换；**Redis 故障连续达阈值即冷却降级为内存**并在探针中可见——限流是防滥用手段，不该拖垮登录 | `core/ratelimit.py` | 同上（降级后仍真限流，不是无脑放行） |
+| CONC-040/041 定时任务单实例锁：`JobLock` 表（job_name 主键=天然唯一约束）+ `job_slot()` FastAPI 依赖，**执行完即释放**（串行调用永远可用），崩溃时靠 `expires_at` TTL 抢占，不会永久停摆；接入全部 8 个 cron 端点 | `core/models_infra.py`、`core/locks.py`、各模块 `jobs/*` 路由 | 同上（持有/释放/TTL 抢占/端点并发最多一个 200） |
+| DEP-010/011/012 健康探针：`/healthz` 存活（不查依赖）、`/readyz` 就绪（DB 可读写 + 限流后端状态，不满足 503） | `main.py` | 同上 |
 
 ## 已实现（V41 批次：编排循环 Agent Harness——发任务给人 = 工具调用）
 

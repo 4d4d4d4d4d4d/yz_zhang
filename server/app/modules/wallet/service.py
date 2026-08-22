@@ -2,6 +2,7 @@
 from sqlalchemy.orm import Session
 
 from app.core.errors import bad_request
+from app.core.locks import lock_wallets
 
 from .models import LedgerEntry, WalletAccount
 
@@ -66,6 +67,7 @@ def withdraw(db: Session, user_id: int, amount: int) -> dict:
 
     if not db.get(PayoutAccount, user_id):  # PAY-005 提现前置：必须已绑收款账户
         raise bad_request("请先绑定收款账户", "no_payout_account")
+    lock_wallets(db, user_id)  # CONC-012 并发提现必须串行，否则日限额与余额都能被绕过
     acct = get_or_create(db, user_id)
     if amount <= 0 or amount > acct.available_cents:
         raise bad_request("可用余额不足", "insufficient_balance")
@@ -96,6 +98,7 @@ def decide_withdraw(db: Session, req, approve: bool, admin_id: int) -> dict:
 
     if req.status != "pending":
         raise bad_request("该提现申请已处理", "request_closed")
+    lock_wallets(db, req.user_id)  # CONC-012
     acct = get_or_create(db, req.user_id)
     acct.frozen_cents -= req.amount_cents
     if approve:
@@ -183,6 +186,7 @@ def platform_finance(db: Session) -> dict:
 
 def settle_platform(db: Session, amount: int, memo: str = "平台收入结算") -> dict:
     """OPS-010 平台收入结算：把平台账户余额划出（模拟对公结算/提现）。"""
+    lock_wallets(db, PLATFORM_USER_ID)  # CONC-012
     platform = get_or_create(db, PLATFORM_USER_ID)
     if amount <= 0 or amount > platform.available_cents:
         raise bad_request("结算金额超出平台可用余额", "insufficient_platform_balance")
@@ -195,6 +199,7 @@ def transfer(db: Session, from_id: int, to_id: int, amount: int, contract_id=Non
     """可用余额间转账（申诉纠正性结算等平台内部调整）。"""
     if amount <= 0:
         raise bad_request("金额必须为正", "invalid_amount")
+    lock_wallets(db, from_id, to_id)  # CONC-011 按 user_id 升序加锁，避免对向转账死锁
     src = get_or_create(db, from_id)
     if src.available_cents < amount:
         raise bad_request("余额不足以执行调整", "insufficient_balance")

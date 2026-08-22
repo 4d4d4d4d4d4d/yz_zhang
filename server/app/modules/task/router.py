@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
+from app.core.locks import job_slot
 from app.core.deps import get_current_user, require_job_auth, require_verified
 from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.core.events import publish
@@ -673,7 +674,8 @@ def sos(task_id: int, body: CheckinIn, user: User = Depends(get_current_user), d
 
 
 @router.post("/tasks/jobs/purge-locations")
-def purge_locations(db: Session = Depends(get_db), _=Depends(require_job_auth)):
+def purge_locations(db: Session = Depends(get_db), _=Depends(require_job_auth),
+        __=Depends(job_slot("purge_locations"))):
     """GEO-024 位置保留策略：已结束任务超过 30 天，清除打卡精确坐标。"""
     from datetime import timedelta
 
@@ -765,7 +767,8 @@ def _complete_task(db: Session, task: Task) -> None:
 
 
 @router.post("/tasks/jobs/deadline-alerts")
-def run_deadline_alerts(db: Session = Depends(get_db), _=Depends(require_job_auth)):
+def run_deadline_alerts(db: Session = Depends(get_db), _=Depends(require_job_auth),
+        __=Depends(job_slot("deadline_alerts"))):
     """AI-DEC-022 逾期预警 job。"""
     from app.modules.decompose.resilience import deadline_alerts
 
@@ -773,7 +776,8 @@ def run_deadline_alerts(db: Session = Depends(get_db), _=Depends(require_job_aut
 
 
 @router.post("/tasks/jobs/settle-reviews")
-def run_settle_reviews(db: Session = Depends(get_db), _=Depends(require_job_auth)):
+def run_settle_reviews(db: Session = Depends(get_db), _=Depends(require_job_auth),
+        __=Depends(job_slot("settle_reviews"))):
     """CRED-002 评价窗口结算 job：窗口到期的未入账评分统一聚合并公开，
     保证即使无人读取，评分也会在窗口到期后按时入账（真双盲的兜底结算）。"""
     cutoff = utcnow() - timedelta(days=settings.REVIEW_WINDOW_DAYS)
@@ -793,7 +797,8 @@ def run_settle_reviews(db: Session = Depends(get_db), _=Depends(require_job_auth
 
 
 @router.post("/tasks/jobs/expire-tasks")
-def run_expire_tasks(db: Session = Depends(get_db), _=Depends(require_job_auth)):
+def run_expire_tasks(db: Session = Depends(get_db), _=Depends(require_job_auth),
+        __=Depends(job_slot("expire_tasks"))):
     """TASK-015 过期任务自动下架：已发布但过了截止时间仍无人成交的任务自动关闭。
 
     发布时校验了 deadline 必须在未来，但发布后从不执行——僵尸挂单会永远占据广场。
@@ -823,7 +828,8 @@ def run_expire_tasks(db: Session = Depends(get_db), _=Depends(require_job_auth))
 
 
 @router.post("/tasks/jobs/auto-accept")
-def run_auto_accept(db: Session = Depends(get_db), _=Depends(require_job_auth)):
+def run_auto_accept(db: Session = Depends(get_db), _=Depends(require_job_auth),
+        __=Depends(job_slot("auto_accept"))):
     """TASK-031 超时自动验收（生产为定时任务，这里同时暴露为可调用 job）。"""
     cutoff = utcnow() - timedelta(days=settings.AUTO_ACCEPT_DAYS)
     rows = (

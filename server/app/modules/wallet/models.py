@@ -16,6 +16,10 @@ class WalletAccount(Base):
     available_cents: Mapped[int] = mapped_column(Integer, default=0)
     escrow_cents: Mapped[int] = mapped_column(Integer, default=0)
     frozen_cents: Mapped[int] = mapped_column(Integer, default=0)
+    # CONC-013 乐观锁：并发扣款只有一个提交能成功，另一个 409 而不是丢更新
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __mapper_args__ = {"version_id_col": lock_version}
 
 
 class LedgerEntry(Base):

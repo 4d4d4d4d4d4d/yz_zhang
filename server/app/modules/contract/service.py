@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.errors import bad_request, conflict
 from app.core.events import publish
+from app.core.locks import lock_contract_funds
 from app.modules.account.models import utcnow
 from app.modules.wallet import service as wallet
 
@@ -107,6 +108,7 @@ def fund(db: Session, contract: Contract, user_id: int) -> Contract:
     """SC-003 发布者注入托管资金，合约生效。"""
     if user_id != contract.requester_id:
         raise bad_request("仅发布方可托管资金", "not_party")
+    lock_contract_funds(db, contract)  # CONC-012 先取行锁再判状态，杜绝并发重复托管
     if contract.status != "signed":
         raise conflict("合约需双方签署后才能托管", "not_fundable")
     wallet.escrow_hold(db, contract.requester_id, contract.amount_cents, contract.id)
@@ -138,6 +140,7 @@ def _settle_deposit(db: Session, contract: Contract, forfeit: bool = False) -> N
 
 def release(db: Session, contract: Contract) -> Contract:
     """SC-005 整体验收放款：放出全部剩余托管（已分期放款的部分不重复）。"""
+    lock_contract_funds(db, contract)  # CONC-012 放款是重复执行代价最高的路径
     if contract.frozen:
         raise conflict("合约处于纠纷冻结中", "contract_frozen")
     if contract.status != "funded":
@@ -175,6 +178,7 @@ def deliver_milestone(db: Session, contract: Contract, user_id: int, milestone: 
 
 def release_milestone(db: Session, contract: Contract, user_id: int, milestone: Milestone) -> Milestone:
     """SC-004/005 分期验收放款；全部放完 → 合约终结。"""
+    lock_contract_funds(db, contract)  # CONC-012
     if user_id != contract.requester_id:
         raise bad_request("仅发布方可验收里程碑", "not_party")
     if contract.frozen:
@@ -230,6 +234,7 @@ def accept_change(db: Session, contract: Contract, user_id: int, order: ChangeOr
         raise conflict("变更单已处理", "change_closed")
     if user_id == order.proposed_by or user_id not in (contract.requester_id, contract.executor_id):
         raise bad_request("需由合约对方接受变更", "not_counterparty")
+    lock_contract_funds(db, contract)  # CONC-012 变更单会补/退托管，同属资金路径
     milestones = db.query(Milestone).filter(Milestone.contract_id == contract.id).all()
     if len(milestones) > 1:
         raise conflict("多里程碑合约请拆期变更（暂不支持整体改价）", "multi_milestone")
@@ -265,6 +270,7 @@ def accept_change(db: Session, contract: Contract, user_id: int, order: ChangeOr
 
 def cancel(db: Session, contract: Contract, cancelled_by: int) -> dict:
     """SC-006 取消规则引擎：按阶段计算责任并执行退款/补偿。"""
+    lock_contract_funds(db, contract)  # CONC-012
     if contract.frozen:
         raise conflict("合约处于纠纷冻结中", "contract_frozen")
     if contract.status in ("pending_signatures", "signed"):
@@ -308,6 +314,7 @@ def freeze(db: Session, contract: Contract) -> None:
 
 def execute_verdict(db: Session, contract: Contract, executor_share_bps: int) -> dict:
     """DSP-007 裁决自动执行：按比例分割托管资金。"""
+    lock_contract_funds(db, contract)  # CONC-012
     if contract.status != "funded":
         raise conflict("合约不在可执行裁决状态", "not_splittable")
     remaining = contract.amount_cents - contract.released_cents

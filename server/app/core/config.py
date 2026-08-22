@@ -44,6 +44,23 @@ class Settings:
     STRANGER_MSG_LIMIT = 5
     # OPS-011 内部定时任务共享密钥：cron 端点必须携带 X-Job-Token（生产改强随机值）
     JOB_TOKEN = os.environ.get("PLATFORM_JOB_TOKEN", "dev-job-token-change-me")
+    # ── CONC 并发与生产化（18 号 spec）──────────────────────────────
+    # 运行环境：dev/test/prod。prod 下启动自检更严格（弱密钥、mock 供应商拒绝启动）
+    ENV = os.environ.get("PLATFORM_ENV", "dev")
+    # CONC-002 连接池（仅非 SQLite 生效；SQLite 不支持池参数）
+    DB_POOL_SIZE = int(os.environ.get("PLATFORM_DB_POOL_SIZE", "10"))
+    DB_MAX_OVERFLOW = int(os.environ.get("PLATFORM_DB_MAX_OVERFLOW", "20"))
+    DB_POOL_RECYCLE = int(os.environ.get("PLATFORM_DB_POOL_RECYCLE", "1800"))
+    DB_POOL_PRE_PING = os.environ.get("PLATFORM_DB_POOL_PRE_PING", "1") != "0"
+    # CONC-003 SQLite 本地并发：WAL + busy_timeout（毫秒）
+    SQLITE_BUSY_TIMEOUT_MS = int(os.environ.get("PLATFORM_SQLITE_BUSY_TIMEOUT_MS", "5000"))
+    # CONC-021 分布式限流后端：配置了 Redis 就用 Redis，否则进程内内存实现
+    REDIS_URL = os.environ.get("PLATFORM_REDIS_URL", "")
+    # CONC-020 Redis 连续失败达阈值后冷却降级为内存实现（可用性优先于严格限流）
+    RATELIMIT_FAIL_THRESHOLD = int(os.environ.get("PLATFORM_RATELIMIT_FAIL_THRESHOLD", "3"))
+    RATELIMIT_COOLDOWN_SECONDS = int(os.environ.get("PLATFORM_RATELIMIT_COOLDOWN_SECONDS", "30"))
+    # CONC-041 定时任务执行锁 TTL（秒）：持锁进程崩溃后超时可被抢占
+    JOB_LOCK_TTL_SECONDS = int(os.environ.get("PLATFORM_JOB_LOCK_TTL_SECONDS", "300"))
 
 
 settings = Settings()

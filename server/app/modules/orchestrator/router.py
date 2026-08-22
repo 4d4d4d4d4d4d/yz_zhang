@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
+from app.core.locks import job_slot
 from app.core.deps import get_current_user, require_job_auth
 from app.core.errors import forbidden, not_found
 from app.modules.account.models import User
@@ -131,7 +132,8 @@ def cancel_mission(
 
 
 @router.post("/missions/jobs/tick-all")
-def tick_all(db: Session = Depends(get_db), _=Depends(require_job_auth)):
+def tick_all(db: Session = Depends(get_db), _=Depends(require_job_auth),
+        __=Depends(job_slot("mission_tick_all"))):
     """ORC-006 自动驱动：定时器批量推进运行中的编排（agent loop 的心跳）。"""
     rows = db.query(Mission).filter(Mission.status.in_(("running", "planning"))).all()
     ticked = 0

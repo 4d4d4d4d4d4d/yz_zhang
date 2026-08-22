@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.db import SessionLocal, init_db
@@ -89,9 +91,46 @@ def create_app() -> FastAPI:
     ):
         app.include_router(router, prefix=settings.API_PREFIX)
 
+    # CONC-013 乐观锁冲突 → 409：并发写同一行时第二个提交在这里被翻译成
+    # 明确的业务语义（"请重试"），而不是 500 内部错误
+    from sqlalchemy.orm.exc import StaleDataError
+
+    @app.exception_handler(StaleDataError)
+    def _stale_data(_request, _exc):
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": {
+                    "code": "concurrent_modification",
+                    "message": "数据已被并发修改，请刷新后重试",
+                }
+            },
+        )
+
     @app.get("/healthz")
     def healthz():
+        """DEP-010 存活探针：不查任何外部依赖，永远快速返回。"""
         return {"ok": True}
+
+    @app.get("/readyz")
+    def readyz():
+        """DEP-011 就绪探针：DB 可读写才导流量，否则 503。"""
+        checks: dict[str, str] = {}
+        ok = True
+        try:
+            with SessionLocal() as db:
+                db.execute(text("SELECT 1"))
+            checks["db"] = "ok"
+        except Exception as exc:  # pragma: no cover - 依赖故障路径
+            checks["db"] = f"error: {type(exc).__name__}"
+            ok = False
+        from app.core.ratelimit import backend_status
+
+        checks["ratelimit"] = backend_status()
+        return JSONResponse(
+            status_code=200 if ok else 503,
+            content={"ready": ok, "env": settings.ENV, "checks": checks},
+        )
 
     return app
 

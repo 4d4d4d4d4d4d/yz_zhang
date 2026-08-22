@@ -34,12 +34,17 @@ class Contract(Base):
     signed_by_executor: Mapped[bool] = mapped_column(Boolean, default=False)
     frozen: Mapped[bool] = mapped_column(Boolean, default=False)  # SC-008 纠纷冻结
     version: Mapped[int] = mapped_column(Integer, default=1)  # SC-007 变更单生效则 +1
+    # CONC-013 乐观锁：与业务版本号 version 分离（后者是合约条款版本，会被展示与导出）。
+    # 每次 ORM UPDATE 自动 +1 并进入 WHERE 条件，并发写第二个提交拿到 StaleDataError → 409
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     # CRED-005 执行者保证金
     deposit_cents: Mapped[int] = mapped_column(Integer, default=0)
     deposit_status: Mapped[str] = mapped_column(String(12), default="none")  # none/held/returned/forfeited
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     funded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __mapper_args__ = {"version_id_col": lock_version}
 
 
 class Milestone(Base):
