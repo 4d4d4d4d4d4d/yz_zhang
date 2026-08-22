@@ -15,6 +15,10 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # VND-042 生产环境配置自检：P0 能力仍是模拟实现 / 弱密钥 / SQLite → 拒绝启动
+    from app.vendors.registry import startup_check
+
+    startup_check()
     init_db()
 
     # 领域事件订阅（14 号 spec 第 3 节）

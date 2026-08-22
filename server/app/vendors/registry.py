@@ -1,0 +1,89 @@
+"""VND-001/041/042 供应商注册表与启动自检。
+
+`get_provider(kind)` 是业务侧唯一入口。新增供应商 = 在 `_REGISTRY` 里
+登记一个实现类 + 设 `PLATFORM_<KIND>_PROVIDER` 环境变量。
+"""
+from app.core.config import settings
+
+from .kyc import MockKycProvider
+from .moderation import LocalModerationProvider
+from .payment import MockPaymentProvider
+from .sms import MockSmsProvider
+
+# kind -> {provider_name: factory}
+_REGISTRY: dict[str, dict[str, type]] = {
+    "payment": {"mock": MockPaymentProvider},
+    "sms": {"mock": MockSmsProvider},
+    "kyc": {"mock": MockKycProvider},
+    "moderation": {"local": LocalModerationProvider},
+}
+
+# VND-042 生产必须接真实供应商的能力（涉及资金/身份/合规，模拟实现上线即事故）
+P0_KINDS = ("payment", "sms", "kyc", "moderation")
+# 各 kind 的「模拟实现」名字：生产环境命中即判定未接入
+MOCK_NAMES = {"payment": "mock", "sms": "mock", "kyc": "mock", "moderation": "local"}
+
+_instances: dict[str, object] = {}
+
+
+def configured_name(kind: str) -> str:
+    return getattr(settings, f"{kind.upper()}_PROVIDER", MOCK_NAMES.get(kind, "mock"))
+
+
+def get_provider(kind: str):
+    """按配置返回实现；未注册的名字回落到该 kind 的模拟实现（并在自检里报出）。"""
+    if kind in _instances:
+        return _instances[kind]
+    name = configured_name(kind)
+    impls = _REGISTRY.get(kind, {})
+    factory = impls.get(name) or impls[MOCK_NAMES[kind]]
+    _instances[kind] = factory()
+    return _instances[kind]
+
+
+def reset() -> None:
+    """测试辅助：切换配置后清缓存。"""
+    _instances.clear()
+
+
+def missing_production_providers() -> list[str]:
+    """VND-042 返回生产环境仍是模拟实现的 P0 能力清单。"""
+    return [k for k in P0_KINDS if configured_name(k) == MOCK_NAMES[k]]
+
+
+def startup_check() -> None:
+    """生产环境启动自检：P0 能力仍是模拟实现则拒绝启动。
+
+    这是刻意的「难用」——把上线前必须完成的对接变成硬性拦截，
+    而不是一行只有开发者看得见的日志。
+    """
+    if settings.ENV != "prod":
+        return
+    problems: list[str] = []
+    missing = missing_production_providers()
+    if missing:
+        problems.append(f"以下 P0 能力仍是模拟实现，禁止上线：{', '.join(missing)}")
+    if settings.JWT_SECRET == "dev-secret-change-me":
+        problems.append("PLATFORM_JWT_SECRET 仍是默认值")
+    if settings.JOB_TOKEN == "dev-job-token-change-me":
+        problems.append("PLATFORM_JOB_TOKEN 仍是默认值")
+    if settings.DATABASE_URL.startswith("sqlite"):
+        problems.append("生产不得使用 SQLite，请配置 PLATFORM_DATABASE_URL 指向 Postgres")
+    if problems:
+        raise RuntimeError("生产环境配置自检未通过：\n- " + "\n- ".join(problems))
+
+
+def status() -> list[dict]:
+    """VND-041 后台展示：各 kind 当前实现、是否模拟、熔断状态。"""
+    from .base import circuit_state
+
+    out = []
+    for kind in _REGISTRY:
+        name = configured_name(kind)
+        out.append({
+            "kind": kind,
+            "provider": name,
+            "is_mock": name == MOCK_NAMES[kind],
+            "circuit": circuit_state(f"{kind}:{name}"),
+        })
+    return out

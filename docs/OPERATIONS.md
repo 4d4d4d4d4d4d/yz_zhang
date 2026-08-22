@@ -61,39 +61,44 @@ App 与 Web **共用同一个 TS SDK**（`packages/core`），
 | **限流（滑动窗口）** | `core/ratelimit.py` | 注册/登录/改密/换绑的暴力尝试 |
 | **对账不变量** | `risk/service.py::reconcile` | 四条硬不变量兜底，不平自动开工单+告警 |
 
-这套组合已被 **258 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
+这套组合已被 **285 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
 「重复接受报名 / 重复托管 / 重复交付 / 重复验收 / 重复里程碑放款」全部拒绝且零副作用。
 
-### 2.2 ⚠️ 明确缺口（上线前必须解决）
+### 2.2 多副本并发安全（V42 已补齐，见 [18-concurrency.md](specs/18-concurrency.md)）
 
-现状是 **SQLite 单文件 + 单进程**，`create_engine` 未配连接池、未开 WAL，
-且**没有行级锁 / SELECT FOR UPDATE / 乐观锁版本号**。
+此前是 **SQLite 单文件 + 单进程 + 无行锁**：单进程安全，多副本下
+「两个进程同时读到 `status=funded` 各自放款」这类竞态在应用层拦不住。
+现已补齐三层防护：
 
-这意味着：
-- **单进程下安全**——所有写请求串行经过同一事务边界，状态机守卫足够；
-- **一旦多进程/多副本部署，钱包与合约的并发写存在真实竞态**
-  （两个进程同时读到 `status=funded` 再各自放款，状态机在应用层判断，DB 层无锁拦不住）。
+| 层 | 实现 | 作用 |
+|---|---|---|
+| **行锁（悲观）** | `core/locks.py::lock_contract` / `lock_wallets` | 多副本下把「读-判断-写」串行化 |
+| **乐观锁** | `Contract.lock_version` / `WalletAccount.lock_version`（`version_id_col`） | 拿不到行锁时，并发 UPDATE 也只有一个能提交，另一个 409 |
+| **状态机白名单** | `task/service.py::transition` | 即使串行到达，重复操作仍被状态判断拒绝 |
 
-**生产化改造路径（按优先级）**：
+要点：
+- **切 Postgres 只改一个环境变量**，业务代码零改动：
+  ```bash
+  PLATFORM_DATABASE_URL=postgresql+psycopg://user:pass@host/db
+  ```
+  连接池参数（`PLATFORM_DB_POOL_SIZE` / `MAX_OVERFLOW` / `POOL_RECYCLE`）已参数化。
+- **加锁顺序统一**：先合约、后钱包，多钱包按 `user_id` 升序——从根上杜绝死锁。
+- **SQLite 自动降级**：`supports_row_lock()` 探测方言，本地开发不受影响
+  （已开 WAL + `busy_timeout`）。
+- **限流**：`RateLimiter` 协议 + 内存/Redis 双实现，配 `PLATFORM_REDIS_URL` 即切；
+  Redis 故障连续达阈值自动降级为内存并在 `/readyz` 中可见——限流不该拖垮登录。
+- **定时任务单实例**：`JobLock` 表 + `job_slot()` 依赖，全部 8 个 cron 端点已接入；
+  执行完即释放，崩溃靠 TTL 抢占。
+- **探针**：`/healthz`（存活，不查依赖）、`/readyz`（DB + 限流后端，不满足 503）。
 
-1. **换 PostgreSQL**（改一个环境变量即可，SQLAlchemy 层无需动业务代码）
-   ```bash
-   PLATFORM_DATABASE_URL=postgresql+psycopg://user:pass@host/db
-   ```
-2. **关键写路径加悲观锁**：`fund` / `release` / `withdraw` / `dispute_split`
-   在读合约与钱包时用 `with_for_update()`：
-   ```python
-   contract = db.query(Contract).filter(...).with_for_update().first()
-   acct = db.query(WalletAccount).filter(...).with_for_update().first()
-   ```
-3. **或加乐观锁版本号**：`Contract.version` 已有字段，
-   UPDATE 时带 `WHERE version = :v` 并检查影响行数，冲突则 409 重试。
-4. **连接池与超时**：`create_engine(url, pool_size=20, max_overflow=10, pool_pre_ping=True)`
-5. **限流改 Redis**：`core/ratelimit.py` 现在是**进程内内存**，多副本下形同虚设。
-6. **事件总线改 MQ**：`core/events.py` 是进程内同步派发，
-   多副本下事件只在处理请求的那个进程里触发（如经验入库、后继子任务发布）。
-7. **定时任务改专用调度器**：现在是可调用的 HTTP job 端点（已加令牌鉴权），
-   生产用 K8s CronJob / APScheduler 单实例触发，避免多副本重复执行。
+覆盖测试：`tests/test_conc_hardening.py`（真多线程）验证并发验收只放款一次、
+并发托管只扣一次、并发提现不透支、丢失更新被拒、job 不重复执行。
+
+**仍待做**：
+- **事件总线改 MQ**：`core/events.py` 是进程内同步派发，多副本下事件只在
+  处理请求的那个进程触发。幂等可重放的（经验入库、通知）问题不大，
+  「后继子任务自动发布」这类必须走 MQ 才安全。
+- **地理检索**：现在是全表扫 + Python 算距离，规模化需换 PostGIS 或 geohash 索引。
 
 **容量参考**：单机 Postgres + 4 个 uvicorn worker，这套读写比下支撑
 日均十万级任务量没问题；瓶颈会先出现在 AI 分解（外部 LLM 调用）和地理检索
@@ -139,13 +144,19 @@ App 与 Web **共用同一个 TS SDK**（`packages/core`），
 | **JWT 密钥** | compose 里写死 `change-me-in-production` | 换强随机值，走 secrets 管理 |
 | **Job 令牌** | 默认 `dev-job-token-change-me` | 同上 |
 | **HTTPS** | 无 | Nginx/网关加 TLS，强制 HSTS |
-| **短信验证码** | 固定 `123456` | 接真实短信服务商 |
-| **实名认证** | 模拟通过 | 接 eKYC（身份核验 + 人脸） |
-| **支付** | 模拟充值提现 | 接持牌支付通道（微信/支付宝/银联） |
-| **全局限流** | 仅认证接口，且进程内 | 网关层 IP 限流 + Redis 分布式限流 |
+| **短信验证码** | `SmsProvider` 抽象已就位，缺省 Mock 固定 `123456` | 设 `PLATFORM_SMS_PROVIDER` 接真实服务商（代码不动） |
+| **实名认证** | `KycProvider` 抽象已就位，证件号已只存摘要 | 设 `PLATFORM_KYC_PROVIDER` 接 eKYC |
+| **支付** | `PaymentProvider` 抽象 + 两阶段订单 + 回调验签已就位 | 设 `PLATFORM_PAYMENT_PROVIDER` 接持牌通道 |
+| **全局限流** | 认证接口已支持 Redis 后端 | 网关层再加一层 IP 限流 |
 | **CORS** | 已配 middleware | 生产收紧到白名单域名 |
 | **依赖扫描** | 无 | CI 加 `pip-audit` / `npm audit` |
-| **日志脱敏** | 无统一处理 | 手机号/身份证/银行卡打码后再落盘 |
+| **日志脱敏** | 外部调用留痕已脱敏（`VendorCall.request_digest`） | 应用日志统一打码中间件（DEP-040） |
+
+> V43 起，生产环境（`PLATFORM_ENV=prod`）若 P0 能力仍是模拟实现、
+> 或密钥仍是默认值、或数据库仍是 SQLite，**启动即失败**并打印缺失清单
+> （`app/vendors/registry.py::startup_check`）——把上线前必须完成的对接
+> 变成硬拦截，而不是一行没人看的日志。管理后台 `/admin/vendors` 可查
+> 各能力当前实现、熔断状态与近 24h 成功率。
 
 ---
 
@@ -291,15 +302,17 @@ CI 已就绪：`.github/workflows/ci.yml` 每次 push 自动跑后端 258 测试
 
 ## 六、诚实的差距总结
 
-**已经很扎实的**：交易闭环、资金安全与守恒、纠纷程序正义、账号安全、审计留痕。
-这些有 258 个测试钉着，逻辑上经得起推敲。
+**已经很扎实的**：交易闭环、资金安全与守恒、纠纷程序正义、账号安全、审计留痕、
+多副本并发安全、外部供应商可替换性。这些有 285 个测试钉着。
 
 **离真正上线还差的**（按紧迫度）：
-1. Postgres + 行锁/乐观锁（多副本资金安全）—— **最关键**
-2. 支付 / 短信 / eKYC 三个外部接入 —— 没有就没法真实收付款
-3. HTTPS、密钥管理、Redis 限流 —— 基础运维安全
-4. 保险、税务、劳务关系法律定稿 —— 合规前置
-5. App 打包发版 + 推送 —— 移动端体验完整性
+1. ~~Postgres + 行锁/乐观锁~~ —— **V42 已完成**（切库只改环境变量）
+2. ~~支付/短信/eKYC 抽象层~~ —— **V43 已完成**；剩下的是**拿到供应商账号并配置**，
+   这一步平台侧无法代劳（需企业资质与签约）
+3. HTTPS、密钥管理、备份演练、监控告警 —— 见 [20-deployment.md](specs/20-deployment.md)
+4. 保险、税务、劳务关系法律定稿 —— 需专业意见，代码无法解决
+5. 移动端 PWA 与 App 发版 —— 见 [21-mobile-pwa.md](specs/21-mobile-pwa.md)
+6. 运营工具（补贴/邀请/活动）—— 见 [22-growth-ops.md](specs/22-growth-ops.md)
 
-代码侧我可以继续把 1 补上（换 Postgres 配置 + 关键路径加锁 + 并发压测），
-2~4 需要外部资源与专业意见，5 需要开发者账号。
+**纯代码能做完的**：3、5、6。**必须由你提供的**：供应商账号与密钥、
+法律与合规意见、应用商店开发者账号。

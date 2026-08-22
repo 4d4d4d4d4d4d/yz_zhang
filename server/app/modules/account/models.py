@@ -36,6 +36,9 @@ class User(Base):
     # ACC-020 实名认证（模拟 eKYC 通过后置位；接单/提现前强制）
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     real_name: Mapped[str] = mapped_column(String(50), default="")
+    # VND-023 证件号只存不可逆摘要（查重/风控关联）与掩码串，明文不入库
+    id_digest: Mapped[str] = mapped_column(String(80), default="", index=True)
+    id_masked: Mapped[str] = mapped_column(String(24), default="")
     # 平台侧角色（OPS-001 简化：仲裁/运营用）
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     # RISK-006 封禁（封禁后所有需登录操作被拒）

@@ -4,6 +4,25 @@
 > 后端 268 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
 
+## 已实现（V43 批次：外部供应商接入抽象层——把「模拟」换成「可换」）
+
+> 新增模块 spec：[19-vendor-integration.md](19-vendor-integration.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| VND-001/041/042 注册表 `get_provider(kind)` + 后台健康面板 `/admin/vendors`（当前实现/是否模拟/熔断/近 24h 成功率）+ **生产启动自检**：`PLATFORM_ENV=prod` 下 P0 能力仍是模拟实现、弱密钥、SQLite 一律拒绝启动（把上线前必须完成的对接变成硬拦截，而不是没人看的日志） | `app/vendors/registry.py`、`admin/router.py`、`main.py` | `tests/test_vendor_integration.py` |
+| VND-002 错误收敛 `VendorError(code, message, retryable)` → 502（可重试）/ 400（明确拒绝），**不泄露供应商原始报文** | `vendors/base.py` | 同上 |
+| VND-003 调用留痕 `VendorCall`（kind/provider/operation/幂等键/**脱敏摘要**/状态/耗时/外部单号）——对账与客诉排查的唯一依据 | `vendors/models.py::VendorCall` | 同上（手机号与验证码不进摘要） |
+| VND-004 幂等：会花钱/会发送的操作带幂等键，重复调用回放首次结果，**不再打供应商** | `vendors/base.py::call` | 同上（三次调用只打一次） |
+| VND-005 熔断：连续失败达阈值进入冷却，冷却期快速失败 | 同上 | 同上 |
+| VND-010/011 **充值改两阶段**（修复真实支付下的致命结构）：此前「调用即加余额」意味着接真实通道后用户下单不付款也能拿到钱 → `PaymentOrder` pending → 供应商确认 → 才入账。模拟通道即时确认，开发体验与既有测试不变 | `vendors/{payment,payment_service}.py`、`wallet/router.py` | 同上（订单落库、外部单号可对账） |
+| VND-012 回调验签 + 回调幂等 + 金额校验：伪造签名一律拒绝（不看金额不查订单）；同一订单重放只入账一次；回调金额与订单不符标记 `mismatch` 挂起人工，且**标记落在独立事务**里（否则会跟着 400 一起回滚，运营再也看不到） | `vendors/payment_service.py::{handle_callback,confirm_topup,_flag_mismatch}` | 同上（三条独立用例） |
+| VND-013 提现打款走 `create_payout` 并落 `payout_ref`；供应商失败整体回滚——宁可提现失败重来，也不能「账扣了钱没打出去」 | `wallet/service.py::_send_payout` | 既有提现用例 |
+| VND-020/021 短信：`/auth/send-code` 端点（限流同级，防被当短信轰炸机）；验证码服务端生成、**只存哈希**（手机号加盐）、有效期 10 分钟、尝试次数上限 5 次；模拟通道回显 `dev_code`，真实通道永不回显 | `vendors/{sms,sms_service}.py`、`account/router.py` | 同上（哈希不含明文、限流生效） |
+| VND-022/023 实名走 `KycProvider`；**证件号不落明文**，只存不可逆摘要 + 掩码串；同一证件号不得绑定多账号（一人多号是补贴套利第一步） | `vendors/kyc.py`、`account/{models,router}.py` | 同上（摘要脱敏、重复证件号 409） |
+| VND-030 内容机审改走 `ModerationProvider`（本地词表为缺省实现，行为不变）；本地实现看不了图/视频时明确返回 `review` 转人工，而不是假装通过 | `vendors/moderation.py`、`task/service.py::machine_review` | 同上（违禁词仍被拦） |
+| SDK 同步：`sendSmsCode`、`topup` 返回两阶段结果类型 | `packages/core/src/client.ts` | web 构建通过 |
+
 ## 已实现（V42 批次：并发与生产化硬化——从「单进程正确」到「多副本正确」）
 
 > 新增模块 spec：[18-concurrency.md](18-concurrency.md)

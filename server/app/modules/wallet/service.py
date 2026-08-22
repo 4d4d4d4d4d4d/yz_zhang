@@ -59,9 +59,22 @@ def _today_withdrawn(db: Session, user_id: int) -> int:
     return int(done) + int(pending)
 
 
+def _send_payout(db: Session, user_id: int, amount: int, ref: str) -> str:
+    """VND-013 打款出账：供应商失败直接抛出，由 get_db 整体回滚——
+    宁可提现失败重来，也不能出现「账扣了钱没打出去」。"""
+    from app.vendors import payment_service
+    from app.vendors.base import VendorError
+
+    try:
+        return payment_service.send_payout(db, user_id, amount, ref)
+    except VendorError as exc:
+        raise exc.as_http() from exc
+
+
 def withdraw(db: Session, user_id: int, amount: int) -> dict:
     """PAY-005/007 提现：须先绑收款账户；日限额硬拒；大额冻结进人审；小额即时出账。"""
     from app.core.config import settings
+    from app.modules.account.models import utcnow
 
     from .models import PayoutAccount, WithdrawRequest
 
@@ -87,9 +100,11 @@ def withdraw(db: Session, user_id: int, amount: int) -> dict:
         return {"status": "pending_review", "request_id": req.id,
                 "available_cents": acct.available_cents, "frozen_cents": acct.frozen_cents}
     acct.available_cents -= amount
-    _log(db, user_id, "withdraw", -amount)
+    entry_ref = f"wd-{user_id}-{int(utcnow().timestamp() * 1000)}"
+    payout_ref = _send_payout(db, user_id, amount, entry_ref)
+    _log(db, user_id, "withdraw", -amount, memo=f"提现打款 {payout_ref}")
     return {"status": "done", "available_cents": acct.available_cents,
-            "frozen_cents": acct.frozen_cents}
+            "frozen_cents": acct.frozen_cents, "payout_ref": payout_ref}
 
 
 def decide_withdraw(db: Session, req, approve: bool, admin_id: int) -> dict:
@@ -102,7 +117,9 @@ def decide_withdraw(db: Session, req, approve: bool, admin_id: int) -> dict:
     acct = get_or_create(db, req.user_id)
     acct.frozen_cents -= req.amount_cents
     if approve:
-        _log(db, req.user_id, "withdraw", -req.amount_cents, memo=f"大额提现批准 #{req.id}")
+        payout_ref = _send_payout(db, req.user_id, req.amount_cents, f"wdreq-{req.id}")
+        _log(db, req.user_id, "withdraw", -req.amount_cents,
+             memo=f"大额提现批准 #{req.id} 打款 {payout_ref}")
         req.status = "approved"
     else:
         acct.available_cents += req.amount_cents

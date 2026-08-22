@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.deps import get_current_user
+from app.vendors import sms_service
 from app.core.errors import bad_request, conflict, not_found
 from app.core.security import create_token, hash_password, verify_password
 
@@ -102,14 +103,34 @@ def _me(user: User) -> dict:
 
 
 # ---------- auth (ACC-001/002) ----------
+class SendCodeIn(BaseModel):
+    phone: str = Field(min_length=6, max_length=20)
+    scene: str = Field(default="verify", pattern="^(verify|login|reset|change_phone)$")
+
+
+@router.post("/auth/send-code")
+def send_sms_code(body: SendCodeIn, db: Session = Depends(get_db)):
+    """VND-020 请求短信验证码。模拟通道回显 `dev_code` 便于开发；真实通道不回显。
+
+    限流与注册/登录同级，防被当作短信轰炸机（费用与骚扰双重风险）。
+    """
+    from app.core.ratelimit import check
+    from app.vendors.base import VendorError
+
+    check(f"send-code:{body.phone}", limit=3, window_seconds=60)
+    try:
+        return sms_service.send_code(db, body.phone, body.scene)
+    except VendorError as exc:
+        raise exc.as_http() from exc
+
+
 @router.post("/auth/register", status_code=201)
 def register(body: RegisterIn, db: Session = Depends(get_db), user_agent: str = Header(default="")):
     # ACC-001 防刷：同手机号 60s 内注册尝试限流
     from app.core.ratelimit import check
 
     check(f"register:{body.phone}", limit=3, window_seconds=60)
-    if body.sms_code != settings.DEV_SMS_CODE:
-        raise bad_request("验证码错误", "sms_code_invalid")
+    sms_service.verify_code(db, body.phone, body.sms_code)
     if db.query(User).filter(User.phone == body.phone).first():
         raise conflict("手机号已注册", "phone_taken")
     referrer = None
@@ -147,8 +168,7 @@ def login_sms(body: SmsLoginIn, db: Session = Depends(get_db), user_agent: str =
     from app.core.ratelimit import check
 
     check(f"login-sms:{body.phone}", limit=5, window_seconds=60)  # 60s 防刷
-    if body.sms_code != settings.DEV_SMS_CODE:
-        raise bad_request("验证码错误", "sms_code_invalid")
+    sms_service.verify_code(db, body.phone, body.sms_code)
     user = db.query(User).filter(User.phone == body.phone).first()
     if user and user.is_deleted:
         raise bad_request("账号已注销", "account_deleted")
@@ -201,8 +221,7 @@ def change_phone(
     from app.core.ratelimit import check
 
     check(f"change-phone:{user.id}", limit=3, window_seconds=60)
-    if body.sms_code != settings.DEV_SMS_CODE:
-        raise bad_request("验证码错误", "sms_code_invalid")
+    sms_service.verify_code(db, body.new_phone, body.sms_code, scene="change_phone")
     if not user.password_hash or not verify_password(body.password, user.password_hash):
         raise bad_request("密码错误", "bad_password")
     if body.new_phone == user.phone:
@@ -225,8 +244,7 @@ def reset_password(body: ResetPasswordIn, db: Session = Depends(get_db)):
     from app.core.ratelimit import check
 
     check(f"reset-pwd:{body.phone}", limit=3, window_seconds=60)  # 防爆破
-    if body.sms_code != settings.DEV_SMS_CODE:
-        raise bad_request("验证码错误", "sms_code_invalid")
+    sms_service.verify_code(db, body.phone, body.sms_code)
     user = db.query(User).filter(User.phone == body.phone).first()
     if not user or user.is_deleted:
         raise bad_request("账号不存在", "no_such_account")
@@ -333,11 +351,40 @@ def update_me(
 def verify_identity(
     body: VerifyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
+    """ACC-020 / VND-022 实名核验：走 `KycProvider` 抽象（模拟通道格式合法即通过）。
+
+    VND-023：证件号**不落明文**，只存不可逆摘要（用于查重与风控关联）与掩码串。
+    """
+    from app.vendors import base as vendor_base
+    from app.vendors.base import VendorError
+    from app.vendors.kyc import id_digest, id_mask
+    from app.vendors.registry import get_provider
+
     if user.is_verified:
         raise conflict("已完成实名认证", "already_verified")
-    # 模拟 eKYC：生产环境调用第三方身份核验 + 人脸比对
+    provider = get_provider("kyc")
+    try:
+        result = vendor_base.call(
+            db, "kyc", provider.name, "verify",
+            {"real_name": body.real_name, "id_no": body.id_number},
+            lambda: provider.verify(body.real_name, body.id_number),
+            idem_key=f"kyc:{id_digest(body.id_number)}",
+        )
+    except VendorError as exc:
+        raise exc.as_http() from exc
+    if result.status == "failed":
+        raise bad_request("实名信息核验未通过，请核对姓名与证件号", "kyc_failed")
+    if result.status == "manual":
+        return {"is_verified": False, "status": "manual_review"}
+    # 同一证件号不得绑定多个账号（防批量刷号/一人多号套补贴）
+    digest = id_digest(body.id_number)
+    taken = db.query(User).filter(User.id_digest == digest, User.id != user.id).first()
+    if taken:
+        raise conflict("该证件号已绑定其它账号", "id_already_bound")
     user.is_verified = True
     user.real_name = body.real_name
+    user.id_digest = digest
+    user.id_masked = id_mask(body.id_number)
     db.add(user)
     return {"is_verified": True}
 

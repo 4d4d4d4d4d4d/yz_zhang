@@ -74,16 +74,46 @@ def topup(
     body: AmountIn, user: User = Depends(get_current_user), db: Session = Depends(get_db),
     idempotency_key: str = Header(default=""),
 ):
-    """PAY-001 支付通道的开发模拟：直接入账。生产接微信/支付宝回调。
+    """PAY-001 / VND-011 充值：两阶段（下单 → 供应商确认 → 才入账）。
 
+    走 `PaymentProvider` 抽象：模拟通道即时确认（开发体验不变），
+    真实通道返回 pending + 支付链接，等回调 `/wallet/pay/callback` 入账。
     资金操作强制幂等（14.6/05.B）：同一 Idempotency-Key 重复提交只入账一次。
     """
+    from app.vendors import payment_service
+    from app.vendors.base import VendorError
+
     def run():
-        acct = service.topup(db, user.id, body.amount_cents)
-        return {"available_cents": acct.available_cents}
+        try:
+            return payment_service.create_topup_order(db, user.id, body.amount_cents)
+        except VendorError as exc:
+            raise exc.as_http() from exc
 
     return replay_or_run(db, user.id, idempotency_key or None, "wallet.topup", run,
                          params={"amount_cents": body.amount_cents})
+
+
+class PayCallbackIn(BaseModel):
+    """VND-012 支付回调报文（模拟通道形态；真实通道字段由供应商定义）。"""
+
+    order_no: str
+    amount_cents: int
+    external_ref: str = ""
+    sign: str
+
+
+@router.post("/pay/callback")
+def pay_callback(body: PayCallbackIn, db: Session = Depends(get_db)):
+    """VND-012 支付回调：验签 → 幂等确认入账。**无需登录**（供应商侧调用），
+    因此验签是唯一信任来源：签名不通过一律拒绝，不看金额也不查订单。"""
+    from app.vendors import payment_service
+    from app.vendors.base import VendorError
+
+    payload = body.model_dump(exclude={"sign"})
+    try:
+        return payment_service.handle_callback(db, payload, body.sign)
+    except VendorError as exc:
+        raise exc.as_http() from exc
 
 
 @router.post("/withdraw")

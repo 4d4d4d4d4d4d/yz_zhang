@@ -91,9 +91,17 @@ def validate_category(db: Session, name: str) -> None:
 
 
 def machine_review(text: str) -> str | None:
-    for word in BANNED_WORDS:
-        if word in text:
-            return word
+    """TASK-004 / VND-030 内容机审：走 `ModerationProvider` 抽象。
+
+    返回命中的标签（拒绝）或 None（放行）。本地实现即原违禁词表，
+    换第三方内容安全只需改 `PLATFORM_MODERATION_PROVIDER`。
+    """
+    from app.vendors.registry import get_provider
+
+    result = get_provider("moderation").check("text", text)
+    if result.status == "reject":
+        labels = result.data.get("labels") or []
+        return labels[0] if labels else "违规内容"
     return None
 
 

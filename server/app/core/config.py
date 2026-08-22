@@ -61,6 +61,11 @@ class Settings:
     RATELIMIT_COOLDOWN_SECONDS = int(os.environ.get("PLATFORM_RATELIMIT_COOLDOWN_SECONDS", "30"))
     # CONC-041 定时任务执行锁 TTL（秒）：持锁进程崩溃后超时可被抢占
     JOB_LOCK_TTL_SECONDS = int(os.environ.get("PLATFORM_JOB_LOCK_TTL_SECONDS", "300"))
+    # ── VND 外部供应商（19 号 spec）：缺省全为模拟实现，开发/CI 不需要任何密钥 ──
+    PAYMENT_PROVIDER = os.environ.get("PLATFORM_PAYMENT_PROVIDER", "mock")
+    SMS_PROVIDER = os.environ.get("PLATFORM_SMS_PROVIDER", "mock")
+    KYC_PROVIDER = os.environ.get("PLATFORM_KYC_PROVIDER", "mock")
+    MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
 
 
 settings = Settings()

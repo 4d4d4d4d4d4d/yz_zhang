@@ -199,8 +199,21 @@ export class PlatformClient {
   wallet() {
     return this.request<Wallet>('GET', '/wallet');
   }
+  /** VND-020 请求短信验证码（模拟通道回显 dev_code，真实通道不回显）。 */
+  sendSmsCode(phone: string, scene = 'verify') {
+    return this.request<{ sent: boolean; expires_in: number; dev_code?: string }>(
+      'POST', '/auth/send-code', { phone, scene },
+    );
+  }
+
+  /** VND-011 充值两阶段：模拟通道即时 succeeded；真实通道返回 pending + pay_url。 */
   topup(amountCents: number) {
-    return this.request<{ available_cents: number }>('POST', '/wallet/topup', { amount_cents: amountCents });
+    return this.request<{
+      order_no: string;
+      status: 'succeeded' | 'pending';
+      available_cents?: number;
+      pay_url?: string;
+    }>('POST', '/wallet/topup', { amount_cents: amountCents });
   }
   getPayoutAccount() {
     return this.request<{ bound: boolean; kind?: string; account_no?: string; holder_name?: string }>(

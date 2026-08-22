@@ -38,10 +38,12 @@ def auth(user) -> dict:
     return {"Authorization": f"Bearer {user['token']}"}
 
 
-def verify_user(client, user, name="张三"):
+def verify_user(client, user, name="张三", id_number=None):
+    """VND-023：证件号一人一号（同号不得绑多账号），故按用户 id 派生唯一证件号。"""
     r = client.post(
         "/api/v1/users/me/verify",
-        json={"real_name": name, "id_number": "110101199001011234"},
+        json={"real_name": name,
+              "id_number": id_number or f"11010119900101{user['id']:04d}"},
         headers=auth(user),
     )
     assert r.status_code == 200, r.text

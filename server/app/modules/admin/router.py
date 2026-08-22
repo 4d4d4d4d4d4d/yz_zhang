@@ -25,6 +25,37 @@ def record_audit(db, admin_id: int, action: str, target_type: str = "",
                       target_id=target_id, detail=detail[:500]))
 
 
+@router.get("/admin/vendors")
+def vendor_status(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """VND-041 供应商健康面板：各能力当前实现、是否仍是模拟、熔断状态、
+    近 24h 成功率。生产环境若有 P0 能力仍是模拟实现，这里显式列出（上线阻塞项）。"""
+    from datetime import timedelta
+
+    from app.modules.account.models import utcnow
+    from app.vendors.models import VendorCall
+    from app.vendors.registry import missing_production_providers, status
+
+    since = utcnow() - timedelta(hours=24)
+    rows = (
+        db.query(VendorCall.kind, VendorCall.status, func.count(VendorCall.id))
+        .filter(VendorCall.created_at >= since)
+        .group_by(VendorCall.kind, VendorCall.status)
+        .all()
+    )
+    stats: dict[str, dict[str, int]] = {}
+    for kind, st, cnt in rows:
+        stats.setdefault(kind, {})[st] = int(cnt)
+
+    out = []
+    for item in status():
+        counts = stats.get(item["kind"], {})
+        total = sum(counts.values())
+        ok = counts.get("succeeded", 0)
+        out.append({**item, "calls_24h": total,
+                    "success_rate": round(ok / total, 4) if total else None})
+    return {"vendors": out, "blocking_for_production": missing_production_providers()}
+
+
 @router.get("/admin/audit-log")
 def audit_log(
     action: str | None = None,

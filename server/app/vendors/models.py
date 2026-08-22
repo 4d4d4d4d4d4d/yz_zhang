@@ -1,7 +1,7 @@
 """VND-003/011 外部调用留痕与支付订单。"""
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String
+from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -48,3 +48,21 @@ class PaymentOrder(Base):
     external_ref: Mapped[str] = mapped_column(String(80), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class SmsCode(Base):
+    """VND-021 验证码：**只存哈希**（手机号加盐），带有效期与尝试次数上限。
+
+    泄库也无法直接冒用；尝试次数上限挡住 6 位码的暴力枚举。
+    """
+
+    __tablename__ = "sms_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    phone: Mapped[str] = mapped_column(String(20), index=True)
+    scene: Mapped[str] = mapped_column(String(20), default="verify")
+    code_hash: Mapped[str] = mapped_column(String(80))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    consumed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
