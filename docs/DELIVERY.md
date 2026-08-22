@@ -1,7 +1,7 @@
 # 交付总览（Final Delivery Overview）
 
-> 截至 2026-08-22：MVP + V1~V44 全批次完成。
-> 后端 **301 tests** + 前端 **29 tests**（core 23 + web 6）全绿。
+> 截至 2026-08-22：MVP + V1~V45 全批次完成。
+> 后端 **313 tests** + 前端 **40 tests**（core 23 + web 17）全绿。
 > 本文档是对 [docs/specs/](specs/README.md)（功能拆分）与
 > [16-traceability.md](specs/16-traceability.md)（逐条追溯）的收口汇总。
 
@@ -47,7 +47,7 @@ dispute 响应缺复核基数字段、圈层创建者角色丢失等。
 | 真实 LLM 分解 | 已接 AnthropicLLM，缺省模板降级 | 设 `ANTHROPIC_API_KEY` 即启用 |
 | 短信/eKYC 实名 | `SmsProvider`/`KycProvider` 抽象 + Mock | 设 `PLATFORM_SMS_PROVIDER` / `PLATFORM_KYC_PROVIDER` |
 | 持牌支付/提现/开票 | `PaymentProvider` 抽象 + 两阶段订单 + 回调验签 | 设 `PLATFORM_PAYMENT_PROVIDER` |
-| 视频转码/CDN | 元数据与发布流已备 | `content` 模块上传回调 |
+| 视频转码/CDN | 图片上传已走 `StorageProvider`，视频元数据与发布流已备 | 设 `PLATFORM_STORAGE_PROVIDER` |
 | RTC 音视频 | IM 文本/图片已备 | `im` 模块会话扩展 |
 | 区块链锚定 | 本地哈希链已备（head 可对外公示） | `anchor` 模块定期上链 job |
 | 内容安全审核 | 本地敏感词机审 | `machine_review` 替换为供应商 API |

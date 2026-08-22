@@ -4,6 +4,23 @@
 > 后端 268 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
 
+## 已实现（V45 批次：移动端与 PWA——让手机用户真的能用）
+
+> 新增模块 spec：[21-mobile-pwa.md](21-mobile-pwa.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| MOB-001/003/004 响应式（≤640 手机 / ≤1024 平板 / >1024 桌面）：列表转竖排卡片、表单与按钮满宽、表格横向滚动（**绝不让 body 出横向滚动条**）、触控目标 ≥44px、输入框 ≥16px（防 iOS 聚焦缩放）、`viewport-fit=cover` + `env(safe-area-inset-*)` 适配刘海与手势条 | `web/src/styles.css`、`web/index.html` | `web/src/mobile.test.tsx` |
+| MOB-002 底部 Tab 导航（广场/发布/消息/我的），手机显示桌面隐藏；消息 Tab 未读红点复用 IM-010 全局未读接口，未读数拿不到不影响导航可用 | `web/src/TabBar.tsx`、`App.tsx` | 同上（四入口渲染、红点数字） |
+| MOB-010 `manifest.webmanifest`：standalone、主题色、**maskable 图标**（少了它安卓自适应图标会被裁掉一圈）、快捷方式；apple-touch-icon 与 iOS meta | `web/public/{manifest.webmanifest,icon.svg,icon-maskable.svg}` | 同上 |
+| MOB-011/012 Service Worker：外壳预缓存 + stale-while-revalidate；**`/api/` 一律不缓存不兜底**——任务状态/合约状态/钱包余额读到陈旧值会让用户基于错误信息决定付钱，宁可报错不可撒谎；断网落离线页 | `web/public/{sw.js,offline.html}` | 同上（预缓存清单不含 API、离线页在册） |
+| MOB-013/014 新版本提示（`SKIP_WAITING` + 刷新，避免旧外壳打新接口）；安装引导可关闭且**记住选择**，隐私模式下 localStorage 抛异常也安静降级 | `web/src/pwa.ts`、`App.tsx` | 同上 |
+| MOB-020 定位「附近任务」（既有能力，拒绝授权时降级为全部任务） | `web/src/pages/Square.tsx` | 既有用例 |
+| MOB-021 拍照/相册取证：客户端压缩（长边 1280 / JPEG 0.8）后上传——**压缩是必需而非优化**，手机直出 3~8MB 既超服务端上限也让弱网执行者传不上去，而凭证传不上去等于没有证据；进度留痕可附图，纠纷时作为证据 | `web/src/PhotoPicker.tsx`、`pages/TaskDetail.tsx`、`task/{models,router}.py` | `server/tests/test_uploads.py` |
+| VND-031 存储供应商抽象 + 上传端点：类型白名单 + 大小上限 + **魔数校验**（只信 Content-Type 等于让上传方自证清白）+ 内容寻址去重 + 登录与限流（否则等于开了免费图床）+ 读取端点禁路径穿越；进度图只接受本平台相对路径（外链不可信且泄露用户 IP） | `app/vendors/storage.py`、`app/modules/files/router.py` | 同上（12 例，多数是拒绝路径） |
+| MOB-031/032/033 Expo 配置：bundle id、scheme `taskplat`、Universal Link / App Links、相机与相册权限的中文用途说明；提审清单列出账号注销/举报/拉黑/协议四个**审核必查项**及其后端接口 | `app/app.json`、`app/STORE_CHECKLIST.md` | — （发版需开发者账号） |
+| SDK 同步：`uploadImage`、`addProgress` 支持 images | `packages/core/src/client.ts` | web 构建通过 |
+
 ## 已实现（V44 批次：生产部署、迁移与可观测）
 
 > 新增模块 spec：[20-deployment.md](20-deployment.md)

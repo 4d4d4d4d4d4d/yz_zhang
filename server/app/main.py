@@ -69,6 +69,7 @@ def create_app() -> FastAPI:
     from app.modules.contract.router import router as contract_router
     from app.modules.decompose.router import router as decompose_router
     from app.modules.dispute.router import router as dispute_router
+    from app.modules.files.router import router as files_router
     from app.modules.im.router import router as im_router
     from app.modules.knowledge.router import router as knowledge_router
     from app.modules.notification.router import router as notification_router
@@ -98,6 +99,7 @@ def create_app() -> FastAPI:
         anchor_router,
         analytics_router,
         orchestrator_router,
+        files_router,
     ):
         app.include_router(router, prefix=settings.API_PREFIX)
 

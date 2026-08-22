@@ -37,3 +37,80 @@ label { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
 .form { display: grid; gap: 12px; max-width: 480px; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 td, th { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+
+/* ══════════════════════════════════════════════════════════════
+   MOB-001~004 移动端适配（21 号 spec）
+   断点：≤640 手机 / ≤1024 平板 / >1024 桌面
+   ══════════════════════════════════════════════════════════════ */
+
+/* MOB-003 触控目标 ≥44px；输入框 ≥16px 防 iOS 聚焦时自动缩放 */
+button, .tab { min-height: 44px; }
+input, textarea, select { font-size: 16px; }
+
+/* 底部 Tab（MOB-002）：桌面隐藏，手机显示 */
+.tabbar { display: none; }
+.install-tip { display: none; }
+.update-tip {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 30;
+  background: var(--text); color: #fff; border-radius: 999px; padding: 10px 18px;
+  display: flex; gap: 12px; align-items: center; font-size: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+}
+.update-tip button { background: var(--brand); padding: 6px 14px; min-height: 36px; }
+
+@media (max-width: 1024px) {
+  .page { margin: 16px auto; }
+}
+
+@media (max-width: 640px) {
+  /* 顶部导航在手机上只留品牌与身份，主导航交给底部 Tab */
+  .nav { padding: 10px 14px; gap: 12px; }
+  .nav a:not(.logo):not(.nav-mobile-keep) { display: none; }
+  .nav .logo { font-size: 16px; }
+
+  /* 内容区给底部 Tab 留出空间 + 适配手势条安全区 */
+  .page {
+    margin: 12px auto calc(72px + env(safe-area-inset-bottom));
+    padding: 0 12px;
+    gap: 12px;
+  }
+  .card { padding: 12px; border-radius: 12px; }
+
+  /* 列表项转为竖排卡片：横排在窄屏会把价格挤到换行错位 */
+  .task-item { flex-direction: column; align-items: stretch; gap: 8px; }
+  .task-item .row { justify-content: space-between; }
+
+  /* 表单与按钮满宽，拇指可达 */
+  .form { max-width: none; }
+  .row > button { flex: 1; }
+  .bubble { max-width: 85%; }
+
+  /* 表格横向滚动，绝不让 body 出现横向滚动条 */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { min-width: 520px; }
+
+  .tabbar {
+    display: flex;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    background: var(--card); border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tabbar .tab {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; padding: 6px 0; font-size: 11px; color: var(--muted); position: relative;
+  }
+  .tabbar .tab .ico { font-size: 20px; line-height: 1; }
+  .tabbar .tab.active { color: var(--brand); }
+  .tabbar .tab .dot {
+    position: absolute; top: 4px; right: 50%; margin-right: -18px;
+    background: var(--bad); color: #fff; border-radius: 999px;
+    font-size: 10px; line-height: 16px; min-width: 16px; padding: 0 4px; text-align: center;
+  }
+
+  .install-tip {
+    display: flex; gap: 10px; align-items: center;
+    margin: 0 12px; padding: 10px 12px;
+    background: #eef2ff; border: 1px solid var(--brand); border-radius: 10px; font-size: 13px;
+  }
+  .install-tip button { min-height: 36px; padding: 6px 12px; }
+}

@@ -9,6 +9,7 @@ from .kyc import MockKycProvider
 from .moderation import LocalModerationProvider
 from .payment import MockPaymentProvider
 from .sms import MockSmsProvider
+from .storage import LocalStorageProvider
 
 # kind -> {provider_name: factory}
 _REGISTRY: dict[str, dict[str, type]] = {
@@ -16,12 +17,14 @@ _REGISTRY: dict[str, dict[str, type]] = {
     "sms": {"mock": MockSmsProvider},
     "kyc": {"mock": MockKycProvider},
     "moderation": {"local": LocalModerationProvider},
+    "storage": {"local": LocalStorageProvider},
 }
 
 # VND-042 生产必须接真实供应商的能力（涉及资金/身份/合规，模拟实现上线即事故）
 P0_KINDS = ("payment", "sms", "kyc", "moderation")
 # 各 kind 的「模拟实现」名字：生产环境命中即判定未接入
-MOCK_NAMES = {"payment": "mock", "sms": "mock", "kyc": "mock", "moderation": "local"}
+MOCK_NAMES = {"payment": "mock", "sms": "mock", "kyc": "mock", "moderation": "local",
+              "storage": "local"}
 
 _instances: dict[str, object] = {}
 

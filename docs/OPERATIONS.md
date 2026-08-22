@@ -29,22 +29,38 @@
 4. A 看推荐并选人 → 5. 双方签约、A 托管 → 6. B 交付 → 7. A 验收放款 →
 8. 双向评价（双盲）→ 9. 经验入库，下次发同类任务可查参考价。
 
-### 1.2 手机端
+### 1.2 手机端（V45 已补齐）
 
-**方式 A：直接用手机浏览器**（当前最快）
-Web 是响应式布局，手机浏览器打开 `http://<你的IP>:8080` 即可，
-可「添加到主屏幕」当 PWA 用。**这是现在就能用的方式。**
+**方式 A：手机浏览器 / PWA（现在就能用，零发版成本）**
 
-**方式 B：原生 App（React Native / Expo，骨架已可运行）**
+浏览器打开站点即可：全站响应式（≤640 手机断点），底部四 Tab
+（广场 / 发布 / 消息 / 我的，消息带未读红点），触控目标 ≥44px、
+输入框 16px（不会一聚焦就整页缩放），刘海与手势条安全区已适配。
+
+可「添加到主屏幕」以独立窗口启动（`manifest.webmanifest`，standalone +
+maskable 图标）。Service Worker 只缓存应用外壳，**API 一律不缓存**——
+任务状态、合约状态、钱包余额读到陈旧值会让用户基于错误信息决定付钱，
+宁可报错也不能撒谎；断网时显示离线兜底页而非浏览器错误页。
+有新版本时提示「刷新」，避免旧外壳打新接口。
+
+**取证拍照**：执行留痕支持拍照/相册附图，客户端压缩（长边 1280、JPEG 0.8）
+后上传。压缩不是优化是必需——手机直出常有 3~8MB，弱网下执行者传不上去，
+而交付凭证传不上去等于没有证据。图片走 `StorageProvider` 抽象，
+接对象存储/CDN 只改环境变量。
+
+**方式 B：原生 App（React Native / Expo）**
 ```bash
-cd app && npm install && npx expo start
-# 手机装 Expo Go，扫码即可真机调试
+cd app && npm install && npx expo start   # 手机装 Expo Go 扫码真机调试
 ```
-App 与 Web **共用同一个 TS SDK**（`packages/core`），
-已实现五 Tab：任务广场 / 发布 / 钱包 / 通知 / 我的，
+App 与 Web 共用同一个 TS SDK（`packages/core`），
 任务详情由 SDK 的 `taskActions` 可见性矩阵驱动（与 Web 同一套规则，防两端漂移）。
+`app.json` 已配 bundle id、深链 scheme（`taskplat://`）、Universal Link / App Links、
+相机与相册权限的中文用途说明。
 
-⚠️ 缺口：App 尚未做打包发版（需 `eas build` + 应用商店账号）、推送通知（需 APNs/FCM）。
+⚠️ 缺口：App 发版需 Expo + Apple/Google 开发者账号（平台侧无法代劳）；
+提审必查项（账号注销 / 举报 / 拉黑 / 协议入口）在 Web 已有、App 侧待接入，
+清单见 [app/STORE_CHECKLIST.md](../app/STORE_CHECKLIST.md)。
+推送通知需 APNs/FCM 通道。
 
 ---
 

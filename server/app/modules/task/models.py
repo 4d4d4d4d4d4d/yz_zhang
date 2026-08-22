@@ -130,6 +130,8 @@ class ProgressLog(Base):
     content: Mapped[str] = mapped_column(Text, default="")
     lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # MOB-021 图片凭证（上传后的相对 URL 列表）：纠纷时最有力的证据往往是照片
+    images: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

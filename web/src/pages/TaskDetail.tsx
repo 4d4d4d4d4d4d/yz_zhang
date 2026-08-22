@@ -4,6 +4,7 @@ import {
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import PhotoPicker from '../PhotoPicker';
 import { useApp } from '../store';
 
 type AppRow = { id: number; applicant_id: number; nickname: string; credit_score: number; rating_avg: number; bid_cents: number; message: string; status: string };
@@ -17,8 +18,11 @@ export default function TaskDetail() {
   const [apps, setApps] = useState<AppRow[]>([]);
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [tree, setTree] = useState<TaskTree | null>(null);
-  const [progress, setProgress] = useState<Array<{ id: number; kind: string; content: string; created_at: string }>>([]);
+  const [progress, setProgress] = useState<
+    Array<{ id: number; kind: string; content: string; images?: string[]; created_at: string }>
+  >([]);
   const [note, setNote] = useState('');
+  const [shots, setShots] = useState<string[]>([]);
   const [error, setError] = useState('');
 
   const isCreator = me && task?.creator_id === me.id;
@@ -253,13 +257,33 @@ export default function TaskDetail() {
           <h3>执行动态</h3>
           <div className="list">
             {progress.map((p) => (
-              <p key={p.id} className="muted">[{p.kind}] {p.content} · {new Date(p.created_at).toLocaleString()}</p>
+              <div key={p.id}>
+                <p className="muted">[{p.kind}] {p.content} · {new Date(p.created_at).toLocaleString()}</p>
+                {!!p.images?.length && (
+                  <div className="row" style={{ gap: 6, marginTop: 4 }}>
+                    {p.images.map((u) => (
+                      <a key={u} href={u} target="_blank" rel="noreferrer">
+                        <img src={u} alt="凭证" width={72} height={72}
+                             style={{ objectFit: 'cover', borderRadius: 8 }} />
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
           {task.status === 'in_progress' && (
-            <div className="row" style={{ marginTop: 8 }}>
-              <input className="grow" placeholder="进度说明…" value={note} onChange={(e) => setNote(e.target.value)} />
-              <button onClick={() => act(async () => { await client.addProgress(taskId, note); setNote(''); })}>更新进度</button>
+            <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
+              <div className="row">
+                <input className="grow" placeholder="进度说明…" value={note} onChange={(e) => setNote(e.target.value)} />
+                <button onClick={() => act(async () => {
+                  await client.addProgress(taskId, note, shots);
+                  setNote('');
+                  setShots([]);
+                })}>更新进度</button>
+              </div>
+              {/* MOB-021 拍照留证：纠纷时最有力的证据往往是现场照片 */}
+              <PhotoPicker urls={shots} onChange={setShots} />
             </div>
           )}
         </div>

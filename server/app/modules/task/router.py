@@ -54,6 +54,8 @@ class ApplyIn(BaseModel):
 
 class ProgressIn(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
+    # MOB-021 图片凭证：由 POST /files 上传后回填的相对 URL
+    images: list[str] = Field(default_factory=list, max_length=9)
 
 
 class CheckinIn(BaseModel):
@@ -579,7 +581,11 @@ def add_progress(
         raise forbidden()
     if task.status not in ("in_progress", "pending_acceptance"):
         raise conflict("任务不在执行中", "not_in_progress")
-    log = ProgressLog(task_id=task_id, user_id=user.id, kind="note", content=body.content)
+    for url in body.images:  # 只接受本平台上传返回的相对路径，杜绝外链与 XSS
+        if not url.startswith("/api/v1/files/"):
+            raise bad_request("图片地址不合法，请通过上传接口获取", "invalid_image_url")
+    log = ProgressLog(task_id=task_id, user_id=user.id, kind="note",
+                      content=body.content, images=body.images)
     db.add(log)
     return {"ok": True}
 
@@ -615,7 +621,7 @@ def list_progress(task_id: int, user: User = Depends(get_current_user), db: Sess
     rows = db.query(ProgressLog).filter(ProgressLog.task_id == task_id).order_by(ProgressLog.id).all()
     return [
         {"id": r.id, "user_id": r.user_id, "kind": r.kind, "content": r.content,
-         "created_at": r.created_at.isoformat()}
+         "images": r.images or [], "created_at": r.created_at.isoformat()}
         for r in rows
     ]
 

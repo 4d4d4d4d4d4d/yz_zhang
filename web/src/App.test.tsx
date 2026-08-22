@@ -59,8 +59,10 @@ describe('App', () => {
 
   it('导航包含核心入口', async () => {
     renderAt('/');
+    // 顶栏与底部 Tab 会有同名入口（如「消息」），因此按区域取而不是全局取
+    const topNav = document.querySelector('nav.nav') as HTMLElement;
     for (const label of ['任务广场', '发布任务', '消息', '钱包', '客服']) {
-      expect(screen.getByText(label)).toBeTruthy();
+      expect(topNav.textContent).toContain(label);
     }
   });
 });
