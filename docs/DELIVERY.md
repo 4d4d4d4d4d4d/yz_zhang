@@ -1,7 +1,7 @@
 # 交付总览（Final Delivery Overview）
 
-> 截至 2026-08-22：MVP + V1~V48 全批次完成。
-> 后端 **365 tests** + 前端 **40 tests**（core 23 + web 17）全绿。
+> 截至 2026-08-22：MVP + V1~V49 全批次完成。
+> 后端 **385 tests** + 前端 **40 tests**（core 23 + web 17）全绿。
 > 本文档是对 [docs/specs/](specs/README.md)（功能拆分）与
 > [16-traceability.md](specs/16-traceability.md)（逐条追溯）的收口汇总。
 
@@ -52,6 +52,7 @@ dispute 响应缺复核基数字段、圈层创建者角色丢失等。
 | 真实 LLM 分解 | 已接 AnthropicLLM，缺省模板降级 | 设 `ANTHROPIC_API_KEY` 即启用 |
 | 短信/eKYC 实名 | `SmsProvider`/`KycProvider` 抽象 + Mock | 设 `PLATFORM_SMS_PROVIDER` / `PLATFORM_KYC_PROVIDER` |
 | 持牌支付/提现/开票 | `PaymentProvider` 抽象 + 两阶段订单 + 回调验签 | 设 `PLATFORM_PAYMENT_PROVIDER` |
+| **资金存管（上线红线）** | `LedgerBackend` 抽象 + 分账指令模型已就位；`internal` 涉嫌资金池与二清，**prod 下拒绝启动** | 接持牌存管后设 `PLATFORM_LEDGER_BACKEND=custody` |
 | 视频转码/CDN | 图片上传已走 `StorageProvider`，视频元数据与发布流已备 | 设 `PLATFORM_STORAGE_PROVIDER` |
 | RTC 音视频 | IM 文本/图片已备 | `im` 模块会话扩展 |
 | 区块链锚定 | 本地哈希链已备（head 可对外公示） | `anchor` 模块定期上链 job |
@@ -80,6 +81,7 @@ cp deploy/.env.example deploy/.env && ./deploy/up.sh   # 生产栈（自检 → 
 | V46 GRW | 优惠券/邀请/活动/新人任务/供需健康度，补贴全部纳入资金四不变量 |
 | V47 SEC | 账号+IP 双维度限流、全局写兜底、失败自动封禁、TLS 与安全响应头 |
 | V48 AIO | 编排闭环：成果评审质量闸门、预算占用/实付分离、修复步带整改要点；**模型不得单独动钱** |
+| V49 FIN | 分账指令守恒可审计、金融话术与分利模式红线硬拦截；**未接存管的生产环境拒绝启动** |
 
 **剩下的都不是代码问题**：HTTPS 证书与域名、供应商签约与密钥、
 法律与合规意见、应用商店开发者账号。

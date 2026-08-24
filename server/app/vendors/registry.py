@@ -66,6 +66,14 @@ def startup_check() -> None:
     missing = missing_production_providers()
     if missing:
         problems.append(f"以下 P0 能力仍是模拟实现，禁止上线：{', '.join(missing)}")
+    # FIN-052 上线红线：平台自建账本托管资金 = 资金池 + 二清（无证从事支付结算）。
+    # 这不是配置疏忽，是业务不能这样做，因此拦截理由要写清楚。
+    if settings.LEDGER_BACKEND != "custody":
+        problems.append(
+            "PLATFORM_LEDGER_BACKEND 仍为 internal：平台自建账本托管用户资金"
+            "涉嫌资金池与二清（无证从事支付结算），不得用于真实交易。"
+            "请接入持牌机构存管后设为 custody"
+        )
     if settings.JWT_SECRET == "dev-secret-change-me":
         problems.append("PLATFORM_JWT_SECRET 仍是默认值")
     if settings.JOB_TOKEN == "dev-job-token-change-me":

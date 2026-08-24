@@ -4,6 +4,30 @@
 > 后端 268 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
 
+## 已实现（V49 批次：资金合规——把「不能这样上线」变成机器闸门）
+
+> 模块 spec：[25-financial-compliance.md](25-financial-compliance.md)
+>
+> ⚠️ **本批次不能让当前形态变得合规**。平台自建账本托管资金 = 资金池 + 二清，
+> 这是资金的**法律路径**问题，代码解决不了；能做的是：把接口留好、
+> 把红线做成硬拦截、把资金流做成可审计，并让**未接存管的生产环境根本起不来**。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **FIN-050/051 `LedgerBackend` 抽象** | `InternalLedger`（平台内账本，仅限开发/演示）与 `CustodyLedger`（持牌存管，钱不经过平台）。切换只改 `PLATFORM_LEDGER_BACKEND` | `tests/test_financial_compliance.py::test_custody_backend_requires_provider_support`（切 custody 但供应商没实现分账 → 明确报错，**不静默退回内部账本**） |
+| **FIN-052 生产拒绝启动（本批次最重要的一条）** | `ENV=prod` 且后端为 internal → `startup_check` 抛错，且拦截理由写明「涉嫌资金池与二清（无证从事支付结算）」。配置疏忽和业务违规要说清楚是哪一种 | 同上（`test_production_refuses_internal_ledger` 断言消息含「资金池」「二清」） |
+| **FIN-053 沙箱标识** | `/version` 返回 `sandbox` 与 `ledger_backend`，避免有人误以为这是真实资金 | 同上 |
+| **FIN-010/011/012/013 分账指令模型** | `SettlementOrder` + `SettlementSplit`：放款/分期/退款/取消补偿/裁决执行五类路径全部产出一条指令；平台佣金作为**独立收款方**出现，与用户资金天然隔离，不靠代码自律 | 同上（放款两方拆分、退款、裁决三方拆分、分期逐期累计） |
+| **FIN-060 守恒并入日终对账** | splits 之和必须等于总额；存管模式下无流水号视为异常。并入 `risk.reconcile`，不守恒即报 | 同上（`test_broken_settlement_is_detected`：人为改一分钱，对账必须报出来而不是悄悄放过） |
+| **FIN-042 资金流向可审计** | `GET /contracts/{id}/settlements`：谁付的 → 指令 → 谁收的，当事人与管理员可见 | 同上（含越权拒绝） |
+| **FIN-020 分利模式白名单** | `pricing` 只允许 `fixed/milestone/hourly/bidding`——**收益分成与股权对价一律拒绝** | 同上（`test_pricing_whitelist_rejects_revenue_share`） |
+| **FIN-021 金融话术拦截** | 独立词表（分红/股权/原始股/期权/保本/年化/众筹/代币…），与普通违禁词**刻意分开**：这些词的问题是把劳务合同变成金融产品，需要独立的拒绝理由。「投资」只在与回报承诺连用时才拦，避免误杀「投资人对接」 | 同上（5 类话术被拦且理由说明为什么；3 类正常任务不被误杀；风控过严和过松一样是失败） |
+| **FIN-022 合约条款定性** | 条款写入「承揽/服务合同，报酬系劳务对价，不构成投资/入股/合伙/保本安排，不成立劳动关系」——**定性写进当事人合意才有对抗力**，只写在平台规则里没用 | 同上 |
+| SDK 同步：`contractSettlements` + `SettlementOrderView` | `packages/core/src/{client,types}.ts` | web 构建通过 |
+
+**仍必须由用户提供**（⚖️ 代码无法替代）：持牌机构的担保交易/资金存管产品与签约、
+平台经营资质、税务代扣与发票方案、反洗钱制度与报送通道。
+
 ## 已实现（V48 批次：AI 编排闭环——从「数状态」到「看成果」）
 
 > 模块 spec：[24-ai-orchestration.md](24-ai-orchestration.md)（已按代码检视结论重写）

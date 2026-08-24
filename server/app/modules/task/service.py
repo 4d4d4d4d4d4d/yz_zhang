@@ -122,6 +122,12 @@ def validate_publishable(task: Task, db: Session | None = None) -> None:
         validate_city(db, task)  # GEO-030
     if task.budget_cents <= 0:
         raise bad_request("预算必须大于 0", "budget_required")
+    # FIN-020/021 金融合规红线先于普通机审：涉众性金融不是「内容不当」，
+    # 是平台根本不能做的业务，拒绝理由也必须说清楚为什么
+    from app.modules.finance.compliance import assert_no_finance_offer, check_pricing
+
+    check_pricing(task.pricing)
+    assert_no_finance_offer(f"{task.title} {task.description}")
     hit = machine_review(task.title + " " + task.description)
     if hit:
         raise bad_request(f"内容含违禁信息（{hit}），发布被拒绝", "content_rejected")

@@ -91,6 +91,10 @@ class Settings:
     AUTH_FAIL_BAN_SECONDS = int(os.environ.get("PLATFORM_AUTH_FAIL_BAN_SECONDS", "900"))
     # SEC-003 生产关闭 API 文档（避免把全部端点与模型结构直接送给攻击者）
     EXPOSE_DOCS = os.environ.get("PLATFORM_EXPOSE_DOCS", "") == "1"
+    # ── FIN 资金合规（25 号 spec）────────────────────────────────────
+    # internal = 平台内账本（**仅限开发/演示**，涉嫌资金池与二清，prod 下拒绝启动）
+    # custody  = 持牌机构存管（钱不经过平台，平台只发分账指令）
+    LEDGER_BACKEND = os.environ.get("PLATFORM_LEDGER_BACKEND", "internal")
 
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]

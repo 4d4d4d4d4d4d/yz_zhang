@@ -12,6 +12,8 @@ from app.core.locks import lock_contract_funds
 from app.modules.account.models import utcnow
 from app.modules.wallet import service as wallet
 
+from app.modules.finance.compliance import CONTRACT_NATURE_CLAUSE
+
 from .models import ChangeOrder, Contract, Milestone
 
 # SC-006 取消/违约规则表：执行者获得托管金的比例（万分比），按阶段与责任方
@@ -32,7 +34,8 @@ def generate(db: Session, task, executor_id: int, amount_cents: int) -> Contract
         f"发布方: 用户{task.creator_id} / 执行方: 用户{executor_id}\n"
         f"金额: {amount_cents / 100:.2f} 元(托管) / 平台服务费率: {settings.PLATFORM_FEE_BPS / 100:.1f}%\n"
         f"验收: 交付后由发布方验收，{settings.AUTO_ACCEPT_DAYS} 天未处理视为自动通过\n"
-        f"争议: 按《平台争议处理规则》仲裁，裁决结果自动执行"
+        f"争议: 按《平台争议处理规则》处理，处理决定自动执行\n"
+        f"{CONTRACT_NATURE_CLAUSE}"
     )
     # CRED-003 信用等级权益：高信用执行者享费率折扣
     from app.modules.account import service as credit
@@ -119,6 +122,20 @@ def fund(db: Session, contract: Contract, user_id: int) -> Contract:
     return contract
 
 
+def _settle(db: Session, contract: Contract, kind: str,
+            parts: list[tuple[int, int, str]], memo: str) -> None:
+    """FIN-010 每一笔资金分配都要留下一条可审计的分账指令。
+
+    这条指令在接存管前是内部账本的镜像，接存管后就是发给存管方的报文本身
+    ——形态不变，换的只是执行者。守恒校验在 `finance.record` 里做。
+    """
+    from app.modules.finance import service as finance
+    from app.modules.finance.service import Split
+
+    finance.record(db, contract, kind,
+                   [Split(uid, amount, purpose) for uid, amount, purpose in parts], memo)
+
+
 def _fee(contract: Contract, amount: int) -> int:
     return amount * contract.fee_bps // 10000
 
@@ -147,10 +164,14 @@ def release(db: Session, contract: Contract) -> Contract:
         raise conflict("合约不在可放款状态", "not_releasable")
     remaining = contract.amount_cents - contract.released_cents
     if remaining > 0:
+        fee = _fee(contract, remaining)
         wallet.escrow_release(
-            db, contract.requester_id, contract.executor_id,
-            remaining, _fee(contract, remaining), contract.id,
+            db, contract.requester_id, contract.executor_id, remaining, fee, contract.id,
         )
+        _settle(db, contract, "release", [
+            (contract.executor_id, remaining - fee, "payout"),
+            (wallet.PLATFORM_USER_ID, fee, "fee"),
+        ], "验收放款")
     db.query(Milestone).filter(
         Milestone.contract_id == contract.id, Milestone.status != "released"
     ).update({"status": "released"})
@@ -187,10 +208,15 @@ def release_milestone(db: Session, contract: Contract, user_id: int, milestone: 
         raise conflict("合约不在可放款状态", "not_releasable")
     if milestone.status != "delivered":
         raise conflict("里程碑需先交付", "invalid_milestone_state")
+    fee = _fee(contract, milestone.amount_cents)
     wallet.escrow_release(
         db, contract.requester_id, contract.executor_id,
-        milestone.amount_cents, _fee(contract, milestone.amount_cents), contract.id,
+        milestone.amount_cents, fee, contract.id,
     )
+    _settle(db, contract, "milestone", [
+        (contract.executor_id, milestone.amount_cents - fee, "payout"),
+        (wallet.PLATFORM_USER_ID, fee, "fee"),
+    ], f"第 {milestone.idx} 期放款")
     milestone.status = "released"
     contract.released_cents += milestone.amount_cents
     db.add_all([milestone, contract])
@@ -287,18 +313,21 @@ def cancel(db: Session, contract: Contract, cancelled_by: int) -> dict:
     comp_bps = CANCEL_RULES.get(("funded_early", who), 0)
     comp = remaining * comp_bps // 10000
     if comp > 0:
+        fee = _fee(contract, comp)
         wallet.dispute_split(
-            db,
-            contract.requester_id,
-            contract.executor_id,
-            remaining,
-            comp,
-            _fee(contract, comp),
-            contract.id,
+            db, contract.requester_id, contract.executor_id,
+            remaining, comp, fee, contract.id,
         )
+        _settle(db, contract, "split", [
+            (contract.executor_id, comp - fee, "compensation"),
+            (wallet.PLATFORM_USER_ID, fee, "fee"),
+            (contract.requester_id, remaining - comp, "refund"),
+        ], f"取消补偿（发起方 {who}）")
         contract.status = "split"
     else:
         wallet.escrow_refund(db, contract.requester_id, remaining, contract.id, "任务取消退款")
+        _settle(db, contract, "refund",
+                [(contract.requester_id, remaining, "refund")], "任务取消退款")
         contract.status = "refunded"
     contract.closed_at = utcnow()
     db.add(contract)
@@ -331,15 +360,16 @@ def execute_verdict(db: Session, contract: Contract, executor_share_bps: int) ->
         raise conflict("合约不在可执行裁决状态", "not_splittable")
     remaining = contract.amount_cents - contract.released_cents
     share = remaining * executor_share_bps // 10000
+    fee = _fee(contract, share)
     wallet.dispute_split(
-        db,
-        contract.requester_id,
-        contract.executor_id,
-        remaining,
-        share,
-        _fee(contract, share),
-        contract.id,
+        db, contract.requester_id, contract.executor_id,
+        remaining, share, fee, contract.id,
     )
+    _settle(db, contract, "verdict", [
+        (contract.executor_id, share - fee, "payout"),
+        (wallet.PLATFORM_USER_ID, fee, "fee"),
+        (contract.requester_id, remaining - share, "refund"),
+    ], f"裁决执行（执行方 {executor_share_bps / 100:.0f}%）")
     contract.frozen = False
     contract.status = "split" if 0 < executor_share_bps < 10000 else (
         "released" if executor_share_bps == 10000 else "refunded"

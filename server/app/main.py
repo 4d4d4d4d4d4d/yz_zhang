@@ -84,6 +84,7 @@ def create_app() -> FastAPI:
     from app.modules.decompose.router import router as decompose_router
     from app.modules.dispute.router import router as dispute_router
     from app.modules.files.router import router as files_router
+    from app.modules.finance.router import router as finance_router
     from app.modules.growth.router import router as growth_router
     from app.modules.im.router import router as im_router
     from app.modules.knowledge.router import router as knowledge_router
@@ -115,6 +116,7 @@ def create_app() -> FastAPI:
         analytics_router,
         orchestrator_router,
         files_router,
+        finance_router,
         growth_router,
     ):
         app.include_router(router, prefix=settings.API_PREFIX)
@@ -138,8 +140,12 @@ def create_app() -> FastAPI:
     @app.get("/version")
     def version():
         """DEP-012 构建信息：出问题时第一件事是确认线上跑的到底是哪个版本。"""
+        from app.vendors.ledger import is_sandbox
+
         return {"version": settings.APP_VERSION, "git_sha": settings.GIT_SHA,
-                "built_at": settings.BUILT_AT, "env": settings.ENV}
+                "built_at": settings.BUILT_AT, "env": settings.ENV,
+                # FIN-053 未接存管即沙箱：显式标注，避免有人误以为这是真实资金
+                "sandbox": is_sandbox(), "ledger_backend": settings.LEDGER_BACKEND}
 
     @app.get("/metrics")
     def metrics(db: Session = Depends(get_db), _=Depends(require_job_auth)):

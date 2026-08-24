@@ -15,6 +15,7 @@ import type {
   Mission,
   MissionEvent,
   MissionStep,
+  SettlementOrderView,
   StepReviewRecord,
   MissionTickResult,
   Notice,
@@ -324,6 +325,13 @@ export class PlatformClient {
       .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
     return this.request<Mission[]>('GET', `/missions${qs ? `?${qs}` : ''}`);
   }
+  /** FIN-042 资金流向审计：一份合约上发生过的全部分账指令。 */
+  contractSettlements(contractId: number) {
+    return this.request<{ settlements: SettlementOrderView[]; sandbox: boolean }>(
+      'GET', `/contracts/${contractId}/settlements`,
+    );
+  }
+
   /** AIO-013 某一步的评审留痕（谁判的、依据什么、多久）。 */
   stepReviews(missionId: number, stepId: number) {
     return this.request<{ reviews: StepReviewRecord[] }>(

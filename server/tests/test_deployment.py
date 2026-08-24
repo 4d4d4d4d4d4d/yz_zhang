@@ -16,7 +16,9 @@ def test_version_endpoint(client):
     r = client.get("/version")
     assert r.status_code == 200
     body = r.json()
-    assert set(body) == {"version", "git_sha", "built_at", "env"}
+    # 断言必备字段而非精确集合：后续批次会往这里加信息（如 FIN-053 沙箱标识），
+    # 用相等断言会让每次增补都变成一次假失败
+    assert {"version", "git_sha", "built_at", "env"} <= set(body)
 
 
 # ---------- DEP-011 就绪含迁移状态 ----------

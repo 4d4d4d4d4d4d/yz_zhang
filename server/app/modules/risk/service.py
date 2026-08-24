@@ -146,6 +146,13 @@ def reconcile(db: Session) -> dict:
         mismatches.append({"invariant": "platform_fee_backing",
                            "platform_balance": platform_balance, "expected": platform_expected})
 
+    # FIN-060 分账守恒：任一指令的 splits 之和必须等于其总额。
+    # 不守恒说明有钱凭空出现或消失，必须立刻停下来查。
+    from app.modules.finance.service import verify_conservation
+
+    for bad in verify_conservation(db):
+        mismatches.append({"invariant": "settlement_conservation", **bad})
+
     return {"ok": not mismatches, "mismatches": mismatches,
             "accounts_checked": len(accounts), "total_holdings_cents": holdings}
 

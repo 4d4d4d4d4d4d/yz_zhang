@@ -341,3 +341,23 @@ export interface MarketCell {
   fill_rate: number;
   gap: '' | 'supply' | 'demand';
 }
+
+// ── FIN 资金合规（25 号 spec）──────────────────────────────────
+/** 一次资金分配指令。接存管前是内部账本的镜像，接存管后就是给存管方的报文。 */
+export interface SettlementOrderView {
+  id: number;
+  kind: 'release' | 'milestone' | 'refund' | 'split' | 'verdict';
+  total_cents: number;
+  backend: 'internal' | 'custody';
+  status: string;
+  /** 存管方流水号；存管模式下为空即视为异常。 */
+  custody_ref: string;
+  memo: string;
+  at: string;
+  /** 金额之和必须等于 total_cents（整数分，不允许尾差蒸发）。 */
+  splits: Array<{
+    payee_user_id: number;   // 0 = 平台账户
+    amount_cents: number;
+    purpose: 'payout' | 'fee' | 'refund' | 'compensation' | 'tax';
+  }>;
+}

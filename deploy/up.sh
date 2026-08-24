@@ -37,6 +37,8 @@ echo "配置自检（DEP-002）…"
   && note "PLATFORM_KYC_PROVIDER 仍是 mock —— 实名形同虚设"
 [[ "${PLATFORM_MODERATION_PROVIDER:-local}" == "local" ]] \
   && note "PLATFORM_MODERATION_PROVIDER 仍是 local —— 只有本地词表，看不了图片视频"
+[[ "${PLATFORM_LEDGER_BACKEND:-internal}" == "custody" ]] \
+  || note "PLATFORM_LEDGER_BACKEND 仍是 internal —— 平台自建账本托管用户资金涉嫌资金池与二清，不得用于真实交易"
 [[ -f "${TLS_CERT_DIR:-./certs}/fullchain.pem" ]] \
   || note "缺少 TLS 证书 ${TLS_CERT_DIR:-./certs}/fullchain.pem —— 明文传密码等于没有安全"
 
