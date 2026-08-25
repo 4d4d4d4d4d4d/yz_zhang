@@ -26,6 +26,11 @@ from npu_sim.evaluation.pipeline import (
     StageProfile,
     analyze_pipeline_bottleneck,
 )
+from npu_sim.evaluation.fidelity import (
+    ChipFidelityReport,
+    ModuleFidelity,
+    chip_fidelity,
+)
 from npu_sim.evaluation.snapshot import (
     ConnectionSnapshot,
     FieldDiff,
@@ -71,7 +76,9 @@ def estimate_plan(
 
 
 __all__ = [
+    "ChipFidelityReport",
     "ComparisonReport",
+    "ModuleFidelity",
     "ConnectionSnapshot",
     "FieldDiff",
     "MappingPlan",
@@ -88,6 +95,7 @@ __all__ = [
     "SweepPoint",
     "SweepReport",
     "analyze_pipeline_bottleneck",
+    "chip_fidelity",
     "capture_state",
     "compare",
     "compare_tensors",

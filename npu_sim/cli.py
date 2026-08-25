@@ -19,6 +19,8 @@ Subcommands:
     snapshot-diff <a> <b>       Diff two architectures' whole-chip state at
                                 the same cycle (where inside the chip an A/B
                                 pair diverges).
+    fidelity <arch>             Report % of chip area on physically-grounded
+                                models vs [calibration knob] placeholders.
     bottleneck <arch>           Measure the pipeline throughput bottleneck —
                                 the slowest stage on the datapath, with a
                                 pipeline-model drain reconciled to measured.
@@ -320,6 +322,23 @@ def _cmd_bottleneck(args: argparse.Namespace, out: TextIO) -> int:
     return 0
 
 
+def _cmd_fidelity(args: argparse.Namespace, out: TextIO) -> int:
+    from npu_sim.evaluation import chip_fidelity, elaborate
+    from npu_sim.reporting import render_fidelity_report
+
+    arch_path = _require_path(args.arch)
+    try:
+        arch = elaborate(str(arch_path))
+    except NpuSimError as exc:
+        sys.stderr.write(f"elaboration error: {exc}\n")
+        return 2
+
+    report = chip_fidelity(arch)
+    md = render_fidelity_report(report, arch_name=arch.name)
+    _write_output(md, args.out, out)
+    return 0
+
+
 def _cmd_snapshot_diff(args: argparse.Namespace, out: TextIO) -> int:
     from npu_sim.evaluation import diff_snapshots, elaborate, snapshot_at_cycle
     from npu_sim.reporting import render_snapshot_diff
@@ -555,6 +574,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional output file; defaults to stdout.",
     )
     p_bn.set_defaults(handler=_cmd_bottleneck)
+
+    p_fid = subparsers.add_parser(
+        "fidelity",
+        help="Report how much of a chip's area is on physically-grounded "
+        "models vs [calibration knob] placeholders (SPEC-013).",
+    )
+    p_fid.add_argument("arch", help="Path to the architecture YAML.")
+    p_fid.add_argument(
+        "--out",
+        default=None,
+        help="Optional output file; defaults to stdout.",
+    )
+    p_fid.set_defaults(handler=_cmd_fidelity)
 
     p_sw = subparsers.add_parser(
         "sweep",

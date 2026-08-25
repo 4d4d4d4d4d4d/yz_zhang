@@ -16,6 +16,7 @@ from npu_sim.evaluation.reconcile import PerOpReconcileReport, ReconcileReport
 from npu_sim.evaluation.runner import SimulationResult
 
 if TYPE_CHECKING:
+    from npu_sim.evaluation.fidelity import ChipFidelityReport
     from npu_sim.evaluation.optimize import OptimizeReport
     from npu_sim.evaluation.pipeline import PipelineBottleneckReport
     from npu_sim.evaluation.snapshot import SnapshotDiff, StateSnapshot
@@ -494,6 +495,38 @@ _AREA_MODEL_CAVEAT = (
     "width) are modeled as area-free, so a flat area column is a known gap "
     "(Phase 5 calibration), not a real zero-cost win."
 )
+
+
+def render_fidelity_report(report: "ChipFidelityReport", arch_name: str = "") -> str:
+    """Render a chip PPA-fidelity breakdown (physical vs placeholder) as Markdown."""
+    title = f"Chip PPA fidelity — `{arch_name}`" if arch_name else "Chip PPA fidelity"
+    parts: list[str] = [f"# {title}"]
+    parts.append(_two_col_table("Metric", "Value", [
+        ("area on grounded models", f"{report.grounded_pct:.0f}%"),
+        ("total area", f"{report.total_area_um2:,.0f} µm²"),
+        ("grounded area", f"{report.grounded_area_um2:,.0f} µm²"),
+    ]))
+
+    badge = {"physical": "✅ physical", "hybrid": "🟡 hybrid",
+             "placeholder": "⚠ placeholder"}
+    lines = [
+        "| module | type | area (µm²) | area % | status |",
+        "|---|---|---:|---:|---|",
+    ]
+    for m in report.modules:
+        pct = (m.area_um2 / report.total_area_um2 * 100.0) if report.total_area_um2 else 0.0
+        lines.append(
+            f"| `{m.module_id}` | {m.module_type} | {m.area_um2:,.0f} | "
+            f"{pct:.0f}% | {badge.get(m.status, m.status)} |"
+        )
+    parts.append("## Per-module\n\n" + "\n".join(lines))
+    parts.append(
+        "> **physical** = SPEC-013 literature-grounded (scales with size); "
+        "**placeholder** = `[calibration knob]`, awaiting Phase-5 synthesis "
+        "(control-plane FSM logic). Absolute figures carry the SPEC-013 ±30% "
+        "analytical band pending calibration."
+    )
+    return "\n\n".join(parts)
 
 
 def render_pipeline_bottleneck(
