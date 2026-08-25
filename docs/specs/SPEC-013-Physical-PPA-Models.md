@@ -145,6 +145,19 @@ DAGC 把 BFP 解包成 float。面积三部分:
 实测:bfp8_tp 2→8 面积 ∝ 增大;join_fifo 16→32 微增;compact off/on 实测省
 ~10.5k µm²(> 文献 20% 占位,因 staging RF 随 throughput 变大)。
 
+## 3.5 L2 物理模型(片上 SRAM cache)
+
+L2 是片上 SRAM 末级缓存 —— 直接用 SRAM macro 模型(`cache_area_um2`):
+`capacity_kb × 1024 × 8 × 0.25 µm²/bit ÷ 0.7` ≈ **2926 µm²/KB**,替换旧的手拍
+`800 µm²/KB`。能量用 `sram_read_energy_pj(payload_bytes)`(Horowitz 32b=5pJ →
+1.25 pJ/byte)—— **有趣的验证**:旧占位是 1.2 pJ/byte,物理值 1.25,二者几乎
+重合,说明缓存访问能量这一项原本就拍得接近对。
+
+**重要备注(不是所有 storage 都是 SRAM)**:L2 是片上 SRAM,用 2926 µm²/KB 对;
+但 TLU 的 2–8 MB 嵌入表若按 SRAM 密度会得到 ~24 mm² 的荒谬面积 —— 大表通常是
+eDRAM / off-chip DRAM(密度高 10–20×)。故 TLU 不能简单套 `cache_area_um2`,
+留待按 eDRAM/DRAM 模型单独迁移(§5)。
+
 ## 4. 契约变更
 
 - MAC 覆盖 `estimate_area()` / `total_area_um2()` / `static_power_uw()` /
@@ -163,7 +176,13 @@ DAGC 把 BFP 解包成 float。面积三部分:
 | **DSB** | SRAM macro(buffer_kb × bitcell / eff) | elems × SRAM read(Horowitz) | ✅ §3.2 |
 | **AVP** | FP-ALU 阵列(vector_width)+ LUT SRAM(lut_entries) | elems × (LUT read + fp interp) | ✅ §3.3 |
 | **DAGC** | unpack 逻辑(∝throughput)+ staging RF + join FIFO | elems × 移位/对齐(int) | ✅ §3.4 |
-| L2/TLU/MMU | 已 size-aware(`capacity_kb×800`),但 800 待换 SRAM bit 模型 | — | 部分 |
+| **L2**(cache) | SRAM macro(`cache_area_um2(capacity_kb)`,2926 µm²/KB) | payload_bytes × SRAM read(Horowitz) | ✅ §3.5 |
+| TLU/MMU/CMDQ/MC | 待迁移;TLU 大表可能是 eDRAM/DRAM,不能按 SRAM 密度 | — | 待做 |
+
+**5 个 compute + L2 cache 已物理化。** 剩余 TLU(嵌入表,可能 eDRAM)/ MMU
+(TLB CAM)/ CMDQ(FIFO)/ MC 及 control(SPEC-007)模块仍是 `[calibration
+knob]` 占位,各需按其真实存储/逻辑类型建模(见 §3.5 备注:不是所有"storage"
+都是 SRAM 密度)。
 
 **5 个 compute 模块(MAC/VAU/DSB/AVP/DAGC)全部迁移完成** —— compute 数据通路
 的 PPA 已全部脱离"经验拍值",改为规模驱动 + 文献引用单位成本。剩余占位系数

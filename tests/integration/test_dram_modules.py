@@ -31,8 +31,8 @@ class TestMC:
 class TestL2:
     def test_larger_cache_grows_area(self):
         r = _cmp("usecase_l2_256kb.yaml", "usecase_l2_2mb_hot.yaml")
-        # (2048-256) × 800 = 1_433_600
-        assert r.area_delta_um2 == pytest.approx(1_433_600, abs=500)
+        # SPEC-013 physical SRAM macro: (2048-256) KB × 2925.7 µm²/KB = 5_242_880
+        assert r.area_delta_um2 == pytest.approx(5_242_880, abs=1000)
 
 
 class TestSE:

@@ -62,9 +62,17 @@ class TestCoefficientProvenanceDisclosure:
     def _src(self, *parts: str) -> str:
         return (MODULES.joinpath(*parts)).read_text(encoding="utf-8")
 
-    def test_dram_and_control_modules_carry_the_marker(self):
-        assert "[calibration knob]" in self._src("dram", "l2_module.py")
+    def test_unmigrated_dram_and_control_modules_carry_the_marker(self):
+        # TLU/MMU (SPEC-011) and MCU (SPEC-007) are not yet on the physical
+        # model, so they still openly mark their placeholders. (L2 has since
+        # been migrated to SPEC-013 — see test_l2_is_physically_grounded.)
+        assert "[calibration knob]" in self._src("dram", "tlu_module.py")
         assert "[calibration knob]" in self._src("control", "mcu_module.py")
+
+    def test_l2_is_physically_grounded(self):
+        # L2 is an on-chip SRAM cache → migrated to the SPEC-013 SRAM model.
+        src = self._src("dram", "l2_module.py")
+        assert "physical" in src and "SPEC-013" in src
 
     def test_all_compute_modules_are_physically_grounded(self):
         # All five compute modules (MAC/VAU/DSB/AVP/DAGC) cite a literature-

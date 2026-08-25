@@ -79,7 +79,8 @@ from|calibrat` 全模块搜索,**没有任何一处**把面积/能量常数关�
 |---|---|---|
 | 面积(compute:**全部 5 个已迁移**) | 规模 × 单位成本 @45nm(SPEC-013;SRAM 用 macro 模型) | ✅ 物理正确形式 + 引用单位成本(±30%,待综合) |
 | 面积(control/DRAM) | `[calibration knob]` 占位常数(部分 size-aware) | 🟡 明示占位,待 Phase 5 |
-| 面积(memory/DRAM:L2/TLU/MMU) | **随容量缩放** `capacity_kb × 800` (`l2_module.py`) | 🟡 形式对,系数 800 是拍的 |
+| 面积(**L2 cache 已迁移**) | SRAM macro `cache_area_um2`(2926 µm²/KB,SPEC-013) | ✅ 引用 45nm SRAM 密度,替换手拍的 800 |
+| 面积(TLU/MMU/CMDQ/MC 未迁移) | `capacity_kb × 600/200` 等手拍系数 | 🟡 形式部分对,系数是拍的,待按 eDRAM/CAM/FIFO 建模 |
 | 面积(control:OGU/MCU/MTU/TAU/AGU/DMA) | 固定常数,**已标 `[calibration knob]`** | 🟡 明示占位 |
 | 能量 | 部分固定(DAGC 0.8pJ),部分按架构因子缩放(OGU `0.25×_T_BUFFSIZE`、MCU `0.4×_T_OPCFG`) | 🟡 结构半对,乘子是拍的 |
 | 静态功耗 | 固定圆整常数(12/18/8 μW) | ❌ 占位 |

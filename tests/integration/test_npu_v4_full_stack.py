@@ -48,16 +48,19 @@ class TestFullStackElaborates:
 class TestStackedSixSpecLevers:
     def test_aggregate_area_matches_per_section_sum(self, report):
         """
-        Expected SPEC-011 deltas:
-          MC banks 8 → 16              : +64_000
-          L2 cap 512 → 2048 KB         : +1_228_800
-          SE structured                : +8_000
-          TLU table 2048 → 8192 + scatter: +3_690_400
-          CMDQ priority                : +5_000
-          MMU tlb 64 → 256             : +38_400
-          Total                        : +5_034_600 μm²
+        Expected deltas (L2 now on the SPEC-013 physical SRAM macro model):
+          MC banks 8 → 16              : +64_000   ([calibration knob])
+          L2 cap 512 → 2048 KB         : +4_493_897 (SPEC-013 SRAM macro)
+          SE structured                : +8_000    ([calibration knob])
+          TLU table 2048 → 8192 + scatter: +3_690_400 ([calibration knob])
+          CMDQ priority                : +5_000    ([calibration knob])
+          MMU tlb 64 → 256             : +38_400   ([calibration knob])
+          Total                        : +8_299_697 μm²
+        The L2 lever grew from the old placeholder +1_228_800 (×800 µm²/KB) to
+        +4_493_897 (physical ×2925.7 µm²/KB); the others remain calibration
+        knobs pending their own SPEC-013 migration.
         """
-        assert report.area_delta_um2 == pytest.approx(5_034_600, abs=1000)
+        assert report.area_delta_um2 == pytest.approx(8_299_697, abs=2000)
 
 
 def test_yaml_driven_contract():

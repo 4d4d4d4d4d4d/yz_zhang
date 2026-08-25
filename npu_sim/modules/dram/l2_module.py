@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Iterator, Optional
 
+from npu_sim import physical
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.module import (
     AreaModel, Capability, EnergyEstimate, IModule, LatencyEstimate, ModuleState,
@@ -110,11 +111,15 @@ class L2(IModule):
         return LatencyEstimate(self._hit_c, c, self._miss_c, 0.8)
 
     def estimate_energy(self, op):
+        # SPEC-013: SRAM read energy (Horowitz 32b=5pJ → ~1.25 pJ/byte),
+        # replacing the hand-picked 1.2 pJ/byte (the two nearly coincide).
         n = int(op.shape_info.get("payload_bytes", 256))
-        return EnergyEstimate(1.2 * n, self.static_power_uw()*1e-6, 0.8)
+        return EnergyEstimate(physical.sram_read_energy_pj(n), self.static_power_uw()*1e-6, 0.8)
 
     def estimate_area(self):
-        storage = self._capacity_kb * 800.0
+        # SPEC-013: on-chip SRAM macro (45nm 6T ~2926 µm²/KB), replacing the
+        # hand-picked ~800 µm²/KB.
+        storage = physical.cache_area_um2(self._capacity_kb)
         cap_extra = sum(
             c.area_cost_um2 for c in self.declared_capabilities()
             if c.name in self._active_caps
@@ -122,7 +127,7 @@ class L2(IModule):
         return AreaModel(
             um2=storage + cap_extra,
             breakdown={"l2_storage": storage, "capabilities": cap_extra},
-            notes="SPEC-011 §2.4 [calibration knob]",
+            notes=f"SPEC-013 physical @{physical.REFERENCE_NODE_NM}nm SRAM macro",
         )
 
     def total_area_um2(self): return self.estimate_area().um2

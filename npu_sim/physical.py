@@ -184,6 +184,17 @@ def sram_static_power_uw(n_bytes: float) -> float:
     return n_bytes * 8 * P_SRAM_LEAK_PER_BIT_UW
 
 
+def cache_area_um2(capacity_kb: float) -> float:
+    """On-chip SRAM cache area (µm²) for ``capacity_kb`` KB of storage.
+
+    At 45 nm this is ~2926 µm²/KB (6T cells + peripheral), replacing the old
+    hand-picked ~800 µm²/KB. NOTE: this is the *SRAM* density — multi-MB
+    off-chip / eDRAM-backed tables (e.g. embeddings) are NOT this dense and
+    must use a different model.
+    """
+    return sram_macro_area_um2(capacity_kb * 1024)
+
+
 # ============================================================
 # DSB — data-staging buffer (SPEC-013 §5, third migrated module).
 # Area/leakage are dominated by the SRAM macro; double-buffering keeps two

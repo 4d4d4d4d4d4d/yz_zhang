@@ -192,3 +192,18 @@ class TestDagcPhysical:
         assert P.dagc_energy_per_elem_pj(["bfp8_unpack", "bfp8_bfp16_mix"]) == pytest.approx(
             2 * P.E_ADD_INT32_PJ
         )
+
+
+class TestCachePhysical:
+    """SPEC-013 §5 — on-chip SRAM cache (L2) area/energy from the SRAM model."""
+
+    def test_cache_area_is_sram_macro(self):
+        assert P.cache_area_um2(512) == pytest.approx(P.sram_macro_area_um2(512 * 1024))
+
+    def test_cache_density_replaces_hand_picked_800(self):
+        # Physical 45nm SRAM density is ~2926 µm²/KB, not the old 800.
+        density = P.cache_area_um2(1)
+        assert 2500 < density < 3300
+
+    def test_cache_area_scales_linearly(self):
+        assert P.cache_area_um2(2048) == pytest.approx(4 * P.cache_area_um2(512))
