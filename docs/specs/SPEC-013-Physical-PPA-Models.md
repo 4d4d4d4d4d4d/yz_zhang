@@ -172,6 +172,18 @@ eDRAM / off-chip DRAM(密度高 10–20×)。故 TLU 不能简单套 `cache_area
 CAM 因子(~2-3× SRAM)、TLB 条目宽度、CMDQ 条目宽度、walker/arbiter 门数均为
 文档化的微架构参数(非拍的 PPA 系数),Phase 5 综合可替换。
 
+## 3.7 TLU 嵌入表物理模型(eDRAM,不是 SRAM)
+
+TLU 的 2–8 MB 嵌入表**不能按 SRAM 密度算**(8MB SRAM ≈ 24 mm²,荒谬)。大型
+片上表用 **eDRAM**(1T1C):IBM 45nm eDRAM cell ≈ **0.067 µm²/bit**(~3.7×
+密于 6T SRAM),`embedding_table_area_um2` = `table_kb×1024×8×0.067÷0.7` ≈
+**784 µm²/KB**。8MB 表 ≈ 6.4 mm²(合理)。查表能量 = 读一条 embedding 向量 =
+`edram_read_energy_pj(emb_dim)`(SRAM read × 2,eDRAM 访问高于 SRAM 低于
+off-chip DRAM),替换旧的 flat 0.5 pJ(严重低估)。
+
+这是本轮最能体现"不臆想"的一步:**同样是"存储",片上 cache 用 SRAM 密度、大
+嵌入表用 eDRAM 密度,两者差 ~3.7×** —— 盲目套 SRAM 会得到假面积。
+
 ## 4. 契约变更
 
 - MAC 覆盖 `estimate_area()` / `total_area_um2()` / `static_power_uw()` /
@@ -193,11 +205,14 @@ CAM 因子(~2-3× SRAM)、TLB 条目宽度、CMDQ 条目宽度、walker/arbiter 
 | **L2**(cache) | SRAM macro(`cache_area_um2`,2926 µm²/KB) | payload_bytes × SRAM read(Horowitz) | ✅ §3.5 |
 | **MMU**(TLB) | CAM(2.5× SRAM cell)+ walker 逻辑 | 固定 | ✅ §3.6 |
 | **CMDQ**(队列) | 寄存器堆(flops)+ 优先级仲裁逻辑 | 固定 | ✅ §3.6 |
-| TLU/MC | 待迁移;TLU 大表可能是 eDRAM/DRAM,不能按 SRAM 密度 | — | 待做 |
+| **TLU**(嵌入表) | eDRAM macro(1T1C,0.067 µm²/bit) | emb_dim × eDRAM read | ✅ §3.7 |
+| MC(内存控制器)+ control(SPEC-007) | 控制逻辑,待 gate-count 模型 | — | 待做 |
 
-**5 个 compute + L2/MMU/CMDQ 已物理化。** 剩余 TLU(嵌入表,可能 eDRAM)/ MC
-及 control(SPEC-007)模块仍是 `[calibration knob]` 占位,各需按其真实存储/
-逻辑类型建模(见 §3.5 备注:不是所有"storage"都是 SRAM 密度)。
+**5 个 compute + L2/TLU/MMU/CMDQ 已物理化。** SPEC-011 存储/查找模块全部脱离
+占位。剩余 MC(内存控制器)及 control(SPEC-007:OGU/MCU/MTU/TAU/AGU/DMA)是
+控制面逻辑,仍 `[calibration knob]`,待 gate-count 模型。核心原则再次体现:
+**按真实存储类型建模** —— SRAM(L2)/ CAM(TLB)/ 寄存器堆(CMDQ)/ eDRAM
+(嵌入表),密度差 10× 以上,不能一刀切(§3.5 备注)。
 
 **5 个 compute 模块(MAC/VAU/DSB/AVP/DAGC)全部迁移完成** —— compute 数据通路
 的 PPA 已全部脱离"经验拍值",改为规模驱动 + 文献引用单位成本。剩余占位系数

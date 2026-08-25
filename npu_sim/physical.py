@@ -188,6 +188,28 @@ def sram_static_power_uw(n_bytes: float) -> float:
 # storage bit, so it is ~2–3× a 6T SRAM cell. Use 2.5×.
 A_CAM_BIT_UM2 = A_SRAM_BIT_UM2 * 2.5
 
+# eDRAM (1T1C) is much denser than 6T SRAM. IBM's 45 nm eDRAM cell ≈ 0.067 µm²
+# (~3.7× denser than the 6T SRAM cell). Large multi-MB on-chip tables (e.g.
+# embeddings) use this, NOT the SRAM density.
+A_EDRAM_BIT_UM2 = 0.067
+# eDRAM read costs more than SRAM but far less than off-chip DRAM; ~2× SRAM.
+_EDRAM_READ_FACTOR = 2.0
+
+
+def edram_macro_area_um2(n_bytes: float, efficiency: float = SRAM_ARRAY_EFFICIENCY) -> float:
+    """eDRAM macro area (µm²) for ``n_bytes`` — for large on-chip tables."""
+    return n_bytes * 8 * A_EDRAM_BIT_UM2 / efficiency
+
+
+def edram_read_energy_pj(n_bytes: float) -> float:
+    """Energy of an eDRAM read of ``n_bytes`` (pJ), ~2× an SRAM read."""
+    return sram_read_energy_pj(n_bytes) * _EDRAM_READ_FACTOR
+
+
+def embedding_table_area_um2(table_kb: float) -> float:
+    """Embedding-table area (µm²): modeled as on-chip eDRAM, not SRAM."""
+    return edram_macro_area_um2(table_kb * 1024)
+
 
 def cam_area_um2(n_entries: int, entry_bytes: int) -> float:
     """CAM array area (µm²) for ``n_entries`` × ``entry_bytes`` (e.g. a TLB)."""

@@ -50,8 +50,8 @@ class TestSE:
 class TestTLU:
     def test_larger_table_grows_area(self):
         r = _cmp("usecase_tlu_512kb.yaml", "usecase_tlu_8mb.yaml")
-        # (8192-512) × 600 + 4_000 scatter = 4_612_000
-        assert r.area_delta_um2 == pytest.approx(4_612_000, abs=500)
+        # SPEC-013 eDRAM table (784 µm²/KB) + scatter cap: (8192-512)×784 + 4_000
+        assert r.area_delta_um2 == pytest.approx(6_025_822, abs=2000)
 
 
 class TestCMDQ:

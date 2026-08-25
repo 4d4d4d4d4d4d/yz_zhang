@@ -62,17 +62,15 @@ class TestCoefficientProvenanceDisclosure:
     def _src(self, *parts: str) -> str:
         return (MODULES.joinpath(*parts)).read_text(encoding="utf-8")
 
-    def test_unmigrated_dram_and_control_modules_carry_the_marker(self):
-        # TLU/MMU (SPEC-011) and MCU (SPEC-007) are not yet on the physical
-        # model, so they still openly mark their placeholders. (L2 has since
-        # been migrated to SPEC-013 — see test_l2_is_physically_grounded.)
-        assert "[calibration knob]" in self._src("dram", "tlu_module.py")
+    def test_unmigrated_control_modules_carry_the_marker(self):
+        # The SPEC-007 control-plane modules (MCU etc.) are not yet on the
+        # physical model, so they still openly mark their placeholders.
         assert "[calibration knob]" in self._src("control", "mcu_module.py")
 
     def test_migrated_memory_modules_are_physically_grounded(self):
-        # L2 (SRAM cache), MMU (TLB CAM) and CMDQ (register file) are on the
-        # SPEC-013 physical model.
-        for mod in ("l2_module.py", "mmu_module.py", "cmdq_module.py"):
+        # L2 (SRAM cache), TLU (eDRAM table), MMU (TLB CAM) and CMDQ (register
+        # file) are on the SPEC-013 physical model.
+        for mod in ("l2_module.py", "tlu_module.py", "mmu_module.py", "cmdq_module.py"):
             src = self._src("dram", mod)
             assert "physical" in src and "SPEC-013" in src, mod
 

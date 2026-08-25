@@ -52,14 +52,14 @@ class TestStackedSixSpecLevers:
           MC banks 8 → 16              : +64_000    ([calibration knob])
           L2 cap 512 → 2048 KB         : +4_493_897 (SPEC-013 SRAM macro)
           SE structured                : +8_000     ([calibration knob])
-          TLU table 2048 → 8192 + scatter: +3_690_400 ([calibration knob])
+          TLU table 2048 → 8192 + scatter: (SPEC-013 eDRAM table)
           CMDQ priority                : (SPEC-013 register file)
           MMU tlb 64 → 256             : +10_971    (SPEC-013 TLB CAM)
-          Total                        : +8_268_469 μm²
-        L2 (SRAM macro), MMU (TLB CAM) and CMDQ (register file) are now on the
-        physical model; MC/SE/TLU remain calibration knobs pending migration.
+          Total                        : +9_399_526 μm²
+        L2 (SRAM macro), TLU (eDRAM table), MMU (TLB CAM) and CMDQ (register
+        file) are now on the physical model; MC/SE remain calibration knobs.
         """
-        assert report.area_delta_um2 == pytest.approx(8_268_469, abs=2000)
+        assert report.area_delta_um2 == pytest.approx(9_399_526, abs=3000)
 
 
 def test_yaml_driven_contract():

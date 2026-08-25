@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from typing import Iterator, Optional
 
+from npu_sim import physical
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.module import (
     AreaModel, Capability, EnergyEstimate, IModule, LatencyEstimate, ModuleState,
@@ -89,10 +90,17 @@ class TLU(IModule):
         return LatencyEstimate(c, c, c + 1, 0.8)
 
     def estimate_energy(self, op):
-        return EnergyEstimate(0.5, self.static_power_uw()*1e-6, 0.8)
+        # SPEC-013: reading one embedding vector = an eDRAM read of emb_dim
+        # bytes (Horowitz SRAM read × eDRAM factor), replacing the flat 0.5 pJ.
+        return EnergyEstimate(
+            physical.edram_read_energy_pj(self._emb_dim),
+            self.static_power_uw()*1e-6, 0.8,
+        )
 
     def estimate_area(self):
-        storage = self._table_kb * 600.0
+        # SPEC-013: the multi-MB embedding table is on-chip eDRAM (1T1C,
+        # ~3.7× denser than 6T SRAM), NOT SRAM density.
+        storage = physical.embedding_table_area_um2(self._table_kb)
         cap_extra = sum(
             c.area_cost_um2 for c in self.declared_capabilities()
             if c.name in self._active_caps
@@ -100,7 +108,7 @@ class TLU(IModule):
         return AreaModel(
             um2=storage + cap_extra,
             breakdown={"embedding_table": storage, "capabilities": cap_extra},
-            notes="SPEC-011 §4.4 [calibration knob]",
+            notes=f"SPEC-013 physical @{physical.REFERENCE_NODE_NM}nm eDRAM table",
         )
 
     def total_area_um2(self): return self.estimate_area().um2

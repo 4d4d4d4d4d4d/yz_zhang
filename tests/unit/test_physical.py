@@ -226,3 +226,26 @@ class TestCamAndFifoPhysical:
 
     def test_cmdq_priority_adds_arbiter_logic(self):
         assert P.cmdq_area_um2(64, True) > P.cmdq_area_um2(64, False)
+
+
+class TestEdramPhysical:
+    """SPEC-013 §5 — large on-chip tables (TLU embeddings) use eDRAM density."""
+
+    def test_edram_is_denser_than_sram(self):
+        # eDRAM cell (1T1C) is far smaller than a 6T SRAM cell.
+        assert P.A_EDRAM_BIT_UM2 < P.A_SRAM_BIT_UM2
+
+    def test_embedding_table_uses_edram_not_sram_density(self):
+        # A multi-MB table as SRAM would be absurd; eDRAM keeps it sane.
+        edram = P.embedding_table_area_um2(8192)      # 8 MB
+        sram = P.cache_area_um2(8192)
+        assert edram < sram
+        assert edram < 10_000_000                     # < 10 mm², not the ~24 mm² SRAM
+
+    def test_embedding_table_scales_linearly(self):
+        assert P.embedding_table_area_um2(8192) == pytest.approx(
+            16 * P.embedding_table_area_um2(512)
+        )
+
+    def test_edram_read_costs_more_than_sram_read(self):
+        assert P.edram_read_energy_pj(256) > P.sram_read_energy_pj(256)

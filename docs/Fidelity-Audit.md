@@ -46,9 +46,9 @@ calibration")、SPEC-005 v1.1 amendment §A.2、review-v1.1-proposal §30
 | 反压/stall/FIFO 满在哪、死锁 | ✅ 可信 | 真正的逐拍协议 |
 | 两个变体的 drain 谁快、快几倍 | ✅ 大体可信 | 时序推导;但见 §4 MAC 例外 |
 | 这颗芯片的**绝对** drain(ns) | ⚠️ 半信 | 拍数机械,但时钟周期/绝对延迟未标定 |
-| 这颗芯片**绝对**面积(μm²)/能量(pJ)/功耗 | ❌ 不可信 | 圆整占位常数,无溯源(§3) |
-| 跨模块面积/能量**比值**(MAC vs DSB 谁大) | ❌ 不可信 | 各自独立拍的常数,比值无意义 |
-| 加宽 compute 器件的**面积代价** | ❌ 不可信 | 面积对规模无感(§4 结构缺口) |
+| 这颗芯片**绝对**面积(μm²)/能量(pJ) | 🟡 半信(见下) | compute + SPEC-011 存储已物理化(±30% 解析);control/MC 仍占位 |
+| 加宽 **compute/存储** 器件的**面积代价** | ✅ 已可信 | 已迁物理模型:面积随规模缩放(SPEC-013,§0 更新) |
+| 加宽 **control**(OGU/MCU…)器件的面积代价 | ❌ 不可信 | 仍是 `[calibration knob]` 占位,待 gate-count 模型 |
 
 ## 2. 时序是"真推导"的证据(为什么机制可信)
 
@@ -77,36 +77,33 @@ from|calibrat` 全模块搜索,**没有任何一处**把面积/能量常数关�
 
 | 轴 | 取值方式 | 可信度 |
 |---|---|---|
-| 面积(compute:**全部 5 个已迁移**) | 规模 × 单位成本 @45nm(SPEC-013;SRAM 用 macro 模型) | ✅ 物理正确形式 + 引用单位成本(±30%,待综合) |
-| 面积(control/DRAM) | `[calibration knob]` 占位常数(部分 size-aware) | 🟡 明示占位,待 Phase 5 |
-| 面积(**L2 cache 已迁移**) | SRAM macro `cache_area_um2`(2926 µm²/KB,SPEC-013) | ✅ 引用 45nm SRAM 密度,替换手拍的 800 |
-| 面积(TLU/MMU/CMDQ/MC 未迁移) | `capacity_kb × 600/200` 等手拍系数 | 🟡 形式部分对,系数是拍的,待按 eDRAM/CAM/FIFO 建模 |
-| 面积(control:OGU/MCU/MTU/TAU/AGU/DMA) | 固定常数,**已标 `[calibration knob]`** | 🟡 明示占位 |
-| 能量 | 部分固定(DAGC 0.8pJ),部分按架构因子缩放(OGU `0.25×_T_BUFFSIZE`、MCU `0.4×_T_OPCFG`) | 🟡 结构半对,乘子是拍的 |
-| 静态功耗 | 固定圆整常数(12/18/8 μW) | ❌ 占位 |
+| 面积(compute 全 5 个:MAC/VAU/DSB/AVP/DAGC) | 规模 × 单位成本 @45nm(SPEC-013) | ✅ 物理正确形式 + 引用单位成本(±30%,待综合) |
+| 面积(SPEC-011 存储:L2/TLU/MMU/CMDQ) | 按真实类型 @45nm:SRAM(L2)/ eDRAM(TLU 表)/ CAM(TLB)/ 寄存器堆(CMDQ) | ✅ 引用各自单元密度,替换手拍系数 |
+| 面积(MC + control SPEC-007:OGU/MCU/…) | 手拍/gate 常数,已标 `[calibration knob]` | 🟡 明示占位,待 gate-count 模型 |
+| 能量(compute + SPEC-011 存储) | 运算数 × Horowitz per-op(SPEC-013) | ✅ 文献引用 |
+| 能量(control) | 部分固定,部分按架构因子缩放(乘子是拍的) | 🟡 结构半对,待迁移 |
+| 静态功耗(已迁移模块) | 门数/存储位 × 漏电密度(SPEC-013) | 🟡 引用漏电量级,待综合 |
 
 **平台自认**:SPEC-005 v1.1 §A.2「全部 calibration knob,Phase 5 校准前为
 占位估计」;review-v1.1-proposal §30 把「这会不会让结果不可信」列为公开待决。
 
-## 4. 两个结构性缺口(不止是"没标定",是"模型缺项")
+## 4. 结构性缺口(原两处,现状)
 
-除了"系数没标定",有两处是**模型本身缺项**,更严重:
-
-- **compute 面积对规模无感**(`test_area_model_sensitivity.py`,已 filed):
-  MAC 阵列 32×32→64×64(4× PE)、VAU lanes×2、AVP vector_width×4 → **面积
-  Δ=0**。这不是标定误差,是面积模型没有 size 项。→ 修复提案 SPEC-005 v1.1 §5。
+- **compute 面积对规模无感** —— ✅ **已修复**:全部 5 个 compute 模块
+  (+ SPEC-011 存储)已迁 SPEC-013 物理模型,面积随规模缩放
+  (`test_area_model_sensitivity.py::TestAllComputeModulesMigrated` 锁定)。
 - **MAC 时序对 shape 无感 vs estimate 对 shape 敏感**(README 实现期发现 #2):
-  `_compute_cycles` 是常数,但 `estimate_latency` 按 `m·k·n` 缩放 —— 两个不
-  一致的时序模型。是 reconcile 静态估 vs 实测 gap 的来源之一。
+  ⏳ **仍未统一** —— `_compute_cycles` 是常数(weight-stationary systolic 每
+  tile 定拍,可能本就正确),但 `estimate_latency` 按 `m·k·n` 缩放。这是 reconcile
+  静态估 vs 实测 gap 的一个来源,属 v1.1 spec 待决(哪个模型对需架构组评审)。
 
-## 5. 披露一致性问题(本次审计新发现,已 filed)
+## 5. 披露一致性(原问题,现状)
 
-`[calibration knob]` 标记在 **SPEC-007(control)/ SPEC-010 / SPEC-011(DRAM)**
-模块的 `AreaModel.notes` 里**在代码中显式存在**(`grep` 可见),但
-**SPEC-005 compute 模块(MAC/DSB/VAU/AVP/DAGC)的 capability 系数在代码里
-没有这个标记** —— 只有 SPEC-005 v1.1 amendment 文档里声明。结果:**用户最
-常看的正是 compute 器件,而这些器件的代码没有"这是占位值"的就地提示**。建议
-把 provenance 标记补齐到 compute 模块(见 README v1.1 候选)。
+原发现:`[calibration knob]` 标记在 control/DRAM 有,但 compute 代码里没有。
+✅ **已解决**:compute 模块现由物理模型(SPEC-013)驱动,代码就地引用 Horowitz /
+45nm 单元密度,不再需要占位标记;剩余占位(MC + control SPEC-007)仍带
+`[calibration knob]`,披露一致。`test_fidelity_audit.py` 锁定"已迁移模块引用
+SPEC-013 / 未迁移模块带 calibration-knob 标记"。
 
 ## 6. 要让绝对数"变真"需要什么(Phase 5 校准路径)
 
