@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -73,3 +73,31 @@ class ChangeOrder(Base):
     reason: Mapped[str] = mapped_column(String(500), default="")
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending/accepted/rejected
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ContractSignature(Base):
+    """LAW-002 签署留痕：谁、何时、对**哪一份文本**表示同意。
+
+    `document_hash` 是签署那一刻的合同全文哈希——事后改条款则对不上，
+    篡改自证。`reliability` 诚实标注证明力：
+      platform_witness  平台见证（能证明文本未改，**不能独立证明签名人身份**）
+      qualified         第三方 CA 签发证书 + 可信时间戳（《电子签名法》可靠电子签名）
+    """
+
+    __tablename__ = "contract_signatures"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    contract_id: Mapped[int] = mapped_column(Integer, index=True)
+    signer_id: Mapped[int] = mapped_column(Integer, index=True)
+    role: Mapped[str] = mapped_column(String(12))          # requester / executor
+    # 合同版本：变更单生效后是新版本，各版本独立签署与独立存证
+    contract_version: Mapped[int] = mapped_column(Integer, default=1)
+    document_hash: Mapped[str] = mapped_column(String(64), index=True)
+    signature: Mapped[str] = mapped_column(String(512), default="")
+    certificate: Mapped[str] = mapped_column(Text, default="")
+    timestamp_token: Mapped[str] = mapped_column(Text, default="")
+    algorithm: Mapped[str] = mapped_column(String(32), default="")
+    reliability: Mapped[str] = mapped_column(String(24), default="platform_witness")
+    provider: Mapped[str] = mapped_column(String(32), default="platform")
+    extra: Mapped[dict] = mapped_column(JSON, default=dict)
+    signed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

@@ -38,7 +38,8 @@ def test_law005_evidence_export_with_hash(client, requester, worker):
     ).json()
     r = client.get(f"/api/v1/legal/disputes/{dispute['id']}/evidence-export", headers=auth(worker))
     body = r.json()
-    assert body["package"]["task_id"] == task["id"] and len(body["sha256"]) == 64
+    # LAW-012 证据包升级后 task 是一个对象（含标题/金额/状态），不再是裸 id
+    assert body["package"]["task"]["id"] == task["id"] and len(body["sha256"]) == 64
     # 非当事人不可导出
     outsider = register(client, "13300000009")
     r = client.get(f"/api/v1/legal/disputes/{dispute['id']}/evidence-export", headers=auth(outsider))

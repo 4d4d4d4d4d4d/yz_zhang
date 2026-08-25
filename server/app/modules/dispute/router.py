@@ -133,7 +133,7 @@ def add_statement(
                            content=body.content, attachments=body.attachments)
     db.add(row)
     db.flush()
-    # 告知对方与仲裁员有新陈述
+    # 告知对方与审核员有新陈述
     from app.modules.notification.service import notify
 
     other = task.executor_id if user.id == task.creator_id else task.creator_id
@@ -221,7 +221,12 @@ def accept_settlement(
 def issue_verdict(
     dispute_id: int, body: ShareIn, arbiter: User = Depends(require_admin), db: Session = Depends(get_db)
 ):
-    """DSP-006/007 平台仲裁：裁决自动执行分账 + 败诉方信用惩罚（CRED-004）。"""
+    """DSP-006/007 **平台处理决定**：自动执行分账 + 责任方信用惩罚（CRED-004）。
+
+    LAW-021 用词：这是依当事人事先约定作出的合同履行调整（类似电商平台的
+    争议处理），**不是法律意义上的仲裁裁决**，不具有强制执行力。
+    对外文案一律称「平台处理决定」，避免误导用户以为已经过仲裁程序。
+    """
     dispute, task, contract = _get_dispute(db, dispute_id)
     if dispute.status != "open":
         raise conflict("纠纷已结案", "dispute_closed")
@@ -249,12 +254,12 @@ def issue_verdict(
 
 @router.post("/disputes/{dispute_id}/appeal")
 def appeal(dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """DSP-008 申诉复核：仅仲裁结案可申诉一次，升级高级仲裁员复核。"""
+    """DSP-008 申诉复核：仅平台处理结案可申诉一次，升级高级审核员复核。"""
     dispute, task, _ = _get_dispute(db, dispute_id)
     if user.id not in (task.creator_id, task.executor_id):
         raise forbidden()
     if dispute.status != "resolved":
-        raise conflict("仅平台仲裁结案的纠纷可申诉（和解结案不可申诉）", "not_appealable")
+        raise conflict("仅平台处理决定结案的纠纷可申诉（和解结案不可申诉）", "not_appealable")
     if dispute.appealed:
         raise conflict("申诉机会已用完（每案一次）", "already_appealed")
     # DSP-010 申诉窗口：逾期裁决终局（业界惯例，防裁决永不生效）
@@ -276,7 +281,7 @@ def appeal(dispute_id: int, user: User = Depends(get_current_user), db: Session 
 def appeal_verdict(
     dispute_id: int, body: ShareIn, senior: User = Depends(require_admin), db: Session = Depends(get_db)
 ):
-    """高级仲裁员复核终局：与原裁决的差额做纠正性划转（原分账不回滚，差额多退少补）。"""
+    """高级审核员复核终局：与原决定的差额做纠正性划转（原分账不回滚，差额多退少补）。"""
     from app.modules.wallet import service as wallet
 
     dispute, task, contract = _get_dispute(db, dispute_id)

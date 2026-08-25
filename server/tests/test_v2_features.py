@@ -76,13 +76,18 @@ def test_sc011_anchor_chain_records_and_verifies(client, requester, worker):
     contract_id = match_and_fund(client, requester, worker, task)
     client.post(f"/api/v1/tasks/{task['id']}/deliver", headers=auth(worker))
     client.post(f"/api/v1/tasks/{task['id']}/accept-delivery", headers=auth(requester))
-    # 签署/托管/放款均入链
+    # 签署/托管/放款均入链（LAW-002 起每次签署也单独入链，故用「包含且有序」
+    # 而非精确相等——条数不是本用例要保护的性质，链的完整性才是）
     anchors = client.get(f"/api/v1/anchors/contracts/{contract_id}", headers=auth(requester)).json()
     events = [a["event_type"] for a in anchors]
-    assert events == ["contract.signed", "contract.funded", "contract.released"]
+    for expected in ("contract.signed", "contract.funded", "contract.released"):
+        assert expected in events, f"{expected} 未入链：{events}"
+    assert events.index("contract.signed") < events.index("contract.funded") \
+        < events.index("contract.released")
+    assert events.count("contract.signed_by") == 2  # 双方各一条签署留痕
     # 链完整性校验通过
     v = client.get("/api/v1/anchors/verify").json()
-    assert v["valid"] is True and v["total"] == 3
+    assert v["valid"] is True and v["total"] >= 3
     # 篡改历史记录 → 校验失败并定位（防篡改核心保证）
     with engine.begin() as conn:
         conn.execute(sa.text("UPDATE anchor_entries SET payload = '{}' WHERE seq = 2"))

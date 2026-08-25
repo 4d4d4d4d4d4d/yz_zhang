@@ -14,7 +14,7 @@ from app.modules.wallet import service as wallet
 
 from app.modules.finance.compliance import CONTRACT_NATURE_CLAUSE
 
-from .models import ChangeOrder, Contract, Milestone
+from .models import ChangeOrder, Contract, ContractSignature, Milestone
 
 # SC-006 取消/违约规则表：执行者获得托管金的比例（万分比），按阶段与责任方
 CANCEL_RULES = {
@@ -34,7 +34,9 @@ def generate(db: Session, task, executor_id: int, amount_cents: int) -> Contract
         f"发布方: 用户{task.creator_id} / 执行方: 用户{executor_id}\n"
         f"金额: {amount_cents / 100:.2f} 元(托管) / 平台服务费率: {settings.PLATFORM_FEE_BPS / 100:.1f}%\n"
         f"验收: 交付后由发布方验收，{settings.AUTO_ACCEPT_DAYS} 天未处理视为自动通过\n"
-        f"争议: 按《平台争议处理规则》处理，处理决定自动执行\n"
+        f"争议: 先经平台按《平台争议处理规则》处理，处理决定自动执行；"
+        f"对处理决定不服的，依本合同争议解决条款提请约定仲裁机构或向"
+        f"有管辖权的法院解决\n"
         f"{CONTRACT_NATURE_CLAUSE}"
     )
     # CRED-003 信用等级权益：高信用执行者享费率折扣
@@ -90,21 +92,125 @@ def define_milestones(db: Session, contract: Contract, user_id: int, items: list
     return rows
 
 
-def sign(db: Session, contract: Contract, user_id: int) -> Contract:
-    """SC-002 双方电子签署。"""
+def sign(db: Session, contract: Contract, user_id: int, meta: dict | None = None) -> Contract:
+    """SC-002 / LAW-001~003 双方电子签署。
+
+    此前只置两个布尔位——那不构成《电子签名法》的可靠电子签名，对方一句
+    「不是我签的」就可能推翻。现在每次签署都产出一条 `ContractSignature`：
+    绑定**签署那一刻的合同全文哈希**，事后改条款则校验失败（篡改自证）。
+    """
     if contract.status != "pending_signatures":
         raise conflict("合约当前不可签署", "not_signable")
     if user_id == contract.requester_id:
+        role = "requester"
         contract.signed_by_requester = True
     elif user_id == contract.executor_id:
+        role = "executor"
         contract.signed_by_executor = True
     else:
         raise bad_request("非合约当事人", "not_party")
+    # LAW-003 未实名不得签署：签名要指向一个可确认的人
+    _require_verified_signer(db, user_id)
+    record_signature(db, contract, user_id, role, meta or {})
     if contract.signed_by_requester and contract.signed_by_executor:
         contract.status = "signed"
         publish(db, "contract.signed", {"contract_id": contract.id, "task_id": contract.task_id})
     db.add(contract)
     return contract
+
+
+def _require_verified_signer(db: Session, user_id: int) -> None:
+    from app.modules.account.models import User
+
+    user = db.get(User, user_id)
+    if user and not user.is_verified:
+        raise bad_request("签署前需完成实名认证", "verification_required")
+
+
+def record_signature(db: Session, contract: Contract, signer_id: int,
+                     role: str, meta: dict) -> ContractSignature:
+    """LAW-002/004 落一条签署留痕（每个合同版本独立签署与独立存证）。"""
+    from app.vendors.signature import document_hash, get_signature_provider
+
+    provider = get_signature_provider()
+    doc_hash = document_hash(contract.terms)
+    result = provider.sign(signer_id, doc_hash, meta)
+    row = ContractSignature(
+        contract_id=contract.id, signer_id=signer_id, role=role,
+        contract_version=contract.version, document_hash=doc_hash,
+        signature=result.signature, certificate=result.certificate,
+        timestamp_token=result.timestamp_token, algorithm=result.algorithm,
+        reliability=result.reliability, provider=result.provider, extra=result.extra,
+    )
+    db.add(row)
+    db.flush()
+    # 签署事件入存证链：合同全文哈希与签名一并锚定
+    from app.modules.anchor import service as anchor
+
+    anchor.anchor(db, "contract.signed_by", "contract", contract.id, {
+        "signer_id": signer_id, "role": role, "version": contract.version,
+        "document_hash": doc_hash, "reliability": result.reliability,
+    })
+    return row
+
+
+def verify_signatures(db: Session, contract: Contract) -> dict:
+    """LAW-040 校验：任一签名对应的文本哈希与当前条款不符 → 定位到具体签名。
+
+    注意语义：**旧版本的签名对不上当前条款是正常的**（条款已变更），
+    因此只校验与当前版本同版的签名。
+    """
+    from app.vendors.signature import document_hash, get_signature_provider
+
+    provider = get_signature_provider()
+    current_hash = document_hash(contract.terms)
+    rows = (
+        db.query(ContractSignature)
+        .filter(ContractSignature.contract_id == contract.id)
+        .order_by(ContractSignature.id).all()
+    )
+    out = []
+    tampered = False
+    for row in rows:
+        same_version = row.contract_version == contract.version
+        hash_ok = row.document_hash == current_hash if same_version else None
+        from app.vendors.signature import SignatureResult
+
+        sig_ok = provider.verify(
+            row.signer_id, row.document_hash,
+            SignatureResult(signature=row.signature, extra=row.extra or {}),
+        )
+        if same_version and (hash_ok is False or not sig_ok):
+            tampered = True
+        out.append({
+            "id": row.id, "signer_id": row.signer_id, "role": row.role,
+            "contract_version": row.contract_version,
+            "document_hash": row.document_hash,
+            "matches_current_terms": hash_ok,
+            "signature_valid": sig_ok,
+            "reliability": row.reliability, "provider": row.provider,
+            "signed_at": row.signed_at.isoformat(),
+        })
+    return {
+        "valid": not tampered,
+        "current_version": contract.version,
+        "current_document_hash": current_hash,
+        "signatures": out,
+        # LAW-013 诚实标注证明力边界
+        "reliability_note": _reliability_note(rows),
+    }
+
+
+def _reliability_note(rows: list) -> str:
+    if not rows:
+        return "尚无签署记录。"
+    if all(r.reliability == "qualified" for r in rows):
+        return "全部签名由第三方 CA 签发证书并附可信时间戳，构成可靠电子签名。"
+    return (
+        "当前为平台见证签名：能证明「平台记录到该次同意，且此后合同文本未被改动」，"
+        "但**不能独立证明签名人身份**，不构成《电子签名法》第十三条的可靠电子签名。"
+        "接入第三方 CA 后此项升级。"
+    )
 
 
 def fund(db: Session, contract: Contract, user_id: int) -> Contract:
@@ -284,6 +390,13 @@ def accept_change(db: Session, contract: Contract, user_id: int, order: ChangeOr
         db.add(milestones[0])
     order.status = "accepted"
     db.add_all([contract, order])
+    # LAW-004 变更单经对方接受即构成对**新版本**的双方合意。
+    # 这里不强制再走一次「签署」流程（那是多余的一步），而是直接为双方
+    # 各记一条新版本的签署留痕，绑定变更后的条款哈希。
+    db.flush()
+    for uid, role in ((contract.requester_id, "requester"),
+                      (contract.executor_id, "executor")):
+        record_signature(db, contract, uid, role, {"via": "change_order", "order_id": order.id})
     # 任务预算同步（TASK-025 变更单双方确认后合约同步变更）
     from app.modules.task.models import Task
 

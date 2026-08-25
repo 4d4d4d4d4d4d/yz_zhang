@@ -4,6 +4,32 @@
 > 后端 268 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
 
+## 已实现（V50 批次：法律效力——诚实标注证明力边界）
+
+> 模块 spec：[26-legal-enforceability.md](26-legal-enforceability.md)
+>
+> **前提澄清**：「智能合约」在中国法下不是独立法律主体，是合同的自动履行工具。
+> 出纠纷靠的是三样东西：有效成立的合同、经得起质证的证据、可执行的争议解决条款。
+> 本批次把第 2 项做扎实，把第 1、3 项的接口与用词做对；
+> ⚖️ 律师定稿的文本与 CA/存证签约仍需用户提供。
+
+| Spec 功能点 | 检视发现的问题 → 实现 | 测试 |
+|---|---|---|
+| **LAW-001/002 签署绑定合同全文** | 原「双签」只是数据库里两个布尔位，**不构成《电子签名法》第十三条的可靠电子签名**——对方一句「不是我签的那份」平台拿不出任何反驳。新增 `ContractSignature`：绑定**签署那一刻的合同全文哈希** + 签名值，事后改条款则校验失败（篡改自证）；签署事件一并入存证链 | `tests/test_legal_enforceability.py::test_tampering_terms_after_signing_is_self_evident` |
+| **LAW-013 诚实标注证明力（本批次的核心态度）** | `PlatformWitnessSignature` 明确标注 `reliability="platform_witness"`：能证明「平台记录到该次同意且文本未改」，**不能独立证明签名人身份**；`LocalNotary` 明确返回 `backed=False`。**冒充证明力比没有证明力更糟**——上了法庭才发现顶不住就晚了 | 同上（`test_platform_witness_signature_does_not_claim_to_be_qualified`、`test_local_notary_declares_no_third_party_backing`） |
+| **LAW-001/010 供应商可替换** | `SignatureProvider`（接 CA 后升级为 `qualified`）与 `NotaryProvider`（接司法链后 `backed=True`），证明力声明随之如实升级 | 同上（`test_qualified_provider_upgrades_the_notice`、`test_third_party_backed_notary_reported`） |
+| **LAW-003 签署前置实名** | 签名要指向一个可确认的人。守卫独立成立，不依赖「上游报名时拦过一次」——实名可能被风控撤销 | 同上 |
+| **LAW-004 版本化签署（实现中修正了 spec）** | spec 原写「变更单生效即触发对新版本的双签」；实现时判断这是**多余的仪式**——变更单本身就是要约+承诺，再走一次签署不增加任何法律效力。改为：接受变更单时直接为双方各记一条新版本签名，绑定变更后条款。旧版本签名对不上当前条款是**正常的**，不判为篡改 | 同上（`test_change_order_creates_new_version_signatures`） |
+| **LAW-011 第三方存证锚定** | `AnchorReceipt` + `/anchors/jobs/notarize`（已排入 cron）：定期把链 head 交存证机构，增量覆盖不重复出回执；`/anchors/coverage` 显示哪些区间有背书 | 同上（`test_notarize_is_incremental`） |
+| **LAW-012/014 证据包升级** | 原导出只有纠纷那几个字段。现覆盖完整时间线：合同全文与签署校验、分账指令、执行留痕与图片凭证、双方陈述与平台处理决定，附哈希链验证报告与存证回执，并**写明未被第三方覆盖的部分** | 同上（`test_evidence_package_covers_full_timeline`、`test_evidence_package_states_its_limits`） |
+| **LAW-021 用词切分** | 平台内部处理是「依当事人事先约定作出的合同履行调整」，**不是法律意义上的仲裁裁决**，没有强制执行力。全站文案统一改为「平台处理决定」；用扫描测试锁住——只有「不是法律意义上的仲裁裁决」这一句允许出现该词 | 同上（`test_platform_decision_is_not_called_arbitration_award` 扫描全部源码） |
+| **LAW-020/022 争议解决与升级路径** | 合约条款与法律问答统一表述：先经平台处理 → 不服可依条款提请**约定的仲裁机构**或向法院起诉，平台提供证据包 | 同上 |
+| SDK 同步：`contractSignatures`、`anchorCoverage` + 类型 | `packages/core/src/{client,types}.ts` | web 构建通过 |
+
+**仍必须由用户提供**（⚖️）：律师定稿的用户协议/隐私政策/合同模板、
+与真实仲裁机构或调解组织的合作及有效的争议解决条款、第三方 CA 与司法存证签约、
+劳务关系定性与保险方案。
+
 ## 已实现（V49 批次：资金合规——把「不能这样上线」变成机器闸门）
 
 > 模块 spec：[25-financial-compliance.md](25-financial-compliance.md)

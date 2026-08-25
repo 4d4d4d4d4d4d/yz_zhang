@@ -361,3 +361,43 @@ export interface SettlementOrderView {
     purpose: 'payout' | 'fee' | 'refund' | 'compensation' | 'tax';
   }>;
 }
+
+// ── LAW 法律效力（26 号 spec）──────────────────────────────────
+/**
+ * 一条签署留痕。`reliability` 诚实标注证明力：
+ *  platform_witness 平台见证（能证明文本未改，**不能独立证明签名人身份**）
+ *  qualified        第三方 CA 证书 + 可信时间戳（可靠电子签名）
+ */
+export interface ContractSignatureView {
+  id: number;
+  signer_id: number;
+  role: 'requester' | 'executor';
+  contract_version: number;
+  document_hash: string;
+  /** 与当前条款是否一致；旧版本签名为 null（条款已变更属正常，不是篡改）。 */
+  matches_current_terms: boolean | null;
+  signature_valid: boolean;
+  reliability: 'platform_witness' | 'qualified';
+  provider: string;
+  signed_at: string;
+}
+
+export interface SignatureReport {
+  valid: boolean;
+  current_version: number;
+  current_document_hash: string;
+  signatures: ContractSignatureView[];
+  /** 证明力边界说明——诚实标注好过让人误以为全有司法效力。 */
+  reliability_note: string;
+}
+
+export interface AnchorCoverage {
+  total_entries: number;
+  third_party_backed_to_seq: number;
+  uncovered_entries: number;
+  receipts: Array<{
+    seq_from: number; seq_to: number; receipt_no: string;
+    authority: string; backed: boolean; detail: string; at: string;
+  }>;
+  note: string;
+}

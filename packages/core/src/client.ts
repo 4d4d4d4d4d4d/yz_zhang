@@ -15,7 +15,9 @@ import type {
   Mission,
   MissionEvent,
   MissionStep,
+  AnchorCoverage,
   SettlementOrderView,
+  SignatureReport,
   StepReviewRecord,
   MissionTickResult,
   Notice,
@@ -325,6 +327,16 @@ export class PlatformClient {
       .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
     return this.request<Mission[]>('GET', `/missions${qs ? `?${qs}` : ''}`);
   }
+  /** LAW-002/040 合约签署留痕与校验：签署后改条款 → 哈希对不上，篡改自证。 */
+  contractSignatures(contractId: number) {
+    return this.request<SignatureReport>('GET', `/contracts/${contractId}/signatures`);
+  }
+
+  /** LAW-013 存证覆盖：哪些区间有第三方背书、哪些只是平台自算。 */
+  anchorCoverage() {
+    return this.request<AnchorCoverage>('GET', '/anchors/coverage');
+  }
+
   /** FIN-042 资金流向审计：一份合约上发生过的全部分账指令。 */
   contractSettlements(contractId: number) {
     return this.request<{ settlements: SettlementOrderView[]; sandbox: boolean }>(

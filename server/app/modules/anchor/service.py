@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.events import subscribe
 
-from .models import AnchorEntry
+from .models import AnchorEntry, AnchorReceipt
 
 GENESIS = "0" * 64
 
@@ -88,3 +88,59 @@ def register_event_handlers() -> None:
     subscribe("contract.funded", _on_funded)
     subscribe("contract.released", _on_released)
     subscribe("contract.verdict_executed", _on_verdict)
+
+
+# ---------- LAW-010/011 第三方存证锚定 ----------
+def notarize_pending(db: Session) -> dict:
+    """把尚未被存证覆盖的链区间交给存证机构，取回回执。
+
+    自算哈希链只能自证前后一致；**自己给自己作证采信度有限**，
+    所以要定期把 head 交给第三方背书。缺省 `LocalNotary` 不背书，
+    回执里会诚实写明这一点（backed=False）。
+    """
+    from app.vendors.notary import get_notary
+
+    last = db.query(AnchorReceipt).order_by(AnchorReceipt.seq_to.desc()).first()
+    covered_to = last.seq_to if last else 0
+    head_entry = db.query(AnchorEntry).order_by(AnchorEntry.seq.desc()).first()
+    if not head_entry or head_entry.seq <= covered_to:
+        return {"notarized": 0, "covered_to": covered_to}
+
+    provider = get_notary()
+    receipt = provider.notarize(head_entry.chain_hash, covered_to + 1, head_entry.seq)
+    row = AnchorReceipt(
+        seq_from=covered_to + 1, seq_to=head_entry.seq, chain_head=head_entry.chain_hash,
+        receipt_no=receipt.receipt_no, authority=receipt.authority,
+        backed=receipt.backed, detail=receipt.detail,
+    )
+    db.add(row)
+    db.flush()
+    return {"notarized": head_entry.seq - covered_to, "covered_to": head_entry.seq,
+            "receipt_no": receipt.receipt_no, "backed": receipt.backed}
+
+
+def coverage(db: Session) -> dict:
+    """LAW-013 存证覆盖情况：哪些区间有第三方背书、哪些没有。
+
+    诚实标注证明力边界，好过让人误以为全部有司法效力。
+    """
+    head_entry = db.query(AnchorEntry).order_by(AnchorEntry.seq.desc()).first()
+    total = head_entry.seq if head_entry else 0
+    receipts = db.query(AnchorReceipt).order_by(AnchorReceipt.seq_to).all()
+    backed_to = max((r.seq_to for r in receipts if r.backed), default=0)
+    return {
+        "total_entries": total,
+        "third_party_backed_to_seq": backed_to,
+        "uncovered_entries": max(0, total - backed_to),
+        "receipts": [
+            {"seq_from": r.seq_from, "seq_to": r.seq_to, "receipt_no": r.receipt_no,
+             "authority": r.authority, "backed": r.backed, "detail": r.detail,
+             "at": r.created_at.isoformat()}
+            for r in receipts
+        ],
+        "note": (
+            "全部存证均有第三方背书。" if backed_to >= total > 0 else
+            "标注 backed=false 的区间仅为平台自算哈希链，无第三方背书，"
+            "可证明「平台记录未被事后改动」，但司法采信度低于第三方存证。"
+        ),
+    }

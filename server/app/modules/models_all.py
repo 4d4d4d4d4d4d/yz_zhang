@@ -4,10 +4,15 @@ from app.core.models_infra import JobLock  # noqa: F401
 from app.vendors.models import PaymentOrder, SmsCode, VendorCall  # noqa: F401
 from app.modules.account.models import Block, LoginSession, User  # noqa: F401
 from app.modules.analytics.models import AnalyticsEvent, SearchQuery  # noqa: F401
-from app.modules.anchor.models import AnchorEntry  # noqa: F401
+from app.modules.anchor.models import AnchorEntry, AnchorReceipt  # noqa: F401
 from app.modules.circle.models import Circle, CircleMember  # noqa: F401
 from app.modules.content.models import Comment, Content, Follow, Like  # noqa: F401
-from app.modules.contract.models import ChangeOrder, Contract, Milestone  # noqa: F401
+from app.modules.contract.models import (  # noqa: F401
+    ChangeOrder,
+    Contract,
+    ContractSignature,
+    Milestone,
+)
 from app.modules.decompose.models import Decomposition  # noqa: F401
 from app.modules.admin.models import Report  # noqa: F401
 from app.modules.dispute.models import Dispute  # noqa: F401

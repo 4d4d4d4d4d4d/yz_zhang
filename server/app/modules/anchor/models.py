@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -25,4 +25,24 @@ class AnchorEntry(Base):
     payload_hash: Mapped[str] = mapped_column(String(64))
     prev_chain_hash: Mapped[str] = mapped_column(String(64))
     chain_hash: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class AnchorReceipt(Base):
+    """LAW-011 第三方存证回执：某个 seq 区间的链 head 被谁、何时背书。
+
+    `backed=False` 表示只是平台自己记录、无外部背书——证据包必须把这个
+    区别写出来（LAW-013），而不是让人误以为全都有司法效力。
+    """
+
+    __tablename__ = "anchor_receipts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    seq_from: Mapped[int] = mapped_column(Integer)
+    seq_to: Mapped[int] = mapped_column(Integer, index=True)
+    chain_head: Mapped[str] = mapped_column(String(64))
+    receipt_no: Mapped[str] = mapped_column(String(120), default="")
+    authority: Mapped[str] = mapped_column(String(60), default="")
+    backed: Mapped[bool] = mapped_column(Boolean, default=False)
+    detail: Mapped[str] = mapped_column(String(300), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

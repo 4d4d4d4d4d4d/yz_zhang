@@ -27,6 +27,8 @@ JOBS: list[tuple[str, int]] = [
     (f"{PREFIX}/disputes/jobs/escalate-overdue", 3600),
     (f"{PREFIX}/missions/jobs/tick-all", 300),
     (f"{PREFIX}/tasks/jobs/purge-locations", 86400),
+    # LAW-011 存证锚定：一天一次足够，区间越大回执越少也越便宜
+    (f"{PREFIX}/anchors/jobs/notarize", 86400),
 ]
 
 log = logging.getLogger("cron")

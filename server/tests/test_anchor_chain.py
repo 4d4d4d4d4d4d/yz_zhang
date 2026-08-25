@@ -24,14 +24,19 @@ def _sha(text: str) -> str:
 
 
 def _build_chain(client, requester, worker):
-    """跑一条完整闭环，产出 signed/funded/released 三条存证，返回 (contract_id)。"""
+    """跑一条完整闭环并返回 contract_id。
+
+    存证条数会随「哪些事件值得入链」增长（LAW-002 起签署也入链），
+    因此这里**不断言精确条数**——条数不是这套测试要保护的性质，
+    链的完整性才是。断言精确值只会让每次增补存证点都变成一次假失败。
+    """
     topup(client, requester, 40000)
     task = publish_task(client, requester)
     contract_id = match_and_fund(client, requester, worker, task)
     client.post(f"/api/v1/tasks/{task['id']}/deliver", headers=auth(worker))
     client.post(f"/api/v1/tasks/{task['id']}/accept-delivery", headers=auth(requester))
     v = client.get("/api/v1/anchors/verify").json()
-    assert v["valid"] is True and v["total"] == 3
+    assert v["valid"] is True and v["total"] >= 3
     return contract_id
 
 
@@ -76,10 +81,12 @@ def test_fully_self_consistent_row_forge_breaks_next_link(client, requester, wor
 def test_deleting_middle_entry_breaks_chain(client, requester, worker):
     """删除中间存证（seq=2）→ seq=3 的 prev 指向已消失的 chain_hash，链断裂。"""
     _build_chain(client, requester, worker)
+    before = client.get("/api/v1/anchors/verify").json()["total"]
     with engine.begin() as conn:
         conn.execute(sa.text("DELETE FROM anchor_entries WHERE seq = 2"))
     v = client.get("/api/v1/anchors/verify").json()
-    assert v["valid"] is False and v["broken_at_seq"] == 3 and v["total"] == 2
+    assert v["valid"] is False and v["broken_at_seq"] == 3
+    assert v["total"] == before - 1  # 少了一条，且断裂点被准确定位
 
 
 def test_genesis_linkage_enforced(client, requester, worker):

@@ -95,6 +95,14 @@ class Settings:
     # internal = 平台内账本（**仅限开发/演示**，涉嫌资金池与二清，prod 下拒绝启动）
     # custody  = 持牌机构存管（钱不经过平台，平台只发分账指令）
     LEDGER_BACKEND = os.environ.get("PLATFORM_LEDGER_BACKEND", "internal")
+    # ── LAW 法律效力（26 号 spec）────────────────────────────────────
+    # platform = 平台见证签名（**不构成《电子签名法》可靠电子签名**）
+    # 接第三方 CA 后换成对应实现，签名才具备独立的身份证明力
+    SIGNATURE_PROVIDER = os.environ.get("PLATFORM_SIGNATURE_PROVIDER", "platform")
+    # local = 自算哈希链，无第三方背书；接司法存证/公证处后才有采信力
+    NOTARY_PROVIDER = os.environ.get("PLATFORM_NOTARY_PROVIDER", "local")
+    # 当前生效的用户协议版本（LAW-030：变更需重新同意）
+    AGREEMENT_VERSION = os.environ.get("PLATFORM_AGREEMENT_VERSION", "2026-08-01")
 
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]

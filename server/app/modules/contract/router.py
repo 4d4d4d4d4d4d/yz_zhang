@@ -261,6 +261,18 @@ def sign_contract(
     return _dump(service.sign(db, contract, user.id))
 
 
+@router.get("/{contract_id}/signatures")
+def contract_signatures(
+    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """LAW-002/040 签署留痕与校验：签署后改条款 → 哈希对不上，篡改自证。
+
+    响应里的 `reliability_note` 会诚实说明当前签名的证明力边界。
+    """
+    contract = _get(db, contract_id, user)
+    return service.verify_signatures(db, contract)
+
+
 @router.post("/{contract_id}/fund")
 def fund_contract(
     contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db),

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.core.errors import forbidden, not_found
-from app.modules.account.models import User
+from app.modules.account.models import User, utcnow
 from app.modules.dispute.models import Dispute
 from app.modules.task.models import Task
 
@@ -27,7 +27,8 @@ LEGAL_FAQS = [
     {
         "keywords": ["欠款", "不付款", "拖欠", "追讨"],
         "answer": "平台任务资金采用先托管后放款机制，正常情况下不存在拖欠。如对结算有争议，"
-        "请先在平台发起纠纷仲裁；对裁决不服可向有管辖权的法院起诉，平台可提供证据包导出。",
+        "请先在平台发起纠纷处理；对平台处理决定不服的，可依合同争议解决条款提请约定的"
+        "仲裁机构，或向有管辖权的法院起诉，平台可提供证据包导出。",
     },
     {
         "keywords": ["劳动关系", "雇佣", "社保", "工伤"],
@@ -98,7 +99,8 @@ def generate_document(
             f"致 用户{counterparty}：\n"
             f"就平台任务《{task.title}》（任务编号 {task.id}，合约金额 {amount:.2f} 元），"
             f"你方未按约定履行义务。现郑重催告：{body.demand or '请于收到本函 3 日内履行合约义务'}。\n"
-            f"逾期未履行的，本人将依据《平台争议处理规则》发起仲裁，并保留诉诸法律的权利。\n\n"
+            f"逾期未履行的，本人将依据《平台争议处理规则》申请平台处理，"
+            f"并保留提请仲裁或诉诸法律的权利。\n\n"
             f"催告人：用户{user.id}（实名认证）"
         )
     elif body.kind == "settlement_agreement":
@@ -121,26 +123,96 @@ def generate_document(
 def evidence_export(
     dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    """LAW-005 证据包导出：结构化证据 + SHA256 哈希（防篡改校验，SC-011 存证雏形）。"""
+    """LAW-012/013/014 证据包导出：**一份自洽、可直接提交的材料**。
+
+    与此前的区别是三点：
+    1. 覆盖完整时间线（合同全文与签署、资金分账、执行留痕与图片凭证、
+       纠纷答辩与处理决定），而不是只有纠纷那几个字段；
+    2. 附哈希链验证报告与第三方存证回执；
+    3. **诚实标注证明力边界**——哪些有第三方背书、哪些只是平台自算，
+       写清楚好过让人误以为全部有司法效力。
+    """
+    from app.modules.anchor import service as anchor
+    from app.modules.contract import service as contract_service
+    from app.modules.contract.models import Contract
+    from app.modules.dispute.models import DisputeStatement
+    from app.modules.finance import service as finance
+    from app.modules.task.models import ProgressLog
+
     dispute = db.get(Dispute, dispute_id)
     if not dispute:
         raise not_found("纠纷不存在")
     task = db.get(Task, dispute.task_id)
     if user.id not in (task.creator_id, task.executor_id) and not user.is_admin:
         raise forbidden("仅当事人可导出证据包")
+
+    contract = db.query(Contract).filter(Contract.task_id == task.id).first()
+    signatures = contract_service.verify_signatures(db, contract) if contract else None
+    logs = db.query(ProgressLog).filter(ProgressLog.task_id == task.id) \
+             .order_by(ProgressLog.id).all()
+    statements = db.query(DisputeStatement).filter(
+        DisputeStatement.dispute_id == dispute.id).order_by(DisputeStatement.id).all()
+
     package = {
         "dispute_id": dispute.id,
-        "task_id": dispute.task_id,
-        "task_title": task.title,
-        "opened_by": dispute.opened_by,
-        "reason": dispute.reason,
-        "evidence": dispute.evidence,
-        "verdict": {
-            "executor_share_bps": dispute.verdict_executor_share_bps,
-            "reason": dispute.verdict_reason,
+        "task": {
+            "id": task.id, "title": task.title, "category": task.category,
+            "budget_cents": task.budget_cents, "status": task.status,
+            "creator_id": task.creator_id, "executor_id": task.executor_id,
+        },
+        "contract": {
+            "id": contract.id, "version": contract.version,
+            "amount_cents": contract.amount_cents,
+            "released_cents": contract.released_cents,
+            "status": contract.status, "terms": contract.terms,
+        } if contract else None,
+        "signatures": signatures,
+        "settlements": finance.contract_trail(db, contract.id) if contract else [],
+        "progress_logs": [
+            {"id": r.id, "user_id": r.user_id, "kind": r.kind, "content": r.content,
+             "images": r.images or [], "at": r.created_at.isoformat()}
+            for r in logs
+        ],
+        "dispute": {
+            "opened_by": dispute.opened_by, "reason": dispute.reason,
+            "evidence": dispute.evidence, "status": dispute.status,
+            "statements": [
+                {"user_id": r.user_id, "role": r.role, "content": r.content,
+                 "attachments": r.attachments or [], "at": r.created_at.isoformat()}
+                for r in statements
+            ],
+            # LAW-021 用词：平台内部处理不是法律意义上的仲裁裁决
+            "platform_decision": {
+                "executor_share_bps": dispute.verdict_executor_share_bps,
+                "reason": dispute.verdict_reason,
+            },
         },
         "exported_by": user.id,
-        "exported_at": dispute.created_at.isoformat(),
+        "exported_at": utcnow().isoformat(),
     }
     canonical = json.dumps(package, ensure_ascii=False, sort_keys=True)
-    return {"package": package, "sha256": hashlib.sha256(canonical.encode()).hexdigest()}
+    chain = anchor.verify_chain(db)
+    cov = anchor.coverage(db)
+
+    return {
+        "package": package,
+        "sha256": hashlib.sha256(canonical.encode()).hexdigest(),
+        "integrity": {
+            "chain_valid": chain.get("valid"),
+            "chain_entries": chain.get("total"),
+            "third_party_backed_to_seq": cov["third_party_backed_to_seq"],
+            "uncovered_entries": cov["uncovered_entries"],
+            "receipts": cov["receipts"],
+        },
+        # LAW-013/021 证明力声明：写清楚这份材料能证明什么、不能证明什么
+        "evidentiary_notice": {
+            "signatures": signatures["reliability_note"] if signatures else "无合约签署记录。",
+            "chain": cov["note"],
+            "decision": (
+                "本文所载「平台处理决定」系依当事人事先约定作出的合同履行调整，"
+                "**不是法律意义上的仲裁裁决**，不具有强制执行力。"
+                "对处理决定不服的，可依合同争议解决条款提请约定的仲裁机构"
+                "或向有管辖权的法院提起诉讼。"
+            ),
+        },
+    }

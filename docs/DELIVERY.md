@@ -1,7 +1,7 @@
 # 交付总览（Final Delivery Overview）
 
-> 截至 2026-08-22：MVP + V1~V49 全批次完成。
-> 后端 **385 tests** + 前端 **40 tests**（core 23 + web 17）全绿。
+> 截至 2026-08-22：MVP + V1~V50 全批次完成。
+> 后端 **401 tests** + 前端 **40 tests**（core 23 + web 17）全绿。
 > 本文档是对 [docs/specs/](specs/README.md)（功能拆分）与
 > [16-traceability.md](specs/16-traceability.md)（逐条追溯）的收口汇总。
 
@@ -55,7 +55,8 @@ dispute 响应缺复核基数字段、圈层创建者角色丢失等。
 | **资金存管（上线红线）** | `LedgerBackend` 抽象 + 分账指令模型已就位；`internal` 涉嫌资金池与二清，**prod 下拒绝启动** | 接持牌存管后设 `PLATFORM_LEDGER_BACKEND=custody` |
 | 视频转码/CDN | 图片上传已走 `StorageProvider`，视频元数据与发布流已备 | 设 `PLATFORM_STORAGE_PROVIDER` |
 | RTC 音视频 | IM 文本/图片已备 | `im` 模块会话扩展 |
-| 区块链锚定 | 本地哈希链已备（head 可对外公示） | `anchor` 模块定期上链 job |
+| 区块链锚定 / 司法存证 | 哈希链 + `NotaryProvider` 抽象 + 锚定 job 已就位，缺省无第三方背书 | 设 `PLATFORM_NOTARY_PROVIDER` 接司法链/公证处 |
+| 可靠电子签名（CA） | `SignatureProvider` 抽象已就位，缺省为平台见证签名（**非可靠电子签名**） | 设 `PLATFORM_SIGNATURE_PROVIDER` 接第三方 CA |
 | 内容安全审核 | 本地敏感词机审 | `machine_review` 替换为供应商 API |
 
 ## 四、如何验证
@@ -82,6 +83,7 @@ cp deploy/.env.example deploy/.env && ./deploy/up.sh   # 生产栈（自检 → 
 | V47 SEC | 账号+IP 双维度限流、全局写兜底、失败自动封禁、TLS 与安全响应头 |
 | V48 AIO | 编排闭环：成果评审质量闸门、预算占用/实付分离、修复步带整改要点；**模型不得单独动钱** |
 | V49 FIN | 分账指令守恒可审计、金融话术与分利模式红线硬拦截；**未接存管的生产环境拒绝启动** |
+| V50 LAW | 签署绑定合同全文（篡改自证）、证据包升级、**诚实标注证明力边界**、平台决定不称仲裁裁决 |
 
 **剩下的都不是代码问题**：HTTPS 证书与域名、供应商签约与密钥、
 法律与合规意见、应用商店开发者账号。
