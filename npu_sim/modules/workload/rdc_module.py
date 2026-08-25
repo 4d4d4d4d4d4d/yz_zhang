@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from typing import Iterator, Optional
 
+from npu_sim import physical
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.module import (
     AreaModel, Capability, EnergyEstimate, IModule, LatencyEstimate, ModuleState,
@@ -94,11 +95,12 @@ class RDC(IModule):
         return EnergyEstimate(0.4 * n, self.static_power_uw()*1e-6, 0.7)
 
     def estimate_area(self):
-        # SPEC-009 §2.4: scales with tree_width.
-        storage = 12_000.0 * (self._tree_width / 8)
+        # SPEC-013: FP reduction tree of tree_width inputs = width-1 FP adders.
+        storage = physical.reduction_tree_area_um2(self._tree_width)
         bd = {c.name: c.area_cost_um2 for c in self.declared_capabilities() if c.name in self._active_caps}
-        bd["tree_storage"] = storage
-        return AreaModel(um2=sum(bd.values()), breakdown=bd, notes="SPEC-009 §2.4 [calibration knob]")
+        bd["tree_adders"] = storage
+        return AreaModel(um2=sum(bd.values()), breakdown=bd,
+                         notes=f"SPEC-013 physical @{physical.REFERENCE_NODE_NM}nm FP reduction tree")
 
     def total_area_um2(self): return self.estimate_area().um2
 

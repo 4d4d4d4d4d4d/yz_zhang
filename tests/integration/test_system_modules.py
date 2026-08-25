@@ -27,8 +27,8 @@ def _cmp(b, v, cycles=3000):
 class TestPMU:
     def test_more_counters_grows_area(self):
         r = _cmp("usecase_pmu_small.yaml", "usecase_pmu_wide.yaml")
-        # n_counters 2 → 8: +6 × 5_000 = +30_000
-        assert r.area_delta_um2 == pytest.approx(30_000, abs=100)
+        # SPEC-013: n_counters 2 → 8: +6 counters × (48-bit reg + incrementer)
+        assert r.area_delta_um2 == pytest.approx(2_304, abs=10)
 
     def test_pmu_does_not_drag_pipeline(self):
         """PMU is a passive observer; main pipeline drain shouldn't change."""

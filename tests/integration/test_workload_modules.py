@@ -42,8 +42,8 @@ class TestIM2COL:
 class TestRDC:
     def test_wider_tree_grows_area(self):
         r = _cmp("usecase_rdc_small.yaml", "usecase_rdc_wide.yaml")
-        # 4 → 16 width: storage 12k × (16-4)/8 = +18k
-        assert r.area_delta_um2 == pytest.approx(18_000, abs=200)
+        # SPEC-013: 4 → 16 width = +12 FP adders (width-1 each) in the tree
+        assert r.area_delta_um2 == pytest.approx(3_840, abs=10)
 
 
 class TestNoC:

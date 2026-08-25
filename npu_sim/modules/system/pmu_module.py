@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Iterator, Optional
 
+from npu_sim import physical
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.module import (
     AreaModel, Capability, EnergyEstimate, IModule, LatencyEstimate, ModuleState,
@@ -83,8 +84,10 @@ class PMU(IModule):
 
     def estimate_area(self):
         # §1.4: 5_000 μm² per counter [calibration knob].
-        area = self._n_counters * 5_000.0
-        return AreaModel(um2=area, breakdown={"counters": area}, notes="SPEC-010 §1.4 [calibration knob]")
+        # SPEC-013: each counter = 48-bit event register + increment adder.
+        area = physical.counter_area_um2(self._n_counters)
+        return AreaModel(um2=area, breakdown={"counters": area},
+                         notes=f"SPEC-013 physical @{physical.REFERENCE_NODE_NM}nm event counters")
 
     def total_area_um2(self): return self.estimate_area().um2
 

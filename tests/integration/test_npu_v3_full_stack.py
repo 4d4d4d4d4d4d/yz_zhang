@@ -56,12 +56,13 @@ class TestStackedFiveSpecLevers:
         ~2926 µm²/KB; other levers still calibration knobs):
           §008 WB cap 64→256 KB    : SPEC-013 SRAM macro (~+561_737)
           §009 IM2COL 1×1→3×3      : kernel size doesn't affect area = 0
-          §009 RDC tree_width 8→16 : (16-8)/8 × 12_000 = +12_000
-          §010 PMU 3→8 counters    : 5 × 5_000 = +25_000
+          §009 RDC tree_width 8→16 : SPEC-013 FP reduction tree (+2_560)
+          §010 PMU 3→8 counters    : SPEC-013 event counters (+1_920)
           §010 SYNC 2→8 participants: 6 × 1_500 = +9_000
-          Total                                = +607_737
+          Total                                = +575_217
+        (WB/RDC/PMU now physical; SYNC still a calibration knob.)
         """
-        assert report.area_delta_um2 == pytest.approx(607_737, abs=200)
+        assert report.area_delta_um2 == pytest.approx(575_217, abs=200)
 
     def test_drain_time_within_small_band(self, report):
         """Variant flips knobs that don't affect main pipeline → drain stable."""

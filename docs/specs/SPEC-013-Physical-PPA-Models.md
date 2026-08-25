@@ -225,6 +225,8 @@ OB 1500 µm²/KB)。改用物理 SRAM macro(`cache_area_um2`,2926 µm²/KB):
 | **TLU**(嵌入表) | eDRAM macro(1T1C,0.067 µm²/bit) | emb_dim × eDRAM read | ✅ §3.7 |
 | **WB**(权重缓冲) | SRAM macro(`cache_area_um2`) | payload × SRAM read | ✅ §3.9 |
 | **OB**(输出/psum 缓冲) | SRAM macro(tile_kb × max_in_flight) | 累加逻辑 | ✅ §3.9(面积) |
+| **RDC**(归约) | FP 归约树(tree_width-1 个 FP 加法器) | — | ✅ (SPEC-013) |
+| **PMU**(计数器) | n_counters × (48-bit 寄存器 + 增量器) | — | ✅ (SPEC-013) |
 | TAU addr FIFO | 寄存器堆(addr_fifo_depth) | — | ✅ §3.8(FSM 部分仍占位) |
 | MC + control FSM(OGU/MCU/MTU/AGU/DMA/NoC/SFU/…) | 控制面 FSM 逻辑 | — | ⏸ 留 Phase 5 综合(见 §5.1) |
 

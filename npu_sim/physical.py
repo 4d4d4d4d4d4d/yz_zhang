@@ -228,6 +228,21 @@ def logic_block_area_um2(gates: int) -> float:
     return gates * A_GATE_UM2
 
 
+def reduction_tree_area_um2(width: int, mantissa_bits: int = _FP32_MANT) -> float:
+    """FP reduction tree over ``width`` inputs: needs width-1 FP adders."""
+    return max(0, width - 1) * fp_add_gates(mantissa_bits) * A_GATE_UM2
+
+
+# A performance counter is a wide event register plus its increment adder.
+PMU_COUNTER_BITS = 48
+
+
+def counter_area_um2(n_counters: int, counter_bits: int = PMU_COUNTER_BITS) -> float:
+    """Area (µm²) of ``n_counters`` event counters (register + incrementer each)."""
+    per = reg_gates(counter_bits) + add_gates(counter_bits)
+    return n_counters * per * A_GATE_UM2
+
+
 # MMU TLB: each entry holds a VPN tag + PPN + flags (~8 bytes); plus a
 # page-table-walker state machine (~2000 NAND2-equivalent gates).
 TLB_ENTRY_BYTES = 8
