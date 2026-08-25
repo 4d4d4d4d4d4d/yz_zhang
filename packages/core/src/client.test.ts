@@ -139,6 +139,26 @@ describe('V1 接口', () => {
     const [, init] = fetchImpl.mock.calls[0];
     expect(JSON.parse(init.body)).toEqual({ target_type: 'content', target_id: 8, reason: '违规' });
   });
+
+  it('LAW-031 同意/撤回打到各自 scope 的路径（撤回不能误发成授权）', async () => {
+    const { client, fetchImpl } = makeClient(200, { scope: 'location', revoked: true });
+    await client.revokeConsent('location');
+    await client.grantConsent('payment');
+    expect(fetchImpl.mock.calls.map((c: unknown[]) => c[0])).toEqual([
+      'http://x/api/v1/legal/consents/location/revoke',
+      'http://x/api/v1/legal/consents/payment/grant',
+    ]);
+    expect(fetchImpl.mock.calls[0][1].method).toBe('POST');
+  });
+
+  it('LAW-030 协议更新被后端拒绝时，错误码原样透出给页面', async () => {
+    const { client } = makeClient(409, {
+      detail: { code: 'agreement_update_required', message: '《隐私政策》已更新' },
+    });
+    const err = await client.apply(1).catch((e) => e);
+    expect(err.status).toBe(409);
+    expect(err.code).toBe('agreement_update_required');
+  });
 });
 
 describe('helpers', () => {

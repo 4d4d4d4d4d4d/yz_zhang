@@ -49,6 +49,10 @@ def bind_payout_account(
 
     if user.real_name and body.holder_name != user.real_name:
         raise bad_request("收款人姓名须与实名认证一致", "holder_name_mismatch")
+    # LAW-031 收款账户是敏感个人信息：绑定行为即构成对该项的单独同意
+    from app.modules.legal import consent
+
+    consent.ensure(db, user.id, "payment")
     acct = db.get(PayoutAccount, user.id)
     if not acct:
         acct = PayoutAccount(user_id=user.id)
@@ -122,6 +126,12 @@ def withdraw(
     idempotency_key: str = Header(default=""),
 ):
     """PAY-004/007 提现：小额即时（模拟 T+0），大额冻结人审，日限额硬拒。幂等防重复。"""
+    from app.modules.legal import consent
+
+    consent.require_current_agreement(db, user.id)  # LAW-030
+    # LAW-031 支付项的「未同意」不在这里拦：撤回时收款账户已被解绑，
+    # 下面的 no_payout_account 校验既覆盖了这种情况，提示也更有用
+
     def run():
         return service.withdraw(db, user.id, body.amount_cents)
 

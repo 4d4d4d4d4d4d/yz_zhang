@@ -15,6 +15,87 @@ from app.modules.task.models import Task
 
 router = APIRouter(prefix="/legal", tags=["legal"])
 
+
+# ---------- LAW-030/031/032 协议版本化、单独同意与数据主体权利 ----------
+@router.get("/agreements")
+def my_agreements(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """我同意过什么、哪些待重新同意、哪些敏感项可撤回（撤回会失去什么）。"""
+    from app.modules.legal import consent
+
+    return consent.status(db, user.id)
+
+
+@router.post("/agreements/accept")
+def accept_agreements(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """LAW-030 协议版本更新后重新同意。"""
+    from app.modules.legal import consent
+
+    return consent.accept_documents(db, user.id)
+
+
+@router.post("/consents/{scope}/grant")
+def grant_consent(
+    scope: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """LAW-031 显式授权某个敏感项（撤回后唯一的重新开启入口）。"""
+    from app.modules.legal import consent
+
+    return consent.grant_sensitive(db, user.id, scope)
+
+
+@router.post("/consents/{scope}/revoke")
+def revoke_consent(
+    scope: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """LAW-032 撤回同意，并**当场执行**撤回的后果。
+
+    只写一条 revoked 记录而不动依赖它的数据，等于「表面撤回」——
+    收款账户还留在库里、还能提现，那这个按钮就是骗人的。
+    """
+    from app.modules.legal import consent
+
+    result = consent.revoke(db, user.id, scope)
+    result["applied"] = _apply_revocation(db, user.id, scope)
+    return result
+
+
+def _apply_revocation(db: Session, user_id: int, scope: str) -> list[str]:
+    """撤回的实际执行：删掉不再有合法性基础的数据。
+
+    刻意**不**删的：已完成交易的资金流水与合约签署记录——
+    《电子商务法》要求商品/服务信息与交易信息保存三年，
+    PIPL 也把「法律法规另有规定」列为删除权的例外。
+    """
+    applied: list[str] = []
+    if scope == "payment":
+        from app.modules.wallet.models import PayoutAccount
+
+        acct = db.get(PayoutAccount, user_id)
+        if acct:
+            db.delete(acct)
+            applied.append("payout_account_unbound")
+    elif scope == "location":
+        from app.modules.task.models import ProgressLog, Task
+
+        # 仍在进行中/纠纷中的任务，其打卡坐标是对方举证「你到没到场」的唯一凭据，
+        # 属于删除权的法定例外（争议解决所必需），保留；其余立即清空。
+        live = [
+            row.id for row in db.query(Task.id).filter(
+                Task.status.in_(("in_progress", "submitted", "disputed"))
+            )
+        ]
+        query = db.query(ProgressLog).filter(
+            ProgressLog.user_id == user_id, ProgressLog.lat.isnot(None)
+        )
+        if live:
+            query = query.filter(ProgressLog.task_id.notin_(live))
+        cleared = query.update({"lat": None, "lng": None}, synchronize_session=False)
+        applied.append(f"location_points_cleared:{cleared}")
+        if live:
+            applied.append("live_task_checkins_retained_for_dispute")
+    db.flush()
+    return applied
+
 DISCLAIMER = "以上内容仅为一般性法律信息，不构成法律意见；正式法律服务请咨询执业律师。"
 
 # LAW-001 法律常识库（生产为 RAG + 审查层，此处规则实现保证可测与不编造）

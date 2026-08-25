@@ -117,6 +117,10 @@ def _get_task(db: Session, task_id: int) -> Task:
 # ---------- 发布（TASK-001/004/005）----------
 @router.post("/tasks", status_code=201)
 def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # LAW-030 协议更新后，关键动作前必须重新同意（只拦关键动作，不拦全站）
+    from app.modules.legal import consent
+
+    consent.require_current_agreement(db, user.id)
     if body.task_type not in TASK_TYPES:
         raise bad_request("非法任务类型", "invalid_type")
     if body.visibility not in ("public", "circle"):
@@ -368,6 +372,9 @@ def list_tasks(
     if lat is None or lng is None:
         rows = query.offset(offset).limit(limit).all()
         return [dump_task(t) | {"distance_m": None} for t in rows]
+    # LAW-031 广场是匿名可访问的，这里拿不到身份，也就无从记录同意。
+    # 之所以不必记录：坐标只用于本次排序，**不落库、不关联到人**——
+    # 需要单独同意的是「处理并留存」，不是这种一次性计算。落库的只有打卡（见 checkin）。
     # 地理检索：取候选窗口按距离过滤+排序后再分页（规模化替换为空间索引）
     rows = query.limit(500).all()
     items = []
@@ -420,6 +427,9 @@ def apply(
     user: User = Depends(require_verified),
     db: Session = Depends(get_db),
 ):
+    from app.modules.legal import consent
+
+    consent.require_current_agreement(db, user.id)  # LAW-030
     task = _get_task(db, task_id)
     if task.status != "published":
         raise conflict("任务不在招募中", "not_recruiting")
@@ -601,6 +611,10 @@ def checkin(
         raise conflict("任务不在执行中", "not_in_progress")
     if task.is_remote or task.lat is None:
         raise bad_request("线上任务无需到场打卡", "no_checkin_needed")
+    # LAW-031 精确位置是敏感个人信息：打卡动作即单独同意；撤回后拒绝继续处理
+    from app.modules.legal import consent
+
+    consent.ensure(db, user.id, "location")
     distance = haversine_m(task.lat, task.lng, body.lat, body.lng)
     if distance > settings.CHECKIN_RADIUS_M:
         raise bad_request(f"距任务地点 {distance:.0f} 米，超出打卡范围", "too_far")
@@ -664,7 +678,12 @@ def get_trip(task_id: int, user: User = Depends(get_current_user), db: Session =
 
 @router.post("/tasks/{task_id}/sos", status_code=201)
 def sos(task_id: int, body: CheckinIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """GEO-023 紧急求助：留痕 + 通知对方与平台（生产联动 110/紧急联系人）。"""
+    """GEO-023 紧急求助：留痕 + 通知对方与平台（生产联动 110/紧急联系人）。
+
+    LAW-031 这里**刻意不做**位置同意校验：PIPL 第十三条第(四)项把
+    「紧急情况下为保护自然人的生命健康所必需」列为无需同意的处理情形。
+    让求助按钮卡在合规弹窗上，是把合规做成了事故。
+    """
     task = _get_task(db, task_id)
     if user.id not in (task.creator_id, task.executor_id):
         raise forbidden()

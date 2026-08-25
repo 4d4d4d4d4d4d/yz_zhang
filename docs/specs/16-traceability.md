@@ -1,8 +1,42 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V42 全批次完成（2026-08-22）。
-> 后端 268 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
+> 状态：MVP + V1~V52 全批次完成（2026-08-25）。
+> 后端 436 tests + 前端 17 tests 全绿；`scripts/smoke.py`（mock 态）与
+> `scripts/sandbox_check.py`（存管合规态，22 项）两条闭环自检均通过。
+> 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V52 批次：协议版本化、单独同意与撤回的**实际后果**）
+
+> 模块 spec：[26-legal-enforceability.md](26-legal-enforceability.md) 第 D 节（LAW-005/030/031/032）
+>
+> **检视结论**：V50 把 `AGREEMENT_VERSION` 加进了配置，**却从未被任何代码读过**——
+> 这正是我在 AIO-003 批评过的「存了但从不使用」，只不过这次是我自己留下的。
+> 一个存在但没人读的版本号，比没有更糟：它让人以为协议版本管理已经做了。
+>
+> 实现时的三个判断，每个都可以反着做，所以写下来：
+> 1. **注册即同意三份文书，但敏感项不在此列**。注册页展示协议是业界标准，
+>    强行让用户注册完再点一次「我同意」不增加任何法律效力；真正有意义的是
+>    **版本变更后重新同意**。而证件/位置/支付必须由各自的动作单独同意——
+>    PIPL 第二十九条明确禁止把敏感项塞进总协议一揽子勾选。
+> 2. **只拦关键动作，不拦全站**。协议过期时若连协议本身、账号注销、数据导出
+>    都打不开，用户会卡进「要同意才能用、要能用才看得到要同意什么」的死循环——
+>    那是把合规做成了拒绝服务。
+> 3. **撤回必须有实际后果**。只写一条 revoked 记录、依赖它的数据原样留着、
+>    能力照样能用，那这个按钮就是骗人的。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **LAW-030 三份文书版本化 + 变更重新同意** | `legal/consent.py::UserConsent`（只增不改的同意流水）、`current_version()` 读 `AGREEMENT_VERSION`、`require_current_agreement()` 挂在发布/报名/托管/提现四个关键动作上 | `tests/test_consent_and_rights.py::test_law044_agreement_update_blocks_key_actions` |
+| **LAW-044 合规不得变成拒绝服务** | 协议过期时读协议、看资料、浏览广场、导出数据一律放行 | 同上 `::test_law044_reading_agreements_is_never_blocked` |
+| **LAW-031 敏感项单独同意** | `SENSITIVE_SCOPES`（证件/位置/支付）各自独立；`consent.ensure()` 在实名、绑收款账户、到场打卡三处随动作记录同意 | 同上 `::test_law031_sensitive_consent_granted_by_the_action_that_needs_it`、`::test_law031_checkin_grants_location_consent` |
+| **LAW-031 撤回后不得「自动重新同意」** | `ensure()` 区分「从未同意」与「已撤回」：前者随动作记录，后者硬拒，必须显式重新授权 | 同上 `::test_law032_revoked_consent_is_not_silently_reacquired` |
+| **LAW-032 撤回的实际后果** | 撤回支付 → 解绑收款账户；撤回证件 → `require_verified` 停用接单与资金操作；撤回位置 → 清空已结束任务坐标、拒绝后续打卡 | 同上 `::test_law032_revoking_payment_unbinds_payout_account`、`::test_law032_revoking_identity_disables_verified_only_actions` |
+| **LAW-032 删除权 vs 举证需要** | 进行中/纠纷中任务的打卡坐标**依法保留**（争议解决所必需，PIPL 删除权例外），其余立即清空——全删会让「你根本没到场」变成各说各话 | 同上 `::test_law032_revoking_location_keeps_live_task_checkins_as_evidence` |
+| **LAW-032 数据主体权利入口** | `status()` 返回 rights 映射（查询/导出/更正/删除/撤回），Web 端 `Profile.tsx::PrivacyConsents` 渲染成可点的界面；`/users/me/export` 补上同意历史 | 同上 `::test_law032_rights_map_points_at_endpoints_that_exist`（逐个打过去看通不通）、`::test_law032_export_includes_consent_history` |
+| **LAW-032 撤回前先告知后果** | `revocation_effect` 随状态一起返回，前端在确认框里先展示再执行 | 同上 `::test_revocation_effect_is_disclosed_before_revoking` |
+| **LAW-005/045 未成年人拦截** | 实名时从证件号派生出生日期判断成年，**只落 `is_adult` 标记不存明文**；15 位老证件等解析不了的一律放行（拦截基于确证事实，不基于解析失败） | 同上 `::test_law045_minor_cannot_complete_verification`、`::test_law045_unparsable_id_is_not_blocked` |
+| 实现中修正的自身缺陷 | 支付同意校验原本插在 `no_payout_account` 之前，把「你还没绑卡」这个能照做的提示换成了「请先同意支付信息处理」——一句让人去点空设置页的话。合规校验只管「撤回后必须停」，「从未同意」交给更具体的业务校验 | 同上 `::test_law031_never_consented_gets_the_actionable_error_not_a_consent_lecture` |
 
 ## 已实现（V51 批次：沙箱桩——让预留的接口真的跑得通）
 

@@ -285,7 +285,9 @@ def fund_contract(
     这是刻意选的形态，避免为了打折去改动托管账目本身。
     """
     from app.modules.growth import service as growth
+    from app.modules.legal import consent
 
+    consent.require_current_agreement(db, user.id)  # LAW-030 资金动作前校验协议版本
     contract = _get(db, contract_id, user)
     task = db.get(Task, contract.task_id)
     discount = 0

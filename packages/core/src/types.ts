@@ -401,3 +401,32 @@ export interface AnchorCoverage {
   }>;
   note: string;
 }
+
+/** LAW-030 一份基础文书的同意状态。 */
+export interface AgreementDocument {
+  key: string;
+  name: string;
+  current_version: string;
+  /** 用户同意过的版本；从未同意为 null。 */
+  agreed_version: string | null;
+  needs_reconsent: boolean;
+}
+
+/** LAW-031 一个敏感个人信息处理项——每项都必须单独同意、可单独撤回。 */
+export interface SensitiveScope {
+  key: string;
+  purpose: string;
+  granted: boolean;
+  granted_at: string | null;
+  revocable: boolean;
+  /** 撤回后会失去什么——必须在用户点撤回**之前**就展示。 */
+  revocation_effect: string;
+}
+
+export interface AgreementStatus {
+  current_version: string;
+  documents: AgreementDocument[];
+  sensitive_scopes: SensitiveScope[];
+  /** LAW-032 数据主体权利入口，前端据此渲染，避免「有能力但用户找不到」。 */
+  rights: Record<string, string>;
+}

@@ -1,5 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
+  AgreementStatus,
   CircleInfo,
   ContentItem,
   CouponTemplate,
@@ -656,6 +657,25 @@ export class PlatformClient {
   exportEvidence(disputeId: number) {
     return this.request<{ package: Record<string, unknown>; sha256: string }>(
       'GET', `/legal/disputes/${disputeId}/evidence-export`,
+    );
+  }
+  // LAW-030/031/032 协议版本、单独同意与数据主体权利
+  myAgreements() {
+    return this.request<AgreementStatus>('GET', '/legal/agreements');
+  }
+  acceptAgreements() {
+    return this.request<{ accepted_version: string; documents: string[] }>(
+      'POST', '/legal/agreements/accept',
+    );
+  }
+  grantConsent(scope: string) {
+    return this.request<{ scope: string; granted: boolean; version: string }>(
+      'POST', `/legal/consents/${scope}/grant`,
+    );
+  }
+  revokeConsent(scope: string) {
+    return this.request<{ scope: string; revoked: boolean; effect: string; applied: string[] }>(
+      'POST', `/legal/consents/${scope}/revoke`,
     );
   }
   report(targetType: 'task' | 'content' | 'user' | 'message', targetId: number, reason: string) {

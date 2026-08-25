@@ -39,6 +39,8 @@ class User(Base):
     # VND-023 证件号只存不可逆摘要（查重/风控关联）与掩码串，明文不入库
     id_digest: Mapped[str] = mapped_column(String(80), default="", index=True)
     id_masked: Mapped[str] = mapped_column(String(24), default="")
+    # LAW-005 只存派生的成年标记，出生日期与证件号明文都不落库
+    is_adult: Mapped[bool] = mapped_column(Boolean, default=False)
     # 平台侧角色（OPS-001 简化：仲裁/运营用）
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     # RISK-006 封禁（封禁后所有需登录操作被拒）

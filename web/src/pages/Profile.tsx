@@ -1,4 +1,4 @@
-import { ApiError, fmtYuan, type InvitationItem } from '@platform/core';
+import { ApiError, fmtYuan, type AgreementStatus, type InvitationItem } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
@@ -59,6 +59,74 @@ function DeviceSessions() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function PrivacyConsents() {
+  const { client } = useApp();
+  const [status, setStatus] = useState<AgreementStatus | null>(null);
+  const [msg, setMsg] = useState('');
+  const load = useCallback(
+    async () => setStatus(await client.myAgreements().catch(() => null)),
+    [client],
+  );
+  useEffect(() => { void load(); }, [load]);
+  if (!status) return null;
+
+  const stale = status.documents.filter((d) => d.needs_reconsent);
+  return (
+    <div className="card">
+      <h3>协议与个人信息授权</h3>
+      <p className="muted" style={{ marginTop: 4 }}>当前协议版本 {status.current_version}</p>
+      {stale.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          {/* LAW-030 协议更新后，发布/接单/资金操作会被拦下，所以这里要显眼 */}
+          <p className="error">《{stale.map((d) => d.name).join('、')}》已更新，需重新阅读并同意后才能继续发布任务、接单与资金操作。</p>
+          <button onClick={async () => {
+            await client.acceptAgreements();
+            await load();
+            setMsg('已同意最新版本');
+          }}>阅读并同意最新版本</button>
+        </div>
+      )}
+      <div className="list" style={{ marginTop: 8 }}>
+        {status.sensitive_scopes.map((s) => (
+          <div className="task-item" key={s.key}>
+            <div>
+              <strong>{s.purpose}</strong>
+              {' '}
+              {s.granted
+                ? <span className="badge ok">已授权</span>
+                : <span className="badge warn">未授权</span>}
+              {/* LAW-032 撤回的后果必须在点之前就看得见 */}
+              <p className="muted">{s.revocation_effect}</p>
+            </div>
+            <button className={s.granted ? 'ghost' : ''} onClick={async () => {
+              if (s.granted && !confirm(`撤回后：${s.revocation_effect}\n\n确认撤回？`)) return;
+              const res = s.granted
+                ? await client.revokeConsent(s.key)
+                : await client.grantConsent(s.key);
+              await load();
+              setMsg(s.granted ? `已撤回（${(res as { applied?: string[] }).applied?.join('、') || '已生效'}）` : '已授权');
+            }}>{s.granted ? '撤回同意' : '授权'}</button>
+          </div>
+        ))}
+      </div>
+      {msg && <p style={{ color: 'var(--ok)', marginTop: 6 }}>{msg}</p>}
+      <p className="muted" style={{ marginTop: 8 }}>
+        你还可以
+        <button className="ghost" style={{ marginLeft: 6 }} onClick={async () => {
+          const data = await client.exportMyData();
+          const url = URL.createObjectURL(
+            new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
+          );
+          const a = document.createElement('a');
+          a.href = url; a.download = 'my-data.json'; a.click();
+          URL.revokeObjectURL(url);
+        }}>导出我的全部数据</button>
+        （含同意记录）。删除个人信息请使用页面底部的「注销账号」。
+      </p>
     </div>
   );
 }
@@ -147,6 +215,7 @@ export default function Profile() {
         </div>
       )}
       <ServicePricing />
+      <PrivacyConsents />
       <DeviceSessions />
       <div className="card row">
         <button className="danger" onClick={() => { setToken(null); nav('/'); }}>退出登录</button>

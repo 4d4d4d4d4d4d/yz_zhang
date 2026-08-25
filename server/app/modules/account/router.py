@@ -149,6 +149,10 @@ def register(request: Request, body: RegisterIn, db: Session = Depends(get_db), 
     # CNT-022 生成本人邀请码（基于 id，稳定唯一）
     user.referral_code = f"R{user.id:06d}"
     db.add(user)
+    # LAW-030 注册页展示协议，注册即同意当前版本（敏感项不在此列，须单独同意）
+    from app.modules.legal import consent
+
+    consent.grant_registration_consents(db, user.id)
     return {"token": _issue_token(db, user, user_agent), "user": _me(user)}
 
 
@@ -367,6 +371,11 @@ def verify_identity(
 
     if user.is_verified:
         raise conflict("已完成实名认证", "already_verified")
+    # LAW-031 证件是敏感个人信息：提交本表单即构成对该项的**单独同意**
+    # （单独告知 + 单独行为），并留痕以备举证
+    from app.modules.legal import consent
+
+    consent.ensure(db, user.id, "identity")
     provider = get_provider("kyc")
     try:
         result = vendor_base.call(
@@ -386,12 +395,38 @@ def verify_identity(
     taken = db.query(User).filter(User.id_digest == digest, User.id != user.id).first()
     if taken:
         raise conflict("该证件号已绑定其它账号", "id_already_bound")
+    # LAW-005 未成年人不得接单：出生日期从证件号派生，**只存成年标记不存明文**
+    if not _is_adult(body.id_number):
+        raise bad_request(
+            "未满 18 周岁不能完成实名认证与接单（涉及合同行为能力与用工合规）",
+            "minor_not_allowed",
+        )
     user.is_verified = True
     user.real_name = body.real_name
     user.id_digest = digest
     user.id_masked = id_mask(body.id_number)
+    user.is_adult = True
     db.add(user)
     return {"is_verified": True}
+
+
+def _is_adult(id_number: str) -> bool:
+    """LAW-005 从 18 位证件号第 7~14 位取出生日期判断是否成年。
+
+    格式不可解析时**放行**：拦截应基于确证的事实，而不是解析失败的猜测；
+    真实 eKYC 供应商会直接返回出生日期，届时改用它更可靠。
+    """
+    from datetime import date
+
+    if len(id_number) != 18 or not id_number[6:14].isdigit():
+        return True
+    try:
+        born = date(int(id_number[6:10]), int(id_number[10:12]), int(id_number[12:14]))
+    except ValueError:
+        return True
+    today = date.today()
+    age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+    return age >= 18
 
 
 # ---------- 黑名单（ACC-033）----------
@@ -440,6 +475,7 @@ def add_certification(
 @router.get("/users/me/export")
 def export_my_data(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     from app.modules.content.models import Content
+    from app.modules.legal.consent import UserConsent
     from app.modules.task.models import Review, Task
     from app.modules.wallet.models import LedgerEntry
 
@@ -460,6 +496,15 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
                       "created_at": c.created_at.isoformat()} for c in contents],
         "reviews_written": [{"task_id": r.task_id, "stars": r.stars, "comment": r.comment}
                             for r in reviews],
+        # LAW-032 同意记录本身也是个人信息，且是「平台凭什么处理我的数据」的答案，
+        # 导出里少了它，用户就没法核对平台的处理是否越界
+        "consents": [
+            {"scope": c.scope, "version": c.version, "notice": c.notice,
+             "granted_at": c.granted_at.isoformat(),
+             "revoked_at": c.revoked_at.isoformat() if c.revoked_at else None}
+            for c in db.query(UserConsent).filter(UserConsent.user_id == user.id)
+            .order_by(UserConsent.id).all()
+        ],
     }
 
 
