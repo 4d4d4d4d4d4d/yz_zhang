@@ -60,6 +60,7 @@ the test assertions.
 | 49 | [ZOPA Band Fix + Surplus Split](49-zopa-surplus.md) | `logic/negotiation.js` (discountZopa/surplusSplit/discountAnchor), `NegotiationPlaybook.vue` | `tests/zopa.test.js` |
 | 50 | [Explainable Recommender Wired Up](50-explainable-recommend.md) | `logic/recommend.js` (conceptSignals), `RecommendDeep.vue` | `tests/conceptSignals.test.js` |
 | 51 | [Marketing Control: engines wired](51-marketing-control-engines.md) | `logic/marketing.js` (channelRollup/percentShares), `MarketingControl.vue` | `tests/channelRollup.test.js` |
+| 52 | [Risk Appetite & Control Effectiveness](52-risk-appetite.md) | `logic/risk.js`, `RiskHeatmap.vue` appetite panel | `tests/risk.test.js` |
 
 Capability flow across domains:
 

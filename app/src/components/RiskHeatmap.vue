@@ -1,7 +1,9 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { riskScore, severityBand, assessRisk, portfolioRisk, DEFAULT_APPETITE } from '../logic/risk.js'
 
 const view = ref('inherent')
+const appetite = ref(DEFAULT_APPETITE)
 
 const risks = [
   { id: 'R-001', title: 'GDPR cross-border transfer breach',     cat: 'Privacy',  owner: 'Cobalt Legal',  i: { l: 4, p: 5 }, r: { l: 2, p: 5 }, controls: ['SCC', 'DPA', 'Encryption'] },
@@ -25,16 +27,14 @@ function cell(l, p) {
   })
 }
 
-function risk(l, p) { return l * p }
-function severity(l, p) {
-  const s = risk(l, p)
-  if (s >= 16) return 'critical'
-  if (s >= 12) return 'high'
-  if (s >= 6) return 'med'
-  return 'low'
-}
+// Spec 52 — scoring and banding come from the shared risk engine.
+const risk = riskScore
+const severity = (l, p) => severityBand(riskScore(l, p))
 
 const cur = computed(() => risks.find(r => r.id === selected.value))
+const curAssessment = computed(() => assessRisk(cur.value, appetite.value))
+const portfolio = computed(() => portfolioRisk(risks, { appetite: appetite.value }))
+const pct = v => v === null ? '—' : (v * 100).toFixed(0) + '%'
 
 const summary = computed(() => {
   const view_ = view.value === 'inherent' ? 'i' : 'r'
@@ -45,13 +45,12 @@ const summary = computed(() => {
   return counts
 })
 
-const movement = computed(() => {
-  const reduced = risks.filter(r => (r.i.l * r.i.p) > (r.r.l * r.r.p)).length
-  const avgRed = Math.round(
-    risks.reduce((s, r) => s + (1 - (r.r.l * r.r.p) / (r.i.l * r.i.p)) * 100, 0) / risks.length
-  )
-  return { reduced, avgRed }
-})
+const movement = computed(() => ({
+  reduced: risks.filter(r => riskScore(r.i.l, r.i.p) > riskScore(r.r.l, r.r.p)).length,
+  // Exposure-weighted, not a mean of per-risk percentages: a trivial risk
+  // fully mitigated must not mask a critical one left untouched.
+  avgRed: Math.round((portfolio.value.portfolioEffectiveness ?? 0) * 100)
+}))
 </script>
 
 <template>
@@ -66,6 +65,37 @@ const movement = computed(() => {
         <button :class="{ on: view === 'inherent' }" @click="view = 'inherent'" type="button">Inherent</button>
         <button :class="{ on: view === 'residual' }" @click="view = 'residual'" type="button">Residual</button>
       </div>
+    </div>
+
+    <div class="card appetite" :class="{ breached: portfolio.breaches.length > 0 }">
+      <div class="ap-head">
+        <div>
+          <div class="kicker">Risk appetite · ISO 31000</div>
+          <h3>
+            {{ portfolio.breaches.length }} risk{{ portfolio.breaches.length === 1 ? '' : 's' }} above appetite
+          </h3>
+          <p class="meta">
+            Exposure {{ portfolio.totalInherent }} → {{ portfolio.totalResidual }} after controls ·
+            portfolio effectiveness <strong>{{ pct(portfolio.portfolioEffectiveness) }}</strong>
+            (exposure-weighted, not an average of per-risk percentages)
+          </p>
+        </div>
+        <label class="ap-set">
+          Appetite ≤ <strong>{{ appetite }}</strong>
+          <input type="range" min="1" max="25" v-model.number="appetite" />
+        </label>
+      </div>
+      <div class="ap-list" v-if="portfolio.breaches.length">
+        <button v-for="b in portfolio.breaches" :key="b.id" type="button" class="ap-chip"
+          :class="b.residualBand" @click="selected = b.id">
+          {{ b.id }} · residual {{ b.residual }}
+        </button>
+      </div>
+      <p v-else class="ap-clear">Every residual risk is within the stated appetite.</p>
+      <p v-if="portfolio.issues.length" class="ap-issue">
+        ⚠ {{ portfolio.issues.length }} register entr{{ portfolio.issues.length === 1 ? 'y has' : 'ies have' }}
+        a residual above inherent — controls cannot raise risk.
+      </p>
     </div>
 
     <div class="row">
@@ -128,10 +158,15 @@ const movement = computed(() => {
           </div>
           <div class="m-side">
             <div class="m-lbl">Δ</div>
-            <div class="m-val ok">−{{ cur.i.l * cur.i.p - cur.r.l * cur.r.p }}</div>
-            <div class="m-sub">reduction</div>
+            <div class="m-val ok">−{{ curAssessment.inherent - curAssessment.residual }}</div>
+            <div class="m-sub">{{ pct(curAssessment.effectiveness) }} control effectiveness</div>
           </div>
         </div>
+
+        <p class="d-appetite" :class="{ over: curAssessment.breach }">
+          Residual {{ curAssessment.residual }} vs appetite {{ appetite }} —
+          <strong>{{ curAssessment.breach ? 'above appetite, escalate' : 'within appetite' }}</strong>
+        </p>
 
         <div class="kicker">Controls in place</div>
         <div class="controls">
@@ -149,6 +184,22 @@ const movement = computed(() => {
 
 <style scoped>
 .hm { display: flex; flex-direction: column; gap: 16px; }
+.appetite { padding: 16px 18px; border-left: 3px solid var(--success); }
+.appetite.breached { border-left-color: var(--danger); }
+.ap-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; flex-wrap: wrap; }
+.ap-head h3 { margin: 4px 0 6px; }
+.ap-set { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); flex-shrink: 0; }
+.ap-set input { accent-color: var(--primary); width: 140px; }
+.ap-list { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.ap-chip { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 5px 12px; font-size: 11px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.ap-chip.critical { border-color: rgba(248,113,113,.6); color: #fca5a5; }
+.ap-chip.high { border-color: rgba(251,191,36,.6); color: #fcd34d; }
+.ap-chip:hover { border-color: var(--primary); }
+.ap-clear { font-size: 12px; color: var(--success); margin: 10px 0 0; }
+.ap-issue { font-size: 11px; color: #fbbf24; margin: 8px 0 0; }
+.d-appetite { font-size: 12px; color: var(--text-dim); margin: 12px 0 0; padding-top: 10px; border-top: 1px dashed var(--border); }
+.d-appetite.over strong { color: var(--danger); }
+.d-appetite strong { color: var(--success); }
 .head { padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .kicker { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .1em; }
 .meta { color: var(--text-dim); font-size: 13px; margin: 4px 0 0; }
