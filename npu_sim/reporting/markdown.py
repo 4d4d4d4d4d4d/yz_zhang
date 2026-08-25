@@ -16,6 +16,7 @@ from npu_sim.evaluation.reconcile import PerOpReconcileReport, ReconcileReport
 from npu_sim.evaluation.runner import SimulationResult
 
 if TYPE_CHECKING:
+    from npu_sim.evaluation.energy import EnergyReport
     from npu_sim.evaluation.fidelity import ChipFidelityReport
     from npu_sim.evaluation.optimize import OptimizeReport
     from npu_sim.evaluation.pipeline import PipelineBottleneckReport
@@ -495,6 +496,35 @@ _AREA_MODEL_CAVEAT = (
     "width) are modeled as area-free, so a flat area column is a known gap "
     "(Phase 5 calibration), not a real zero-cost win."
 )
+
+
+def render_energy_report(report: "EnergyReport", arch_name: str = "") -> str:
+    """Render a workload energy report (dynamic + static → total) as Markdown."""
+    title = f"Workload energy — `{arch_name}`" if arch_name else "Workload energy"
+    parts: list[str] = [f"# {title}"]
+    parts.append(_two_col_table("Metric", "Value", [
+        ("ops", str(report.n_ops)),
+        ("dynamic energy", f"{report.dynamic_pj:,.0f} pJ"),
+        ("static energy", f"{report.static_pj:,.0f} pJ"),
+        ("total energy", f"{report.total_pj:,.0f} pJ ({report.total_pj/1000:,.1f} nJ)"),
+        ("energy / op", f"{report.energy_per_op_pj:,.0f} pJ"),
+        ("area", f"{report.total_area_um2/1e6:.3f} mm²"),
+        ("latency", f"{report.drain_cycles:,} cyc"),
+    ]))
+    if report.per_module_pj:
+        rows = [
+            (f"`{mid}`", f"{pj:,.0f} pJ",
+             f"{(pj / report.dynamic_pj * 100.0) if report.dynamic_pj else 0:.0f}%")
+            for mid, pj in report.per_module_pj
+        ]
+        parts.append("## Dynamic energy by module\n\n"
+                     + _three_col_table("module", "dynamic pJ", "share", rows))
+    parts.append(
+        "> Dynamic = Σ per-op energy (Horowitz-grounded, SPEC-013); static = "
+        "chip static power × runtime. Absolute figures carry the ±30% "
+        "analytical band (see docs/Physical-Validation.md)."
+    )
+    return "\n\n".join(parts)
 
 
 def render_fidelity_report(report: "ChipFidelityReport", arch_name: str = "") -> str:

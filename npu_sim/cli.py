@@ -21,6 +21,8 @@ Subcommands:
                                 pair diverges).
     fidelity <arch>             Report % of chip area on physically-grounded
                                 models vs [calibration knob] placeholders.
+    energy <arch> <ops>         Total workload energy (dynamic + static) +
+                                a PPA one-liner (area / energy / latency).
     bottleneck <arch>           Measure the pipeline throughput bottleneck —
                                 the slowest stage on the datapath, with a
                                 pipeline-model drain reconciled to measured.
@@ -322,6 +324,29 @@ def _cmd_bottleneck(args: argparse.Namespace, out: TextIO) -> int:
     return 0
 
 
+def _cmd_energy(args: argparse.Namespace, out: TextIO) -> int:
+    from npu_sim.evaluation import analyze_energy, elaborate
+    from npu_sim.evaluation.trace_ops import load_ops
+    from npu_sim.reporting import render_energy_report
+
+    arch_path = _require_path(args.arch)
+    ops_path = _require_path(args.ops)
+    try:
+        arch = elaborate(str(arch_path))
+        ops = load_ops(str(ops_path))
+    except NpuSimError as exc:
+        sys.stderr.write(f"elaboration error: {exc}\n")
+        return 2
+    except (ValueError, FileNotFoundError) as exc:
+        sys.stderr.write(f"ops load error: {exc}\n")
+        return 2
+
+    report = analyze_energy(ops, arch, max_cycles=args.max_cycles)
+    md = render_energy_report(report, arch_name=arch.name)
+    _write_output(md, args.out, out)
+    return 0
+
+
 def _cmd_fidelity(args: argparse.Namespace, out: TextIO) -> int:
     from npu_sim.evaluation import chip_fidelity, elaborate
     from npu_sim.reporting import render_fidelity_report
@@ -587,6 +612,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional output file; defaults to stdout.",
     )
     p_fid.set_defaults(handler=_cmd_fidelity)
+
+    p_en = subparsers.add_parser(
+        "energy",
+        help="Total workload energy = dynamic (per-op, Horowitz) + static "
+        "(power × runtime), with a PPA one-liner (SPEC-013).",
+    )
+    p_en.add_argument("arch", help="Path to the architecture YAML.")
+    p_en.add_argument(
+        "ops",
+        help="Path to an ops YAML (top-level `ops:` list, or a fixture with a "
+        "TraceProducer whose config.ops is reused).",
+    )
+    p_en.add_argument(
+        "--max-cycles", type=int, default=100_000,
+        help="Scheduler step cap for the measured run (default: 100000).",
+    )
+    p_en.add_argument(
+        "--out", default=None, help="Optional output file; defaults to stdout.",
+    )
+    p_en.set_defaults(handler=_cmd_energy)
 
     p_sw = subparsers.add_parser(
         "sweep",

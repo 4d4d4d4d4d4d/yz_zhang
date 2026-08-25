@@ -31,6 +31,7 @@ from npu_sim.evaluation.fidelity import (
     ModuleFidelity,
     chip_fidelity,
 )
+from npu_sim.evaluation.energy import EnergyReport, analyze_energy
 from npu_sim.evaluation.snapshot import (
     ConnectionSnapshot,
     FieldDiff,
@@ -77,6 +78,7 @@ def estimate_plan(
 
 __all__ = [
     "ChipFidelityReport",
+    "EnergyReport",
     "ComparisonReport",
     "ModuleFidelity",
     "ConnectionSnapshot",
@@ -95,6 +97,7 @@ __all__ = [
     "SweepPoint",
     "SweepReport",
     "analyze_pipeline_bottleneck",
+    "analyze_energy",
     "chip_fidelity",
     "capture_state",
     "compare",

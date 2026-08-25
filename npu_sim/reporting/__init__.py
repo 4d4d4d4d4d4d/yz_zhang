@@ -2,6 +2,7 @@
 
 from npu_sim.reporting.markdown import (
     render_comparison_report,
+    render_energy_report,
     render_fidelity_report,
     render_mapping_report,
     render_optimize_report,
@@ -15,6 +16,7 @@ from npu_sim.reporting.markdown import (
 
 __all__ = [
     "render_comparison_report",
+    "render_energy_report",
     "render_fidelity_report",
     "render_mapping_report",
     "render_optimize_report",

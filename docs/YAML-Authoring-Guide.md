@@ -342,6 +342,10 @@ python -m npu_sim bottleneck my_chip.yaml
 #   占位=控制面 FSM,待 Phase 5 综合。实测 v4 全栈芯片:88% 面积已物理化。
 python -m npu_sim fidelity my_chip.yaml
 
+# 功耗/能量:某 workload 的总能量 = 动态(逐算子 Horowitz)+ 静态(功耗×运行时),
+#   并给一行 PPA(面积/能量/延迟)。这是 PPA 里"E"的完整、随 workload 变的数字。
+python -m npu_sim energy my_chip.yaml attn_ops.yaml
+
 # 设计空间扫描:把某个模块的一个配置旋钮扫一组值,报 PPA 响应 + 瓶颈迁移
 #   —— 直接回答"改这个器件值多少"。每个值都是真跑一遍(临时 override 叠在 base 上)
 #   例:扫 AVP 向量宽度 16/32/64 —— 16→32 drain -42%,32→64 几乎不动(瓶颈迁到 dsb)
