@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Iterator, Optional
 
+from npu_sim import physical
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.clock import IClock
 from npu_sim.interfaces.module import (
@@ -155,16 +156,22 @@ class TAU(IModule):
         )
 
     def estimate_area(self) -> AreaModel:
+        # Hybrid: the address-generation FSM is control-plane logic whose gate
+        # count needs RTL synthesis (Phase 5) — kept as a [calibration knob]
+        # constant. The address FIFO IS a real size knob, so it is grounded as
+        # a register file (SPEC-013).
         active = set(self.active_capabilities())
         breakdown = {
             c.name: c.area_cost_um2
             for c in self.declared_capabilities()
             if c.name in active
         }
+        fifo = physical.register_file_area_um2(self._addr_fifo_depth, 8)  # 8B addresses
+        breakdown["addr_fifo"] = fifo
         return AreaModel(
             um2=sum(breakdown.values()),
             breakdown=breakdown,
-            notes="SPEC-007 §4.4.1 [calibration knob]",
+            notes="SPEC-007 FSM [calibration knob] + SPEC-013 physical addr FIFO",
         )
 
     def snapshot_state(self) -> ModuleState:

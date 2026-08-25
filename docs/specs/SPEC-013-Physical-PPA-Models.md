@@ -184,6 +184,13 @@ off-chip DRAM),替换旧的 flat 0.5 pJ(严重低估)。
 这是本轮最能体现"不臆想"的一步:**同样是"存储",片上 cache 用 SRAM 密度、大
 嵌入表用 eDRAM 密度,两者差 ~3.7×** —— 盲目套 SRAM 会得到假面积。
 
+## 3.8 TAU 地址 FIFO(control 模块里唯一可解析的 size 部分)
+
+TAU 的地址生成 FSM 是控制逻辑(留 Phase 5,§5.1),但它的 `addr_fifo_depth`
+是真实 size 旋钮 → 用寄存器堆建模:`register_file_area_um2(depth, 8B)`(depth
+16 → 4096 µm²,64 → 16384,∝ depth)。TAU 面积 = FSM 占位常数 + 物理 FIFO,是
+诚实的"部分物理化 + 部分明示占位"混合(其余 control 模块无此类 size 旋钮)。
+
 ## 4. 契约变更
 
 - MAC 覆盖 `estimate_area()` / `total_area_um2()` / `static_power_uw()` /
@@ -206,13 +213,27 @@ off-chip DRAM),替换旧的 flat 0.5 pJ(严重低估)。
 | **MMU**(TLB) | CAM(2.5× SRAM cell)+ walker 逻辑 | 固定 | ✅ §3.6 |
 | **CMDQ**(队列) | 寄存器堆(flops)+ 优先级仲裁逻辑 | 固定 | ✅ §3.6 |
 | **TLU**(嵌入表) | eDRAM macro(1T1C,0.067 µm²/bit) | emb_dim × eDRAM read | ✅ §3.7 |
-| MC(内存控制器)+ control(SPEC-007) | 控制逻辑,待 gate-count 模型 | — | 待做 |
+| TAU addr FIFO | 寄存器堆(addr_fifo_depth) | — | ✅ §3.8(FSM 部分仍占位) |
+| MC + control FSM(OGU/MCU/MTU/TAU/AGU/DMA) | 控制面 FSM 逻辑 | — | ⏸ 留 Phase 5 综合(见 §5.1) |
 
-**5 个 compute + L2/TLU/MMU/CMDQ 已物理化。** SPEC-011 存储/查找模块全部脱离
-占位。剩余 MC(内存控制器)及 control(SPEC-007:OGU/MCU/MTU/TAU/AGU/DMA)是
-控制面逻辑,仍 `[calibration knob]`,待 gate-count 模型。核心原则再次体现:
-**按真实存储类型建模** —— SRAM(L2)/ CAM(TLB)/ 寄存器堆(CMDQ)/ eDRAM
-(嵌入表),密度差 10× 以上,不能一刀切(§3.5 备注)。
+**解析物理模型的边界已到达。** 所有**可解析建模**的部件已物理化:compute 阵列
+(PE 数 / lanes / vector_width)+ 全部片上存储(SRAM/CAM/eDRAM/寄存器堆,各按
+真实单元密度,差 10× 以上不一刀切)。剩余的**控制面 FSM 逻辑**(MC + SPEC-007)
+按其本质留待 Phase 5 综合 —— 见 §5.1。
+
+## 5.1 为什么 control-plane FSM 面积留 `[calibration knob]`(不是偷懒)
+
+存储和规则数据通路阵列的面积**可从物理第一性 + 公开单元密度解析推导**(bitcell
+面积、PE 门数、CAM/eDRAM cell)。但控制面 FSM(op 生成、命令序列、地址生成状态
+机)的门数**无法从 config 或文献推导** —— 它取决于具体 RTL 实现,只有综合能给。
+
+**把占位 `30000 µm²` 改写成 `37500 门 × 0.8 µm²` 不是"变真",是把同一个猜测换
+个单位** —— 那才是臆想。所以诚实的做法是:
+- **有真实 size 旋钮的部分照样物理化**(如 TAU 的 `addr_fifo` → 寄存器堆,§3.8);
+- **纯 FSM 逻辑保留 `[calibration knob]`**,并明示"待 Phase 5 综合",而不是编造
+  门数。
+
+这是解析 PPA 模型的**诚实边界**:能从物理推的都推了,推不动的老实标注,等综合。
 
 **5 个 compute 模块(MAC/VAU/DSB/AVP/DAGC)全部迁移完成** —— compute 数据通路
 的 PPA 已全部脱离"经验拍值",改为规模驱动 + 文献引用单位成本。剩余占位系数
