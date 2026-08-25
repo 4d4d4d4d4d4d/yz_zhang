@@ -59,15 +59,16 @@ class TestStackedSPEC008Levers:
 
     def test_aggregate_area_matches_per_section_sum(self, report):
         """
-        Per-section area deltas expected:
-          §1 WB cap 64→256 KB        : (256-64) × 1200 = +230_400
+        Per-section area deltas (WB/OB now on the SPEC-013 physical SRAM macro,
+        ~2926 µm²/KB; other levers still calibration knobs):
+          §1 WB cap 64→256 KB        : SPEC-013 SRAM macro (~+561_737)
           §1 WB enable_prefetch       :                = +4_000
-          §2 OB tile 8→32 + 1→2       : 32×2 - 8×1 = 56 × 1500 = +84_000
+          §2 OB tile 8→32 + 1→2       : SPEC-013 SRAM macro
           §3 Quant per_channel        : 4000-500       = +3_500
           §4 SFU enable_trig          : 4000+4000      = +8_000
-          Total                                       = +329_900
+          Total                                       = +741_077
         """
-        assert report.area_delta_um2 == pytest.approx(329_900, abs=1.0)
+        assert report.area_delta_um2 == pytest.approx(741_077, abs=2.0)
 
     def test_static_power_grows_with_storage(self, report):
         """WB capacity_kb × 0.5 μW/KB + capability extras."""

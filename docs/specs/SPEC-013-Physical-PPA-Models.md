@@ -191,6 +191,16 @@ TAU 的地址生成 FSM 是控制逻辑(留 Phase 5,§5.1),但它的 `addr_fifo_
 16 → 4096 µm²,64 → 16384,∝ depth)。TAU 面积 = FSM 占位常数 + 物理 FIFO,是
 诚实的"部分物理化 + 部分明示占位"混合(其余 control 模块无此类 size 旋钮)。
 
+## 3.9 WB / OB 片上缓冲(SRAM,复用 cache_area_um2)
+
+WB(权重缓冲)和 OB(输出/psum 缓冲)都是片上 SRAM,原用手拍密度(WB 1200、
+OB 1500 µm²/KB)。改用物理 SRAM macro(`cache_area_um2`,2926 µm²/KB):
+- WB 面积 = `cache_area_um2(capacity_kb)`;能量 = `sram_read_energy_pj(payload)`
+  (原手拍 0.3 pJ/byte → 物理 1.25)。
+- OB 面积 = `cache_area_um2(tile_kb × max_in_flight)`(双缓冲即 ×2)。
+两者的能力逻辑(prefetch / compression / fp32_acc)仍是小 `[calibration knob]`
+常数,存储主项已物理化。
+
 ## 4. 契约变更
 
 - MAC 覆盖 `estimate_area()` / `total_area_um2()` / `static_power_uw()` /
@@ -213,8 +223,14 @@ TAU 的地址生成 FSM 是控制逻辑(留 Phase 5,§5.1),但它的 `addr_fifo_
 | **MMU**(TLB) | CAM(2.5× SRAM cell)+ walker 逻辑 | 固定 | ✅ §3.6 |
 | **CMDQ**(队列) | 寄存器堆(flops)+ 优先级仲裁逻辑 | 固定 | ✅ §3.6 |
 | **TLU**(嵌入表) | eDRAM macro(1T1C,0.067 µm²/bit) | emb_dim × eDRAM read | ✅ §3.7 |
+| **WB**(权重缓冲) | SRAM macro(`cache_area_um2`) | payload × SRAM read | ✅ §3.9 |
+| **OB**(输出/psum 缓冲) | SRAM macro(tile_kb × max_in_flight) | 累加逻辑 | ✅ §3.9(面积) |
 | TAU addr FIFO | 寄存器堆(addr_fifo_depth) | — | ✅ §3.8(FSM 部分仍占位) |
-| MC + control FSM(OGU/MCU/MTU/TAU/AGU/DMA) | 控制面 FSM 逻辑 | — | ⏸ 留 Phase 5 综合(见 §5.1) |
+| MC + control FSM(OGU/MCU/MTU/AGU/DMA/NoC/SFU/…) | 控制面 FSM 逻辑 | — | ⏸ 留 Phase 5 综合(见 §5.1) |
+
+**实测 v4 全栈芯片 90% 面积已物理化**(compute + 全部片上缓冲/存储);剩余
+~10% 是控制/互连/胶合 FSM 与虚拟激励源,按本质留 Phase 5(§5.1)。用
+`python -m npu_sim fidelity <arch>` 可对任意芯片查证物理化占比。
 
 **解析物理模型的边界已到达。** 所有**可解析建模**的部件已物理化:compute 阵列
 (PE 数 / lanes / vector_width)+ 全部片上存储(SRAM/CAM/eDRAM/寄存器堆,各按

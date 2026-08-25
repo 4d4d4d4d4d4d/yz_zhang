@@ -26,19 +26,19 @@ def _run(name, cycles=3000):
 
 
 class TestOBTileCapacity:
-    """§2.5.1: tile_kb × max_in_flight_tiles × 1500 μm²."""
+    """SPEC-013: tile_kb × max_in_flight × physical SRAM macro (~2926 µm²/KB)."""
 
     def test_8kb_to_64kb_grows_area(self):
         report = compare(_run("usecase_ob_small_tile.yaml"),
                          _run("usecase_ob_large_tile.yaml"))
-        # (64 - 8) × 1 × 1500 = 84_000
-        assert report.area_delta_um2 == pytest.approx(84_000, abs=1.0)
+        # (64 - 8) KB × 1 × 2925.7 µm²/KB = 163_840
+        assert report.area_delta_um2 == pytest.approx(163_840, abs=2.0)
 
     def test_double_buffer_doubles_storage_area(self):
         report = compare(_run("usecase_ob_small_tile.yaml"),
                          _run("usecase_ob_double_buffer.yaml"))
-        # 8 × (2 - 1) × 1500 = 12_000
-        assert report.area_delta_um2 == pytest.approx(12_000, abs=1.0)
+        # 8 KB × (2 - 1) × 2925.7 µm²/KB = 23_406
+        assert report.area_delta_um2 == pytest.approx(23_406, abs=2.0)
 
 
 class TestOBFP32Acc:

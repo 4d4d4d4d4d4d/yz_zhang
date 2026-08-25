@@ -26,14 +26,14 @@ def _run(name: str, cycles: int = 3000):
 
 
 class TestWBCapacitySweep:
-    """§1.8 capacity影响:area scales with capacity_kb × 1200 μm²/KB."""
+    """SPEC-013: area scales with capacity via the physical SRAM macro (~2926 µm²/KB)."""
 
     def test_capacity_quadruples_area(self):
         base = _run("usecase_wb_small_capacity.yaml")
         var = _run("usecase_wb_large_capacity.yaml")
         report = compare(base, var)
-        # 64 KB → 256 KB = +192 KB × 1200 = +230_400 μm²
-        assert report.area_delta_um2 == pytest.approx(230_400, abs=1.0), (
+        # 64 KB → 256 KB = +192 KB × 2925.7 µm²/KB (SPEC-013 SRAM macro)
+        assert report.area_delta_um2 == pytest.approx(561_737, abs=2.0), (
             f"§1.5.1: capacity-scaled area delta wrong: {report.area_delta_um2}"
         )
 
@@ -90,8 +90,8 @@ class TestWBOverflow:
         base = _run("usecase_wb_small_capacity.yaml")
         var = _run("usecase_wb_overflow.yaml")
         report = compare(base, var)
-        # 64 KB - 4 KB = 60 KB × 1200 = -72_000 μm²
-        assert report.area_delta_um2 == pytest.approx(-72_000, abs=1.0)
+        # 64 KB → 4 KB = -60 KB × 2925.7 µm²/KB (SPEC-013 SRAM macro)
+        assert report.area_delta_um2 == pytest.approx(-175_543, abs=2.0)
 
 
 class TestWBContract:
@@ -109,12 +109,12 @@ class TestWBContract:
         assert port_names == {"weight_in", "weight_out", "prefetch_cmd_in", "cmd_in"}
 
     def test_area_scales_with_capacity_in_sim(self):
-        """SPEC-008 §1.5.1: 256 KB WB contributes ~307_200 μm² to total area.
+        """SPEC-013: 256 KB WB contributes ~749k µm² (physical SRAM macro).
         Derived via sim total_area_um2 to honor the YAML-driven contract."""
         result = _run("usecase_wb_large_capacity.yaml")
         # WB is the dominant area contributor (Producer/Consumer are virtual).
-        # 256 KB × 1200 = 307_200 μm² for storage + small capability extras.
-        assert result.total_area_um2 >= 307_200, (
+        # 256 KB × 2925.7 µm²/KB = ~749k µm² for storage + small capability extras.
+        assert result.total_area_um2 >= 748_000, (
             f"total_area_um2 = {result.total_area_um2} below WB capacity floor"
         )
 

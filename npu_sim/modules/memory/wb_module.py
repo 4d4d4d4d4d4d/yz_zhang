@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import Iterator, Optional
 
+from npu_sim import physical
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.clock import IClock
 from npu_sim.interfaces.module import (
@@ -220,8 +221,8 @@ class WB(IModule):
 
     def estimate_energy(self, operation: IOperation) -> EnergyEstimate:
         payload = int(operation.shape_info.get("payload_bytes", 1024))
-        # §1.5.3: 0.3 pJ/byte read + 0.5 pJ/byte write (avg per access).
-        dynamic = payload * 0.3
+        # SPEC-013: SRAM read energy (Horowitz 32b=5pJ → ~1.25 pJ/byte).
+        dynamic = physical.sram_read_energy_pj(payload)
         return EnergyEstimate(
             dynamic_pj=dynamic,
             static_pj_per_cycle=self.static_power_uw() * 1e-6,
@@ -229,9 +230,10 @@ class WB(IModule):
         )
 
     def estimate_area(self) -> AreaModel:
-        # §1.5.1: capacity_kb × 1200 μm²/KB, plus capability area.
+        # SPEC-013: on-chip SRAM weight buffer (45nm macro ~2926 µm²/KB),
+        # replacing the hand-picked 1200 µm²/KB.
         capacity_kb = self._capacity_bytes // 1024
-        storage_um2 = capacity_kb * 1200.0
+        storage_um2 = physical.cache_area_um2(capacity_kb)
         cap_breakdown = {
             c.name: c.area_cost_um2
             for c in self.declared_capabilities()
@@ -241,7 +243,7 @@ class WB(IModule):
         return AreaModel(
             um2=sum(breakdown.values()),
             breakdown=breakdown,
-            notes="SPEC-008 §1.5.1 [calibration knob]",
+            notes="SPEC-013 physical SRAM buffer + SPEC-008 capability logic [calibration knob]",
         )
 
     def static_power_uw(self) -> float:

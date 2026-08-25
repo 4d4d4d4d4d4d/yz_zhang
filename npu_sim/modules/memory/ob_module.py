@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Iterator, Optional
 
+from npu_sim import physical
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.clock import IClock
 from npu_sim.interfaces.module import (
@@ -208,8 +209,10 @@ class OB(IModule):
         )
 
     def estimate_area(self) -> AreaModel:
-        # §2.5.1: tile_kb × max_in_flight_tiles × 1500 μm²/KB.
-        storage_um2 = self._tile_kb * self._max_in_flight * _AREA_PER_KB_PER_TILE
+        # SPEC-013: on-chip SRAM output/psum buffer (45nm macro ~2926 µm²/KB),
+        # replacing the hand-picked 1500 µm²/KB. Double-buffered tiles →
+        # tile_kb × max_in_flight bytes of SRAM.
+        storage_um2 = physical.cache_area_um2(self._tile_kb * self._max_in_flight)
         cap_breakdown = {
             c.name: c.area_cost_um2
             for c in self.declared_capabilities()
@@ -219,7 +222,7 @@ class OB(IModule):
         return AreaModel(
             um2=sum(breakdown.values()),
             breakdown=breakdown,
-            notes="SPEC-008 §2.5.1 [calibration knob]",
+            notes="SPEC-013 physical SRAM buffer + SPEC-008 capability logic [calibration knob]",
         )
 
     def total_area_um2(self) -> float:

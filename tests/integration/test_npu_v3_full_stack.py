@@ -52,15 +52,16 @@ class TestStackedFiveSpecLevers:
 
     def test_aggregate_area_matches_per_section_sum(self, report):
         """
-        Expected breakdown:
-          §008 WB cap 64→256 KB    : 192 × 1200 = +230_400
+        Expected breakdown (WB now on the SPEC-013 physical SRAM macro
+        ~2926 µm²/KB; other levers still calibration knobs):
+          §008 WB cap 64→256 KB    : SPEC-013 SRAM macro (~+561_737)
           §009 IM2COL 1×1→3×3      : kernel size doesn't affect area = 0
           §009 RDC tree_width 8→16 : (16-8)/8 × 12_000 = +12_000
           §010 PMU 3→8 counters    : 5 × 5_000 = +25_000
           §010 SYNC 2→8 participants: 6 × 1_500 = +9_000
-          Total                                = +276_400
+          Total                                = +607_737
         """
-        assert report.area_delta_um2 == pytest.approx(276_400, abs=200)
+        assert report.area_delta_um2 == pytest.approx(607_737, abs=200)
 
     def test_drain_time_within_small_band(self, report):
         """Variant flips knobs that don't affect main pipeline → drain stable."""
