@@ -1,5 +1,11 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { channelRollup, allocateBudget, pacingStatus, percentShares } from '../logic/marketing.js'
+import { proportionZTest, recommendation } from '../logic/significance.js'
+import { sortRows, nextDir } from '../logic/sortRows.js'
+import { useFormat } from '../composables/useFormat.js'
+
+const { money } = useFormat()
 
 const campaigns = ref([
   { id: 'c1', name: 'Lumi · JP launch', channel: 'TikTok', status: 'live',   spend: 18400, roas: 4.2, ctr: 4.8, cvr: 3.2, delta: 12 },
@@ -16,18 +22,20 @@ const sortDir = ref('desc')
 const filter = ref('all')
 const filters = ['all', 'live', 'paused', 'draft']
 
-const sorted = computed(() => {
-  return [...campaigns.value]
-    .filter(c => filter.value === 'all' || c.status === filter.value)
-    .sort((a, b) => {
-      const dir = sortDir.value === 'asc' ? 1 : -1
-      return a[sortKey.value] > b[sortKey.value] ? dir : -dir
-    })
-})
+// Spec 51 — the hand-rolled comparator returned ±dir for equal values and
+// never 0, so compare(a,b) === compare(b,a) — an inconsistent comparator with
+// implementation-defined ordering. sortRows is stable and type-aware.
+const sorted = computed(() =>
+  sortRows(
+    campaigns.value.filter(c => filter.value === 'all' || c.status === filter.value),
+    sortKey.value,
+    sortDir.value
+  )
+)
 
 function sortBy(k) {
-  if (sortKey.value === k) sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
-  else { sortKey.value = k; sortDir.value = 'desc' }
+  sortDir.value = nextDir(sortKey.value, k, sortDir.value)
+  sortKey.value = k
 }
 
 function toggleStatus(c) {
@@ -37,13 +45,24 @@ function scale(c, by) {
   c.spend = Math.max(0, Math.round(c.spend * (1 + by)))
 }
 
+// Spec 51 — the verdict was a hardcoded `probability: 96.8 / status:
+// 'significant'`. It now comes from the spec-45 two-proportion z-test over the
+// variants' own visitors and conversions.
 const abTest = ref({
-  variantA: { name: 'UGC Reel', spend: 8400, conv: 268, ctr: 4.6 },
-  variantB: { name: 'Studio Hero', spend: 8200, conv: 198, ctr: 3.4 },
-  probability: 96.8,
-  sample: 184000,
-  status: 'significant'
+  variantA: { name: 'UGC Reel', spend: 8400, visitors: 92400, conv: 268 },
+  variantB: { name: 'Studio Hero', spend: 8200, visitors: 91600, conv: 198 }
 })
+const abResult = computed(() => proportionZTest({
+  convA: abTest.value.variantA.conv, nA: abTest.value.variantA.visitors,
+  convB: abTest.value.variantB.conv, nB: abTest.value.variantB.visitors
+}))
+const abVerdict = computed(() => recommendation(abResult.value))
+const AB_LABEL = {
+  ship: 'Ship B — significant lift',
+  rollback: 'Keep A — B is significantly worse',
+  keep_testing: 'Keep testing — not yet significant',
+  invalid: 'Awaiting traffic'
+}
 
 const geo = ref([
   { code: 'JP', name: 'Japan',  value: 92, share: 22 },
@@ -61,7 +80,26 @@ const activeGeo = ref(null)
 const budget = ref({
   Meta: 38, TikTok: 32, Google: 18, YouTube: 12
 })
-const aiSuggestion = { Meta: 32, TikTok: 40, Google: 16, YouTube: 12 }
+
+// Spec 51 — the "AI suggestion" was a hardcoded object. It is now the output
+// of the ROAS-proportional water-fill allocator running over the campaigns'
+// own spend-weighted channel performance, with a 5% floor per channel so no
+// live channel is starved outright.
+const TOTAL_BUDGET = 100000
+const PERIOD_DAYS = 30
+const ELAPSED_DAYS = 18
+
+const channels = computed(() => channelRollup(campaigns.value))
+const allocation = computed(() => allocateBudget(
+  TOTAL_BUDGET,
+  channels.value.map(c => ({ id: c.id, roas: c.roas, min: TOTAL_BUDGET * 0.05 }))
+))
+// Largest-remainder so the shares total exactly 100 — applyAI feeds these
+// straight into the reallocator, which assumes they do.
+const aiSuggestion = computed(() => percentShares(allocation.value.allocations))
+
+const totalSpent = computed(() => campaigns.value.reduce((s, c) => s + c.spend, 0))
+const pacing = computed(() => pacingStatus(TOTAL_BUDGET, totalSpent.value, ELAPSED_DAYS, PERIOD_DAYS))
 
 function reallocate(channel, val) {
   const old = budget.value[channel]
@@ -76,7 +114,7 @@ function reallocate(channel, val) {
   const sum = Object.values(budget.value).reduce((a, b) => a + b, 0)
   if (sum !== 100) budget.value[others[0]] += 100 - sum
 }
-function applyAI() { budget.value = { ...aiSuggestion } }
+function applyAI() { budget.value = { ...aiSuggestion.value } }
 </script>
 
 <template>
@@ -130,7 +168,7 @@ function applyAI() { budget.value = { ...aiSuggestion } }
       <div class="card ab">
         <div class="th-row">
           <h3>A/B test · Lumi creative</h3>
-          <span class="abs" :class="abTest.status">{{ abTest.status === 'significant' ? '● significant' : '○ collecting' }}</span>
+          <span class="abs" :class="abResult.significant ? 'significant' : 'collecting'">{{ abResult.significant ? '● significant' : '○ collecting' }}</span>
         </div>
         <div class="ab-grid">
           <div class="variant" :class="{ winner: abTest.variantA.conv > abTest.variantB.conv }">
@@ -141,7 +179,7 @@ function applyAI() { budget.value = { ...aiSuggestion } }
             </div>
             <div class="vkpi">
               <div><div class="vn-num">{{ abTest.variantA.conv }}</div><div class="vn-lbl">Conv</div></div>
-              <div><div class="vn-num">{{ abTest.variantA.ctr }}%</div><div class="vn-lbl">CTR</div></div>
+              <div><div class="vn-num">{{ ((abTest.variantA.conv / abTest.variantA.visitors) * 100).toFixed(2) }}%</div><div class="vn-lbl">CVR</div></div>
               <div><div class="vn-num">${{ abTest.variantA.spend.toLocaleString() }}</div><div class="vn-lbl">Spend</div></div>
             </div>
           </div>
@@ -152,22 +190,25 @@ function applyAI() { budget.value = { ...aiSuggestion } }
             </div>
             <div class="vkpi">
               <div><div class="vn-num">{{ abTest.variantB.conv }}</div><div class="vn-lbl">Conv</div></div>
-              <div><div class="vn-num">{{ abTest.variantB.ctr }}%</div><div class="vn-lbl">CTR</div></div>
+              <div><div class="vn-num">{{ ((abTest.variantB.conv / abTest.variantB.visitors) * 100).toFixed(2) }}%</div><div class="vn-lbl">CVR</div></div>
               <div><div class="vn-num">${{ abTest.variantB.spend.toLocaleString() }}</div><div class="vn-lbl">Spend</div></div>
             </div>
           </div>
         </div>
         <div class="ab-foot">
           <div>
-            <div class="kicker">Bayesian P(A > B)</div>
-            <div class="big-prob grad-text">{{ abTest.probability }}%</div>
+            <div class="kicker">Confidence (1 − p)</div>
+            <div class="big-prob grad-text">{{ abResult.valid ? ((1 - abResult.pValue) * 100).toFixed(1) : '—' }}%</div>
+            <div class="kl">p {{ abResult.valid ? (abResult.pValue < 0.001 ? '<0.001' : abResult.pValue.toFixed(3)) : '—' }} · z {{ abResult.valid ? abResult.z.toFixed(2) : '—' }}</div>
           </div>
           <div>
             <div class="kicker">Sample</div>
-            <div class="big-prob">{{ abTest.sample.toLocaleString() }}</div>
-            <div class="kl">95% CI · ±0.4%</div>
+            <div class="big-prob">{{ (abTest.variantA.visitors + abTest.variantB.visitors).toLocaleString() }}</div>
+            <div class="kl" v-if="abResult.valid">
+              95% CI [{{ (abResult.ci95[0] * 100).toFixed(2) }}%, {{ (abResult.ci95[1] * 100).toFixed(2) }}%]
+            </div>
           </div>
-          <button class="btn btn-primary" type="button">Promote A → 100%</button>
+          <button class="btn btn-primary" type="button">{{ AB_LABEL[abVerdict] }}</button>
         </div>
       </div>
 
@@ -197,12 +238,44 @@ function applyAI() { budget.value = { ...aiSuggestion } }
         <h3>Budget reallocator</h3>
         <button class="btn btn-ghost sm" @click="applyAI" type="button">Apply AI suggestion ↺</button>
       </div>
-      <p class="re-note">Total stays at 100%. AI rebalance moves +8 to TikTok based on the last 7-day Pareto frontier.</p>
+      <p class="re-note">
+        Total stays at 100%. The suggestion is a ROAS-proportional water-fill over
+        spend-weighted channel performance, floored at 5% per channel.
+      </p>
+
+      <div class="pacing" :class="pacing.status">
+        <div class="pc-row">
+          <div>
+            <div class="kicker">Budget pacing · day {{ ELAPSED_DAYS }} of {{ PERIOD_DAYS }}</div>
+            <h4>{{ money(totalSpent) }} spent of {{ money(TOTAL_BUDGET) }}</h4>
+          </div>
+          <div class="pc-status">
+            <span class="pc-pill" :class="pacing.status">{{ pacing.status }}</span>
+            <div class="pc-delta">{{ pacing.delta >= 0 ? '+' : '−' }}{{ money(Math.abs(pacing.delta)) }} vs target</div>
+          </div>
+        </div>
+        <div class="pc-bar">
+          <div class="pc-spent" :style="{ width: Math.min(100, totalSpent / TOTAL_BUDGET * 100) + '%' }"></div>
+          <div class="pc-target" :style="{ left: Math.min(100, pacing.target / TOTAL_BUDGET * 100) + '%' }" title="On-pace target"></div>
+        </div>
+        <div class="pc-foot">
+          <span>Run rate {{ money(pacing.dailyRunRate) }}/day</span>
+          <span>Projected {{ money(pacing.projectedTotal) }} by day {{ PERIOD_DAYS }}</span>
+        </div>
+      </div>
+
+      <div class="chan-alloc">
+        <div v-for="c in channels" :key="c.id" class="ca">
+          <span class="ca-name">{{ c.id }}</span>
+          <span class="ca-roas">{{ c.roas.toFixed(2) }}× blended</span>
+          <span class="ca-amt">{{ money(allocation.allocations[c.id] ?? 0) }}</span>
+        </div>
+      </div>
       <div class="reallocator">
         <div v-for="(v, k) in budget" :key="k" class="ch-row">
           <div class="ch-lbl">
             <span class="ch-name" :class="k.toLowerCase()">{{ k }}</span>
-            <span class="ch-suggest">AI: {{ aiSuggestion[k] }}%</span>
+            <span class="ch-suggest">AI: {{ aiSuggestion[k] ?? 0 }}%</span>
           </div>
           <input type="range" min="0" max="100" :value="v" @input="reallocate(k, +$event.target.value)" />
           <div class="ch-val">{{ v }}%</div>
@@ -290,6 +363,27 @@ function applyAI() { budget.value = { ...aiSuggestion } }
 .ch-name.google { color: #6ee7b7; }
 .ch-name.youtube { color: #fecaca; }
 .ch-suggest { font-size: 10px; color: var(--text-dim); }
+.pacing { margin: 14px 0; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); border-left-width: 3px; }
+.pacing.over { border-left-color: var(--danger); }
+.pacing.under { border-left-color: #fbbf24; }
+.pacing.on-track { border-left-color: var(--success); }
+.pc-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.pc-row h4 { margin: 4px 0 0; font-size: 16px; font-variant-numeric: tabular-nums; }
+.pc-status { text-align: right; }
+.pc-pill { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); }
+.pc-pill.over { color: var(--danger); }
+.pc-pill.under { color: #fbbf24; }
+.pc-pill.on-track { color: var(--success); }
+.pc-delta { font-size: 11px; color: var(--text-dim); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.pc-bar { position: relative; height: 10px; border-radius: 999px; background: var(--surface-2); margin: 12px 0 6px; overflow: hidden; }
+.pc-spent { height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-2)); }
+.pc-target { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); }
+.pc-foot { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; flex-wrap: wrap; gap: 8px; }
+.chan-alloc { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.ca { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: baseline; font-size: 12px; padding: 6px 8px; border-radius: 7px; background: var(--surface); }
+.ca-name { font-weight: 600; }
+.ca-roas { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.ca-amt { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 76px; text-align: right; }
 .ch-row input { accent-color: var(--primary); width: 100%; }
 .ch-val { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
 .total { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); font-size: 12px; color: var(--text-dim); text-align: right; }

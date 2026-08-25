@@ -67,6 +67,48 @@ export function allocateBudget(total, channels) {
   return { allocations, expectedReturn: Math.round(expectedReturn * 100) / 100, unallocated: fromCents(remainder) }
 }
 
+// Spec 51 — roll campaigns up to channels so the allocator has something to
+// allocate across. Channel ROAS is SPEND-WEIGHTED (total revenue ÷ total
+// spend), never a mean of per-campaign ROAS: averaging ratios lets a tiny
+// high-ROAS campaign outvote the spend that actually carries the channel.
+export function channelRollup(campaigns) {
+  const byChannel = new Map()
+  for (const c of Array.isArray(campaigns) ? campaigns : []) {
+    const id = c?.channel
+    if (!id) continue
+    const cur = byChannel.get(id) || { id, spend: 0, revenue: 0, campaigns: 0 }
+    const spend = Number(c.spend) || 0
+    cur.spend += spend
+    cur.revenue += spend * (Number(c.roas) || 0)
+    cur.campaigns += 1
+    byChannel.set(id, cur)
+  }
+  return [...byChannel.values()]
+    .map(c => ({ ...c, roas: c.spend > 0 ? c.revenue / c.spend : 0 }))
+    .sort((a, b) => b.spend - a.spend || a.id.localeCompare(b.id))
+}
+
+// Spec 51 — whole-percent shares that sum to exactly 100. Rounding each share
+// independently can total 99 or 101, which then corrupts any consumer that
+// assumes 100 (the budget reallocator does). Largest-remainder fixes the drift.
+export function percentShares(amounts) {
+  const entries = Object.entries(amounts || {})
+  const total = entries.reduce((s, [, v]) => s + (Number(v) || 0), 0)
+  if (!(total > 0)) return Object.fromEntries(entries.map(([k]) => [k, 0]))
+  const exact = entries.map(([k, v]) => {
+    const pct = ((Number(v) || 0) / total) * 100
+    return { k, floor: Math.floor(pct), frac: pct - Math.floor(pct) }
+  })
+  let leftover = 100 - exact.reduce((s, e) => s + e.floor, 0)
+  exact.sort((a, b) => b.frac - a.frac || a.k.localeCompare(b.k))
+  for (const e of exact) {
+    if (leftover <= 0) break
+    e.floor += 1
+    leftover -= 1
+  }
+  return Object.fromEntries(exact.map(e => [e.k, e.floor]))
+}
+
 // Linear pacing with ±10% tolerance band.
 export function pacingStatus(budget, spent, elapsedDays, totalDays) {
   if (!totalDays || totalDays <= 0 || elapsedDays <= 0) {
