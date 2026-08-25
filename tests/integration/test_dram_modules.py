@@ -57,15 +57,16 @@ class TestTLU:
 class TestCMDQ:
     def test_deeper_priority_grows_area(self):
         r = _cmp("usecase_cmdq_16.yaml", "usecase_cmdq_256_priority.yaml")
-        # (256-16) × 200 + 5_000 priority = 53_000
-        assert r.area_delta_um2 == pytest.approx(53_000, abs=200)
+        # SPEC-013 register file (8B/entry flops) + priority arbiter gates:
+        # (256-16) entries × 320 µm² + 1200 arbiter = 62_640
+        assert r.area_delta_um2 == pytest.approx(62_640, abs=200)
 
 
 class TestMMU:
     def test_larger_tlb_grows_area(self):
         r = _cmp("usecase_mmu_tlb16.yaml", "usecase_mmu_tlb256_hot.yaml")
-        # (256-16) × 200 = 48_000
-        assert r.area_delta_um2 == pytest.approx(48_000, abs=200)
+        # SPEC-013 TLB CAM (8B/entry × 2.5× SRAM): (256-16) × ~57 µm² = 13_714
+        assert r.area_delta_um2 == pytest.approx(13_714, abs=100)
 
     def test_higher_hit_rate_speeds_up_drain(self):
         r = _cmp("usecase_mmu_tlb16.yaml", "usecase_mmu_tlb256_hot.yaml")

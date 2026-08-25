@@ -184,6 +184,51 @@ def sram_static_power_uw(n_bytes: float) -> float:
     return n_bytes * 8 * P_SRAM_LEAK_PER_BIT_UW
 
 
+# A CAM (content-addressable) cell carries match/compare logic on top of the
+# storage bit, so it is ~2–3× a 6T SRAM cell. Use 2.5×.
+A_CAM_BIT_UM2 = A_SRAM_BIT_UM2 * 2.5
+
+
+def cam_area_um2(n_entries: int, entry_bytes: int) -> float:
+    """CAM array area (µm²) for ``n_entries`` × ``entry_bytes`` (e.g. a TLB)."""
+    return n_entries * entry_bytes * 8 * A_CAM_BIT_UM2 / SRAM_ARRAY_EFFICIENCY
+
+
+def register_file_area_um2(depth: int, entry_bytes: int) -> float:
+    """Flip-flop register file area (µm²) for a shallow, low-latency queue
+    (``depth`` entries × ``entry_bytes``). Uses the flop gate model, not SRAM,
+    since command queues are typically register-based."""
+    return depth * entry_bytes * 8 * _GATES_PER_FF * A_GATE_UM2
+
+
+def logic_block_area_um2(gates: int) -> float:
+    """Area (µm²) of a fixed control-logic block of ``gates`` NAND2-equivalents."""
+    return gates * A_GATE_UM2
+
+
+# MMU TLB: each entry holds a VPN tag + PPN + flags (~8 bytes); plus a
+# page-table-walker state machine (~2000 NAND2-equivalent gates).
+TLB_ENTRY_BYTES = 8
+TLB_WALKER_GATES = 2000
+# CMDQ: each queued command descriptor is ~8 bytes; the priority arbiter is a
+# small comparator/sort network (~1500 gates).
+CMDQ_ENTRY_BYTES = 8
+CMDQ_PRIORITY_GATES = 1500
+
+
+def mmu_area_um2(tlb_entries: int) -> float:
+    """MMU area (µm²) = TLB CAM + page-table-walker logic."""
+    return cam_area_um2(tlb_entries, TLB_ENTRY_BYTES) + logic_block_area_um2(TLB_WALKER_GATES)
+
+
+def cmdq_area_um2(depth: int, enable_priority: bool) -> float:
+    """CMDQ area (µm²) = command register file (+ priority arbiter logic)."""
+    a = register_file_area_um2(depth, CMDQ_ENTRY_BYTES)
+    if enable_priority:
+        a += logic_block_area_um2(CMDQ_PRIORITY_GATES)
+    return a
+
+
 def cache_area_um2(capacity_kb: float) -> float:
     """On-chip SRAM cache area (µm²) for ``capacity_kb`` KB of storage.
 

@@ -158,6 +158,20 @@ L2 是片上 SRAM 末级缓存 —— 直接用 SRAM macro 模型(`cache_area_um
 eDRAM / off-chip DRAM(密度高 10–20×)。故 TLU 不能简单套 `cache_area_um2`,
 留待按 eDRAM/DRAM 模型单独迁移(§5)。
 
+## 3.6 MMU(TLB CAM)与 CMDQ(命令队列)物理模型
+
+两个小型片上结构,不同存储类型:
+
+- **MMU TLB** 是 CAM(内容寻址):每 cell 带匹配比较逻辑,面积 ~2.5× SRAM cell
+  (`A_CAM_BIT_UM2`)。每条目 ~8 B(VPN tag + PPN + flags)。加页表遍历状态机
+  (~2000 门)。实测每条目 ~57 µm²(旧手拍 200),64→256 entries 面积 ∝ 增长。
+- **CMDQ** 是浅命令队列 —— 低延迟,用触发器寄存器堆(非 SRAM):
+  `depth × entry_bytes × 8 × 5 门 × 0.8 µm²`,每条目 ~8 B;优先级仲裁另加
+  ~1500 门。depth 线性缩放。
+
+CAM 因子(~2-3× SRAM)、TLB 条目宽度、CMDQ 条目宽度、walker/arbiter 门数均为
+文档化的微架构参数(非拍的 PPA 系数),Phase 5 综合可替换。
+
 ## 4. 契约变更
 
 - MAC 覆盖 `estimate_area()` / `total_area_um2()` / `static_power_uw()` /
@@ -176,13 +190,14 @@ eDRAM / off-chip DRAM(密度高 10–20×)。故 TLU 不能简单套 `cache_area
 | **DSB** | SRAM macro(buffer_kb × bitcell / eff) | elems × SRAM read(Horowitz) | ✅ §3.2 |
 | **AVP** | FP-ALU 阵列(vector_width)+ LUT SRAM(lut_entries) | elems × (LUT read + fp interp) | ✅ §3.3 |
 | **DAGC** | unpack 逻辑(∝throughput)+ staging RF + join FIFO | elems × 移位/对齐(int) | ✅ §3.4 |
-| **L2**(cache) | SRAM macro(`cache_area_um2(capacity_kb)`,2926 µm²/KB) | payload_bytes × SRAM read(Horowitz) | ✅ §3.5 |
-| TLU/MMU/CMDQ/MC | 待迁移;TLU 大表可能是 eDRAM/DRAM,不能按 SRAM 密度 | — | 待做 |
+| **L2**(cache) | SRAM macro(`cache_area_um2`,2926 µm²/KB) | payload_bytes × SRAM read(Horowitz) | ✅ §3.5 |
+| **MMU**(TLB) | CAM(2.5× SRAM cell)+ walker 逻辑 | 固定 | ✅ §3.6 |
+| **CMDQ**(队列) | 寄存器堆(flops)+ 优先级仲裁逻辑 | 固定 | ✅ §3.6 |
+| TLU/MC | 待迁移;TLU 大表可能是 eDRAM/DRAM,不能按 SRAM 密度 | — | 待做 |
 
-**5 个 compute + L2 cache 已物理化。** 剩余 TLU(嵌入表,可能 eDRAM)/ MMU
-(TLB CAM)/ CMDQ(FIFO)/ MC 及 control(SPEC-007)模块仍是 `[calibration
-knob]` 占位,各需按其真实存储/逻辑类型建模(见 §3.5 备注:不是所有"storage"
-都是 SRAM 密度)。
+**5 个 compute + L2/MMU/CMDQ 已物理化。** 剩余 TLU(嵌入表,可能 eDRAM)/ MC
+及 control(SPEC-007)模块仍是 `[calibration knob]` 占位,各需按其真实存储/
+逻辑类型建模(见 §3.5 备注:不是所有"storage"都是 SRAM 密度)。
 
 **5 个 compute 模块(MAC/VAU/DSB/AVP/DAGC)全部迁移完成** —— compute 数据通路
 的 PPA 已全部脱离"经验拍值",改为规模驱动 + 文献引用单位成本。剩余占位系数

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Iterator, Optional
 
+from npu_sim import physical
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.module import (
     AreaModel, Capability, EnergyEstimate, IModule, LatencyEstimate, ModuleState,
@@ -104,11 +105,13 @@ class MMU(IModule):
         return EnergyEstimate(0.1, self.static_power_uw()*1e-6, 0.8)
 
     def estimate_area(self):
-        area = self._tlb_entries * 200.0 + 8_000.0
+        # SPEC-013: TLB CAM (2.5× SRAM cell) + page-table-walker logic.
+        cam = physical.cam_area_um2(self._tlb_entries, physical.TLB_ENTRY_BYTES)
+        walker = physical.logic_block_area_um2(physical.TLB_WALKER_GATES)
         return AreaModel(
-            um2=area,
-            breakdown={"tlb_cam": self._tlb_entries * 200.0, "walker_logic": 8_000.0},
-            notes="SPEC-011 §6.4 [calibration knob]",
+            um2=cam + walker,
+            breakdown={"tlb_cam": cam, "walker_logic": walker},
+            notes=f"SPEC-013 physical @{physical.REFERENCE_NODE_NM}nm CAM + walker",
         )
 
     def total_area_um2(self): return self.estimate_area().um2

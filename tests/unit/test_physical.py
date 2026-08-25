@@ -207,3 +207,22 @@ class TestCachePhysical:
 
     def test_cache_area_scales_linearly(self):
         assert P.cache_area_um2(2048) == pytest.approx(4 * P.cache_area_um2(512))
+
+
+class TestCamAndFifoPhysical:
+    """SPEC-013 §5 — TLB CAM (MMU) and command register file (CMDQ)."""
+
+    def test_cam_cell_is_denser_penalty_over_sram(self):
+        # CAM cell carries match logic → larger than a plain SRAM bit.
+        assert P.A_CAM_BIT_UM2 > P.A_SRAM_BIT_UM2
+
+    def test_mmu_area_scales_with_tlb_entries(self):
+        assert P.mmu_area_um2(256) > P.mmu_area_um2(64)
+        # walker logic is a fixed floor present even at tiny TLBs
+        assert P.mmu_area_um2(1) > P.logic_block_area_um2(P.TLB_WALKER_GATES) * 0.9
+
+    def test_cmdq_area_scales_with_depth(self):
+        assert P.cmdq_area_um2(256, False) == pytest.approx(4 * P.cmdq_area_um2(64, False))
+
+    def test_cmdq_priority_adds_arbiter_logic(self):
+        assert P.cmdq_area_um2(64, True) > P.cmdq_area_um2(64, False)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Iterator, Optional
 
+from npu_sim import physical
 from npu_sim.core.module_registry import ModuleRegistry
 from npu_sim.interfaces.module import (
     AreaModel, Capability, EnergyEstimate, IModule, LatencyEstimate, ModuleState,
@@ -85,12 +86,14 @@ class CMDQ(IModule):
         return EnergyEstimate(0.05, self.static_power_uw()*1e-6, 0.9)
 
     def estimate_area(self):
-        area = self._depth * 200.0 + (5_000.0 if self._enable_priority else 0.0)
+        # SPEC-013: command register file (flops) + optional priority arbiter.
+        storage = physical.register_file_area_um2(self._depth, physical.CMDQ_ENTRY_BYTES)
+        prio = (physical.logic_block_area_um2(physical.CMDQ_PRIORITY_GATES)
+                if self._enable_priority else 0.0)
         return AreaModel(
-            um2=area,
-            breakdown={"queue_storage": self._depth * 200.0,
-                       "priority_logic": 5_000.0 if self._enable_priority else 0.0},
-            notes="SPEC-011 §5.4 [calibration knob]",
+            um2=storage + prio,
+            breakdown={"queue_storage": storage, "priority_logic": prio},
+            notes=f"SPEC-013 physical @{physical.REFERENCE_NODE_NM}nm regfile",
         )
 
     def total_area_um2(self): return self.estimate_area().um2
