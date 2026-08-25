@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { rankOpportunities, scoreBreakdown } from '../logic/expansion.js'
 
 const accounts = ref([
   {
@@ -61,13 +62,21 @@ const selected = ref('lumi')
 const filter = ref('all')
 const filters = ['all', 'expansion', 'upsell']
 
-const filtered = computed(() => filter.value === 'all' ? accounts.value : accounts.value.filter(a => a.type === filter.value))
-const cur = computed(() => accounts.value.find(a => a.id === selected.value))
+// Spec 53 — the score was a hardcoded number per account while the signals
+// that should produce it sat unused. It is now derived, and accounts are
+// ranked by expected value (propensity × upside) rather than raw upside.
+const ranked = computed(() => rankOpportunities(accounts.value))
+const filtered = computed(() => filter.value === 'all' ? ranked.value : ranked.value.filter(a => a.type === filter.value))
+const cur = computed(() => ranked.value.find(a => a.id === selected.value))
+const curBreakdown = computed(() => scoreBreakdown(cur.value?.signals))
 
 const summary = computed(() => ({
-  count: accounts.value.length,
-  upside: accounts.value.reduce((s, a) => s + a.upside, 0),
-  avgScore: Math.round(accounts.value.reduce((s, a) => s + a.score, 0) / accounts.value.length)
+  count: ranked.value.length,
+  upside: ranked.value.reduce((s, a) => s + a.upside, 0),
+  weighted: ranked.value.reduce((s, a) => s + a.expectedValue, 0),
+  avgScore: ranked.value.length
+    ? Math.round(ranked.value.reduce((s, a) => s + a.score, 0) / ranked.value.length)
+    : 0
 }))
 </script>
 
@@ -77,7 +86,12 @@ const summary = computed(() => ({
       <div>
         <div class="kicker">Expansion engine · AI-scored</div>
         <h3>{{ summary.count }} accounts with expansion signal · +${{ summary.upside.toLocaleString() }} MRR upside</h3>
-        <p class="meta">Composite score: usage velocity + intent signals + product fit + health. Pre-draft is generated only when score ≥ 60.</p>
+        <p class="meta">
+          Score is <strong>evidence coverage</strong>: each observed signal weighted by how predictive it is,
+          against the full signal set — so partial evidence scores partially.
+          Ranked by expected value (score × upside), not headline upside:
+          <strong class="grad-text">${{ Math.round(summary.weighted).toLocaleString() }}</strong> weighted pipeline.
+        </p>
       </div>
       <div class="filt">
         <button v-for="f in filters" :key="f" :class="{ on: filter === f }" @click="filter = f" type="button">{{ f }}</button>
@@ -91,7 +105,7 @@ const summary = computed(() => ({
           @click="selected = a.id">
           <div class="ac-head">
             <span class="ac-name">{{ a.name }}</span>
-            <span class="ac-score" :class="a.score >= 85 ? 'high' : a.score >= 70 ? 'med' : 'low'">{{ a.score }}</span>
+            <span class="ac-score" :class="a.score >= 45 ? 'high' : a.score >= 25 ? 'med' : 'low'">{{ a.score }}</span>
           </div>
           <div class="ac-meta">
             <span class="pl-pill">{{ a.plan }}</span>
@@ -99,8 +113,8 @@ const summary = computed(() => ({
             <span class="ac-mrr">${{ a.mrr.toLocaleString() }} MRR</span>
           </div>
           <div class="ac-upside">
-            <span>+${{ a.upside.toLocaleString() }}</span>
-            <span class="dimc-i">MRR upside</span>
+            <span>${{ Math.round(a.expectedValue).toLocaleString() }}</span>
+            <span class="dimc-i">expected · of ${{ a.upside.toLocaleString() }} upside</span>
           </div>
         </div>
       </div>
@@ -127,6 +141,19 @@ const summary = computed(() => ({
           </div>
         </div>
 
+        <div class="kicker">Score contribution</div>
+        <div class="contrib">
+          <div v-for="c in curBreakdown" :key="c.tag" class="cb">
+            <span class="cb-tag">{{ c.tag }}</span>
+            <div class="cb-track"><div class="cb-fill" :style="{ width: (c.contribution / 25 * 100) + '%' }"></div></div>
+            <span class="cb-pts">{{ c.contribution.toFixed(1) }} pts</span>
+          </div>
+          <p class="cb-note">
+            Expected value <strong>${{ Math.round(cur.expectedValue).toLocaleString() }}</strong>
+            = {{ cur.score }}% × ${{ cur.upside.toLocaleString() }} upside
+          </p>
+        </div>
+
         <div class="kicker">Recommended play</div>
         <div class="play">
           <span class="ai-tag">AI</span>
@@ -147,6 +174,13 @@ const summary = computed(() => ({
 
 <style scoped>
 .up { display: flex; flex-direction: column; gap: 16px; }
+.contrib { display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; }
+.cb { display: grid; grid-template-columns: 92px 1fr 66px; gap: 10px; align-items: center; font-size: 11px; }
+.cb-tag { color: var(--text-dim); text-transform: capitalize; }
+.cb-track { height: 7px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.cb-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-2)); }
+.cb-pts { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+.cb-note { font-size: 11px; color: var(--text-dim); margin: 8px 0 0; }
 .head { padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .kicker { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .1em; margin-top: 14px; margin-bottom: 8px; font-weight: 700; }
 .kicker:first-child { margin-top: 0; }

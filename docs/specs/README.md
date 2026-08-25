@@ -61,6 +61,7 @@ the test assertions.
 | 50 | [Explainable Recommender Wired Up](50-explainable-recommend.md) | `logic/recommend.js` (conceptSignals), `RecommendDeep.vue` | `tests/conceptSignals.test.js` |
 | 51 | [Marketing Control: engines wired](51-marketing-control-engines.md) | `logic/marketing.js` (channelRollup/percentShares), `MarketingControl.vue` | `tests/channelRollup.test.js` |
 | 52 | [Risk Appetite & Control Effectiveness](52-risk-appetite.md) | `logic/risk.js`, `RiskHeatmap.vue` appetite panel | `tests/risk.test.js` |
+| 53 | [Expansion Score From Signals](53-expansion-scoring.md) | `logic/expansion.js`, `UpsellEngine.vue` EV ranking | `tests/expansion.test.js` |
 
 Capability flow across domains:
 
