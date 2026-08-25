@@ -178,6 +178,35 @@ class TestMACAreaPower:
         assert e.dynamic_pj == pytest.approx(512 * physical.energy_per_mac_pj("int8"))
 
 
+class TestMACTimingModel:
+    """finding #2 resolved: runtime and estimate share one systolic model."""
+
+    def _tok(self, dim):
+        from npu_sim.interfaces.transport import TransportToken
+        return TransportToken(
+            payload=None, size_bytes=1, timestamp_ps=0, source_module="x",
+            metadata={"op_shape": {"m": dim, "k": dim, "n": dim}},
+        )
+
+    def test_runtime_and_estimate_agree(self):
+        m = MAC(); m.configure(_default_config())
+        op = _make_op(m=32, k=32, n=32, kind=PrecisionKind.INT8)
+        est_min = m.estimate_latency(op).min_cycles
+        assert m._compute_cycles(self._tok(32)) == est_min
+        assert est_min > 2  # scales with the matmul, not a flat constant
+
+    def test_runtime_scales_with_matmul_size(self):
+        m = MAC(); m.configure(_default_config())
+        assert m._compute_cycles(self._tok(64)) > m._compute_cycles(self._tok(32))
+
+    def test_shapeless_token_uses_base_cost(self):
+        from npu_sim.interfaces.transport import TransportToken
+        m = MAC(); m.configure(_default_config())
+        tok = TransportToken(payload=None, size_bytes=1, timestamp_ps=0,
+                             source_module="x", metadata={})
+        assert m._compute_cycles(tok) == max(1, 32 // 32) + 1
+
+
 class TestMACState:
 
     def test_snapshot_idle_initially(self):

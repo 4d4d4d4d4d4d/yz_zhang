@@ -201,10 +201,8 @@ class MAC(IModule):
         n = shape.get("n", 1)
         macs = m * k * n if ("m" in shape or "k" in shape or "n" in shape) \
             else shape.get("n_elements", 0)
-        pe = self._rows * self._cols
-        fill = self._rows + self._cols
-        compute = -(-macs // pe) if macs else 0  # ceil
-        cycles = compute + fill if macs else 0
+        # Same systolic model the runtime uses (finding #2 resolved).
+        cycles = self._systolic_cycles(macs) if macs else 0
         return LatencyEstimate(
             min_cycles=cycles,
             typical_cycles=int(cycles * 1.1),
@@ -279,7 +277,24 @@ class MAC(IModule):
 
     # ============== Behavior (generator) ==============
 
-    def _compute_cycles(self) -> int:
+    def _systolic_cycles(self, macs: int) -> int:
+        """Weight-stationary systolic cost: ceil(macs / PE) compute + (rows+cols)
+        fill/drain. This is the single timing model shared by estimate_latency
+        and the runtime (finding #2 resolved: they no longer disagree)."""
+        pe = self._rows * self._cols
+        if not macs:
+            return max(1, self._cols // self._rows) + 1
+        compute = -(-macs // pe)  # ceil
+        return compute + (self._rows + self._cols)
+
+    def _compute_cycles(self, token=None) -> int:
+        """Runtime per-token cost. A token carrying an op_shape (SPEC-012 trace)
+        is timed by its matmul size via the systolic model; a shapeless
+        synthetic token falls back to the base per-token issue cost."""
+        shape = token.metadata.get("op_shape") if token is not None else None
+        if shape and any(k in shape for k in ("m", "k", "n")):
+            macs = shape.get("m", 1) * shape.get("k", 1) * shape.get("n", 1)
+            return self._systolic_cycles(macs)
         return max(1, self._cols // self._rows) + 1
 
     def behavior(self) -> Iterator[None]:
@@ -305,7 +320,7 @@ class MAC(IModule):
                 continue
 
             self._busy = True
-            total = self._compute_cycles()
+            total = self._compute_cycles(act)
             # Sub-stage the same total cycles across fill/compute/writeback.
             fill_n = max(0, total // 3)
             compute_n = max(0, total // 3)

@@ -44,7 +44,7 @@ calibration")、SPEC-005 v1.1 amendment §A.2、review-v1.1-proposal §30
 | 加宽 X 能不能提吞吐 / 提多少(相对%) | ✅ 可信 | 时序机械推导,趋势正确 |
 | 瓶颈会不会迁移、迁到哪 | ✅ 可信 | 同上(`optimize`/`sweep` 实测) |
 | 反压/stall/FIFO 满在哪、死锁 | ✅ 可信 | 真正的逐拍协议 |
-| 两个变体的 drain 谁快、快几倍 | ✅ 大体可信 | 时序推导;但见 §4 MAC 例外 |
+| 两个变体的 drain 谁快、快几倍 | ✅ 可信 | 时序机械推导(MAC shape 例外已统一,§4) |
 | 这颗芯片的**绝对** drain(ns) | ⚠️ 半信 | 拍数机械,但时钟周期/绝对延迟未标定 |
 | 这颗芯片**绝对**面积(μm²)/能量(pJ) | 🟡 半信(见下) | compute + SPEC-011 存储已物理化(±30% 解析);control/MC 仍占位 |
 | 加宽 **compute/存储** 器件的**面积代价** | ✅ 已可信 | 已迁物理模型:面积随规模缩放(SPEC-013,§0 更新) |
@@ -93,9 +93,10 @@ from|calibrat` 全模块搜索,**没有任何一处**把面积/能量常数关�
   (+ SPEC-011 存储)已迁 SPEC-013 物理模型,面积随规模缩放
   (`test_area_model_sensitivity.py::TestAllComputeModulesMigrated` 锁定)。
 - **MAC 时序对 shape 无感 vs estimate 对 shape 敏感**(README 实现期发现 #2):
-  ⏳ **仍未统一** —— `_compute_cycles` 是常数(weight-stationary systolic 每
-  tile 定拍,可能本就正确),但 `estimate_latency` 按 `m·k·n` 缩放。这是 reconcile
-  静态估 vs 实测 gap 的一个来源,属 v1.1 spec 待决(哪个模型对需架构组评审)。
+  ✅ **已统一**(SPEC-013):运行时与 estimate 共用 systolic 模型
+  `ceil(macs/PE)+(rows+cols)`。带 shape 的 trace token 按 matmul 大小定时
+  (32³ → 96 拍);无 shape 合成 token 用基础成本。`test_mac_module.py::
+  TestMACTimingModel` 锁定。这消除了 reconcile 静态估 vs 实测的一个 gap 来源。
 
 ## 5. 披露一致性(原问题,现状)
 
