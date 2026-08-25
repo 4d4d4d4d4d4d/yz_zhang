@@ -74,6 +74,12 @@ class PlatformWitnessSignature:
         return hmac.compare_digest(expected, result.signature or "")
 
 
+def _sandbox_ca() -> type:
+    from .sandbox import SandboxCaSignature
+
+    return SandboxCaSignature
+
+
 _REGISTRY: dict[str, type] = {"platform": PlatformWitnessSignature}
 _provider: SignatureProvider | None = None
 
@@ -81,7 +87,9 @@ _provider: SignatureProvider | None = None
 def get_signature_provider() -> SignatureProvider:
     global _provider
     if _provider is None:
-        factory = _REGISTRY.get(settings.SIGNATURE_PROVIDER, PlatformWitnessSignature)
+        name = settings.SIGNATURE_PROVIDER
+        factory = _sandbox_ca() if name == "sandbox-ca" else \
+            _REGISTRY.get(name, PlatformWitnessSignature)
         _provider = factory()
     return _provider
 

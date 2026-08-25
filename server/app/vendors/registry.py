@@ -8,23 +8,46 @@ from app.core.config import settings
 from .kyc import MockKycProvider
 from .moderation import LocalModerationProvider
 from .payment import MockPaymentProvider
+from .sandbox import (
+    SandboxCustodyPayment,
+    SandboxKycProvider,
+    SandboxModeration,
+    SandboxSmsProvider,
+    SandboxStorage,
+)
 from .sms import MockSmsProvider
 from .storage import LocalStorageProvider
 
 # kind -> {provider_name: factory}
 _REGISTRY: dict[str, dict[str, type]] = {
-    "payment": {"mock": MockPaymentProvider},
-    "sms": {"mock": MockSmsProvider},
-    "kyc": {"mock": MockKycProvider},
-    "moderation": {"local": LocalModerationProvider},
-    "storage": {"local": LocalStorageProvider},
+    "payment": {"mock": MockPaymentProvider, "sandbox": SandboxCustodyPayment},
+    "sms": {"mock": MockSmsProvider, "sandbox": SandboxSmsProvider},
+    "kyc": {"mock": MockKycProvider, "sandbox": SandboxKycProvider},
+    "moderation": {"local": LocalModerationProvider, "sandbox": SandboxModeration},
+    "storage": {"local": LocalStorageProvider, "sandbox": SandboxStorage},
 }
 
 # VND-042 生产必须接真实供应商的能力（涉及资金/身份/合规，模拟实现上线即事故）
 P0_KINDS = ("payment", "sms", "kyc", "moderation")
-# 各 kind 的「模拟实现」名字：生产环境命中即判定未接入
+# 各 kind 的缺省（退化）实现名
 MOCK_NAMES = {"payment": "mock", "sms": "mock", "kyc": "mock", "moderation": "local",
               "storage": "local"}
+# STUB-002 **非生产实现集合**。判定从「等于 mock 名」改为「属于本集合」——
+# 否则新增 sandbox 反而绕开了 V49 建立的上线红线。
+# 补桩是为了让路径可测，**不能顺手削弱拦截**，这是本批次最容易做错的地方。
+NON_PRODUCTION_NAMES = {
+    kind: {MOCK_NAMES[kind], "sandbox", "mock", "local"} for kind in MOCK_NAMES
+}
+
+
+def provider_grade(kind: str, name: str | None = None) -> str:
+    """STUB-003 三态：production / sandbox（形态真实但仍是桩）/ mock（退化实现）。"""
+    name = name or configured_name(kind)
+    if name == "sandbox":
+        return "sandbox"
+    if name in (MOCK_NAMES.get(kind), "mock", "local"):
+        return "mock"
+    return "production"
 
 _instances: dict[str, object] = {}
 
@@ -50,8 +73,11 @@ def reset() -> None:
 
 
 def missing_production_providers() -> list[str]:
-    """VND-042 返回生产环境仍是模拟实现的 P0 能力清单。"""
-    return [k for k in P0_KINDS if configured_name(k) == MOCK_NAMES[k]]
+    """VND-042/STUB-002 返回生产环境仍是**非生产实现**的 P0 能力清单。
+
+    包含 sandbox：沙箱桩形态虽真，仍不接任何真实机构，上线即事故。
+    """
+    return [k for k in P0_KINDS if configured_name(k) in NON_PRODUCTION_NAMES[k]]
 
 
 def startup_check() -> None:
@@ -65,7 +91,19 @@ def startup_check() -> None:
     problems: list[str] = []
     missing = missing_production_providers()
     if missing:
-        problems.append(f"以下 P0 能力仍是模拟实现，禁止上线：{', '.join(missing)}")
+        detail = ", ".join(f"{k}({configured_name(k)})" for k in missing)
+        problems.append(f"以下 P0 能力仍是非生产实现（mock/sandbox），禁止上线：{detail}")
+    # LAW-001/010 签名与存证同样不得停留在桩实现
+    if settings.SIGNATURE_PROVIDER in ("platform", "sandbox-ca"):
+        problems.append(
+            f"PLATFORM_SIGNATURE_PROVIDER={settings.SIGNATURE_PROVIDER} 为非生产实现："
+            "平台见证签名与沙箱 CA 都不构成《电子签名法》的可靠电子签名"
+        )
+    if settings.NOTARY_PROVIDER in ("local", "sandbox-notary"):
+        problems.append(
+            f"PLATFORM_NOTARY_PROVIDER={settings.NOTARY_PROVIDER} 为非生产实现："
+            "自算哈希链与沙箱存证都没有真实的司法采信力"
+        )
     # FIN-052 上线红线：平台自建账本托管资金 = 资金池 + 二清（无证从事支付结算）。
     # 这不是配置疏忽，是业务不能这样做，因此拦截理由要写清楚。
     if settings.LEDGER_BACKEND != "custody":
@@ -101,10 +139,12 @@ def status() -> list[dict]:
     out = []
     for kind in _REGISTRY:
         name = configured_name(kind)
+        grade = provider_grade(kind, name)
         out.append({
             "kind": kind,
             "provider": name,
-            "is_mock": name == MOCK_NAMES[kind],
+            "grade": grade,                      # production / sandbox / mock
+            "is_mock": grade != "production",     # 兼容既有调用方
             "circuit": circuit_state(f"{kind}:{name}"),
         })
     return out

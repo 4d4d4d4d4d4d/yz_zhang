@@ -43,6 +43,12 @@ class LocalNotary:
         )
 
 
+def _sandbox_notary() -> type:
+    from .sandbox import SandboxNotary
+
+    return SandboxNotary
+
+
 _REGISTRY: dict[str, type] = {"local": LocalNotary}
 _provider: NotaryProvider | None = None
 
@@ -50,7 +56,9 @@ _provider: NotaryProvider | None = None
 def get_notary() -> NotaryProvider:
     global _provider
     if _provider is None:
-        factory = _REGISTRY.get(settings.NOTARY_PROVIDER, LocalNotary)
+        name = settings.NOTARY_PROVIDER
+        factory = _sandbox_notary() if name == "sandbox-notary" else \
+            _REGISTRY.get(name, LocalNotary)
         _provider = factory()
     return _provider
 

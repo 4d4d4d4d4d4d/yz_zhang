@@ -1,7 +1,7 @@
 # 交付总览（Final Delivery Overview）
 
-> 截至 2026-08-22：MVP + V1~V50 全批次完成。
-> 后端 **401 tests** + 前端 **40 tests**（core 23 + web 17）全绿。
+> 截至 2026-08-22：MVP + V1~V51 全批次完成。
+> 后端 **416 tests** + 前端 **40 tests**（core 23 + web 17）全绿。
 > 本文档是对 [docs/specs/](specs/README.md)（功能拆分）与
 > [16-traceability.md](specs/16-traceability.md)（逐条追溯）的收口汇总。
 
@@ -65,7 +65,8 @@ dispute 响应缺复核基数字段、圈层创建者角色丢失等。
 docker compose up --build              # 开发栈 Web: :8080 / API 文档: :8000/docs
 cd server && python -m pytest -q       # 333 passed
 npm test                               # core 23 + web 17 passed
-cd server && python -m scripts.smoke   # 对已启动实例跑真实闭环并核对分账
+cd server && python -m scripts.smoke          # 开发态：对已启动实例跑真实闭环
+cd server && python -m scripts.sandbox_check  # 合规态：存管+可靠签名+第三方存证闭环
 cd server && python -m scripts.seed_demo  # 演示数据（密码 pass123456）
 
 cp deploy/.env.example deploy/.env && ./deploy/up.sh   # 生产栈（自检 → 迁移 → 起栈）
@@ -84,6 +85,7 @@ cp deploy/.env.example deploy/.env && ./deploy/up.sh   # 生产栈（自检 → 
 | V48 AIO | 编排闭环：成果评审质量闸门、预算占用/实付分离、修复步带整改要点；**模型不得单独动钱** |
 | V49 FIN | 分账指令守恒可审计、金融话术与分利模式红线硬拦截；**未接存管的生产环境拒绝启动** |
 | V50 LAW | 签署绑定合同全文（篡改自证）、证据包升级、**诚实标注证明力边界**、平台决定不称仲裁裁决 |
+| V51 STUB | 为每个预留接口补形态真实的沙箱桩，**合规态完整闭环可跑通且被测试覆盖**；生产对沙箱一视同仁地拒绝 |
 
 **剩下的都不是代码问题**：HTTPS 证书与域名、供应商签约与密钥、
 法律与合规意见、应用商店开发者账号。

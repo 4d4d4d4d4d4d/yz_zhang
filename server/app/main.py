@@ -137,6 +137,18 @@ def create_app() -> FastAPI:
             },
         )
 
+    # VND-002 外部依赖失败统一转 HTTP：502（可重试）/ 400（明确拒绝）。
+    # 少了这一层，存管分账之类的失败会变成未处理异常 500，
+    # 既丢了语义也让调用方无法区分「重试有用」和「重试没用」。
+    from app.vendors.base import VendorError
+
+    @app.exception_handler(VendorError)
+    def _vendor_error(_request, exc: VendorError):
+        return JSONResponse(
+            status_code=502 if exc.retryable else 400,
+            content={"detail": {"code": f"vendor_{exc.code}", "message": exc.message}},
+        )
+
     @app.get("/version")
     def version():
         """DEP-012 构建信息：出问题时第一件事是确认线上跑的到底是哪个版本。"""

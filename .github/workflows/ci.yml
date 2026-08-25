@@ -62,6 +62,23 @@ jobs:
       - name: 主闭环冒烟（真实 HTTP，跑完一笔交易并核对分账）
         run: python -m scripts.smoke
 
+  sandbox-compliance:
+    name: 沙箱合规态闭环（STUB-041）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      # 开发态（mock/internal）与合规态（sandbox/custody）两条路径都必须常绿，
+      # 否则只有一条被维护，接真实供应商时另一条就是从没跑过的代码
+      - name: 存管 + 可靠签名 + 第三方存证的完整闭环
+        run: python -m scripts.sandbox_check
+
   migration-drift:
     name: 迁移与模型一致性（DEP-020）
     runs-on: ubuntu-latest

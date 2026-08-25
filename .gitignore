@@ -9,6 +9,7 @@ server/test_platform.db
 *.db-wal
 *.db-shm
 server/smoke*.db
+server/sandbox_check.db
 server/mig*.db
 server/drift*.db
 server/ci.db

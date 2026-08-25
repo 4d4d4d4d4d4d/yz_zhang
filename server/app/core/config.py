@@ -68,6 +68,7 @@ class Settings:
     SMS_PROVIDER = os.environ.get("PLATFORM_SMS_PROVIDER", "mock")
     KYC_PROVIDER = os.environ.get("PLATFORM_KYC_PROVIDER", "mock")
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
+    STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
     APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.44.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")

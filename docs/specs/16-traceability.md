@@ -4,6 +4,32 @@
 > 后端 268 tests + 前端 29 tests 全绿。真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
 
+## 已实现（V51 批次：沙箱桩——让预留的接口真的跑得通）
+
+> 模块 spec：[27-sandbox-stubs.md](27-sandbox-stubs.md)
+>
+> **检视结论**：V43/V49/V50 依次抽出了接口，但每个 kind **只发布了退化实现**——
+> `CustodyLedger` 遇到 `MockPaymentProvider`（没有 `split_settle`）直接抛错，
+> **整条存管路径零测试覆盖**；`qualified` 签名与 `backed` 存证也只在测试里
+> 临时定义一个类，没有随代码发布。
+> **接口预留了却跑不通，等于没预留**：换供应商那天才第一次执行到这些分支，
+> 而那正是最不能出错的时刻。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **STUB-002 补桩不削弱拦截（最容易做错的地方）** | 生产判定从「等于 mock 名」改为「属于该 kind 的**非生产实现集合**」，sandbox 与 mock 一视同仁地被拒；签名/存证供应商也纳入自检 | `tests/test_sandbox_stubs.py::test_sandbox_providers_still_rejected_in_production` |
+| **STUB-010/011/012 存管形态支付** | `SandboxCustodyPayment` + 独立的**存管账簿**：付款进存管专户而非平台账户，平台只能通过 `split_settle` 下达分账指令——用代码证明「钱不经过平台」这个形态真的走得通 | 同上（`test_full_loop_runs_in_custody_mode` 断言专户余额与分账落账；`test_money_invariants_hold_in_custody_mode`） |
+| **STUB-013/052 失败注入** | `PLATFORM_SANDBOX_FAIL_MODE` 让分账/打款/签名/存证按操作名注入失败——**失败路径比成功路径更需要提前跑过** | 同上（分账失败整体回滚、钱没动、失败指令不入库；注入按操作名精确生效不误伤） |
+| **STUB-020/022/053 可靠签名沙箱** | `SandboxCaSignature` 返回签名 + 证书 + 时间戳令牌，`reliability=qualified`，且 `verify` **真的能验**——只返回固定值的桩没有意义 | 同上（证明力声明升级、篡改仍被检出、换人/换文本/伪造签名三种情况都验不过） |
+| **STUB-021/054 第三方存证沙箱** | `SandboxNotary` 返回 `backed=True` 与可质证编号，覆盖区间变为全量 | 同上 |
+| **STUB-030/056 eKYC 三态** | 按证件号尾号触发 `passed/failed/manual`，让转人工分支可测 | 同上 |
+| **STUB-031/055 严格短信路径** | `SandboxSmsProvider` 不回显验证码，覆盖 mock 固定码所绕过的「必须先请求验证码、有效期、尝试次数上限」 | 同上（不先请求就注册失败、错码被拒、正确码通过） |
+| **STUB-032/033 审核与存储** | 审核三态（有媒体一律转人工，与真实供应商的保守取向一致）；存储签发直传 URL 形态 | 同上 |
+| **STUB-003 供应商三态** | `provider_grade()` 区分 production / sandbox / mock，后台面板与自检共用 | 同上 |
+| **STUB-040/041 合规态自检脚本** | `scripts/sandbox_check.py` 装上全套沙箱桩跑完整闭环（22 项断言），**同时是对接验收脚本**：真实供应商实现同一组方法后换名再跑，全绿即契约对齐；已并入 CI 与既有 mock 冒烟并行 | CI 作业 `sandbox-compliance` |
+| **VND-002 补齐**（实现中发现的缺口） | `VendorError` 此前**没有 API 边界处理器**——存管分账失败会变成未处理异常 500，既丢语义又让调用方分不清「重试有用」和「重试没用」。补统一处理器：502（可重试）/ 400（明确拒绝） | 同上（失败注入用例依赖它返回 4xx/5xx 而非崩溃） |
+| `STORAGE_PROVIDER` 配置项补齐 | storage 已注册但没有配置键，无法切换 | 同上 |
+
 ## 已实现（V50 批次：法律效力——诚实标注证明力边界）
 
 > 模块 spec：[26-legal-enforceability.md](26-legal-enforceability.md)

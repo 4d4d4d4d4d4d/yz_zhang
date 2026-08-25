@@ -49,6 +49,7 @@
 | 24 | AI 编排增强：模型驱动的验收与迭代 | [24-ai-orchestration.md](./24-ai-orchestration.md) | P0 |
 | 25 | 资金合规与分账（含**上线红线**） | [25-financial-compliance.md](./25-financial-compliance.md) | P0 |
 | 26 | 智能合约的法律效力与纠纷解决 | [26-legal-enforceability.md](./26-legal-enforceability.md) | P0 |
+| 27 | 沙箱桩实现（让预留接口跑得通） | [27-sandbox-stubs.md](./27-sandbox-stubs.md) | P0 |
 
 ## 功能点编号与优先级约定
 
