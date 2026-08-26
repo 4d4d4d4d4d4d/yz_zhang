@@ -124,7 +124,7 @@ function dotPos(ch) {
         <button class="btn btn-primary sm" @click="applyOptimal" type="button">↺ Apply AI optimum</button>
       </div>
       <div class="bud-row">
-        <input type="range" min="40000" max="500000" step="10000" v-model.number="totalBudget" />
+        <input type="range" min="40000" max="500000" step="10000" v-model.number="totalBudget" aria-label="Total budget" />
         <span class="bud-num">${{ totalBudget.toLocaleString() }}</span>
       </div>
     </div>
@@ -138,7 +138,7 @@ function dotPos(ch) {
             <span class="ch-name"><span class="ch-dot" :style="{ background: p.color }"></span>{{ p.name }}</span>
             <span class="ch-alloc">{{ p.alloc }}% · ${{ Math.round(p.budget / 1000) }}k</span>
           </div>
-          <input type="range" min="0" max="100" :value="p.alloc" @input="setAlloc(p.id, +$event.target.value)" />
+          <input type="range" min="0" max="100" :value="p.alloc" @input="setAlloc(p.id, +$event.target.value)" :aria-label="`${p.id} budget allocation percent`" />
           <div class="ch-curve">
             <svg viewBox="0 0 200 60" preserveAspectRatio="none">
               <path :d="curvePath(p)" fill="none" :stroke="p.color" stroke-width="2" stroke-linecap="round" stroke-opacity=".75" />

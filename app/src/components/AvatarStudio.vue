@@ -66,7 +66,7 @@ function toggleVariant(l) {
 
         <div class="f-sec">
           <div class="kicker">Script</div>
-          <textarea v-model="script" rows="6"></textarea>
+          <textarea v-model="script" rows="6" aria-label="Presenter script"></textarea>
         </div>
 
         <div class="f-sec">

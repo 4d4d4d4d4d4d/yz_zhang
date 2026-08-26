@@ -108,7 +108,7 @@ function exportCsv() {
     <div class="card filters">
       <div class="search">
         <span class="ico">🔎</span>
-        <input v-model="query" placeholder="Search order ID or partner name…" />
+        <input v-model="query" placeholder="Search order ID or partner name…" aria-label="Search order ID or partner name" />
       </div>
       <div class="fl">
         <div class="fg">

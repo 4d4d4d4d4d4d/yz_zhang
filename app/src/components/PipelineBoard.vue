@@ -78,7 +78,7 @@ function kybScore(c) {
     <div class="card filters">
       <div class="search">
         <span class="ico">🔎</span>
-        <input v-model="query" type="text" placeholder="Search partner name…" />
+        <input v-model="query" type="text" placeholder="Search partner name…" aria-label="Search partner name" />
       </div>
       <div class="facets">
         <div class="facet">

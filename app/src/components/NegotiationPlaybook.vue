@@ -173,7 +173,7 @@ function postComment() {
         </div>
       </div>
       <form class="cin" @submit.prevent="postComment">
-        <input v-model="draft" placeholder="Reply… (Ctrl+Enter to send)" />
+        <input v-model="draft" placeholder="Reply… (Ctrl+Enter to send)" aria-label="Reply to the deal thread" />
         <button class="btn btn-primary sm" type="submit">Post</button>
       </form>
     </div>

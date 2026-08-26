@@ -48,7 +48,7 @@ const cur = computed(() => clauses.find(c => c.id === selected.value))
     <div class="card filters">
       <div class="search">
         <span class="ico">🔎</span>
-        <input v-model="query" type="text" placeholder="Search 240+ clauses…" />
+        <input v-model="query" type="text" placeholder="Search 240+ clauses…" aria-label="Search clause library" />
       </div>
       <div class="cats">
         <button v-for="c in cats" :key="c" :class="{ on: category === c }" @click="category = c" type="button">{{ c }}</button>

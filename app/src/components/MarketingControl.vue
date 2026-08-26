@@ -277,7 +277,7 @@ function applyAI() { budget.value = { ...aiSuggestion.value } }
             <span class="ch-name" :class="k.toLowerCase()">{{ k }}</span>
             <span class="ch-suggest">AI: {{ aiSuggestion[k] ?? 0 }}%</span>
           </div>
-          <input type="range" min="0" max="100" :value="v" @input="reallocate(k, +$event.target.value)" />
+          <input type="range" min="0" max="100" :value="v" @input="reallocate(k, +$event.target.value)" :aria-label="`${k} budget share percent`" />
           <div class="ch-val">{{ v }}%</div>
         </div>
       </div>

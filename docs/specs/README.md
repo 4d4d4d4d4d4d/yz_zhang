@@ -64,6 +64,7 @@ the test assertions.
 | 53 | [Expansion Score From Signals](53-expansion-scoring.md) | `logic/expansion.js`, `UpsellEngine.vue` EV ranking | `tests/expansion.test.js` |
 | 54 | [Partner Fit Composite (ranking fix)](54-partner-fit-composite.md) | `logic/matching.js` `compositeFit`, `BusinessMatchHub.vue` | `tests/compositeFit.test.js` |
 | 55 | [Wiring Conformance (orphan guard)](55-wiring-conformance.md) | `tests/architecture.test.js` — every logic module wired + tested | self-enforcing (2 assertions/module) |
+| 56 | [Console A11y Conformance](56-console-a11y-conformance.md) | 33 unlabeled controls fixed across 11 components | `tests/a11y.console.test.js` |
 
 Capability flow across domains:
 

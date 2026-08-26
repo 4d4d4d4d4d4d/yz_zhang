@@ -162,7 +162,7 @@ const signals = computed(() => [
         </div>
         <div>
           <label>Budget · ${{ budget.toLocaleString() }}</label>
-          <input type="range" min="5000" max="200000" step="1000" v-model.number="budget" />
+          <input type="range" min="5000" max="200000" step="1000" v-model.number="budget" aria-label="Campaign budget" />
         </div>
       </div>
 

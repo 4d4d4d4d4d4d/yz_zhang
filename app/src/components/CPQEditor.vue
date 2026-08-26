@@ -94,9 +94,9 @@ const partnerTotalFmt = computed(() => new Intl.NumberFormat('en', {
           <select v-model="l.sku" @change="lines[i].sku = l.sku">
             <option v-for="p in catalog" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
-          <input class="num" type="number" min="1" v-model.number="lines[i].qty" />
+          <input class="num" type="number" min="1" v-model.number="lines[i].qty" :aria-label="`${l.product.name} quantity`" />
           <span class="num dimc">${{ l.product.list.toLocaleString() }}</span>
-          <input class="num" type="number" min="0" max="60" v-model.number="lines[i].discount" />
+          <input class="num" type="number" min="0" max="60" v-model.number="lines[i].discount" :aria-label="`${l.product.name} discount percent`" />
           <span class="num strong">${{ Math.round(l.net).toLocaleString() }}</span>
           <span class="num"><span class="mg-pill" :class="l.margin >= 60 ? 'ok' : l.margin >= 40 ? 'warn' : 'risk'">{{ l.margin.toFixed(0) }}%</span></span>
           <button class="x" @click="removeLine(i)" type="button" title="Remove">×</button>

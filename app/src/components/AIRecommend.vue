@@ -55,7 +55,7 @@ const recs = computed(() => {
       <div class="row">
         <label>Monthly budget · USD</label>
         <div class="range">
-          <input type="range" min="2000" max="200000" step="1000" v-model.number="budget" />
+          <input type="range" min="2000" max="200000" step="1000" v-model.number="budget" aria-label="Monthly budget" />
           <span class="amount">${{ budget.toLocaleString() }}</span>
         </div>
       </div>
