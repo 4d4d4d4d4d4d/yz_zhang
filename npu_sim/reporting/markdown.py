@@ -428,14 +428,20 @@ def render_optimize_report(report: "OptimizeReport") -> str:
         ("stop reason", report.stop_reason),
     ]))
 
+    has_energy = any(s.total_energy_pj is not None for s in report.steps)
+    ecol = " energy (nJ) |" if has_energy else ""
+    esep = "---:|" if has_energy else ""
     lines = [
-        "| round | knob | change | drain (cyc) | bottleneck | kept |",
-        "|---:|---|---|---:|---|:-:|",
+        f"| round | knob | change | drain (cyc) |{ecol} bottleneck | kept |",
+        f"|---:|---|---|---:|{esep}---|:-:|",
     ]
     for s in report.steps:
+        ecell = (f" {s.total_energy_pj/1000:,.1f} |"
+                 if has_energy and s.total_energy_pj is not None else
+                 (" — |" if has_energy else ""))
         lines.append(
             f"| {s.round_index} | `{s.knob}` | {s.from_value}→{s.to_value} | "
-            f"{s.drain_cycles:,} | `{s.bottleneck_module}` | "
+            f"{s.drain_cycles:,} |{ecell} `{s.bottleneck_module}` | "
             f"{'✓' if s.accepted else '✗'} |"
         )
     parts.append("## Search trace\n\n" + "\n".join(lines))
@@ -456,16 +462,22 @@ def render_sweep_report(report: "SweepReport") -> str:
     parts.append(f"Base: `{report.base_name}`")
 
     base = report.baseline_drain_cycles
+    has_energy = any(p.total_energy_pj is not None for p in report.points)
+    ecol = " energy (nJ) |" if has_energy else ""
+    esep = "---:|" if has_energy else ""
     lines = [
-        "| value | drain (cyc) | Δ drain | area (um²) | static µW | bottleneck |",
-        "|---|---:|---:|---:|---:|---|",
+        f"| value | drain (cyc) | Δ drain | area (um²) |{ecol} static µW | bottleneck |",
+        f"|---|---:|---:|---:|{esep}---:|---|",
     ]
     for p in report.points:
         dpct = (p.drain_cycles - base) / base * 100 if base else 0.0
         best = " ⭐" if p.value == report.best_value else ""
+        ecell = (f" {p.total_energy_pj/1000:,.1f} |"
+                 if has_energy and p.total_energy_pj is not None else
+                 (" — |" if has_energy else ""))
         lines.append(
             f"| {p.value}{best} | {p.drain_cycles:,} | {dpct:+.0f}% | "
-            f"{p.total_area_um2:,.0f} | {p.static_power_uw:,.0f} | "
+            f"{p.total_area_um2:,.0f} |{ecell} {p.static_power_uw:,.0f} | "
             f"`{p.bottleneck_module}`@{p.bottleneck_ii:.0f} |"
         )
     parts.append("\n".join(lines))

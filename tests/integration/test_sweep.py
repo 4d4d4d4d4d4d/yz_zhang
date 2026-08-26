@@ -47,6 +47,20 @@ class TestSweepMechanics:
             assert p.drain_cycles > 0
             assert p.total_area_um2 > 0
 
+    def test_trace_chip_reports_energy(self, report):
+        # the base is a TraceProducer chip, so every point carries total energy
+        for p in report.points:
+            assert p.total_energy_pj is not None and p.total_energy_pj > 0
+
+    def test_energy_optimum_can_differ_from_drain_optimum(self, report):
+        # widening avp cuts drain monotonically, but leakage eventually makes
+        # a wider array cost MORE energy than the mid setting — a real PPA
+        # tradeoff the energy column surfaces.
+        energies = [p.total_energy_pj for p in report.points]
+        drains = [p.drain_cycles for p in report.points]
+        assert drains[-1] == min(drains)              # widest is drain-optimal
+        assert energies.index(min(energies)) != len(energies) - 1  # energy optimum earlier
+
 
 class TestDiminishingReturns:
     """Widening the bottleneck stage helps — until the bottleneck moves."""

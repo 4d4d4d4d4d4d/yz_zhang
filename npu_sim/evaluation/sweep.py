@@ -37,6 +37,7 @@ class SweepPoint:
     static_power_uw: float
     bottleneck_module: Optional[str]
     bottleneck_ii: float
+    total_energy_pj: Optional[float] = None   # None if base carries no ops trace
 
 
 @dataclass(frozen=True)
@@ -68,9 +69,13 @@ def sweep_config(
     """
     # Local import keeps evaluation.__init__ import order simple.
     from npu_sim.evaluation import analyze_pipeline_bottleneck, elaborate
+    from npu_sim.mapping import RuleBasedMapper
 
     base_abs = str(Path(base_path).resolve())
-    base_name = elaborate(base_abs).name  # the untouched base's identity
+    base_arch = elaborate(base_abs)
+    base_name = base_arch.name  # the untouched base's identity
+    period_ps = base_arch.clocks[next(iter(base_arch.clocks))].period_ps
+    ops = _try_load_ops(base_abs)   # None if the base carries no ops trace
     points: list[SweepPoint] = []
 
     for value in values:
@@ -90,6 +95,13 @@ def sweep_config(
             bn = analyze_pipeline_bottleneck(arch, max_cycles=max_cycles)
             area = sum(m.total_area_um2() for m in arch.modules.values())
             power = sum(m.static_power_uw() for m in arch.modules.values())
+            energy_pj = None
+            if ops is not None:
+                # dynamic (per-op, Horowitz) + static (power × runtime); no
+                # extra sim — reuses the drain already measured.
+                dynamic = RuleBasedMapper(strict=False).map(ops, arch).total_dynamic_pj
+                static = power * (bn.measured_drain_cycles * period_ps) * 1e-6
+                energy_pj = dynamic + static
 
         points.append(SweepPoint(
             value=value,
@@ -98,6 +110,7 @@ def sweep_config(
             static_power_uw=power,
             bottleneck_module=bn.bottleneck_module,
             bottleneck_ii=bn.bottleneck_ii,
+            total_energy_pj=energy_pj,
         ))
 
     baseline = points[0].drain_cycles if points else 0
@@ -130,3 +143,14 @@ def sweep_config(
         bottleneck_shifted=shifted,
         summary_text="\n".join(lines),
     )
+
+
+def _try_load_ops(base_path: str):
+    """Load the workload ops from the base (a TraceProducer fixture), or None
+    if the base carries no trace — energy is then simply not reported."""
+    from npu_sim.evaluation.trace_ops import load_ops
+    try:
+        ops = load_ops(base_path)
+        return ops or None
+    except (ValueError, FileNotFoundError, KeyError):
+        return None

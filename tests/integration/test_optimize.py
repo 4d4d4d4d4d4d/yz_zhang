@@ -32,6 +32,11 @@ def report():
 
 
 class TestGreedySearch:
+    def test_steps_report_energy(self, report):
+        # trace-driven base → every step carries total energy alongside drain
+        for s in report.steps:
+            assert s.total_energy_pj is not None and s.total_energy_pj > 0
+
     def test_final_drain_beats_initial(self, report):
         assert report.final_drain_cycles < report.initial_drain_cycles
         assert report.drain_improvement_pct > 0

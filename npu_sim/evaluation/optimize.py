@@ -43,6 +43,7 @@ class OptimizeStep:
     bottleneck_module: Optional[str]
     total_area_um2: float
     accepted: bool                  # False = tried, no improvement, search stopped
+    total_energy_pj: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -69,13 +70,15 @@ class OptimizeReport:
         )
 
 
-def _measure(base_abs: str, selection: dict, max_cycles: int):
+def _measure(base_abs: str, selection: dict, max_cycles: int, ops=None, period_ps=0):
     """Run the base with `selection` ({knob: value}) applied; return metrics.
 
     One sim per call: analyze_pipeline_bottleneck already returns the measured
     drain, and total area is static (sum of module areas, no run needed).
+    Returns (drain_cycles, area_um2, bottleneck_module, total_energy_pj|None).
     """
     from npu_sim.evaluation import analyze_pipeline_bottleneck, elaborate
+    from npu_sim.mapping import RuleBasedMapper
 
     mod_overrides: dict = {}
     for knob, value in selection.items():
@@ -94,7 +97,12 @@ def _measure(base_abs: str, selection: dict, max_cycles: int):
         arch = elaborate(str(vpath))
         bn = analyze_pipeline_bottleneck(arch, max_cycles=max_cycles)
         area = sum(m.total_area_um2() for m in arch.modules.values())
-    return bn.measured_drain_cycles, area, bn.bottleneck_module
+        energy_pj = None
+        if ops is not None:
+            power = sum(m.static_power_uw() for m in arch.modules.values())
+            dynamic = RuleBasedMapper(strict=False).map(ops, arch).total_dynamic_pj
+            energy_pj = dynamic + power * (bn.measured_drain_cycles * period_ps) * 1e-6
+    return bn.measured_drain_cycles, area, bn.bottleneck_module, energy_pj
 
 
 def optimize_bottleneck(
@@ -109,14 +117,18 @@ def optimize_bottleneck(
     values (cheap/narrow first). The search starts at each knob's first value.
     """
     from npu_sim.evaluation import elaborate
+    from npu_sim.evaluation.sweep import _try_load_ops
 
     base_abs = str(Path(base_path).resolve())
-    base_name = elaborate(base_abs).name
+    base_arch = elaborate(base_abs)
+    base_name = base_arch.name
+    period_ps = base_arch.clocks[next(iter(base_arch.clocks))].period_ps
+    ops = _try_load_ops(base_abs)   # None if the base carries no ops trace
 
     # Start at the first (baseline) value of every knob.
     idx = {k: 0 for k in knobs}
     selection = {k: knobs[k][0] for k in knobs}
-    drain, area, bn = _measure(base_abs, selection, max_cycles)
+    drain, area, bn, energy = _measure(base_abs, selection, max_cycles, ops, period_ps)
     initial_drain = drain
     initial_selection = dict(selection)
 
@@ -140,22 +152,22 @@ def optimize_bottleneck(
         to_v = knobs[knob][idx[knob] + 1]
         trial = dict(selection)
         trial[knob] = to_v
-        t_drain, t_area, t_bn = _measure(base_abs, trial, max_cycles)
+        t_drain, t_area, t_bn, t_energy = _measure(base_abs, trial, max_cycles, ops, period_ps)
 
         if t_drain < drain:
             idx[knob] += 1
             selection = trial
-            drain, area, bn = t_drain, t_area, t_bn
+            drain, area, bn, energy = t_drain, t_area, t_bn, t_energy
             steps.append(OptimizeStep(
                 round_index=r, knob=knob, from_value=from_v, to_value=to_v,
                 drain_cycles=t_drain, bottleneck_module=t_bn,
-                total_area_um2=t_area, accepted=True,
+                total_area_um2=t_area, accepted=True, total_energy_pj=t_energy,
             ))
         else:
             steps.append(OptimizeStep(
                 round_index=r, knob=knob, from_value=from_v, to_value=to_v,
                 drain_cycles=t_drain, bottleneck_module=t_bn,
-                total_area_um2=t_area, accepted=False,
+                total_area_um2=t_area, accepted=False, total_energy_pj=t_energy,
             ))
             stop_reason = (
                 f"widening {knob} {from_v}→{to_v} did not improve drain "
