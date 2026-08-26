@@ -70,7 +70,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.45.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.46.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

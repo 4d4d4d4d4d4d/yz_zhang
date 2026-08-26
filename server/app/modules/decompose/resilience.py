@@ -53,4 +53,4 @@ def deadline_alerts(db: Session, now: datetime) -> int:
 
 
 def register_event_handlers() -> None:
-    subscribe("task.cancelled", _on_task_cancelled)
+    subscribe("task.cancelled", _on_task_cancelled, retry=True)

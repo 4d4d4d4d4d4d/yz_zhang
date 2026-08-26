@@ -76,4 +76,5 @@ def _on_contract_funded(db: Session, payload: dict) -> None:
 
 
 def register_event_handlers() -> None:
-    subscribe("contract.funded", _on_contract_funded)
+    # 已有会话时直接返回，补建晚一点不影响正确性
+    subscribe("contract.funded", _on_contract_funded, retry=True)

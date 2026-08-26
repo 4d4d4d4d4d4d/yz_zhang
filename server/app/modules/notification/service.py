@@ -62,8 +62,9 @@ def _on_dispute_opened(db, payload):
 
 
 def register_event_handlers() -> None:
-    subscribe("task.matched", _on_task_matched)
-    subscribe("contract.funded", _on_contract_funded)
-    subscribe("contract.released", _on_contract_released)
-    subscribe("task.pending_acceptance", _on_task_pending_acceptance)
-    subscribe("dispute.opened", _on_dispute_opened)
+    # 通知补发晚一点也还是有用的信息，且失败时写入已被保存点回滚，重试从干净状态重来
+    subscribe("task.matched", _on_task_matched, retry=True)
+    subscribe("contract.funded", _on_contract_funded, retry=True)
+    subscribe("contract.released", _on_contract_released, retry=True)
+    subscribe("task.pending_acceptance", _on_task_pending_acceptance, retry=True)
+    subscribe("dispute.opened", _on_dispute_opened, retry=True)

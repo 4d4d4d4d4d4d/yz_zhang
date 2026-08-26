@@ -84,10 +84,14 @@ def _on_verdict(db, payload):
 
 
 def register_event_handlers() -> None:
-    subscribe("contract.signed", _on_signed)
-    subscribe("contract.funded", _on_funded)
-    subscribe("contract.released", _on_released)
-    subscribe("contract.verdict_executed", _on_verdict)
+    # EVT-012 critical：签了字却没有链上记录，等于平台对外承诺的证据能力有洞。
+    # retry=False 的理由是时序而非幂等：几小时后补进去的条目，seq 会排在
+    # 真实发生更晚的事件之后，链所声称的「按此顺序发生」就变成了假话——
+    # 而这条链是要拿去举证的。所以宁可当场失败，也不事后补。
+    subscribe("contract.signed", _on_signed, retry=False, critical=True)
+    subscribe("contract.funded", _on_funded, retry=False, critical=True)
+    subscribe("contract.released", _on_released, retry=False, critical=True)
+    subscribe("contract.verdict_executed", _on_verdict, retry=False, critical=True)
 
 
 # ---------- LAW-010/011 第三方存证锚定 ----------

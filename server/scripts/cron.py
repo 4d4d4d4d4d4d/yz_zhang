@@ -29,6 +29,9 @@ JOBS: list[tuple[str, int]] = [
     (f"{PREFIX}/tasks/jobs/purge-locations", 86400),
     # LAW-011 存证锚定：一天一次足够，区间越大回执越少也越便宜
     (f"{PREFIX}/anchors/jobs/notarize", 86400),
+    # EVT-021 事件补做：跑得勤一点，用户少收一条通知的窗口就短一点
+    (f"{PREFIX}/events/jobs/drain", 120),
+    (f"{PREFIX}/events/jobs/purge", 86400),
 ]
 
 log = logging.getLogger("cron")

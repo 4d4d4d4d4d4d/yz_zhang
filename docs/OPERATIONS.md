@@ -77,7 +77,7 @@ App 与 Web 共用同一个 TS SDK（`packages/core`），
 | **限流（滑动窗口）** | `core/ratelimit.py` | 注册/登录/改密/换绑的暴力尝试 |
 | **对账不变量** | `risk/service.py::reconcile` | 四条硬不变量兜底，不平自动开工单+告警 |
 
-这套组合已被 **349 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
+这套组合已被 **452 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
 「重复接受报名 / 重复托管 / 重复交付 / 重复验收 / 重复里程碑放款」全部拒绝且零副作用。
 
 ### 2.2 多副本并发安全（V42 已补齐，见 [18-concurrency.md](specs/18-concurrency.md)）
@@ -110,10 +110,31 @@ App 与 Web 共用同一个 TS SDK（`packages/core`），
 覆盖测试：`tests/test_conc_hardening.py`（真多线程）验证并发验收只放款一次、
 并发托管只扣一次、并发提现不透支、丢失更新被拒、job 不重复执行。
 
+### 2.3 事件投递（V53 已补齐，见 [28-event-delivery.md](specs/28-event-delivery.md)）
+
+此前 `core/events.py` 是十七行同步派发、**没有任何隔离**。`task.completed` 上
+挂着 6 个派生 handler，和真正的放款在同一个事务同一个请求里——
+用探针复现过：把知识卡片 handler 改成抛异常（卡片生成走 LLM，超时很正常），
+**验收接口直接崩，执行方一分钱拿不到**。锦上添花拖死了存在理由。
+
+现在的模型：
+
+| 机制 | 作用 |
+|---|---|
+| **SAVEPOINT 隔离** | 每个 handler 在嵌套事务里跑，失败只回滚它自己那一段 |
+| **事务性发件箱** | `publish()` 在业务事务内写 `outbox_events`，业务回滚则事件不存在 |
+| **投递记录唯一约束** | `(event_id, handler)` 唯一——「恰好一次」靠数据库，不靠代码自觉 |
+| **`retry` 必填声明** | 新增 handler 必须回答「隔一段时间自动补做还对吗」，不答就注册失败 |
+| **`critical` 例外** | 存证入链这类失败**必须**让业务事务失败：签了字却没链上记录，等于证据能力有洞 |
+| **drain job + 死信** | 任何副本都能补做任何副本发布的事件（这就是 SEC-040 要的跨副本能力） |
+
+刻意**没有**引入 Kafka/Redis：发件箱在同一个库同一个事务里，天然没有两阶段提交
+问题；真要上 MQ，让它从发件箱消费即可，业务代码一行不用改。顺序不能反。
+
+同样刻意**没有**把派发改成全异步：通知与经验卡片在同一请求内落库，用户刷新就能
+看到；异步只是失败后的兜底，不是默认路径。
+
 **仍待做**：
-- **事件总线改 MQ**：`core/events.py` 是进程内同步派发，多副本下事件只在
-  处理请求的那个进程触发。幂等可重放的（经验入库、通知）问题不大，
-  「后继子任务自动发布」这类必须走 MQ 才安全。
 - **地理检索**：现在是全表扫 + Python 算距离，规模化需换 PostGIS 或 geohash 索引。
 
 **容量参考**：单机 Postgres + 4 个 uvicorn worker，这套读写比下支撑
@@ -263,6 +284,8 @@ docker compose -f deploy/docker-compose.prod.yml run --rm migrate
 | `/version` | git sha / 版本 / 环境 | 无 |
 | `/metrics` | Prometheus：请求量、延迟分位、**托管中金额 / 待提现 / 未结纠纷** | `X-Job-Token` |
 | `/jobz` | 各 job 上次成功时间与最近错误 | `X-Job-Token` |
+| `/api/v1/events/health` | 待补做与死信的事件投递数（按 handler 聚合） | `X-Job-Token` |
+| `/api/v1/events/dead-letters` | 需人工处理的投递明细 | 管理员登录 |
 
 指标带令牌的理由：资金口径数字不该对公网裸奔。
 
@@ -271,6 +294,11 @@ docker compose -f deploy/docker-compose.prod.yml run --rm migrate
 - `/jobz` 中任一 job `seconds_since_success` 超过其周期 2 倍
   —— job「静默不跑」比报错更危险（自动验收停摆＝资金永久卡在托管）
 - 提现失败率突增、5xx 突增、`/readyz` 连续失败
+- **`platform_event_dead_letters` 大于 0**（V53 新增）——
+  死信堆积是「有功能已经悄悄坏了」的最早信号：业务面上一切正常，
+  用户只是少收了通知、经验没入库、后继子任务没自动发出来，
+  没有任何接口会报错，只有这个数会涨。每条死信都代表一个**未发生的副作用**，
+  需要人判断是否补做（`/api/v1/events/dead-letters` 看明细）。
 
 日志是结构化 JSON，带 `request_id`（入站生成或透传），
 并对手机号 / 证件号 / 银行卡自动打码——出事时排查日志，不能因为日志本身再泄一次。
@@ -280,13 +308,16 @@ docker compose -f deploy/docker-compose.prod.yml run --rm migrate
 - [x] Postgres + 行锁/乐观锁 —— V42
 - [x] Redis 限流 —— V42（配 `PLATFORM_REDIS_URL` 即启用）
 - [x] 迁移、备份、恢复校验、探针、指标 —— V44
+- [x] 事件投递失败隔离与跨副本补做 —— V53（cron 已含 `events/jobs/drain`，
+      **多副本部署时务必确认 cron 在跑**，否则失败的副作用没人补）
 - [ ] HTTPS + 域名（Nginx/网关加 TLS 与 HSTS，本仓库不含证书管理）
 - [ ] 接短信 / eKYC / 支付**真实账号** —— 抽象层已就位，缺的是签约与密钥
 - [ ] 告警接入值班系统（PagerDuty / 电话）
 - [ ] 定期做恢复演练并记录 RTO/RPO
 
-CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 349 测试、
-前端 40 测试与构建、**alembic 迁移漂移检查**、**真实 HTTP 主闭环冒烟**。
+CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 452 测试、
+前端 42 测试与构建、**alembic 迁移漂移检查**、**真实 HTTP 主闭环冒烟**、
+**沙箱合规态闭环自检**。
 
 ---
 
@@ -398,7 +429,8 @@ CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 349 测试、
 ## 六、诚实的差距总结
 
 **已经很扎实的**：交易闭环、资金安全与守恒、纠纷程序正义、账号安全、审计留痕、
-多副本并发安全、外部供应商可替换性。这些有 349 个测试钉着。
+多副本并发安全、外部供应商可替换性、事件投递的失败隔离与可补做。
+这些有 452 个测试钉着。
 
 **离真正上线还差的**（按紧迫度）：
 1. ~~Postgres + 行锁/乐观锁~~ —— **V42 已完成**（切库只改环境变量）

@@ -143,4 +143,4 @@ def _on_task_completed(db: Session, payload: dict) -> None:
 
 
 def register_event_handlers() -> None:
-    subscribe("task.completed", _on_task_completed)
+    subscribe("task.completed", _on_task_completed, retry=True)

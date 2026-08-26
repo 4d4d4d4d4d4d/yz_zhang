@@ -32,4 +32,6 @@ def _on_task_completed(db: Session, payload: dict) -> None:
 
 
 def register_event_handlers() -> None:
-    subscribe("task.completed", _on_task_completed)
+    # EVT-022 唯一标为不可重试的：它会**创建一个带预算的新任务**。
+    # 几小时后由后台悄悄补出来一单，比缺这一期更糟——留给人去决定。
+    subscribe("task.completed", _on_task_completed, retry=False)

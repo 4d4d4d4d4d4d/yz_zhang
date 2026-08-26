@@ -1,5 +1,6 @@
 """汇总导入全部 ORM 模型，供 init_db 建表。新增模块的 models 必须在此登记。"""
 from app.core.idempotency import IdempotencyRecord  # noqa: F401
+from app.core.events import EventDelivery, OutboxEvent  # noqa: F401
 from app.core.models_infra import JobLock  # noqa: F401
 from app.vendors.models import PaymentOrder, SmsCode, VendorCall  # noqa: F401
 from app.modules.account.models import Block, LoginSession, User  # noqa: F401

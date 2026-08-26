@@ -44,4 +44,4 @@ def _on_task_published(db: Session, payload: dict) -> None:
 
 
 def register_event_handlers() -> None:
-    subscribe("task.published", _on_task_published)
+    subscribe("task.published", _on_task_published, retry=True)

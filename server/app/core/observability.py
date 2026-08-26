@@ -144,6 +144,9 @@ def _business_metrics(db) -> list[str]:
         db.query(func.count(Dispute.id))
         .filter(Dispute.status.notin_(("resolved", "closed", "settled"))).scalar() or 0
     )
+    from app.core import events
+
+    evt = events.health(db)
     return [
         "# HELP platform_escrow_cents 托管中资金（分）",
         "# TYPE platform_escrow_cents gauge",
@@ -157,6 +160,14 @@ def _business_metrics(db) -> list[str]:
         "# HELP platform_open_disputes 未结纠纷数",
         "# TYPE platform_open_disputes gauge",
         f"platform_open_disputes {int(open_disputes)}",
+        # EVT-030 死信堆积是「有功能已经悄悄坏了」的最早信号：
+        # 用户少收了通知、经验没入库，业务面上一切正常，只有这个数会涨
+        "# HELP platform_event_pending_retry 待补做的事件投递数",
+        "# TYPE platform_event_pending_retry gauge",
+        f"platform_event_pending_retry {int(evt['pending_retry'])}",
+        "# HELP platform_event_dead_letters 需人工处理的事件投递数",
+        "# TYPE platform_event_dead_letters gauge",
+        f"platform_event_dead_letters {int(evt['dead_letters'])}",
     ]
 
 

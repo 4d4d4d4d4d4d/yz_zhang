@@ -1,10 +1,41 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V52 全批次完成（2026-08-25）。
-> 后端 436 tests + 前端 17 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V53 全批次完成（2026-08-25）。
+> 后端 452 tests + 前端 42 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，22 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V53 批次：事件投递——别让锦上添花拖死存在理由）
+
+> 模块 spec：[28-event-delivery.md](28-event-delivery.md)（覆盖 CONC-030/031 与 SEC-040）
+>
+> **检视结论（用探针复现过，不是推测）**：`app/core/events.py` 原本十七行，
+> 同步派发、无隔离。`task.completed` 上挂着 **6 个** handler，
+> 和真正的放款在**同一个事务同一个请求**里。把知识卡片 handler 改成抛
+> `RuntimeError`（真实诱因：卡片生成走 LLM，超时很正常），
+> 验收接口直接崩、**执行方一分钱拿不到**。
+>
+> 这是本末倒置：知识库是锦上添花，放款是这个平台的存在理由。
+>
+> 顺带堵掉最容易想到的那个「修法」——`try: ... except: pass`。
+> 那会把事故从「崩掉」变成「静默丢失」：用户永远收不到那条通知，
+> 而没有任何人知道。**后者比前者更糟。**
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **EVT-010/040 失败隔离** | 每个 handler 在 `begin_nested()` 的 SAVEPOINT 里跑，失败只回滚它自己那一段，业务事务与其它 handler 不受影响 | `tests/test_event_delivery.py::test_evt040_derived_handler_failure_does_not_roll_back_the_payout`（验收照常成功且到账 27600）、`::test_evt040_savepoint_rolls_back_only_the_failing_handler` |
+| **EVT-011 绝不静默** | 失败写 `EventDelivery(status=failed)` + 结构化告警日志；记录写在**业务会话**里，业务回滚则记录一起消失（那件事本来就没发生） | 同上（断言 `last_error` 含异常类型） |
+| **EVT-012/041 critical 例外** | 判定标准不是「重不重要」（那样人人都想标 critical），而是**这个副作用缺失会不会让已提交的业务事实无法自圆其说**。存证入链属于此类：签了字却没有链上记录，等于平台承诺的证据能力有洞 | `::test_evt041_critical_handler_failure_aborts_the_business_transaction`（钱一分没动） |
+| **EVT-001/045 事务性发件箱** | `publish()` 在业务事务内写 `OutboxEvent`，与业务改动同生共死；记录发布副本 | `::test_evt045_rolled_back_transaction_leaves_no_event`、`::test_evt001_committed_transaction_records_the_event` |
+| **EVT-002/043 恰好一次** | `(event_id, handler)` 唯一约束——不是靠代码自觉，是靠数据库；跨副本同样成立 | `::test_evt043_drain_recovers_and_does_not_double_apply`（重复 drain 不重复补） |
+| **EVT-021 / CONC-031 / SEC-040 跨副本补做** | drain job 从库里的发件箱补做，受 `job_slot` 单实例锁保护：**任何副本都能补做任何副本发布的事件**，不需要 Redis/Kafka。刻意选发件箱而非 MQ：同库同事务天然没有两阶段提交问题，真要上 MQ 让它从发件箱消费即可，业务代码一行不动 | 同上 |
+| **EVT-020/046 必填的重试声明** | `subscribe(..., retry=)` 是必填关键字参数。**检视时改过一次名**：最初叫 `idempotent`，但有了 SAVEPOINT，失败的写入已被回滚干净，纯 DB handler 几乎自动可重试——真正的问题是**时序**：「隔一段时间再补做，还对吗」 | `::test_evt046_subscribe_without_retry_declaration_is_rejected`、`::test_every_registered_handler_declared_its_retry_policy`（全站扫一遍，不允许绕过声明） |
+| **EVT-022/044 死信** | `retry=False` 的失败直接进死信。当前唯一这样标的是**周期任务自动续期**——它会创建一个带预算的新任务，几小时后由后台悄悄补出来一单，比缺这一期更糟。存证入链同样 `retry=False`：几小时后补进去的条目 `seq` 会排在真实发生更晚的事件之后，链所声称的「按此顺序发生」就成了假话，而这条链是要拿去举证的 | `::test_evt044_non_retryable_handler_goes_straight_to_dead_letter`、`::test_evt022_dead_letters_are_visible_to_operators` |
+| **EVT-023 重试上限** | 5 次后转死信，避免无限重试打爆日志与数据库 | `::test_evt023_repeated_failures_become_dead_letters` |
+| **EVT-004 保留期** | 清理只删**已完成**的旧事件；失败与死信连同它们的事件一起留着（否则重试时读不到 payload） | `::test_evt004_purge_keeps_unfinished_deliveries` |
+| **EVT-030/031 可观测** | `/metrics` 出 `platform_event_pending_retry` 与 `platform_event_dead_letters`；`/events/health` 按 handler 聚合。死信堆积是「有功能已经悄悄坏了」的最早信号——业务面上一切正常，只有这个数会涨 | `::test_evt031_health_and_metrics_expose_backlog` |
+| 全部 12 个既有 handler 重新分类 | 存证 4 个 → `critical=True, retry=False`；周期续期 → `retry=False`；通知/经验/分解/分析/IM/订阅推送 → `retry=True`，每处都写了理由 | 全量回归 452 tests |
 
 ## 已实现（V52 批次：协议版本化、单独同意与撤回的**实际后果**）
 

@@ -125,4 +125,5 @@ def _on_task_completed(db: Session, payload: dict) -> None:
 
 
 def register_event_handlers() -> None:
-    subscribe("task.completed", _on_task_completed)
+    # 只推进 draft 状态的后继、只结项还没结项的母任务，补做时重新读状态即可
+    subscribe("task.completed", _on_task_completed, retry=True)
