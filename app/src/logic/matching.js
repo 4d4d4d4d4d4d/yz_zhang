@@ -32,6 +32,38 @@ function stageFit(a, b) {
   return d === 0 ? 1 : d === 1 ? 0.5 : 0
 }
 
+// Spec 54 — directory fit composite. The partner directory scores different
+// dimensions than the needs-matcher above (delivery speed matters for an
+// agency listing; deal stage does not), so it carries its own weights while
+// sharing this one implementation of the weighted-composite rule.
+export const DIRECTORY_WEIGHTS = {
+  'Category match': 0.30,
+  'Market match': 0.30,
+  'Trust signals': 0.25,
+  'Delivery speed': 0.15
+}
+
+// Renormalises over the dimensions actually present. A dimension that was not
+// measured is missing information, not a zero — unlike an absent buying signal
+// (spec 53), where absence really is evidence against.
+export function compositeFit(fit, weights = DIRECTORY_WEIGHTS) {
+  const rows = (Array.isArray(fit) ? fit : [])
+    .filter(f => weights[f?.k] !== undefined)
+    .map(f => ({ k: f.k, v: Math.min(100, Math.max(0, Number(f.v) || 0)), weight: weights[f.k] }))
+
+  const totalWeight = rows.reduce((s, r) => s + r.weight, 0)
+  if (!(totalWeight > 0)) return { score: 0, contributions: [] }
+
+  const contributions = rows
+    .map(r => ({ ...r, contribution: (r.weight / totalWeight) * r.v }))
+    .sort((a, b) => b.contribution - a.contribution || a.k.localeCompare(b.k))
+
+  return {
+    score: contributions.reduce((s, r) => s + r.contribution, 0),
+    contributions
+  }
+}
+
 export function scorePartner(need, partner, { adjacency = {} } = {}) {
   const factors = {
     category: jaccard(need.categories, partner.categories),

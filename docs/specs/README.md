@@ -62,6 +62,7 @@ the test assertions.
 | 51 | [Marketing Control: engines wired](51-marketing-control-engines.md) | `logic/marketing.js` (channelRollup/percentShares), `MarketingControl.vue` | `tests/channelRollup.test.js` |
 | 52 | [Risk Appetite & Control Effectiveness](52-risk-appetite.md) | `logic/risk.js`, `RiskHeatmap.vue` appetite panel | `tests/risk.test.js` |
 | 53 | [Expansion Score From Signals](53-expansion-scoring.md) | `logic/expansion.js`, `UpsellEngine.vue` EV ranking | `tests/expansion.test.js` |
+| 54 | [Partner Fit Composite (ranking fix)](54-partner-fit-composite.md) | `logic/matching.js` `compositeFit`, `BusinessMatchHub.vue` | `tests/compositeFit.test.js` |
 
 Capability flow across domains:
 
