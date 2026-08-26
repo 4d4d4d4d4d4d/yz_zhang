@@ -112,5 +112,48 @@ class TestRenderAndCLI:
         assert rc == 3
 
 
+class TestObjectives:
+    """--objective drain / energy / edp select what a move must improve."""
+
+    @staticmethod
+    def _final_energy(rep):
+        # energy of the final (accepted) design = last accepted step's energy
+        accepted = [s for s in rep.steps if s.accepted]
+        return accepted[-1].total_energy_pj if accepted else None
+
+    def test_energy_objective_finds_energy_optimal(self):
+        # widening avp cuts drain but eventually costs more energy; the energy
+        # objective must NOT widen past the energy minimum (vw=32 < 64).
+        drain_opt = optimize_bottleneck(str(FIXTURES / CHIP), KNOBS, objective="drain")
+        energy_opt = optimize_bottleneck(str(FIXTURES / CHIP), KNOBS, objective="energy")
+        assert drain_opt.final_selection["avp.vector_width"] == 64
+        assert energy_opt.final_selection["avp.vector_width"] < 64
+        # the energy-objective design draws strictly less energy than the
+        # drain-objective one (that's why it stopped widening earlier)
+        assert self._final_energy(energy_opt) < self._final_energy(drain_opt)
+
+    def test_objective_recorded_in_report(self):
+        r = optimize_bottleneck(str(FIXTURES / CHIP), KNOBS, objective="edp")
+        assert r.objective == "edp"
+
+    def test_energy_objective_requires_trace_base(self):
+        # a non-trace base (synthetic Producer) has no ops → energy objective errors
+        with pytest.raises(ValueError):
+            optimize_bottleneck(
+                str(FIXTURES / "mac_chain.yaml"),
+                {"mac.array_cols": [32, 64]}, objective="energy",
+            )
+
+    def test_cli_objective_flag(self):
+        buf = io.StringIO()
+        rc = cli_main(
+            ["optimize", str(FIXTURES / CHIP), "--objective", "energy",
+             "--knob", "avp.vector_width=16,32,64"],
+            out=buf,
+        )
+        assert rc == 0
+        assert "energy" in buf.getvalue()
+
+
 def test_yaml_driven_contract():
     assert_evaluation_is_yaml_driven(__file__)

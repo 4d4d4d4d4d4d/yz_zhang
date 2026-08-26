@@ -58,6 +58,7 @@ class OptimizeReport:
     final_selection: dict
     steps: tuple[OptimizeStep, ...]
     stop_reason: str
+    objective: str = "drain"          # "drain" | "energy" | "edp"
     summary_text: str = ""
 
     @property
@@ -105,16 +106,38 @@ def _measure(base_abs: str, selection: dict, max_cycles: int, ops=None, period_p
     return bn.measured_drain_cycles, area, bn.bottleneck_module, energy_pj
 
 
+def _objective_metric(objective: str, drain: int, energy_pj) -> float:
+    """Scalar to MINIMIZE for the chosen objective (lower = better)."""
+    if objective == "drain":
+        return float(drain)
+    if energy_pj is None:
+        raise ValueError(
+            f"objective '{objective}' needs energy, but the base carries no ops "
+            "trace (use a TraceProducer chip, or objective='drain')."
+        )
+    if objective == "energy":
+        return float(energy_pj)
+    if objective == "edp":                       # energy-delay product
+        return float(energy_pj) * float(drain)
+    raise ValueError(f"unknown objective {objective!r} (drain | energy | edp)")
+
+
 def optimize_bottleneck(
     base_path: str,
     knobs: dict,
     max_cycles: int = 100_000,
     max_rounds: int = 20,
+    objective: str = "drain",
 ) -> OptimizeReport:
-    """Greedily widen the bottleneck stage until drain stops improving.
+    """Greedily widen the bottleneck stage until the objective stops improving.
 
     ``knobs`` maps ``"<module_id>.<config_key>"`` → ascending list of candidate
     values (cheap/narrow first). The search starts at each knob's first value.
+    ``objective`` selects what a move must improve: ``drain`` (latency),
+    ``energy`` (total pJ), or ``edp`` (energy-delay product). It stays a greedy
+    bottleneck-*widening* search — it never narrows an over-provisioned stage —
+    so for energy/EDP it finds the best config reachable by widening, not the
+    global optimum.
     """
     from npu_sim.evaluation import elaborate
     from npu_sim.evaluation.sweep import _try_load_ops
@@ -129,6 +152,7 @@ def optimize_bottleneck(
     idx = {k: 0 for k in knobs}
     selection = {k: knobs[k][0] for k in knobs}
     drain, area, bn, energy = _measure(base_abs, selection, max_cycles, ops, period_ps)
+    metric = _objective_metric(objective, drain, energy)
     initial_drain = drain
     initial_selection = dict(selection)
 
@@ -153,11 +177,12 @@ def optimize_bottleneck(
         trial = dict(selection)
         trial[knob] = to_v
         t_drain, t_area, t_bn, t_energy = _measure(base_abs, trial, max_cycles, ops, period_ps)
+        t_metric = _objective_metric(objective, t_drain, t_energy)
 
-        if t_drain < drain:
+        if t_metric < metric:
             idx[knob] += 1
             selection = trial
-            drain, area, bn, energy = t_drain, t_area, t_bn, t_energy
+            drain, area, bn, energy, metric = t_drain, t_area, t_bn, t_energy, t_metric
             steps.append(OptimizeStep(
                 round_index=r, knob=knob, from_value=from_v, to_value=to_v,
                 drain_cycles=t_drain, bottleneck_module=t_bn,
@@ -170,23 +195,24 @@ def optimize_bottleneck(
                 total_area_um2=t_area, accepted=False, total_energy_pj=t_energy,
             ))
             stop_reason = (
-                f"widening {knob} {from_v}→{to_v} did not improve drain "
-                f"({drain:,}→{t_drain:,}) — diminishing returns"
+                f"widening {knob} {from_v}→{to_v} did not improve {objective} "
+                f"({metric:,.0f}→{t_metric:,.0f}) — diminishing returns"
             )
             break
 
     lines = [
-        f"Greedy bottleneck optimization of `{base_name}`:",
+        f"Greedy bottleneck optimization of `{base_name}` (objective: {objective}):",
         f"  initial: {initial_drain:,} cyc  {initial_selection}",
     ]
     for s in steps:
         tag = "✓" if s.accepted else "✗ (stop)"
+        e = f", {s.total_energy_pj/1000:,.1f} nJ" if s.total_energy_pj is not None else ""
         lines.append(
             f"  round {s.round_index}: {s.knob} {s.from_value}→{s.to_value} "
-            f"⇒ {s.drain_cycles:,} cyc, bottleneck {s.bottleneck_module} {tag}"
+            f"⇒ {s.drain_cycles:,} cyc{e}, bottleneck {s.bottleneck_module} {tag}"
         )
     imp = (initial_drain - drain) / initial_drain * 100 if initial_drain else 0.0
-    lines.append(f"  final:   {drain:,} cyc  {selection}  ({imp:+.0f}% vs initial)")
+    lines.append(f"  final:   {drain:,} cyc  {selection}  ({imp:+.0f}% drain vs initial)")
     lines.append(f"  stop:    {stop_reason}")
 
     return OptimizeReport(
@@ -198,5 +224,6 @@ def optimize_bottleneck(
         final_selection=dict(selection),
         steps=tuple(steps),
         stop_reason=stop_reason,
+        objective=objective,
         summary_text="\n".join(lines),
     )

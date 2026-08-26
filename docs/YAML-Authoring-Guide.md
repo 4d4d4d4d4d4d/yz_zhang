@@ -351,10 +351,11 @@ python -m npu_sim energy my_chip.yaml attn_ops.yaml
 #   例:扫 AVP 向量宽度 16/32/64 —— 16→32 drain -42%,32→64 几乎不动(瓶颈迁到 dsb)
 python -m npu_sim sweep my_chip.yaml avp.vector_width 16,32,64
 
-# 自动设计搜索:贪心地"追瓶颈" —— 每轮加宽当前瓶颈级,直到加宽不再降 drain
+# 自动设计搜索:贪心地"追瓶颈" —— 每轮加宽当前瓶颈级,直到目标不再改善
 #   给若干旋钮(module.key=cheap,...,wide),优化器自己找配置组合
-#   例:追 avp→dsb→vau,drain -48% 后在 vau(无旋钮)收敛
-python -m npu_sim optimize my_chip.yaml \
+#   --objective 选优化目标:drain(延迟)/ energy(总能量)/ edp(能量×延迟)
+#   例:drain 目标追到 avp=64;energy 目标只到 avp=32(更宽反而更耗能)
+python -m npu_sim optimize my_chip.yaml --objective energy \
     --knob avp.vector_width=16,32,64 \
     --knob dsb.read_throughput=8,16
 

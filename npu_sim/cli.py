@@ -30,8 +30,8 @@ Subcommands:
                                 report the PPA response + bottleneck shift
                                 (design-space exploration).
     optimize <base> --knob ...  Greedily widen the bottleneck stage across
-                                config knobs until drain stops improving
-                                (automated design search).
+                                config knobs until the objective (drain /
+                                energy / edp) stops improving.
 
 Designed for the SPEC-003 §7 R7 workflow: researcher edits a YAML, runs
 `python -m npu_sim compare base.yaml variant.yaml`, pastes the output into
@@ -269,11 +269,15 @@ def _cmd_optimize(args: argparse.Namespace, out: TextIO) -> int:
 
     try:
         report = optimize_bottleneck(
-            args.base, knobs, max_cycles=args.max_cycles, max_rounds=args.max_rounds
+            args.base, knobs, max_cycles=args.max_cycles,
+            max_rounds=args.max_rounds, objective=args.objective,
         )
     except NpuSimError as exc:
         sys.stderr.write(f"optimize error: {exc}\n")
         return 2
+    except ValueError as exc:
+        sys.stderr.write(f"optimize error: {exc}\n")
+        return 3
 
     md = render_optimize_report(report)
     _write_output(md, args.out, out)
@@ -672,6 +676,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="MODULE.KEY=v1,v2,...",
         help="A knob to search: module config field + ascending candidate "
         "values (cheap→wide). Repeatable. E.g. --knob avp.vector_width=16,32,64.",
+    )
+    p_opt.add_argument(
+        "--objective",
+        choices=("drain", "energy", "edp"),
+        default="drain",
+        help="What a move must improve: drain (latency), energy (total pJ), "
+        "or edp (energy-delay product). energy/edp need a trace-driven base.",
     )
     p_opt.add_argument(
         "--max-rounds",

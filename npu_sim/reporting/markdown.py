@@ -421,10 +421,11 @@ def render_optimize_report(report: "OptimizeReport") -> str:
     """Render a greedy bottleneck-chasing optimization as Markdown."""
     parts: list[str] = [f"# Bottleneck optimization — `{report.base_name}`"]
     parts.append(_two_col_table("Metric", "Value", [
+        ("objective", report.objective),
         ("knobs", ", ".join(f"`{k}`" for k in report.knobs)),
         ("initial drain", f"{report.initial_drain_cycles:,} cyc"),
         ("final drain", f"{report.final_drain_cycles:,} cyc"),
-        ("improvement", f"{report.drain_improvement_pct:+.0f}%"),
+        ("drain improvement", f"{report.drain_improvement_pct:+.0f}%"),
         ("stop reason", report.stop_reason),
     ]))
 
