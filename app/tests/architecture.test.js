@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join, dirname, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 // Spec 22 — the architecture rules of spec 00 §2 and spec 13 rule 2,
@@ -72,4 +72,61 @@ describe('specs index consistency', () => {
     }
     expect(missing, missing.join(', ')).toEqual([])
   })
+})
+
+// ---------------------------------------------------------------- spec 55
+// Specs 50/51 found engines that were fully built and fully tested but wired
+// to nothing: recommend.js (the flagship "explainable" ranker) and
+// marketing.js. Both had shipped to no user. That audit was manual; this
+// makes it permanent, so a logic module cannot be written without either a
+// consumer in the app or an explicit, verified exemption.
+
+// Modules legitimately consumed outside src/ (build tooling, not the app).
+const CONSUMER_EXEMPT = { 'bundleBudget.js': 'scripts/check-bundle.mjs' }
+
+function walk(dir, out = []) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) walk(full, out)
+    else out.push(full)
+  }
+  return out
+}
+
+describe('logic modules are wired and tested (spec 55)', () => {
+  const SRC = join(ROOT, 'src')
+  const TESTS = join(ROOT, 'tests')
+
+  // Everything in src/ that is NOT itself part of the logic layer.
+  const appSources = walk(SRC)
+    .filter(f => !f.includes(`${sep}logic${sep}`))
+    .map(f => readFileSync(f, 'utf8'))
+
+  const testSources = walk(TESTS).map(f => readFileSync(f, 'utf8'))
+
+  for (const file of logicFiles) {
+    it(`${file} is consumed by the app`, () => {
+      const needle = `logic/${file}`
+      if (CONSUMER_EXEMPT[file]) {
+        const exemptPath = join(ROOT, CONSUMER_EXEMPT[file])
+        expect(existsSync(exemptPath), `${file}: exemption points at a missing file`).toBe(true)
+        expect(
+          readFileSync(exemptPath, 'utf8').includes(needle),
+          `${file}: exempted to ${CONSUMER_EXEMPT[file]}, which does not reference it`
+        ).toBe(true)
+        return
+      }
+      expect(
+        appSources.some(src => src.includes(needle)),
+        `${file} has no consumer in src/ — an engine wired to nothing ships to nobody`
+      ).toBe(true)
+    })
+
+    it(`${file} is covered by a test file`, () => {
+      expect(
+        testSources.some(src => src.includes(`logic/${file}`)),
+        `${file} is not referenced by any test`
+      ).toBe(true)
+    })
+  }
 })

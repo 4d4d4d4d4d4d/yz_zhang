@@ -63,6 +63,7 @@ the test assertions.
 | 52 | [Risk Appetite & Control Effectiveness](52-risk-appetite.md) | `logic/risk.js`, `RiskHeatmap.vue` appetite panel | `tests/risk.test.js` |
 | 53 | [Expansion Score From Signals](53-expansion-scoring.md) | `logic/expansion.js`, `UpsellEngine.vue` EV ranking | `tests/expansion.test.js` |
 | 54 | [Partner Fit Composite (ranking fix)](54-partner-fit-composite.md) | `logic/matching.js` `compositeFit`, `BusinessMatchHub.vue` | `tests/compositeFit.test.js` |
+| 55 | [Wiring Conformance (orphan guard)](55-wiring-conformance.md) | `tests/architecture.test.js` — every logic module wired + tested | self-enforcing (2 assertions/module) |
 
 Capability flow across domains:
 
