@@ -23,6 +23,9 @@ os.environ["PLATFORM_STORAGE_PROVIDER"] = "sandbox"
 os.environ["PLATFORM_LEDGER_BACKEND"] = "custody"
 os.environ["PLATFORM_SIGNATURE_PROVIDER"] = "sandbox-ca"
 os.environ["PLATFORM_NOTARY_PROVIDER"] = "sandbox-notary"
+# TAX-001 合规态必须已决定个税方案：这里选平台代扣 + 劳务报酬预扣预缴
+os.environ["PLATFORM_TAX_MODE"] = "withholding"
+os.environ["PLATFORM_TAX_PROVIDER"] = "labor_income"
 os.environ.setdefault("PLATFORM_LOG_LEVEL", "WARNING")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -67,7 +70,7 @@ def register(client, phone: str, nickname: str) -> dict:
 
 
 def main() -> None:
-    print("沙箱合规态自检（存管 + 可靠签名 + 第三方存证）")
+    print("沙箱合规态自检（存管 + 可靠签名 + 第三方存证 + 个税代扣）")
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     app = create_app()
@@ -95,19 +98,21 @@ def main() -> None:
         step("STUB-056 eKYC manual 三态可达",
              r.status_code == 200 and r.json().get("status") == "manual_review", r.json())
 
-        r = client.post("/api/v1/wallet/topup", json={"amount_cents": 100000},
+        # 金额取真实量级：劳务报酬每次收入 ≤4000 元先减除 800 元，
+        # 拿几百块的任务跑这套自检，代扣那几步会「通过」得莫名其妙
+        r = client.post("/api/v1/wallet/topup", json={"amount_cents": 1000000},
                         headers=auth(requester["token"]))
         step("充值（付款进存管专户）", r.status_code == 200 and r.json()["status"] == "succeeded")
 
         from app.vendors.sandbox import BOOK, ESCROW_ACCOUNT
 
         step("存管专户确实收到钱（钱不经过平台）",
-             BOOK.balances.get(ESCROW_ACCOUNT, 0) == 100000,
+             BOOK.balances.get(ESCROW_ACCOUNT, 0) == 1000000,
              f"{ESCROW_ACCOUNT}={BOOK.balances.get(ESCROW_ACCOUNT, 0)}")
 
         r = client.post("/api/v1/tasks",
                         json={"title": "沙箱验收任务", "description": "合规态闭环自检",
-                              "category": "跑腿", "budget_cents": 30000,
+                              "category": "跑腿", "budget_cents": 500000,
                               "city": "杭州", "lat": 30.27, "lng": 120.15,
                               "address_hint": "西湖区"},
                         headers=auth(requester["token"]))
@@ -146,6 +151,11 @@ def main() -> None:
         step("指令由存管方执行", order["backend"] == "custody", order["backend"])
         step("指令带存管流水号", bool(order["custody_ref"]), order["custody_ref"])
         step("分账守恒", sum(s["amount_cents"] for s in order["splits"]) == order["total_cents"])
+        # TAX-011/040 合规态下放款是**三方**分账：执行者 / 平台 / 税款专户
+        purposes = {s["purpose"] for s in order["splits"]}
+        step("TAX-011 分账含代扣税款收款方", "tax" in purposes, sorted(purposes))
+        tax_split = next(s for s in order["splits"] if s["purpose"] == "tax")
+        step("代扣金额为正", tax_split["amount_cents"] > 0, tax_split["amount_cents"])
         step("存管账簿收到分账",
              BOOK.balances.get(f"custody:user:{worker['id']}", 0) > 0,
              {k: v for k, v in BOOK.balances.items() if v})
@@ -161,7 +171,21 @@ def main() -> None:
 
         with SessionLocal() as db:
             recon = risk.reconcile(db)
-        step("资金四不变量成立", recon["ok"] is True, recon.get("mismatches"))
+        step("资金五不变量成立（含税款专户有据）", recon["ok"] is True, recon.get("mismatches"))
+
+        detail = client.get("/api/v1/finance/my-tax", headers=auth(worker["token"])).json()
+        step("TAX-021 执行者可查代扣明细",
+             len(detail["items"]) == 1 and detail["items"][0]["withheld_cents"] > 0,
+             detail["yearly"])
+        step("TAX-021 措辞不冒充完税证明",
+             "不是税务机关的完税证明" in detail["disclaimer"])
+
+        r = client.post("/api/v1/finance/jobs/remit-tax",
+                        headers={"X-Job-Token": "dev-job-token-change-me"})
+        step("TAX-013 税款缴库", r.json()["remitted_cents"] == tax_split["amount_cents"],
+             r.json())
+        with SessionLocal() as db:
+            step("缴库后不变量仍成立", risk.reconcile(db)["ok"] is True)
 
     print(f"\n沙箱合规态自检通过（{PASSED} 项）。")
     print("接真实供应商后把 provider 名换掉再跑一遍，全绿即说明契约对齐。")

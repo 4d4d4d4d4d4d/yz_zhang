@@ -53,15 +53,20 @@ def flag_pair(db: Session, task) -> None:
 
 
 def reconcile(db: Session) -> dict:
-    """PAY-006 对账：三条硬不变量，差错返回明细（生产为日终任务+差错工单）。
+    """PAY-006 对账：五条硬不变量，差错返回明细（生产为日终任务+差错工单）。
 
-    1. 全局资金守恒：Σ(可用+托管+冻结) == Σ(用户充值 + 平台注资) - Σ(提现 + 平台结算)
+    1. 全局资金守恒：Σ(可用+托管+冻结) == Σ(用户充值 + 平台注资) - Σ(提现 + 平台结算 + 缴库)
     2. 托管有据：Σ escrow == Σ funded 合约的 (金额 - 已放款)
     3. 冻结有据：Σ frozen == Σ(保证金 held + 待审大额提现)
     4. 平台账户有据：平台可用 == Σ佣金 + Σ平台注资 - Σ平台结算 - Σ对外补贴净额
+    5. 税款专户有据：专户余额 == Σ代扣 - Σ已缴库（TAX-012）
 
     第 4 条把 GRW 补贴纳入口径：补贴会减少平台余额，若不计入，
     每发一张券日终对账就会误报一次「平台佣金不符」。
+
+    第 5 条盯的是**代扣的钱不能与平台收入混同**：那既不是平台的收入，
+    也不再是执行者的钱，是平台代持待缴库的第三方资金。混进佣金账户的后果是
+    账面上平台「赚」多了，等到缴库才发现那笔钱早被当成收入结算走了。
     """
     from app.modules.contract.models import Contract
     from app.modules.wallet.models import LedgerEntry, WalletAccount
@@ -72,8 +77,10 @@ def reconcile(db: Session) -> dict:
         LedgerEntry.kind.in_(("topup", "platform_topup"))
     ).scalar()
     # 离开系统的钱：用户提现 + 平台收入对公结算
+    # 离开系统的钱还包括代扣税款缴库（TAX-013）——它真的划出去了，
+    # 不计入的话每缴一次库全局守恒就会误报一次
     total_out = -db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0)).filter(
-        LedgerEntry.kind.in_(("withdraw", "platform_settle"))
+        LedgerEntry.kind.in_(("withdraw", "platform_settle", "tax_remit"))
     ).scalar()
     accounts = db.query(WalletAccount).all()
     holdings = sum(a.available_cents + a.escrow_cents + a.frozen_cents for a in accounts)
@@ -145,6 +152,15 @@ def reconcile(db: Session) -> dict:
     if platform_balance != platform_expected:
         mismatches.append({"invariant": "platform_fee_backing",
                            "platform_balance": platform_balance, "expected": platform_expected})
+
+    # TAX-012 第五条：税款专户有据
+    from app.modules.tax import service as tax_service
+
+    tax_balance = tax_service.account_balance(db)
+    tax_expected = tax_service.expected_balance(db)
+    if tax_balance != tax_expected:
+        mismatches.append({"invariant": "tax_account_backing",
+                           "tax_balance": tax_balance, "expected": tax_expected})
 
     # FIN-060 分账守恒：任一指令的 splits 之和必须等于其总额。
     # 不守恒说明有钱凭空出现或消失，必须立刻停下来查。

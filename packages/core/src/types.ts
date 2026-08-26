@@ -430,3 +430,24 @@ export interface AgreementStatus {
   /** LAW-032 数据主体权利入口，前端据此渲染，避免「有能力但用户找不到」。 */
   rights: Record<string, string>;
 }
+
+/** TAX-021 一笔代扣记录。 */
+export interface TaxWithholdingItem {
+  id: number;
+  contract_id: number;
+  kind: string;
+  income_cents: number;
+  taxable_cents: number;
+  withheld_cents: number;
+  rule: string;
+  note: string;
+  at: string;
+}
+
+export interface TaxSummary {
+  mode: string;
+  yearly: Array<{ year: number; income_cents: number; withheld_cents: number; count: number }>;
+  items: TaxWithholdingItem[];
+  /** 平台出具的是**代扣明细**，不是税务机关的完税证明——前端必须原样展示这句。 */
+  disclaimer: string;
+}

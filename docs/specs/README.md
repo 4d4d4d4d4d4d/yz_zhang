@@ -51,6 +51,7 @@
 | 26 | 智能合约的法律效力与纠纷解决 | [26-legal-enforceability.md](./26-legal-enforceability.md) | P0 |
 | 27 | 沙箱桩实现（让预留接口跑得通） | [27-sandbox-stubs.md](./27-sandbox-stubs.md) | P0 |
 | 28 | 事件投递：失败隔离、可重试、跨副本 | [28-event-delivery.md](./28-event-delivery.md) | P0 |
+| 29 | 个税代扣代缴与发票 | [29-tax-withholding.md](./29-tax-withholding.md) | P0 |
 
 ## 功能点编号与优先级约定
 

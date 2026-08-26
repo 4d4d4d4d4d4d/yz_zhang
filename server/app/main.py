@@ -93,6 +93,7 @@ def create_app() -> FastAPI:
     from app.modules.search.router import router as search_router
     from app.modules.support.router import router as support_router
     from app.modules.eventops.router import router as eventops_router
+    from app.modules.tax.router import router as tax_router
     from app.modules.task.router import router as task_router
     from app.modules.wallet.router import router as wallet_router
 
@@ -120,6 +121,7 @@ def create_app() -> FastAPI:
         finance_router,
         growth_router,
         eventops_router,
+        tax_router,
     ):
         app.include_router(router, prefix=settings.API_PREFIX)
 

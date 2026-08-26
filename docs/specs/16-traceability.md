@@ -1,10 +1,41 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V53 全批次完成（2026-08-25）。
-> 后端 452 tests + 前端 42 tests 全绿；`scripts/smoke.py`（mock 态）与
-> `scripts/sandbox_check.py`（存管合规态，22 项）两条闭环自检均通过。
+> 状态：MVP + V1~V54 全批次完成（2026-08-26）。
+> 后端 479 tests + 前端 42 tests 全绿；`scripts/smoke.py`（mock 态）与
+> `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V54 批次：个税代扣代缴——平台一直在做扣缴义务人该做而没做的事）
+
+> 模块 spec：[29-tax-withholding.md](29-tax-withholding.md)（落地 FIN-030/031/032）
+>
+> **检视结论**：`release()` 一直只有**两个**收款方——执行者和平台。
+> 平台向自然人支付报酬，却一分税没扣、没有任何完税记录。
+> 《个人所得税法》第九条：以支付所得的单位或者个人为扣缴义务人；
+> 《税收征收管理法》第六十九条：应扣未扣，**处应扣未扣税款 50% 至 3 倍罚款**。
+>
+> 这不是代码疏漏，是这门生意的合规底座缺了一块。
+>
+> **代码不替你选按哪种所得课税**（劳务报酬 vs 经营所得委托代征 vs 自行申报，
+> 这是税务与法律决定），但它做三件事：把三条路都变成可执行可测试的实现、
+> **逼你必须显式选一条**（不选生产不让启动）、无论选哪条钱都必须守恒可对账。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **TAX-042 劳务报酬预扣预缴** | `LaborIncomeTax`：≤4000 元减除 800、>4000 减除 20%，三档预扣率与速算扣除，全是现行规定的真实算法而非占位 | `tests/test_tax_withholding.py::test_tax042_labor_income_brackets`（7 个分档）、`::test_tax042_bracket_boundary_is_not_off_by_one`（四千元分界最容易把 `<` 写成 `<=`，写反的后果是每笔四千上下的报酬都扣错） |
+| **TAX-002 三条路都能跑** | `NoWithholdingTax`（诚实命名，不叫 Default）/ `LaborIncomeTax` / `CommissionedCollectionTax`，注册进 vendor registry | 同上 `::test_commissioned_collection_uses_configured_rate`（说明里写明「以委托代征协议为前提」——没有协议按这个税率扣是另一种违法） |
+| **TAX-001/044 上线红线** | 生产 + `TAX_MODE=none` → 启动自检失败。允许选 `self_declared`（不扣），但**必须是显式选择**：默认的 none 意味着「没人想过这件事」 | `::test_tax044_production_refuses_to_start_without_a_tax_decision`、`::test_declaring_withholding_without_a_rule_is_also_refused`（配了一半比没配更危险）、`::test_self_declared_passes_the_gate` |
+| **TAX-010/012 代扣的钱独立成户** | `TAX_USER_ID = -1` 专户。它既不是平台收入也不再是执行者的钱，混进佣金账户的后果是账面上平台「赚」多了，等缴库才发现那笔钱早被当成收入结算走了 | `::test_tax012_withheld_money_is_not_mixed_into_platform_income` |
+| **TAX-011 三方分账（FIN-031）** | 放款分账变成执行者 / 平台 / 税款专户三个收款方，`purpose="tax"` | `::test_tax040_payout_is_split_three_ways`（含分账守恒） |
+| **TAX-012 第五条不变量** | `税款专户余额 == Σ代扣 − Σ已缴库`；全局守恒把 `tax_remit` 计入流出 | `::test_tax041_all_five_invariants_hold`、`::test_tax045_remit_zeroes_the_account_and_is_not_double_counted` |
+| **TAX-047 四条路一条都不能漏** | 整体放款 / 分期放款 / 裁决执行 / 取消补偿共用 `_withhold()`——只改整体放款会让所有分期合约悄悄免税 | `::test_tax047_milestone_release_also_withholds`、`::test_verdict_execution_also_withholds` |
+| **TAX-021/046 措辞准确** | 出具的是**代扣明细**不是完税证明：劳务报酬是预扣预缴，年度汇算还要并入综合所得多退少补。让用户以为能直接抵扣是在帮他犯错 | `::test_tax046_executor_sees_detail_and_it_does_not_claim_to_be_a_tax_certificate` |
+| 流水如实反映收入与扣除 | 先全额确认收入、再从中代扣两条流水；按净额直接入账会让执行者在流水里**看不到自己被扣过税** | `::test_executor_ledger_shows_income_then_withholding` |
+| **TAX-022 平台服务费发票（FIN-032）** | 只开佣金部分。平台没有为劳务报酬开票的资格，含糊其辞地"帮你开全额发票"是虚开不是服务 | `::test_tax022_invoice_covers_only_the_platform_fee`、`::test_invoice_only_for_the_paying_party_and_only_once` |
+| **TAX-043 向后兼容** | 默认 `none` 模式行为与改造前**逐字节一致**（不扣税、两方分账）——向后兼容不能靠嘴说 | `::test_tax043_none_mode_behaves_exactly_as_before` |
+| **TAX-014 已代扣不自动冲回** | 申诉改判发生在申报之后时，正确做法是**更正申报**而非账上偷偷冲销——装作能自动冲回，会做出一套和税局对不上的账 | 写入 spec 与代码注释，由人处理 |
+| 合规态自检扩展 | `scripts/sandbox_check.py` 现在跑「存管 + 可靠签名 + 第三方存证 + **个税代扣**」28 项，含三方分账、五不变量、缴库后仍守恒 | CI 作业 `sandbox-compliance` |
 
 ## 已实现（V53 批次：事件投递——别让锦上添花拖死存在理由）
 

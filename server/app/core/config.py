@@ -70,7 +70,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.46.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.47.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")
@@ -104,6 +104,16 @@ class Settings:
     NOTARY_PROVIDER = os.environ.get("PLATFORM_NOTARY_PROVIDER", "local")
     # 当前生效的用户协议版本（LAW-030：变更需重新同意）
     AGREEMENT_VERSION = os.environ.get("PLATFORM_AGREEMENT_VERSION", "2026-08-01")
+    # ── TAX 个税代扣（29 号 spec）───────────────────────────────────
+    # none          = 不代扣（**现状，生产下拒绝启动**：向自然人付款不扣税违法）
+    # withholding   = 平台代扣，用 TAX_PROVIDER 指定的规则
+    # self_declared = 执行方为个体户/企业自行申报并开票，平台不扣
+    TAX_MODE = os.environ.get("PLATFORM_TAX_MODE", "none")
+    # none / labor_income（劳务报酬预扣预缴）/ commissioned_collection（委托代征）
+    TAX_PROVIDER = os.environ.get("PLATFORM_TAX_PROVIDER", "none")
+    # 委托代征核定征收率（万分比）。默认 1% 是常见档位，
+    # ⚖️ 实际税率以你与税务机关签订的委托代征协议为准
+    TAX_COLLECTION_RATE_BPS = int(os.environ.get("PLATFORM_TAX_COLLECTION_RATE_BPS", "100"))
 
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]

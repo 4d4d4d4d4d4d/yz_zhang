@@ -17,6 +17,7 @@ from .sandbox import (
 )
 from .sms import MockSmsProvider
 from .storage import LocalStorageProvider
+from .tax import CommissionedCollectionTax, LaborIncomeTax, NoWithholdingTax
 
 # kind -> {provider_name: factory}
 _REGISTRY: dict[str, dict[str, type]] = {
@@ -25,13 +26,18 @@ _REGISTRY: dict[str, dict[str, type]] = {
     "kyc": {"mock": MockKycProvider, "sandbox": SandboxKycProvider},
     "moderation": {"local": LocalModerationProvider, "sandbox": SandboxModeration},
     "storage": {"local": LocalStorageProvider, "sandbox": SandboxStorage},
+    # TAX-002 三条路都是**真实算法**，不是桩：劳务报酬累进表与委托代征核定率
+    # 都按现行规定实现。它们的「不可上生产」不在于算得不对，
+    # 而在于缺少申报与缴库通道（见 TAX-013）与委托代征协议。
+    "tax": {"none": NoWithholdingTax, "labor_income": LaborIncomeTax,
+            "commissioned_collection": CommissionedCollectionTax},
 }
 
 # VND-042 生产必须接真实供应商的能力（涉及资金/身份/合规，模拟实现上线即事故）
 P0_KINDS = ("payment", "sms", "kyc", "moderation")
 # 各 kind 的缺省（退化）实现名
 MOCK_NAMES = {"payment": "mock", "sms": "mock", "kyc": "mock", "moderation": "local",
-              "storage": "local"}
+              "storage": "local", "tax": "none"}
 # STUB-002 **非生产实现集合**。判定从「等于 mock 名」改为「属于本集合」——
 # 否则新增 sandbox 反而绕开了 V49 建立的上线红线。
 # 补桩是为了让路径可测，**不能顺手削弱拦截**，这是本批次最容易做错的地方。
@@ -111,6 +117,22 @@ def startup_check() -> None:
             "PLATFORM_LEDGER_BACKEND 仍为 internal：平台自建账本托管用户资金"
             "涉嫌资金池与二清（无证从事支付结算），不得用于真实交易。"
             "请接入持牌机构存管后设为 custody"
+        )
+    # TAX-001/044 上线红线：向自然人支付报酬而不代扣个税，平台作为扣缴义务人
+    # 面临应扣未扣税款 50%~3 倍的罚款（《税收征收管理法》第六十九条）。
+    # 允许你选择 self_declared（执行方自行申报开票），但**必须是显式选择**——
+    # 默认的 none 意味着「没人想过这件事」，那才是真正的风险。
+    if settings.TAX_MODE not in ("withholding", "self_declared"):
+        problems.append(
+            f"PLATFORM_TAX_MODE={settings.TAX_MODE}：未决定个税方案。"
+            "平台向自然人支付报酬即为扣缴义务人，应扣未扣将被处应扣未扣税款"
+            "50% 至 3 倍罚款。请设为 withholding（平台代扣）或 "
+            "self_declared（执行方为个体户/企业自行申报并开票）"
+        )
+    if settings.TAX_MODE == "withholding" and settings.TAX_PROVIDER == "none":
+        problems.append(
+            "PLATFORM_TAX_MODE=withholding 但 PLATFORM_TAX_PROVIDER=none："
+            "声明了要代扣却没有配置扣缴规则，等于没扣"
         )
     if settings.JWT_SECRET == "dev-secret-change-me":
         problems.append("PLATFORM_JWT_SECRET 仍是默认值")

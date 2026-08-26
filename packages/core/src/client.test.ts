@@ -151,6 +151,12 @@ describe('V1 接口', () => {
     expect(fetchImpl.mock.calls[0][1].method).toBe('POST');
   });
 
+  it('TAX-021 代扣明细走 finance 前缀', async () => {
+    const { client, fetchImpl } = makeClient(200, { mode: 'withholding', items: [] });
+    await client.myTax();
+    expect(fetchImpl.mock.calls[0][0]).toBe('http://x/api/v1/finance/my-tax');
+  });
+
   it('LAW-030 协议更新被后端拒绝时，错误码原样透出给页面', async () => {
     const { client } = makeClient(409, {
       detail: { code: 'agreement_update_required', message: '《隐私政策》已更新' },

@@ -242,6 +242,21 @@ def _settle(db: Session, contract: Contract, kind: str,
                    [Split(uid, amount, purpose) for uid, amount, purpose in parts], memo)
 
 
+def _withhold(db: Session, contract: Contract, net_income: int,
+              kind: str) -> tuple[int, list[tuple[int, int, str]]]:
+    """TAX-011 代扣个税，返回（税额, 分账里的税款收款方）。
+
+    放在这里而不是各调用点内联：整体放款、分期放款、裁决执行、取消补偿
+    是**四条**通向执行者钱包的路，只改其中一条就等于给另外三条免了税。
+    """
+    from app.modules.tax import service as tax
+
+    row = tax.withhold(db, contract.executor_id, contract.id, net_income, kind)
+    if not row:
+        return 0, []
+    return row.withheld_cents, [(tax.TAX_USER_ID, row.withheld_cents, "tax")]
+
+
 def _fee(contract: Contract, amount: int) -> int:
     return amount * contract.fee_bps // 10000
 
@@ -274,9 +289,11 @@ def release(db: Session, contract: Contract) -> Contract:
         wallet.escrow_release(
             db, contract.requester_id, contract.executor_id, remaining, fee, contract.id,
         )
+        withheld, tax_parts = _withhold(db, contract, remaining - fee, "release")
         _settle(db, contract, "release", [
-            (contract.executor_id, remaining - fee, "payout"),
+            (contract.executor_id, remaining - fee - withheld, "payout"),
             (wallet.PLATFORM_USER_ID, fee, "fee"),
+            *tax_parts,
         ], "验收放款")
     db.query(Milestone).filter(
         Milestone.contract_id == contract.id, Milestone.status != "released"
@@ -319,9 +336,11 @@ def release_milestone(db: Session, contract: Contract, user_id: int, milestone: 
         db, contract.requester_id, contract.executor_id,
         milestone.amount_cents, fee, contract.id,
     )
+    withheld, tax_parts = _withhold(db, contract, milestone.amount_cents - fee, "milestone")
     _settle(db, contract, "milestone", [
-        (contract.executor_id, milestone.amount_cents - fee, "payout"),
+        (contract.executor_id, milestone.amount_cents - fee - withheld, "payout"),
         (wallet.PLATFORM_USER_ID, fee, "fee"),
+        *tax_parts,
     ], f"第 {milestone.idx} 期放款")
     milestone.status = "released"
     contract.released_cents += milestone.amount_cents
@@ -431,9 +450,11 @@ def cancel(db: Session, contract: Contract, cancelled_by: int) -> dict:
             db, contract.requester_id, contract.executor_id,
             remaining, comp, fee, contract.id,
         )
+        withheld, tax_parts = _withhold(db, contract, comp - fee, "split")
         _settle(db, contract, "split", [
-            (contract.executor_id, comp - fee, "compensation"),
+            (contract.executor_id, comp - fee - withheld, "compensation"),
             (wallet.PLATFORM_USER_ID, fee, "fee"),
+            *tax_parts,
             (contract.requester_id, remaining - comp, "refund"),
         ], f"取消补偿（发起方 {who}）")
         contract.status = "split"
@@ -478,9 +499,11 @@ def execute_verdict(db: Session, contract: Contract, executor_share_bps: int) ->
         db, contract.requester_id, contract.executor_id,
         remaining, share, fee, contract.id,
     )
+    withheld, tax_parts = _withhold(db, contract, share - fee, "verdict")
     _settle(db, contract, "verdict", [
-        (contract.executor_id, share - fee, "payout"),
+        (contract.executor_id, share - fee - withheld, "payout"),
         (wallet.PLATFORM_USER_ID, fee, "fee"),
+        *tax_parts,
         (contract.requester_id, remaining - share, "refund"),
     ], f"裁决执行（执行方 {executor_share_bps / 100:.0f}%）")
     contract.frozen = False

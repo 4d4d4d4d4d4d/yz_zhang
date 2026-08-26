@@ -26,6 +26,7 @@ import type {
   Recommendation,
   Task,
   TaskTree,
+  TaxSummary,
   Wallet,
 } from './types';
 
@@ -659,6 +660,11 @@ export class PlatformClient {
       'GET', `/legal/disputes/${disputeId}/evidence-export`,
     );
   }
+  // TAX-021 我的个税代扣明细（注意：是代扣明细，不是完税证明）
+  myTax() {
+    return this.request<TaxSummary>('GET', '/finance/my-tax');
+  }
+
   // LAW-030/031/032 协议版本、单独同意与数据主体权利
   myAgreements() {
     return this.request<AgreementStatus>('GET', '/legal/agreements');

@@ -32,6 +32,8 @@ JOBS: list[tuple[str, int]] = [
     # EVT-021 事件补做：跑得勤一点，用户少收一条通知的窗口就短一点
     (f"{PREFIX}/events/jobs/drain", 120),
     (f"{PREFIX}/events/jobs/purge", 86400),
+    # TAX-013 代扣税款缴库：一天一次（真实环境与申报周期对齐）
+    (f"{PREFIX}/finance/jobs/remit-tax", 86400),
 ]
 
 log = logging.getLogger("cron")
