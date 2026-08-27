@@ -9,6 +9,8 @@ Owners：架构组
 | 文档 | 用途 |
 |---|---|
 | [架构 YAML 编写指南](../YAML-Authoring-Guide.md) | **怎么写评估 YAML** — 骨架、base/overrides、全模块 config/端口参考、CLI、常见坑、完整配方 |
+| [保真度审计](../Fidelity-Audit.md) | **这些 PPA 数字有多可信** — 机制真实 vs 绝对系数;信任矩阵 |
+| [物理模型验证](../Physical-Validation.md) | SPEC-013 绝对面积/能量 vs 公开 45nm 参考(全部区间内) |
 | [评估报告](../EVALUATION_REPORT.md) | 40+ use case 的实测 delta 表(`scripts/run_all_evaluations.py` 一键重跑) |
 | [QEMU 对标分析](../QEMU-Benchmark-Analysis.md) | 平台定位 + 4 项改进空间 |
 
@@ -28,6 +30,7 @@ Owners：架构组
 | [SPEC-010 系统基础设施](./SPEC-010-System-Infrastructure.md) | PMU / SYNC | v0.1 Draft（全 2 §§ 实现 + 测试）|
 | [SPEC-011 DRAM 子系统与专用计算](./SPEC-011-DRAM-Specialized.md) | MC / L2 / SE / TLU / CMDQ / MMU | v0.1 Draft（全 6 §§ 实现 + 测试）|
 | [SPEC-012 Trace-Driven 激励](./SPEC-012-Trace-Driven-Stimulus.md) | TraceProducer — 播放真实模型算子序列 | v0.1 Draft（实现 + 测试）|
+| [SPEC-013 物理 PPA 模型](./SPEC-013-Physical-PPA-Models.md) | literature-grounded 面积/能量(`physical.py`),替换占位系数;compute + 全部片上存储已迁移 | v0.1 Draft（实现 + 测试 + 验证）|
 | [SPEC-001 v1.1 增订](./SPEC-001-v1.1-amendment.md) | Area 维度 + clock_domain | v1.1 Draft（Review pending）|
 | [SPEC-003 v1.1 增订](./SPEC-003-v1.1-amendment.md) | `__relocate__` / `clock_domains` / `physical_dimension` | v1.1 Draft（Review pending）|
 | [SPEC-005 v1.1 增订](./SPEC-005-v1.1-amendment.md) | 现存模块 area 系数 + UNPACK capability | v1.1 Draft（Review pending）|

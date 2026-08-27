@@ -17,6 +17,10 @@ NPU simulation platform implementing the v1.0 spec set:
 - **SPEC-003** Architecture description DSL (YAML, base+overrides, 9-phase
   elaborator)
 - **SPEC-004** Functional simulation interface (INumericalModel, comparison)
+- **SPEC-005** Compute module library (DAGC/DSB/MAC/VAU/AVP behavior)
+- **SPEC-006** Rule-based Mapper (op→module) + §8 estimate-vs-measured
+- **SPEC-013** Physical PPA models — literature-grounded area/energy
+  (`npu_sim/physical.py`), replacing the placeholder coefficients
 - **ADR-001** Six key technical decisions
 - **ADR-002** Module identity criteria (new IModule subclass vs. capability flag)
 
@@ -48,16 +52,34 @@ tests/                       unit + integration; fixtures under tests/fixtures/
 pip install -e .[dev]
 pytest tests/
 
-# CLI
+# CLI — run/compare
 python -m npu_sim list-modules
 python -m npu_sim simulate tests/fixtures/architectures/usecase_baseline.yaml
-python -m npu_sim compare tests/fixtures/architectures/usecase_baseline.yaml \
-                          tests/fixtures/architectures/usecase_variant_slow_cons.yaml
+python -m npu_sim compare  base.yaml variant.yaml
+python -m npu_sim trace    my_chip.yaml            # ASCII cycle waveform
+
+# CLI — evaluate a workload (ops YAML or a TraceProducer fixture)
+python -m npu_sim estimate   my_chip.yaml ops.yaml   # static op→module mapping
+python -m npu_sim reconcile  my_chip.yaml ops.yaml   # static estimate vs measured
+python -m npu_sim bottleneck my_chip.yaml            # measured throughput bottleneck
+python -m npu_sim energy     my_chip.yaml ops.yaml   # total energy (dyn+static) + PPA line
+python -m npu_sim fidelity   my_chip.yaml            # % area on physical vs [calibration knob]
+
+# CLI — design-space exploration (PPA: area / energy / latency)
+python -m npu_sim sweep    my_chip.yaml avp.vector_width 16,32,64
+python -m npu_sim optimize my_chip.yaml --objective energy \
+                           --knob avp.vector_width=16,32,64 --knob dsb.read_throughput=8,16
+python -m npu_sim snapshot  my_chip.yaml --at-cycle 20     # whole-chip state
+python -m npu_sim snapshot-diff a.yaml b.yaml --at-cycle 20
 ```
 
-Test suite must stay fast. Last commit reported ~1.0 s for the full suite.
-If you add slow tests, ask before merging — fast feedback is part of the
-platform's value proposition.
+See `docs/YAML-Authoring-Guide.md` for the full CLI + YAML reference, and
+`docs/Fidelity-Audit.md` / `docs/Physical-Validation.md` for what the PPA
+numbers can be trusted for (physical models vs pre-silicon placeholders).
+
+Test suite must stay fast (currently ~20 s / 785 tests; the sweep/optimize/
+bottleneck tests each run real sims). If you add slow tests, ask before
+merging — fast feedback is part of the platform's value proposition.
 
 ## When making changes
 
@@ -135,8 +157,15 @@ the README list.
   contracts for now.
 - A trained NPU model. SPEC-004 functional sim runs structural data flow,
   not numerical training.
-- Production-grade. Coverage is good for the v1.0 contracts and the Phase 2
-  module library (DAGC, DSB, MAC, VAU, AVP — behavior defined in SPEC-005),
-  but the timing/area/energy coefficients are pre-silicon estimates awaiting
-  Phase 5 calibration, and the functional models are golden reference ops,
-  not bit-accurate RTL.
+- Production-grade / silicon-calibrated. Coverage is good for the v1.0
+  contracts and the Phase 2 module library (DAGC, DSB, MAC, VAU, AVP —
+  behavior defined in SPEC-005). Area/energy for the compute datapath and all
+  on-chip storage are now **physically grounded** (SPEC-013: literature-
+  derived, size-scaling, ~90% of a full chip's area; validated in-range vs
+  published 45nm references, see `docs/Physical-Validation.md`), carrying a
+  ±30% analytical band. The remaining ~10% — control-plane FSM logic — stays
+  `[calibration knob]` pending Phase-5 RTL synthesis. `python -m npu_sim
+  fidelity <arch>` reports the grounded fraction for any chip. Trust the
+  relative/directional PPA and the ±30% absolute compute+storage figures;
+  absolute control-plane area and cross-node scaling await Phase 5. Functional
+  models are golden reference ops, not bit-accurate RTL.
