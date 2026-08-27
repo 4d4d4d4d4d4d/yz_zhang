@@ -65,6 +65,7 @@ the test assertions.
 | 54 | [Partner Fit Composite (ranking fix)](54-partner-fit-composite.md) | `logic/matching.js` `compositeFit`, `BusinessMatchHub.vue` | `tests/compositeFit.test.js` |
 | 55 | [Wiring Conformance (orphan guard)](55-wiring-conformance.md) | `tests/architecture.test.js` — every logic module wired + tested | self-enforcing (2 assertions/module) |
 | 56 | [Console A11y Conformance](56-console-a11y-conformance.md) | 33 unlabeled controls fixed across 11 components | `tests/a11y.console.test.js` |
+| 57 | [i18n Debt Ratchet](57-i18n-debt-ratchet.md) | `UsageMetering.vue` migrated to 4 locales; debt budget 779 | `tests/i18n.debt.test.js` |
 
 Capability flow across domains:
 
