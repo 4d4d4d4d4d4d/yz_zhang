@@ -66,6 +66,7 @@ the test assertions.
 | 55 | [Wiring Conformance (orphan guard)](55-wiring-conformance.md) | `tests/architecture.test.js` — every logic module wired + tested | self-enforcing (2 assertions/module) |
 | 56 | [Console A11y Conformance](56-console-a11y-conformance.md) | 33 unlabeled controls fixed across 11 components | `tests/a11y.console.test.js` |
 | 57 | [i18n Debt Ratchet](57-i18n-debt-ratchet.md) | `UsageMetering.vue` migrated to 4 locales; debt budget 779 | `tests/i18n.debt.test.js` |
+| 58 | [Locale Splitting + CPQ Truth](58-locale-splitting-and-cpq-truth.md) | lazy locale chunks (entry 100.6→82.0 KB); real margin-recovery advice; approval marker fixed; debt 779→712 | `tests/localeLoader.test.js`, `tests/cpqEditor.test.js`, `tests/quoteToCash.test.js` |
 
 Capability flow across domains:
 

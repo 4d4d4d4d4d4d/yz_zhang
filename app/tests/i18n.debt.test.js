@@ -7,17 +7,17 @@ import { fileURLToPath } from 'node:url'
 // is largely hardcoded English: 803 user-visible strings across 72 components
 // at the time of measurement. Translating that in one pass is not credible, so
 // this is a RATCHET: the debt may shrink, never grow. Migrating UsageMetering
-// took it to 779. Migrating a component
+// took it to 779, RiskHeatmap to 744, CPQEditor to 712. Migrating a component
 // lowers TOTAL_BUDGET; adding an English string to a migrated component fails
 // outright.
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 // Components fully migrated to i18n. These must stay at zero.
-const MIGRATED = ['UsageMetering.vue']
+const MIGRATED = ['UsageMetering.vue', 'RiskHeatmap.vue', 'CPQEditor.vue']
 
 // Ceiling for everything else. Lower this as components migrate; never raise it.
-const TOTAL_BUDGET = 779
+const TOTAL_BUDGET = 712
 
 function templateOf(src) {
   const m = src.match(/<template>([\s\S]*?)<\/template>\s*(?:<style|$)/)

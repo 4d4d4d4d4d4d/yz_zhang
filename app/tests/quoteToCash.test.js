@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { priceQuote, approvalFor } from '../src/logic/cpq.js'
+import { priceQuote, approvalFor, markerPercent, marginRecovery, APPROVAL_TIERS } from '../src/logic/cpq.js'
 import { buildSchedule } from '../src/logic/revrec.js'
 import { meterBill, invoice, projectedTotal } from '../src/logic/metering.js'
 
@@ -42,11 +42,112 @@ describe('cpq · priceQuote', () => {
 
 describe('cpq · approvalFor', () => {
   it('boundary values belong to the lower tier (5/15/25)', () => {
-    expect(approvalFor(5).level).toBe('Auto-approved')
-    expect(approvalFor(5.01).level).toBe('Sales Manager')
-    expect(approvalFor(15).level).toBe('Sales Manager')
-    expect(approvalFor(25).level).toBe('VP Sales')
-    expect(approvalFor(25.01).level).toBe('CFO + CEO')
+    expect(approvalFor(5).key).toBe('auto')
+    expect(approvalFor(5.01).key).toBe('manager')
+    expect(approvalFor(15).key).toBe('manager')
+    expect(approvalFor(25).key).toBe('vp')
+    expect(approvalFor(25.01).key).toBe('exec')
+  })
+
+  it('returns keys, never display copy — the tier must stay translatable', () => {
+    for (const tier of APPROVAL_TIERS) {
+      expect(tier.key).toMatch(/^[a-z]+$/)
+    }
+    expect(approvalFor(0)).not.toHaveProperty('level')
+    expect(approvalFor(0)).not.toHaveProperty('who')
+  })
+
+  it('garbage discounts fall to the first tier rather than off the table', () => {
+    expect(approvalFor(undefined).key).toBe('auto')
+    expect(approvalFor(NaN).index).toBe(0)
+    expect(approvalFor(-40).key).toBe('auto')
+  })
+})
+
+describe('cpq · markerPercent (spec 58)', () => {
+  // Regression: the bar drew four equal columns but the old view positioned the
+  // marker at `discount * 3`, a linear scale over unequal tier widths. At 8%
+  // the marker sat at 24% — inside the "Auto" column — while the heading beside
+  // it read "Sales Manager".
+  it('keeps the marker inside the column of the tier that actually approves', () => {
+    const width = 100 / APPROVAL_TIERS.length
+    for (const d of [0, 2, 5, 5.01, 8, 12, 15, 18, 25, 30, 60]) {
+      const { index } = approvalFor(d)
+      const pos = markerPercent(d)
+      expect(pos).toBeGreaterThanOrEqual(index * width)
+      expect(pos).toBeLessThanOrEqual((index + 1) * width)
+    }
+    expect(8 * 3).toBeLessThan(width) // the old formula really did land in "Auto"
+    expect(markerPercent(8)).toBeGreaterThan(width)
+  })
+
+  it('is monotonic and bounded', () => {
+    let prev = -1
+    for (let d = 0; d <= 60; d += 0.5) {
+      const pos = markerPercent(d)
+      expect(pos).toBeGreaterThanOrEqual(prev)
+      expect(pos).toBeLessThanOrEqual(100)
+      prev = pos
+    }
+    expect(markerPercent(0)).toBe(0)
+    expect(markerPercent(1000)).toBe(100)
+  })
+})
+
+describe('cpq · marginRecovery (spec 58)', () => {
+  // gross 10000 - 4000 disc = net 6000, cost 3000 -> margin 50% exactly
+  const atFloor = () => priceQuote([{ sku: 'plat', qty: 10, discount: 40 }], CATALOG)
+
+  it('stays silent when the quote already clears the floor', () => {
+    expect(marginRecovery(atFloor(), 50)).toBeNull()
+    expect(marginRecovery(priceQuote([{ sku: 'plat', qty: 10, discount: 0 }], CATALOG), 50)).toBeNull()
+  })
+
+  it('recommends a discount that actually reaches the floor', () => {
+    const q = priceQuote([{ sku: 'plat', qty: 10, discount: 50 }], CATALOG) // net 5000, cost 3000 -> 40%
+    const r = marginRecovery(q, 50)
+    expect(r.feasible).toBe(true)
+    expect(r.marginNow).toBeCloseTo(40, 6)
+    expect(r.toDiscount).toBeLessThan(r.fromDiscount)
+    expect(r.marginAfter).toBeGreaterThanOrEqual(50)
+    // Rounding is DOWN to the step, so we never overshoot by more than one step.
+    expect(r.marginAfter).toBeLessThan(50.6)
+    // The advice is arithmetic, not a slogan: applying it reproduces the margin.
+    const applied = priceQuote([{ sku: 'plat', qty: 10, discount: r.toDiscount }], CATALOG)
+    expect(applied.totals.blendedMargin).toBeCloseTo(r.marginAfter, 6)
+  })
+
+  it('trims the deepest discount when several lines could supply the same dollars', () => {
+    const q = priceQuote([
+      { sku: 'plat', qty: 10, discount: 20 },
+      { sku: 'seat', qty: 500, discount: 55 }
+    ], CATALOG)
+    // Both lines have enough headroom at this floor, so the choice is the
+    // tie-break, not feasibility: trim the least defensible discount.
+    const r = marginRecovery(q, 70)
+    expect(r.feasible).toBe(true)
+    expect(q.lines.every(l => l.gross * (l.discount / 100) >= r.needed)).toBe(true)
+    expect(r.sku).toBe('seat')
+  })
+
+  it('reports the shortfall instead of inventing a fix it cannot deliver', () => {
+    // Every discount removed still leaves margin under the floor.
+    const q = priceQuote([{ sku: 'plat', qty: 10, discount: 5 }], CATALOG)
+    const r = marginRecovery(q, 95)
+    expect(r.feasible).toBe(false)
+    expect(r.headroom).toBeLessThan(r.needed)
+    expect(r).not.toHaveProperty('toDiscount')
+  })
+
+  it('is safe on an empty or zero-net quote', () => {
+    expect(marginRecovery(priceQuote([], CATALOG), 50)).toBeNull()
+    expect(marginRecovery(undefined, 50)).toBeNull()
+    expect(marginRecovery({ totals: { net: 0, cost: 100 } }, 50)).toBeNull()
+  })
+
+  it('a 100% floor is clamped rather than dividing by zero', () => {
+    const r = marginRecovery(priceQuote([{ sku: 'plat', qty: 10, discount: 5 }], CATALOG), 100)
+    expect(Number.isFinite(r.needed)).toBe(true)
   })
 })
 
