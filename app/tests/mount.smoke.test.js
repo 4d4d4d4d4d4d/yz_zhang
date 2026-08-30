@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { createRouter, createMemoryHistory } from 'vue-router'
 
@@ -8,6 +8,7 @@ import zh from '../src/i18n/locales/zh.js'
 import ja from '../src/i18n/locales/ja.js'
 import es from '../src/i18n/locales/es.js'
 import { SECTIONS } from '../src/console/registry.js'
+import { loadSection } from '../src/console/panels.js'
 
 import Console from '../src/views/Console.vue'
 import Home from '../src/views/Home.vue'
@@ -20,7 +21,11 @@ import Contact from '../src/views/Contact.vue'
 
 // happy-dom has no canvas 2D context; components that draw (VideoHero)
 // guard on it, but stub it so a null return never throws mid-mount.
-beforeAll(() => {
+beforeAll(async () => {
+  // Spec 59 — warm every section chunk so a cached panel resolves in a
+  // microtask; chunk-loading itself is covered by tests/consolePanels.test.js.
+  await Promise.all(SECTIONS.map(s => loadSection(s.key)))
+
   const gradient = { addColorStop: () => {} }
   HTMLCanvasElement.prototype.getContext = () => ({
     fillRect: () => {}, clearRect: () => {}, beginPath: () => {}, moveTo: () => {},
@@ -91,7 +96,14 @@ describe('console — every section and sub-tab mounts clean', () => {
       expect(buttons.length, `${section.key} sub-tab buttons`).toBe(section.subs.length)
       for (let i = 0; i < buttons.length; i++) {
         await buttons[i].trigger('click')
-        await wrapper.vm.$nextTick()
+        await flushPromises(); await wrapper.vm.$nextTick(); await flushPromises()
+        // Spec 59 — panels are async. Asserting "no errors" against a panel
+        // that never mounted is a test that cannot fail, so require the panel
+        // to have actually rendered before believing the silence.
+        const panel = wrapper.find('.panel')
+        expect(panel.exists(), `${section.key}/${section.subs[i]} panel missing`).toBe(true)
+        expect(panel.find('.sk[aria-busy="true"]').exists(), `${section.key}/${section.subs[i]} stuck on skeleton`).toBe(false)
+        expect(panel.element.children.length, `${section.key}/${section.subs[i]} rendered empty`).toBeGreaterThan(0)
       }
       wrapper.unmount()
       expect(errors, `${section.key}: ${errors.join(' | ')}`).toEqual([])

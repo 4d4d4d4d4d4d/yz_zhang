@@ -225,6 +225,7 @@ export default {
     optCommitBody: 'en esta línea. Elegible según la tendencia de 90 días.'
   },
   console: {
+    loading: 'Cargando el módulo…',
     s: {
       recommend: { title: 'Recomendaciones IA', sub: 'Conceptos de anuncios rankeados y explicables, sobre datos anónimos de 1,200+ marcas.' },
       marketing: { title: 'Hub de marketing', sub: 'Rendimiento en tiempo real por canal, insights con IA y biblioteca creativa.' },

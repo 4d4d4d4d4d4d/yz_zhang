@@ -225,6 +225,7 @@ export default {
     optCommitBody: '（この明細）。90 日間の推移に基づき対象となります。'
   },
   console: {
+    loading: 'モジュールを読み込み中…',
     s: {
       recommend: { title: 'AI レコメンド', sub: '説明可能でランク付けされた広告コンセプト。1,200+ ブランドの匿名化データに基づく。' },
       marketing: { title: 'マーケティングハブ', sub: 'チャネル横断の実績、AI による洞察、クリエイティブライブラリ。' },

@@ -1,73 +1,25 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, defineAsyncComponent } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { SECTIONS } from '../console/registry.js'
-import { recordSection } from '../store/workspace.js'
+import { recordSection, prefs } from '../store/workspace.js'
 
 import SecurityRibbon  from '../components/SecurityRibbon.vue'
 import NotificationCenter from '../components/NotificationCenter.vue'
 import ModuleBoundary     from '../components/ModuleBoundary.vue'
 import SubTabs         from '../components/SubTabs.vue'
 import LiveActivityFeed from '../components/LiveActivityFeed.vue'
+import PanelSkeleton   from '../components/PanelSkeleton.vue'
+import { loadSection, prefetchSection } from '../console/panels.js'
+import { prefetchOrder, requestIdle } from '../logic/prefetch.js'
 
-import RecommendDeep     from '../components/RecommendDeep.vue'
-import RecommendAdvanced from '../components/RecommendAdvanced.vue'
-import ModelRegistry     from '../components/ModelRegistry.vue'
-import BanditExplorer    from '../components/BanditExplorer.vue'
-import FeatureStore      from '../components/FeatureStore.vue'
-import ExperimentManager from '../components/ExperimentManager.vue'
-import UsageMetering     from '../components/UsageMetering.vue'
-import PersonalizationDash from '../components/PersonalizationDash.vue'
 
-import MarketingHub        from '../components/MarketingHub.vue'
-import MarketingControl    from '../components/MarketingControl.vue'
-import AttributionWaterfall from '../components/AttributionWaterfall.vue'
-import AudienceBuilder     from '../components/AudienceBuilder.vue'
-import CohortRetention     from '../components/CohortRetention.vue'
-import ForecastSim         from '../components/ForecastSim.vue'
-import FunnelView          from '../components/FunnelView.vue'
-import RevenueDashboard    from '../components/RevenueDashboard.vue'
-import UpsellEngine        from '../components/UpsellEngine.vue'
 
-import BusinessMatchHub from '../components/BusinessMatchHub.vue'
-import PipelineBoard    from '../components/PipelineBoard.vue'
-import AccountIntel     from '../components/AccountIntel.vue'
-import OutreachSequence from '../components/OutreachSequence.vue'
-import SalesForecast    from '../components/SalesForecast.vue'
-import TerritoryQuota   from '../components/TerritoryQuota.vue'
-import OrderBook       from '../components/OrderBook.vue'
-import MarketplaceCommission from '../components/MarketplaceCommission.vue'
 
-import DealRoom              from '../components/DealRoom.vue'
-import NegotiationPlaybook   from '../components/NegotiationPlaybook.vue'
-import ApprovalFlow          from '../components/ApprovalFlow.vue'
-import ClauseLibrary         from '../components/ClauseLibrary.vue'
-import ObligationTracker     from '../components/ObligationTracker.vue'
-import ContractAnalytics     from '../components/ContractAnalytics.vue'
-import CPQEditor             from '../components/CPQEditor.vue'
-import RevenueRecognition    from '../components/RevenueRecognition.vue'
 
-import AvatarStudio      from '../components/AvatarStudio.vue'
-import ImmersiveMeeting  from '../components/ImmersiveMeeting.vue'
-import MeetingPlanner    from '../components/MeetingPlanner.vue'
-import VirtualTour       from '../components/VirtualTour.vue'
-import FieldVerification from '../components/FieldVerification.vue'
 
-import ShowcaseGallery   from '../components/ShowcaseGallery.vue'
-import TrustLinkBuilder  from '../components/TrustLinkBuilder.vue'
-import VerificationQueue from '../components/VerificationQueue.vue'
-import TrustPipeline     from '../components/TrustPipeline.vue'
-import DealReportCard    from '../components/DealReportCard.vue'
 
-import TrustCenter      from '../components/TrustCenter.vue'
-import ControlsRegister from '../components/ControlsRegister.vue'
-import RiskHeatmap      from '../components/RiskHeatmap.vue'
-import DPIAWorkflow     from '../components/DPIAWorkflow.vue'
-import AuditRoom        from '../components/AuditRoom.vue'
-import PolicyManagement from '../components/PolicyManagement.vue'
-import CustomerHealth   from '../components/CustomerHealth.vue'
-import SupportSLA       from '../components/SupportSLA.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -75,36 +27,27 @@ const route = useRoute()
 // Component wiring stays in the view (it imports .vue files); the
 // structure (keys, order, sub list) comes from the single-source
 // registry (spec 20). Keyed by `section/sub`.
-const COMPONENTS = {
-  'recommend/inputs': RecommendDeep, 'recommend/agents': RecommendAdvanced, 'recommend/registry': ModelRegistry,
-  'recommend/bandit': BanditExplorer, 'recommend/features': FeatureStore, 'recommend/experiments': ExperimentManager,
-  'recommend/metering': UsageMetering, 'recommend/tenant': PersonalizationDash,
-  'marketing/overview': MarketingHub, 'marketing/control': MarketingControl, 'marketing/attribution': AttributionWaterfall,
-  'marketing/audience': AudienceBuilder, 'marketing/retention': CohortRetention, 'marketing/forecast': ForecastSim,
-  'marketing/revenue': RevenueDashboard, 'marketing/upsell': UpsellEngine, 'marketing/funnel': FunnelView,
-  'partners/network': BusinessMatchHub, 'partners/pipeline': PipelineBoard, 'partners/intel': AccountIntel,
-  'partners/outreach': OutreachSequence, 'partners/forecast': SalesForecast, 'partners/territory': TerritoryQuota,
-  'partners/orders': OrderBook, 'partners/commission': MarketplaceCommission,
-  'deals/room': DealRoom, 'deals/playbook': NegotiationPlaybook, 'deals/workflow': ApprovalFlow,
-  'deals/library': ClauseLibrary, 'deals/obligations': ObligationTracker, 'deals/analytics': ContractAnalytics,
-  'deals/cpq': CPQEditor, 'deals/revrec': RevenueRecognition,
-  'showcase/gallery': ShowcaseGallery, 'showcase/links': TrustLinkBuilder, 'showcase/verification': VerificationQueue,
-  'showcase/pipeline': TrustPipeline, 'showcase/report': DealReportCard,
-  'immersive/avatar': AvatarStudio, 'immersive/meeting': ImmersiveMeeting, 'immersive/planner': MeetingPlanner,
-  'immersive/tour': VirtualTour, 'immersive/field': FieldVerification,
-  'trust/posture': TrustCenter, 'trust/controls': ControlsRegister, 'trust/heatmap': RiskHeatmap,
-  'trust/dpia': DPIAWorkflow, 'trust/audit': AuditRoom, 'trust/policies': PolicyManagement,
-  'trust/health': CustomerHealth, 'trust/support': SupportSLA
-}
 
+// Spec 59 — each panel is an async component backed by its section's chunk.
+// The first panel of a section pulls the chunk; its siblings then resolve from
+// cache, so flicking through sub-tabs costs nothing after the first.
 const sections = SECTIONS.map(s => ({
   key: s.key,
   icon: s.icon,
-  sub: s.subs.map(v => {
-    const comp = COMPONENTS[`${s.key}/${v}`]
-    if (!comp) throw new Error(`Console: no component wired for ${s.key}/${v}`)
-    return { v, comp }
-  })
+  sub: s.subs.map(v => ({
+    v,
+    comp: defineAsyncComponent({
+      loader: () => loadSection(s.key).then(panels => {
+        const comp = panels[v]
+        if (!comp) throw new Error(`Console: no component wired for ${s.key}/${v}`)
+        return comp
+      }),
+      loadingComponent: PanelSkeleton,
+      // Below this, the chunk usually lands first and a skeleton would only
+      // flash. ModuleBoundary catches a genuine failure.
+      delay: 180
+    })
+  }))
 }))
 
 const active = computed(() => sections.find(s => s.key === route.params.tab) || sections[0])
@@ -119,6 +62,20 @@ watch(() => [active.value.key, route.query.sub], () => { subTab.value = requeste
 
 // Spec 32 — remember visited sections for the ⌘K empty-query jump list.
 watch(() => active.value.key, k => recordSection(k), { immediate: true })
+
+// Spec 59 — warm the sections the reader is most likely to open next, once the
+// current one has painted. Speculative and failure-tolerant: a prefetch that
+// does not arrive costs nothing, because the click path loads it anyway.
+watch(() => active.value.key, k => {
+  for (const key of prefetchOrder(SECTIONS.map(s => s.key), k, prefs.recents)) {
+    prefetchSection(key)
+  }
+})
+onMounted(() => requestIdle(() => {
+  for (const key of prefetchOrder(SECTIONS.map(s => s.key), active.value.key, prefs.recents)) {
+    prefetchSection(key)
+  }
+}))
 
 const subTabs = computed(() => active.value.sub.map(s => ({ v: s.v, label: t(`console.tabs.${active.value.key}.${s.v}`) })))
 const activeComp = computed(() => active.value.sub.find(s => s.v === subTab.value)?.comp)
@@ -166,7 +123,9 @@ const activeComp = computed(() => active.value.sub.find(s => s.v === subTab.valu
         <SubTabs v-model="subTab" :tabs="subTabs" />
 
         <ModuleBoundary :key="active.key + '/' + subTab">
-          <component :is="activeComp" />
+          <div class="panel" :data-panel="active.key + '/' + subTab">
+            <component :is="activeComp" />
+          </div>
         </ModuleBoundary>
 
         <LiveActivityFeed />

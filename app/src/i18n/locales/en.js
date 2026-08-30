@@ -227,6 +227,7 @@ export default {
     optCommitBody: 'on this line item. Eligible based on 90-day trend.'
   },
   console: {
+    loading: 'Loading module…',
     s: {
       recommend: { title: 'AI Recommendations', sub: 'Explainable, ranked ad concepts — backed by anonymized performance data from 1,200+ brands.' },
       marketing: { title: 'Marketing Hub', sub: 'Real-time performance across channels, with AI-generated insights and creative library.' },

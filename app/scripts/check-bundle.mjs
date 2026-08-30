@@ -4,7 +4,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
-import { evaluateBudget, BUDGETS, TOTAL_BUDGET } from '../src/logic/bundleBudget.js'
+import { evaluateBudget, TOTAL_BUDGET } from '../src/logic/bundleBudget.js'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const assetsDir = join(root, 'dist', 'assets')
@@ -22,11 +22,18 @@ const chunks = readdirSync(assetsDir)
   }))
   .sort((a, b) => b.gzipKB - a.gzipKB)
 
-const { ok, violations, totalKB } = evaluateBudget(chunks)
+const { ok, violations, totalKB, paths } = evaluateBudget(chunks)
 
 console.log('Bundle gzip sizes (KB):')
 for (const c of chunks) console.log(`  ${c.gzipKB.toFixed(1).padStart(7)}  ${c.name}`)
 console.log(`  ${totalKB.toFixed(1).padStart(7)}  (total, budget ${TOTAL_BUDGET})`)
+
+// Spec 59 — the number that describes a real reader, not the sum nobody downloads.
+console.log('\nDelivered per path (gzip KB):')
+for (const [name, p] of Object.entries(paths)) {
+  const via = p.heaviest ? ` (worst section: ${p.heaviest})` : ''
+  console.log(`  ${p.kb.toFixed(1).padStart(7)}  ${name}, budget ${p.limit}${via}`)
+}
 
 if (!ok) {
   console.error('\n✗ Bundle budget exceeded:')

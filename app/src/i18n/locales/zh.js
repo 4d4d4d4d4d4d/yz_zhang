@@ -227,6 +227,7 @@ export default {
     optCommitBody: '（该行项目）。依据 90 天趋势判断符合条件。'
   },
   console: {
+    loading: '模块加载中…',
     s: {
       recommend: { title: 'AI 推荐', sub: '可解释、可排序的广告创意推荐，背后是 1,200+ 品牌脱敏后的真实数据。' },
       marketing: { title: '营销中心', sub: '跨渠道的实时表现、AI 洞察以及创意素材库。' },
