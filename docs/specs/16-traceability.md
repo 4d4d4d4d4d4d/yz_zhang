@@ -1,10 +1,44 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V54 全批次完成（2026-08-26）。
-> 后端 479 tests + 前端 42 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V55 全批次完成（2026-08-26）。
+> 后端 494 tests + 前端 42 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V55 批次：反洗钱——把金额减 1 元多点几次就能绕过的门槛）
+
+> 模块 spec：[30-aml.md](30-aml.md)（落地 FIN-040）
+>
+> **检视结论（探针复现，不是推测）**：提现风控此前判的是**单笔** ≥¥1 万转人审。
+> 同一账号连续提现 5 笔 ¥9,999：
+>
+> ```
+> 五笔 ¥9999 提现结果： [(200,'done'), (200,'done'), (200,'done'), (200,'done'), (200,'done')]
+> 进入人审的笔数： 0
+> ```
+>
+> **¥49,995 出账，零人审。** 不需要任何技术手段——把金额减 1 元，多点几次。
+> 拆分（structuring）是绕过单笔门槛最古老最简单的手法，恰恰是反洗钱监测的头号目标。
+>
+> **本批次刻意划定的边界**：接存管后直接报送义务在持牌机构一侧，
+> 但存管机构只看到资金流、**看不到业务语义**——哪笔钱对应哪个任务、
+> 双方是不是同一个人的马甲。代码做的是「平台看得见而存管方看不见」的那部分，
+> 不假装能替代持牌机构的报送系统。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **AML-001/040 阈值从「单笔」改为「累计」** | 单笔 ≥ 门槛**或**当日累计 ≥ 门槛都转人审——直接堵掉探针复现的洞 | `tests/test_aml.py::test_aml040_structuring_no_longer_slips_through`（第一笔正常放行，2~5 笔全部转人审；改造前是 0 笔）、`::test_aml001_single_large_withdrawal_still_reviewed` |
+| **AML-003/041 判定在锁内** | 风控判定与余额判断共用同一个 `today_withdrawn`，都在钱包锁内——并发提现各自读到「还没超」再分别放行，和拆分是同一个洞的两种利用姿势 | `::test_aml041_concurrent_withdrawals_cannot_dodge_the_cumulative_threshold`（真多线程，至多一笔即时出账） |
+| **AML-010 拆分识别带数值** | 滚动窗口内多笔金额接近但均低于单笔门槛 → 记形态，触发依据带出具体区间与笔数 | `::test_aml010_structuring_pattern_is_identified_with_numbers` |
+| **AML-011/042 快进快出** | 充值后短时间内几乎原样提现**且中间无真实成交**。「无成交」是关键：有成交说明钱是挣来的，那是正常业务 | `::test_aml042_passthrough_is_detected`、`::test_passthrough_not_flagged_when_the_money_was_earned` |
+| **AML-013/043 收款账户聚集** | 多个用户绑同一张卡。一人多号已由证件号摘要拦住，但**收款账户**这一维度此前没人看。**只标记不拦截**——夫妻共用一张卡、帮父母代收都是真实场景 | `::test_aml043_shared_payout_account_is_flagged_but_not_blocked` |
+| **AML-030/031/045 不得泄露（tipping-off）** | 《反洗钱法》第五条要求对反洗钱工作信息保密。用户只看到中性措辞「该笔提现需人工复核」；**绝不回 reasons**——那既违反保密义务，也直接教会对方下次怎么规避 | `::test_aml045_user_facing_message_is_neutral`（扫「可疑/反洗钱/拆分/风控」等字样）、`::test_aml044_suspicious_flags_do_not_leak_into_data_export`（LAW-032 的导出权在这里让位） |
+| **AML-021 不自动报送** | 代码只识别、留痕、转人审、可导出。报送是合规官的动作，要人判断要签字；自动报送既不合规也不负责任 | `::test_compliance_officer_reviews_and_records_the_conclusion` |
+| **AML-046 只有管理员能读** | 整个 AML 路由**没有任何面向用户的端点**——这是刻意的 | `::test_aml046_only_admins_can_read_the_suspicious_list` |
+| **AML-047 不能误伤正常用户** | 风控做得太紧等于停业：小额提现照常即时到账 | `::test_aml047_ordinary_withdrawals_are_not_held` |
+| 实现中补的真实缺口 | 最初只有「拆分」和「大额报告线」会留痕，单纯因累计达线被扣下的提现**什么都不写**。复核的人打开队列看到一堆没有说明的条目只能全部放行——那等于风控没做，还平白让用户等了一天。改为**被扣下的提现必须带着理由**，`needs_review` 与 `reasons` 等价 | `::test_every_held_withdrawal_carries_a_reviewable_reason` |
+| **AML-023 保存期与删除权的冲突** | 反洗钱要求交易记录保存 5 年，与 LAW-032 删除权真实冲突且反洗钱法优先（PIPL 第四十七条把「法律另有规定」列为删除义务例外） | 见 30 号 spec 第 D 节 |
 
 ## 已实现（V54 批次：个税代扣代缴——平台一直在做扣缴义务人该做而没做的事）
 

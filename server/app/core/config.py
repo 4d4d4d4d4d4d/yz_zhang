@@ -70,7 +70,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.47.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.48.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")
@@ -104,6 +104,19 @@ class Settings:
     NOTARY_PROVIDER = os.environ.get("PLATFORM_NOTARY_PROVIDER", "local")
     # 当前生效的用户协议版本（LAW-030：变更需重新同意）
     AGREEMENT_VERSION = os.environ.get("PLATFORM_AGREEMENT_VERSION", "2026-08-01")
+    # ── AML 反洗钱（30 号 spec）─────────────────────────────────────
+    # 当日累计达此额度即转人审。**必须有累计口径**：只判单笔的话，
+    # 把金额减 1 元多点几次就能绕过（拆分/structuring，探针已复现）
+    AML_DAILY_REVIEW_CENTS = int(os.environ.get("PLATFORM_AML_DAILY_REVIEW_CENTS", "1000000"))
+    # 大额交易报告线（供合规官复核后报送，代码不自动对外报送）
+    AML_REPORT_CENTS = int(os.environ.get("PLATFORM_AML_REPORT_CENTS", "5000000"))
+    # 拆分识别：滚动窗口小时数、窗口内笔数阈值、"接近单笔门槛"的百分比
+    AML_STRUCTURING_HOURS = int(os.environ.get("PLATFORM_AML_STRUCTURING_HOURS", "24"))
+    AML_STRUCTURING_COUNT = int(os.environ.get("PLATFORM_AML_STRUCTURING_COUNT", "3"))
+    AML_NEAR_THRESHOLD_PCT = int(os.environ.get("PLATFORM_AML_NEAR_THRESHOLD_PCT", "80"))
+    # 快进快出：充值后多少小时内提现走本形态，以及占充值额的比例阈值
+    AML_PASSTHROUGH_HOURS = int(os.environ.get("PLATFORM_AML_PASSTHROUGH_HOURS", "24"))
+    AML_PASSTHROUGH_PCT = int(os.environ.get("PLATFORM_AML_PASSTHROUGH_PCT", "80"))
     # ── TAX 个税代扣（29 号 spec）───────────────────────────────────
     # none          = 不代扣（**现状，生产下拒绝启动**：向自然人付款不扣税违法）
     # withholding   = 平台代扣，用 TAX_PROVIDER 指定的规则

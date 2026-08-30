@@ -84,20 +84,31 @@ def withdraw(db: Session, user_id: int, amount: int) -> dict:
     acct = get_or_create(db, user_id)
     if amount <= 0 or amount > acct.available_cents:
         raise bad_request("可用余额不足", "insufficient_balance")
-    if _today_withdrawn(db, user_id) + amount > settings.WITHDRAW_DAILY_LIMIT_CENTS:
+    today = _today_withdrawn(db, user_id)
+    if today + amount > settings.WITHDRAW_DAILY_LIMIT_CENTS:
         raise bad_request(
             f"超出单日提现限额（{settings.WITHDRAW_DAILY_LIMIT_CENTS / 100:.0f} 元）",
             "daily_limit_exceeded",
         )
-    if amount >= settings.LARGE_WITHDRAW_CENTS:
-        # 大额：可用 → 冻结，生成人审申请（批准划出 / 驳回解冻）
+    # AML-001/003 风控判定必须在**这个锁里**做：并发提现各自读到「还没超」
+    # 再分别放行，和拆分是同一个洞的两种利用姿势
+    from app.modules.aml import service as aml
+
+    verdict = aml.assess_withdrawal(db, user_id, amount, today)
+    if verdict["needs_review"]:
+        # 大额或累计达标：可用 → 冻结，生成人审申请（批准划出 / 驳回解冻）
         acct.available_cents -= amount
         acct.frozen_cents += amount
         req = WithdrawRequest(user_id=user_id, amount_cents=amount)
         db.add(req)
         db.flush()
-        _log(db, user_id, "withdraw_hold", -amount, memo=f"大额提现待审 #{req.id}")
+        _log(db, user_id, "withdraw_hold", -amount, memo=f"提现待审 #{req.id}")
+        aml.record_withdrawal_flags(db, user_id, verdict["reasons"], req.id)
+        # AML-030/031 tipping-off：给用户的话必须中性。
+        # 这里**绝不能**回 verdict["reasons"]——那等于告诉他「你哪条触发了风控」，
+        # 既违反《反洗钱法》第五条的保密义务，也直接教会他下次怎么规避。
         return {"status": "pending_review", "request_id": req.id,
+                "message": aml.NEUTRAL_REVIEW_MESSAGE,
                 "available_cents": acct.available_cents, "frozen_cents": acct.frozen_cents}
     acct.available_cents -= amount
     entry_ref = f"wd-{user_id}-{int(utcnow().timestamp() * 1000)}"

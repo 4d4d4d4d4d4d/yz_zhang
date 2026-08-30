@@ -53,6 +53,10 @@ def bind_payout_account(
     from app.modules.legal import consent
 
     consent.ensure(db, user.id, "payment")
+    # AML-013 收款账户聚集：只标记不拦截——夫妻共用一张卡、帮父母代收都是真实场景
+    from app.modules.aml import service as aml
+
+    aml.check_payout_clustering(db, user.id, body.account_no)
     acct = db.get(PayoutAccount, user.id)
     if not acct:
         acct = PayoutAccount(user_id=user.id)
