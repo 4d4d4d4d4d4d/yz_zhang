@@ -33,6 +33,15 @@ def purge(db: Session = Depends(get_db), _=Depends(require_job_auth),
     return events.purge(db)
 
 
+@router.post("/jobs/purge-security")
+def purge_security(db: Session = Depends(get_db), _=Depends(require_job_auth),
+                   __=Depends(job_slot("security_purge"))):
+    """SECEV-006 清理高频安全事件噪音；封禁与解封的处置留痕不清。"""
+    from app.core import guard
+
+    return guard.purge(db)
+
+
 @router.get("/health")
 def health(db: Session = Depends(get_db), _=Depends(require_job_auth)):
     """EVT-031 待重试与死信统计。"""

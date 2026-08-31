@@ -2,6 +2,7 @@
 from app.core.idempotency import IdempotencyRecord  # noqa: F401
 from app.core.events import EventDelivery, OutboxEvent  # noqa: F401
 from app.core.models_infra import JobLock  # noqa: F401
+from app.core.models_security import SecurityEvent  # noqa: F401
 from app.vendors.models import PaymentOrder, SmsCode, VendorCall  # noqa: F401
 from app.modules.account.models import Block, LoginSession, User  # noqa: F401
 from app.modules.aml.models import SuspiciousActivity  # noqa: F401

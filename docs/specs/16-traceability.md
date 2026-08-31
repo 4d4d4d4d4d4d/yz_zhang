@@ -1,10 +1,47 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V55 全批次完成（2026-08-26）。
-> 后端 494 tests + 前端 42 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V56 全批次完成（2026-08-27）。
+> 后端 510 tests + 前端 42 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V56 批次：一句说谎的注释——跨副本封禁与人机验证）
+
+> 模块 spec：[31-security-events.md](31-security-events.md)（落地 SEC-021/022/023）
+>
+> **检视结论**：`app/core/guard.py` 里原本写着
+>
+> ```python
+> # 封禁本身落 DB（SecurityEvent），因此跨副本仍能看到。
+> _banned_until: dict[str, float] = {}
+> ```
+>
+> **那个表根本不存在。** 全仓库 grep 只有这一行注释提到它，封禁就是一个
+> 进程内 dict。三副本部署下：攻击者换个连接打到别的副本照样过；
+> 每副本各自计数，有效阈值被放大三倍；管理员解封**只解了一个副本**，
+> 被误封的公司出口 IP 之后还有 2/3 概率被拒——用户报「有时候能登录
+> 有时候不能」，客服根本复现不出来。**时好时坏的故障比稳定的故障
+> 难查一个数量级。**
+>
+> 同一批还有第二处：`docs/OPERATIONS.md` 写着人机验证「抽象位已留（SEC-021）」，
+> 而全仓库没有一行 captcha 代码。读文档的人会以为接入只是换个环境变量。
+>
+> **注释和文档比代码更容易骗人，因为没有测试盯着它们。**
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **SECEV-001/002 封禁状态落 DB** | `SecurityEvent` 表真正建出来；封禁以 DB 为准，进程内只保留 5 秒的**有界最终一致**快照（封禁时长以分钟计，几秒滞后对拦截与解封都无所谓，换来不必每个写请求查一次库） | `tests/test_security_events.py::test_secev030_ban_survives_a_process_restart`（清掉进程状态＝「请求打到另一个副本」，改造前这里会放行） |
+| **SECEV-003/032 失败计数跨副本累计** | 计数同样落 DB，否则 N 个副本把有效阈值放大了 N 倍 | `::test_secev032_failures_accumulate_across_replicas`（每次失败都「换个副本」，仍能累计到阈值） |
+| **SECEV-021/031 解封全局生效** | 解封改 `expires_at` 并写 `unban` 事件，**不删记录**——删了就没法回答「这个 IP 什么时候被封过、谁解的」 | `::test_secev031_unban_takes_effect_globally` |
+| 实现中被测试逮到的真实缺陷 | 解封接口自己也走全局写限流中间件，而中间件按 IP 拒绝被封的来源。误封整个公司出口 IP 时管理员很可能就坐在那个 IP 后面——**补救路径恰好在最需要它的时候不可用**。只放行安全处置路径（仍要求管理员身份） | `::test_the_unban_endpoint_is_not_blocked_by_the_ban_itself` |
+| **SECEV-004/036 写入量天然有界** | 封禁检查在计数**之前**，被封的 IP 不再产生新失败记录，单 IP 每窗口最多写「阈值」条。这不是巧合，是把顺序排对了才有的性质 | `::test_secev036_failure_records_per_window_are_bounded_by_the_threshold` |
+| **SECEV-010 `CaptchaProvider` 真的建出来** | `NoCaptcha`（诚实命名：它不验证任何东西）+ `SandboxCaptcha`（**真的会拒**，不是只返回 True 的桩）+ 注册进 vendor registry，面板里如实标注等级 | `::test_no_captcha_is_honestly_named_as_not_enforcing`、`::test_captcha_provider_appears_in_the_vendor_panel` |
+| **SECEV-011 验证码是给被误伤的人一条自证的路** | 没有它时风控的唯一升级手段是封禁——手滑输错几次的真人和撞库脚本得到的处置完全一样。加入后阶梯变成 正常 → 要求验证 → 封禁：**误封率下降，拦截率上升** | `::test_secev011_captcha_gives_a_real_person_a_way_out_instead_of_a_ban`（真人带验证码登进去了，且没被封） |
+| **SECEV-013 错误验证码计入失败** | 否则可以用无限次错误验证码把真正的登录尝试藏在噪音里 | `::test_secev013_wrong_captcha_counts_as_a_failure` |
+| **SECEV-014 直通实现也留痕** | 没接真实供应商时风控趋势仍然看得见 | `::test_secev034_passthrough_provider_still_records_the_event` |
+| **SECEV-020 看板读 DB** | 全局封禁列表 + 观察名单 + 窗口内验证码触发数；封禁条目带**原因** | `::test_secev020_board_reads_shared_state`、`::test_secev037_board_requires_admin` |
+| **SECEV-006 保留期分级** | 清理 `auth_failure` 这类高频噪音；**封禁与解封是运营处置留痕，不随保留期清理** | `::test_secev006_purge_keeps_disposition_records` |
 
 ## 已实现（V55 批次：反洗钱——把金额减 1 元多点几次就能绕过的门槛）
 

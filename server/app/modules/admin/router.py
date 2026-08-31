@@ -32,35 +32,28 @@ class UnbanIn(BaseModel):
 
 @router.get("/admin/security")
 def security_board(_: User = Depends(require_admin)):
-    """SEC-023 安全看板：当前被自动封禁的 IP 与失败计数。
+    """SECEV-020 安全看板：全局封禁列表、观察名单与人机验证触发次数。
 
-    自动封禁必须可人工解除——误封一个公司出口 IP 会挡住一整栋楼的用户。
+    **读 DB，所以任何副本看到的都一样。** 改造前它读的是进程内 dict——
+    三副本部署下管理员只能看到当前这个副本封了谁，另外两个完全不知道。
     """
     from app.core import guard
 
-    now_banned = [
-        {"ip": ip, "seconds_left": guard.ban_remaining(ip)}
-        for ip in list(guard._banned_until)
-        if guard.ban_remaining(ip) > 0
-    ]
-    watching = [
-        {"ip": ip, "recent_failures": len(hits)}
-        for ip, hits in guard._fail_counts.items() if hits
-    ]
-    return {
-        "banned": sorted(now_banned, key=lambda r: -r["seconds_left"]),
-        "watching": sorted(watching, key=lambda r: -r["recent_failures"])[:50],
-        "threshold": settings.AUTH_FAIL_BAN_THRESHOLD,
-        "ban_seconds": settings.AUTH_FAIL_BAN_SECONDS,
-    }
+    return guard.board()
 
 
 @router.post("/admin/security/unban")
-def security_unban(body: UnbanIn, admin: User = Depends(require_admin)):
-    """SEC-020 解除封禁（误封公司出口 IP 时的补救手段）。"""
+def security_unban(body: UnbanIn, admin: User = Depends(require_admin),
+                   db: Session = Depends(get_db)):
+    """SECEV-021 解除封禁（误封公司出口 IP 时的补救手段）。
+
+    改造前解封只作用于当前副本：被误封的公司出口 IP 之后还有 (N-1)/N 的概率
+    被拒，用户报「有时候能登录有时候不能」，客服根本复现不出来。
+    """
     from app.core import guard
 
-    guard.unban(body.ip)
+    guard.unban(db, body.ip, admin.id)
+    record_audit(db, admin.id, "security_unban", "ip", 0, f"解封 {body.ip}")
     return {"ip": body.ip, "banned": False}
 
 

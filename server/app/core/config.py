@@ -70,7 +70,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.48.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.49.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")
@@ -90,6 +90,11 @@ class Settings:
     AUTH_FAIL_WINDOW_SECONDS = int(os.environ.get("PLATFORM_AUTH_FAIL_WINDOW_SECONDS", "300"))
     AUTH_FAIL_BAN_THRESHOLD = int(os.environ.get("PLATFORM_AUTH_FAIL_BAN_THRESHOLD", "10"))
     AUTH_FAIL_BAN_SECONDS = int(os.environ.get("PLATFORM_AUTH_FAIL_BAN_SECONDS", "900"))
+    # SECEV-012 人机验证软阈值：窗口内失败达此数即要求验证码。
+    # 必须**明显低于**封禁阈值，否则这条「让真人自证」的路等于不存在
+    CAPTCHA_AFTER_FAILURES = int(os.environ.get("PLATFORM_CAPTCHA_AFTER_FAILURES", "3"))
+    # none = 直通（不验证任何东西）；sandbox = 形态真实的桩；或你登记的真实供应商
+    CAPTCHA_PROVIDER = os.environ.get("PLATFORM_CAPTCHA_PROVIDER", "none")
     # SEC-003 生产关闭 API 文档（避免把全部端点与模型结构直接送给攻击者）
     EXPOSE_DOCS = os.environ.get("PLATFORM_EXPOSE_DOCS", "") == "1"
     # ── FIN 资金合规（25 号 spec）────────────────────────────────────

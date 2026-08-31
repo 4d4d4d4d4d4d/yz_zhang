@@ -49,6 +49,9 @@ class RegisterIn(BaseModel):
 class LoginIn(BaseModel):
     phone: str
     password: str
+    # SECEV-011 失败到软阈值后必填。空串等于「没做验证」，
+    # 由 check_captcha 决定要不要拦——只有真的到阈值了才拦
+    captcha_token: str = ""
 
 
 class SmsLoginIn(BaseModel):
@@ -160,12 +163,15 @@ def register(request: Request, body: RegisterIn, db: Session = Depends(get_db), 
 def login(request: Request, body: LoginIn, db: Session = Depends(get_db), user_agent: str = Header(default="")):
     # ACC-002/SEC-011/020 防撞库：双维度限流 + 失败计数自动封禁 IP
     from app.core.clientip import client_ip
-    from app.core.guard import guard, note_auth_failure, note_auth_success
+    from app.core.guard import check_captcha, guard, note_auth_failure, note_auth_success
 
     guard(request, "login-pwd", body.phone, limit=5, ip_limit=20)
+    # SECEV-011 阶梯：正常 → 要求人机验证 → 封禁。
+    # 少了中间这一档，手滑输错几次的真人和撞库脚本得到的处置完全一样
+    check_captcha(request, "login-pwd", body.captcha_token)
     user = db.query(User).filter(User.phone == body.phone).first()
     if not user or user.is_deleted or not verify_password(body.password, user.password_hash):
-        note_auth_failure(client_ip(request))
+        note_auth_failure(client_ip(request), "login-pwd", "密码错误或账号不存在")
         raise bad_request("手机号或密码错误", "bad_credentials")
     note_auth_success(client_ip(request))
     return {"token": _issue_token(db, user, user_agent), "user": _me(user)}

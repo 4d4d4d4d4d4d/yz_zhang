@@ -53,6 +53,7 @@
 | 28 | 事件投递：失败隔离、可重试、跨副本 | [28-event-delivery.md](./28-event-delivery.md) | P0 |
 | 29 | 个税代扣代缴与发票 | [29-tax-withholding.md](./29-tax-withholding.md) | P0 |
 | 30 | 反洗钱与可疑交易 | [30-aml.md](./30-aml.md) | P0 |
+| 31 | 安全事件落库、跨副本封禁与人机验证 | [31-security-events.md](./31-security-events.md) | P0 |
 
 ## 功能点编号与优先级约定
 
