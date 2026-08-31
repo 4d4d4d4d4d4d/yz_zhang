@@ -11,7 +11,8 @@ export const GOTO_MAP = {
   d: { name: 'console', params: { tab: 'deals' } },
   s: { name: 'console', params: { tab: 'showcase' } },
   i: { name: 'console', params: { tab: 'immersive' } },
-  t: { name: 'console', params: { tab: 'trust' } }
+  t: { name: 'console', params: { tab: 'trust' } },
+  x: { name: 'console', params: { tab: 'markets' } } // m is marketing; x for eXpansion
 }
 
 export function resolveGoto(key) {

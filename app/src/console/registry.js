@@ -9,5 +9,6 @@ export const SECTIONS = [
   { key: 'deals',     icon: '📝', subs: ['room', 'playbook', 'workflow', 'library', 'obligations', 'analytics', 'cpq', 'revrec'] },
   { key: 'showcase',  icon: '🎬', subs: ['gallery', 'links', 'verification', 'pipeline', 'report'] },
   { key: 'immersive', icon: '🕶', subs: ['avatar', 'meeting', 'planner', 'tour', 'field'] },
+  { key: 'markets',   icon: '🌍', subs: ['entry', 'landed', 'readiness', 'calendar'] },
   { key: 'trust',     icon: '🛡', subs: ['posture', 'controls', 'heatmap', 'dpia', 'audit', 'policies', 'health', 'support'] }
 ]

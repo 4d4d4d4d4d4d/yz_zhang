@@ -106,6 +106,24 @@ describe('pathCost', () => {
     expect(v.overBy).toBe(139 - PATHS.console.budget)
   })
 
+  // Spec 60 — adding a whole console section legitimately grows the total
+  // while barely moving what any single reader downloads. The rule this pins:
+  // the total may be raised for new surface area; a path budget may not.
+  it('a new section costs the total, not the reader', () => {
+    const before = [
+      { name: 'index-a.js', gzipKB: 83 },
+      { name: 'Console-b.js', gzipKB: 6 },
+      { name: 'marketing-h.js', gzipKB: 21 },
+      { name: 'trust-h.js', gzipKB: 17 }
+    ]
+    const after = [...before, { name: 'markets-h.js', gzipKB: 9 }]
+    const totalOf = cs => cs.reduce((s, c) => s + c.gzipKB, 0)
+    expect(totalOf(after)).toBeGreaterThan(totalOf(before))
+    // The new section is not the heaviest, so the delivered path is unchanged.
+    expect(pathCost(after, PATHS.console).kb).toBe(pathCost(before, PATHS.console).kb)
+    expect(evaluateBudget(after).violations.filter(v => v.name.startsWith('(path'))).toEqual([])
+  })
+
   it('a split that raises the total but cuts delivered bytes is not a regression', () => {
     const monolith = [{ name: 'index-a.js', gzipKB: 82 }, { name: 'Console-b.js', gzipKB: 109 }]
     const split = [

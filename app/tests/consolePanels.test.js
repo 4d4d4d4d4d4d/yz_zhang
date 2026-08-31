@@ -53,10 +53,18 @@ describe('prefetch policy (spec 59)', () => {
   })
 
   it('falls back to the sidebar neighbours when there is no history', () => {
-    // recommend is first in the sidebar, so only the one below it exists.
-    expect(prefetchOrder(KEYS, 'recommend', [])).toEqual(['marketing'])
-    expect(prefetchOrder(KEYS, 'deals', [])).toEqual(['showcase', 'partners'])
-    expect(prefetchOrder(KEYS, 'trust', [])).toEqual(['immersive'])
+    // Neighbours are read off the live registry order rather than hardcoded,
+    // so inserting a section (spec 60 added `markets`) cannot silently make
+    // this assertion describe a sidebar that no longer exists.
+    const below = k => KEYS[KEYS.indexOf(k) + 1]
+    const above = k => KEYS[KEYS.indexOf(k) - 1]
+
+    // The first section has nothing above it.
+    expect(prefetchOrder(KEYS, KEYS[0], [])).toEqual([below(KEYS[0])])
+    // A middle section warms below-then-above, in that order.
+    expect(prefetchOrder(KEYS, 'deals', [])).toEqual([below('deals'), above('deals')])
+    // The last has nothing below it.
+    expect(prefetchOrder(KEYS, KEYS.at(-1), [])).toEqual([above(KEYS.at(-1))])
   })
 
   it('is capped — prefetching everything defeats the split', () => {
@@ -66,7 +74,8 @@ describe('prefetch policy (spec 59)', () => {
   })
 
   it('ignores history entries that are not real sections', () => {
-    expect(prefetchOrder(KEYS, 'deals', ['ghost', '', null, 'trust'])).toEqual(['trust', 'showcase'])
+    expect(prefetchOrder(KEYS, 'deals', ['ghost', '', null, 'trust']))
+      .toEqual(['trust', KEYS[KEYS.indexOf('deals') + 1]])
   })
 
   it('never repeats a section', () => {

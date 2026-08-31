@@ -15,7 +15,8 @@ const loaders = {
   deals: () => import('./sections/deals.js'),
   showcase: () => import('./sections/showcase.js'),
   immersive: () => import('./sections/immersive.js'),
-  trust: () => import('./sections/trust.js')
+  trust: () => import('./sections/trust.js'),
+  markets: () => import('./sections/markets.js')
 }
 
 const cache = new Map()

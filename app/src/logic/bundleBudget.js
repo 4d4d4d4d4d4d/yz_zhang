@@ -12,7 +12,7 @@
 
 // gzip KB budgets, matched by filename prefix (vite names chunks
 // `<Name>-<hash>.js`). Unlisted chunks fall under DEFAULT.
-export const SECTION_KEYS = ['recommend', 'marketing', 'partners', 'deals', 'showcase', 'immersive', 'trust']
+export const SECTION_KEYS = ['recommend', 'marketing', 'partners', 'deals', 'showcase', 'immersive', 'trust', 'markets']
 export const SECTION_BUDGET = 22 // no single console section may outgrow its peers
 
 export const BUDGETS = {
@@ -21,7 +21,12 @@ export const BUDGETS = {
   ...Object.fromEntries(SECTION_KEYS.map(k => [k, SECTION_BUDGET])),
   DEFAULT: 40
 }
-export const TOTAL_BUDGET = 250 // gzip KB across all JS assets — anti-bloat only
+// Anti-bloat ceiling across ALL JS assets. Nobody downloads this number, so it
+// is deliberately loose and gets raised when a genuinely new surface lands
+// (spec 60's `markets` section took it past 250). The number that must NOT
+// drift is `PATHS` below — what one reader actually receives. Raising TOTAL
+// while a path budget also rises is the signal to stop and split something.
+export const TOTAL_BUDGET = 285
 
 // What a reader actually downloads for a surface. Declared, not inferred: the
 // point is to state the claim ("opening the console costs at most X") and let
