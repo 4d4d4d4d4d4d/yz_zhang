@@ -8,6 +8,7 @@ DB 执行锁（CONC-040）——即便这个 worker 被误起多份也不会重�
 """
 import logging
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -16,26 +17,15 @@ API_BASE = os.environ.get("PLATFORM_API_BASE", "http://localhost:8000")
 JOB_TOKEN = os.environ.get("PLATFORM_JOB_TOKEN", "dev-job-token-change-me")
 PREFIX = "/api/v1"
 
-# (路径, 周期秒)。周期按「延迟一个周期的业务代价」定：
-# 自动验收、纠纷 SLA 直接关系资金滞留，跑勤一点；位置清理是合规保留期，一天一次够了。
+# JOB-001 调度表**不再手抄**：直接读 app.core.jobs 里唯一的那份声明。
+# 手抄的清单一定会漂移——上一版就漂出三处：资金对账根本不在表里、
+# 签署超期作废的路径少了 /contracts 前缀（一直在打 404）、
+# 而监控看不见「从未跑过」的 job，所以这些错了几个月也没人知道。
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from app.core.jobs import JOBS as _DECLARED  # noqa: E402
+
 JOBS: list[tuple[str, int]] = [
-    (f"{PREFIX}/tasks/jobs/auto-accept", 300),
-    (f"{PREFIX}/tasks/jobs/expire-tasks", 600),
-    (f"{PREFIX}/tasks/jobs/settle-reviews", 3600),
-    (f"{PREFIX}/tasks/jobs/deadline-alerts", 3600),
-    (f"{PREFIX}/jobs/expire-unsigned", 3600),
-    (f"{PREFIX}/disputes/jobs/escalate-overdue", 3600),
-    (f"{PREFIX}/missions/jobs/tick-all", 300),
-    (f"{PREFIX}/tasks/jobs/purge-locations", 86400),
-    # LAW-011 存证锚定：一天一次足够，区间越大回执越少也越便宜
-    (f"{PREFIX}/anchors/jobs/notarize", 86400),
-    # EVT-021 事件补做：跑得勤一点，用户少收一条通知的窗口就短一点
-    (f"{PREFIX}/events/jobs/drain", 120),
-    (f"{PREFIX}/events/jobs/purge", 86400),
-    # TAX-013 代扣税款缴库：一天一次（真实环境与申报周期对齐）
-    (f"{PREFIX}/finance/jobs/remit-tax", 86400),
-    # SECEV-006 安全事件保留期清理
-    (f"{PREFIX}/events/jobs/purge-security", 86400),
+    (f"{PREFIX}{j.path}", j.period_seconds) for j in _DECLARED
 ]
 
 log = logging.getLogger("cron")

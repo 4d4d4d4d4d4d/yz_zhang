@@ -1,5 +1,5 @@
 """管理后台 API（12.E）：用户管理、举报处置队列、平台指标看板。"""
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.deps import get_current_user, require_admin
-from app.core.errors import bad_request, not_found
+from app.core.errors import bad_request, forbidden, not_found
+from app.core.locks import job_slot
 from app.modules.account.models import User
 from app.modules.content.models import Content
 from app.modules.contract.models import Contract
@@ -488,8 +489,31 @@ def settle_platform(
 
 
 # ---------- 对账 job（PAY-006/008） ----------
+def _job_or_admin(
+    x_job_token: str = Header(default=""),
+    authorization: str = Header(default=""),
+    db: Session = Depends(get_db),
+) -> int:
+    """JOB-020 调度器（X-Job-Token）**或**管理员都能触发，返回触发者 id（调度器为 0）。
+
+    此前它只接受 `require_admin`——**调度器根本调不动**，加上又不在调度表里，
+    这个「日终对账」实际上是一个需要有人每天记得手动点的按钮。
+    这门生意最重要的那道安全网，从来没有被架起来过。
+    """
+    if x_job_token and x_job_token == settings.JOB_TOKEN:
+        return 0                       # 平台账户，见 JOB-021
+    from app.core.deps import get_current_user
+
+    user = get_current_user(db=db, authorization=authorization)
+    if not user.is_admin:
+        raise forbidden("需要管理员权限", "admin_required")
+    return user.id
+
+
 @router.post("/admin/jobs/reconcile")
-def run_reconcile(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def run_reconcile(triggered_by: int = Depends(_job_or_admin),
+                  db: Session = Depends(get_db),
+                  __=Depends(job_slot("reconcile"))):
     """PAY-008 告警闭环：对账不平不能只返回结果——自动开差错工单 + 通知全体管理员。"""
     from app.modules.notification.service import notify
     from app.modules.risk.service import reconcile
@@ -498,7 +522,8 @@ def run_reconcile(admin: User = Depends(require_admin), db: Session = Depends(ge
     result = reconcile(db)
     if not result["ok"]:
         detail = "; ".join(str(m) for m in result["mismatches"])[:1500]
-        db.add(Ticket(user_id=admin.id, subject="[对账差错] 资金不变量校验失败",
+        # JOB-021 调度器触发时归属平台账户（0），而不是某个碰巧在场的管理员
+        db.add(Ticket(user_id=triggered_by, subject="[对账差错] 资金不变量校验失败",
                       body=f"日终对账发现差错，请立即核查：{detail}"))
         for a in db.query(User).filter(User.is_admin.is_(True)).all():
             notify(db, a.id, "risk", "对账差错告警",

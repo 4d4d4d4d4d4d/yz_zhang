@@ -145,8 +145,12 @@ def _business_metrics(db) -> list[str]:
         .filter(Dispute.status.notin_(("resolved", "closed", "settled"))).scalar() or 0
     )
     from app.core import events
+    from app.core.locks import job_health
 
     evt = events.health(db)
+    jobs = job_health(db)
+    never_run = sum(1 for j in jobs if j.get("never_run"))
+    stale = sum(1 for j in jobs if j.get("stale"))
     return [
         "# HELP platform_escrow_cents 托管中资金（分）",
         "# TYPE platform_escrow_cents gauge",
@@ -168,6 +172,14 @@ def _business_metrics(db) -> list[str]:
         "# HELP platform_event_dead_letters 需人工处理的事件投递数",
         "# TYPE platform_event_dead_letters gauge",
         f"platform_event_dead_letters {int(evt['dead_letters'])}",
+        # JOB-011 「从未跑过」必须能被告警看见。此前监控只罗列已有记录，
+        # 一个从没被调度过的 job（比如资金对账）在指标里根本不存在
+        "# HELP platform_jobs_never_run 应有但从未成功执行过的 job 数",
+        "# TYPE platform_jobs_never_run gauge",
+        f"platform_jobs_never_run {never_run}",
+        "# HELP platform_jobs_stale 超过自身周期 3 倍未成功的 job 数",
+        "# TYPE platform_jobs_stale gauge",
+        f"platform_jobs_stale {stale}",
     ]
 
 

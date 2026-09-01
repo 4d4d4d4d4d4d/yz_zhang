@@ -1,10 +1,56 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V56 全批次完成（2026-08-27）。
-> 后端 510 tests + 前端 42 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V57 全批次完成（2026-08-27）。
+> 后端 522 tests + 前端 42 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V57 批次：从来没有被架起来过的那道安全网）
+
+> 模块 spec：[32-job-orchestration.md](32-job-orchestration.md)
+>
+> **检视结论**：拿 `scripts/cron.py` 的调度表和代码里的 job 端点对了一遍，对不上：
+>
+> ```
+> 代码里的 job 端点： 14
+>   ✗ /admin/jobs/reconcile            没有任何调度器会触发它
+>   ✗ /contracts/jobs/expire-unsigned  没有任何调度器会触发它
+> cron 表里但代码里找不到的： ['/jobs/expire-unsigned']
+> ```
+>
+> **缺口一（最严重）**：`/admin/jobs/reconcile` 是五条资金不变量的日终对账，
+> OPERATIONS 把它列为最高优先级告警「直接推值班手机」。但它既不在调度表里，
+> 鉴权还是 `require_admin`——**调度器根本调不动**。所谓「日终对账」实际上是
+> 一个需要有人每天记得手动点的按钮。**这门生意最重要的那道安全网，
+> 从来没有被架起来过。**
+>
+> **缺口二**：cron 写的是 `/jobs/expire-unsigned`，真实路径是
+> `/contracts/jobs/expire-unsigned`（合约路由带前缀）。一直在打 404，
+> 而这个 job 负责解冻超期未签合约的执行者保证金——钱一直冻着。
+>
+> **缺口三（让前两条得以长期存在）**：`/jobz` 遍历 `JobLock` 表，
+> **从未被调用过的 job 根本没有行**，于是在监控里干脆不存在；
+> 告警规则遍历的也是已有记录，缺席的那个不触发任何东西。
+> **专门用来发现「job 静默不跑」的监控，对最严重的那种静默完全免疫。**
+> 冒烟脚本每次打印「0 个 job 有记录」，我读过很多遍都当成了正常输出——
+> **空列表看起来太像一切正常了。**
+>
+> 三个缺口是同一个根因的三种表现：**调度表是手抄的**，和端点定义分处两地。
+> 手抄的清单一定会漂移，区别只是什么时候被发现——而它漂了不会报错。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **JOB-001 唯一事实来源** | `app/core/jobs.py::JOBS` 一份声明（路径 + 周期 + 锁名 + 用途），`cron.py` 直接 import 它，不再手抄路径 | `tests/test_job_orchestration.py::test_cron_reads_the_single_declaration_instead_of_a_hand_copied_list` |
+| **JOB-002/030 漂移在 CI 里就红** | 测试**从 OpenAPI 自动发现** job 端点，与声明表双向核对：多一个少一个都失败。这条比前一条更重要——它让不同步不用等人想起来去对 | `::test_job030_declared_jobs_and_actual_routes_match_both_ways` |
+| **JOB-034 逐条打过去确认不是 404** | 路由表对得上还不够，真发一次请求才算数（缺口二的直接反面） | `::test_job034_every_scheduled_path_actually_routes` |
+| **JOB-010/012/031 监控对照期望而非罗列现状** | `/jobz` 以声明表为基准，从未跑过的显式标 `never_run` 并**留在列表里**；stale 按**每个 job 自己的周期**判定（一天一次的清理和两分钟一次的补做用同一个绝对阈值只会同时误报和漏报） | `::test_job031_jobz_lists_every_expected_job_including_never_run`、`::test_never_run_flips_after_the_job_actually_runs` |
+| **JOB-011/035 指标** | `platform_jobs_never_run` / `platform_jobs_stale` | `::test_job035_metrics_expose_never_run` |
+| **JOB-020/032 资金对账终于能被调度器触发** | 鉴权改为「job 令牌**或**管理员」，加单实例锁，纳入调度表（周期一天） | `::test_job032_reconcile_can_be_triggered_by_the_scheduler`、`::test_reconcile_still_works_for_admins_and_rejects_everyone_else` |
+| **JOB-021/033 告警闭环仍然成立** | 调度器触发时差错工单归属平台账户（不是某个碰巧在场的管理员），照常通知全体管理员 | `::test_job033_scheduler_triggered_mismatch_still_raises_the_alarm`（人为制造不平，断言工单与通知都出来了） |
+| **JOB-023 修正 expire-unsigned 路径** | 补上 `/contracts` 前缀 | 由 JOB-030/034 覆盖 |
+| 锁名与端点一致 | `lock_name` 与端点上 `job_slot()` 的参数对不上，`/jobz` 会永远显示 never_run | `::test_lock_names_are_unique_and_match_the_endpoints` |
+| 冒烟脚本不再放过空列表 | 那行输出从「0 个 job 有记录」变成断言**全部应有 job 都在监控里** | `scripts/smoke.py` |
 
 ## 已实现（V56 批次：一句说谎的注释——跨副本封禁与人机验证）
 

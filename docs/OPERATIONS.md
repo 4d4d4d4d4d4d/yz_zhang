@@ -77,7 +77,7 @@ App 与 Web 共用同一个 TS SDK（`packages/core`），
 | **限流（滑动窗口）** | `core/ratelimit.py` | 注册/登录/改密/换绑的暴力尝试 |
 | **对账不变量** | `risk/service.py::reconcile` | 五条硬不变量兜底，不平自动开工单+告警 |
 
-这套组合已被 **510 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
+这套组合已被 **522 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
 「重复接受报名 / 重复托管 / 重复交付 / 重复验收 / 重复里程碑放款」全部拒绝且零副作用。
 
 ### 2.2 多副本并发安全（V42 已补齐，见 [18-concurrency.md](specs/18-concurrency.md)）
@@ -103,8 +103,10 @@ App 与 Web 共用同一个 TS SDK（`packages/core`），
   （已开 WAL + `busy_timeout`）。
 - **限流**：`RateLimiter` 协议 + 内存/Redis 双实现，配 `PLATFORM_REDIS_URL` 即切；
   Redis 故障连续达阈值自动降级为内存并在 `/readyz` 中可见——限流不该拖垮登录。
-- **定时任务单实例**：`JobLock` 表 + `job_slot()` 依赖，全部 8 个 cron 端点已接入；
-  执行完即释放，崩溃靠 TTL 抢占。
+- **定时任务单实例**：`JobLock` 表 + `job_slot()` 依赖，全部 14 个 job 端点已接入；
+  执行完即释放，崩溃靠 TTL 抢占。调度表与端点**同源**（`app/core/jobs.py`），
+  cron 直接读它，并有测试从 OpenAPI 自动发现端点双向核对——**漂了 CI 就红**
+  （V57：此前手抄的表漂出三处，其中资金对账 job 从来没被架起来过）。
 - **探针**：`/healthz`（存活，不查依赖）、`/readyz`（DB + 限流后端，不满足 503）。
 
 覆盖测试：`tests/test_conc_hardening.py`（真多线程）验证并发验收只放款一次、
@@ -304,8 +306,13 @@ docker compose -f deploy/docker-compose.prod.yml run --rm migrate
 
 **必配告警**（DEP-043）：
 - 资金对账不平 / 存证链断裂 —— 最高优先级，直接推值班手机
-- `/jobz` 中任一 job `seconds_since_success` 超过其周期 2 倍
-  —— job「静默不跑」比报错更危险（自动验收停摆＝资金永久卡在托管）
+- **`platform_jobs_never_run` > 0** —— 有应有的 job **从来没跑过**。
+  V57 之前监控对这种情况完全免疫：`/jobz` 只遍历已有记录，没跑过的没有行，
+  于是在列表里干脆不存在。冒烟每次打印「0 个 job 有记录」，
+  看起来太像一切正常了——**空列表不是好消息，是没人在跑**。
+- `platform_jobs_stale` > 0 或 `/jobz` 中任一 job `seconds_since_success`
+  超过其**自身周期**的 3 倍 —— job「静默不跑」比报错更危险
+  （自动验收停摆＝资金永久卡在托管）
 - 提现失败率突增、5xx 突增、`/readyz` 连续失败
 - **`platform_event_dead_letters` 大于 0**（V53 新增）——
   死信堆积是「有功能已经悄悄坏了」的最早信号：业务面上一切正常，
@@ -330,7 +337,7 @@ docker compose -f deploy/docker-compose.prod.yml run --rm migrate
 - [ ] 告警接入值班系统（PagerDuty / 电话）
 - [ ] 定期做恢复演练并记录 RTO/RPO
 
-CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 510 测试、
+CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 522 测试、
 前端 43 测试与构建、**alembic 迁移漂移检查**、**真实 HTTP 主闭环冒烟**、
 **沙箱合规态闭环自检**。
 
@@ -472,8 +479,8 @@ CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 510 测试、
 
 **已经很扎实的**：交易闭环、资金安全与守恒、纠纷程序正义、账号安全、审计留痕、
 多副本并发安全、外部供应商可替换性、事件投递的失败隔离与可补做、
-个税代扣的资金隔离与可对账、反洗钱的可疑识别与保密、边界防护的跨副本一致性。
-这些有 510 个测试钉着。
+个税代扣的资金隔离与可对账、反洗钱的可疑识别与保密、边界防护的跨副本一致性、
+定时任务编排的完整性。这些有 522 个测试钉着。
 
 **离真正上线还差的**（按紧迫度）：
 1. ~~Postgres + 行锁/乐观锁~~ —— **V42 已完成**（切库只改环境变量）

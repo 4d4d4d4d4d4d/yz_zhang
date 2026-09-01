@@ -115,7 +115,17 @@ def main() -> None:
     step("闭环后托管清零", escrow.split()[-1] == "0", escrow)
 
     status, jobs = req("GET", BASE + "/jobz", headers={"X-Job-Token": JOB_TOKEN})
-    step("job 健康端点", status == 200, f"{len(jobs.get('jobs', []))} 个 job 有记录")
+    rows = jobs.get("jobs", [])
+    step("job 健康端点", status == 200, f"{len(rows)} 个 job 在册")
+    # JOB-031 这一行以前打印的是「0 个 job 有记录」，而我读过很多遍都当成了正常输出——
+    # 空列表看起来太像一切正常了。现在它必须**列全**应有的 job，
+    # 一个都不能少，否则「有 job 从来没被调度过」这件事又会没人发现
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from app.core.jobs import JOBS as DECLARED
+
+    listed = {r["job"] for r in rows}
+    missing = {j.lock_name for j in DECLARED} - listed
+    step("全部应有 job 都在监控里", not missing, f"缺失：{sorted(missing)}")
 
     print("冒烟通过：这套部署能完成一笔真实交易并正确分账。")
 

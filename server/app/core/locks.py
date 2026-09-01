@@ -151,21 +151,58 @@ def _note_job_result(db: Session, job_name: str, ok: bool, error: str = "") -> N
 
 
 def job_health(db: Session) -> list[dict]:
-    """DEP-051 各 job 的上次成功时间与最近错误，供监控与后台展示。"""
+    """DEP-051 / JOB-010 各 job 的健康状态。
+
+    **以声明表为基准，而不是罗列现状。** 原实现只遍历 `JobLock` 表——
+    一个从未被调用过的 job 根本没有行，于是它在监控里干脆不存在。
+    而告警规则写的是「任一 job 超时未成功」，遍历的也是已有记录，
+    缺席的那个不触发任何东西：**专门用来发现「job 静默不跑」的监控，
+    对最严重的那种静默完全免疫**。
+
+    上一版就因此漏掉了两个：资金对账（最高优先级告警）根本不在调度表里，
+    签署超期作废的路径少了前缀一直在打 404。冒烟脚本每次打印
+    「0 个 job 有记录」，看起来太像一切正常了。
+    """
+    from app.core.jobs import JOBS as DECLARED
     from app.core.models_infra import JobLock
     from app.modules.account.models import utcnow
 
     now = utcnow()
+    rows = {r.job_name: r for r in db.query(JobLock).all()}
     out = []
-    for row in db.query(JobLock).all():
-        age = (now - row.last_success_at).total_seconds() if row.last_success_at else None
+    for job in DECLARED:
+        row = rows.get(job.lock_name)
+        age = None
+        if row is not None and row.last_success_at:
+            age = int((now - row.last_success_at).total_seconds())
+        # stale 的判定用**每个 job 自己的周期**：一天一次的清理任务和
+        # 两分钟一次的事件补做，用同一个绝对阈值只会同时误报和漏报
+        stale = age is not None and age > job.period_seconds * 3
         out.append({
-            "job": row.job_name,
-            "last_success_at": row.last_success_at.isoformat() if row.last_success_at else None,
-            "seconds_since_success": int(age) if age is not None else None,
-            "last_error": row.last_error,
-            "holder": row.holder,
+            "job": job.lock_name,
+            "path": job.path,
+            "period_seconds": job.period_seconds,
+            "last_success_at": row.last_success_at.isoformat()
+            if row is not None and row.last_success_at else None,
+            "seconds_since_success": age,
+            "last_error": row.last_error if row is not None else "",
+            "holder": row.holder if row is not None else "",
+            # JOB-012 从未跑过必须是**异常**，不是从列表里消失
+            "never_run": row is None or row.last_success_at is None,
+            "stale": stale,
+            "purpose": job.purpose,
         })
+    # 声明表之外的遗留记录也列出来，避免改名后旧锁无人认领却看不见
+    for name, row in rows.items():
+        if name not in {j.lock_name for j in DECLARED}:
+            out.append({
+                "job": name, "path": "", "period_seconds": None,
+                "last_success_at": row.last_success_at.isoformat()
+                if row.last_success_at else None,
+                "seconds_since_success": None, "last_error": row.last_error,
+                "holder": row.holder, "never_run": False, "stale": False,
+                "purpose": "⚠️ 不在声明表中：可能是改名后遗留的旧锁",
+            })
     return sorted(out, key=lambda r: r["job"])
 
 
