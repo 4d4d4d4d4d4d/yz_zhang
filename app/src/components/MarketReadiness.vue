@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { readinessRank, readiness, GATE_KINDS } from '../logic/goLive.js'
+import { postureForMarket } from '../logic/posture.js'
 
 const { t, locale } = useI18n()
 
@@ -36,6 +37,27 @@ const MARKETS = [
     g('localeQa', A, 'open', 16, 2, 'loc'), g('legalPages', A, 'done', 0, 1, 'legal') ] }
 ]
 
+// Spec 61 — the same frameworks and findings the Trust Center scores, read
+// through the same engine. Two surfaces answering "is this market ready?" with
+// different numbers is worse than only one of them existing.
+const FRAMEWORKS = [
+  { key: 'gdpr', name: 'GDPR', region: 'EU', status: 'pass', controls: 142, score: 96 },
+  { key: 'ccpa', name: 'CCPA / CPRA', region: 'US', status: 'pass', controls: 88, score: 94 },
+  { key: 'appi', name: 'APPI', region: 'JP', status: 'pass', controls: 64, score: 92 },
+  { key: 'lgpd', name: 'LGPD', region: 'BR', status: 'warn', controls: 71, score: 78 },
+  { key: 'pdpa', name: 'PDPA', region: 'SEA', status: 'pass', controls: 58, score: 89 },
+  { key: 'dsa', name: 'DSA', region: 'EU', status: 'warn', controls: 47, score: 81 },
+  { key: 'c2pa', name: 'C2PA provenance', region: 'all', status: 'pass', controls: 12, score: 100 },
+  { key: 'aiact', name: 'AI Act readiness', region: 'EU', status: 'risk', controls: 38, score: 64 }
+]
+const FINDINGS = [
+  { key: 'lgpdScc', sev: 'high', scope: 'BR' },
+  { key: 'aiAct', sev: 'high', scope: 'EU' },
+  { key: 'dsaFlag', sev: 'med', scope: 'EU' },
+  { key: 'ccpaOpt', sev: 'med', scope: 'US' },
+  { key: 'appiTrn', sev: 'low', scope: 'JP' }
+]
+
 // Deterministic clock: the panel is a planning surface, not a live ticker, and
 // a fixture that shifts with the wall clock cannot be reasoned about or tested.
 const NOW = Date.UTC(2026, 8, 1)
@@ -47,6 +69,7 @@ const live = computed(() => ranked.value.filter(r => r.canGoLive))
 const selected = ref(null)
 const current = computed(() => MARKETS.find(m => m.code === (selected.value ?? ranked.value[0]?.code)))
 const detail = computed(() => current.value ? readiness(current.value.gates, NOW) : null)
+const compliance = computed(() => current.value ? postureForMarket(current.value.code, FRAMEWORKS, FINDINGS) : null)
 
 const dateFmt = ts => new Intl.DateTimeFormat(locale.value, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(ts))
 </script>
@@ -120,6 +143,18 @@ const dateFmt = ts => new Intl.DateTimeFormat(locale.value, { year: 'numeric', m
           </li>
         </ul>
 
+        <div class="posture" v-if="compliance">
+          <div class="kicker">{{ t('golive.compliance') }}</div>
+          <template v-if="compliance.covered">
+            <div class="p-row">
+              <span class="p-score" :class="compliance.score >= 85 ? 'ok' : compliance.score >= 70 ? 'warn' : 'risk'">{{ compliance.score }}</span>
+              <span class="p-note">{{ t('golive.postureNote', { scope: compliance.scope, framework: compliance.worst.name }) }}</span>
+            </div>
+            <p v-if="compliance.capped" class="p-cap">{{ t('golive.postureCapped', { framework: compliance.worst.name, cap: compliance.cap, raw: compliance.raw }) }}</p>
+          </template>
+          <p v-else class="p-none">{{ t('golive.postureNone') }}</p>
+        </div>
+
         <div class="cp" v-if="detail.openCount">
           {{ t('golive.criticalPath', {
             days: detail.criticalPathDays,
@@ -182,6 +217,15 @@ const dateFmt = ts => new Intl.DateTimeFormat(locale.value, { year: 'numeric', m
   background: var(--bg-2); color: var(--text-dim); margin-left: 6px; }
 .gates li.blocking .g-kind { background: rgba(248, 113, 113, .14); color: #fca5a5; }
 .g-eta { font-size: 11px; color: var(--text-dim); text-align: right; }
+
+.posture { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.p-row { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
+.p-score { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.p-score.ok { color: var(--success); }
+.p-score.warn { color: #fcd34d; }
+.p-score.risk { color: var(--danger); }
+.p-note, .p-cap, .p-none { font-size: 11px; color: var(--text-dim); line-height: 1.55; margin: 0; }
+.p-cap { margin-top: 6px; }
 
 .cp { margin-top: 14px; padding: 11px 13px; border: 1px solid var(--border); border-radius: 10px;
   background: var(--surface); font-size: 12px; color: var(--text-dim); line-height: 1.55; }
