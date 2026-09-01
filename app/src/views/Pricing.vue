@@ -1,8 +1,10 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SectionHeader from '../components/SectionHeader.vue'
-const { t } = useI18n()
+import { CURRENCIES, formatPrice, defaultCurrencyFor } from '../logic/currency.js'
+import { prefs, setCurrencyPref } from '../store/workspace.js'
+const { t, locale } = useI18n()
 
 const cycle = ref('monthly')
 const prices = {
@@ -11,11 +13,17 @@ const prices = {
   scale:   { monthly: null, yearly: null }
 }
 
+// Spec 25: currency defaults from the locale, follows locale switches
+// until the visitor overrides manually. Spec 27: the override persists.
+const currency = ref(prefs.currency || defaultCurrencyFor(locale.value))
+watch(locale, l => { if (!prefs.currency) currency.value = defaultCurrencyFor(l) })
+function pickCurrency(code) { currency.value = code; setCurrencyPref(code) }
+
 function price(plan) {
   const v = prices[plan][cycle.value]
-  if (v === null) return 'Custom'
-  if (v === 0) return 'Free'
-  return `$${v}`
+  if (v === null) return t('pricing.custom')
+  if (v === 0) return t('pricing.free')
+  return formatPrice(v, currency.value, locale.value)
 }
 </script>
 
@@ -28,6 +36,12 @@ function price(plan) {
         <button :class="{ on: cycle === 'monthly' }" @click="cycle='monthly'" type="button">{{ t('pricing.monthly') }}</button>
         <button :class="{ on: cycle === 'yearly' }" @click="cycle='yearly'" type="button">{{ t('pricing.yearly') }}</button>
       </div>
+
+      <div class="currency">
+        <button v-for="(c, code) in CURRENCIES" :key="code" type="button"
+          :class="{ on: currency === code }" @click="pickCurrency(code)">{{ code }}</button>
+      </div>
+      <p class="fx-note">{{ t('pricing.fx', { code: currency }) }}</p>
 
       <div class="grid grid-3">
         <div class="card plan">
@@ -68,6 +82,10 @@ function price(plan) {
 .cycle { display: flex; justify-content: center; width: max-content; margin-left: auto; margin-right: auto; margin-bottom: 40px; }
 .cycle button { padding: 8px 18px; border-radius: 999px; background: transparent; border: 0; color: var(--text-dim); cursor: pointer; font-size: 13px; font-weight: 600; }
 .cycle button.on { background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: #fff; }
+.currency { display: flex; justify-content: center; gap: 6px; margin: -24px auto 8px; }
+.currency button { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text-dim); font-size: 11px; font-weight: 700; cursor: pointer; }
+.currency button.on { border-color: rgba(124, 92, 255, .55); background: rgba(124, 92, 255, .15); color: #fff; }
+.fx-note { text-align: center; font-size: 11px; color: var(--text-dim); margin: 0 0 28px; }
 
 .plan { display: flex; flex-direction: column; gap: 14px; position: relative; }
 .plan .tag { font-size: 12px; color: var(--text-dim); }

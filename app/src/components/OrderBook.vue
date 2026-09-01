@@ -1,5 +1,10 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { useSortable } from '../composables/useSortable.js'
+import { useFormat } from '../composables/useFormat.js'
+import { toCsv } from '../logic/csv.js'
+
+const { money, num } = useFormat()
 
 const orders = ref([
   { id: 'O-20419', partner: 'Lumen Studios',  market: 'JP', placed: 'Dec 02', items: 3, total: 84000, pay: 'paid',    fulfill: 'shipped',  due: '—' },
@@ -32,6 +37,39 @@ const summary = computed(() => ({
   outstanding: orders.value.filter(o => o.pay !== 'paid').reduce((s, o) => s + o.total, 0),
   overdue: orders.value.filter(o => o.pay === 'overdue').reduce((s, o) => s + o.total, 0)
 }))
+
+// Column model drives both the sortable header and the CSV export.
+const COLUMNS = [
+  { key: 'id', label: 'Order' },
+  { key: 'partner', label: 'Partner' },
+  { key: 'market', label: 'Market' },
+  { key: 'items', label: 'Items', num: true },
+  { key: 'total', label: 'Total', num: true },
+  { key: 'pay', label: 'Payment' },
+  { key: 'fulfill', label: 'Fulfillment' },
+  { key: 'due', label: 'Due' }
+]
+
+const { sorted, sortBy, ariaSort, sortKey, sortDir } = useSortable(filtered)
+
+function sortGlyph(key) {
+  if (sortKey.value !== key) return ''
+  return sortDir.value === 'asc' ? '▲' : '▼'
+}
+
+// Export the currently sorted+filtered view — what you see is what you get.
+function exportCsv() {
+  const csv = toCsv(sorted.value, COLUMNS)
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'orders.csv'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <template>
@@ -39,7 +77,7 @@ const summary = computed(() => ({
     <div class="card head">
       <div>
         <div class="kicker">Order book · B2B</div>
-        <h3>{{ orders.length }} orders · ${{ summary.gmv.toLocaleString() }} GMV month-to-date</h3>
+        <h3>{{ orders.length }} orders · {{ money(summary.gmv) }} GMV month-to-date</h3>
         <p class="meta">Real-time order ledger. Payments synced via Stripe + bank webhooks. Disputes auto-routed to Finance.</p>
       </div>
     </div>
@@ -47,22 +85,22 @@ const summary = computed(() => ({
     <div class="kpi-row">
       <div class="card kpi">
         <div class="kk">GMV · MTD</div>
-        <div class="kv grad-text">${{ Math.round(summary.gmv / 1000).toLocaleString() }}k</div>
+        <div class="kv grad-text">{{ money(summary.gmv, { compact: true }) }}</div>
         <div class="kd up">▲ +14% MoM</div>
       </div>
       <div class="card kpi">
         <div class="kk">Outstanding</div>
-        <div class="kv">${{ Math.round(summary.outstanding / 1000).toLocaleString() }}k</div>
+        <div class="kv">{{ money(summary.outstanding, { compact: true }) }}</div>
         <div class="kd dimc">{{ orders.filter(o => o.pay !== 'paid').length }} orders pending</div>
       </div>
       <div class="card kpi">
         <div class="kk">Overdue</div>
-        <div class="kv" :class="summary.overdue > 0 ? 'danger' : ''">${{ Math.round(summary.overdue / 1000).toLocaleString() }}k</div>
+        <div class="kv" :class="summary.overdue > 0 ? 'danger' : ''">{{ money(summary.overdue, { compact: true }) }}</div>
         <div class="kd dimc">{{ orders.filter(o => o.pay === 'overdue').length }} order(s)</div>
       </div>
       <div class="card kpi">
         <div class="kk">Avg ticket</div>
-        <div class="kv">${{ Math.round(summary.gmv / orders.length).toLocaleString() }}</div>
+        <div class="kv">{{ money(summary.gmv / orders.length) }}</div>
         <div class="kd dimc">across {{ orders.length }} orders</div>
       </div>
     </div>
@@ -70,7 +108,7 @@ const summary = computed(() => ({
     <div class="card filters">
       <div class="search">
         <span class="ico">🔎</span>
-        <input v-model="query" placeholder="Search order ID or partner name…" />
+        <input v-model="query" placeholder="Search order ID or partner name…" aria-label="Search order ID or partner name" />
       </div>
       <div class="fl">
         <div class="fg">
@@ -90,24 +128,21 @@ const summary = computed(() => ({
 
     <div class="card">
       <div class="th-row">
-        <h3>Orders · {{ filtered.length }}</h3>
-        <button class="btn btn-ghost sm" type="button">Export CSV</button>
+        <h3>Orders · {{ sorted.length }}</h3>
+        <button class="btn btn-ghost sm" type="button" @click="exportCsv">Export CSV</button>
       </div>
       <table class="t">
         <thead>
           <tr>
-            <th>Order</th>
-            <th>Partner</th>
-            <th>Market</th>
-            <th class="num">Items</th>
-            <th class="num">Total</th>
-            <th>Payment</th>
-            <th>Fulfillment</th>
-            <th>Due</th>
+            <th v-for="c in COLUMNS" :key="c.key" :class="{ num: c.num }" :aria-sort="ariaSort(c.key)">
+              <button class="sort-h" type="button" @click="sortBy(c.key)">
+                {{ c.label }}<span class="sort-g" aria-hidden="true">{{ sortGlyph(c.key) }}</span>
+              </button>
+            </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="o in filtered" :key="o.id">
+          <tr v-for="o in sorted" :key="o.id">
             <td>
               <div class="o-id">{{ o.id }}</div>
               <div class="o-date">{{ o.placed }}</div>
@@ -115,7 +150,7 @@ const summary = computed(() => ({
             <td>{{ o.partner }}</td>
             <td><span class="mk">{{ o.market }}</span></td>
             <td class="num">{{ o.items }}</td>
-            <td class="num"><strong>${{ o.total.toLocaleString() }}</strong></td>
+            <td class="num"><strong>{{ money(o.total) }}</strong></td>
             <td><span class="pay" :class="o.pay">{{ o.pay }}</span></td>
             <td><span class="ful" :class="o.fulfill">{{ o.fulfill }}</span></td>
             <td class="dimc">{{ o.due }}</td>
@@ -158,6 +193,12 @@ const summary = computed(() => ({
 .t { width: 100%; border-collapse: collapse; font-size: 13px; }
 .t th { text-align: left; padding: 10px 8px; font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--border); font-weight: 700; }
 .t th.num { text-align: right; }
+.t th .sort-h { display: inline-flex; align-items: center; gap: 5px; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; font-weight: inherit; cursor: pointer; }
+.t th.num .sort-h { flex-direction: row-reverse; }
+.t th .sort-h:hover { color: var(--text); }
+.t th .sort-h:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 3px; }
+.t th[aria-sort="ascending"] .sort-h, .t th[aria-sort="descending"] .sort-h { color: var(--primary-2); }
+.sort-g { font-size: 8px; }
 .t td { padding: 12px 8px; border-bottom: 1px dashed var(--border); }
 .t td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .t td.dimc { color: var(--text-dim); }

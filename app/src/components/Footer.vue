@@ -1,7 +1,12 @@
 <script setup>
 import { useI18n } from 'vue-i18n'
+import { setConsent } from '../store/workspace.js'
 const { t } = useI18n()
 const year = new Date().getFullYear()
+
+// Spec 41 — re-open the consent banner so a visitor can withdraw or change
+// their choice as easily as they gave it (GDPR).
+function managePrivacy() { setConsent({ analytics: false, decided: false }) }
 </script>
 
 <template>
@@ -38,6 +43,7 @@ const year = new Date().getFullYear()
     </div>
     <div class="container copy">
       © {{ year }} {{ t('brand') }}. {{ t('footer.rights') }}
+      <button type="button" class="privacy-link" @click="managePrivacy">{{ t('consent.manage') }}</button>
     </div>
   </footer>
 </template>
@@ -53,6 +59,8 @@ const year = new Date().getFullYear()
 .cols a { display: block; color: var(--text); padding: 4px 0; font-size: 14px; }
 .cols a:hover { color: var(--primary-2); }
 .copy { color: var(--text-dim); font-size: 13px; padding-top: 32px; margin-top: 32px; border-top: 1px solid var(--border); }
+.privacy-link { background: none; border: 0; color: var(--text-dim); font: inherit; cursor: pointer; text-decoration: underline; margin-left: 12px; padding: 0; }
+.privacy-link:hover { color: var(--primary-2); }
 
 @media (max-width: 900px) {
   .foot-inner { grid-template-columns: 1fr; gap: 32px; }

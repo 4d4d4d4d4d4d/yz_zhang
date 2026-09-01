@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { attribute, attributionRows } from '../logic/attribution.js'
 
 const model = ref('shapley')
 const models = [
@@ -8,32 +9,53 @@ const models = [
   { v: 'linear',   label: 'Linear',        note: 'Equal credit across all touches.' },
   { v: 'decay',    label: 'Time-decay',    note: 'Half-life of 7 days; recent touches weigh more.' },
   { v: 'position', label: 'Position-based',note: '40% first, 40% last, 20% split across middle.' },
-  { v: 'shapley',  label: 'Shapley',       note: 'Game-theoretic credit across all touchpoint coalitions.' },
-  { v: 'datadriven', label: 'Data-driven', note: 'Learned credit via counterfactual lift modeling.' }
+  { v: 'shapley',  label: 'Shapley',       note: 'Game-theoretic credit across all touchpoint coalitions.' }
 ]
 
-const channels = ['TikTok', 'Meta · Search', 'Meta · Reel', 'Google · YouTube', 'Email · Lifecycle', 'Direct']
+// Spec 46 — aggregated conversion paths (path rollup). Every number on this
+// screen is COMPUTED from these journeys; nothing is a hardcoded split.
+const DAY = 86400000
+const CONVERTED_AT = 100 * DAY
+const PATHS = [
+  { count: 607, steps: [['TikTok', 21], ['Meta · Reel', 9], ['Direct', 0]] },
+  { count: 351, steps: [['Google · YouTube', 17], ['Email · Lifecycle', 5], ['Direct', 0]] },
+  { count: 272, steps: [['TikTok', 28], ['Google · YouTube', 14], ['Email · Lifecycle', 4], ['Direct', 0]] },
+  { count: 158, steps: [['Meta · Search', 11], ['Meta · Reel', 0]] },
+  { count:  96, steps: [['TikTok', 6], ['Meta · Search', 0]] },
+  { count:  63, steps: [['Email · Lifecycle', 0]] },
+  { count:  50, steps: [['Meta · Search', 19], ['Meta · Reel', 8], ['Email · Lifecycle', 0]] }
+]
 
-const splits = {
-  last:        [12, 18, 22, 14, 24, 10],
-  first:       [38, 16, 12, 18, 6,  10],
-  linear:      [22, 17, 16, 18, 14, 13],
-  decay:       [14, 18, 22, 16, 22, 8],
-  position:    [28, 14, 14, 16, 18, 10],
-  shapley:     [26, 19, 17, 15, 16, 7],
-  datadriven:  [30, 21, 14, 14, 17, 4]
-}
+const journeys = PATHS.map(p => ({
+  count: p.count,
+  convertedAt: CONVERTED_AT,
+  touches: p.steps.map(([channel, daysBefore]) => ({ channel, at: CONVERTED_AT - daysBefore * DAY }))
+}))
 
-const credit = computed(() => splits[model.value])
-const cumulative = computed(() => {
-  let acc = 0
-  return credit.value.map(v => { acc += v; return acc })
-})
-
-const conversions = 1597
+const conversions = journeys.reduce((s, j) => s + j.count, 0)
 const revenue = 247800
 
-function bar(v) { return Math.max(8, v * 4) }
+const rows = computed(() => attributionRows(journeys, model.value, { halfLifeDays: 7 }))
+const cumulative = computed(() => {
+  let acc = 0
+  return rows.value.map(r => { acc += r.pct; return acc })
+})
+
+// Over/under-credit versus a naive last-touch view — the point of the panel.
+const lastTouch = computed(() => attribute(journeys, 'last'))
+const deltas = computed(() => rows.value.map(r => ({
+  channel: r.channel,
+  pct: r.pct,
+  delta: r.pct - (lastTouch.value[r.channel] ?? 0) * 100
+})))
+
+const topPaths = computed(() =>
+  [...PATHS].sort((a, b) => b.count - a.count).slice(0, 3).map(p => ({
+    count: p.count,
+    share: (p.count / conversions) * 100,
+    steps: p.steps.map(([channel]) => channel)
+  }))
+)
 </script>
 
 <template>
@@ -55,20 +77,20 @@ function bar(v) { return Math.max(8, v * 4) }
         <span class="meta">{{ models.find(m => m.v === model).note }}</span>
       </div>
       <div class="bars">
-        <div v-for="(c, i) in channels" :key="c" class="brow">
-          <span class="bch">{{ c }}</span>
+        <div v-for="(r, i) in rows" :key="r.channel" class="brow">
+          <span class="bch">{{ r.channel }}</span>
           <div class="bw">
-            <div class="bf" :style="{ width: (credit[i] * 3) + '%' }">
-              <span class="bv">{{ credit[i] }}%</span>
+            <div class="bf" :style="{ width: Math.max(2, r.pct * 3) + '%' }">
+              <span class="bv">{{ r.pct.toFixed(1) }}%</span>
             </div>
-            <span class="bcum">cum {{ cumulative[i] }}%</span>
+            <span class="bcum">cum {{ cumulative[i].toFixed(1) }}%</span>
           </div>
-          <span class="brev">${{ Math.round(revenue * credit[i] / 100).toLocaleString() }}</span>
+          <span class="brev">${{ Math.round(revenue * r.credit).toLocaleString() }}</span>
         </div>
       </div>
       <div class="legend">
-        <span><span class="dot top"></span>Top channel · {{ channels[credit.indexOf(Math.max(...credit))] }} ({{ Math.max(...credit) }}%)</span>
-        <span>Total · {{ credit.reduce((s, v) => s + v, 0) }}%</span>
+        <span v-if="rows.length"><span class="dot top"></span>Top channel · {{ rows[0].channel }} ({{ rows[0].pct.toFixed(1) }}%)</span>
+        <span>Total · {{ rows.reduce((s, r) => s + r.pct, 0).toFixed(0) }}%</span>
       </div>
     </div>
 
@@ -76,29 +98,16 @@ function bar(v) { return Math.max(8, v * 4) }
       <div class="card">
         <h3>Customer journey · top 3 paths</h3>
         <div class="paths">
-          <div class="path">
-            <div class="p-meta"><span class="p-share">38%</span><span class="p-count">607 conv</span></div>
-            <div class="p-flow">
-              <span class="step tt">TikTok</span><span class="arr">→</span>
-              <span class="step meta">Meta · Reel</span><span class="arr">→</span>
-              <span class="step direct">Direct</span>
+          <div v-for="(p, pi) in topPaths" :key="pi" class="path">
+            <div class="p-meta">
+              <span class="p-share">{{ p.share.toFixed(0) }}%</span>
+              <span class="p-count">{{ p.count }} conv</span>
             </div>
-          </div>
-          <div class="path">
-            <div class="p-meta"><span class="p-share">22%</span><span class="p-count">351 conv</span></div>
             <div class="p-flow">
-              <span class="step google">Google</span><span class="arr">→</span>
-              <span class="step email">Email</span><span class="arr">→</span>
-              <span class="step direct">Direct</span>
-            </div>
-          </div>
-          <div class="path">
-            <div class="p-meta"><span class="p-share">17%</span><span class="p-count">272 conv</span></div>
-            <div class="p-flow">
-              <span class="step tt">TikTok</span><span class="arr">→</span>
-              <span class="step google">Google · YT</span><span class="arr">→</span>
-              <span class="step email">Email</span><span class="arr">→</span>
-              <span class="step direct">Direct</span>
+              <template v-for="(s, si) in p.steps" :key="si">
+                <span class="step">{{ s }}</span>
+                <span v-if="si < p.steps.length - 1" class="arr">→</span>
+              </template>
             </div>
           </div>
         </div>
@@ -108,19 +117,19 @@ function bar(v) { return Math.max(8, v * 4) }
         <h3>Delta vs last-touch</h3>
         <p class="meta">How much each channel is over/under-credited if you only look at last-touch.</p>
         <div class="delta">
-          <div v-for="(c, i) in channels" :key="c" class="dr">
-            <span class="d-ch">{{ c }}</span>
+          <div v-for="d in deltas" :key="d.channel" class="dr">
+            <span class="d-ch">{{ d.channel }}</span>
             <div class="d-bar">
               <div class="d-mid"></div>
               <div class="d-fill"
-                :class="credit[i] >= splits.last[i] ? 'pos' : 'neg'"
+                :class="d.delta >= 0 ? 'pos' : 'neg'"
                 :style="{
-                  width: Math.abs(credit[i] - splits.last[i]) * 4 + '%',
-                  marginLeft: credit[i] >= splits.last[i] ? '50%' : `calc(50% - ${Math.abs(credit[i] - splits.last[i]) * 4}%)`
+                  width: Math.min(50, Math.abs(d.delta) * 1.2) + '%',
+                  marginLeft: d.delta >= 0 ? '50%' : `calc(50% - ${Math.min(50, Math.abs(d.delta) * 1.2)}%)`
                 }">
               </div>
             </div>
-            <span class="d-num" :class="credit[i] >= splits.last[i] ? 'pos' : 'neg'">{{ credit[i] >= splits.last[i] ? '+' : '' }}{{ credit[i] - splits.last[i] }}pt</span>
+            <span class="d-num" :class="d.delta >= 0 ? 'pos' : 'neg'">{{ d.delta >= 0 ? '+' : '' }}{{ d.delta.toFixed(1) }}pt</span>
           </div>
         </div>
       </div>

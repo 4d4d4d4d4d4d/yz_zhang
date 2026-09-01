@@ -1,51 +1,25 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { invoice } from '../logic/metering.js'
+import { TENANTS as tenants, METERS as meters, PLAN_BASE_FEES } from '../data/workspace.js'
+import { useFormat } from '../composables/useFormat.js'
+import { useI18n } from 'vue-i18n'
 
-const tenants = [
-  { id: 'lumi',     name: 'Lumi DTC',           plan: 'Enterprise', mrr: 9800 },
-  { id: 'kaito',    name: 'Kaito Beauty',       plan: 'Growth',     mrr: 2400 },
-  { id: 'aurora',   name: 'Aurora Media',       plan: 'Enterprise', mrr: 6200 },
-  { id: 'verda',    name: 'Verda Commerce',     plan: 'Starter',    mrr: 0    }
-]
+const { money, num, pct } = useFormat()
+const { t } = useI18n()
+
 const tenant = ref('lumi')
 const cur = computed(() => tenants.find(t => t.id === tenant.value))
 
-const meters = {
-  lumi: [
-    { k: 'API calls',    used: 2840000, included: 3000000, unit: 'req',  rate: '$0.0008 / 1K', cost: 2272 },
-    { k: 'GPU seconds',  used: 184000, included: 200000,  unit: 's',    rate: '$0.024 / s',    cost: 4416 },
-    { k: 'Renders',      used: 12480, included: 10000,    unit: 'job',  rate: '$0.18 / job',   cost: 2246 },
-    { k: 'Storage',      used: 4.2,   included: 5,        unit: 'TB',   rate: '$28 / TB-mo',   cost: 118 }
-  ],
-  kaito: [
-    { k: 'API calls',    used: 460000, included: 500000,  unit: 'req',  rate: '$0.0012 / 1K', cost: 552 },
-    { k: 'GPU seconds',  used: 38000, included: 40000,    unit: 's',    rate: '$0.026 / s',    cost: 988 },
-    { k: 'Renders',      used: 1840,  included: 2000,     unit: 'job',  rate: '$0.22 / job',   cost: 405 },
-    { k: 'Storage',      used: 0.8,   included: 1,        unit: 'TB',   rate: '$32 / TB-mo',   cost: 26 }
-  ],
-  aurora: [
-    { k: 'API calls',    used: 1680000, included: 2000000,unit: 'req',  rate: '$0.0009 / 1K', cost: 1512 },
-    { k: 'GPU seconds',  used: 128000,  included: 150000, unit: 's',    rate: '$0.025 / s',    cost: 3200 },
-    { k: 'Renders',      used: 7820,    included: 8000,   unit: 'job',  rate: '$0.20 / job',   cost: 1564 },
-    { k: 'Storage',      used: 2.4,     included: 3,      unit: 'TB',   rate: '$30 / TB-mo',   cost: 72 }
-  ],
-  verda: [
-    { k: 'API calls',    used: 28000,  included: 50000,   unit: 'req',  rate: '$0.0015 / 1K', cost: 42 },
-    { k: 'GPU seconds',  used: 1800,   included: 2000,    unit: 's',    rate: '$0.030 / s',    cost: 54 },
-    { k: 'Renders',      used: 142,    included: 200,     unit: 'job',  rate: '$0.25 / job',   cost: 36 },
-    { k: 'Storage',      used: 0.04,   included: 0.1,     unit: 'TB',   rate: '$40 / TB-mo',   cost: 2 }
-  ]
-}
 
 const curMeters = computed(() => meters[tenant.value])
-const baseFee = computed(() => ({ Enterprise: 5000, Growth: 999, Starter: 0 }[cur.value.plan]))
-const usageCost = computed(() => curMeters.value.reduce((s, m) => s + m.cost, 0))
-const overageCost = computed(() => curMeters.value.reduce((s, m) => {
-  if (m.used <= m.included) return s
-  const ratio = (m.used - m.included) / m.included
-  return s + Math.round(m.cost * ratio * 0.4)
-}, 0))
-const total = computed(() => baseFee.value + usageCost.value)
+const baseFee = computed(() => PLAN_BASE_FEES[cur.value.plan])
+// Spec-15 metering engine — invoice total includes the overage premium
+// (R1 correction: the inline version left overage out of the total).
+const inv = computed(() => invoice(baseFee.value, curMeters.value))
+const usageCost = computed(() => inv.value.usage)
+const overageCost = computed(() => inv.value.overage)
+const total = computed(() => inv.value.total)
 const dayOfMonth = 22, daysInMonth = 30
 
 const trend = computed(() => {
@@ -59,13 +33,13 @@ const trendMax = computed(() => Math.max(...trend.value))
   <div class="um">
     <div class="card head">
       <div>
-        <div class="kicker">Metered billing · Stripe-style</div>
-        <h3>Usage &amp; invoice</h3>
-        <p class="meta">Real-time meter aggregation. Overages charged at 1.4× rate, invoiced on the 1st of next month.</p>
+        <div class="kicker">{{ t('metering.kicker') }}</div>
+        <h3>{{ t('metering.title') }}</h3>
+        <p class="meta">{{ t('metering.sub') }}</p>
       </div>
       <div class="tenant-pick">
-        <button v-for="t in tenants" :key="t.id" :class="{ on: tenant === t.id }" @click="tenant = t.id" type="button">
-          {{ t.name }}<span class="tp-plan">{{ t.plan }}</span>
+        <button v-for="tn in tenants" :key="tn.id" :class="{ on: tenant === tn.id }" @click="tenant = tn.id" type="button">
+          {{ tn.name }}<span class="tp-plan">{{ tn.plan }}</span>
         </button>
       </div>
     </div>
@@ -73,38 +47,38 @@ const trendMax = computed(() => Math.max(...trend.value))
     <div class="card invoice">
       <div class="inv-grid">
         <div>
-          <div class="kicker">{{ cur.name }} · {{ cur.plan }} plan</div>
-          <h3>Current invoice · day {{ dayOfMonth }} of {{ daysInMonth }}</h3>
-          <p class="meta">Forecast end-of-cycle: <strong>${{ Math.round(total / dayOfMonth * daysInMonth).toLocaleString() }}</strong></p>
+          <div class="kicker">{{ t('metering.planLine', { name: cur.name, plan: cur.plan }) }}</div>
+          <h3>{{ t('metering.invoiceTitle', { day: dayOfMonth, days: daysInMonth }) }}</h3>
+          <p class="meta">{{ t('metering.forecast') }} <strong>{{ money(total / dayOfMonth * daysInMonth) }}</strong></p>
         </div>
         <div class="inv-amt">
-          <div class="ia-num grad-text">${{ total.toLocaleString() }}</div>
-          <div class="ia-lbl">accrued so far</div>
+          <div class="ia-num grad-text">{{ money(total) }}</div>
+          <div class="ia-lbl">{{ t('metering.accrued') }}</div>
         </div>
       </div>
 
       <div class="line-items">
         <div class="li">
-          <span class="li-name">Platform fee · {{ cur.plan }}</span>
-          <span class="li-val">${{ baseFee.toLocaleString() }}</span>
+          <span class="li-name">{{ t('metering.platformFee', { plan: cur.plan }) }}</span>
+          <span class="li-val">{{ money(baseFee) }}</span>
         </div>
         <div v-for="m in curMeters" :key="m.k" class="li">
           <span class="li-name">{{ m.k }} <span class="dimc-i">· {{ m.rate }}</span></span>
-          <span class="li-val">${{ m.cost.toLocaleString() }}</span>
+          <span class="li-val">{{ money(m.cost) }}</span>
         </div>
         <div class="li li-sub">
-          <span class="li-name">Subtotal</span>
-          <span class="li-val">${{ (baseFee + usageCost).toLocaleString() }}</span>
+          <span class="li-name">{{ t('metering.subtotal') }}</span>
+          <span class="li-val">{{ money(baseFee + usageCost) }}</span>
         </div>
         <div class="li li-warn" v-if="overageCost > 0">
-          <span class="li-name">Overage · projected at month-end</span>
-          <span class="li-val">+${{ overageCost.toLocaleString() }}</span>
+          <span class="li-name">{{ t('metering.overage') }}</span>
+          <span class="li-val">+{{ money(overageCost) }}</span>
         </div>
       </div>
     </div>
 
     <div class="card">
-      <h3>Meters · {{ dayOfMonth }}/{{ daysInMonth }} of current cycle</h3>
+      <h3>{{ t('metering.metersTitle', { day: dayOfMonth, days: daysInMonth }) }}</h3>
       <div class="meters">
         <div v-for="m in curMeters" :key="m.k" class="m" :class="{ over: m.used > m.included }">
           <div class="m-head">
@@ -114,12 +88,12 @@ const trendMax = computed(() => Math.max(...trend.value))
           <div class="m-bar">
             <div class="m-included" :style="{ width: Math.min(100, m.used / m.included * 100) + '%' }"></div>
             <div v-if="m.used > m.included" class="m-over" :style="{ width: Math.min(40, (m.used - m.included) / m.included * 100) + '%' }"></div>
-            <div class="m-line" :style="{ left: Math.min(100, (dayOfMonth / daysInMonth) * 100) + '%' }" title="Pro-rata expected"></div>
+            <div class="m-line" :style="{ left: Math.min(100, (dayOfMonth / daysInMonth) * 100) + '%' }" :title="t('metering.proRata')"></div>
           </div>
           <div class="m-foot">
-            <span><strong>{{ m.used.toLocaleString() }}</strong> {{ m.unit }} used</span>
-            <span class="dimc-i">/ {{ m.included.toLocaleString() }} included</span>
-            <span class="m-cost">${{ m.cost.toLocaleString() }}</span>
+            <span><strong>{{ num(m.used) }}</strong> {{ m.unit }} {{ t('metering.used') }}</span>
+            <span class="dimc-i">/ {{ num(m.included) }} {{ t('metering.included') }}</span>
+            <span class="m-cost">{{ money(m.cost) }}</span>
           </div>
         </div>
       </div>
@@ -127,32 +101,32 @@ const trendMax = computed(() => Math.max(...trend.value))
 
     <div class="row">
       <div class="card">
-        <h3>Cost trend · last 14d</h3>
+        <h3>{{ t('metering.trendTitle') }}</h3>
         <div class="trend">
           <div v-for="(v, i) in trend" :key="i" class="t-col">
             <div class="t-fill" :style="{ height: (v / trendMax * 100) + '%' }"></div>
           </div>
         </div>
         <div class="t-foot">
-          <span>${{ trend[0] }} → ${{ trend[trend.length - 1] }}</span>
-          <span class="up">+{{ Math.round((trend[trend.length-1] - trend[0]) / trend[0] * 100) }}%</span>
+          <span>{{ money(trend[0]) }} → {{ money(trend[trend.length - 1]) }}</span>
+          <span class="up">+{{ pct((trend[trend.length-1] - trend[0]) / trend[0], { digits: 0 }) }}</span>
         </div>
       </div>
 
       <div class="card">
-        <h3>Optimization opportunities</h3>
+        <h3>{{ t('metering.optTitle') }}</h3>
         <div class="opt">
           <div class="op">
-            <span class="op-tag save">SAVE</span>
-            <div><strong>Cache hit on Vision Agent</strong> · raising threshold from 86% → 94% would cut GPU seconds by ~12% (≈ <strong>${{ Math.round(curMeters[1].cost * 0.12).toLocaleString() }}/mo</strong>)</div>
+            <span class="op-tag save">{{ t('metering.tagSave') }}</span>
+            <div><strong>{{ t('metering.optCache') }}</strong> {{ t('metering.optCacheBody', { amount: money(curMeters[1].cost * 0.12) }) }}</div>
           </div>
           <div class="op">
-            <span class="op-tag tier">UPGRADE</span>
-            <div><strong>Renders</strong> · projected {{ Math.round(curMeters[2].used / dayOfMonth * daysInMonth).toLocaleString() }} jobs. Upgrade to Scale tier saves ~$420/mo vs overage.</div>
+            <span class="op-tag tier">{{ t('metering.tagUpgrade') }}</span>
+            <div><strong>{{ t('metering.optRenders') }}</strong> {{ t('metering.optRendersBody', { jobs: num(curMeters[2].used / dayOfMonth * daysInMonth) }) }}</div>
           </div>
           <div class="op">
-            <span class="op-tag commit">COMMIT</span>
-            <div>1-year commit on API calls · <strong>save 22%</strong> on this line item. Eligible based on 90-day trend.</div>
+            <span class="op-tag commit">{{ t('metering.tagCommit') }}</span>
+            <div>{{ t('metering.optCommit') }} <strong>{{ t('metering.optCommitSave') }}</strong> {{ t('metering.optCommitBody') }}</div>
           </div>
         </div>
       </div>

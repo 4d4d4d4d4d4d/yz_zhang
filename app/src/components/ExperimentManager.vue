@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { proportionZTest, recommendation } from '../logic/significance.js'
 
 const experiments = ref([
   {
@@ -72,10 +73,47 @@ const mutexGroups = computed(() => {
 function statusLabel(s) {
   return { ramping: 'Ramping', shipped: 'Shipped', holdout: 'Holdout', paused: 'Paused' }[s]
 }
+// Spec 45 — in-tool A/B significance calculator (two-proportion z-test), so an
+// operator can decide ship/keep-testing from real numbers, not a gut call.
+const calc = ref({ nA: 12400, convA: 298, nB: 12550, convB: 372 })
+const sig = computed(() => proportionZTest({
+  nA: Number(calc.value.nA), convA: Number(calc.value.convA),
+  nB: Number(calc.value.nB), convB: Number(calc.value.convB)
+}))
+const verdict = computed(() => recommendation(sig.value))
+const VERDICT_LABEL = { ship: 'Ship treatment ✓', keep_testing: 'Keep testing — not significant', rollback: 'Roll back — treatment is worse', invalid: 'Enter visitors for both arms' }
+const pct = n => (n * 100).toFixed(2) + '%'
 </script>
 
 <template>
   <div class="ex">
+    <div class="card sigcalc">
+      <div class="kicker">Significance calculator · two-proportion z-test</div>
+      <div class="sc-grid">
+        <div class="sc-arm">
+          <div class="sc-lbl">Control</div>
+          <label>Visitors <input type="number" v-model.number="calc.nA" min="0" /></label>
+          <label>Conversions <input type="number" v-model.number="calc.convA" min="0" /></label>
+          <div class="sc-rate" v-if="sig.valid">{{ pct(sig.rateA) }}</div>
+        </div>
+        <div class="sc-arm">
+          <div class="sc-lbl">Treatment</div>
+          <label>Visitors <input type="number" v-model.number="calc.nB" min="0" /></label>
+          <label>Conversions <input type="number" v-model.number="calc.convB" min="0" /></label>
+          <div class="sc-rate" v-if="sig.valid">{{ pct(sig.rateB) }}</div>
+        </div>
+        <div class="sc-out" :class="sig.valid ? (sig.significant ? (sig.diff > 0 ? 'ok' : 'bad') : 'wip') : 'wip'">
+          <div class="sc-verdict">{{ VERDICT_LABEL[verdict] }}</div>
+          <div class="sc-stats" v-if="sig.valid">
+            <span>lift <strong>{{ (sig.lift * 100).toFixed(1) }}%</strong></span>
+            <span>p <strong>{{ sig.pValue < 0.001 ? '<0.001' : sig.pValue.toFixed(3) }}</strong></span>
+            <span>z <strong>{{ sig.z.toFixed(2) }}</strong></span>
+            <span>95% CI <strong>[{{ pct(sig.ci95[0]) }}, {{ pct(sig.ci95[1]) }}]</strong></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="card head">
       <div>
         <div class="kicker">Experiments</div>
@@ -174,6 +212,25 @@ function statusLabel(s) {
 </template>
 
 <style scoped>
+.sigcalc { padding: 16px 18px; }
+.sc-grid { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 14px; margin-top: 12px; align-items: stretch; }
+.sc-arm { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.sc-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); font-weight: 700; }
+.sc-arm label { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); }
+.sc-arm input { width: 96px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg-2, var(--surface)); color: var(--text); font-variant-numeric: tabular-nums; }
+.sc-rate { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: auto; }
+.sc-out { display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border); }
+.sc-out.ok { border-color: rgba(52,211,153,.5); background: rgba(52,211,153,.1); }
+.sc-out.bad { border-color: rgba(248,113,113,.5); background: rgba(248,113,113,.1); }
+.sc-out.wip { border-color: var(--border); }
+.sc-verdict { font-size: 15px; font-weight: 800; }
+.sc-out.ok .sc-verdict { color: var(--success); }
+.sc-out.bad .sc-verdict { color: var(--danger); }
+.sc-stats { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) { .sc-grid { grid-template-columns: 1fr; } }
+</style>
+<style scoped>
+/* existing */
 .ex { display: flex; flex-direction: column; gap: 16px; }
 .head { padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .kicker { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .1em; margin-top: 12px; }

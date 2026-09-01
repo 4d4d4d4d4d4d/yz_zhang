@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { commissionRun } from '../logic/commission.js'
 
 const tiers = [
   { name: 'Platinum', rate: 8,  cap: '∞',     partners: 8,  gmv: 1840000, color: '#7c5cff' },
@@ -17,11 +18,14 @@ const earners = [
   { name: 'Helio Network',      tier: 'Standard', gmv:  28000, comm:  5600, payout: 'Dec 22' }
 ]
 
-const commByTier = computed(() => tiers.map(t => ({ ...t, comm: Math.round(t.gmv * t.rate / 100) })))
-const totalGMV = computed(() => tiers.reduce((s, t) => s + t.gmv, 0))
-const totalComm = computed(() => commByTier.value.reduce((s, t) => s + t.comm, 0))
-const totalPartners = computed(() => tiers.reduce((s, t) => s + t.partners, 0))
-const blendedRate = computed(() => ((totalComm.value / totalGMV.value) * 100).toFixed(2))
+// Spec-17 commission engine (caps now enforced; fixture is under cap so
+// displayed figures are unchanged).
+const run = computed(() => commissionRun(tiers, earners))
+const commByTier = computed(() => run.value.byTier.map(t => ({ ...t, comm: t.commission })))
+const totalGMV = computed(() => run.value.totalGMV)
+const totalComm = computed(() => run.value.totalCommission)
+const totalPartners = computed(() => run.value.totalPartners)
+const blendedRate = computed(() => run.value.blendedRate.toFixed(2))
 
 const payoutQueue = [
   { date: 'Dec 15', count: 18, amount: 184000 },

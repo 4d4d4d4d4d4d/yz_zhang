@@ -93,7 +93,7 @@ onMounted(() => {})
         @dragover.prevent="dragOver = true"
         @dragleave="dragOver = false"
         @drop="onDrop">
-        <input ref="fileEl" type="file" accept="image/*,video/*" hidden @change="onFile" />
+        <input ref="fileEl" type="file" accept="image/*,video/*" hidden @change="onFile" aria-label="Upload product image or video" />
         <div v-if="!imgUrl" class="dz" @click="pickFile">
           <div class="dz-icon">⤴</div>
           <div class="dz-title">Drop product image or video</div>

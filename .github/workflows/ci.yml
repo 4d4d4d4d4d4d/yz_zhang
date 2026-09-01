@@ -1,0 +1,25 @@
+# Spec 12 — CI quality gate: full test suite + production build on every push/PR.
+# Spec 18 — logic-layer coverage thresholds enforced via test:coverage.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm run test:coverage
+      - run: npm run build
+      - run: npm run check:bundle

@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { buildRenderPlan, advanceProgress } from '../logic/render.js'
 
 const { t } = useI18n()
 
@@ -34,7 +35,8 @@ const status = ref('idle') // idle | rendering | done
 const queue = ref([])
 
 const currentAsset = computed(() => assets.find(a => a.id === asset.value))
-const planned = computed(() => fmt.value.length * targets.value.length)
+const planned = computed(() =>
+  buildRenderPlan({ targets: targets.value, formats: fmt.value }, { markets, formats }).planned)
 
 function toggle(list, id) {
   const i = list.indexOf(id)
@@ -44,24 +46,15 @@ function toggle(list, id) {
 async function render() {
   if (!fmt.value.length || !targets.value.length) return
   status.value = 'rendering'
-  queue.value = []
-  for (const m of targets.value) {
-    for (const f of fmt.value) {
-      const mk = markets.find(x => x.id === m)
-      queue.value.push({
-        id: `${m}-${f}`,
-        market: mk.label,
-        lang: mk.lang,
-        format: formats.find(x => x.id === f).label,
-        progress: 0
-      })
-    }
-  }
+  queue.value = buildRenderPlan(
+    { targets: targets.value, formats: fmt.value },
+    { markets, formats }
+  ).items
   for (const item of queue.value) {
     await new Promise(res => setTimeout(res, 240))
     while (item.progress < 100) {
       await new Promise(res => setTimeout(res, 60))
-      item.progress = Math.min(100, item.progress + 8 + Math.random() * 14)
+      item.progress = advanceProgress(item.progress)
     }
   }
   status.value = 'done'

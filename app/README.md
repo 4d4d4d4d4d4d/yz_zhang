@@ -20,9 +20,40 @@ All marketing surfaces, all interactive demos, all dynamic copy are translated a
 cd app
 npm install
 npm run dev      # http://localhost:5173
+npm run test     # unit tests (Vitest) for src/logic
 npm run build    # production build → dist/
 npm run preview  # serve the build
 ```
+
+## Architecture: specs, logic layer, tests
+
+Commercialization capabilities are built spec-first — see the
+[specs index](../docs/specs/README.md) for the reviewed design of all 12
+domains (architecture, recommendations, marketing, matchmaking,
+negotiation, risk & legal, showcase & trust, digital humans, cross-language
+meetings, virtual tours, field verification, and the trust pipeline that
+composes them into deal readiness). CI (`.github/workflows/ci.yml`) runs
+the full test suite and the production build on every push and PR.
+
+Domain algorithms live in `src/logic/` as pure, framework-free modules
+(recommendation ranking with explanations, ROAS water-fill budget allocation,
+partner fit scoring, ZOPA / playbook term evaluation, market compliance
+gates, trust scoring + scoped share links + a bounded-concurrency
+verification queue). Each module is covered by unit tests in `tests/`.
+
+The **Console → Video Showcase** section is the trust surface for closing
+cross-border deals: provenance-signed video work with evidence-backed badges,
+least-privilege expiring trust links (watermark enforced whenever assets are
+shared), and a live view of the priority verification queue.
+
+The **Console → Immersive Suite** section covers the in-person half of
+going global, online: a digital-human studio (script → timed storyboard →
+per-language presenter variants, synthetic-media disclosure always on),
+an immersive meeting room with live glossary-protected captions and a
+cross-timezone scheduler, a VR-style virtual factory tour (walkway-graph
+navigation, coverage tracking, adaptive bitrate that degrades but never
+denies), and a field-verification network — vetted local specialists whose
+on-site evidence lands in a tamper-evident hash chain before attestation.
 
 ## Stack
 

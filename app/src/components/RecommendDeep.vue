@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { conceptSignals, rankCandidates } from '../logic/recommend.js'
 
 const product = ref('skincare')
 const audience = ref(['gen-z', 'urban'])
@@ -60,42 +61,61 @@ async function run() {
 
 watch([product, audience, voice, goal, budget], () => { showResults.value = false; step.value = -1 }, { deep: true })
 
-const concepts = computed(() => {
-  const base = {
-    skincare: [
-      { hook: 'Before / after reveal in 3 seconds', format: '9:16 reel', market: 'JP', ctr: 4.8, cvr: 3.2, roas: 4.1, scores: { relevance: 94, creativity: 86, fit: 92, risk: 88 } },
-      { hook: 'Founder POV — why we re-formulated', format: '1:1 carousel', market: 'US', ctr: 3.6, cvr: 2.7, roas: 3.4, scores: { relevance: 88, creativity: 80, fit: 90, risk: 92 } },
-      { hook: '7-day skin diary (UGC)', format: '9:16 reel', market: 'KR', ctr: 5.2, cvr: 2.9, roas: 3.8, scores: { relevance: 92, creativity: 90, fit: 88, risk: 84 } }
-    ],
-    sneaker: [
-      { hook: 'Style swap montage', format: '9:16 reel', market: 'US', ctr: 5.1, cvr: 2.4, roas: 3.2, scores: { relevance: 92, creativity: 88, fit: 90, risk: 86 } },
-      { hook: 'Build close-up + spec overlay', format: '16:9 demo', market: 'DE', ctr: 3.2, cvr: 2.8, roas: 3.0, scores: { relevance: 86, creativity: 78, fit: 84, risk: 92 } },
-      { hook: 'Street interview reactions', format: '9:16 reel', market: 'JP', ctr: 4.6, cvr: 2.2, roas: 2.8, scores: { relevance: 88, creativity: 90, fit: 86, risk: 80 } }
-    ],
-    saas: [
-      { hook: 'Pain → workflow in 12 seconds', format: '16:9 demo', market: 'US', ctr: 2.8, cvr: 4.6, roas: 6.2, scores: { relevance: 94, creativity: 76, fit: 92, risk: 96 } },
-      { hook: 'Animated explainer · 30s', format: '1:1 feed', market: 'EU', ctr: 2.4, cvr: 3.8, roas: 4.4, scores: { relevance: 88, creativity: 84, fit: 88, risk: 94 } },
-      { hook: 'Customer logo wall + ROI quote', format: '9:16 reel', market: 'BR', ctr: 3.0, cvr: 3.2, roas: 3.8, scores: { relevance: 84, creativity: 70, fit: 86, risk: 92 } }
-    ],
-    gadget: [
-      { hook: 'Hand-held demo, 6s bumper', format: '6s bumper', market: 'US', ctr: 4.2, cvr: 2.1, roas: 2.6, scores: { relevance: 90, creativity: 82, fit: 88, risk: 90 } },
-      { hook: 'Spec battle vs. competitor', format: '16:9 demo', market: 'DE', ctr: 3.4, cvr: 2.4, roas: 2.8, scores: { relevance: 86, creativity: 74, fit: 84, risk: 78 } },
-      { hook: 'Unboxing ASMR cut', format: '9:16 reel', market: 'JP', ctr: 5.0, cvr: 1.9, roas: 2.4, scores: { relevance: 88, creativity: 92, fit: 88, risk: 86 } }
-    ],
-    food: [
-      { hook: 'Recipe in 6 seconds', format: '6s bumper', market: 'US', ctr: 4.6, cvr: 2.0, roas: 2.6, scores: { relevance: 92, creativity: 88, fit: 86, risk: 92 } },
-      { hook: 'POV taste test', format: '9:16 reel', market: 'SEA', ctr: 4.2, cvr: 2.4, roas: 2.8, scores: { relevance: 88, creativity: 86, fit: 90, risk: 86 } },
-      { hook: 'Local cuisine pairing', format: '1:1 feed', market: 'JP', ctr: 3.8, cvr: 2.6, roas: 3.0, scores: { relevance: 90, creativity: 84, fit: 92, risk: 90 } }
-    ]
-  }[product.value]
+// Spec 50 — concepts carry the targeting facts the ranker needs: which
+// audiences they speak to, the brand voice they embody, and the production
+// budget they require.
+const CATALOG = {
+  skincare: [
+    { hook: 'Before / after reveal in 3 seconds', format: '9:16 reel', market: 'JP', ctr: 4.8, cvr: 3.2, roas: 4.1, audiences: ['gen-z', 'urban'], voice: 'clinical', minBudget: 20000, scores: { relevance: 94, creativity: 86, fit: 92, risk: 88 } },
+    { hook: 'Founder POV — why we re-formulated', format: '1:1 carousel', market: 'US', ctr: 3.6, cvr: 2.7, roas: 3.4, audiences: ['millennial', 'professionals'], voice: 'warm', minBudget: 15000, scores: { relevance: 88, creativity: 80, fit: 90, risk: 92 } },
+    { hook: '7-day skin diary (UGC)', format: '9:16 reel', market: 'KR', ctr: 5.2, cvr: 2.9, roas: 3.8, audiences: ['gen-z', 'students'], voice: 'playful', minBudget: 8000, scores: { relevance: 92, creativity: 90, fit: 88, risk: 84 } }
+  ],
+  sneaker: [
+    { hook: 'Style swap montage', format: '9:16 reel', market: 'US', ctr: 5.1, cvr: 2.4, roas: 3.2, audiences: ['gen-z', 'urban'], voice: 'bold', minBudget: 18000, scores: { relevance: 92, creativity: 88, fit: 90, risk: 86 } },
+    { hook: 'Build close-up + spec overlay', format: '16:9 demo', market: 'DE', ctr: 3.2, cvr: 2.8, roas: 3.0, audiences: ['professionals', 'millennial'], voice: 'clinical', minBudget: 30000, scores: { relevance: 86, creativity: 78, fit: 84, risk: 92 } },
+    { hook: 'Street interview reactions', format: '9:16 reel', market: 'JP', ctr: 4.6, cvr: 2.2, roas: 2.8, audiences: ['gen-z', 'urban'], voice: 'playful', minBudget: 12000, scores: { relevance: 88, creativity: 90, fit: 86, risk: 80 } }
+  ],
+  saas: [
+    { hook: 'Pain → workflow in 12 seconds', format: '16:9 demo', market: 'US', ctr: 2.8, cvr: 4.6, roas: 6.2, audiences: ['professionals'], voice: 'clinical', minBudget: 25000, scores: { relevance: 94, creativity: 76, fit: 92, risk: 96 } },
+    { hook: 'Animated explainer · 30s', format: '1:1 feed', market: 'EU', ctr: 2.4, cvr: 3.8, roas: 4.4, audiences: ['professionals', 'millennial'], voice: 'warm', minBudget: 35000, scores: { relevance: 88, creativity: 84, fit: 88, risk: 94 } },
+    { hook: 'Customer logo wall + ROI quote', format: '9:16 reel', market: 'BR', ctr: 3.0, cvr: 3.2, roas: 3.8, audiences: ['professionals'], voice: 'bold', minBudget: 15000, scores: { relevance: 84, creativity: 70, fit: 86, risk: 92 } }
+  ],
+  gadget: [
+    { hook: 'Hand-held demo, 6s bumper', format: '6s bumper', market: 'US', ctr: 4.2, cvr: 2.1, roas: 2.6, audiences: ['gen-z', 'urban'], voice: 'bold', minBudget: 12000, scores: { relevance: 90, creativity: 82, fit: 88, risk: 90 } },
+    { hook: 'Spec battle vs. competitor', format: '16:9 demo', market: 'DE', ctr: 3.4, cvr: 2.4, roas: 2.8, audiences: ['professionals', 'millennial'], voice: 'clinical', minBudget: 28000, scores: { relevance: 86, creativity: 74, fit: 84, risk: 78 } },
+    { hook: 'Unboxing ASMR cut', format: '9:16 reel', market: 'JP', ctr: 5.0, cvr: 1.9, roas: 2.4, audiences: ['gen-z', 'students'], voice: 'playful', minBudget: 10000, scores: { relevance: 88, creativity: 92, fit: 88, risk: 86 } }
+  ],
+  food: [
+    { hook: 'Recipe in 6 seconds', format: '6s bumper', market: 'US', ctr: 4.6, cvr: 2.0, roas: 2.6, audiences: ['parents', 'millennial'], voice: 'warm', minBudget: 9000, scores: { relevance: 92, creativity: 88, fit: 86, risk: 92 } },
+    { hook: 'POV taste test', format: '9:16 reel', market: 'SEA', ctr: 4.2, cvr: 2.4, roas: 2.8, audiences: ['gen-z', 'students'], voice: 'playful', minBudget: 8000, scores: { relevance: 88, creativity: 86, fit: 90, risk: 86 } },
+    { hook: 'Local cuisine pairing', format: '1:1 feed', market: 'JP', ctr: 3.8, cvr: 2.6, roas: 3.0, audiences: ['millennial', 'urban'], voice: 'warm', minBudget: 14000, scores: { relevance: 90, creativity: 84, fit: 92, risk: 90 } }
+  ]
+}
 
-  const voiceTilt = { warm: 'relevance', bold: 'creativity', clinical: 'risk', playful: 'creativity' }[voice.value]
-  return base.map(c => {
-    const tweak = { ...c.scores }
-    tweak[voiceTilt] = Math.min(99, tweak[voiceTilt] + 4)
-    const total = (tweak.relevance + tweak.creativity + tweak.fit + tweak.risk) / 4
-    return { ...c, scores: tweak, total: Math.round(total) }
-  }).sort((a, b) => b.total - a.total)
+const SIGNAL_LABEL = {
+  affinity: 'Audience affinity', freshness: 'Creative freshness',
+  performance: 'Expected performance', brandFit: 'Brand-voice fit', localization: 'Market fit'
+}
+
+// Ranked by the spec-01 engine: weighted signals + MMR-lite diversity re-rank,
+// with the per-signal contributions that make the ranking explainable.
+const concepts = computed(() => {
+  const base = CATALOG[product.value]
+  const ctx = { audience: audience.value, voice: voice.value, goal: goal.value, budget: budget.value }
+  const ranked = rankCandidates(
+    base.map(c => ({ ...c, id: c.hook, signals: conceptSignals(c, ctx) })),
+    { diversityPenalty: 0.15 }
+  )
+  return ranked.map(r => {
+    const src = base.find(b => b.hook === r.id)
+    return {
+      ...src,
+      total: Math.round(r.score),
+      rank: r.rank,
+      demoted: r.adjusted < r.score - 0.01,
+      explanation: r.explanation
+    }
+  })
 })
 
 const signals = computed(() => [
@@ -142,7 +162,7 @@ const signals = computed(() => [
         </div>
         <div>
           <label>Budget · ${{ budget.toLocaleString() }}</label>
-          <input type="range" min="5000" max="200000" step="1000" v-model.number="budget" />
+          <input type="range" min="5000" max="200000" step="1000" v-model.number="budget" aria-label="Campaign budget" />
         </div>
       </div>
 
@@ -177,7 +197,10 @@ const signals = computed(() => [
               <div class="rank">#{{ i + 1 }}</div>
               <div class="title">
                 <h3>{{ c.hook }}</h3>
-                <div class="meta">{{ c.format }} · {{ c.market }} · score {{ c.total }}</div>
+                <div class="meta">
+                  {{ c.format }} · {{ c.market }} · score {{ c.total }}
+                  <span v-if="c.demoted" class="dv" title="Demoted by the diversity re-rank so one format cannot sweep the top results">diversity re-rank</span>
+                </div>
               </div>
               <div class="kpis">
                 <div><div class="kn">{{ c.ctr.toFixed(1) }}%</div><div class="kl">CTR</div></div>
@@ -185,10 +208,15 @@ const signals = computed(() => [
                 <div><div class="kn grad-text">{{ c.roas.toFixed(1) }}×</div><div class="kl">ROAS</div></div>
               </div>
             </div>
+            <div class="why">Why this ranks here — contribution to the {{ c.total }} score</div>
             <div class="bars">
-              <div v-for="(v, k) in c.scores" :key="k" class="b">
-                <div class="bl"><span>{{ k }}</span><span>{{ v }}</span></div>
-                <div class="bt"><div class="bf" :style="{ width: v + '%' }"></div></div>
+              <div v-for="e in c.explanation" :key="e.key" class="b">
+                <div class="bl">
+                  <span>{{ SIGNAL_LABEL[e.key] }}</span>
+                  <span>{{ e.contribution.toFixed(1) }} pts</span>
+                </div>
+                <div class="bt"><div class="bf" :style="{ width: (e.contribution / 30 * 100) + '%' }"></div></div>
+                <div class="bmeta">signal {{ (e.value * 100).toFixed(0) }}% × weight {{ (e.weight * 100).toFixed(0) }}%</div>
               </div>
             </div>
             <div class="actions">
@@ -243,7 +271,11 @@ input[type="range"] { width: 100%; accent-color: var(--primary); }
 .kpis { display: flex; gap: 18px; }
 .kn { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .kl { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .08em; }
-.bars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.why { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; margin-bottom: 8px; }
+.dv { display: inline-block; margin-left: 8px; font-size: 10px; padding: 1px 7px; border-radius: 5px; background: rgba(251,191,36,.16); color: #fcd34d; }
+.bmeta { font-size: 10px; color: var(--text-dim); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.bars { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+@media (max-width: 900px) { .bars { grid-template-columns: repeat(2, 1fr); } }
 .bl { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-bottom: 4px; text-transform: capitalize; }
 .bt { height: 4px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
 .bf { height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-2)); }

@@ -101,7 +101,7 @@ function spark(arr, w = 80, h = 24) {
           <div class="split-canary" :style="{ width: cur.traffic + '%' }"><span>{{ cur.id }} · {{ cur.traffic }}%</span></div>
           <div class="split-prod"><span>prod · {{ 100 - cur.traffic }}%</span></div>
         </div>
-        <input type="range" min="0" max="100" :value="cur.traffic" @input="setTraffic(+$event.target.value)" />
+        <input type="range" min="0" max="100" :value="cur.traffic" @input="setTraffic(+$event.target.value)" aria-label="Canary traffic percent" />
       </div>
       <div class="canary-foot">
         <div><div class="cn">+{{ ((cur.ndcg - 0.461) / 0.461 * 100).toFixed(1) }}%</div><div class="cl">NDCG lift vs prod</div></div>

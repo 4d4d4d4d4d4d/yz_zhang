@@ -1,20 +1,34 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SectionHeader from '../components/SectionHeader.vue'
 import PartnerMatcher from '../components/PartnerMatcher.vue'
+import { validateContact } from '../logic/validation.js'
+import { useAnalytics } from '../composables/useAnalytics.js'
 const { t } = useI18n()
+const { track } = useAnalytics()
 
 const form = ref({ name: '', email: '', company: '', region: '', role: 'brand', message: '' })
 const status = ref('idle') // idle | sending | success | error
+const errors = ref({})     // field → i18n key
 
-const valid = computed(() => form.value.name && form.value.email && form.value.company && form.value.message)
+onMounted(() => track('form_view', { form: 'contact' }))
 
 async function submit() {
-  if (!valid.value) { status.value = 'error'; return }
+  track('form_submit', { form: 'contact', role: form.value.role })
+  const result = validateContact(form.value)
+  errors.value = result.errors
+  if (!result.valid) {
+    status.value = 'error'
+    track('form_error', { form: 'contact', fields: Object.keys(result.errors) })
+    await nextTick()
+    document.querySelector('[aria-invalid="true"]')?.focus()
+    return
+  }
   status.value = 'sending'
   await new Promise(r => setTimeout(r, 900))
   status.value = 'success'
+  track('form_success', { form: 'contact', role: form.value.role })
 }
 </script>
 
@@ -28,15 +42,21 @@ async function submit() {
         <form class="card form" @submit.prevent="submit">
           <div class="row two">
             <label>{{ t('contact.name') }} *
-              <input v-model="form.name" type="text" required />
+              <input v-model="form.name" type="text" required
+                :aria-invalid="!!errors.name" :aria-describedby="errors.name ? 'err-name' : undefined" />
+              <span v-if="errors.name" id="err-name" class="field-err" role="alert">{{ t(errors.name) }}</span>
             </label>
             <label>{{ t('contact.email') }} *
-              <input v-model="form.email" type="email" required />
+              <input v-model="form.email" type="email" required
+                :aria-invalid="!!errors.email" :aria-describedby="errors.email ? 'err-email' : undefined" />
+              <span v-if="errors.email" id="err-email" class="field-err" role="alert">{{ t(errors.email) }}</span>
             </label>
           </div>
           <div class="row two">
             <label>{{ t('contact.company') }} *
-              <input v-model="form.company" type="text" required />
+              <input v-model="form.company" type="text" required
+                :aria-invalid="!!errors.company" :aria-describedby="errors.company ? 'err-company' : undefined" />
+              <span v-if="errors.company" id="err-company" class="field-err" role="alert">{{ t(errors.company) }}</span>
             </label>
             <label>{{ t('contact.region') }}
               <input v-model="form.region" type="text" placeholder="US, JP, BR…" />
@@ -51,7 +71,9 @@ async function submit() {
             </select>
           </label>
           <label>{{ t('contact.message') }} *
-            <textarea v-model="form.message" rows="5" required></textarea>
+            <textarea v-model="form.message" rows="5" required
+              :aria-invalid="!!errors.message" :aria-describedby="errors.message ? 'err-message' : undefined"></textarea>
+            <span v-if="errors.message" id="err-message" class="field-err" role="alert">{{ t(errors.message) }}</span>
           </label>
 
           <div class="form-foot">
@@ -60,7 +82,7 @@ async function submit() {
               <span v-else-if="status === 'success'">✓ {{ t('contact.success') }}</span>
               <span v-else>{{ t('contact.submit') }} →</span>
             </button>
-            <span v-if="status === 'error'" class="err">{{ t('contact.error') }}</span>
+            <span v-if="status === 'error'" class="err" role="status">{{ t('contact.error') }}</span>
           </div>
         </form>
 
@@ -111,6 +133,8 @@ textarea { resize: vertical; }
 .form-foot { display: flex; align-items: center; gap: 16px; margin-top: 4px; }
 .form-foot :deep(.btn) { min-width: 200px; justify-content: center; }
 .err { color: var(--danger); font-size: 13px; }
+.field-err { display: block; margin-top: 4px; color: var(--danger); font-size: 11.5px; }
+input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--danger); }
 
 .side { display: flex; flex-direction: column; gap: 16px; }
 .link-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px dashed var(--border); color: var(--text); font-size: 14px; }

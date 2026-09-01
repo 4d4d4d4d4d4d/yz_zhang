@@ -1,17 +1,17 @@
 <script setup>
 import { computed } from 'vue'
+import { forecastSummary, DEFAULT_STAGES, COVERAGE_BENCHMARK } from '../logic/salesForecast.js'
 
 const quarter = 'Q4 FY26'
 const quota = 4200000
 
-const stages = [
-  { name: 'Closed Won',    weight: 1.00, color: '#34d399' },
-  { name: 'Verbal',         weight: 0.85, color: '#22d3ee' },
-  { name: 'Proposal',       weight: 0.55, color: '#7c5cff' },
-  { name: 'Negotiation',    weight: 0.65, color: '#a78bfa' },
-  { name: 'Discovery',      weight: 0.25, color: '#fbbf24' },
-  { name: 'Lead',           weight: 0.10, color: '#94a3b8' }
-]
+// Spec 47 — weights come from the shared ladder; displayed high→low so the
+// funnel reads in order (the inline list had Proposal above Negotiation).
+const STAGE_COLOR = {
+  'Closed Won': '#34d399', Verbal: '#22d3ee', Negotiation: '#a78bfa',
+  Proposal: '#7c5cff', Discovery: '#fbbf24', Lead: '#94a3b8'
+}
+const stages = [...DEFAULT_STAGES].reverse().map(s => ({ ...s, color: STAGE_COLOR[s.name] }))
 
 const deals = [
   { id: 'D-2841', name: 'Lumen Studios · JP',    stage: 'Negotiation', value: 840000, owner: 'AM', category: 'best',   close: 'Dec 18' },
@@ -25,12 +25,14 @@ const deals = [
   { id: 'D-2849', name: 'Helio Network · BR',    stage: 'Discovery',   value:  95000, owner: 'AM', category: 'upside', close: 'Jan 12' }
 ]
 
-const weighted = computed(() =>
-  deals.reduce((s, d) => s + d.value * stages.find(st => st.name === d.stage).weight, 0)
-)
-const commit = computed(() => deals.filter(d => d.category === 'commit').reduce((s, d) => s + d.value, 0))
-const best   = computed(() => deals.filter(d => d.category === 'best').reduce((s, d) => s + d.value, 0))
-const upside = computed(() => deals.filter(d => d.category === 'upside').reduce((s, d) => s + d.value, 0))
+// Spec 47 — all roll-ups come from the audited forecast engine. Categories are
+// a partition: commit already contains Closed Won, so it is never re-added.
+const fc = computed(() => forecastSummary({ deals, quota }))
+
+const weighted = computed(() => fc.value.weighted)
+const commit = computed(() => fc.value.commit)
+const best = computed(() => fc.value.best)
+const upside = computed(() => fc.value.upside)
 
 const stageTotals = computed(() => stages.map(s => ({
   ...s,
@@ -39,9 +41,12 @@ const stageTotals = computed(() => stages.map(s => ({
   count: deals.filter(d => d.stage === s.name).length
 })))
 
-const closedWon = computed(() => deals.filter(d => d.stage === 'Closed Won').reduce((s, d) => s + d.value, 0))
-const attainment = computed(() => Math.round((closedWon.value + commit.value) / quota * 100))
-const gap = computed(() => quota - closedWon.value - commit.value)
+const closedWon = computed(() => fc.value.closedWon)
+const attainment = computed(() => Math.round(fc.value.attainment))
+const gap = computed(() => fc.value.gap)
+// Commit beyond what is already banked — used to stack the attainment bar
+// without painting the Closed Won segment twice.
+const commitOpen = computed(() => Math.max(0, fc.value.committed - fc.value.closedWon))
 </script>
 
 <template>
@@ -51,11 +56,16 @@ const gap = computed(() => quota - closedWon.value - commit.value)
         <div class="kicker">Forecast · {{ quarter }}</div>
         <h3>${{ Math.round(weighted / 1000).toLocaleString() }}k weighted pipeline</h3>
         <p class="meta">Quota ${{ (quota / 1000).toLocaleString() }}k · gap to quota ${{ Math.round(gap / 1000).toLocaleString() }}k</p>
+        <p class="cov" :class="fc.coverageHealthy ? 'ok' : 'warn'">
+          Pipeline coverage
+          <strong>{{ fc.coverage === null ? '—' : fc.coverage.toFixed(1) + '×' }}</strong>
+          <span class="cov-bm">vs {{ COVERAGE_BENCHMARK }}× benchmark · ${{ Math.round(fc.openPipeline / 1000).toLocaleString() }}k open</span>
+        </p>
       </div>
       <div class="att">
         <div class="att-bar">
           <div class="att-fill won" :style="{ width: (closedWon / quota * 100) + '%' }" :title="`Closed Won · $${Math.round(closedWon/1000)}k`"></div>
-          <div class="att-fill commit" :style="{ width: (commit / quota * 100) + '%' }" :title="`Commit · $${Math.round(commit/1000)}k`"></div>
+          <div class="att-fill commit" :style="{ width: (commitOpen / quota * 100) + '%' }" :title="`Commit (open) · $${Math.round(commitOpen/1000)}k`"></div>
           <div class="att-fill best" :style="{ width: (best / quota * 100) + '%' }" :title="`Best case · $${Math.round(best/1000)}k`"></div>
         </div>
         <div class="att-num grad-text">{{ attainment }}%</div>
@@ -134,6 +144,11 @@ const gap = computed(() => quota - closedWon.value - commit.value)
 
 <style scoped>
 .fcs { display: flex; flex-direction: column; gap: 16px; }
+.cov { font-size: 12px; margin: 8px 0 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.cov strong { font-size: 15px; font-variant-numeric: tabular-nums; }
+.cov.ok strong { color: var(--success); }
+.cov.warn strong { color: #fbbf24; }
+.cov-bm { color: var(--text-dim); }
 .head { padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .kicker { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .1em; }
 .meta { color: var(--text-dim); font-size: 13px; margin: 4px 0 0; }

@@ -1,7 +1,11 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { riskScore, severityBand, assessRisk, portfolioRisk, DEFAULT_APPETITE } from '../logic/risk.js'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const view = ref('inherent')
+const appetite = ref(DEFAULT_APPETITE)
 
 const risks = [
   { id: 'R-001', title: 'GDPR cross-border transfer breach',     cat: 'Privacy',  owner: 'Cobalt Legal',  i: { l: 4, p: 5 }, r: { l: 2, p: 5 }, controls: ['SCC', 'DPA', 'Encryption'] },
@@ -25,16 +29,14 @@ function cell(l, p) {
   })
 }
 
-function risk(l, p) { return l * p }
-function severity(l, p) {
-  const s = risk(l, p)
-  if (s >= 16) return 'critical'
-  if (s >= 12) return 'high'
-  if (s >= 6) return 'med'
-  return 'low'
-}
+// Spec 52 — scoring and banding come from the shared risk engine.
+const risk = riskScore
+const severity = (l, p) => severityBand(riskScore(l, p))
 
 const cur = computed(() => risks.find(r => r.id === selected.value))
+const curAssessment = computed(() => assessRisk(cur.value, appetite.value))
+const portfolio = computed(() => portfolioRisk(risks, { appetite: appetite.value }))
+const pct = v => v === null ? '—' : (v * 100).toFixed(0) + '%'
 
 const summary = computed(() => {
   const view_ = view.value === 'inherent' ? 'i' : 'r'
@@ -45,40 +47,67 @@ const summary = computed(() => {
   return counts
 })
 
-const movement = computed(() => {
-  const reduced = risks.filter(r => (r.i.l * r.i.p) > (r.r.l * r.r.p)).length
-  const avgRed = Math.round(
-    risks.reduce((s, r) => s + (1 - (r.r.l * r.r.p) / (r.i.l * r.i.p)) * 100, 0) / risks.length
-  )
-  return { reduced, avgRed }
-})
+const movement = computed(() => ({
+  reduced: risks.filter(r => riskScore(r.i.l, r.i.p) > riskScore(r.r.l, r.r.p)).length,
+  // Exposure-weighted, not a mean of per-risk percentages: a trivial risk
+  // fully mitigated must not mask a critical one left untouched.
+  avgRed: Math.round((portfolio.value.portfolioEffectiveness ?? 0) * 100)
+}))
 </script>
 
 <template>
   <div class="hm">
     <div class="card head">
       <div>
-        <div class="kicker">Risk register</div>
-        <h3>{{ risks.length }} risks · {{ view === 'inherent' ? 'inherent' : 'residual' }} view</h3>
-        <p class="meta">Toggle between inherent (no controls) and residual (after controls) posture.</p>
+        <div class="kicker">{{ t('riskmap.kicker') }}</div>
+        <h3>{{ t('riskmap.title', { n: risks.length, view: view === 'inherent' ? t('riskmap.viewInherent') : t('riskmap.viewResidual') }) }}</h3>
+        <p class="meta">{{ t('riskmap.sub') }}</p>
       </div>
       <div class="toggle">
-        <button :class="{ on: view === 'inherent' }" @click="view = 'inherent'" type="button">Inherent</button>
-        <button :class="{ on: view === 'residual' }" @click="view = 'residual'" type="button">Residual</button>
+        <button :class="{ on: view === 'inherent' }" @click="view = 'inherent'" type="button">{{ t('riskmap.inherent') }}</button>
+        <button :class="{ on: view === 'residual' }" @click="view = 'residual'" type="button">{{ t('riskmap.residual') }}</button>
       </div>
+    </div>
+
+    <div class="card appetite" :class="{ breached: portfolio.breaches.length > 0 }">
+      <div class="ap-head">
+        <div>
+          <div class="kicker">{{ t('riskmap.appetiteKicker') }}</div>
+          <h3>{{ t('riskmap.aboveAppetite', portfolio.breaches.length, { n: portfolio.breaches.length }) }}</h3>
+          <p class="meta">
+            {{ t('riskmap.exposure', { from: portfolio.totalInherent, to: portfolio.totalResidual }) }}
+            <strong>{{ pct(portfolio.portfolioEffectiveness) }}</strong>
+            {{ t('riskmap.weightedNote') }}
+          </p>
+        </div>
+        <label class="ap-set">
+          {{ t('riskmap.appetiteLabel') }} <strong>{{ appetite }}</strong>
+          <input type="range" min="1" max="25" v-model.number="appetite" />
+        </label>
+      </div>
+      <div class="ap-list" v-if="portfolio.breaches.length">
+        <button v-for="b in portfolio.breaches" :key="b.id" type="button" class="ap-chip"
+          :class="b.residualBand" @click="selected = b.id">
+          {{ t('riskmap.chip', { id: b.id, score: b.residual }) }}
+        </button>
+      </div>
+      <p v-else class="ap-clear">{{ t('riskmap.allWithin') }}</p>
+      <p v-if="portfolio.issues.length" class="ap-issue">
+        {{ t('riskmap.issues', portfolio.issues.length, { n: portfolio.issues.length }) }}
+      </p>
     </div>
 
     <div class="row">
       <div class="card grid-card">
         <div class="g-meta">
-          <span><span class="lg low"></span>low</span>
-          <span><span class="lg med"></span>medium</span>
-          <span><span class="lg high"></span>high</span>
-          <span><span class="lg critical"></span>critical</span>
+          <span><span class="lg low"></span>{{ t('riskmap.sev.low') }}</span>
+          <span><span class="lg med"></span>{{ t('riskmap.sev.med') }}</span>
+          <span><span class="lg high"></span>{{ t('riskmap.sev.high') }}</span>
+          <span><span class="lg critical"></span>{{ t('riskmap.sev.critical') }}</span>
         </div>
 
         <div class="grid-wrap">
-          <div class="y-axis"><span>Catastrophic</span><span>Major</span><span>Moderate</span><span>Minor</span><span>Negligible</span></div>
+          <div class="y-axis"><span v-for="i in [5,4,3,2,1]" :key="i">{{ t(`riskmap.impact.i${i}`) }}</span></div>
           <div class="grid5">
             <template v-for="p in [5,4,3,2,1]" :key="p">
               <div v-for="l in [1,2,3,4,5]" :key="`${l}-${p}`" class="cell" :class="severity(l, p)">
@@ -90,19 +119,19 @@ const movement = computed(() => {
           </div>
         </div>
         <div class="x-axis">
-          <span>Rare</span><span>Unlikely</span><span>Possible</span><span>Likely</span><span>Certain</span>
+          <span v-for="l in 5" :key="l">{{ t(`riskmap.likelihood.l${l}`) }}</span>
         </div>
-        <div class="axis-lbl x">Likelihood →</div>
-        <div class="axis-lbl y">↑ Impact</div>
+        <div class="axis-lbl x">{{ t('riskmap.axisX') }}</div>
+        <div class="axis-lbl y">{{ t('riskmap.axisY') }}</div>
 
         <div class="summary">
-          <div><div class="s-num critical">{{ summary.critical }}</div><div class="s-lbl">Critical</div></div>
-          <div><div class="s-num high">{{ summary.high }}</div><div class="s-lbl">High</div></div>
-          <div><div class="s-num med">{{ summary.med }}</div><div class="s-lbl">Medium</div></div>
-          <div><div class="s-num low">{{ summary.low }}</div><div class="s-lbl">Low</div></div>
+          <div><div class="s-num critical">{{ summary.critical }}</div><div class="s-lbl">{{ t('riskmap.band.critical') }}</div></div>
+          <div><div class="s-num high">{{ summary.high }}</div><div class="s-lbl">{{ t('riskmap.band.high') }}</div></div>
+          <div><div class="s-num med">{{ summary.med }}</div><div class="s-lbl">{{ t('riskmap.band.med') }}</div></div>
+          <div><div class="s-num low">{{ summary.low }}</div><div class="s-lbl">{{ t('riskmap.band.low') }}</div></div>
           <div class="s-sep"></div>
-          <div><div class="s-num">{{ movement.reduced }}</div><div class="s-lbl">Reduced</div></div>
-          <div><div class="s-num grad-text">{{ movement.avgRed }}%</div><div class="s-lbl">Avg reduction</div></div>
+          <div><div class="s-num">{{ movement.reduced }}</div><div class="s-lbl">{{ t('riskmap.reduced') }}</div></div>
+          <div><div class="s-num grad-text">{{ movement.avgRed }}%</div><div class="s-lbl">{{ t('riskmap.avgReduction') }}</div></div>
         </div>
       </div>
 
@@ -112,35 +141,40 @@ const movement = computed(() => {
           <span class="d-cat" :class="cur.cat.toLowerCase()">{{ cur.cat }}</span>
         </div>
         <h3>{{ cur.title }}</h3>
-        <p class="d-owner">Owner · {{ cur.owner }}</p>
+        <p class="d-owner">{{ t('riskmap.owner') }} {{ cur.owner }}</p>
 
         <div class="movement">
           <div class="m-side">
-            <div class="m-lbl">Inherent</div>
+            <div class="m-lbl">{{ t('riskmap.inherent') }}</div>
             <div class="m-val" :class="severity(cur.i.l, cur.i.p)">{{ cur.i.l * cur.i.p }}</div>
             <div class="m-sub">L{{ cur.i.l }} × I{{ cur.i.p }}</div>
           </div>
           <div class="m-arr">→</div>
           <div class="m-side">
-            <div class="m-lbl">Residual</div>
+            <div class="m-lbl">{{ t('riskmap.residual') }}</div>
             <div class="m-val" :class="severity(cur.r.l, cur.r.p)">{{ cur.r.l * cur.r.p }}</div>
             <div class="m-sub">L{{ cur.r.l }} × I{{ cur.r.p }}</div>
           </div>
           <div class="m-side">
             <div class="m-lbl">Δ</div>
-            <div class="m-val ok">−{{ cur.i.l * cur.i.p - cur.r.l * cur.r.p }}</div>
-            <div class="m-sub">reduction</div>
+            <div class="m-val ok">−{{ curAssessment.inherent - curAssessment.residual }}</div>
+            <div class="m-sub">{{ t('riskmap.effectiveness', { pct: pct(curAssessment.effectiveness) }) }}</div>
           </div>
         </div>
 
-        <div class="kicker">Controls in place</div>
+        <p class="d-appetite" :class="{ over: curAssessment.breach }">
+          {{ t('riskmap.vsAppetite', { score: curAssessment.residual, appetite }) }}
+          <strong>{{ curAssessment.breach ? t('riskmap.over') : t('riskmap.within') }}</strong>
+        </p>
+
+        <div class="kicker">{{ t('riskmap.controls') }}</div>
         <div class="controls">
           <span v-for="c in cur.controls" :key="c" class="ctl">✓ {{ c }}</span>
         </div>
 
         <div class="d-actions">
-          <button class="btn btn-primary sm" type="button">Open mitigation plan</button>
-          <button class="btn btn-ghost sm" type="button">Re-assess</button>
+          <button class="btn btn-primary sm" type="button">{{ t('riskmap.openPlan') }}</button>
+          <button class="btn btn-ghost sm" type="button">{{ t('riskmap.reassess') }}</button>
         </div>
       </div>
     </div>
@@ -149,6 +183,22 @@ const movement = computed(() => {
 
 <style scoped>
 .hm { display: flex; flex-direction: column; gap: 16px; }
+.appetite { padding: 16px 18px; border-left: 3px solid var(--success); }
+.appetite.breached { border-left-color: var(--danger); }
+.ap-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; flex-wrap: wrap; }
+.ap-head h3 { margin: 4px 0 6px; }
+.ap-set { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); flex-shrink: 0; }
+.ap-set input { accent-color: var(--primary); width: 140px; }
+.ap-list { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.ap-chip { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 5px 12px; font-size: 11px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.ap-chip.critical { border-color: rgba(248,113,113,.6); color: #fca5a5; }
+.ap-chip.high { border-color: rgba(251,191,36,.6); color: #fcd34d; }
+.ap-chip:hover { border-color: var(--primary); }
+.ap-clear { font-size: 12px; color: var(--success); margin: 10px 0 0; }
+.ap-issue { font-size: 11px; color: #fbbf24; margin: 8px 0 0; }
+.d-appetite { font-size: 12px; color: var(--text-dim); margin: 12px 0 0; padding-top: 10px; border-top: 1px dashed var(--border); }
+.d-appetite.over strong { color: var(--danger); }
+.d-appetite strong { color: var(--success); }
 .head { padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .kicker { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .1em; }
 .meta { color: var(--text-dim); font-size: 13px; margin: 4px 0 0; }

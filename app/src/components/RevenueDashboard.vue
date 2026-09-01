@@ -1,10 +1,12 @@
 <script setup>
 import { computed } from 'vue'
+import { useFormat } from '../composables/useFormat.js'
+
+const { money, pct } = useFormat()
 
 const mrr = 384000
 const arr = mrr * 12
 const lastMrr = 360000
-const mom = ((mrr - lastMrr) / lastMrr) * 100
 
 const waterfall = [
   { k: 'Starting MRR', value: lastMrr, kind: 'start' },
@@ -33,6 +35,7 @@ const cohorts = [
 const nrr = 116
 const grr = 92
 const totalMrr = plans.reduce((s, p) => s + p.mrr, 0)
+const totalAccts = plans.reduce((s, p) => s + p.accts, 0)
 
 // Compute cumulative for waterfall positioning
 const waterfallPos = computed(() => {
@@ -72,12 +75,12 @@ const waterfallPos = computed(() => {
     <div class="kpi-row">
       <div class="card kpi">
         <div class="kk">MRR</div>
-        <div class="kv grad-text">${{ Math.round(mrr / 1000).toLocaleString() }}k</div>
-        <div class="kd up">▲ +{{ mom.toFixed(1) }}% MoM</div>
+        <div class="kv grad-text">{{ money(mrr, { compact: true }) }}</div>
+        <div class="kd up">▲ {{ pct((mrr - lastMrr) / lastMrr) }} MoM</div>
       </div>
       <div class="card kpi">
         <div class="kk">ARR</div>
-        <div class="kv">${{ (arr / 1e6).toFixed(2) }}M</div>
+        <div class="kv">{{ money(arr, { compact: true }) }}</div>
         <div class="kd dimc">12 × MRR</div>
       </div>
       <div class="card kpi">
@@ -92,12 +95,12 @@ const waterfallPos = computed(() => {
       </div>
       <div class="card kpi">
         <div class="kk">Avg ACV</div>
-        <div class="kv">${{ Math.round(arr / plans.reduce((s, p) => s + p.accts, 0)).toLocaleString() }}</div>
-        <div class="kd dimc">across {{ plans.reduce((s, p) => s + p.accts, 0) }} accounts</div>
+        <div class="kv">{{ money(arr / totalAccts) }}</div>
+        <div class="kd dimc">across {{ totalAccts }} accounts</div>
       </div>
       <div class="card kpi">
         <div class="kk">LTV · estimate</div>
-        <div class="kv">$84.2k</div>
+        <div class="kv">{{ money(84200, { compact: true }) }}</div>
         <div class="kd up">payback 7.2 mo</div>
       </div>
     </div>
@@ -136,9 +139,9 @@ const waterfallPos = computed(() => {
               <div class="pl-fill" :style="{ width: (p.mrr / totalMrr * 100) + '%', background: p.color }"></div>
             </div>
             <div class="pl-foot">
-              <span class="pl-num">${{ Math.round(p.mrr / 1000) }}k MRR</span>
-              <span class="dimc-i">{{ Math.round(p.mrr / totalMrr * 100) }}%</span>
-              <span class="pl-arpu">$${{ Math.round(p.mrr / p.accts) }} ARPU</span>
+              <span class="pl-num">{{ money(p.mrr, { compact: true }) }} MRR</span>
+              <span class="dimc-i">{{ pct(p.mrr / totalMrr, { digits: 0 }) }}</span>
+              <span class="pl-arpu">{{ money(p.mrr / p.accts) }} ARPU</span>
             </div>
           </div>
         </div>

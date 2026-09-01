@@ -5,6 +5,7 @@ import FeatureGrid from '../components/FeatureGrid.vue'
 import AIRecommend from '../components/AIRecommend.vue'
 import CampaignPlanner from '../components/CampaignPlanner.vue'
 import ComplianceCard from '../components/ComplianceCard.vue'
+import TrustJourney from '../components/TrustJourney.vue'
 const { t } = useI18n()
 
 const features = ['f1','f2','f3','f4','f5','f6'].map(k => ({
@@ -39,6 +40,17 @@ const features = ['f1','f2','f3','f4','f5','f6'].map(k => ({
       <SectionHeader title="Campaign Planner"
         subtitle="From a single brief to a fully sequenced launch plan across markets — with budget pacing and creative variants." />
       <CampaignPlanner />
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <SectionHeader
+        :eyebrow="t('product.journey.eyebrow')"
+        :title="t('product.journey.title')"
+        :subtitle="t('product.journey.subtitle')"
+      />
+      <TrustJourney />
     </div>
   </section>
 

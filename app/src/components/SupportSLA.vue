@@ -1,29 +1,32 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { slaStatus } from '../logic/customerSuccess.js'
+import { slaReport, uptimeFromDowntime, DEFAULT_SCHEDULE } from '../logic/slaCredit.js'
+import { useFormat } from '../composables/useFormat.js'
+import { ticketsAt } from '../data/workspace.js'
 
+const { money } = useFormat()
 const now = Date.now()
-function inHours(h) { return new Date(now + h * 3600000).toISOString() }
+const tickets = ref(ticketsAt(now))
 
-const tickets = ref([
-  { id: 'T-8241', title: 'Render queue stuck · JP region',           account: 'Lumen Studios',   sev: 'SEV1', assignee: 'On-call', due: inHours(-0.5), status: 'active',  sla: 1,  age: '3h 24m', csat: null },
-  { id: 'T-8240', title: 'API returning 429 on burst',               account: 'Aurora Media',    sev: 'SEV2', assignee: 'Priya',   due: inHours(4.2),   status: 'active',  sla: 8,  age: '5h 12m', csat: null },
-  { id: 'T-8239', title: 'How to enable multi-market rendering',     account: 'Kaito Beauty',    sev: 'SEV3', assignee: 'Marcus',  due: inHours(38),    status: 'active',  sla: 48, age: '10h',    csat: null },
-  { id: 'T-8238', title: 'SSO SAML metadata rotation',               account: 'Cobalt Legal',    sev: 'SEV2', assignee: 'Priya',   due: inHours(-2),    status: 'active',  sla: 8,  age: '11h',    csat: null },
-  { id: 'T-8237', title: 'Invoice charge dispute · overage',         account: 'Mizu Logistics',  sev: 'SEV3', assignee: 'Sofia',   due: inHours(52),    status: 'active',  sla: 48, age: '4h',     csat: null },
-  { id: 'T-8236', title: 'Bulk export missing 6 renders',            account: 'Northwave',       sev: 'SEV2', assignee: 'Marcus',  due: inHours(6),     status: 'resolved',sla: 8,  age: '2d',     csat: 5 },
-  { id: 'T-8235', title: 'Onboarding walkthrough scheduling',        account: 'Verda Commerce',  sev: 'SEV3', assignee: 'Sofia',   due: inHours(72),    status: 'resolved',sla: 48, age: '2d',     csat: 5 },
-  { id: 'T-8234', title: 'Brand kit sync failed',                    account: 'Lumen Studios',   sev: 'SEV2', assignee: 'Priya',   due: inHours(6),     status: 'resolved',sla: 8,  age: '2d',     csat: 4 }
-])
+// Spec 43 — availability SLA & service credits for the flagship enterprise
+// contract. Downtime this billing period breaches the 99.9% commitment,
+// so a tiered service credit is owed.
+const PERIOD_MIN = 30 * 24 * 60
+const downtimeMin = ref(65) // observed this period
+const commitment = 99.9
+const monthlyFee = 12000
+const availability = computed(() => slaReport({
+  uptimePct: uptimeFromDowntime(downtimeMin.value, PERIOD_MIN),
+  commitment,
+  monthlyFee
+}))
 
 const filter = ref('active')
 const filters = ['active', 'resolved', 'all']
 
-const enriched = computed(() => tickets.value.map(t => {
-  const hoursLeft = (new Date(t.due) - now) / 3600000
-  const pctConsumed = t.status === 'resolved' ? 100 : Math.min(100, (1 - hoursLeft / t.sla) * 100)
-  const breach = hoursLeft < 0 && t.status !== 'resolved'
-  return { ...t, hoursLeft, pctConsumed, breach }
-}))
+// Spec-16: per-ticket SLA math via the logic layer (now injected)
+const enriched = computed(() => tickets.value.map(t => slaStatus(t, now)))
 
 const filtered = computed(() => filter.value === 'all' ? enriched.value : enriched.value.filter(t => t.status === filter.value))
 
@@ -71,6 +74,27 @@ const agents = [
       <div class="card kpi">
         <div class="cn">{{ summary.csat }}</div>
         <div class="cl">CSAT rolling</div>
+      </div>
+    </div>
+
+    <div class="card avail" :class="{ breached: !availability.met }">
+      <div class="av-head">
+        <div>
+          <div class="kicker">Availability SLA · this billing period</div>
+          <h3>Uptime {{ availability.uptimePct.toFixed(3) }}% · commitment {{ commitment }}%</h3>
+          <p class="meta">{{ downtimeMin }} min downtime over 30 days. Service credits are applied automatically to the next invoice.</p>
+        </div>
+        <div class="av-credit">
+          <div class="av-pct" :class="availability.met ? 'ok' : 'risk'">{{ availability.met ? 'SLA met' : availability.creditPct + '%' }}</div>
+          <div class="av-amt" v-if="!availability.met">{{ money(availability.creditAmount) }} credit owed</div>
+        </div>
+      </div>
+      <div class="av-tiers">
+        <div v-for="t in DEFAULT_SCHEDULE" :key="t.minUptime" class="av-tier"
+          :class="{ active: !availability.met && availability.creditPct === t.credit }">
+          <span class="av-band">{{ t.minUptime > 0 ? '≥ ' + t.minUptime + '%' : '< 95%' }}</span>
+          <span class="av-cr">{{ t.credit }}% credit</span>
+        </div>
       </div>
     </div>
 
@@ -202,4 +226,18 @@ const agents = [
   .t th:nth-child(2), .t td:nth-child(2),
   .t th:nth-child(4), .t td:nth-child(4) { display: none; }
 }
+
+.avail { border-left: 3px solid var(--success); }
+.avail.breached { border-left-color: var(--danger); }
+.av-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.av-credit { text-align: right; flex-shrink: 0; }
+.av-pct { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.av-pct.ok { color: var(--success); }
+.av-pct.risk { color: var(--danger); }
+.av-amt { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.av-tiers { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.av-tier { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px; }
+.av-tier.active { border-color: var(--danger); background: rgba(248, 113, 113, .12); }
+.av-band { color: var(--text-dim); }
+.av-cr { font-weight: 700; }
 </style>

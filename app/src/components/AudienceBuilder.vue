@@ -73,7 +73,7 @@ const savedSegments = [
             <select v-model="r.op">
               <option v-for="o in ops" :key="o">{{ o }}</option>
             </select>
-            <input v-model="r.value" placeholder="value" />
+            <input v-model="r.value" placeholder="value" :aria-label="`${r.field} value`" />
             <button class="x" @click="delRule(g, ri)" type="button">×</button>
           </div>
           <div class="g-foot">
@@ -102,7 +102,7 @@ const savedSegments = [
             <select v-model="r.op">
               <option v-for="o in ops" :key="o">{{ o }}</option>
             </select>
-            <input v-model="r.value" placeholder="value" />
+            <input v-model="r.value" placeholder="value" :aria-label="`${r.field} value`" />
             <button class="x" @click="delExclusion(ri)" type="button">×</button>
           </div>
         </div>

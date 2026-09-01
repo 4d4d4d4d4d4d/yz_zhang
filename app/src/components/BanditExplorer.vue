@@ -1,57 +1,41 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, computed } from 'vue'
+import { createBandit } from '../logic/bandit.js'
 
-const arms = ref([
-  { id: 'A', name: 'UGC Reel · JP',        truth: 0.052, alpha: 1, beta: 1, pulls: 0, conv: 0, share: 25, color: '#7c5cff' },
-  { id: 'B', name: 'Founder POV · US',     truth: 0.038, alpha: 1, beta: 1, pulls: 0, conv: 0, share: 25, color: '#22d3ee' },
-  { id: 'C', name: 'Before/After · KR',    truth: 0.061, alpha: 1, beta: 1, pulls: 0, conv: 0, share: 25, color: '#ff7ad9' },
-  { id: 'D', name: 'Spec Bumper · DE',     truth: 0.028, alpha: 1, beta: 1, pulls: 0, conv: 0, share: 25, color: '#34d399' }
-])
+const ARM_META = [
+  { id: 'A', name: 'UGC Reel · JP',     truth: 0.052, color: '#7c5cff' },
+  { id: 'B', name: 'Founder POV · US',  truth: 0.038, color: '#22d3ee' },
+  { id: 'C', name: 'Before/After · KR', truth: 0.061, color: '#ff7ad9' },
+  { id: 'D', name: 'Spec Bumper · DE',  truth: 0.028, color: '#34d399' }
+]
+
+const bandit = createBandit(ARM_META, { epsilon: 0.15 })
+
 const epsilon = ref(0.15)
-const regret = ref([])
-const cumReward = ref(0)
-const cumOptimal = ref(0)
 const running = ref(true)
+const snap = ref(bandit.snapshot())
 
-const totalPulls = computed(() => arms.value.reduce((s, a) => s + a.pulls, 0))
-const bestTruth = computed(() => Math.max(...arms.value.map(a => a.truth)))
+watch(epsilon, v => bandit.setEpsilon(v))
 
-function thompson(a) {
-  // Beta(alpha, beta) sample via simple mean+noise approx
-  const mean = a.alpha / (a.alpha + a.beta)
-  const variance = (a.alpha * a.beta) / (Math.pow(a.alpha + a.beta, 2) * (a.alpha + a.beta + 1))
-  return Math.max(0, Math.min(1, mean + (Math.random() - .5) * Math.sqrt(variance) * 4))
-}
-
-function step() {
-  const explore = Math.random() < epsilon.value
-  let chosen
-  if (explore) chosen = arms.value[Math.floor(Math.random() * arms.value.length)]
-  else {
-    const samples = arms.value.map(a => ({ a, s: thompson(a) }))
-    samples.sort((x, y) => y.s - x.s)
-    chosen = samples[0].a
-  }
-  const reward = Math.random() < chosen.truth ? 1 : 0
-  chosen.pulls++
-  if (reward) { chosen.conv++; chosen.alpha++ } else { chosen.beta++ }
-
-  cumReward.value += reward
-  cumOptimal.value += bestTruth.value
-  regret.value.push(cumOptimal.value - cumReward.value)
-  if (regret.value.length > 200) regret.value.shift()
-
-  const totalPlus = arms.value.reduce((s, a) => s + a.alpha, 0)
-  for (const a of arms.value) a.share = Math.round((a.alpha / totalPlus) * 100)
-}
+const arms = computed(() => snap.value.arms.map((a, i) => ({ ...a, ...ARM_META[i] })))
+const regret = computed(() => snap.value.regret)
+const cumReward = computed(() => snap.value.cumReward)
+const cumOptimal = computed(() => snap.value.cumOptimal)
+const totalPulls = computed(() => snap.value.totalPulls)
 
 let timer
-onMounted(() => { timer = setInterval(() => { if (running.value) for (let i = 0; i < 4; i++) step() }, 150) })
+onMounted(() => {
+  timer = setInterval(() => {
+    if (!running.value) return
+    for (let i = 0; i < 4; i++) bandit.step()
+    snap.value = bandit.snapshot()
+  }, 150)
+})
 onBeforeUnmount(() => clearInterval(timer))
 
 function reset() {
-  for (const a of arms.value) { a.alpha = 1; a.beta = 1; a.pulls = 0; a.conv = 0; a.share = 25 }
-  regret.value = []; cumReward.value = 0; cumOptimal.value = 0
+  bandit.reset()
+  snap.value = bandit.snapshot()
 }
 
 const regretPath = computed(() => {

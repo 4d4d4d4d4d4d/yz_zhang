@@ -1,10 +1,11 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { compositeFit } from '../logic/matching.js'
 
 const partners = [
   {
     id: 'lumen', name: 'Lumen Studios', kind: 'Creative agency', city: 'Tokyo, JP',
-    years: 9, headcount: '40–80', score: 94,
+    years: 9, headcount: '40–80',
     badges: ['KYB verified', 'Identity verified', 'APPI compliant', 'Bank verified'],
     tags: ['Beauty', 'Fashion', 'Premium DTC'],
     bio: 'Tokyo-based creative agency. Built campaigns for Shiseido, Uniqlo, and 3 unicorn DTC brands. Won 2024 Spikes Asia silver.',
@@ -16,7 +17,7 @@ const partners = [
   },
   {
     id: 'aurora', name: 'Aurora Media', kind: 'Media buying', city: 'Singapore, SG',
-    years: 6, headcount: '20–50', score: 91,
+    years: 6, headcount: '20–50',
     badges: ['KYB verified', 'Identity verified', 'PDPA compliant'],
     tags: ['Beauty', 'Food', 'APAC'],
     bio: 'Media buying specialist for APAC beauty DTC. Managed $40M in 2024 with average 3.6× ROAS.',
@@ -28,7 +29,7 @@ const partners = [
   },
   {
     id: 'northwave', name: 'Northwave Partners', kind: 'Distribution', city: 'São Paulo, BR',
-    years: 11, headcount: '80–200', score: 88,
+    years: 11, headcount: '80–200',
     badges: ['KYB verified', 'Identity verified', 'LGPD compliant', 'Insurance verified'],
     tags: ['SaaS', 'Tech', 'LATAM'],
     bio: 'B2B SaaS distribution across LATAM. 200+ enterprise relationships in BR, MX, AR.',
@@ -40,7 +41,7 @@ const partners = [
   },
   {
     id: 'cobalt', name: 'Cobalt Legal', kind: 'Compliance partner', city: 'Berlin, DE',
-    years: 14, headcount: '10–20', score: 90,
+    years: 14, headcount: '10–20',
     badges: ['Bar verified', 'GDPR specialist', 'KYB verified'],
     tags: ['Legal', 'GDPR', 'CCPA', 'APPI'],
     bio: 'Cross-border DPA, terms and IP — beauty, SaaS and consumer tech focus.',
@@ -52,8 +53,21 @@ const partners = [
   }
 ]
 
+// Spec 54 — the headline score was asserted per partner alongside a fit
+// breakdown that disagreed with it: Cobalt's asserted 90 outranked Northwave's
+// 88, but their own bars weight out to 87.3 vs 87.5. The score is now the
+// weighted composite of those bars, so the two can never contradict.
+const ranked = computed(() =>
+  partners
+    .map(p => {
+      const { score, contributions } = compositeFit(p.fit)
+      return { ...p, score: Math.round(score * 10) / 10, contributions }
+    })
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+)
+
 const active = ref(partners[0].id)
-const current = computed(() => partners.find(p => p.id === active.value))
+const current = computed(() => ranked.value.find(p => p.id === active.value))
 const opener = computed(() => `Hello ${current.value.name.split(' ')[0]} team,\n\nWe are exploring a partnership for our upcoming launch in ${current.value.city.split(',')[1].trim()}. Based on your work with ${current.value.tags[0].toLowerCase()} brands and your ${current.value.years}-year track record, we believe there's a strong fit.\n\nCould we book a 30-minute intro this week to walk through scope, timeline and commercial structure?\n\nBest regards,`)
 
 const inbox = [
@@ -68,9 +82,9 @@ const inbox = [
     <div class="card list">
       <div class="lh">
         <h3>Network</h3>
-        <span class="meta">{{ partners.length }} matched</span>
+        <span class="meta">{{ ranked.length }} matched · ranked by fit</span>
       </div>
-      <button v-for="p in partners" :key="p.id"
+      <button v-for="p in ranked" :key="p.id"
         class="pli" :class="{ on: active === p.id }"
         @click="active = p.id" type="button">
         <div class="logo" :style="{ background: `linear-gradient(135deg, hsl(${p.name.length * 24}, 80%, 65%), hsl(${(p.name.length * 24 + 60) % 360}, 80%, 55%))` }">{{ p.name[0] }}</div>
@@ -108,11 +122,15 @@ const inbox = [
         <p class="bio">{{ current.bio }}</p>
 
         <div class="fit">
-          <div class="kicker">Fit breakdown</div>
+          <div class="kicker">Fit breakdown · weighted composite = {{ current.score }}</div>
           <div class="fit-grid">
-            <div v-for="f in current.fit" :key="f.k">
-              <div class="frow"><span>{{ f.k }}</span><span>{{ f.v }}</span></div>
-              <div class="bt"><div class="bf" :style="{ width: f.v + '%' }"></div></div>
+            <div v-for="c in current.contributions" :key="c.k">
+              <div class="frow">
+                <span>{{ c.k }} <em class="fw">×{{ c.weight.toFixed(2) }}</em></span>
+                <span>{{ c.v }}</span>
+              </div>
+              <div class="bt"><div class="bf" :style="{ width: c.v + '%' }"></div></div>
+              <div class="fcontrib">contributes {{ c.contribution.toFixed(1) }}</div>
             </div>
           </div>
         </div>
@@ -187,6 +205,8 @@ const inbox = [
 .kicker { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 10px; }
 .fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
 .frow { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; color: var(--text-dim); }
+.fw { font-style: normal; font-size: 10px; opacity: .7; }
+.fcontrib { font-size: 10px; color: var(--text-dim); margin-top: 3px; font-variant-numeric: tabular-nums; }
 .bt { height: 4px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
 .bf { height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-2)); }
 

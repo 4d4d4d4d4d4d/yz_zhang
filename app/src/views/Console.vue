@@ -1,134 +1,83 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, defineAsyncComponent } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { SECTIONS } from '../console/registry.js'
+import { recordSection, prefs } from '../store/workspace.js'
 
 import SecurityRibbon  from '../components/SecurityRibbon.vue'
+import NotificationCenter from '../components/NotificationCenter.vue'
+import ModuleBoundary     from '../components/ModuleBoundary.vue'
 import SubTabs         from '../components/SubTabs.vue'
 import LiveActivityFeed from '../components/LiveActivityFeed.vue'
+import PanelSkeleton   from '../components/PanelSkeleton.vue'
+import { loadSection, prefetchSection } from '../console/panels.js'
+import { prefetchOrder, requestIdle } from '../logic/prefetch.js'
 
-import RecommendDeep     from '../components/RecommendDeep.vue'
-import RecommendAdvanced from '../components/RecommendAdvanced.vue'
-import ModelRegistry     from '../components/ModelRegistry.vue'
-import BanditExplorer    from '../components/BanditExplorer.vue'
-import FeatureStore      from '../components/FeatureStore.vue'
-import ExperimentManager from '../components/ExperimentManager.vue'
-import UsageMetering     from '../components/UsageMetering.vue'
-import PersonalizationDash from '../components/PersonalizationDash.vue'
 
-import MarketingHub        from '../components/MarketingHub.vue'
-import MarketingControl    from '../components/MarketingControl.vue'
-import AttributionWaterfall from '../components/AttributionWaterfall.vue'
-import AudienceBuilder     from '../components/AudienceBuilder.vue'
-import CohortRetention     from '../components/CohortRetention.vue'
-import ForecastSim         from '../components/ForecastSim.vue'
-import RevenueDashboard    from '../components/RevenueDashboard.vue'
-import UpsellEngine        from '../components/UpsellEngine.vue'
 
-import BusinessMatchHub from '../components/BusinessMatchHub.vue'
-import PipelineBoard    from '../components/PipelineBoard.vue'
-import AccountIntel     from '../components/AccountIntel.vue'
-import OutreachSequence from '../components/OutreachSequence.vue'
-import SalesForecast    from '../components/SalesForecast.vue'
-import TerritoryQuota   from '../components/TerritoryQuota.vue'
-import OrderBook       from '../components/OrderBook.vue'
-import MarketplaceCommission from '../components/MarketplaceCommission.vue'
 
-import DealRoom              from '../components/DealRoom.vue'
-import NegotiationPlaybook   from '../components/NegotiationPlaybook.vue'
-import ApprovalFlow          from '../components/ApprovalFlow.vue'
-import ClauseLibrary         from '../components/ClauseLibrary.vue'
-import ObligationTracker     from '../components/ObligationTracker.vue'
-import ContractAnalytics     from '../components/ContractAnalytics.vue'
-import CPQEditor             from '../components/CPQEditor.vue'
-import RevenueRecognition    from '../components/RevenueRecognition.vue'
 
-import TrustCenter      from '../components/TrustCenter.vue'
-import ControlsRegister from '../components/ControlsRegister.vue'
-import RiskHeatmap      from '../components/RiskHeatmap.vue'
-import DPIAWorkflow     from '../components/DPIAWorkflow.vue'
-import AuditRoom        from '../components/AuditRoom.vue'
-import PolicyManagement from '../components/PolicyManagement.vue'
-import CustomerHealth   from '../components/CustomerHealth.vue'
-import SupportSLA       from '../components/SupportSLA.vue'
+
+
 
 const { t } = useI18n()
 const route = useRoute()
 
-const sections = [
-  {
-    key: 'recommend', icon: '🧠',
-    sub: [
-      { v: 'inputs',     label: 'Inputs · ranking',         comp: RecommendDeep },
-      { v: 'agents',     label: 'Agent pipeline',           comp: RecommendAdvanced },
-      { v: 'registry',   label: 'Model registry · canary',  comp: ModelRegistry },
-      { v: 'bandit',     label: 'Live bandit',              comp: BanditExplorer },
-      { v: 'features',   label: 'Feature store',            comp: FeatureStore },
-      { v: 'experiments',label: 'Experiments',              comp: ExperimentManager },
-      { v: 'metering',   label: 'Usage · billing',          comp: UsageMetering },
-      { v: 'tenant',     label: 'Tenant impact',            comp: PersonalizationDash }
-    ]
-  },
-  {
-    key: 'marketing', icon: '📈',
-    sub: [
-      { v: 'overview',    label: 'Overview',              comp: MarketingHub },
-      { v: 'control',     label: 'Campaigns · A/B · geo', comp: MarketingControl },
-      { v: 'attribution', label: 'Attribution',           comp: AttributionWaterfall },
-      { v: 'audience',    label: 'Audience builder',      comp: AudienceBuilder },
-      { v: 'retention',   label: 'Cohort retention',      comp: CohortRetention },
-      { v: 'forecast',    label: 'What-if forecast',      comp: ForecastSim },
-      { v: 'revenue',     label: 'SaaS revenue',          comp: RevenueDashboard },
-      { v: 'upsell',      label: 'Upsell engine',         comp: UpsellEngine }
-    ]
-  },
-  {
-    key: 'partners', icon: '🤝',
-    sub: [
-      { v: 'network',  label: 'Network profile', comp: BusinessMatchHub },
-      { v: 'pipeline', label: 'Pipeline board',  comp: PipelineBoard },
-      { v: 'intel',    label: 'Account intel',   comp: AccountIntel },
-      { v: 'outreach', label: 'Outreach cadence',comp: OutreachSequence },
-      { v: 'forecast', label: 'Sales forecast',  comp: SalesForecast },
-      { v: 'territory',label: 'Territory · quota', comp: TerritoryQuota },
-      { v: 'orders',   label: 'Order book',      comp: OrderBook },
-      { v: 'commission',label:'Marketplace · commission', comp: MarketplaceCommission }
-    ]
-  },
-  {
-    key: 'deals', icon: '📝',
-    sub: [
-      { v: 'room',         label: 'Deal room',                comp: DealRoom },
-      { v: 'playbook',     label: 'Playbook · ZOPA · redline',comp: NegotiationPlaybook },
-      { v: 'workflow',     label: 'Approval workflow',        comp: ApprovalFlow },
-      { v: 'library',      label: 'Clause library',           comp: ClauseLibrary },
-      { v: 'obligations',  label: 'Obligations',              comp: ObligationTracker },
-      { v: 'analytics',    label: 'CLM analytics',            comp: ContractAnalytics },
-      { v: 'cpq',          label: 'CPQ · quote',              comp: CPQEditor },
-      { v: 'revrec',       label: 'Rev recognition',          comp: RevenueRecognition }
-    ]
-  },
-  {
-    key: 'trust', icon: '🛡',
-    sub: [
-      { v: 'posture',  label: 'Posture',         comp: TrustCenter },
-      { v: 'controls', label: 'Controls · DSR',  comp: ControlsRegister },
-      { v: 'heatmap',  label: 'Risk heatmap',    comp: RiskHeatmap },
-      { v: 'dpia',     label: 'DPIA workflow',   comp: DPIAWorkflow },
-      { v: 'audit',    label: 'Audit room',      comp: AuditRoom },
-      { v: 'policies', label: 'Policies · training', comp: PolicyManagement },
-      { v: 'health',   label: 'Customer health', comp: CustomerHealth },
-      { v: 'support',  label: 'Support · SLA',   comp: SupportSLA }
-    ]
-  }
-]
+// Component wiring stays in the view (it imports .vue files); the
+// structure (keys, order, sub list) comes from the single-source
+// registry (spec 20). Keyed by `section/sub`.
+
+// Spec 59 — each panel is an async component backed by its section's chunk.
+// The first panel of a section pulls the chunk; its siblings then resolve from
+// cache, so flicking through sub-tabs costs nothing after the first.
+const sections = SECTIONS.map(s => ({
+  key: s.key,
+  icon: s.icon,
+  sub: s.subs.map(v => ({
+    v,
+    comp: defineAsyncComponent({
+      loader: () => loadSection(s.key).then(panels => {
+        const comp = panels[v]
+        if (!comp) throw new Error(`Console: no component wired for ${s.key}/${v}`)
+        return comp
+      }),
+      loadingComponent: PanelSkeleton,
+      // Below this, the chunk usually lands first and a skeleton would only
+      // flash. ModuleBoundary catches a genuine failure.
+      delay: 180
+    })
+  }))
+}))
 
 const active = computed(() => sections.find(s => s.key === route.params.tab) || sections[0])
 
-const subTab = ref(active.value.sub[0].v)
-watch(() => active.value.key, () => { subTab.value = active.value.sub[0].v })
+// ?sub= deep link (spec 24): palette hits and share links can target a sub-tab.
+const requestedSub = () => {
+  const q = route.query.sub
+  return active.value.sub.some(s => s.v === q) ? q : active.value.sub[0].v
+}
+const subTab = ref(requestedSub())
+watch(() => [active.value.key, route.query.sub], () => { subTab.value = requestedSub() })
 
-const subTabs = computed(() => active.value.sub.map(s => ({ v: s.v, label: s.label })))
+// Spec 32 — remember visited sections for the ⌘K empty-query jump list.
+watch(() => active.value.key, k => recordSection(k), { immediate: true })
+
+// Spec 59 — warm the sections the reader is most likely to open next, once the
+// current one has painted. Speculative and failure-tolerant: a prefetch that
+// does not arrive costs nothing, because the click path loads it anyway.
+watch(() => active.value.key, k => {
+  for (const key of prefetchOrder(SECTIONS.map(s => s.key), k, prefs.recents)) {
+    prefetchSection(key)
+  }
+})
+onMounted(() => requestIdle(() => {
+  for (const key of prefetchOrder(SECTIONS.map(s => s.key), active.value.key, prefs.recents)) {
+    prefetchSection(key)
+  }
+}))
+
+const subTabs = computed(() => active.value.sub.map(s => ({ v: s.v, label: t(`console.tabs.${active.value.key}.${s.v}`) })))
 const activeComp = computed(() => active.value.sub.find(s => s.v === subTab.value)?.comp)
 </script>
 
@@ -164,13 +113,20 @@ const activeComp = computed(() => active.value.sub.find(s => s.v === subTab.valu
         <SecurityRibbon />
 
         <div class="m-head">
-          <h2 class="grad-text">{{ t(`console.s.${active.key}.title`) }}</h2>
+          <div class="m-title">
+            <h2 class="grad-text">{{ t(`console.s.${active.key}.title`) }}</h2>
+            <NotificationCenter />
+          </div>
           <p>{{ t(`console.s.${active.key}.sub`) }}</p>
         </div>
 
         <SubTabs v-model="subTab" :tabs="subTabs" />
 
-        <component :is="activeComp" :key="active.key + '/' + subTab" />
+        <ModuleBoundary :key="active.key + '/' + subTab">
+          <div class="panel" :data-panel="active.key + '/' + subTab">
+            <component :is="activeComp" />
+          </div>
+        </ModuleBoundary>
 
         <LiveActivityFeed />
       </main>
@@ -200,6 +156,7 @@ const activeComp = computed(() => active.value.sub.find(s => s.v === subTab.valu
 
 .main { min-width: 0; }
 .m-head { margin-bottom: 20px; }
+.m-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .m-head h2 { font-size: 32px; }
 .m-head p { margin: 6px 0 0; color: var(--text-dim); }
 

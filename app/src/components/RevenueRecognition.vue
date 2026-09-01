@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { buildSchedule } from '../logic/revrec.js'
 
 const contracts = ref([
   { id: 'C-204', name: 'Lumen Studios',       tcv: 840000, start: 0, term: 12, obligations: [
@@ -22,38 +23,14 @@ const selected = ref('C-204')
 const cur = computed(() => contracts.value.find(c => c.id === selected.value))
 const months = 12
 
-// Build monthly schedule for current contract
-const schedule = computed(() => {
-  const arr = Array.from({ length: months }, (_, i) => ({ month: i + 1, obligations: {} }))
-  for (const o of cur.value.obligations) {
-    for (let m = 0; m < months; m++) {
-      let val = 0
-      if (o.kind === 'ratable') {
-        if (m >= o.start && m < o.end) val = o.amount / (o.end - o.start)
-      } else if (o.kind === 'point-in-time') {
-        if (m === o.start) val = o.amount
-      } else if (o.kind === 'milestone') {
-        // Split into 3 equal milestones
-        const step = (o.end - o.start) / 3
-        for (let i = 0; i < 3; i++) {
-          if (Math.floor(o.start + step * i) === m) val += o.amount / 3
-        }
-      }
-      arr[m].obligations[o.name] = val
-    }
-  }
-  return arr
-})
-
-const monthlyTotals = computed(() => schedule.value.map(row => Object.values(row.obligations).reduce((s, v) => s + v, 0)))
-const monthlyMax = computed(() => Math.max(...monthlyTotals.value))
-const totalRecognized = computed(() => monthlyTotals.value.reduce((s, v) => s + v, 0))
-const totalDeferred = computed(() => cur.value.tcv - totalRecognized.value)
-
-const cumulative = computed(() => {
-  let acc = 0
-  return monthlyTotals.value.map(v => (acc += v))
-})
+// Monthly schedule via the spec-15 rev-rec engine
+const built = computed(() => buildSchedule(cur.value, months))
+const schedule = computed(() => built.value.rows)
+const monthlyTotals = computed(() => built.value.monthlyTotals)
+const monthlyMax = computed(() => Math.max(...built.value.monthlyTotals))
+const totalRecognized = computed(() => built.value.recognized)
+const totalDeferred = computed(() => built.value.deferred)
+const cumulative = computed(() => built.value.cumulative)
 
 const colors = { 'Platform · sub': '#7c5cff', 'Onboarding': '#22d3ee', 'Training': '#ff7ad9', 'GPU commit rebate': '#34d399', 'Prof services': '#fcd34d' }
 
