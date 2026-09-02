@@ -1,10 +1,54 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V57 全批次完成（2026-08-27）。
-> 后端 522 tests + 前端 42 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V58 全批次完成（2026-08-28）。
+> 后端 532 tests + 前端 42 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V58 批次：同一个动作两条路，最常走的那条抄了近道）
+
+> 模块 spec：[33-moderation-actions.md](33-moderation-actions.md)
+>
+> **检视结论**：封禁一个用户在这个系统里有两条路，做的事完全不一样。
+>
+> `/admin/users/{id}/ban`（OPS-013 那条，写得很仔细）：算影响面 →
+> 通知在途合约对手方 → 关闭待处理报名并通知 → 走状态机下架挂单 → 记审计。
+>
+> `/admin/reports/{id}/resolve` 且 `action="ban_user"`（**审核队列**那条）：
+>
+> ```python
+> user.is_banned = True
+> db.add(user)
+> ```
+>
+> **就这两行，上面五件事一件都没做。** 而审核队列恰恰是审核员日常真正在用的
+> 那个界面——写得仔细的那条反而在另一个页面上，用得更少。
+>
+> 后果不是「少了点提示」：在途合约的对手方**永远不会被告知**他的钱还托管在
+> 一个已被封禁、永远不会来验收的人那里。OPS-013 整节就是为了防止这件事，
+> 结果最常用的入口把它完全绕开了。而这个函数的 docstring 写着
+> 「处置留痕（RISK-002/006）」——**它一条审计都没记**。
+>
+> 同一个函数里还有一处绕过状态机：`task.status = "cancelled"` 直接赋值，
+> 不派发 `task.cancelled` 事件。今天只是少个事件（当前订阅者恰好提前返回），
+> 但**下一个给这个事件加订阅者的人——比如托管退款——会发现它在这条路径上
+> 根本不触发**。发布者也收不到任何通知：任务就这么消失了，无从申诉。
+>
+> 和 [32 号](32-job-orchestration.md) 是同一类问题的另一种形态：
+> 32 号是「同一份清单抄在两处」→ 漂移；这里是「同一个动作实现在两处」→
+> **能力不对等**。两者都不会报错，区别只在于后者错在**用户的钱和知情权**。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **MOD-001 单一实现** | 处置副作用全部收进 `admin/service.py`：`ban_user()` / `takedown_task()` / `takedown_content()`，两个端点都调它，端点只管鉴权取参 | 全量回归 532 tests |
+| **MOD-023 两条路径逐项对等（核心用例）** | 同样的封禁，从审核队列进和从用户页进，封禁状态/挂单状态/待处理报名数快照必须一模一样 | `tests/test_moderation_actions.py::test_mod023_both_ban_paths_have_identical_side_effects` |
+| **MOD-020 对手方通知** | 在途合约对手方必须被告知——他的钱还托管在一个被封的人那里 | `::test_mod020_ban_from_report_queue_notifies_the_counterparty` |
+| **MOD-021 报名关闭** | 报名者不该继续等一个永远没人来选他的任务 | `::test_mod021_ban_from_report_queue_closes_pending_applications` |
+| **MOD-022 挂单下架走状态机** | 走了 `transition()` 才有 `task.cancelled` 事件；断言发件箱里确实有这条事件 | `::test_mod022_ban_from_report_queue_takes_down_listings_via_the_state_machine` |
+| **MOD-003/024 下架要告诉受影响的人** | 发布者收到**带原因**的通知（否则无从申诉），报名者收到关闭通知；已成交（有托管）的任务**拒绝**被审核单方作废，指向纠纷流程 | `::test_mod024_task_takedown_notifies_creator_and_applicants`、`::test_takedown_refuses_tasks_that_already_have_escrow` |
+| **MOD-004/025 每次处置都记审计（含驳回）** | 驳回同样是决定：谁在什么时候驳回了哪条举报，是事后复盘的关键。只写 `report.handled_by` 不够——审计日志按动作查询时看不到它 | `::test_mod025_every_resolution_including_dismiss_is_audited`、`::test_takedown_and_ban_actions_are_individually_queryable` |
+| **MOD-011/026 状态机唯一入口机器强制** | 全仓库 **AST** 扫描：`task.status = ` 只允许出现在 `transition()` 内。用 AST 而不是正则——第一版正则把**讲这件事的文档字符串**也当成了违规 | `::test_mod026_nothing_bypasses_the_state_machine` |
 
 ## 已实现（V57 批次：从来没有被架起来过的那道安全网）
 

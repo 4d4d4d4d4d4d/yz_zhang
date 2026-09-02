@@ -153,31 +153,35 @@ def resolve_report(
         raise not_found("举报不存在或已处理")
     if body.action not in ("dismiss", "remove_content", "ban_user"):
         raise bad_request("非法处置动作", "invalid_action")
+    # MOD-001 处置副作用全部走 admin/service 的单一实现。
+    # 此前这里是两行 `user.is_banned = True`——影响面、对手方通知、报名关闭、
+    # 挂单下架、审计一件都没做，而**审核队列恰恰是审核员日常真正在用的界面**。
+    from . import service as admin_service
+
+    reason = f"举报处置 #{report.id}：{report.reason[:80]}"
+    detail = {}
     if body.action == "remove_content":
         if report.target_type == "content":
-            content = db.get(Content, report.target_id)
-            if content:
-                content.status = "removed"
-                db.add(content)
+            detail = admin_service.takedown_content(db, admin.id, report.target_id, reason)
         elif report.target_type == "task":
-            task = db.get(Task, report.target_id)
-            if task and task.status in ("draft", "published"):
-                task.status = "cancelled"
-                db.add(task)
+            detail = admin_service.takedown_task(db, admin.id, report.target_id, reason)
     elif body.action == "ban_user":
         target_user_id = report.target_id
         if report.target_type == "content":
             content = db.get(Content, report.target_id)
             target_user_id = content.author_id if content else 0
-        user = db.get(User, target_user_id)
-        if user:
-            user.is_banned = True
-            db.add(user)
+        if target_user_id:
+            detail = admin_service.ban_user(db, admin.id, target_user_id, reason)
     report.status = "resolved"
     report.action = body.action
     report.handled_by = admin.id
     db.add(report)
-    return {"id": report.id, "status": "resolved", "action": body.action}
+    # MOD-004 每一次处置都记审计，**包括驳回**——谁在什么时候驳回了哪条举报，
+    # 是事后复盘的关键。只写 report.handled_by 不够：审计日志按动作查询时看不到它
+    record_audit(db, admin.id, f"report_{body.action}", report.target_type,
+                 report.target_id, f"举报 #{report.id}：{report.reason[:200]}")
+    return {"id": report.id, "status": "resolved", "action": body.action,
+            "effect": detail}
 
 
 # ---------- 工单处理（CS-010/013） ----------
@@ -234,94 +238,22 @@ def list_users(
     ]
 
 
-def _ban_impact(db, user_id: int) -> dict:
-    """OPS-013 封禁影响面：在途合约 / 托管资金 / 钱包余额。
-
-    封禁会让该用户无法交付或验收，其对手方的托管资金将被无限期困住——
-    封禁前必须让管理员看见这个爆炸半径。
-    """
-    from app.modules.wallet.service import get_or_create
-
-    in_flight = (
-        db.query(Contract)
-        .filter(
-            (Contract.requester_id == user_id) | (Contract.executor_id == user_id),
-            Contract.status.in_(("pending_signatures", "signed", "funded")),
-        )
-        .all()
-    )
-    acct = get_or_create(db, user_id)
-    # 未成交的挂单：封禁后无人能选人，须下架，否则工人白报名空等
-    open_tasks = (
-        db.query(Task)
-        .filter(Task.creator_id == user_id, Task.status.in_(("draft", "published")))
-        .all()
-    )
-    return {
-        "in_flight_contracts": [
-            {"contract_id": c.id, "task_id": c.task_id, "status": c.status,
-             "amount_cents": c.amount_cents,
-             "counterparty_id": c.executor_id if c.requester_id == user_id else c.requester_id}
-            for c in in_flight
-        ],
-        "in_flight_count": len(in_flight),
-        "escrow_at_risk_cents": sum(
-            c.amount_cents - c.released_cents for c in in_flight if c.status == "funded"
-        ),
-        "open_task_ids": [t.id for t in open_tasks],
-        "open_task_count": len(open_tasks),
-        "wallet": {"available_cents": acct.available_cents,
-                   "escrow_cents": acct.escrow_cents, "frozen_cents": acct.frozen_cents},
-    }
-
-
 @router.get("/admin/users/{user_id}/ban-impact")
 def ban_impact(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     """OPS-013 封禁前预览影响面（不产生副作用）。"""
     if not db.get(User, user_id):
         raise not_found("用户不存在")
-    return _ban_impact(db, user_id)
+    from . import service as admin_service
+
+    return admin_service.ban_impact(db, user_id)
 
 
 @router.post("/admin/users/{user_id}/ban")
 def ban_user(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    user = db.get(User, user_id)
-    if not user:
-        raise not_found("用户不存在")
-    if user.is_admin:
-        raise bad_request("不能封禁管理员", "cannot_ban_admin")
-    impact = _ban_impact(db, user_id)
-    user.is_banned = True
-    db.add(user)
-    # OPS-013 通知在途合约的对手方：被封用户无法再交付/验收，
-    # 请及时取消或发起纠纷，避免托管资金无限期困住。
-    from app.modules.notification.service import notify
+    """OPS-013 封禁：影响面、对手方通知、挂单下架、审计——见 admin/service。"""
+    from . import service as admin_service
 
-    for c in impact["in_flight_contracts"]:
-        notify(db, c["counterparty_id"], "task", "对方账号已被封禁",
-               f"任务 #{c['task_id']}（合约 #{c['contract_id']}）的对方账号已被平台封禁，"
-               "无法继续履约。请尽快取消任务或发起纠纷，以便结清托管资金。")
-    # OPS-013 下架未成交挂单：封禁后无人能选人，留在广场只会让工人白报名空等
-    from app.modules.task.models import Application
-    from app.modules.task.service import transition
-
-    for task_id in impact["open_task_ids"]:
-        task = db.get(Task, task_id)
-        if not task:
-            continue
-        pending = db.query(Application).filter(
-            Application.task_id == task_id, Application.status == "pending"
-        ).all()
-        for a in pending:
-            a.status = "rejected"
-            db.add(a)
-            notify(db, a.applicant_id, "task", "报名的任务已下架",
-                   f"《{task.title}》的发布方账号已被封禁，任务已下架，你的报名已自动关闭。")
-        transition(db, task, "cancelled", {"cancelled_by": "system_creator_banned"})
-    record_audit(db, admin.id, "ban_user", "user", user_id,
-                 f"在途合约 {impact['in_flight_count']} 笔，涉险托管 {impact['escrow_at_risk_cents']} 分，"
-                 f"下架挂单 {impact['open_task_count']} 个")
-    return {"id": user.id, "is_banned": True, "impact": impact}
+    return admin_service.ban_user(db, admin.id, user_id)
 
 
 @router.post("/admin/users/{user_id}/unban")
