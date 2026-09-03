@@ -11,6 +11,8 @@ Owners：架构组
 | [架构 YAML 编写指南](../YAML-Authoring-Guide.md) | **怎么写评估 YAML** — 骨架、base/overrides、全模块 config/端口参考、CLI、常见坑、完整配方 |
 | [保真度审计](../Fidelity-Audit.md) | **这些 PPA 数字有多可信** — 机制真实 vs 绝对系数;信任矩阵 |
 | [物理模型验证](../Physical-Validation.md) | SPEC-013 绝对面积/能量 vs 公开 45nm 参考(全部区间内) |
+| [平台能力评估](../Platform-Capability-Assessment.md) | **平台能做/不能做什么** — 已实现 vs 缺失(🔴 数据搬运/带宽建模是最大缺口)+ 优先级 |
+| [NPU 设计研究案例](../NPU-Design-Study.md) | 从零对 encoder 比较三种设计的完整 PPA 验证(`examples/design_study_encoder.py`) |
 | [评估报告](../EVALUATION_REPORT.md) | 40+ use case 的实测 delta 表(`scripts/run_all_evaluations.py` 一键重跑) |
 | [QEMU 对标分析](../QEMU-Benchmark-Analysis.md) | 平台定位 + 4 项改进空间 |
 
@@ -93,6 +95,24 @@ v1.0 已 Accepted,以此为契约启动实现。任何与 spec 不符的实现�
 | Phase 5 | 校准与 Use Case | DAGC/DSB/MAC 校准记录、AGU-W 减半 use case 端到端跑通 |
 
 ### v1.1 候选项
+
+源自平台能力评估(`docs/Platform-Capability-Assessment.md`,按优先级):
+- 🔴 **数据搬运能量 + 访存带宽/dataflow 建模(最高优先)** —— 当前 workload
+  动态能量只算每算子**计算**能量(MAC=macs×per-mac),**不含**operand/weight
+  的 DRAM↔on-chip 搬运能量;无 bandwidth/roofline/data-reuse/tiling 模型,MC
+  带宽未耦合到计算 stall。Horowitz:DRAM 访问 640pJ vs MAC ~1pJ(640×),真实
+  NPU 的 PPA 常由数据搬运主导,故当前总能量可能低估数倍,且"能量随设计不变"
+  是此缺失的假象(`docs/NPU-Design-Study.md` §3.2)。需求:给算子加访存字节 →
+  流量 → per-access 能量 + roofline;SPEC-005/006 增订"每 op 的 operand 流量与
+  搬运能量"口径。
+- 🟠 **Mapper 升级为 cost-model + DAG** —— 扁平算子表 → DAG/依赖边;空间映射
+  (systolic tiling/sharding);dataflow(weight/output/row-stationary)loop-nest;
+  cost-model/ILP/RL 搜索;`optimize` 支持缩小过配置的级(现仅加宽)。含 SPEC-006
+  §8 已列的"读连接图按路径 max II 估吞吐"。
+- 🟠 无热 / 时变功耗 / DVFS / power-gating(能量是聚合量,非功率曲线)。
+- 🟠 无 floorplan / 布线面积与线延迟(NoC 是模块,非带线成本的物理 mesh)。
+- 🟠 量化数值精度 ↔ PPA 权衡(precision 影响选算子/能量,但不建模量化误差)。
+- 🟢 前端:ONNX/框架算子图导入(现为手写 op YAML);batching / 全图调度。
 
 源自 v1.0 spec:
 - 随机算子 / stochastic rounding（SPEC-004 §9）
