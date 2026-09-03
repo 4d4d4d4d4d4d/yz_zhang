@@ -1,0 +1,20 @@
+schema_version: "1.0"
+name: "Wrong direction"
+description: "Source port is INPUT instead of OUTPUT."
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: a
+    type: Dummy
+    clock: main_clk
+    config: { throughput_elems_per_cycle: 1 }
+  - id: b
+    type: Dummy
+    clock: main_clk
+    config: { throughput_elems_per_cycle: 1 }
+
+connections:
+  - { from: a.in_data, to: b.in_data, fifo_depth: 1, latency_cycles: 1 }

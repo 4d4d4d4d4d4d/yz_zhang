@@ -1,0 +1,13 @@
+schema_version: "1.0"
+name: "AGU deep pipeline (depth=8)"
+description: |
+  SPEC-007 §7.3 algorithm-stimulus variant: deeper AGU pipeline (depth=8)
+  costs +7 cycles of fill stall, but steady-state throughput is unchanged.
+
+base: usecase_agu_shallow.yaml
+
+overrides:
+  modules:
+    agu_0:
+      config:
+        agu_pipeline_depth: 8

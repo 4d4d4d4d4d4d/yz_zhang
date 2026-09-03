@@ -1,0 +1,33 @@
+schema_version: "1.0"
+name: "Trace-driven attention block (single layer)"
+description: |
+  SPEC-012 §2:TraceProducer 播放一个真实 attention block 的算子序列
+  (q/k/v proj → scores → softmax → attn → out_proj),而不是合成 token。
+  每个 matmul token 大小由 shape 推导(int8 32x32 → 1024 B),softmax
+  token 由 n_elements 推导(256 → 1024 B)。这是"跑真实模型层"的最小证明。
+
+clock_domains:
+  - { id: main_clk, period_ps: 1000 }
+
+modules:
+  - id: trace_src
+    type: TraceProducer
+    clock: main_clk
+    config:
+      ops:
+        - { op_type: matmul,  m: 32, k: 32, n: 32, precision: int8 }   # q_proj
+        - { op_type: matmul,  m: 32, k: 32, n: 32, precision: int8 }   # k_proj
+        - { op_type: matmul,  m: 32, k: 32, n: 32, precision: int8 }   # v_proj
+        - { op_type: matmul,  m: 32, k: 32, n: 32, precision: int8 }   # scores = q·kᵀ
+        - { op_type: softmax, n_elements: 256 }                        # softmax(scores)
+        - { op_type: matmul,  m: 32, k: 32, n: 32, precision: int8 }   # attn = p·v
+        - { op_type: matmul,  m: 32, k: 32, n: 32, precision: int8 }   # out_proj
+      send_rate_cycles_per_token: 1
+      repeat: 1
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+
+connections:
+  - { from: trace_src.out, to: cons.in, fifo_depth: 8, latency_cycles: 1 }

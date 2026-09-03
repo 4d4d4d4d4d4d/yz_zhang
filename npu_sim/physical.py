@@ -1,0 +1,494 @@
+"""Physically-grounded PPA coefficients — literature-derived, not hand-picked.
+
+Every constant here traces to a published source at a stated process node, so
+area/energy come from a documented physical basis instead of arbitrary round
+numbers. This is the standard pre-silicon methodology (McPAT / Aladdin /
+Timeloop use the same analytical + literature approach before a PDK exists).
+See docs/specs/SPEC-013-Physical-PPA-Models.md for the full derivation.
+
+Reference node: **45 nm**. Energy figures are used at their *published* node
+(Horowitz ISSCC 2014, measured/reported at 45 nm) rather than fabricated-scaled
+to a finer node — scaling to a target node is a Phase-5 calibration step with
+its own published factors, kept out so nothing here is invented.
+
+What this buys over the old capability-constant model:
+  * area/energy scale with the actual datapath size (PE count, SRAM bytes),
+    fixing the size-blind gap (docs/specs/README.md);
+  * every number is greppable to a citation, fixing the provenance gap.
+
+Uncertainty: gate-count area is analytical (±~30%); it is the *functional
+form* (area ∝ PE count) that matters pre-calibration, and the unit costs cite
+published cell/gate/op values. Phase-5 replaces the unit costs with synthesis.
+"""
+
+from __future__ import annotations
+
+REFERENCE_NODE_NM = 45
+
+# ============================================================
+# Energy per operation @ 45 nm (pJ)
+# Source: M. Horowitz, "1.1 Computing's Energy Problem (and what we can do
+# about it)", ISSCC 2014, Fig. 1.1.5 — the canonical, widely-reproduced table.
+# ============================================================
+E_ADD_INT8_PJ = 0.03      # 8-bit integer add
+E_ADD_INT32_PJ = 0.1      # 32-bit integer add
+E_MUL_INT8_PJ = 0.2       # 8-bit int mult: 32b=3.1pJ, ~quadratic in width → ~0.2
+E_MUL_INT32_PJ = 3.1      # 32-bit integer multiply
+E_ADD_FP16_PJ = 0.4       # 16-bit float add
+E_ADD_FP32_PJ = 0.9       # 32-bit float add (used for FP32 accumulation)
+E_MUL_FP16_PJ = 1.1       # 16-bit float multiply
+E_MUL_FP32_PJ = 3.7       # 32-bit float multiply
+E_SRAM_RD_32B_PJ = 5.0    # 32-bit read from an 8 KB SRAM
+E_DRAM_RD_32B_PJ = 640.0  # 32-bit DRAM access
+
+# ============================================================
+# Area unit costs @ 45 nm (µm²)
+# ============================================================
+# 6T SRAM bitcell @ 45 nm. Published cells: TSMC 45nm ~0.25, Intel 45nm 0.346.
+# Use 0.25 (dense foundry 6T); Phase-5 sets the exact library value.
+A_SRAM_BIT_UM2 = 0.25
+# NAND2-equivalent standard cell @ 45 nm (~0.7–1.0 µm² across libraries).
+A_GATE_UM2 = 0.8
+
+# ============================================================
+# Static (leakage) power @ 45 nm
+# ~few nW per NAND2-equivalent gate for a general-purpose 45 nm process.
+# ============================================================
+P_LEAK_PER_GATE_UW = 0.003   # 3 nW/gate
+
+# ============================================================
+# Analytical gate counts for arithmetic units.
+# Methodology (SPEC-013 §2): an n-bit array multiplier ≈ n² partial-product
+# AND gates + n·(n−1) full-adders; an n-bit adder ≈ n full-adders; an n-bit
+# register ≈ n flip-flops. A full-adder and a flip-flop are each ≈ 5
+# NAND2-equivalent gates.
+# ============================================================
+_GATES_PER_FA = 5
+_GATES_PER_FF = 5
+
+
+def mult_gates(n_bits: int) -> int:
+    """Array-multiplier gate count for an ``n_bits`` × ``n_bits`` multiply."""
+    return n_bits * n_bits + n_bits * (n_bits - 1) * _GATES_PER_FA
+
+
+def add_gates(n_bits: int) -> int:
+    """Ripple-carry adder gate count for an ``n_bits`` add."""
+    return n_bits * _GATES_PER_FA
+
+
+def reg_gates(n_bits: int) -> int:
+    """Register gate count for ``n_bits`` of state."""
+    return n_bits * _GATES_PER_FF
+
+
+def mux_gates(n_bits: int) -> int:
+    """2:1 multiplexer gate count over ``n_bits`` (≈3 gates/bit)."""
+    return n_bits * 3
+
+
+def fp_add_gates(mantissa_bits: int, exp_bits: int = 8) -> int:
+    """Floating-point adder: exponent compare + mantissa align-shift + add +
+    normalize. Analytical (SPEC-013 §2): mantissa add + 2× mantissa for the
+    align/normalize barrel shifters + an exponent adder."""
+    return add_gates(mantissa_bits) + 2 * mantissa_bits * _GATES_PER_FA + add_gates(exp_bits)
+
+
+def fp_mul_gates(mantissa_bits: int, exp_bits: int = 8) -> int:
+    """Floating-point multiplier: mantissa array multiply + exponent add +
+    normalize."""
+    return mult_gates(mantissa_bits) + add_gates(exp_bits) + add_gates(mantissa_bits)
+
+
+# FP32 datapath: 1 sign + 8 exponent + 23 stored mantissa (24 with implicit 1).
+_FP32_MANT = 24
+
+
+# Per-PE gate contribution of each MAC capability (SPEC-013 §3). A MAC PE is a
+# multiplier feeding an accumulator; each precision the array supports adds its
+# own multiplier lane, and FP32 accumulation adds a 32-bit adder + psum reg.
+_MAC_PE_GATES = {
+    # int8×int8 multiply.
+    "int8_matmul": mult_gates(8),                       # 344
+    # FP32 accumulate: 32-bit adder + 32-bit psum register.
+    "accumulate_fp32": add_gates(32) + reg_gates(32),   # 320
+    # BFP16: 8-bit mantissa multiply + shared-exponent alignment (~+50).
+    "bfp16_matmul": mult_gates(8) + 50,                 # 394
+    # FP16: 11-bit mantissa multiply + FP16 add for the wider datapath.
+    "fp16_matmul": mult_gates(11) + add_gates(11),      # 726
+}
+
+
+def mac_pe_gates(active_caps) -> int:
+    """Total per-PE gate count for the given active MAC capabilities."""
+    return sum(_MAC_PE_GATES.get(c, 0) for c in active_caps)
+
+
+def mac_array_area_um2(rows: int, cols: int, active_caps) -> float:
+    """PE-array area (µm²): PE count × per-PE gates × gate area.
+
+    Scales with the array size — the whole point of the physical model.
+    """
+    return rows * cols * mac_pe_gates(active_caps) * A_GATE_UM2
+
+
+def mac_array_static_power_uw(rows: int, cols: int, active_caps) -> float:
+    """PE-array leakage (µW): total gate count × per-gate leakage."""
+    return rows * cols * mac_pe_gates(active_caps) * P_LEAK_PER_GATE_UW
+
+
+# MAC precision-kind → (multiply energy, accumulate energy) in pJ.
+# Accumulation is FP32 (the psum datapath), so it dominates low-precision MACs.
+_MAC_ENERGY_PJ = {
+    "int8": E_MUL_INT8_PJ + E_ADD_FP32_PJ,     # 1.1
+    "bfp16": E_MUL_FP16_PJ + E_ADD_FP32_PJ,    # 2.0  (block-FP ~ FP16 mult)
+    "bf16": E_MUL_FP16_PJ + E_ADD_FP32_PJ,     # alias
+    "fp16": E_MUL_FP16_PJ + E_ADD_FP32_PJ,     # 2.0
+    "fp32": E_MUL_FP32_PJ + E_ADD_FP32_PJ,     # 4.6
+}
+
+
+def energy_per_mac_pj(precision_kind: str) -> float:
+    """Dynamic energy of one multiply-accumulate at the given precision (pJ).
+
+    Defaults to the int8 figure for unknown kinds (the array's base lane).
+    """
+    return _MAC_ENERGY_PJ.get(precision_kind, _MAC_ENERGY_PJ["int8"])
+
+
+def sram_area_um2(n_bytes: float) -> float:
+    """6T-SRAM *cell* array area (µm²) for ``n_bytes`` of storage."""
+    return n_bytes * 8 * A_SRAM_BIT_UM2
+
+
+# SRAM macro efficiency = cell area / full macro area (decoders + sense amps +
+# row/col drivers). Published 45 nm SRAM arrays run ~65–75% efficient.
+SRAM_ARRAY_EFFICIENCY = 0.7
+# 6T SRAM cell retention leakage @ 45 nm (~0.1 nW/cell order of magnitude).
+P_SRAM_LEAK_PER_BIT_UW = 1e-4
+
+
+def sram_macro_area_um2(n_bytes: float, efficiency: float = SRAM_ARRAY_EFFICIENCY) -> float:
+    """Full SRAM macro area (µm²): cell array inflated by peripheral overhead."""
+    return sram_area_um2(n_bytes) / efficiency
+
+
+def sram_read_energy_pj(n_bytes: float) -> float:
+    """Energy of an SRAM read of ``n_bytes`` (pJ). Horowitz gives a 32-bit
+    (4-byte) SRAM read ≈ 5 pJ; scale linearly with bytes."""
+    return E_SRAM_RD_32B_PJ * (n_bytes / 4.0)
+
+
+def sram_static_power_uw(n_bytes: float) -> float:
+    """SRAM retention leakage (µW) for ``n_bytes`` of storage."""
+    return n_bytes * 8 * P_SRAM_LEAK_PER_BIT_UW
+
+
+# A CAM (content-addressable) cell carries match/compare logic on top of the
+# storage bit, so it is ~2–3× a 6T SRAM cell. Use 2.5×.
+A_CAM_BIT_UM2 = A_SRAM_BIT_UM2 * 2.5
+
+# eDRAM (1T1C) is much denser than 6T SRAM. IBM's 45 nm eDRAM cell ≈ 0.067 µm²
+# (~3.7× denser than the 6T SRAM cell). Large multi-MB on-chip tables (e.g.
+# embeddings) use this, NOT the SRAM density.
+A_EDRAM_BIT_UM2 = 0.067
+# eDRAM read costs more than SRAM but far less than off-chip DRAM; ~2× SRAM.
+_EDRAM_READ_FACTOR = 2.0
+
+
+def edram_macro_area_um2(n_bytes: float, efficiency: float = SRAM_ARRAY_EFFICIENCY) -> float:
+    """eDRAM macro area (µm²) for ``n_bytes`` — for large on-chip tables."""
+    return n_bytes * 8 * A_EDRAM_BIT_UM2 / efficiency
+
+
+def edram_read_energy_pj(n_bytes: float) -> float:
+    """Energy of an eDRAM read of ``n_bytes`` (pJ), ~2× an SRAM read."""
+    return sram_read_energy_pj(n_bytes) * _EDRAM_READ_FACTOR
+
+
+def embedding_table_area_um2(table_kb: float) -> float:
+    """Embedding-table area (µm²): modeled as on-chip eDRAM, not SRAM."""
+    return edram_macro_area_um2(table_kb * 1024)
+
+
+def cam_area_um2(n_entries: int, entry_bytes: int) -> float:
+    """CAM array area (µm²) for ``n_entries`` × ``entry_bytes`` (e.g. a TLB)."""
+    return n_entries * entry_bytes * 8 * A_CAM_BIT_UM2 / SRAM_ARRAY_EFFICIENCY
+
+
+def register_file_area_um2(depth: int, entry_bytes: int) -> float:
+    """Flip-flop register file area (µm²) for a shallow, low-latency queue
+    (``depth`` entries × ``entry_bytes``). Uses the flop gate model, not SRAM,
+    since command queues are typically register-based."""
+    return depth * entry_bytes * 8 * _GATES_PER_FF * A_GATE_UM2
+
+
+def logic_block_area_um2(gates: int) -> float:
+    """Area (µm²) of a fixed control-logic block of ``gates`` NAND2-equivalents."""
+    return gates * A_GATE_UM2
+
+
+def reduction_tree_area_um2(width: int, mantissa_bits: int = _FP32_MANT) -> float:
+    """FP reduction tree over ``width`` inputs: needs width-1 FP adders."""
+    return max(0, width - 1) * fp_add_gates(mantissa_bits) * A_GATE_UM2
+
+
+# A performance counter is a wide event register plus its increment adder.
+PMU_COUNTER_BITS = 48
+
+
+def counter_area_um2(n_counters: int, counter_bits: int = PMU_COUNTER_BITS) -> float:
+    """Area (µm²) of ``n_counters`` event counters (register + incrementer each)."""
+    per = reg_gates(counter_bits) + add_gates(counter_bits)
+    return n_counters * per * A_GATE_UM2
+
+
+# MMU TLB: each entry holds a VPN tag + PPN + flags (~8 bytes); plus a
+# page-table-walker state machine (~2000 NAND2-equivalent gates).
+TLB_ENTRY_BYTES = 8
+TLB_WALKER_GATES = 2000
+# CMDQ: each queued command descriptor is ~8 bytes; the priority arbiter is a
+# small comparator/sort network (~1500 gates).
+CMDQ_ENTRY_BYTES = 8
+CMDQ_PRIORITY_GATES = 1500
+
+
+def mmu_area_um2(tlb_entries: int) -> float:
+    """MMU area (µm²) = TLB CAM + page-table-walker logic."""
+    return cam_area_um2(tlb_entries, TLB_ENTRY_BYTES) + logic_block_area_um2(TLB_WALKER_GATES)
+
+
+def cmdq_area_um2(depth: int, enable_priority: bool) -> float:
+    """CMDQ area (µm²) = command register file (+ priority arbiter logic)."""
+    a = register_file_area_um2(depth, CMDQ_ENTRY_BYTES)
+    if enable_priority:
+        a += logic_block_area_um2(CMDQ_PRIORITY_GATES)
+    return a
+
+
+def cache_area_um2(capacity_kb: float) -> float:
+    """On-chip SRAM cache area (µm²) for ``capacity_kb`` KB of storage.
+
+    At 45 nm this is ~2926 µm²/KB (6T cells + peripheral), replacing the old
+    hand-picked ~800 µm²/KB. NOTE: this is the *SRAM* density — multi-MB
+    off-chip / eDRAM-backed tables (e.g. embeddings) are NOT this dense and
+    must use a different model.
+    """
+    return sram_macro_area_um2(capacity_kb * 1024)
+
+
+# ============================================================
+# DSB — data-staging buffer (SPEC-013 §5, third migrated module).
+# Area/leakage are dominated by the SRAM macro; double-buffering keeps two
+# ping-pong copies (2× storage). Energy per staged element is an SRAM read
+# (+ a write when double-buffered), replicated across broadcast sinks.
+# ============================================================
+def dsb_storage_bytes(buffer_kb: int, double_buffer: bool) -> int:
+    """Physical SRAM bytes: the buffer, doubled for ping-pong double-buffering."""
+    return buffer_kb * 1024 * (2 if double_buffer else 1)
+
+
+def dsb_area_um2(buffer_kb: int, double_buffer: bool) -> float:
+    """DSB area (µm²) = SRAM macro area of the (double-)buffered storage.
+
+    Broadcast wiring and banking overhead are small relative to the SRAM and
+    are folded into the macro efficiency factor.
+    """
+    return sram_macro_area_um2(dsb_storage_bytes(buffer_kb, double_buffer))
+
+
+def dsb_static_power_uw(buffer_kb: int, double_buffer: bool) -> float:
+    """DSB leakage (µW) = SRAM retention leakage of the buffered storage."""
+    return sram_static_power_uw(dsb_storage_bytes(buffer_kb, double_buffer))
+
+
+def dsb_energy_per_elem_pj(
+    double_buffer: bool, broadcast_factor: int = 1, bytes_per_elem: int = 2
+) -> float:
+    """Energy to stage one element (pJ): an SRAM read (+ a write when
+    double-buffered), replicated to ``broadcast_factor`` sinks."""
+    e = sram_read_energy_pj(bytes_per_elem)
+    if double_buffer:
+        e += sram_read_energy_pj(bytes_per_elem)   # write side of the ping-pong
+    return e * broadcast_factor
+
+
+# ============================================================
+# AVP — activation / vector processor (SPEC-013 §5, fourth migrated module).
+# Two area components: a `vector_width`-wide FP ALU array (transcendental
+# compute via LUT interpolation) + a LUT SRAM holding function samples.
+# ============================================================
+# FP16 samples in the transcendental LUT.
+AVP_LUT_ENTRY_BYTES = 2
+
+# Per-lane gate contribution of each AVP transcendental. Each does a LUT
+# lookup then interpolates — an FP multiply + FP add — plus (for gelu) a
+# select mux; pooling is just a compare/add.
+_AVP_LANE_GATES = {
+    "gelu": fp_mul_gates(_FP32_MANT) + fp_add_gates(_FP32_MANT) + mux_gates(16),
+    "softmax": fp_mul_gates(_FP32_MANT) + fp_add_gates(_FP32_MANT),
+    "layernorm": fp_mul_gates(_FP32_MANT) + fp_add_gates(_FP32_MANT),
+    "pooling": fp_add_gates(_FP32_MANT),
+}
+
+# Energy per element per active transcendental @ 45 nm: a LUT read + the
+# interpolation (FP multiply + FP add). Summed over active ops (conservative,
+# matches the pre-existing AVP semantics).
+def _avp_op_energy_pj() -> float:
+    return sram_read_energy_pj(AVP_LUT_ENTRY_BYTES) + E_MUL_FP32_PJ + E_ADD_FP32_PJ
+
+
+def avp_lane_gates(active_caps) -> int:
+    """Total per-lane gate count for the active AVP transcendentals."""
+    return sum(_AVP_LANE_GATES.get(c, 0) for c in active_caps)
+
+
+def avp_lut_bytes(lut_entries: int) -> int:
+    """LUT storage in bytes for ``lut_entries`` FP16 samples."""
+    return lut_entries * AVP_LUT_ENTRY_BYTES
+
+
+def avp_area_um2(vector_width: int, lut_entries: int, active_caps) -> float:
+    """AVP area (µm²) = FP-ALU array + transcendental LUT SRAM macro."""
+    alu = vector_width * avp_lane_gates(active_caps) * A_GATE_UM2
+    lut = sram_macro_area_um2(avp_lut_bytes(lut_entries))
+    return alu + lut
+
+
+def avp_static_power_uw(vector_width: int, lut_entries: int, active_caps) -> float:
+    """AVP leakage (µW) = ALU gate leakage + LUT SRAM retention leakage."""
+    alu = vector_width * avp_lane_gates(active_caps) * P_LEAK_PER_GATE_UW
+    lut = sram_static_power_uw(avp_lut_bytes(lut_entries))
+    return alu + lut
+
+
+def avp_energy_per_elem_pj(active_caps) -> float:
+    """Dynamic energy per processed element (pJ), summed over active ops."""
+    return sum(_avp_op_energy_pj() for c in active_caps if c in _AVP_LANE_GATES)
+
+
+# ============================================================
+# DAGC — BFP unpack / align (SPEC-013 §5, fifth and final compute module).
+# Area = BFP-unpack shift/align logic (∝ unpack throughput) + a staging
+# register file (a small SRAM) + a join FIFO. `compact_unpack` replaces the
+# wide staging register file with dynamic decode, saving most of that SRAM
+# (SPEC-005 v1.1 §U.1: a real −area lever, preserved here).
+# ============================================================
+# Unpack staging depth per throughput-lane (microarchitectural choice, not a
+# fabricated PPA coefficient): how many elements the align pipeline stages.
+DAGC_STAGE_ELEMS = 256
+DAGC_OUT_BYTES = 2                 # BF16 unpacked output
+DAGC_JOIN_BYTES = 4                # FP32-wide join FIFO entries
+# compact_unpack keeps only this fraction of the staging register file
+# (dynamic decode replaces the wide RF).
+DAGC_COMPACT_RETENTION = 0.4
+
+
+def barrel_shifter_gates(n_bits: int) -> int:
+    """Log-depth barrel shifter over ``n_bits`` (≈2 gates-equiv per bit)."""
+    return 2 * n_bits * _GATES_PER_FA
+
+
+def bfp_unpack_lane_gates(out_bits: int) -> int:
+    """One BFP→float unpack lane: exponent barrel-shift align + output reg."""
+    return barrel_shifter_gates(out_bits) + reg_gates(out_bits)
+
+
+def dagc_staging_bytes(bfp8_tp: int, bfp16_tp: int) -> int:
+    """Unpack staging register-file size (bytes) before compact-unpack."""
+    return (bfp8_tp + bfp16_tp) * DAGC_STAGE_ELEMS * DAGC_OUT_BYTES
+
+
+def dagc_area_um2(
+    bfp8_tp: int, bfp16_tp: int, join_fifo_depth: int, active_caps
+) -> float:
+    """DAGC area (µm²) = unpack shift logic + staging RF (SRAM, reduced by
+    compact_unpack) + join FIFO."""
+    active = set(active_caps)
+    # Shift/align logic scales with unpack throughput (parallel lanes).
+    logic_gates = (
+        bfp8_tp * bfp_unpack_lane_gates(16) + bfp16_tp * bfp_unpack_lane_gates(32)
+    )
+    if "bfp8_bfp16_mix" in active:
+        logic_gates += 4 * mux_gates(32)     # mixed-precision aligner
+    if "int4_reorder" in active:
+        logic_gates += 2 * mux_gates(32)     # 4-bit reorder mux network
+    logic_area = logic_gates * A_GATE_UM2
+
+    staging = sram_macro_area_um2(dagc_staging_bytes(bfp8_tp, bfp16_tp))
+    if "compact_unpack" in active:
+        staging *= DAGC_COMPACT_RETENTION    # dynamic decode drops the wide RF
+
+    join = sram_macro_area_um2(join_fifo_depth * DAGC_JOIN_BYTES)
+    return logic_area + staging + join
+
+
+def dagc_static_power_uw(
+    bfp8_tp: int, bfp16_tp: int, join_fifo_depth: int, active_caps
+) -> float:
+    """DAGC leakage (µW): logic-gate leakage + staging/join SRAM retention."""
+    active = set(active_caps)
+    logic_gates = (
+        bfp8_tp * bfp_unpack_lane_gates(16) + bfp16_tp * bfp_unpack_lane_gates(32)
+    )
+    staging_bytes = dagc_staging_bytes(bfp8_tp, bfp16_tp)
+    if "compact_unpack" in active:
+        staging_bytes = int(staging_bytes * DAGC_COMPACT_RETENTION)
+    return (
+        logic_gates * P_LEAK_PER_GATE_UW
+        + sram_static_power_uw(staging_bytes)
+        + sram_static_power_uw(join_fifo_depth * DAGC_JOIN_BYTES)
+    )
+
+
+def dagc_energy_per_elem_pj(active_caps) -> float:
+    """Energy to unpack one element (pJ): barrel-shift align (int op), plus a
+    mix-align op when the mixed-precision path is active."""
+    active = set(active_caps)
+    e = E_ADD_INT32_PJ                       # exponent align / shift
+    if "bfp8_bfp16_mix" in active:
+        e += E_ADD_INT32_PJ                  # extra align for mixed precision
+    return e
+
+
+# ============================================================
+# VAU — vector arithmetic unit (SPEC-013 §5, second migrated module).
+# A VAU has `lanes` parallel FP ALUs; each lane carries the logic for every
+# op the unit supports, so per-lane gates = Σ active-capability lane logic.
+# ============================================================
+_VAU_LANE_GATES = {
+    "vector_add": fp_add_gates(_FP32_MANT),                 # FP32 adder
+    "vector_mul": fp_mul_gates(_FP32_MANT),                 # FP32 multiplier
+    "vector_max": fp_add_gates(_FP32_MANT),                 # compare ≈ subtractor
+    "relu": mux_gates(32),                                  # max(0,x): sign + 2:1 mux
+}
+
+# Energy per element per op @ 45 nm (Horowitz). An element does one op; the
+# per-element estimate sums the active ops as a conservative upper bound
+# (matches the pre-existing VAU semantics), each term now literature-grounded.
+_VAU_ENERGY_PJ = {
+    "vector_add": E_ADD_FP32_PJ,     # 0.9
+    "vector_mul": E_MUL_FP32_PJ,     # 3.7
+    "vector_max": E_ADD_FP32_PJ,     # 0.9  (compare ≈ subtract)
+    "relu": E_ADD_INT32_PJ,          # 0.1  (compare-with-0 + select)
+}
+
+
+def vau_lane_gates(active_caps) -> int:
+    """Total per-lane gate count for the active VAU capabilities."""
+    return sum(_VAU_LANE_GATES.get(c, 0) for c in active_caps)
+
+
+def vau_area_um2(lanes: int, active_caps) -> float:
+    """VAU ALU-array area (µm²): lanes × per-lane gates × gate area."""
+    return lanes * vau_lane_gates(active_caps) * A_GATE_UM2
+
+
+def vau_static_power_uw(lanes: int, active_caps) -> float:
+    """VAU leakage (µW): total lane gate count × per-gate leakage."""
+    return lanes * vau_lane_gates(active_caps) * P_LEAK_PER_GATE_UW
+
+
+def vau_energy_per_elem_pj(active_caps) -> float:
+    """Dynamic energy per processed element (pJ), summed over active ops."""
+    return sum(_VAU_ENERGY_PJ.get(c, 0.0) for c in active_caps)

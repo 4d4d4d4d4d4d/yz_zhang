@@ -1,0 +1,19 @@
+schema_version: "1.0"
+name: "DAGC chain with deliberately slow consumer (stall demo)"
+description: |
+  Producer fires fast, Consumer drains slowly. DAGC and upstream FIFOs
+  fill up → DAGC stalls on output port → Producer stalls on its output.
+  Designed to make SPEC-002 §3.3 back-pressure visible in the waveform.
+
+base: dagc_chain.yaml
+
+overrides:
+  modules:
+    prod:
+      config:
+        n_tokens: 32
+        send_rate_cycles_per_token: 1
+        payload_size_bytes: 8
+    cons:
+      config:
+        receive_rate_cycles_per_token: 20

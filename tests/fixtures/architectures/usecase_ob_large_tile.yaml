@@ -1,0 +1,12 @@
+schema_version: "1.0"
+name: "OB large tile (64 KB) — capacity-sweep variant"
+description: |
+  §2.8 capacity sweep: tile_kb 8 → 64 grows accumulator area linearly.
+
+base: usecase_ob_small_tile.yaml
+
+overrides:
+  modules:
+    ob:
+      config:
+        tile_kb: 64

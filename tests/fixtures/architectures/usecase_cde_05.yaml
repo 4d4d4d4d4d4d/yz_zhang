@@ -1,0 +1,21 @@
+schema_version: "1.0"
+name: "CDE compress ratio 0.5 — baseline"
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config: { n_tokens: 4, send_rate_cycles_per_token: 1, payload_size_bytes: 64 }
+  - id: cde
+    type: CDE
+    clock: main_clk
+    config: { direction: compress, compression_ratio: 0.5, enable_zlib: false }
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+connections:
+  - { from: prod.out, to: cde.data_in, fifo_depth: 8, latency_cycles: 1 }
+  - { from: cde.data_out, to: cons.in, fifo_depth: 8, latency_cycles: 1 }

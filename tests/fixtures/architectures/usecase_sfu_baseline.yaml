@@ -1,0 +1,35 @@
+schema_version: "1.0"
+name: "SFU baseline (exp only, no trig)"
+description: |
+  SPEC-008 §4.7 evaluation baseline. Producer drives operand tokens;
+  SFU computes default_op (exp, 8 cycles); Consumer drains.
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 6
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 8
+
+  - id: sfu
+    type: SFU
+    clock: main_clk
+    config:
+      enable_trig: false
+      default_op: exp
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+
+connections:
+  - { from: prod.out, to: sfu.operand_in, fifo_depth: 8, latency_cycles: 1 }
+  - { from: sfu.result_out, to: cons.in, fifo_depth: 8, latency_cycles: 1 }

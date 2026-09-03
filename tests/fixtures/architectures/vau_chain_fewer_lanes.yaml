@@ -1,0 +1,13 @@
+schema_version: "1.0"
+name: "VAU chain (variant: fewer lanes)"
+description: >
+  Drop VAU lanes from 16 to 4. Verifies SPEC-005 §4.4 knob has an observable
+  drain-time / stall impact via the comparator.
+
+base: vau_chain.yaml
+
+overrides:
+  modules:
+    vau:
+      config:
+        lanes: 4

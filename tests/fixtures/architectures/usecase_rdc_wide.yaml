@@ -1,0 +1,7 @@
+schema_version: "1.0"
+name: "RDC tree_width=16 — wide reducer (area-scale variant)"
+base: usecase_rdc_small.yaml
+overrides:
+  modules:
+    rdc:
+      config: { tree_width: 16 }

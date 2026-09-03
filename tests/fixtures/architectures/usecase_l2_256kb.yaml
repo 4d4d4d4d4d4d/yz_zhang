@@ -1,0 +1,21 @@
+schema_version: "1.0"
+name: "L2 256 KB hit_rate=0.5 — baseline"
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config: { n_tokens: 6, send_rate_cycles_per_token: 1, payload_size_bytes: 8 }
+  - id: l2
+    type: L2
+    clock: main_clk
+    config: { capacity_kb: 256, hit_rate: 0.5, hit_cycles: 8, miss_cycles: 12 }
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+connections:
+  - { from: prod.out, to: l2.req_in, fifo_depth: 16, latency_cycles: 1 }
+  - { from: l2.data_out, to: cons.in, fifo_depth: 16, latency_cycles: 1 }

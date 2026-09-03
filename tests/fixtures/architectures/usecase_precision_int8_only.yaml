@@ -1,0 +1,15 @@
+schema_version: "1.0"
+name: "MAC mixed precision baseline (INT8 only)"
+description: |
+  SPEC-005 §3 + Mapper precision-aware routing baseline: MAC配 INT8 only
+  (support_bfp16=false, support_fp16=false). Used as the "归一精度" side
+  of the precision-non-uniformity evaluation.
+
+base: mac_chain.yaml
+
+overrides:
+  modules:
+    mac:
+      config:
+        support_bfp16: false
+        support_fp16: false

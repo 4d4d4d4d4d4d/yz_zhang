@@ -1,0 +1,13 @@
+schema_version: "1.0"
+name: "OB int32-only accumulator (no FP32) — fp32 cost variant"
+description: |
+  §2.8 FP32 acc cost: disable support_fp32_acc → drops fp32_acc capability
+  area. Baseline (default) has fp32 enabled.
+
+base: usecase_ob_small_tile.yaml
+
+overrides:
+  modules:
+    ob:
+      config:
+        support_fp32_acc: false

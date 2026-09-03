@@ -1,0 +1,13 @@
+schema_version: "1.0"
+name: "Trace-driven attention (4 layers)"
+description: |
+  SPEC-012 §3:同一 attention block 重复 4 遍 = 4-layer transformer 的
+  attention 栈。drain_time 应约为单层的 4×(7 ops → 28 ops)。
+
+base: usecase_trace_attention.yaml
+
+overrides:
+  modules:
+    trace_src:
+      config:
+        repeat: 4

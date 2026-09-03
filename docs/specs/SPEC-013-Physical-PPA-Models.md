@@ -1,0 +1,277 @@
+# SPEC-013 物理 PPA 模型(literature-grounded,非经验拍值)
+
+文档状态:**v0.1 Draft(implementation spec)**
+最后更新:2026-08-05
+Owners:架构组
+触发:用户要求"要真实模拟,不要臆想"——面积/能量系数必须有可引用的物理依据,
+不能是随手拍的圆整常数(见 `docs/Fidelity-Audit.md`)。
+派生自:SPEC-001 §3.1(area/power 聚合)、SPEC-005(模块库)、
+`npu_sim/physical.py`(实现)。
+
+## 0. 范围与原则
+
+本规范定义把模块 PPA(面积/能量/漏电)从"每能力固定常数"升级为
+**参数化物理模型**的口径。核心原则:
+
+1. **每个常数可溯源**到公开文献,并标注工艺节点。代码里 grep 得到引用。
+2. **形式物理正确**:面积随数据通路规模缩放(PE 数 / SRAM 字节),能量随
+   运算数缩放——即使单位系数有不确定带,函数形式必须对。
+3. **不臆造缩放**:能量取自 Horowitz(45nm 实测/报告值)时**就用 45nm**,
+   不臆造缩到更细节点;跨节点缩放是 Phase 5 用公开 scaling 因子做的校准步。
+4. **渐进迁移**:一次迁一个模块(先 MAC),其余保持现状并在 §5 登记,与
+   用户"一个个依次"的工作流一致。
+
+参考节点:**45 nm**。
+
+## 1. 能量:每运算焦耳数 @ 45nm
+
+来源:**M. Horowitz, "1.1 Computing's Energy Problem (and what we can do about
+it)", ISSCC 2014, Fig. 1.1.5**(业界最常引用的 energy-per-op 表)。
+
+| 运算 | pJ @45nm | 运算 | pJ @45nm |
+|---|---|---|---|
+| int8 add | 0.03 | fp16 add | 0.4 |
+| int32 add | 0.1 | fp32 add | 0.9 |
+| int8 mult | 0.2* | fp16 mult | 1.1 |
+| int32 mult | 3.1 | fp32 mult | 3.7 |
+| SRAM 32b read (8KB) | 5.0 | DRAM 32b | 640 |
+
+\* int8 mult 非原表直给:乘法能量 ~随位宽平方,int32=3.1pJ → int8≈3.1×(8/32)²≈0.2pJ。
+
+**每 MAC 能量** = 乘 + FP32 累加(psum 通路是 FP32):
+`int8 MAC = 0.2 + 0.9 = 1.1 pJ`;`bfp16/fp16 MAC = 1.1 + 0.9 = 2.0 pJ`。
+累加的 FP32 加法(0.9pJ)在低精度 MAC 里占主导——这是真实的,低精度省的是
+乘法不是累加。
+
+## 2. 面积:解析门/单元计数模型 @ 45nm
+
+**单位成本**(公开值):
+- 6T SRAM bitcell ≈ **0.25 µm²** @45nm(TSMC 45nm ~0.25、Intel 45nm 0.346;
+  取密集 foundry 6T)。
+- NAND2 等效标准单元 ≈ **0.8 µm²** @45nm(各库 0.7–1.0)。
+- 漏电 ≈ **3 nW/门**(45nm GP 量级)。
+
+**门计数解析法**:
+- n-bit 阵列乘法器 ≈ `n²` 部分积 AND 门 + `n·(n−1)` 全加器;
+- n-bit 加法器 ≈ `n` 全加器;n-bit 寄存器 ≈ `n` 触发器;
+- 一个全加器 / 触发器 ≈ 5 NAND2 等效门。
+
+**不确定性**:门计数面积是解析估计(±~30%)。校准前**关键是函数形式**
+(面积 ∝ PE 数),单位成本引用公开值;Phase 5 用综合替换单位成本收窄误差。
+
+## 3. MAC 物理模型(本规范首个落地模块)
+
+MAC PE = 乘法器 + 累加器。每支持一种精度就多一条乘法器 lane;FP32 累加加
+一个 32-bit 加法器 + psum 寄存器。**每 PE 门数** = Σ active capability 门贡献:
+
+| capability | 门贡献 | 计算 |
+|---|---|---|
+| int8_matmul | 344 | `mult_gates(8)=8²+8·7·5` |
+| accumulate_fp32 | 320 | `add_gates(32)+reg_gates(32)=160+160` |
+| bfp16_matmul | 394 | `mult_gates(8)+50`(共享指数对齐) |
+| fp16_matmul | 726 | `mult_gates(11)+add_gates(11)` |
+
+- **面积** = `rows × cols × (Σ per-PE 门) × 0.8 µm²`
+- **漏电** = `rows × cols × (Σ per-PE 门) × 3 nW`
+- **动态能量** = `MACs × per-MAC 能量(§1,按 op 精度)`
+
+实测(默认 32×32,int8+accum+bfp16 = 1058 门/PE):
+面积 = 1024×1058×0.8 = **866,714 µm²**;16×16 → 216,678;64×64 → 3,466,854
+(严格 ∝ PE 数)。对比旧的 size-blind 常数 65,000——旧值不随阵列变,新值随
+PE 数线性缩放,这才是"真模拟"。
+
+## 3.1 VAU 物理模型(第二个落地模块)
+
+VAU 有 `lanes` 条并行 FP ALU;每条 lane 携带所支持全部 op 的逻辑,故
+**每 lane 门数** = Σ active capability 的 lane 逻辑门:
+
+| capability | lane 门(FP32) | 依据 |
+|---|---|---|
+| vector_add | `fp_add_gates(24)` = 400 | 尾数加 + 对齐/规格化移位器 + 指数加 |
+| vector_mul | `fp_mul_gates(24)` = 3496 | 尾数阵列乘 + 指数加 + 规格化 |
+| vector_max | `fp_add_gates(24)` = 400 | 比较 ≈ 减法器 |
+| relu | `mux_gates(32)` = 96 | max(0,x):符号判断 + 2:1 mux |
+
+- **面积** = `lanes × (Σ per-lane 门) × 0.8 µm²`(默认 16 lanes、全 op = 4392
+  门/lane → 56,218 µm²;32 lanes → 112,435,严格 ∝ lanes)。
+- **动态能量/元素** = Σ active op 的 Horowitz 值(add 0.9、mul 3.7、max 0.9、
+  relu 0.1 pJ)——保留原"sum active"语义(保守上界),每项换成文献值。
+- FP 乘法器 lane 比加法器 lane 大 ~8×(`fp_mul_gates ≫ fp_add_gates`),这
+  也是真实的(FP 乘法昂贵)。
+
+## 3.2 DSB 物理模型(第三个落地模块,SRAM-dominated)
+
+DSB 是暂存 SRAM,面积/漏电由 SRAM macro 主导——这是**最扎实可引用**的一档
+(SRAM 面积/能量文献值最多)。
+
+- **面积** = SRAM macro = `存储字节 × 8 × 0.25 µm²/bit ÷ 0.7`(cell array
+  除以阵列效率;45nm 6T ~0.25µm²/bit,array efficiency ~0.7)。double-buffer
+  保留两份 ping-pong → 存储 ×2。实测 64KB double-buf = 374,491 µm²
+  (128KB 有效存储的 45nm SRAM,合理);32→64→128 KB = 187k→374k→749k
+  (∝ buffer_kb),double-buffer 精确 ×2。旧值是常数 27,000(size-blind)。
+- **漏电** = `存储位 × 1e-4 µW/bit`(45nm 6T 保持漏电 ~0.1 nW/cell 量级)。
+- **动态能量/元素** = SRAM 读能量(Horowitz 32b read 5pJ → 按字节缩放);
+  double-buffer 再加一次写访问(×2);broadcast_factor 复制到 N 个 sink。
+- broadcast 布线 / banking 外围相对 SRAM 很小,并入 macro efficiency,不单列。
+
+## 3.3 AVP 物理模型(第四个落地模块,ALU + LUT 双组件)
+
+AVP 做超越函数(softmax/gelu/layernorm),面积两部分:**FP-ALU 阵列**(每
+lane 做 LUT 插值)+ **LUT SRAM**(存函数采样)。
+
+- **面积** = `vector_width × Σ active per-lane 门 × 0.8 µm²`(ALU,复用 §3.1
+  的 FP 门模型:每个超越 ≈ fp_mul + fp_add + LUT 选择 mux)+
+  `sram_macro(lut_entries × 2 B)`(LUT,FP16 采样,复用 §3.2 SRAM 模型)。
+  实测:vector_width 16→32→64 = 152k→302k→602k µm²(ALU 主导,∝ vw);
+  lut_entries 256→1024 时面积微增(LUT 是小 SRAM)。
+- **动态能量/元素** = Σ active 超越 的(LUT 读 + 插值 fp mul + fp add)。
+- **直接修复了最早的 finding**:"AVP 面积对 vector_width 不敏感" —— 现在
+  ALU 阵列随 vector_width 线性缩放。
+
+## 3.4 DAGC 物理模型(第五个,BFP 解包,保留 compact_unpack 权衡)
+
+DAGC 把 BFP 解包成 float。面积三部分:
+
+- **解包移位逻辑**(∝ throughput):每条 unpack lane = 指数 barrel shifter +
+  输出寄存器(`bfp_unpack_lane_gates`)。bfp8_tp / bfp16_tp 是并行 lane 数 →
+  面积 ∝ throughput。mix 对齐器 / int4 reorder 是额外 mux 网络。
+- **staging 寄存器堆**(SRAM):暂存解包 tile。`compact_unpack` 用动态解码
+  替换宽寄存器堆 → 只保留 40%(`DAGC_COMPACT_RETENTION`),这就是 SPEC-005
+  v1.1 §U.1 的 −area 杠杆,**物理化保留**(实测省 ≥1500 µm²,
+  `test_unpack_area_tradeoff.py` + `test_dagc_module.py` 双重锁)。
+- **join FIFO**(SRAM,∝ join_fifo_depth)。
+
+**能量/元素** = 移位/对齐 int op(Horowitz int32 add 0.1pJ),mix 再加一次。
+实测:bfp8_tp 2→8 面积 ∝ 增大;join_fifo 16→32 微增;compact off/on 实测省
+~10.5k µm²(> 文献 20% 占位,因 staging RF 随 throughput 变大)。
+
+## 3.5 L2 物理模型(片上 SRAM cache)
+
+L2 是片上 SRAM 末级缓存 —— 直接用 SRAM macro 模型(`cache_area_um2`):
+`capacity_kb × 1024 × 8 × 0.25 µm²/bit ÷ 0.7` ≈ **2926 µm²/KB**,替换旧的手拍
+`800 µm²/KB`。能量用 `sram_read_energy_pj(payload_bytes)`(Horowitz 32b=5pJ →
+1.25 pJ/byte)—— **有趣的验证**:旧占位是 1.2 pJ/byte,物理值 1.25,二者几乎
+重合,说明缓存访问能量这一项原本就拍得接近对。
+
+**重要备注(不是所有 storage 都是 SRAM)**:L2 是片上 SRAM,用 2926 µm²/KB 对;
+但 TLU 的 2–8 MB 嵌入表若按 SRAM 密度会得到 ~24 mm² 的荒谬面积 —— 大表通常是
+eDRAM / off-chip DRAM(密度高 10–20×)。故 TLU 不能简单套 `cache_area_um2`,
+留待按 eDRAM/DRAM 模型单独迁移(§5)。
+
+## 3.6 MMU(TLB CAM)与 CMDQ(命令队列)物理模型
+
+两个小型片上结构,不同存储类型:
+
+- **MMU TLB** 是 CAM(内容寻址):每 cell 带匹配比较逻辑,面积 ~2.5× SRAM cell
+  (`A_CAM_BIT_UM2`)。每条目 ~8 B(VPN tag + PPN + flags)。加页表遍历状态机
+  (~2000 门)。实测每条目 ~57 µm²(旧手拍 200),64→256 entries 面积 ∝ 增长。
+- **CMDQ** 是浅命令队列 —— 低延迟,用触发器寄存器堆(非 SRAM):
+  `depth × entry_bytes × 8 × 5 门 × 0.8 µm²`,每条目 ~8 B;优先级仲裁另加
+  ~1500 门。depth 线性缩放。
+
+CAM 因子(~2-3× SRAM)、TLB 条目宽度、CMDQ 条目宽度、walker/arbiter 门数均为
+文档化的微架构参数(非拍的 PPA 系数),Phase 5 综合可替换。
+
+## 3.7 TLU 嵌入表物理模型(eDRAM,不是 SRAM)
+
+TLU 的 2–8 MB 嵌入表**不能按 SRAM 密度算**(8MB SRAM ≈ 24 mm²,荒谬)。大型
+片上表用 **eDRAM**(1T1C):IBM 45nm eDRAM cell ≈ **0.067 µm²/bit**(~3.7×
+密于 6T SRAM),`embedding_table_area_um2` = `table_kb×1024×8×0.067÷0.7` ≈
+**784 µm²/KB**。8MB 表 ≈ 6.4 mm²(合理)。查表能量 = 读一条 embedding 向量 =
+`edram_read_energy_pj(emb_dim)`(SRAM read × 2,eDRAM 访问高于 SRAM 低于
+off-chip DRAM),替换旧的 flat 0.5 pJ(严重低估)。
+
+这是本轮最能体现"不臆想"的一步:**同样是"存储",片上 cache 用 SRAM 密度、大
+嵌入表用 eDRAM 密度,两者差 ~3.7×** —— 盲目套 SRAM 会得到假面积。
+
+## 3.8 TAU 地址 FIFO(control 模块里唯一可解析的 size 部分)
+
+TAU 的地址生成 FSM 是控制逻辑(留 Phase 5,§5.1),但它的 `addr_fifo_depth`
+是真实 size 旋钮 → 用寄存器堆建模:`register_file_area_um2(depth, 8B)`(depth
+16 → 4096 µm²,64 → 16384,∝ depth)。TAU 面积 = FSM 占位常数 + 物理 FIFO,是
+诚实的"部分物理化 + 部分明示占位"混合(其余 control 模块无此类 size 旋钮)。
+
+## 3.9 WB / OB 片上缓冲(SRAM,复用 cache_area_um2)
+
+WB(权重缓冲)和 OB(输出/psum 缓冲)都是片上 SRAM,原用手拍密度(WB 1200、
+OB 1500 µm²/KB)。改用物理 SRAM macro(`cache_area_um2`,2926 µm²/KB):
+- WB 面积 = `cache_area_um2(capacity_kb)`;能量 = `sram_read_energy_pj(payload)`
+  (原手拍 0.3 pJ/byte → 物理 1.25)。
+- OB 面积 = `cache_area_um2(tile_kb × max_in_flight)`(双缓冲即 ×2)。
+两者的能力逻辑(prefetch / compression / fp32_acc)仍是小 `[calibration knob]`
+常数,存储主项已物理化。
+
+## 4. 契约变更
+
+- MAC 覆盖 `estimate_area()` / `total_area_um2()` / `static_power_uw()` /
+  `estimate_energy()`,读 `npu_sim/physical.py`。
+- MAC 的 `declared_capabilities()` 数值字段(area/power/energy)置 0 并注释
+  "由物理模型取代"——保留仅为 capability-presence 契约(SPEC-001 §3.1)。
+- 面积单调性(lean int8-only < full with bfp16/fp16)由 per-PE 门数保证,
+  仍成立。
+
+## 5. 迁移路线(其余模块,一个个依次)
+
+| 模块 | 面积驱动项 | 能量驱动项 | 状态 |
+|---|---|---|---|
+| **MAC** | PE 数 × per-PE 门 | MACs × per-MAC(Horowitz) | ✅ §3 |
+| **VAU** | lanes × per-lane FP-ALU 门 | elems × Σ active fp op(Horowitz) | ✅ §3.1 |
+| **DSB** | SRAM macro(buffer_kb × bitcell / eff) | elems × SRAM read(Horowitz) | ✅ §3.2 |
+| **AVP** | FP-ALU 阵列(vector_width)+ LUT SRAM(lut_entries) | elems × (LUT read + fp interp) | ✅ §3.3 |
+| **DAGC** | unpack 逻辑(∝throughput)+ staging RF + join FIFO | elems × 移位/对齐(int) | ✅ §3.4 |
+| **L2**(cache) | SRAM macro(`cache_area_um2`,2926 µm²/KB) | payload_bytes × SRAM read(Horowitz) | ✅ §3.5 |
+| **MMU**(TLB) | CAM(2.5× SRAM cell)+ walker 逻辑 | 固定 | ✅ §3.6 |
+| **CMDQ**(队列) | 寄存器堆(flops)+ 优先级仲裁逻辑 | 固定 | ✅ §3.6 |
+| **TLU**(嵌入表) | eDRAM macro(1T1C,0.067 µm²/bit) | emb_dim × eDRAM read | ✅ §3.7 |
+| **WB**(权重缓冲) | SRAM macro(`cache_area_um2`) | payload × SRAM read | ✅ §3.9 |
+| **OB**(输出/psum 缓冲) | SRAM macro(tile_kb × max_in_flight) | 累加逻辑 | ✅ §3.9(面积) |
+| **RDC**(归约) | FP 归约树(tree_width-1 个 FP 加法器) | — | ✅ (SPEC-013) |
+| **PMU**(计数器) | n_counters × (48-bit 寄存器 + 增量器) | — | ✅ (SPEC-013) |
+| TAU addr FIFO | 寄存器堆(addr_fifo_depth) | — | ✅ §3.8(FSM 部分仍占位) |
+| MC + control FSM(OGU/MCU/MTU/AGU/DMA/NoC/SFU/…) | 控制面 FSM 逻辑 | — | ⏸ 留 Phase 5 综合(见 §5.1) |
+
+**实测 v4 全栈芯片 90% 面积已物理化**(compute + 全部片上缓冲/存储);剩余
+~10% 是控制/互连/胶合 FSM 与虚拟激励源,按本质留 Phase 5(§5.1)。用
+`python -m npu_sim fidelity <arch>` 可对任意芯片查证物理化占比。
+
+**解析物理模型的边界已到达。** 所有**可解析建模**的部件已物理化:compute 阵列
+(PE 数 / lanes / vector_width)+ 全部片上存储(SRAM/CAM/eDRAM/寄存器堆,各按
+真实单元密度,差 10× 以上不一刀切)。剩余的**控制面 FSM 逻辑**(MC + SPEC-007)
+按其本质留待 Phase 5 综合 —— 见 §5.1。
+
+## 5.1 为什么 control-plane FSM 面积留 `[calibration knob]`(不是偷懒)
+
+存储和规则数据通路阵列的面积**可从物理第一性 + 公开单元密度解析推导**(bitcell
+面积、PE 门数、CAM/eDRAM cell)。但控制面 FSM(op 生成、命令序列、地址生成状态
+机)的门数**无法从 config 或文献推导** —— 它取决于具体 RTL 实现,只有综合能给。
+
+**把占位 `30000 µm²` 改写成 `37500 门 × 0.8 µm²` 不是"变真",是把同一个猜测换
+个单位** —— 那才是臆想。所以诚实的做法是:
+- **有真实 size 旋钮的部分照样物理化**(如 TAU 的 `addr_fifo` → 寄存器堆,§3.8);
+- **纯 FSM 逻辑保留 `[calibration knob]`**,并明示"待 Phase 5 综合",而不是编造
+  门数。
+
+这是解析 PPA 模型的**诚实边界**:能从物理推的都推了,推不动的老实标注,等综合。
+
+**5 个 compute 模块(MAC/VAU/DSB/AVP/DAGC)全部迁移完成** —— compute 数据通路
+的 PPA 已全部脱离"经验拍值",改为规模驱动 + 文献引用单位成本。剩余占位系数
+集中在 control(SPEC-007)/ DRAM(SPEC-011)模块,已标 `[calibration knob]`。
+
+迁移每个模块:先在本规范加一节推导 + 引用 → 加 `physical.py` 函数 →
+覆盖模块 PPA 方法 → 更新该模块测试 → flip
+`test_area_model_sensitivity.py` 对应断言。
+
+## 6. 测试要求
+
+- **§T.1** `test_physical.py`:每个 `physical.py` 常数/函数对齐 §1–§3 的值与
+  引用;门计数公式与缩放(2× PE → 2× 面积/漏电)。
+- **§T.2** MAC 面积随 `array_rows×array_cols` 单调缩放(flip 原 size-blind
+  tripwire);能量 = MACs × per-MAC。
+- **§T.3** 面积单调性:int8-only < +bfp16 < +fp16。
+
+## 7. 与 CLAUDE.md 一致性
+
+CLAUDE.md 称系数是"pre-silicon estimates awaiting Phase 5 calibration"。本
+规范**不声称已标定到硅**;它把系数从"无依据经验值"升级为"公开文献 @45nm +
+物理正确的函数形式",并为 Phase 5(综合/PDK 替换单位成本 + 节点缩放)留出
+干净的替换点。这是"从臆想到可校准"的第一步,不是终点。

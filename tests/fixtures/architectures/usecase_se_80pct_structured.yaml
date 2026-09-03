@@ -1,0 +1,7 @@
+schema_version: "1.0"
+name: "SE 80% sparsity + structured — fast variant"
+base: usecase_se_30pct.yaml
+overrides:
+  modules:
+    se:
+      config: { sparsity_ratio: 0.8, enable_structured_pruning: true }

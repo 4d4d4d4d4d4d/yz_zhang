@@ -1,0 +1,24 @@
+schema_version: "1.0"
+name: "Probe never-consume"
+description: "Producer sends, Consumer never drains. Tests upstream stall accumulation."
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 8
+      send_rate_cycles_per_token: 1
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      never_consume: true
+
+connections:
+  - { from: prod.out, to: cons.in, fifo_depth: 2, latency_cycles: 1 }

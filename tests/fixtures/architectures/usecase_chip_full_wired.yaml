@@ -1,0 +1,108 @@
+schema_version: "1.0"
+name: "Fully-wired chip — every module carries real traffic"
+description: |
+  与 usecase_npu_v4_full_stack.yaml(26 模块、仅 6 条连接,其余模块只贡献
+  面积)不同:本 fixture 是一颗"真正交互的芯片"——13 个模块、12 条连接,
+  每条连接都有真实 token 流,没有旁观者模块。
+
+  四条交互链在同一仿真里并发:
+    控制面:host → CMDQ → MCU(260 拍/op)→ MAC.in_cmd
+    权重面:weight_src → WB(load→serve)→ MAC.in_weight(置 weight_loaded)
+    激活面:act_src → DAGC(unpack)→ DSB(stage)→ MAC.in_act
+    结果面:MAC.out_psum → OB(accumulate/flush)→ VAU → AVP → Quant → sink
+
+  跨面交互证据(测试断言):
+    - MCU dispatched == CMDQ dequeued(控制面全链路贯通)
+    - WB weights_served ≥ 1 且 MAC 收到后置 weight_loaded(权重面→计算面)
+    - OB psums_accepted == flushed(结果面逐 tile 交接)
+    - sink 收到的 token 数 == 激活 token 数(端到端无丢失)
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  # ---- 三路激励 ----
+  - id: host
+    type: Producer
+    clock: main_clk
+    config: { n_tokens: 3, send_rate_cycles_per_token: 1, payload_size_bytes: 8 }
+  - id: weight_src
+    type: Producer
+    clock: main_clk
+    config: { n_tokens: 2, send_rate_cycles_per_token: 1, payload_size_bytes: 64 }
+  - id: act_src
+    type: Producer
+    clock: main_clk
+    config: { n_tokens: 6, send_rate_cycles_per_token: 1, payload_size_bytes: 8 }
+
+  # ---- 控制面 ----
+  - id: cmdq
+    type: CMDQ
+    clock: main_clk
+    config: { queue_depth: 16, enable_priority: false }
+  - id: mcu
+    type: MCU
+    clock: main_clk
+    config: { has_ogu_peer: false, threads: 1 }
+
+  # ---- 权重面 ----
+  - id: wb
+    type: WB
+    clock: main_clk
+    config: { capacity_kb: 64, write_bw_bytes_per_cycle: 32, read_bw_bytes_per_cycle: 64 }
+
+  # ---- 激活面 ----
+  - id: dagc
+    type: DAGC
+    clock: main_clk
+    config: { bfp8_unpack_throughput: 8, bfp16_unpack_throughput: 4, bfp_ratio: "2:1" }
+  - id: dsb
+    type: DSB
+    clock: main_clk
+    config: { buffer_kb: 64, read_throughput: 8, enable_double_buffer: true }
+
+  # ---- 计算 + 结果面 ----
+  - id: mac
+    type: MAC
+    clock: main_clk
+    config: { array_rows: 32, array_cols: 32, support_bfp16: true, psums_per_tile: 1 }
+  - id: ob
+    type: OB
+    clock: main_clk
+    config: { tile_kb: 8, max_in_flight_tiles: 2, accumulate_depth: 1, support_fp32_acc: true }
+  - id: vau
+    type: VAU
+    clock: main_clk
+    config: { lanes: 16 }
+  - id: avp
+    type: AVP
+    clock: main_clk
+    config: { vector_width: 16 }
+  - id: q_out
+    type: Quant
+    clock: main_clk
+    config: { direction: quant, bits_in: 32, bits_out: 8, enable_per_channel: false, symmetric: true }
+  - id: sink
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+
+connections:
+  # 控制面链
+  - { from: host.out,        to: cmdq.host_in,   fifo_depth: 16, latency_cycles: 1 }
+  - { from: cmdq.mcu_out,    to: mcu.cmd_in,     fifo_depth: 8,  latency_cycles: 1 }
+  - { from: mcu.op_out,      to: mac.in_cmd,     fifo_depth: 4,  latency_cycles: 1 }
+  # 权重面链
+  - { from: weight_src.out,  to: wb.weight_in,   fifo_depth: 8,  latency_cycles: 1 }
+  - { from: wb.weight_out,   to: mac.in_weight,  fifo_depth: 8,  latency_cycles: 1 }
+  # 激活面链
+  - { from: act_src.out,     to: dagc.in_packed, fifo_depth: 4,  latency_cycles: 1 }
+  - { from: dagc.out_unpacked, to: dsb.in_data,  fifo_depth: 4,  latency_cycles: 1 }
+  - { from: dsb.out_data,    to: mac.in_act,     fifo_depth: 4,  latency_cycles: 1 }
+  # 结果面链
+  - { from: mac.out_psum,    to: ob.psum_in,     fifo_depth: 8,  latency_cycles: 1 }
+  - { from: ob.acc_out,      to: vau.in_a,       fifo_depth: 4,  latency_cycles: 1 }
+  - { from: vau.out,         to: avp.in_data,    fifo_depth: 4,  latency_cycles: 1 }
+  - { from: avp.out_data,    to: q_out.data_in,  fifo_depth: 4,  latency_cycles: 1 }
+  - { from: q_out.data_out,  to: sink.in,        fifo_depth: 4,  latency_cycles: 1 }

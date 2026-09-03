@@ -1,0 +1,34 @@
+schema_version: "1.0"
+name: "DAGC chain, slow consumer"
+description: "Producer -> DAGC -> slow Consumer. DAGC output stalls, caused_by cons."
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 16
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 8
+
+  - id: dagc
+    type: DAGC
+    clock: main_clk
+    config:
+      bfp8_unpack_throughput: 8
+      bfp16_unpack_throughput: 4
+      bfp_ratio: "2:1"
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 8
+
+connections:
+  - { from: prod.out, to: dagc.in_packed, fifo_depth: 4, latency_cycles: 1 }
+  - { from: dagc.out_unpacked, to: cons.in, fifo_depth: 2, latency_cycles: 1 }

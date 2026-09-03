@@ -1,0 +1,32 @@
+schema_version: "1.0"
+name: "VAU chain, slow consumer"
+description: "Producer -> VAU -> slow Consumer. VAU output stalls, caused_by cons."
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 16
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 8
+
+  - id: vau
+    type: VAU
+    clock: main_clk
+    config:
+      lanes: 16
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 8
+
+connections:
+  - { from: prod.out, to: vau.in_a, fifo_depth: 4, latency_cycles: 1 }
+  - { from: vau.out, to: cons.in, fifo_depth: 2, latency_cycles: 1 }

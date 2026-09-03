@@ -1,0 +1,7 @@
+schema_version: "1.0"
+name: "L2 2 MB hit_rate=0.9 — hot-cache variant"
+base: usecase_l2_256kb.yaml
+overrides:
+  modules:
+    l2:
+      config: { capacity_kb: 2048, hit_rate: 0.9 }
