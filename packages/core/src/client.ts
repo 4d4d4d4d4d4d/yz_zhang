@@ -1,6 +1,7 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
   AgreementStatus,
+  CaptchaConfig,
   CircleInfo,
   ContentItem,
   CouponTemplate,
@@ -78,8 +79,20 @@ export class PlatformClient {
       phone, password, nickname, sms_code: smsCode,
     });
   }
-  login(phone: string, password: string) {
-    return this.request<{ token: string; user: Me }>('POST', '/auth/login', { phone, password });
+  /** CAP-010 `captchaToken` 在服务端返回 `captcha_required` 后由调用方补上并重试。
+   *
+   *  V56 在服务端加了这道门，却没有任何客户端能交出令牌——网页和 App 上
+   *  连一个能填的地方都没有。运维一旦按文档接上真实验证码，任何连续输错
+   *  3 次密码的用户都会被永久挡在门外。这个参数是那把钥匙。
+   */
+  login(phone: string, password: string, captchaToken = '') {
+    return this.request<{ token: string; user: Me }>('POST', '/auth/login', {
+      phone, password, captcha_token: captchaToken,
+    });
+  }
+  /** CAP-002 渲染人机验证挑战所需的配置（公开，登录页还没有 token）。 */
+  captchaConfig() {
+    return this.request<CaptchaConfig>('GET', '/auth/captcha-config');
   }
   me() {
     return this.request<Me>('GET', '/users/me');

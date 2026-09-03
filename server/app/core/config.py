@@ -70,7 +70,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.51.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.52.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")
@@ -95,6 +95,12 @@ class Settings:
     CAPTCHA_AFTER_FAILURES = int(os.environ.get("PLATFORM_CAPTCHA_AFTER_FAILURES", "3"))
     # none = 直通（不验证任何东西）；sandbox = 形态真实的桩；或你登记的真实供应商
     CAPTCHA_PROVIDER = os.environ.get("PLATFORM_CAPTCHA_PROVIDER", "none")
+    # CAP-002 客户端渲染挑战需要的两样东西。**接真实供应商时必须配站点公钥**，
+    # 否则网页渲染不出挑战 → 用户永远交不出 token → 被锁在门外（生产自检会拦）
+    CAPTCHA_SITE_KEY = os.environ.get("PLATFORM_CAPTCHA_SITE_KEY", "")
+    # hCaptcha / Turnstile / 腾讯云验证码都是「加载脚本 + 用站点公钥渲染 +
+    # 回调拿 token」这一个形状，所以只需要一个地址就能切换
+    CAPTCHA_SCRIPT_URL = os.environ.get("PLATFORM_CAPTCHA_SCRIPT_URL", "")
     # SEC-003 生产关闭 API 文档（避免把全部端点与模型结构直接送给攻击者）
     EXPOSE_DOCS = os.environ.get("PLATFORM_EXPOSE_DOCS", "") == "1"
     # ── FIN 资金合规（25 号 spec）────────────────────────────────────

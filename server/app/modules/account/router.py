@@ -128,6 +128,26 @@ def send_sms_code(request: Request, body: SendCodeIn, db: Session = Depends(get_
         raise exc.as_http() from exc
 
 
+@router.get("/auth/captcha-config")
+def captcha_config():
+    """CAP-002 客户端渲染人机验证挑战所需的配置。**公开**——登录页还没有 token。
+
+    刻意**不**告诉调用方「你现在需不需要验证」：那等于把「这个 IP 已经触发
+    风控」告诉任何人，白送一个探测风控状态的接口（CAP-003）。
+    客户端的正确顺序是：正常提交 → 收到 `captcha_required` → 渲染 → 带 token 重试。
+    """
+    from app.vendors.registry import get_provider
+
+    provider = get_provider("captcha")
+    return {
+        "provider": provider.name,
+        # 直通实现下客户端不必渲染任何东西；这个字段让前端不用猜
+        "enforcing": getattr(provider, "enforcing", False),
+        "site_key": settings.CAPTCHA_SITE_KEY,
+        "script_url": settings.CAPTCHA_SCRIPT_URL,
+    }
+
+
 @router.post("/auth/register", status_code=201)
 def register(request: Request, body: RegisterIn, db: Session = Depends(get_db), user_agent: str = Header(default="")):
     # ACC-001/SEC-011 防刷：账号 + IP 双维度。只按手机号限挡不住批量注册——

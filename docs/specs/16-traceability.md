@@ -1,10 +1,46 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V58 全批次完成（2026-08-28）。
-> 后端 532 tests + 前端 42 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V59 全批次完成（2026-09-03）。
+> 后端 539 tests + 前端 46 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V59 批次：门建好了，却没有钥匙孔）
+
+> 模块 spec：[34-captcha-e2e.md](34-captcha-e2e.md)
+>
+> **检视结论——这是我上上批（V56）自己挖的坑。** 服务端把人机验证阶梯做得
+> 很完整：`CaptchaProvider` 抽象、软阈值、事件留痕、错误验证码计入失败，
+> 还写了测试。**但是没有任何一个客户端能满足这道门：**
+>
+> ```
+> packages/core/src/client.ts:
+>   login(phone, password) { ... { phone, password } }   // 没有 captcha_token
+> web/src/pages/Login.tsx:   没有任何验证码 UI
+> app/App.tsx:               同上
+> ```
+>
+> 默认 `CAPTCHA_PROVIDER=none` 是直通实现，所以当前一切正常。
+> 但 `docs/OPERATIONS.md` 明明白白建议「配 `PLATFORM_CAPTCHA_PROVIDER`
+> 接第三方」——**运维照做，全站登录立刻半死**：任何连续输错 3 次密码的用户
+> 都交不出令牌，被锁在门外直到窗口过期，然后重复。
+>
+> 我建这道阶梯的理由是「给被误伤的真人一条自证的路」。
+> **没有客户端支持时，它反而变成了一堵比封禁更早生效的墙。**
+>
+> 这和 V51 的教训是同一句话的两半：「接口预留了却跑不通，等于没预留」——
+> 而这里是**门建好了却没有钥匙孔**。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **CAP-030 端到端真的走得通** | 提交 → `captcha_required` → 拉配置 → 带令牌重试 → 登进去 | `tests/test_captcha_e2e.py::test_cap030_documented_client_flow_can_actually_get_through` |
+| **CAP-010/031 SDK 真的把令牌发出去** | `login(phone, password, captchaToken?)`。UI 做了而 SDK 不传等于没做——V56 就是这么留下缺口的 | `packages/core/src/client.test.ts::CAP-031 login 确实把验证码令牌发出去了` |
+| **CAP-002/032 公开配置端点** | `GET /auth/captcha-config` 返回 provider / enforcing / site_key / script_url。**无需登录**——登录页还没有 token | `::test_cap032_config_endpoint_needs_no_login` |
+| **CAP-003/033 反应式，不主动问** | 客户端**不**预先询问「我现在需不需要验证」：那等于把「这个 IP 已触发风控」告诉任何人，白送一个探测风控状态的接口。断言触发前后该端点响应逐字节相同 | `::test_cap033_config_does_not_leak_whether_this_ip_is_under_suspicion` |
+| **CAP-011/012 Web 挑战组件** | 登录页捕获 `captcha_required` → 拉配置 → 渲染。按 hCaptcha/Turnstile/腾讯云**共同的形状**实现（脚本 + 站点公钥 + 回调拿 token），接哪家只改环境变量；没有脚本地址时退化为可输入的令牌框并**如实标注是什么**，不画假滑块 | `web/src/CaptchaChallenge.tsx`，构建通过 |
+| **CAP-020/034 机器闸门** | 生产 + 会真的拦人的实现 + 没配站点公钥 → **拒绝启动**。这不是「配置不全」，是登录不可用 | `::test_cap034_production_refuses_enforcing_captcha_without_a_site_key`、`::test_passthrough_captcha_does_not_need_a_site_key`（直通不被误伤） |
+| **CAP-035 不回归** | 默认配置下登录流程与改造前完全一致；老客户端不带该字段照样能登 | `::test_cap035_default_configuration_behaves_exactly_as_before`、`::test_login_still_accepts_a_request_without_the_captcha_field` |
 
 ## 已实现（V58 批次：同一个动作两条路，最常走的那条抄了近道）
 

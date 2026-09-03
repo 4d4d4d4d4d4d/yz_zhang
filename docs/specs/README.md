@@ -56,6 +56,7 @@
 | 31 | 安全事件落库、跨副本封禁与人机验证 | [31-security-events.md](./31-security-events.md) | P0 |
 | 32 | 定时任务编排的完整性 | [32-job-orchestration.md](./32-job-orchestration.md) | P0 |
 | 33 | 处置动作的单一实现 | [33-moderation-actions.md](./33-moderation-actions.md) | P0 |
+| 34 | 人机验证的端到端闭环 | [34-captcha-e2e.md](./34-captcha-e2e.md) | P0 |
 
 ## 功能点编号与优先级约定
 

@@ -451,3 +451,14 @@ export interface TaxSummary {
   /** 平台出具的是**代扣明细**，不是税务机关的完税证明——前端必须原样展示这句。 */
   disclaimer: string;
 }
+
+/** CAP-002 人机验证的客户端配置。 */
+export interface CaptchaConfig {
+  provider: string;
+  /** 直通实现为 false——客户端不必渲染任何东西。 */
+  enforcing: boolean;
+  /** 站点公钥；hCaptcha / Turnstile / 腾讯云都用它渲染。 */
+  site_key: string;
+  /** 供应商脚本地址；为空表示退化为手工输入令牌（沙箱/自建）。 */
+  script_url: string;
+}

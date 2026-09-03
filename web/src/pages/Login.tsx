@@ -1,6 +1,7 @@
-import { ApiError } from '@platform/core';
+import { ApiError, type CaptchaConfig } from '@platform/core';
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import CaptchaChallenge from '../CaptchaChallenge';
 import { useApp } from '../store';
 
 export default function Login() {
@@ -11,6 +12,10 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
   const [error, setError] = useState('');
+  // CAP-003 反应式：**不**预先问「我需不需要验证」——那等于把「这个 IP 已经
+  // 触发风控」告诉任何人。只有服务端真的要求了才拉配置并渲染挑战
+  const [captcha, setCaptcha] = useState<CaptchaConfig | null>(null);
+  const [captchaToken, setCaptchaToken] = useState('');
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -18,11 +23,19 @@ export default function Login() {
     try {
       const res =
         mode === 'login'
-          ? await client.login(phone, password)
+          ? await client.login(phone, password, captchaToken)
           : await client.register(phone, password, nickname);
       setToken(res.token);
       nav('/');
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'captcha_required') {
+        // 服务端要求人机验证：拉配置、渲染挑战，让用户能**自证是真人**再重试。
+        // 少了这一步，接上真实验证码后连续输错几次密码的用户就被永久挡在门外
+        setCaptcha(await client.captchaConfig().catch(() => null));
+        setCaptchaToken('');
+        setError('请完成人机验证后重试');
+        return;
+      }
       setError(err instanceof ApiError ? err.message : '网络错误');
     }
   }
@@ -48,6 +61,9 @@ export default function Login() {
               </label>
               <p className="muted">开发环境短信验证码固定为 123456，已自动填入</p>
             </>
+          )}
+          {captcha && mode === 'login' && (
+            <CaptchaChallenge config={captcha} onToken={setCaptchaToken} />
           )}
           {error && <p className="error">{error}</p>}
           <div className="row">

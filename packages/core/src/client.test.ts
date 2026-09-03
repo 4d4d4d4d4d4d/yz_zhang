@@ -151,6 +151,27 @@ describe('V1 接口', () => {
     expect(fetchImpl.mock.calls[0][1].method).toBe('POST');
   });
 
+  it('CAP-031 login 确实把验证码令牌发出去了', async () => {
+    // UI 做了而 SDK 不传，等于没做——V56 就是这么留下缺口的
+    const { client, fetchImpl } = makeClient(200, { token: 't', user: {} });
+    await client.login('13800000000', 'pw', 'the-token');
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({
+      phone: '13800000000', password: 'pw', captcha_token: 'the-token',
+    });
+  });
+
+  it('CAP-010 不传令牌时仍是合法请求（老调用方不被破坏）', async () => {
+    const { client, fetchImpl } = makeClient(200, { token: 't', user: {} });
+    await client.login('13800000000', 'pw');
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).captcha_token).toBe('');
+  });
+
+  it('CAP-002 验证码配置走公开端点', async () => {
+    const { client, fetchImpl } = makeClient(200, { provider: 'none', enforcing: false });
+    await client.captchaConfig();
+    expect(fetchImpl.mock.calls[0][0]).toBe('http://x/api/v1/auth/captcha-config');
+  });
+
   it('TAX-021 代扣明细走 finance 前缀', async () => {
     const { client, fetchImpl } = makeClient(200, { mode: 'withholding', items: [] });
     await client.myTax();

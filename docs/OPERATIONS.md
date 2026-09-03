@@ -77,7 +77,7 @@ App 与 Web 共用同一个 TS SDK（`packages/core`），
 | **限流（滑动窗口）** | `core/ratelimit.py` | 注册/登录/改密/换绑的暴力尝试 |
 | **对账不变量** | `risk/service.py::reconcile` | 五条硬不变量兜底，不平自动开工单+告警 |
 
-这套组合已被 **532 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
+这套组合已被 **539 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
 「重复接受报名 / 重复托管 / 重复交付 / 重复验收 / 重复里程碑放款」全部拒绝且零副作用。
 
 ### 2.2 多副本并发安全（V42 已补齐，见 [18-concurrency.md](specs/18-concurrency.md)）
@@ -224,7 +224,7 @@ App 与 Web 共用同一个 TS SDK（`packages/core`），
 |---|---|---|
 | **TLS 证书** | 配置已就位 | 证书需你提供（ACME/Certbot 或云厂商），`up.sh` 会检查 |
 | **WAF / CC 防护** | 无 | 云厂商 WAF 或 CDN 层防护，应用层挡不住大流量 DDoS |
-| **人机验证** | ✅ V56 已实现抽象与沙箱桩，默认 `none` 直通 | 配 `PLATFORM_CAPTCHA_PROVIDER` 接第三方（hCaptcha/腾讯云等） |
+| **人机验证** | ✅ V56 服务端 + V59 端到端（SDK/网页/配置端点）已打通 | 配 `PLATFORM_CAPTCHA_PROVIDER` **和 `PLATFORM_CAPTCHA_SITE_KEY`** 接第三方；**只配前者不配后者，生产会拒绝启动**——网页渲染不出挑战，用户会被锁在门外 |
 | **依赖扫描** | 无 | CI 加 `pip-audit` / `npm audit` |
 | ~~跨副本封禁共享~~ | ✅ V56 已修：封禁与失败计数落 `security_events` 表 | —— |
 
@@ -340,8 +340,8 @@ docker compose -f deploy/docker-compose.prod.yml run --rm migrate
 - [ ] 告警接入值班系统（PagerDuty / 电话）
 - [ ] 定期做恢复演练并记录 RTO/RPO
 
-CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 532 测试、
-前端 43 测试与构建、**alembic 迁移漂移检查**、**真实 HTTP 主闭环冒烟**、
+CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 539 测试、
+前端 46 测试与构建、**alembic 迁移漂移检查**、**真实 HTTP 主闭环冒烟**、
 **沙箱合规态闭环自检**。
 
 ---
@@ -483,7 +483,7 @@ CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 532 测试、
 **已经很扎实的**：交易闭环、资金安全与守恒、纠纷程序正义、账号安全、审计留痕、
 多副本并发安全、外部供应商可替换性、事件投递的失败隔离与可补做、
 个税代扣的资金隔离与可对账、反洗钱的可疑识别与保密、边界防护的跨副本一致性、
-定时任务编排的完整性、处置动作的一致性。这些有 532 个测试钉着。
+定时任务编排的完整性、处置动作的一致性。这些有 539 个测试钉着。
 
 **离真正上线还差的**（按紧迫度）：
 1. ~~Postgres + 行锁/乐观锁~~ —— **V42 已完成**（切库只改环境变量）

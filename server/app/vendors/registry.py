@@ -139,6 +139,16 @@ def startup_check() -> None:
             "PLATFORM_TAX_MODE=withholding 但 PLATFORM_TAX_PROVIDER=none："
             "声明了要代扣却没有配置扣缴规则，等于没扣"
         )
+    # CAP-020 一个客户端渲染不出来的强制验证 = 把全站用户锁在门外。
+    # 这不是「配置不全」，是登录不可用，所以必须硬拦截而不是打一行日志。
+    captcha = _REGISTRY["captcha"].get(settings.CAPTCHA_PROVIDER)
+    if captcha is not None and getattr(captcha, "enforcing", False) \
+            and not settings.CAPTCHA_SITE_KEY:
+        problems.append(
+            f"PLATFORM_CAPTCHA_PROVIDER={settings.CAPTCHA_PROVIDER} 会真的拦人，"
+            "但没有配 PLATFORM_CAPTCHA_SITE_KEY：网页与 App 渲染不出挑战，"
+            "用户永远交不出验证令牌，连续输错几次密码后将被锁在门外"
+        )
     if settings.JWT_SECRET == "dev-secret-change-me":
         problems.append("PLATFORM_JWT_SECRET 仍是默认值")
     if settings.JOB_TOKEN == "dev-job-token-change-me":
