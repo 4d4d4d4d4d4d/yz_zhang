@@ -1,10 +1,62 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V59 全批次完成（2026-09-03）。
-> 后端 539 tests + 前端 46 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V60 全批次完成（2026-09-04）。
+> 后端 550 tests + 前端 46 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V60 批次：把钱锁在一个再也登不上的账户里）
+
+> 模块 spec：[35-account-deletion.md](35-account-deletion.md)
+>
+> **检视结论**：注销是全站唯一一个「用户主动把自己永久锁在门外」的操作——
+> `is_deleted` 置位、手机号改写、全部会话吊销，此后登录态 403、密码登录 400。
+> **闸门放行一次，就等于永久锁门一次。** 探针跑下来，它错了三处。
+>
+> **一、钱包是三态的，闸门只看了一态。**
+>
+> ```
+> WITHDRAW:   200 {'status': 'pending_review', 'available_cents': 0, 'frozen_cents': 1500000}
+> WALLET:     {'available_cents': 0, 'escrow_cents': 0, 'frozen_cents': 1500000}
+> DEACTIVATE: 200 {'deleted': True}
+> ```
+>
+> 一笔 ¥15,000 的提现进了 AML 人工复核，钱从可用挪到冻结、可用归零，
+> 于是 `if acct.available_cents > 0` 认为「没钱了」，放行。
+> 复核**驳回**时 `available_cents += amount` —— ¥15,000 退回一个再也登不上、
+> 手机号已改写、连密码登录都被拒的账户，永久搁浅。
+> 而驳回不是意外：大额提现进人审的全部意义就是它可能被驳回。
+>
+> **二、拦截条件是两张手抄的白名单，已经抄漏了一个。**
+> `Dispute.status == "open"` 漏掉了 `appealed`（申诉复核中，`appeal-verdict`
+> **会重新分账**）；模型上那行注释 `# open/resolved/settled` 自己也漏了它——
+> **注释和代码同时错，还互相印证**，这是最难发现的一种错。
+>
+> **三、注销后银行卡号原样留在库里。**
+> `users.real_name` 被小心地清成了 `""`，而 `payout_accounts` 里
+> 一模一样的姓名加一张完整卡号（`6222021234567890123` / `张三`）原样留下。
+> 不是「该不该留」的问题——是**没有人做过这个决定**：注销就是一段手写的
+> 六行赋值，凭作者当时想得起来的字段，以后每加一列默认行为都是「悄悄留下」。
+>
+> **关键判断：不能一删了之，删过头本身违法。**《反洗钱法》第十九条要求客户
+> 身份资料与交易记录至少保存五年；《个人信息保护法》第四十七条也给删除权
+> 写了「法定保存期限未届满」的例外。所以正确形态是**逐字段三选一**
+> （删除 / 脱敏保留 / 原样保留），而且这张表必须是**声明**——
+> 新增一列就逼作者做一次决定，而不是让它默默留下。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **ACCDEL-010 闸门看钱包三态之和** | `available + escrow + frozen > 0` 一律拒绝。钱本身是事实来源，任何单态都不是 | `tests/test_account_deletion.py::test_accdel010_pending_withdrawal_review_blocks_deactivation` |
+| **ACCDEL-011 一次说全** | 三个态在一条消息里各自给出金额与可执行指路，别让用户逐个撞墙；错误码 `funds_remaining` | `::test_accdel011_message_names_every_blocking_bucket_at_once` |
+| **ACCDEL-012 反向判断终态** | `contract.SETTLED_STATUSES` / `dispute.CLOSED_STATUSES` 声明「已出账终态」，不在其中的一律算进行中。新增状态忘了登记 → **多拦一次注销**（安全侧），而不是放走一笔钱 | `::test_accdel012_settled_status_sets_are_declared_not_hand_copied` |
+| **ACCDEL-013 `appealed` 必须拦** | 申诉复核会重新分账，此刻注销等于放弃一笔还没算完的钱 | `::test_accdel013_appealed_dispute_blocks_deactivation` |
+| **ACCDEL-020/021 处置表逐列覆盖模型** | `app/modules/account/deletion.py` 的 `USER_DISPOSITION` / `PAYOUT_DISPOSITION` 声明每一列是删除/脱敏/保留，`erase_personal_data()` 是唯一执行入口；反射比对，多写或漏写都红 | `::test_accdel021_disposition_table_covers_exactly_the_model_columns`（参数化 User + PayoutAccount） |
+| **ACCDEL-022/023 脱敏而非清空** | `real_name → 张*`、`account_no → 6222****0123`、`holder_name → 张*`。掩码后**不足以再发起打款**，这是有意的 | `::test_accdel022_027_dispositions_are_actually_applied` |
+| **ACCDEL-024/025 权限与封禁** | `is_admin` 置 `False`（注销一个管理员却留着管理员标记 = 留了一枚定时炸弹）；`is_banned` **不清**，注销不是洗白封禁的手段 | 同上、`::test_accdel025_deactivation_does_not_wash_away_a_ban` |
+| **ACCDEL-027 对手方的凭证保留** | 信用分与评价聚合不是注销者一个人的数据 | `::test_accdel022_027_dispositions_are_actually_applied` |
+| **ACCDEL-030 闸门不是死路** | 复核出结果、冻结清零后照常可注销；断言三态全零这条不变量本身，而不是「某几个 409」 | `::test_accdel030_review_cleared_then_deactivation_leaves_all_buckets_zero` |
+| **ACCDEL-032 扫全表** | 已注销用户名下不得再有连续 12 位以上纯数字的卡号——查整张表，而不是只看刚注销的那一行 | `::test_accdel032_no_full_card_number_survives_deletion` |
 
 ## 已实现（V59 批次：门建好了，却没有钥匙孔）
 

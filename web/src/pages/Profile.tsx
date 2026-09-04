@@ -220,7 +220,12 @@ export default function Profile() {
       <div className="card row">
         <button className="danger" onClick={() => { setToken(null); nav('/'); }}>退出登录</button>
         <button className="ghost" onClick={async () => {
-          if (!confirm('注销后账号不可恢复（需先结清合约与余额），确认继续？')) return;
+          // ACCDEL-010 闸门看的是钱包三态之和，文案就得说全三态：
+          // 「余额」只说了可用态，用户看到「余额 0 却注销不了」会以为是 bug
+          if (!confirm(
+            '注销后账号不可恢复，且需先结清合约与钱包内全部资金'
+            + '（可用余额、合约托管、提现复核冻结）。确认继续？',
+          )) return;
           try {
             await client.deactivateAccount();
             setToken(null);

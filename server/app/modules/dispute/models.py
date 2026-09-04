@@ -6,6 +6,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base
 from app.modules.account.models import utcnow
 
+# ACCDEL-012/013 纠纷的**终态**。注销闸门按「不在这张表里就算进行中」判断。
+# 注意 `appealed`（申诉复核中）不是终态：`appeal-verdict` 会重新分账，
+# 当事人此刻注销等于放弃一笔还没算完的钱。
+CLOSED_STATUSES: frozenset[str] = frozenset({"resolved", "settled"})
+
 
 class Dispute(Base):
     """DSP-001 纠纷：协商 → 平台仲裁 → 裁决自动执行。"""
@@ -17,7 +22,8 @@ class Dispute(Base):
     contract_id: Mapped[int] = mapped_column(Integer, index=True)
     opened_by: Mapped[int] = mapped_column(Integer)
     reason: Mapped[str] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(20), default="open")  # open/resolved/settled
+    # open/appealed（进行中） | resolved/settled（终态，见 CLOSED_STATUSES）
+    status: Mapped[str] = mapped_column(String(20), default="open")
     # DSP-003 证据链自动归集快照
     evidence: Mapped[dict] = mapped_column(JSON, default=dict)
     # 和解提案（DSP-004）：{"executor_share_bps": int, "proposed_by": user_id}

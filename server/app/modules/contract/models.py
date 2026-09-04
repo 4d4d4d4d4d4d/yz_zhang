@@ -17,6 +17,11 @@ CONTRACT_STATUSES = [
     "cancelled",
 ]
 
+# ACCDEL-012 资金已彻底出账的终态。账号注销闸门按「**不在**这张表里就算进行中」
+# 判断，而不是手抄一张「进行中」的白名单——那种白名单抄漏了不会有任何东西报错。
+# 以后新增一个状态，忘了登记的方向是「多拦一次注销」，不是「放走一笔钱」。
+SETTLED_STATUSES: frozenset[str] = frozenset({"released", "refunded", "split", "cancelled"})
+
 
 class Contract(Base):
     __tablename__ = "contracts"

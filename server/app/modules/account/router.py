@@ -321,17 +321,29 @@ def revoke_session(
 # ---------- 账号注销（ACC-006）----------
 @router.post("/users/me/deactivate")
 def deactivate_account(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """注销：有未结算合约或进行中纠纷时阻断；通过后脱敏并吊销全部会话。"""
-    from app.modules.contract.models import Contract
-    from app.modules.dispute.models import Dispute
+    """注销：资金未清或关系未了时阻断；通过后按处置表脱敏并吊销全部会话。
+
+    注销是**不可逆**的：此后 `get_current_user` 一律 403、密码登录一律 400、
+    手机号被改写。所以闸门放行一次，就等于永久锁门一次。
+
+    ACCDEL-010 闸门以**钱包三态之和**为准。改造前只看 `available_cents`，
+    于是一笔进了人工复核（AML-001）的大额提现——钱从可用挪到冻结、可用归零——
+    会被认为「没钱了」而放行；复核驳回时钱退回一个再也登不上的账户，永久搁浅。
+
+    ACCDEL-012 合约与纠纷改为**反向**判断：不在「已出账终态」集合里的一律算
+    进行中。改造前手抄的 `Dispute.status == "open"` 漏掉了 `appealed`
+    （申诉复核会重新分账），而抄漏了不会有任何东西报错。
+    """
+    from app.modules.contract.models import SETTLED_STATUSES, Contract
+    from app.modules.dispute.models import CLOSED_STATUSES, Dispute
     from app.modules.wallet import service as wallet
 
+    from .deletion import erase_personal_data
+
+    mine = (Contract.requester_id == user.id) | (Contract.executor_id == user.id)
     active_contract = (
         db.query(Contract)
-        .filter(
-            (Contract.requester_id == user.id) | (Contract.executor_id == user.id),
-            Contract.status.in_(["pending_signatures", "signed", "funded"]),
-        )
+        .filter(mine, Contract.status.notin_(tuple(SETTLED_STATUSES)))
         .first()
     )
     if active_contract:
@@ -339,26 +351,24 @@ def deactivate_account(user: User = Depends(get_current_user), db: Session = Dep
     open_dispute = (
         db.query(Dispute)
         .join(Contract, Contract.id == Dispute.contract_id)
-        .filter(
-            (Contract.requester_id == user.id) | (Contract.executor_id == user.id),
-            Dispute.status == "open",
-        )
+        .filter(mine, Dispute.status.notin_(tuple(CLOSED_STATUSES)))
         .first()
     )
     if open_dispute:
         raise conflict("存在进行中纠纷，结案后方可注销", "open_dispute")
+
     acct = wallet.get_or_create(db, user.id)
-    if acct.available_cents > 0:
-        raise conflict("钱包仍有余额，请先提现", "balance_remaining")
-    # 脱敏保留（审计要求保留交易记录，个人身份信息清除）
-    user.is_deleted = True
-    user.phone = f"deleted:{user.id}"
-    user.nickname = "已注销用户"
-    user.real_name = ""
-    user.bio = ""
-    user.lat = None
-    user.lng = None
-    db.add(user)
+    # ACCDEL-011 三个态一次说全，别让用户逐个撞墙
+    blocked = [
+        (acct.available_cents, "可用余额", "请先提现"),
+        (acct.escrow_cents, "合约托管中", "等合约结算后再注销"),
+        (acct.frozen_cents, "冻结中（提现复核或纠纷冻结）", "等处理完成后再注销"),
+    ]
+    parts = [f"{label} ¥{cents / 100:.2f}（{how}）" for cents, label, how in blocked if cents > 0]
+    if parts:
+        raise conflict("钱包仍有未结资金：" + "；".join(parts), "funds_remaining")
+
+    erase_personal_data(db, user)
     db.query(LoginSession).filter(LoginSession.user_id == user.id).update({"revoked": True})
     return {"deleted": True}
 
