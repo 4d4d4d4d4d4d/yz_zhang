@@ -300,3 +300,26 @@ def test_guidance_changes_the_result():
     guided = model.denoise_elements(ctx, targets, steps=3, guidance=3.0, uncond_fn=uncond_fn)
 
     assert not torch.allclose(plain[targets[0]].data, guided[targets[0]].data, atol=1e-5)
+
+
+def test_text_loss_ignores_padding():
+    """Predicting <pad> is free accuracy; an all-padding caption has no signal."""
+    torch.manual_seed(0)
+    cfg = tiny_config()
+    model = AtlasModel(cfg)
+    ctx = build(model, make_batch(), n_observed=1)
+
+    text_idx = ctx.indices_of(TEXT)[0]
+    blank = torch.full_like(ctx[text_idx].data, cfg.text_pad_id)
+    ctx = ctx.replace_at(text_idx, ctx[text_idx].with_data(blank))
+
+    _, stats = model.compute_loss(ctx)
+    assert stats["loss_text"] == 0.0
+    assert torch.isfinite(torch.tensor(stats["loss"]))
+
+
+def test_text_loss_is_nonzero_for_a_real_caption():
+    torch.manual_seed(0)
+    model = AtlasModel(tiny_config())
+    _, stats = model.compute_loss(build(model, make_batch(), n_observed=1))
+    assert stats["loss_text"] > 0.0

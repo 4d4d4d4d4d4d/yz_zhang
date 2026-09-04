@@ -354,11 +354,19 @@ class AtlasModel(nn.Module):
                     continue
                 losses[element.kind].append(flow_loss(pred[idx], x1, noise, weight))
             else:
+                # Causal within the element: position i predicts token i+1.
+                # Padding is excluded -- captions are short relative to the
+                # padded length, and predicting <pad> is free accuracy that
+                # would otherwise dominate the loss.
                 logits = pred[idx][:, :-1]
                 labels = element.data[:, 1:]
-                losses[TEXT].append(
-                    F.cross_entropy(logits.reshape(-1, logits.shape[-1]), labels.reshape(-1))
+                text_loss = F.cross_entropy(
+                    logits.reshape(-1, logits.shape[-1]),
+                    labels.reshape(-1),
+                    ignore_index=self.config.text_pad_id,
                 )
+                if torch.isfinite(text_loss):
+                    losses[TEXT].append(text_loss)
 
         zero = torch.zeros((), device=self.device)
         image_loss = torch.stack(losses[IMAGE]).mean() if losses[IMAGE] else zero

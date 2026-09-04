@@ -36,6 +36,7 @@ class AtlasConfig:
     # -- text --
     text_vocab_size: int = 512
     max_text_len: int = 32
+    text_pad_id: int = 0                 # excluded from the text loss
 
     # -- context --
     max_views: int = 8                   # largest view count seen in training
