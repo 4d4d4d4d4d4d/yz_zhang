@@ -247,3 +247,56 @@ def test_generate_views_extends_the_context():
     out = model.generate_views(ctx, cams, steps=2)
     # two new views, each contributing an image and a depth element
     assert len(out) == before + 4
+
+
+def test_guidance_uses_the_live_context_not_a_snapshot():
+    """Classifier-free guidance must see the views generated so far.
+
+    A stale unconditional context would drift further from the conditional
+    branch with every new frame, so check that ``uncond_fn`` is handed the
+    context as it stands at the moment of the call.
+    """
+    torch.manual_seed(0)
+    cfg = tiny_config()
+    model = wake_model(AtlasModel(cfg).eval())
+    ctx = build(model, make_batch(views=2), n_observed=2, predict_depth=False)
+
+    from atlas.data import orbit_cameras
+
+    g = torch.Generator().manual_seed(0)
+    cams = orbit_cameras(2, g, height=cfg.image_size, width=cfg.image_size).reshape(1, 2)
+    cams = type(cams)(
+        cams.w2c.expand(2, 2, 4, 4).contiguous(), cams.K.expand(2, 2, 3, 3).contiguous(),
+        cfg.image_size, cfg.image_size,
+    )
+
+    seen: list[int] = []
+
+    def uncond_fn(context):
+        seen.append(len(context))
+        return context
+
+    model.generate_views(ctx, cams, steps=2, guidance=2.0, uncond_fn=uncond_fn)
+
+    assert seen, "guidance never consulted the unconditional branch"
+    # The context grows as views are appended, so the callback must see it grow.
+    assert seen[-1] > seen[0], f"unconditional context never grew: {seen}"
+
+
+def test_guidance_changes_the_result():
+    torch.manual_seed(0)
+    cfg = tiny_config()
+    model = wake_model(AtlasModel(cfg).eval())
+    ctx = build(model, make_batch(views=2), n_observed=1, predict_depth=False)
+    targets = [i for i in ctx.indices_of(IMAGE) if not bool(ctx[i].observed.all())]
+
+    def uncond_fn(context):
+        text = context.indices_of(TEXT)[0]
+        return context.replace_at(text, context[text].with_data(torch.zeros_like(context[text].data)))
+
+    torch.manual_seed(1)
+    plain = model.denoise_elements(ctx, targets, steps=3)
+    torch.manual_seed(1)
+    guided = model.denoise_elements(ctx, targets, steps=3, guidance=3.0, uncond_fn=uncond_fn)
+
+    assert not torch.allclose(plain[targets[0]].data, guided[targets[0]].data, atol=1e-5)

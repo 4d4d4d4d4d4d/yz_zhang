@@ -68,7 +68,7 @@ def evaluate(
         _, points = model.reconstruct(ctx, steps=steps)
 
         pred_depth = []
-        for idx, view in enumerate(range(views)):
+        for view in range(views):
             cam = ctx[ctx.indices_of(IMAGE)[view]].cameras
             fwd = cam.c2w[:, :3, 2]
             rel = points[:, view] - cam.centers[:, None, None, :]

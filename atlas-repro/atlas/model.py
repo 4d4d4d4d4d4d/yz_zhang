@@ -382,24 +382,28 @@ class AtlasModel(nn.Module):
         context: SpatialContext,
         target_indices: Sequence[int],
         guidance: float,
-        uncond_context: SpatialContext | None,
+        uncond_fn,
     ):
-        """Build a ``velocity_fn`` that denoises ``target_indices`` jointly."""
+        """Build a ``velocity_fn`` that denoises ``target_indices`` jointly.
 
-        def velocity_fn(x_flat: list[Tensor], t: Tensor) -> list[Tensor]:
-            ctx = context
+        ``uncond_fn`` maps the *current* context to its unconditional twin.
+        Deriving it per call rather than holding a second context alongside
+        keeps the two branches sharing every already-generated view -- with a
+        stale copy, guidance would drift further off with each new frame.
+        """
+
+        def fill(ctx: SpatialContext, x_flat: list[Tensor], t: Tensor) -> SpatialContext:
             for x, idx in zip(x_flat, target_indices):
                 el = ctx[idx]
                 ctx = ctx.replace_at(idx, Element(el.kind, x, el.cameras, el.observed, t))
-            out = self.forward(ctx)
+            return ctx
+
+        def velocity_fn(x_flat: list[Tensor], t: Tensor) -> list[Tensor]:
+            out = self.forward(fill(context, x_flat, t))
             v = [out[idx] for idx in target_indices]
 
-            if guidance != 1.0 and uncond_context is not None:
-                uctx = uncond_context
-                for x, idx in zip(x_flat, target_indices):
-                    el = uctx[idx]
-                    uctx = uctx.replace_at(idx, Element(el.kind, x, el.cameras, el.observed, t))
-                uout = self.forward(uctx)
+            if guidance != 1.0 and uncond_fn is not None:
+                uout = self.forward(fill(uncond_fn(context), x_flat, t))
                 v = [uv + guidance * (cv - uv) for cv, uv in zip(v, (uout[i] for i in target_indices))]
             return v
 
@@ -414,10 +418,14 @@ class AtlasModel(nn.Module):
         steps: int = 32,
         shift: float = 1.0,
         guidance: float = 1.0,
-        uncond_context: SpatialContext | None = None,
+        uncond_fn=None,
         generator: torch.Generator | None = None,
     ) -> SpatialContext:
-        """Jointly denoise the given elements from pure noise to data."""
+        """Jointly denoise the given elements from pure noise to data.
+
+        ``uncond_fn``, when given alongside ``guidance != 1``, maps a context
+        to its unconditional twin for classifier-free guidance.
+        """
         target_indices = list(target_indices)
         if not target_indices:
             return context
@@ -432,7 +440,7 @@ class AtlasModel(nn.Module):
                 torch.randn(el.data.shape, device=device, dtype=el.data.dtype, generator=generator)
             )
 
-        velocity_fn = self._velocity_for(context, target_indices, guidance, uncond_context)
+        velocity_fn = self._velocity_for(context, target_indices, guidance, uncond_fn)
         grid = shift_timesteps(torch.linspace(0.0, 1.0, steps + 1, device=device), shift)
 
         for i in range(steps):
@@ -459,7 +467,7 @@ class AtlasModel(nn.Module):
         with_depth: bool | None = None,
         shift: float = 1.0,
         guidance: float = 1.0,
-        uncond_context: SpatialContext | None = None,
+        uncond_fn=None,
         generator: torch.Generator | None = None,
     ) -> SpatialContext:
         """Autoregressively generate new views at the requested poses.
@@ -486,18 +494,13 @@ class AtlasModel(nn.Module):
                 context = context.append(Element(DEPTH, d, cam))
                 targets.append(len(context) - 1)
 
-            if uncond_context is not None:
-                uncond_context = uncond_context.append(context[targets[0]])
-                if with_depth:
-                    uncond_context = uncond_context.append(context[targets[-1]])
-
             context = self.denoise_elements(
                 context,
                 targets,
                 steps=steps,
                 shift=shift,
                 guidance=guidance,
-                uncond_context=uncond_context,
+                uncond_fn=uncond_fn,
                 generator=generator,
             )
         return context

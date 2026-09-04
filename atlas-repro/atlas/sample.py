@@ -94,13 +94,15 @@ def generate(
         context = SpatialContext([Element(TEXT, ids, observed=observed_flag)])
         caption = prompt
 
-    uncond = null_text_context(context, tokenizer) if guidance != 1.0 else None
+    # Derived per denoising call so the unconditional branch always shares the
+    # views generated so far, rather than a snapshot taken before the rollout.
+    uncond_fn = (lambda ctx: null_text_context(ctx, tokenizer)) if guidance != 1.0 else None
     cams = _trajectory(n_views, cfg.image_size, seed, dev)
     cams = cams.reshape(1, n_views) if cams.batch_shape == (n_views,) else cams
 
     context = model.generate_views(
         context, cams, steps=steps, with_depth=cfg.predict_depth,
-        guidance=guidance, uncond_context=uncond,
+        guidance=guidance, uncond_fn=uncond_fn,
     )
 
     # Walk the context pairing each view with the depth element that follows
