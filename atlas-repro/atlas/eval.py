@@ -12,6 +12,17 @@ Reports:
 
 Both run through exactly the same model and the same spatial context; only
 which elements are observed differs.
+
+Each metric is reported next to a trivial baseline, because an absolute
+error rate says nothing on its own:
+
+``recon/abs_rel_const``  the best possible *constant* depth map.  Since the
+                         metric is scale-aligned, this is what you score by
+                         predicting no geometry at all -- only a model that
+                         beats it has learned any shape.
+``nvs/psnr_copy``        the nearest observed view copied to the target pose.
+                         Beating it means the model moved the camera rather
+                         than echoing what it was given.
 """
 
 from __future__ import annotations
@@ -46,6 +57,9 @@ def evaluate(
     device: str = "cpu",
 ) -> dict[str, float]:
     """Score reconstruction and novel-view synthesis on held-out scenes."""
+    if observed < 1:
+        raise ValueError("evaluation needs at least one observed view to condition on")
+
     cfg = model.config
     dev = torch.device(device)
     tokenizer = WordTokenizer(max_len=cfg.max_text_len)
@@ -53,7 +67,9 @@ def evaluate(
     dataset = SyntheticWorlds(length=scenes, image_size=cfg.image_size, views=views, seed=seed)
 
     recon: list[dict[str, float]] = []
+    recon_const: list[dict[str, float]] = []
     nvs: list[float] = []
+    nvs_copy: list[float] = []
 
     for start in range(0, scenes, batch_size):
         items = [dataset[i] for i in range(start, min(start + batch_size, scenes))]
@@ -80,6 +96,16 @@ def evaluate(
         recon.append(
             pointmap_metrics(pred_depth.flatten(0, 1), gt_depth.flatten(0, 1), valid.flatten(0, 1))
         )
+        # Baseline: a constant depth map.  The metric aligns scale, so the
+        # constant itself is irrelevant -- this is the score for predicting
+        # no geometry whatsoever.
+        recon_const.append(
+            pointmap_metrics(
+                torch.ones_like(pred_depth).flatten(0, 1),
+                gt_depth.flatten(0, 1),
+                valid.flatten(0, 1),
+            )
+        )
 
         # -- novel-view synthesis: a few views given, the rest generated --
         ctx = build_context(
@@ -95,10 +121,18 @@ def evaluate(
         for i in target_indices:
             pred = model.decode_image(generated[i].data)
             view = ctx.indices_of(IMAGE).index(i)
-            nvs.extend(psnr(pred, batch["image"][:, view].to(dev)).tolist())
+            truth = batch["image"][:, view].to(dev)
+            nvs.extend(psnr(pred, truth).tolist())
+            # Baseline: copy the last observed view to this pose.
+            nvs_copy.extend(psnr(batch["image"][:, observed - 1].to(dev), truth).tolist())
 
-    out = {f"recon/{k}": float(sum(r[k] for r in recon) / len(recon)) for k in recon[0]}
+    def mean(rows, key):
+        return float(sum(r[key] for r in rows) / len(rows))
+
+    out = {f"recon/{k}": mean(recon, k) for k in recon[0]}
+    out["recon/abs_rel_const"] = mean(recon_const, "abs_rel")
     out["nvs/psnr"] = float(sum(nvs) / len(nvs)) if nvs else float("nan")
+    out["nvs/psnr_copy"] = float(sum(nvs_copy) / len(nvs_copy)) if nvs_copy else float("nan")
     out["scenes"] = scenes
     return out
 
