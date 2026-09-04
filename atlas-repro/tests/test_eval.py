@@ -53,3 +53,22 @@ def test_evaluation_scenes_are_disjoint_from_training():
     train_scene = SyntheticWorlds(length=1, image_size=16, views=2, seed=TrainConfig().seed)[0]
     eval_scene = SyntheticWorlds(length=1, image_size=16, views=2, seed=default_eval_seed)[0]
     assert not torch.equal(train_scene["image"], eval_scene["image"])
+
+
+def test_reconstruct_scene_returns_aligned_outputs():
+    from atlas.reconstruct import reconstruct_scene
+
+    model = tiny_model()
+    result = reconstruct_scene(model, scene=0, views=2, steps=2, seed=99)
+
+    size = model.config.image_size
+    assert result["images"].shape == (2, 3, size, size)
+    assert result["depth"].shape == (2, size, size)
+    assert result["gt_depth"].shape == (2, size, size)
+    assert result["points"].shape == (2, size, size, 3)
+    assert torch.isfinite(result["points"]).all()
+    # decode_depth bottoms out at exactly 0 (the code's -1 endpoint), which an
+    # untrained model saturates to, so the bound is >= 0 rather than > 0.
+    assert bool((result["depth"] >= 0).all())
+    assert bool(torch.isfinite(result["depth"]).all())
+    assert set(result["metrics"]) == {"abs_rel", "delta_1.25", "delta_1.25^2"}

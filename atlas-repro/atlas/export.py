@@ -116,14 +116,19 @@ def points_from_context(
     images: Tensor,
     *,
     max_depth: float | None = None,
+    min_depth: float = 1e-3,
     depth: Tensor | None = None,
     stride: int = 1,
 ) -> tuple[Tensor, Tensor]:
     """Flatten per-view pointmaps and images into one coloured cloud.
 
-    ``points`` is ``(V, H, W, 3)`` and ``images`` ``(V, 3, H, W)``.  Points
-    beyond ``max_depth`` are dropped -- rays that hit nothing produce points at
-    the far plane, and keeping them would bury the scene in a shell.
+    ``points`` is ``(V, H, W, 3)`` and ``images`` ``(V, 3, H, W)``.  Both ends
+    of the depth range are trimmed, because both saturate:
+
+    * beyond ``max_depth``, rays that hit nothing pile up at the far plane and
+      would bury the scene inside a shell;
+    * below ``min_depth``, the depth code bottoms out at zero, which
+      unprojects to a knot of points sitting exactly at the camera centre.
     """
     if points.ndim != 4 or points.shape[-1] != 3:
         raise ValueError(f"points must be (V,H,W,3), got {tuple(points.shape)}")
@@ -138,7 +143,10 @@ def points_from_context(
     pts = points[:, ::stride, ::stride].reshape(-1, 3)
     rgb = images[:, :, ::stride, ::stride].permute(0, 2, 3, 1).reshape(-1, 3)
 
-    if max_depth is not None and depth is not None:
-        keep = depth[:, ::stride, ::stride].reshape(-1) < max_depth
+    if depth is not None:
+        d = depth[:, ::stride, ::stride].reshape(-1)
+        keep = d > min_depth
+        if max_depth is not None:
+            keep = keep & (d < max_depth)
         pts, rgb = pts[keep], rgb[keep]
     return pts, rgb

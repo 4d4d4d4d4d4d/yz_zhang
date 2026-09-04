@@ -106,3 +106,20 @@ def test_png_writing_and_conversion():
 def test_colorize_depth_handles_an_empty_mask():
     out = colorize_depth(torch.zeros(4, 4))
     assert out.shape == (1, 4, 4) and float(out.max()) <= 0.0
+
+
+def test_points_from_context_drops_degenerate_near_points():
+    """Depth 0 unprojects to a knot of points at the camera centre."""
+    points = torch.randn(1, 2, 2, 3)
+    images = torch.rand(1, 3, 2, 2) * 2 - 1
+    depth = torch.tensor([[[0.0, 0.0], [2.0, 3.0]]])
+    pts, rgb = points_from_context(points, images, depth=depth, max_depth=10.0)
+    assert pts.shape == (2, 3) and rgb.shape == (2, 3)
+
+
+def test_points_from_context_trims_both_ends():
+    points = torch.randn(1, 1, 4, 3)
+    images = torch.rand(1, 3, 1, 4) * 2 - 1
+    depth = torch.tensor([[[0.0, 1.0, 5.0, 99.0]]])
+    pts, _ = points_from_context(points, images, depth=depth, max_depth=10.0)
+    assert pts.shape == (2, 3)  # keeps 1.0 and 5.0, drops 0.0 and 99.0

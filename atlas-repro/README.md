@@ -76,7 +76,7 @@ exported as PLY.
 
 ```bash
 pip install torch                 # CPU wheel is fine
-python -m pytest tests -q         # 63 tests, ~7s
+python -m pytest tests -q         # 95 tests, ~4s
 
 # train the CPU-scale model (~35 min on 4 cores)
 python -m atlas.train --config configs/tiny.json
@@ -91,6 +91,9 @@ python -m atlas.sample --ckpt runs/atlas-tiny/checkpoint.pt \
 
 # or condition on a real posed view and continue the trajectory
 python -m atlas.sample --ckpt runs/atlas-tiny/checkpoint.pt --scene 7 --observed 1
+
+# reconstruct 3D from posed images, with a depth comparison against truth
+python -m atlas.reconstruct --ckpt runs/atlas-tiny/checkpoint.pt --scene 3
 ```
 
 `atlas.sample` writes the views as PNGs, an inverse-depth visualisation, and
@@ -113,7 +116,44 @@ better); `delta_1.25` is the fraction of pixels within a 1.25× ratio of the
 truth (higher is better); `nvs/psnr` is PSNR of views generated at held-out
 poses given two observed views.
 
-<!-- RESULTS -->
+| | model | trivial baseline |
+|---|---|---|
+| `recon/abs_rel` ↓ | **0.130** | 0.363 *(best constant depth)* |
+| `recon/delta_1.25` ↑ | **0.810** | — |
+| `recon/delta_1.25²` ↑ | **0.959** | — |
+| `nvs/psnr` (dB) ↑ | **12.83** | 11.89 *(copy observed view)* |
+
+Training: 3000 steps, batch 8, ~31 minutes on 4 CPU cores. Loss 1.75 → 0.236;
+the depth term fell 0.885 → 0.0085.
+
+**Reconstruction works.** 0.130 against a 0.363 constant-depth bound is a
+2.8× improvement, and 81% of pixels land within 1.25× of the truth. It holds
+up qualitatively — predicted depth resolves the individual objects and their
+ordering, not just the floor gradient:
+
+![Reconstruction: input views, predicted depth, ground-truth depth](docs/reconstruction.png)
+
+*Top: input views. Middle: predicted depth. Bottom: ground truth.*
+
+**Generation is weak at this scale**, and it would be dishonest to present it
+otherwise. 12.83 dB beats copying the observed view by less than 1 dB, and
+the samples show it: the model learns floor texture and colour statistics but
+does not place coherent objects at held-out poses.
+
+![Generation: one real view followed by five generated ones](docs/generation.png)
+
+*Leftmost is the real conditioning view; the rest are generated.*
+
+That gap is the expected shape of the result rather than a surprise.
+Reconstruction is largely a geometric inference from pixels the model can
+see, which a 4.2M-parameter model can learn from 3000 steps. Generating an
+unseen view requires actually modelling the scene's contents — the part that
+World Labs addressed with web-scale pretraining and three orders of magnitude
+more capacity. Reproducing the architecture faithfully does not reproduce
+what scale buys.
+
+To push generation further: `configs/small.json` (120M, 64px, latent
+tokenizer) on a GPU, and far more than 4096 scenes.
 
 Reference points for the real system, from World Labs' announcement: Atlas
 reports mean absolute-relative pointmap error of 8.6 on DTU, 9.3 on ETH3D and
@@ -199,9 +239,9 @@ atlas/
   data/
     synthetic.py      vectorised CPU raytracer with exact depth and poses
     posed.py          loader for real posed-image datasets
-  train.py  train_vae.py  sample.py  eval.py
+  train.py  train_vae.py  sample.py  reconstruct.py  eval.py
 configs/   tiny.json (CPU)   small.json (single GPU)
-tests/     63 tests
+tests/     95 tests
 ```
 
 ## Notes on the tests
