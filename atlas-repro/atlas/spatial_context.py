@@ -7,6 +7,10 @@ autoregressive over elements and diffusive within them, so the same context
 expresses reconstruction, novel-view synthesis and video rollout depending
 only on which elements are observed and which are noise.
 
+Elements are ordered but not *timed*: a sequence of views is a camera path
+through a static world, not a world that changes.  Adding dynamics would mean
+a timestamp per element and a fourth rotary axis to carry it.
+
 An element is one of:
 
 ``text``   a block of discrete tokens (the prompt / caption).

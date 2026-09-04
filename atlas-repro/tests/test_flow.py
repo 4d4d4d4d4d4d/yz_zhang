@@ -5,6 +5,7 @@ import torch
 
 from atlas.flow import (
     euler_sample,
+    timestep_grid,
     flow_loss,
     interpolate,
     sample_timesteps,
@@ -69,3 +70,21 @@ def test_loss_weight_masks_out_observed_elements():
     pred[0] += 10.0  # a wildly wrong prediction on sample 0
     weight = torch.tensor([0.0, 1.0])
     assert float(flow_loss(pred, x1, noise, weight)) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_timestep_grid_spans_the_unit_interval():
+    grid = timestep_grid(8)
+    assert grid.shape == (9,)
+    assert float(grid[0]) == 0.0 and float(grid[-1]) == 1.0
+    assert bool((grid.diff() > 0).all())
+
+
+def test_timestep_grid_honours_shift():
+    plain = timestep_grid(8)
+    shifted = timestep_grid(8, shift=3.0)
+    assert bool((shifted[1:-1] > plain[1:-1]).all())
+
+
+def test_timestep_grid_rejects_zero_steps():
+    with pytest.raises(ValueError, match="steps must be"):
+        timestep_grid(0)

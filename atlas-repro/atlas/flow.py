@@ -22,6 +22,7 @@ import torch
 from torch import Tensor
 
 __all__ = [
+    "timestep_grid",
     "interpolate",
     "velocity_target",
     "sample_timesteps",
@@ -86,6 +87,20 @@ def shift_timesteps(t: Tensor, shift: float = 1.0) -> Tensor:
     return shift * t / (1.0 + (shift - 1.0) * t)
 
 
+def timestep_grid(
+    steps: int, *, shift: float = 1.0, device=None, dtype: torch.dtype = torch.float32
+) -> Tensor:
+    """The ``steps + 1`` integration times from ``t = 0`` to ``t = 1``.
+
+    Shared by every sampler so the schedule is defined once: a mismatch
+    between the grid a sampler walks and the one the model was trained
+    against shows up as quality loss with no error anywhere.
+    """
+    if steps < 1:
+        raise ValueError("steps must be >= 1")
+    return shift_timesteps(torch.linspace(0.0, 1.0, steps + 1, device=device, dtype=dtype), shift)
+
+
 def flow_loss(pred_v: Tensor, x1: Tensor, noise: Tensor, weight: Tensor | None = None) -> Tensor:
     """Mean squared velocity error, optionally weighted per sample.
 
@@ -120,16 +135,12 @@ def euler_sample(
     on a rectified path the exact trajectory is a straight line, so error
     comes only from the model, not the integrator.
     """
-    if steps < 1:
-        raise ValueError("steps must be >= 1")
     x = (
         torch.randn(shape, device=device, dtype=dtype, generator=generator)
         if noise is None
         else noise.to(device=device, dtype=dtype)
     )
-
-    grid = torch.linspace(0.0, 1.0, steps + 1, device=device, dtype=dtype)
-    grid = shift_timesteps(grid, shift)
+    grid = timestep_grid(steps, shift=shift, device=device, dtype=dtype)
 
     for i in range(steps):
         t_now, t_next = grid[i], grid[i + 1]

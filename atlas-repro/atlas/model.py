@@ -27,7 +27,7 @@ from torch import Tensor, nn
 from .cameras import Cameras, unproject_depth
 from .config import AtlasConfig
 from .depth_repr import decode_depth, encode_depth
-from .flow import euler_sample, flow_loss, interpolate, sample_timesteps, shift_timesteps
+from .flow import flow_loss, interpolate, sample_timesteps, shift_timesteps, timestep_grid
 from .spatial_context import DEPTH, IMAGE, MODALITIES, TEXT, Element, SpatialContext, build_attention_mask
 from .tokenizer import ImageVAE, build_tokenizer
 from .transformer import TimestepEmbedding, Transformer
@@ -449,7 +449,7 @@ class AtlasModel(nn.Module):
             )
 
         velocity_fn = self._velocity_for(context, target_indices, guidance, uncond_fn)
-        grid = shift_timesteps(torch.linspace(0.0, 1.0, steps + 1, device=device), shift)
+        grid = timestep_grid(steps, shift=shift, device=device, dtype=xs[0].dtype)
 
         for i in range(steps):
             t_now, t_next = grid[i], grid[i + 1]

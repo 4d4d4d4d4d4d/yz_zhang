@@ -104,7 +104,14 @@ layout web splat viewers expect).
 Numbers below are from `configs/tiny.json` — 4.2M parameters, 32×32, 3000
 steps on one CPU — evaluated on 32 scenes the model never saw (a disjoint
 dataset seed). They exist to show the pipeline works end to end and that the
-spatial context is doing something, **not** to compare against Atlas.
+spatial context is doing something, **not** to compare against Atlas: a model
+this size on scenes this simple is three orders of magnitude away, and the
+data is a different distribution entirely.
+
+`abs_rel` is scale-aligned mean absolute relative depth error (lower is
+better); `delta_1.25` is the fraction of pixels within a 1.25× ratio of the
+truth (higher is better); `nvs/psnr` is PSNR of views generated at held-out
+poses given two observed views.
 
 <!-- RESULTS -->
 
@@ -123,6 +130,8 @@ minute of 1440p video with pixel-level camera control.
   task-specific branches.
 - Spatial context: every visual element anchored by an explicit camera pose;
   video represented as a sequence of posed images.
+- Cameras in the OpenCV convention with proper rotations (`det = +1`), so
+  synthetic scenes and real posed datasets share one pose convention.
 - Multimodal autoregressive diffusion: block-causal across elements,
   bidirectional within continuous elements, causal within text.
 - Rectified flow for the continuous modalities, with the number of denoising
@@ -149,6 +158,15 @@ minute of 1440p video with pixel-level camera control.
   depth with no download. `atlas/data/posed.py` reads real posed datasets
   (COLMAP-style exports, RealEstate10K/CO3D/ScanNet repackagings) in the same
   format when you have them.
+- **Time.** This is the one capability *not* reproduced. Atlas is described as
+  doing spatio-temporal simulation — worlds that change, not just cameras that
+  move. Here every scene is static, so "video" means a camera trajectory
+  through a frozen world, and consistency across frames is a geometry problem
+  rather than a dynamics one. The architecture has room for it: an element is
+  already anchored by a pose, and a timestamp would be another axis of the
+  axial RoPE alongside `(element, row, column)`. What is missing is data with
+  motion in it, which the raytracer does not generate — adding the field
+  without that would be untested surface area.
 - **Resolution.** 32px (CPU) or 64px (`configs/small.json`), against 1440p.
 - **Tokenizer.** The tiny config diffuses pixels directly. `configs/small.json`
   uses a KL autoencoder pretrained by `atlas/train_vae.py`, which is the
