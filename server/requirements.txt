@@ -1,0 +1,11 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+sqlalchemy>=2.0
+alembic>=1.13          # DEP-020 生产唯一建表路径
+pydantic>=2.6
+httpx>=0.27
+pytest>=8.0
+# 可选：设置 ANTHROPIC_API_KEY 后启用真实 LLM 任务分解（缺省用模板引擎，见 decompose/llm.py）
+anthropic>=0.40
+# 可选：设置 PLATFORM_REDIS_URL 后启用分布式限流（CONC-021），缺省用进程内实现
+redis>=5.0

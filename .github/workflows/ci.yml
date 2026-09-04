@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  backend:
+    name: 后端测试（pytest）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: python -m pytest tests/ -q
+
+  frontend:
+    name: 前端测试与构建（vitest + tsc + vite）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npm run build:web
+
+  boot-smoke:
+    name: 服务启动 + 主闭环冒烟（DEP-060）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: 迁移建库（验证 alembic 路径真的能建出可用的库）
+        run: alembic upgrade head
+        env:
+          PLATFORM_DATABASE_URL: sqlite:///./ci.db
+      - name: 启动并探活
+        run: |
+          uvicorn app.main:app --port 8000 &
+          for i in $(seq 1 30); do
+            sleep 1
+            if curl -sf http://localhost:8000/readyz; then break; fi
+            if [ "$i" = "30" ]; then echo "server failed to boot"; exit 1; fi
+          done
+      - name: 主闭环冒烟（真实 HTTP，跑完一笔交易并核对分账）
+        run: python -m scripts.smoke
+
+  sandbox-compliance:
+    name: 沙箱合规态闭环（STUB-041）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      # 开发态（mock/internal）与合规态（sandbox/custody）两条路径都必须常绿，
+      # 否则只有一条被维护，接真实供应商时另一条就是从没跑过的代码
+      - name: 存管 + 可靠签名 + 第三方存证的完整闭环
+        run: python -m scripts.sandbox_check
+
+  migration-drift:
+    name: 迁移与模型一致性（DEP-020）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: 检查是否有未生成迁移的模型改动
+        run: |
+          alembic upgrade head
+          alembic check
+        env:
+          PLATFORM_DATABASE_URL: sqlite:///./drift.db

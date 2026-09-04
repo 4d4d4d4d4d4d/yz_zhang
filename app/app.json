@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "协作任务平台",
+    "slug": "task-platform",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "taskplat",
+    "platforms": ["ios", "android"],
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "com.example.taskplat",
+      "supportsTablet": true,
+      "associatedDomains": ["applinks:your-domain.example"],
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "用于展示附近任务与到场打卡",
+        "NSCameraUsageDescription": "用于拍摄任务交付凭证与到场照片",
+        "NSPhotoLibraryUsageDescription": "用于从相册选择任务交付凭证"
+      }
+    },
+    "android": {
+      "package": "com.example.taskplat",
+      "permissions": ["ACCESS_FINE_LOCATION", "CAMERA", "READ_MEDIA_IMAGES"],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [{ "scheme": "https", "host": "your-domain.example", "pathPrefix": "/tasks" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        { "locationWhenInUsePermission": "用于展示附近任务与到场打卡" }
+      ],
+      [
+        "expo-image-picker",
+        { "photosPermission": "用于从相册选择任务交付凭证",
+          "cameraPermission": "用于拍摄任务交付凭证与到场照片" }
+      ]
+    ],
+    "extra": {
+      "apiBase": "https://your-domain.example"
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "task-platform",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "web"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "dev:web": "npm run dev -w web",
+    "build:web": "npm run build -w web"
+  }
+}

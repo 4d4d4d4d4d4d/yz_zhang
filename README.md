@@ -1,172 +1,83 @@
-# File Organizer
+# 协作任务平台（Task Platform）
 
-A simple yet powerful Python utility to organize files in directories by various criteria.
+AI 驱动的任务协作与本地服务平台 Monorepo：任务发布 → AI 分解 → 智能推荐 →
+合约托管 → 执行验收 → 结算评价 → 经验入库的完整闭环。
 
-## Features
+> Spec 驱动开发：先写 [docs/specs/](docs/specs/README.md)（15 个模块功能拆分），
+> 再按 spec 逐模块实现并配测试，追溯矩阵见 [16-traceability.md](docs/specs/16-traceability.md)。
 
-- **Organize by Extension**: Automatically categorizes files into folders like Images, Documents, Code, etc.
-- **Organize by Date**: Groups files by modification date (YYYY/Month folders)
-- **Organize by Size**: Sorts files into Small/Medium/Large categories
-- **Dry-run Mode**: Preview changes before applying them
-- **Custom Categories**: Define your own file type categories via JSON config
-- **Duplicate Handling**: Automatically handles files with duplicate names
+## 目录结构
 
-## Installation
+```
+docs/specs/       # 功能拆分 spec（01~15）+ 追溯矩阵（16）+ 编排循环（17）
+                  # + 生产化 spec：并发（18）供应商（19）部署（20）移动端/PWA（21）增长运营（22）
+                  # + 合规化 spec：抗攻击（23）AI 编排增强（24）资金合规（25）法律效力（26）沙箱桩（27）
+                  # + 交付后自检 spec：事件投递（28）个税代扣（29）反洗钱（30）安全事件（31）
+                  #   任务编排（32）处置动作（33）人机验证（34）账号注销（35）
+docs/OPERATIONS.md # 部署 / 并发 / 安全 / 运营增长手册（含明确缺口清单）
+server/           # 后端：FastAPI 模块化单体（Python 3.11+）
+  app/core/       #   配置/DB/安全/事件总线/依赖/并发锁/可观测/边界防护
+  app/vendors/    #   外部供应商抽象层（支付/短信/eKYC/审核/存储/签名/存证/存管）
+                  #   三态实现：mock 退化 / sandbox 形态真实的桩 / 真实供应商
+  app/modules/    #   account task matching contract wallet decompose knowledge files growth finance
+                  #   im dispute notification support content circle legal admin search anchor risk analytics orchestrator
+  tests/          #   550 个测试（端到端闭环+状态机穷举+资金守恒 fuzz+各交叉路径守恒+平台佣金实收对账+收款账户绑定+任务过期下架+广场/我的任务/我的报名分页+通知中心+cron 端点鉴权+幂等指纹+登录限流+签署/纠纷 SLA+真双盲评分+任务编辑防调包+接单上限/开关+提现风控+对账告警+密码/换绑/设备安全+防重放+越权+存证链防篡改+管理员审计+封禁影响面+口碑页双盲防旁路+封禁挂单下架+IM未读位点+纠纷答辩期+编排循环护栏+并发放款/托管/提现真并发+乐观锁防丢失更新+job单实例锁+健康就绪探针+限流降级+支付回调验签/重放/金额不符+供应商幂等熔断+验证码只存哈希+证件号脱敏防一人多号+生产启动自检+迁移与模型不漂移+日志脱敏+指标基数+job健康反查排期+图片上传魔数/超限/穿越/外链拒绝+补贴资金守恒/一单一券/仅一级分销/活动预算硬顶+协议版本变更强制重新同意+敏感项单独同意与撤回后停用+未成年人实名拦截+事件handler失败不拖垮放款+发件箱与业务同生共死+跨副本补做不重复+死信与重试上限+个税累进分档与四千元分界+四条放款路径全部代扣+税款专户不与佣金混同+五条对账不变量+未定税务方案拒绝上线+拆分提现不再能绕过人审+并发提现不能绕累计阈值+快进快出与账户聚集识别+可疑标记不泄露给用户+封禁跨副本生效/解封全局生效/失败计数跨副本累计+人机验证阶梯与错误验证码计入失败+解封入口不被封禁本身挡住+调度表与端点双向一致/每条路径真能路由/从未跑过的job在监控里可见+资金对账可被调度器触发并告警+两条封禁路径副作用逐项对等/下架通知发布者与报名者/驳回也留审计/AST扫描禁止绕过状态机+人机验证端到端可通过/配置端点不泄露风控状态/强制验证无站点公钥拒绝上线+注销闸门看钱包三态之和/申诉复核中的纠纷拦住注销/注销处置表逐列覆盖模型/卡号与真名脱敏而非清空/注销不洗白封禁）
+packages/core/    # 共享 TS SDK（Web/App 复用，29 tests，含操作可见性矩阵、同意/撤回路径与验证码令牌透传）
+web/              # Web 前端：React + Vite + PWA（17 tests，含管理后台/移动端约束/优惠页）
+app/              # App：React Native / Expo 骨架
+deploy/           # 生产部署：prod compose + 自检启动 + 备份/恢复脚本
+tools/            # 与平台无关的历史小工具（file-organizer）
+```
 
-No external dependencies required! Just Python 3.6+
+## 快速开始（Docker，一键全栈）
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd yz_zhang
+docker compose up --build          # 开发栈（SQLite 单副本）
+# Web: http://localhost:8080  /  API 文档: http://localhost:8000/docs
 
-# Make the script executable (optional)
-chmod +x file_organizer.py
+cp deploy/.env.example deploy/.env && ./deploy/up.sh   # 生产栈（Postgres+Redis+多副本）
 ```
 
-## Usage
+生产栈起栈前会做配置自检（弱密钥、CORS 为 `*`、供应商仍是 mock 一律拒绝启动），
+详见 [docs/OPERATIONS.md](docs/OPERATIONS.md) 第四节。
 
-### Basic Usage
+CI：`.github/workflows/ci.yml` 在每次 push/PR 自动跑后端 pytest、前端 vitest+构建、服务启动冒烟。
+
+## 快速开始（本地开发）
 
 ```bash
-# Organize by file extension
-python file_organizer.py /path/to/directory --by-extension
+# 后端（Python 3.11+）
+cd server
+pip install -r requirements.txt
+python -m pytest tests/ -q        # 跑测试
+uvicorn app.main:app --port 8000  # 启动 API（文档：/docs）
 
-# Organize by modification date
-python file_organizer.py /path/to/directory --by-date
-
-# Organize by file size
-python file_organizer.py /path/to/directory --by-size
+# 前端（Node 20+，仓库根目录）
+npm install
+npm test          # core + web 全部测试
+npm run dev:web   # http://localhost:5173（代理 /api 到 8000）
 ```
 
-### Dry Run (Preview Mode)
+## 体验主闭环（Web）
 
-Always recommended to run with `--dry-run` first to see what will happen:
+1. 注册两个账号（验证码固定 `123456`），在「我的」完成实名认证（模拟）。
+2. 账号 A 充值（钱包页，模拟支付）→ 发布任务；项目型任务会触发 **AI 分解**，
+   可编辑子任务预算后确认，无前置依赖的子任务自动发布。
+3. 账号 B 设置技能标签 → 在广场报名；A 在任务详情查看 **AI 推荐人选** 并选人。
+4. 双方**签署智能合约** → A 托管资金 → B 执行（进度/打卡）→ 提交验收。
+5. A 验收通过自动放款（平台抽佣 8%）→ 双向互评 → 信用分更新 →
+   经验卡入库，下次发布同类任务可查「参考价」。
+6. 出问题可「发起纠纷」：资金冻结 → 和解或仲裁 → 裁决自动执行分账。
 
-```bash
-python file_organizer.py /path/to/directory --by-extension --dry-run
-```
+## 技术要点
 
-### Custom Categories
-
-Create a custom configuration file to define your own file categories:
-
-```bash
-python file_organizer.py /path/to/directory --by-extension --config my_categories.json
-```
-
-See `example_config.json` for the configuration format.
-
-## Examples
-
-### Example 1: Organize Downloads Folder
-
-```bash
-python file_organizer.py ~/Downloads --by-extension --dry-run
-```
-
-This will show you how your files would be organized into categories like:
-- Images/ (jpg, png, gif, etc.)
-- Documents/ (pdf, docx, txt, etc.)
-- Videos/ (mp4, avi, mkv, etc.)
-- And more...
-
-### Example 2: Organize Photos by Date
-
-```bash
-python file_organizer.py ~/Pictures --by-date
-```
-
-This will organize your photos into folders like:
-- 2025/January/
-- 2025/February/
-- 2024/December/
-
-### Example 3: Clean Up Large Files
-
-```bash
-python file_organizer.py /path/to/folder --by-size
-```
-
-This will separate files into:
-- Small (< 1MB)/
-- Medium (1-10MB)/
-- Large (> 10MB)/
-
-## Default File Categories
-
-The organizer recognizes these file types by default:
-
-- **Images**: jpg, jpeg, png, gif, bmp, svg, webp, ico
-- **Documents**: pdf, doc, docx, txt, odt, rtf, tex, md
-- **Spreadsheets**: xls, xlsx, csv, ods
-- **Presentations**: ppt, pptx, odp
-- **Videos**: mp4, avi, mkv, mov, flv, wmv, webm
-- **Audio**: mp3, wav, flac, aac, ogg, wma, m4a
-- **Archives**: zip, rar, 7z, tar, gz, bz2, xz
-- **Code**: py, js, java, cpp, c, h, hpp, cs, go, rs, rb
-- **Web**: html, css, scss, sass, xml, json, yaml, yml
-- **Executables**: exe, dll, so, dylib, app, deb, rpm
-- **Fonts**: ttf, otf, woff, woff2, eot
-
-Files that don't match any category go into an "Other" folder.
-
-## Custom Configuration
-
-Create a JSON file with your custom categories:
-
-```json
-{
-  "MyImages": [".jpg", ".png", ".heic"],
-  "MyDocuments": [".pdf", ".docx"],
-  "ProjectFiles": [".psd", ".ai", ".sketch"]
-}
-```
-
-Then use it with:
-
-```bash
-python file_organizer.py /path/to/dir --by-extension --config custom.json
-```
-
-## Safety Features
-
-- **Dry-run mode**: Test before making changes
-- **Duplicate handling**: Automatically renames files if duplicates exist
-- **Non-recursive**: Only processes files in the specified directory (not subdirectories)
-- **Validation**: Checks that the directory exists before proceeding
-
-## Use Cases
-
-- Clean up messy Downloads folders
-- Organize photo libraries by date
-- Sort project files by type
-- Identify large files taking up space
-- Prepare files for backup or archival
-- Maintain organized work directories
-
-## Requirements
-
-- Python 3.6 or higher
-- No external dependencies (uses only standard library)
-
-## License
-
-MIT License - Feel free to use and modify as needed.
-
-## Contributing
-
-Suggestions and improvements are welcome! Feel free to:
-- Report bugs
-- Suggest new features
-- Submit pull requests
-
-## Future Enhancements
-
-Potential features for future versions:
-- Recursive organization (organize subdirectories)
-- Undo functionality
-- Pattern-based filtering (ignore certain files)
-- Move vs Copy mode
-- Integration with cloud storage
-- GUI interface
+- **状态机**：任务/合约状态流转白名单约束，非法流转 409。
+- **事件总线**：进程内领域事件（`task.completed`、`contract.funded`…）驱动
+  经验入库、后继子任务发布、会话创建、通知，生产可平滑替换为 MQ。
+- **资金**：整数分记账、只增流水、三态账本（可用/托管/冻结）、E2E 资金守恒断言。
+- **LLM 网关**：`decompose/llm.py` 抽象接口 + 模板实现 + 真实 `AnthropicLLM`
+  （claude-opus-4-8，adaptive thinking，JSON Schema 结构化输出）。设 `ANTHROPIC_API_KEY`
+  即启用真实分解，失败自动降级模板；缺省与 CI 走模板引擎，接入不动业务代码。
+- **演示数据**：`cd server && python -m scripts.seed_demo` 一键生成可交互样例
+  （用户/任务/闭环/圈层/动态；密码 `pass123456`）。
+- **可解释推荐**：技能/信用/距离/评价加权，返回推荐理由。
