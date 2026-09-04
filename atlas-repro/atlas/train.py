@@ -84,6 +84,19 @@ def _infinite(loader: DataLoader):
 
 
 def train(model_cfg: AtlasConfig, train_cfg: TrainConfig) -> Path:
+    # Validate the configuration before touching a device or allocating a
+    # model, so a misconfigured run fails on the config rather than on CUDA.
+    if model_cfg.tokenizer == "vae" and not train_cfg.vae_checkpoint:
+        raise ValueError(
+            'model.tokenizer is "vae" but train.vae_checkpoint is unset -- '
+            "pretrain one with `python -m atlas.train_vae` and point at its vae.pt"
+        )
+    if train_cfg.views_per_sample > model_cfg.max_views:
+        raise ValueError(
+            f"train.views_per_sample ({train_cfg.views_per_sample}) exceeds "
+            f"model.max_views ({model_cfg.max_views})"
+        )
+
     torch.manual_seed(train_cfg.seed)
     device = torch.device(train_cfg.device)
     out_dir = Path(train_cfg.out_dir)
@@ -114,6 +127,20 @@ def train(model_cfg: AtlasConfig, train_cfg: TrainConfig) -> Path:
     )
 
     model = AtlasModel(model_cfg).to(device)
+
+    if model_cfg.tokenizer == "vae":
+        # The latent tokenizer is pretrained by atlas.train_vae and frozen here.
+        # Training the flow against a randomly initialised latent space would
+        # look like it was working while learning nothing transferable.
+        from .tokenizer import load_pretrained_vae
+
+        load_pretrained_vae(train_cfg.vae_checkpoint, model.tokenizer)
+        model.tokenizer.to(device)
+        for param in model.tokenizer.parameters():
+            param.requires_grad_(False)
+        model.tokenizer.eval()
+        print(f"loaded frozen tokenizer from {train_cfg.vae_checkpoint}")
+
     n_params = sum(p.numel() for p in model.parameters())
     print(f"model: {n_params / 1e6:.2f}M parameters, {model_cfg.tokens_per_view} tokens per view")
 
@@ -145,6 +172,7 @@ def train(model_cfg: AtlasConfig, train_cfg: TrainConfig) -> Path:
             n_observed=n_observed,
             predict_depth=model_cfg.predict_depth,
             max_text_len=model_cfg.max_text_len,
+            max_views=model_cfg.max_views,
             device=device,
         )
         latent_context = model.encode_context(context)

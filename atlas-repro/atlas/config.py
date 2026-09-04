@@ -38,7 +38,7 @@ class AtlasConfig:
     max_text_len: int = 32
 
     # -- context --
-    max_views: int = 8
+    max_views: int = 8                   # largest view count seen in training
     predict_depth: bool = True
 
     def __post_init__(self) -> None:
@@ -100,6 +100,8 @@ class TrainConfig:
     text_loss_weight: float = 0.1
     timestep_distribution: str = "logit_normal"
     timestep_shift: float = 1.0
+
+    vae_checkpoint: str | None = None    # required when model.tokenizer == "vae"
 
     seed: int = 0
     device: str = "cpu"

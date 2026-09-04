@@ -87,9 +87,9 @@ def train_vae(
         torch.nn.utils.clip_grad_norm_(vae.parameters(), 1.0)
         opt.step()
 
-        running["rec"] += float(rec_loss)
-        running["kl"] += float(kl_loss)
         with torch.no_grad():
+            running["rec"] += float(rec_loss.detach())
+            running["kl"] += float(kl_loss.detach())
             latent_sq += float(posterior.mean.pow(2).mean())
             latent_n += 1
 
@@ -137,6 +137,8 @@ def main() -> None:
     parser.add_argument("--scenes", type=int, default=8192)
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--views", type=int, default=2)
+    parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument("--out", type=str, default="runs/vae")
     args = parser.parse_args()
 
@@ -144,7 +146,8 @@ def main() -> None:
         steps=args.steps, image_size=args.image_size, downsample=args.downsample,
         latent_channels=args.latent_channels, base_channels=args.base_channels,
         batch_size=args.batch_size, lr=args.lr, kl_weight=args.kl_weight,
-        scenes=args.scenes, device=args.device, seed=args.seed, out_dir=args.out,
+        views=args.views, scenes=args.scenes, device=args.device, seed=args.seed,
+        log_every=args.log_every, out_dir=args.out,
     )
 
 

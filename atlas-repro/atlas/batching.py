@@ -40,6 +40,7 @@ def build_context(
     predict_depth: bool = True,
     with_text: bool = True,
     max_text_len: int = 32,
+    max_views: int | None = None,
     device=None,
 ) -> SpatialContext:
     """Assemble the spatial context for one batch of posed frames.
@@ -56,6 +57,11 @@ def build_context(
     b, v = images.shape[:2]
     if not 0 <= n_observed <= v:
         raise ValueError(f"n_observed must be in [0, {v}], got {n_observed}")
+    if max_views is not None and v > max_views:
+        raise ValueError(
+            f"batch has {v} views but the model config allows {max_views}; "
+            "raise model.max_views or lower train.views_per_sample"
+        )
 
     device = device or images.device
     images = images.to(device)

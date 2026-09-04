@@ -24,7 +24,14 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-__all__ = ["Tokenizer", "IdentityTokenizer", "ImageVAE", "DiagonalGaussian", "build_tokenizer"]
+__all__ = [
+    "Tokenizer",
+    "IdentityTokenizer",
+    "ImageVAE",
+    "DiagonalGaussian",
+    "build_tokenizer",
+    "load_pretrained_vae",
+]
 
 
 class Tokenizer(nn.Module):
@@ -163,6 +170,25 @@ class ImageVAE(Tokenizer):
     def forward(self, x: Tensor) -> tuple[Tensor, DiagonalGaussian]:
         post = self.posterior(x)
         return self.decoder(post.sample()), post
+
+
+def load_pretrained_vae(path, vae: "ImageVAE") -> "ImageVAE":
+    """Load weights written by ``atlas.train_vae`` into ``vae``, in place.
+
+    The tokenizer is trained separately and then frozen, so a mismatch between
+    the checkpoint and the model config would otherwise surface as a silently
+    wrong latent space rather than an error.
+    """
+    ckpt = torch.load(path, map_location="cpu", weights_only=False)
+    for key, attr in (("downsample", "downsample"), ("latent_channels", "latent_channels")):
+        if key in ckpt and int(ckpt[key]) != int(getattr(vae, attr)):
+            raise ValueError(
+                f"VAE checkpoint has {key}={ckpt[key]} but the model config says {getattr(vae, attr)}"
+            )
+    vae.load_state_dict(ckpt["vae"])
+    if "scaling_factor" in ckpt:
+        vae.scaling_factor = float(ckpt["scaling_factor"])
+    return vae
 
 
 def build_tokenizer(kind: str, **kwargs) -> Tokenizer:
