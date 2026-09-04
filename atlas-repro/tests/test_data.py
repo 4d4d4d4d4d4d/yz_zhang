@@ -102,3 +102,23 @@ def test_orbit_cameras_look_towards_the_origin():
     to_origin = torch.nn.functional.normalize(-cams.centers, dim=-1)
     forward = cams.c2w[:, :3, 2]
     assert bool(((to_origin * forward).sum(-1) > 0.8).all())
+
+
+def test_unrepresentable_depth_is_marked_invalid():
+    """The floor runs to the horizon, past what the depth code can express.
+
+    Those pixels must not be scored -- no prediction could match them -- so
+    the loader excludes them from the validity mask.
+    """
+    from atlas.depth_repr import DEPTH_FAR
+
+    ds = SyntheticWorlds(length=8, image_size=32, views=2, seed=0)
+    saw_clamped = False
+    for i in range(8):
+        item = ds[i]
+        depth, valid = item["depth"], item["depth_valid"]
+        assert not bool(((depth > DEPTH_FAR) & valid).any())
+        assert not bool(((depth <= 0) & valid).any())
+        saw_clamped |= bool((depth > DEPTH_FAR).any())
+        assert float(valid.float().mean()) > 0.5
+    assert saw_clamped, "no scene exercised the far-plane clamp"

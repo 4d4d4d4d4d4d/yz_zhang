@@ -188,15 +188,30 @@ def unproject_depth(cameras: Cameras, depth: Tensor) -> Tensor:
 
 
 def look_at(eye: Tensor, target: Tensor, up: Tensor | None = None) -> Tensor:
-    """Build a world-to-camera transform looking from ``eye`` at ``target``."""
+    """Build a world-to-camera transform looking from ``eye`` at ``target``.
+
+    ``up`` is the world direction that should map to the camera's **+y** axis.
+    In the OpenCV convention used here +y points *down* the image, so the
+    default ``(0, -1, 0)`` corresponds to a world whose +y is up.
+    """
     if up is None:
         up = eye.new_tensor([0.0, -1.0, 0.0]).expand_as(eye)
     fwd = torch.nn.functional.normalize(target - eye, dim=-1)
-    # Guard against a degenerate up vector parallel to the view direction.
-    if torch.any((fwd * torch.nn.functional.normalize(up, dim=-1)).abs().sum(-1) > 0.999):
-        up = up + up.new_tensor([1e-3, 0.0, 1e-3])
-    right = torch.nn.functional.normalize(torch.cross(fwd, up, dim=-1), dim=-1)
-    true_up = torch.cross(right, fwd, dim=-1)
+
+    # Guard against an up vector parallel to the view direction, which would
+    # make the cross product vanish.  The test is |cos| between the two, and
+    # only the cameras that are actually degenerate get perturbed.
+    up_n = torch.nn.functional.normalize(up, dim=-1)
+    degenerate = (fwd * up_n).sum(-1, keepdim=True).abs() > 0.999
+    up = torch.where(degenerate, up + up.new_tensor([1e-3, 0.0, 1e-3]), up)
+
+    # A right-handed camera frame (x right, y down, z forward) requires
+    # x = y * z and y = z * x.  Taking the cross products the other way round
+    # gives an orthonormal matrix with determinant -1 -- a reflection, which is
+    # self-consistent within this codebase but is not a rotation and does not
+    # match the poses real datasets ship.
+    right = torch.nn.functional.normalize(torch.cross(up, fwd, dim=-1), dim=-1)
+    true_up = torch.cross(fwd, right, dim=-1)
 
     r = torch.stack((right, true_up, fwd), dim=-2)  # world -> camera rotation
     w2c = torch.zeros(*eye.shape[:-1], 4, 4, device=eye.device, dtype=eye.dtype)

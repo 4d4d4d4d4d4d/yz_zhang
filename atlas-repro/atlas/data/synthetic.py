@@ -23,6 +23,7 @@ from torch import Tensor
 from torch.utils.data import Dataset
 
 from ..cameras import Cameras, look_at
+from ..depth_repr import DEPTH_FAR
 
 __all__ = ["SyntheticWorlds", "Scene", "render", "random_scene", "orbit_cameras"]
 
@@ -284,7 +285,6 @@ class SyntheticWorlds(Dataset):
         cams = orbit_cameras(self.views, g, height=self.image_size, width=self.image_size)
         rgb, depth = render(scene, cams, self.image_size, self.image_size)
 
-        valid = depth > 0
         if self.normalize_scale:
             centers = cams.centers
             scale = (centers - centers.mean(0, keepdim=True)).norm(dim=-1).mean().clamp_min(1e-6)
@@ -294,6 +294,12 @@ class SyntheticWorlds(Dataset):
 
             cams = Cameras(invert_rigid(c2w), cams.K, cams.height, cams.width)
             depth = depth / scale
+
+        # The floor is an unbounded plane, so grazing rays run to the horizon
+        # and land far beyond what the depth encoding can represent.  Those
+        # pixels are still supervised (the clamp is a sensible "very far"
+        # target) but they must not be scored: no prediction could match them.
+        valid = (depth > 0) & (depth <= DEPTH_FAR)
 
         return {
             "image": rgb,

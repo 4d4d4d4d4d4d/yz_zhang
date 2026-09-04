@@ -25,6 +25,7 @@ from torch import Tensor
 from torch.utils.data import Dataset
 
 from ..cameras import Cameras, invert_rigid
+from ..depth_repr import DEPTH_FAR
 
 __all__ = ["PosedFrames"]
 
@@ -93,10 +94,8 @@ class PosedFrames(Dataset):
                     raw[None, None], size=(self.image_size, self.image_size), mode="nearest"
                 )[0, 0]
                 depths.append(raw)
-                valids.append(raw > 0)
             else:
                 depths.append(torch.zeros(self.image_size, self.image_size))
-                valids.append(torch.zeros(self.image_size, self.image_size, dtype=torch.bool))
 
         k = torch.tensor(meta["K"], dtype=torch.float32)
         # Intrinsics are stored for the source resolution; rescale to ours.
@@ -109,6 +108,7 @@ class PosedFrames(Dataset):
 
         w2c = torch.stack(w2cs)
         depth = torch.stack(depths)
+        has_depth = any(f.get("depth") for f in chosen)
         cams = Cameras(w2c, k, self.image_size, self.image_size)
 
         if self.normalize_scale:
@@ -119,10 +119,15 @@ class PosedFrames(Dataset):
             w2c = invert_rigid(c2w)
             depth = depth / scale
 
+        # Same exclusion as the synthetic loader: depth past the representable
+        # far plane is supervised but never scored.  Frames with no depth file
+        # at all are entirely invalid.
+        valid = (depth > 0) & (depth <= DEPTH_FAR) if has_depth else torch.zeros_like(depth, dtype=torch.bool)
+
         return {
             "image": torch.stack(images),
             "depth": depth,
-            "depth_valid": torch.stack(valids),
+            "depth_valid": valid,
             "w2c": w2c,
             "K": k,
             "caption": meta.get("caption", "a scene"),
