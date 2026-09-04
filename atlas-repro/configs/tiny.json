@@ -1,0 +1,33 @@
+{
+  "_comment": "CPU-scale reproduction. ~5M params, trains in minutes, enough to show the spatial context working.",
+  "model": {
+    "dim": 192,
+    "depth": 6,
+    "n_heads": 4,
+    "image_size": 32,
+    "patch_size": 4,
+    "tokenizer": "identity",
+    "latent_channels": 3,
+    "vae_downsample": 1,
+    "plucker_bands": 6,
+    "text_vocab_size": 64,
+    "max_text_len": 16,
+    "max_views": 6,
+    "predict_depth": true
+  },
+  "train": {
+    "steps": 3000,
+    "batch_size": 8,
+    "lr": 6e-4,
+    "warmup_steps": 150,
+    "views_per_sample": 4,
+    "min_observed_views": 0,
+    "depth_loss_weight": 1.0,
+    "text_loss_weight": 0.05,
+    "scenes": 4096,
+    "device": "cpu",
+    "log_every": 100,
+    "ckpt_every": 500,
+    "out_dir": "runs/atlas-tiny"
+  }
+}

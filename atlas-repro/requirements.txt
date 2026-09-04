@@ -1,0 +1,7 @@
+# Core. The reproduction needs nothing else to train, sample and evaluate:
+# the dataset is generated in-process and PNG/PLY writing uses the stdlib.
+torch>=2.1
+
+# Optional.
+#   pillow, numpy  -- only for atlas.data.posed, which reads real posed datasets
+#   pytest         -- to run the test suite

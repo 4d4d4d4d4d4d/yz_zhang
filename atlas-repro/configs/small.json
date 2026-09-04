@@ -1,0 +1,36 @@
+{
+  "_comment": "Single-GPU configuration. ~120M params at 64px with a latent tokenizer.",
+  "model": {
+    "dim": 384,
+    "depth": 12,
+    "n_heads": 8,
+    "image_size": 64,
+    "patch_size": 2,
+    "tokenizer": "vae",
+    "latent_channels": 4,
+    "vae_downsample": 4,
+    "vae_base_channels": 64,
+    "vae_scaling_factor": 1.0,
+    "plucker_bands": 8,
+    "text_vocab_size": 64,
+    "max_text_len": 32,
+    "max_views": 8,
+    "predict_depth": true
+  },
+  "train": {
+    "steps": 60000,
+    "batch_size": 16,
+    "lr": 3e-4,
+    "warmup_steps": 1000,
+    "views_per_sample": 6,
+    "min_observed_views": 0,
+    "depth_loss_weight": 1.0,
+    "text_loss_weight": 0.05,
+    "scenes": 65536,
+    "device": "cuda",
+    "num_workers": 4,
+    "log_every": 100,
+    "ckpt_every": 2000,
+    "out_dir": "runs/atlas-small"
+  }
+}
