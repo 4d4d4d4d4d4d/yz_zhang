@@ -172,6 +172,37 @@ describe('V1 接口', () => {
     expect(fetchImpl.mock.calls[0][0]).toBe('http://x/api/v1/auth/captcha-config');
   });
 
+  it('DSPC-020 被诉方能按任务找到纠纷（他只知道任务 id）', async () => {
+    // 发起方能从 openDispute() 的返回值拿到 dispute_id，被诉方拿不到——
+    // 他收到的通知就只说「任务 #N 有纠纷」。没有这条路，他连程序在哪都找不到。
+    const { client, fetchImpl } = makeClient(200, { id: 7, task_id: 17 });
+    await client.disputeByTask(17);
+    expect(fetchImpl.mock.calls[0][0]).toBe('http://x/api/v1/tasks/17/dispute');
+    expect(fetchImpl.mock.calls[0][1].method).toBe('GET');
+  });
+
+  it('DSPC-001 答辩真的发得出去', async () => {
+    // 服务端把两造兼听当作裁决的硬性前置，而在此之前没有任何客户端能写入
+    // 这张表——那道前置永远只能靠等答辩期超时满足，等于每份决定都是缺席裁决。
+    const { client, fetchImpl } = makeClient(201, { id: 1, role: 'respondent' });
+    await client.addDisputeStatement(7, '已按约定完成，附现场照片。', ['u1']);
+    expect(fetchImpl.mock.calls[0][0]).toBe('http://x/api/v1/disputes/7/statements');
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({
+      content: '已按约定完成，附现场照片。', attachments: ['u1'],
+    });
+  });
+
+  it('DSPC-020 陈述列表与申诉各有其方法', async () => {
+    const { client, fetchImpl } = makeClient(200, []);
+    await client.disputeStatements(7);
+    await client.appealDispute(7);
+    expect(fetchImpl.mock.calls.map((c: unknown[]) => c[0])).toEqual([
+      'http://x/api/v1/disputes/7/statements',
+      'http://x/api/v1/disputes/7/appeal',
+    ]);
+    expect(fetchImpl.mock.calls[1][1].method).toBe('POST');
+  });
+
   it('TAX-021 代扣明细走 finance 前缀', async () => {
     const { client, fetchImpl } = makeClient(200, { mode: 'withholding', items: [] });
     await client.myTax();

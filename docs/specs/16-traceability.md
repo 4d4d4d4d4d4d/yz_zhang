@@ -1,10 +1,68 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V60 全批次完成（2026-09-04）。
-> 后端 550 tests + 前端 46 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V61 全批次完成（2026-09-07）。
+> 后端 561 tests + 前端 49 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V61 批次：被告席上没有麦克风）
+
+> 模块 spec：[36-dispute-client-loop.md](36-dispute-client-loop.md)
+>
+> **检视结论**：纠纷开出来以后，当事人在客户端上是**哑的**。
+> `client.ts` / `web/src` / `app` 全文搜 `statement` / `答辩`：**零命中**。
+> 七个当事人侧端点里客户端只接了一个：
+>
+> | 端点 | 作用 | SDK | UI |
+> |---|---|---|---|
+> | `POST /tasks/{id}/disputes` | 发起纠纷 | ✅ | ✅ |
+> | `GET /disputes/{id}` | 看这场纠纷 | ❌ | ❌ |
+> | `POST /disputes/{id}/statements` | **答辩 / 举证** | ❌ | ❌ |
+> | `GET /disputes/{id}/statements` | 看双方陈述 | ❌ | ❌ |
+> | `POST /disputes/{id}/settlement` | 和解提案 | ✅ | ❌ |
+> | `POST /disputes/{id}/settlement/accept` | 接受和解 | ✅ | ❌ |
+> | `POST /disputes/{id}/appeal` | 申诉 | ❌ | ❌ |
+>
+> 和解的两个 SDK 方法写好了却没有任何界面调用——**死方法**，和没写一样。
+>
+> **后果不是「慢一点」。** 服务端把两造兼听当作裁决的硬性前置：
+>
+> ```python
+> if not _respondent_had_voice(db, dispute, task):
+>     raise conflict("被诉方尚未答辩且答辩期未过，暂不可裁决", "response_window_open")
+> ```
+>
+> 而被诉方永远不可能答辩——没有任何客户端能写入 `DisputeStatement`。
+> 于是这个判断的第一条分支在生产里是**死代码**，每次都落到「等满 48 小时」：
+> **平台上线后的每一份处理决定都是缺席裁决**，被诉方从未获得陈述的手段，
+> 而审计记录会显示 100% 的纠纷在「被诉方无陈述」的状态下结案。
+> DSP-005 整条就是为了防止这件事，它写在服务端、有测试覆盖、**且无法实现**。
+>
+> 更糟的是**被诉方连这场纠纷在哪都找不到**：开案通知只说「任务 #N 有纠纷」，
+> 而全站没有任何「按任务查纠纷」的端点；`dispute_id` 只在发起方那一侧的
+> 返回值里。那句「请在 48 小时内协商或提交证据」还是**硬编码的 48**，
+> 运维改了 `PLATFORM_DISPUTE_RESPONSE_HOURS`，它会继续理直气壮地说 48。
+>
+> **这是 V59 那个缺陷的第二次出现**（服务端竖起门、没有客户端能过），
+> 所以这次留下机器闸门。但 V60 的教训同样适用：**闸门本身不能是一个
+> 写错了不会报错的东西**。我先试过用正则扫 `client.ts` 统计覆盖率，
+> 三次跑出三个不同的数字（46 / 78 / 152）——模板字符串、跨行泛型、
+> 查询串拼接都能骗过正则。一个会漏报的检查器去防漏报，是自欺。
+> 所以闸门做成**枚举 + 精确正则**：枚举来自 FastAPI 路由（不会抄漏），
+> 匹配是按路径逐条构造的精确式（不会误判），只覆盖这一个模块。
+> 宽而不准的检查没有价值。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **DSPC-001 被诉方真的能开口** | 完整当事人路径：从任务 id 找到纠纷 → 读事由 → 答辩 → 裁决前置立刻满足，不必等满答辩期 | `tests/test_dispute_client_loop.py::test_dspc001_respondent_can_speak_and_that_unblocks_the_verdict` |
+| **DSPC-010 按任务查纠纷** | 新增 `GET /tasks/{task_id}/dispute`。被诉方只知道任务 id——这是他进入这场程序的唯一一条路；非当事人 403，无纠纷 404 | `::test_dspc010_respondent_cannot_be_locked_out_by_not_knowing_the_dispute_id`、`::test_dspc010_task_without_dispute_returns_404` |
+| **DSPC-011 服务端给出客户端算不出的事实** | `_dump` 增加 `response_deadline` / `resolved_at` / `appealable` / `respondent_id` / `respondent_spoke`。答辩期长度与申诉窗口都是服务端配置 | `::test_dspc011_deadline_comes_from_config_not_from_a_hardcoded_48` |
+| **DSPC-012 通知不再说谎** | 带上任务号，小时数取自 `settings.DISPUTE_RESPONSE_HOURS`，并指明逾期会缺席裁决 | `::test_dspc012_open_notification_carries_the_task_and_the_configured_hours`（断言改配置后正文里不再出现 48） |
+| **DSPC-013 陈述权不能被通知开关放弃** | `notify(..., force=True)`：此前只有 `funds` 类必达，纠纷开案属于 `task` 类，用户关掉就收不到——等于用一个开关放弃了自己的答辩机会 | `::test_dspc013_dispute_notice_ignores_the_category_switch` |
+| **DSPC-020/021 SDK 与网页面板** | `dispute` / `disputeByTask` / `disputeStatements` / `addDisputeStatement` / `appealDispute`；`web/src/DisputePanel.tsx` 提供陈述时间线、答辩框（显示截止时间）、和解提案与接受（把两个死方法接上）、结案后的申诉入口 | `packages/core/src/client.test.ts::DSPC-001/020` 三项，`npm run build:web` 通过 |
+| **DSPC-030 `appealable` 与端点同一个判断** | `_appeal_block()` 是唯一实现，端点与客户端按钮共用。此前三条规则只长在端点里，客户端要画按钮就得再实现一遍 | `::test_dspc030_appealable_flag_and_the_appeal_endpoint_never_disagree`（双向）、`::test_dspc030_expired_appeal_window_closes_the_flag_too` |
+| **DSPC-040 机器闸门** | 纠纷模块所有 `get_current_user` 端点（排除 job）的路径必须在 `client.ts` 里有对应调用 | `::test_dspc040_every_party_facing_dispute_endpoint_is_reachable_from_the_sdk`、`::test_dspc040_the_four_actions_that_were_missing_are_named_explicitly`；已实测：把 SDK 里任一路径改坏，两条都变红 |
 
 ## 已实现（V60 批次：把钱锁在一个再也登不上的账户里）
 

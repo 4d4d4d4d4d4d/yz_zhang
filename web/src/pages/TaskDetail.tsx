@@ -4,6 +4,7 @@ import {
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { DisputePanel } from '../DisputePanel';
 import PhotoPicker from '../PhotoPicker';
 import { useApp } from '../store';
 
@@ -287,6 +288,11 @@ export default function TaskDetail() {
             </div>
           )}
         </div>
+      )}
+      {/* DSPC-021 纠纷面板。当事人（含被诉方）从这里答辩、和解、申诉——
+          此前这三件事在任何客户端上都做不了，唯一能做的动作是发起纠纷 */}
+      {(isCreator || isExecutor) && (
+        <DisputePanel client={client} taskId={taskId} meId={me ? me.id : null} />
       )}
     </div>
   );

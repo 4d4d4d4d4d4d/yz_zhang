@@ -29,8 +29,38 @@ class ShareIn(BaseModel):
     reason: str = ""
 
 
-def _dump(d: Dispute) -> dict:
-    return {
+def _appeal_block(d: Dispute) -> str:
+    """DSPC-030 「能不能申诉」的**唯一**判断：端点与客户端按钮共用。
+
+    返回空串表示可申诉，否则是拒绝的错误码。
+    此前这三条只长在 `appeal` 端点里，客户端要画按钮就得再实现一遍——
+    而 `_dump` 连 `resolved_at` 都不返回，客户端根本算不出申诉窗口。
+    结果只有两种：不画按钮（现状），或者画一个必然 409 的按钮。
+    """
+    from datetime import timedelta
+
+    from app.core.config import settings
+
+    if d.status != "resolved":
+        return "not_appealable"
+    if d.appealed:
+        return "already_appealed"
+    if d.resolved_at and utcnow() > d.resolved_at + timedelta(days=settings.APPEAL_WINDOW_DAYS):
+        return "appeal_window_closed"
+    return ""
+
+
+def response_deadline(d: Dispute):
+    """DSPC-011 答辩截止时间。长度是服务端配置，客户端不该猜也不该硬编码。"""
+    from datetime import timedelta
+
+    from app.core.config import settings
+
+    return d.created_at + timedelta(hours=settings.DISPUTE_RESPONSE_HOURS)
+
+
+def _dump(d: Dispute, task: Task | None = None, db: Session | None = None) -> dict:
+    out = {
         "id": d.id, "task_id": d.task_id, "contract_id": d.contract_id,
         "opened_by": d.opened_by, "reason": d.reason, "status": d.status,
         "evidence": d.evidence, "settlement_proposal": d.settlement_proposal,
@@ -38,7 +68,23 @@ def _dump(d: Dispute) -> dict:
         "verdict_reason": d.verdict_reason,
         "split_base_cents": d.split_base_cents,  # DSP-008 裁决/复核分账基数
         "escalated": d.escalated,  # DSP-009 SLA 超期升级标记
+        # DSPC-011 以下四项客户端算不出来：答辩期长度与申诉窗口都是服务端配置
+        "resolved_at": d.resolved_at.isoformat() if d.resolved_at else None,
+        "response_deadline": response_deadline(d).isoformat(),
+        "appealable": _appeal_block(d) == "",
     }
+    if task is not None and db is not None:
+        from .models import DisputeStatement
+
+        respondent_id = task.executor_id if d.opened_by == task.creator_id else task.creator_id
+        out["respondent_id"] = respondent_id
+        out["respondent_spoke"] = bool(
+            db.query(DisputeStatement)
+            .filter(DisputeStatement.dispute_id == d.id,
+                    DisputeStatement.user_id == respondent_id)
+            .first()
+        )
+    return out
 
 
 @router.post("/tasks/{task_id}/disputes", status_code=201)
@@ -86,7 +132,7 @@ def open_dispute(
         "dispute_id": dispute.id, "task_id": task_id,
         "parties": [task.creator_id, task.executor_id],
     })
-    return _dump(dispute)
+    return _dump(dispute, task, db)
 
 
 def _get_dispute(db: Session, dispute_id: int) -> tuple[Dispute, Task, Contract]:
@@ -166,11 +212,12 @@ def list_statements(
 
 
 def _respondent_had_voice(db: Session, dispute: Dispute, task: Task) -> bool:
-    """DSP-005 两造兼听：被诉方已答辩，或答辩期已过（可缺席裁决）。"""
-    from datetime import timedelta
+    """DSP-005 两造兼听：被诉方已答辩，或答辩期已过（可缺席裁决）。
 
-    from app.core.config import settings
-
+    DSPC-001：改造前这个函数的第一条分支在生产里是**死代码**——没有任何
+    客户端能写入 `DisputeStatement`，所以每一次都落到「等满答辩期」，
+    平台上线后的每一份处理决定都会是缺席裁决。
+    """
     from .models import DisputeStatement
 
     respondent_id = task.executor_id if dispute.opened_by == task.creator_id else task.creator_id
@@ -182,8 +229,7 @@ def _respondent_had_voice(db: Session, dispute: Dispute, task: Task) -> bool:
     )
     if spoke:
         return True
-    deadline = dispute.created_at + timedelta(hours=settings.DISPUTE_RESPONSE_HOURS)
-    return utcnow() >= deadline
+    return utcnow() >= response_deadline(dispute)
 
 
 @router.post("/disputes/{dispute_id}/settlement")
@@ -198,7 +244,7 @@ def propose_settlement(
         raise conflict("纠纷已结案", "dispute_closed")
     dispute.settlement_proposal = {"executor_share_bps": body.executor_share_bps, "proposed_by": user.id}
     db.add(dispute)
-    return _dump(dispute)
+    return _dump(dispute, task, db)
 
 
 @router.post("/disputes/{dispute_id}/settlement/accept")
@@ -214,7 +260,7 @@ def accept_settlement(
     if dispute.status != "open":
         raise conflict("纠纷已结案", "dispute_closed")
     _execute_split(db, dispute, task, contract, proposal["executor_share_bps"], "settled", "双方和解")
-    return _dump(dispute)
+    return _dump(dispute, task, db)
 
 
 @router.post("/disputes/{dispute_id}/verdict")
@@ -249,7 +295,7 @@ def issue_verdict(
 
     record_audit(db, arbiter.id, "dispute_verdict", "dispute", dispute.id,
                  f"执行者分成 {body.executor_share_bps}bps：{body.reason[:200]}")
-    return _dump(dispute)
+    return _dump(dispute, task, db)
 
 
 @router.post("/disputes/{dispute_id}/appeal")
@@ -258,23 +304,20 @@ def appeal(dispute_id: int, user: User = Depends(get_current_user), db: Session 
     dispute, task, _ = _get_dispute(db, dispute_id)
     if user.id not in (task.creator_id, task.executor_id):
         raise forbidden()
-    if dispute.status != "resolved":
-        raise conflict("仅平台处理决定结案的纠纷可申诉（和解结案不可申诉）", "not_appealable")
-    if dispute.appealed:
-        raise conflict("申诉机会已用完（每案一次）", "already_appealed")
-    # DSP-010 申诉窗口：逾期裁决终局（业界惯例，防裁决永不生效）
-    from datetime import timedelta
-
-    from app.core.config import settings
-
-    if dispute.resolved_at and utcnow() > dispute.resolved_at + timedelta(
-        days=settings.APPEAL_WINDOW_DAYS
-    ):
-        raise conflict("申诉期已过，裁决已终局", "appeal_window_closed")
+    # DSPC-030 与 `_dump()["appealable"]` 共用同一个判断：
+    # 客户端画出来的按钮和端点真正的准入不允许有两份实现
+    block = _appeal_block(dispute)
+    if block:
+        raise conflict({
+            "not_appealable": "仅平台处理决定结案的纠纷可申诉（和解结案不可申诉）",
+            "already_appealed": "申诉机会已用完（每案一次）",
+            # DSP-010 申诉窗口：逾期裁决终局（业界惯例，防裁决永不生效）
+            "appeal_window_closed": "申诉期已过，裁决已终局",
+        }[block], block)
     dispute.appealed = True
     dispute.status = "appealed"
     db.add(dispute)
-    return _dump(dispute) | {"appealed": True}
+    return _dump(dispute, task, db) | {"appealed": True}
 
 
 @router.post("/disputes/{dispute_id}/appeal-verdict")
@@ -306,7 +349,7 @@ def appeal_verdict(
 
     record_audit(db, senior.id, "dispute_appeal_verdict", "dispute", dispute.id,
                  f"复核终局 {body.executor_share_bps}bps，纠正 {delta} 分")
-    return _dump(dispute) | {"corrective_delta_cents": delta}
+    return _dump(dispute, task, db) | {"corrective_delta_cents": delta}
 
 
 @router.post("/disputes/jobs/escalate-overdue")
@@ -351,4 +394,31 @@ def get_dispute(dispute_id: int, user: User = Depends(get_current_user), db: Ses
     dispute, task, _ = _get_dispute(db, dispute_id)
     if user.id not in (task.creator_id, task.executor_id) and not user.is_admin:
         raise forbidden()
-    return _dump(dispute)
+    return _dump(dispute, task, db)
+
+
+@router.get("/tasks/{task_id}/dispute")
+def get_task_dispute(
+    task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """DSPC-010 按任务取纠纷：**被诉方进入这场纠纷的唯一一条路。**
+
+    发起方能从 `POST /tasks/{id}/disputes` 的返回值里拿到 `dispute_id`，
+    被诉方拿不到——他收到的通知只说「任务 #17 有纠纷」，而全站此前没有
+    任何「按任务查纠纷」的入口。于是被诉方连这场针对他的程序在哪都找不到，
+    更不用说答辩。
+    """
+    task = db.get(Task, task_id)
+    if not task:
+        raise not_found("任务不存在")
+    if user.id not in (task.creator_id, task.executor_id) and not user.is_admin:
+        raise forbidden()
+    dispute = (
+        db.query(Dispute)
+        .filter(Dispute.task_id == task_id)
+        .order_by(Dispute.id.desc())
+        .first()
+    )
+    if not dispute:
+        raise not_found("该任务没有纠纷")
+    return _dump(dispute, task, db)

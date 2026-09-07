@@ -10,6 +10,8 @@ import type {
   Contract,
   Decomposition,
   DecompositionItem,
+  Dispute,
+  DisputeStatement,
   Conversation,
   InvitationItem,
   Me,
@@ -768,7 +770,28 @@ export class PlatformClient {
   }
 
   openDispute(taskId: number, reason: string) {
-    return this.request<{ id: number; status: string }>('POST', `/tasks/${taskId}/disputes`, { reason });
+    return this.request<Dispute>('POST', `/tasks/${taskId}/disputes`, { reason });
+  }
+  dispute(disputeId: number) {
+    return this.request<Dispute>('GET', `/disputes/${disputeId}`);
+  }
+  // DSPC-010 被诉方进入这场纠纷的唯一一条路：他只知道任务 id。
+  // 发起方能从 openDispute() 的返回值里拿到 dispute_id，被诉方拿不到。
+  disputeByTask(taskId: number) {
+    return this.request<Dispute>('GET', `/tasks/${taskId}/dispute`);
+  }
+  disputeStatements(disputeId: number) {
+    return this.request<DisputeStatement[]>('GET', `/disputes/${disputeId}/statements`);
+  }
+  // DSPC-001 答辩。服务端把「两造兼听」当作裁决的硬性前置，
+  // 而在此之前没有任何客户端能写入这张表——那道前置永远只能靠等答辩期超时满足。
+  addDisputeStatement(disputeId: number, content: string, attachments: string[] = []) {
+    return this.request<{ id: number; role: string; created_at: string }>(
+      'POST', `/disputes/${disputeId}/statements`, { content, attachments },
+    );
+  }
+  appealDispute(disputeId: number) {
+    return this.request<Dispute & { appealed: boolean }>('POST', `/disputes/${disputeId}/appeal`);
   }
   proposeSettlement(disputeId: number, executorShareBps: number) {
     return this.request<{ id: number }>('POST', `/disputes/${disputeId}/settlement`, {

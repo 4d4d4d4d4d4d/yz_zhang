@@ -462,3 +462,39 @@ export interface CaptchaConfig {
   /** 供应商脚本地址；为空表示退化为手工输入令牌（沙箱/自建）。 */
   script_url: string;
 }
+
+/** DSP/DSPC 纠纷。`response_deadline` 与 `appealable` 由服务端算——
+ *  答辩期长度与申诉窗口都是服务端配置，客户端不该猜，更不该硬编码。 */
+export interface Dispute {
+  id: number;
+  task_id: number;
+  contract_id: number;
+  opened_by: number;
+  reason: string;
+  /** open / appealed（进行中） | resolved / settled（终态） */
+  status: string;
+  evidence: Record<string, unknown>;
+  settlement_proposal: { executor_share_bps: number; proposed_by: number } | null;
+  verdict_executor_share_bps: number | null;
+  verdict_reason: string;
+  split_base_cents: number;
+  escalated: boolean;
+  resolved_at: string | null;
+  /** 被诉方的答辩截止时间；逾期平台可缺席作出处理决定。 */
+  response_deadline: string;
+  /** 与 `POST /disputes/{id}/appeal` 的准入是同一个判断，不是两份实现。 */
+  appealable: boolean;
+  /** 仅在按 id / 按任务取回时返回（列表接口不带）。 */
+  respondent_id?: number | null;
+  respondent_spoke?: boolean;
+}
+
+export interface DisputeStatement {
+  id: number;
+  user_id: number;
+  /** opener 发起方 / respondent 被诉方 */
+  role: string;
+  content: string;
+  attachments: string[];
+  created_at: string;
+}

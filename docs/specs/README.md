@@ -58,6 +58,7 @@
 | 33 | 处置动作的单一实现 | [33-moderation-actions.md](./33-moderation-actions.md) | P0 |
 | 34 | 人机验证的端到端闭环 | [34-captcha-e2e.md](./34-captcha-e2e.md) | P0 |
 | 35 | 账号注销的资金与个人信息闭环 | [35-account-deletion.md](./35-account-deletion.md) | P0 |
+| 36 | 纠纷的当事人闭环 | [36-dispute-client-loop.md](./36-dispute-client-loop.md) | P0 |
 
 ## 功能点编号与优先级约定
 
