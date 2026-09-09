@@ -48,6 +48,13 @@ maskable 图标）。Service Worker 只缓存应用外壳，**API 一律不缓�
 而交付凭证传不上去等于没有证据。图片走 `StorageProvider` 抽象，
 接对象存储/CDN 只改环境变量。
 
+⚠️ **接对象存储时必须保住一条不变量**（V62）：文件名必须来自 CSPRNG，
+**不得由文件内容派生**。`GET /files/{name}` 是匿名的能力 URL——CDN 直出时
+读取端不可能鉴权，安全性完全依赖「名字不可猜」。改造前名字是
+`sha256(内容)[:32]`，于是任何持有原图的人都能离线算出 URL，
+端点变成一台「这张图在不在你这儿」的存在性预言机。
+内容哈希只用于磁盘去重（`blobs/<sha256>` + 硬链接），不进 URL。
+
 **方式 B：原生 App（React Native / Expo）**
 ```bash
 cd app && npm install && npx expo start   # 手机装 Expo Go 扫码真机调试
@@ -77,7 +84,7 @@ App 与 Web 共用同一个 TS SDK（`packages/core`），
 | **限流（滑动窗口）** | `core/ratelimit.py` | 注册/登录/改密/换绑的暴力尝试 |
 | **对账不变量** | `risk/service.py::reconcile` | 五条硬不变量兜底，不平自动开工单+告警 |
 
-这套组合已被 **561 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
+这套组合已被 **569 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
 「重复接受报名 / 重复托管 / 重复交付 / 重复验收 / 重复里程碑放款」全部拒绝且零副作用。
 
 ### 2.2 多副本并发安全（V42 已补齐，见 [18-concurrency.md](specs/18-concurrency.md)）
@@ -216,7 +223,8 @@ App 与 Web 共用同一个 TS SDK（`packages/core`），
 
 **其余已就位**：TLS 强制跳转 + HSTS（仅 prod 下发）、安全响应头
 （nosniff / frame DENY / CSP / Referrer-Policy）、生产关闭 `/docs`、
-`/metrics` 与 `/jobz` 仅内网可达、上传文件带 `nosniff` + sandbox CSP。
+`/metrics` 与 `/jobz` 仅内网可达、上传文件带 `nosniff` + sandbox CSP、
+上传 URL 为不可推导的随机令牌且可追溯到上传者（`uploaded_files`）。
 
 ### 3.3 ⚠️ 仍需补的
 
@@ -340,7 +348,7 @@ docker compose -f deploy/docker-compose.prod.yml run --rm migrate
 - [ ] 告警接入值班系统（PagerDuty / 电话）
 - [ ] 定期做恢复演练并记录 RTO/RPO
 
-CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 561 测试、
+CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 569 测试、
 前端 46 测试与构建、**alembic 迁移漂移检查**、**真实 HTTP 主闭环冒烟**、
 **沙箱合规态闭环自检**。
 
@@ -497,7 +505,7 @@ CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 561 测试、
 **已经很扎实的**：交易闭环、资金安全与守恒、纠纷程序正义、账号安全、审计留痕、
 多副本并发安全、外部供应商可替换性、事件投递的失败隔离与可补做、
 个税代扣的资金隔离与可对账、反洗钱的可疑识别与保密、边界防护的跨副本一致性、
-定时任务编排的完整性、处置动作的一致性。这些有 561 个测试钉着。
+定时任务编排的完整性、处置动作的一致性。这些有 569 个测试钉着。
 
 **离真正上线还差的**（按紧迫度）：
 1. ~~Postgres + 行锁/乐观锁~~ —— **V42 已完成**（切库只改环境变量）

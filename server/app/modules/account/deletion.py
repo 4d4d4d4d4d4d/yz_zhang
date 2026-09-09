@@ -79,6 +79,20 @@ USER_DISPOSITION: dict[str, Disposition] = {
     "created_at": R,
 }
 
+# ---------- uploaded_files（FILE-014）----------
+# 本批的决定是**全部 RETAIN**，而且这是一个决定，不是默认值：
+# 上传物是交付凭证与纠纷证据，属于**交易对手方的凭证**与法定可追溯性
+# （内容安全、反洗钱都要求能追溯到上传者），不是注销者独有的画像数据。
+# 注销一方不能把对方手里的证据一并带走。
+UPLOADED_FILE_DISPOSITION: dict[str, Disposition] = {
+    "name": R,
+    "owner_id": R,
+    "sha256": R,
+    "content_type": R,
+    "size_bytes": R,
+    "created_at": R,
+}
+
 # ---------- payout_accounts ----------
 PAYOUT_DISPOSITION: dict[str, Disposition] = {
     "user_id": R,

@@ -1,10 +1,69 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V61 全批次完成（2026-09-07）。
-> 后端 561 tests + 前端 49 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V62 全批次完成（2026-09-09）。
+> 后端 569 tests + 前端 49 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V62 批次：用文件内容当文件名，等于把钥匙印在锁上）
+
+> 模块 spec：[37-upload-capability-urls.md](37-upload-capability-urls.md)
+>
+> **检视结论**：`GET /api/v1/files/{name}` 完全匿名。这本身不是错误——
+> `<img src>` 带不了 Authorization 头，接真实对象存储后 URL 直接指向 CDN，
+> 读取端必然是匿名的。业界的标准做法是**能力 URL**：知道 URL 即有权读。
+> 这个模式成立**有且只有一个前提：URL 不可猜**。
+>
+> 而名字是：
+>
+> ```python
+> digest = hashlib.sha256(data).hexdigest()[:32]
+> name = f"{digest}{ext}"     # 文件名就是文件内容的指纹
+> ```
+>
+> 探针实测：
+>
+> ```
+> A url: /api/v1/files/04523bfdcb1918b37b179fd3010ceabb.png
+> B url: /api/v1/files/04523bfdcb1918b37b179fd3010ceabb.png
+> same object across users: True
+> offline-computed name matches: True
+> anonymous GET: 200 208 bytes
+> cache header: public, max-age=31536000, immutable
+> ```
+>
+> 三件事同时成立，各自独立：
+>
+> 1. **能力 URL 的前提不成立。** 内容哈希对任何持有该内容的人都是公开的，
+>    端点因此变成一台**存在性预言机**：拿一张候选图片离线算一次 sha256，
+>    就能问平台「这张图在不在你这儿」，200 即「在」。不需登录、不留痕迹。
+>    我**没有**声称的是暴力枚举——128 位枚不动；问题是这个值**不是秘密**。
+> 2. **跨用户去重把两个人的数据物理合成了一份。** 省空间是对的，
+>    但省的应该是磁盘、不是 URL。V60 刚建立的删除权机制管不到这里：
+>    甲注销要删的对象可能同时是乙的证据，删了破坏乙的证据链，不删就是
+>    没执行删除权——**内容寻址在一个有删除义务的系统里是结构性错误**。
+> 3. **这个能力无法吊销。** 名字由内容决定，重新上传还是同一个名字；
+>    URL 一旦泄露就没办法换，而响应还带着 `immutable` 缓存一年。
+>    一个不能轮换的凭证不是凭证。
+>
+> 外加一条独立的缺口：**平台答不出「这张违规图片是谁传的」**——上传要求
+> 登录，却没有任何地方记下上传者（`VendorCall` 只记 provider/operation/摘要）。
+>
+> **一个佐证**：沙箱的直传实现 `sign_upload` 用的是 `uuid.uuid4().hex`。
+> 真实对象存储的形态本来就是随机令牌，**只有实际在跑的那条本地路径跑偏了**——
+> 而它才是所有测试与冒烟走的路径。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **FILE-010/021 名字来自 CSPRNG** | `secrets.token_hex(16)`，与内容无关；同一份内容重复上传得到不同 URL | `tests/test_upload_capability_urls.py::test_file021_url_is_not_derivable_from_the_file_contents`（断言 sha256 既不出现在 URL 里、也取不到文件）、`::test_file010_name_is_random_so_two_uploads_of_one_file_differ` |
+| **FILE-011/022 磁盘去重与 URL 去重分开** | blob 落 `blobs/<sha256>` 存一份，命名条目用 `os.link()` 硬链接；跨设备等 `OSError` 退化为复制（只损失空间，不损失正确性）。引用计数顺带解决删除困境 | `::test_file022_disk_still_dedupes_by_content`、`::test_blob_directory_is_not_itself_readable_through_the_endpoint` |
+| **FILE-020 跨用户互不可达** | 甲乙上传同一份字节得到两条独立 URL 与两条归属记录 | `::test_file020_two_users_uploading_the_same_bytes_stay_separate` |
+| **FILE-012/023 归属落库** | 新表 `uploaded_files`（name/owner_id/sha256/content_type/size_bytes），迁移 `f0a4c81d5e27` | `::test_file023_upload_is_attributable_to_a_user` |
+| **FILE-013 把前提写下来** | `read_file` 的 docstring 写明这是能力 URL，且它能安全匿名的**唯一**依据是名字来自 CSPRNG——改 `put()` 的人必须先读到这句 | 代码注释 |
+| **FILE-014 进 V60 的处置表** | `UPLOADED_FILE_DISPOSITION` 全部 `RETAIN`：上传物是交付凭证与纠纷证据，属于**交易对手方的凭证**与法定可追溯性。这是一个决定，不是默认值 | `tests/test_account_deletion.py::test_accdel021_...` 参数化新增 `UploadedFile`——V60 定的「新增一列就逼作者做一次决定」第一次真的被使用 |
+| **非回归** | 匿名读、长缓存、`nosniff`、路径穿越拒绝全部不变 | `::test_upload_and_anonymous_read_still_work`，`tests/test_uploads.py` 全套 |
+| **原测试的修正** | `test_upload_is_content_addressed` 原本断言两次上传 URL **相等**，把缺陷钉成了规格。改名为 `test_upload_dedupes_on_disk_but_not_in_the_url` 并断言不等 | `tests/test_uploads.py` |
 
 ## 已实现（V61 批次：被告席上没有麦克风）
 

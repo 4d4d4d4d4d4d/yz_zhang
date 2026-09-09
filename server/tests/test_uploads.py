@@ -33,12 +33,19 @@ def test_upload_and_read_roundtrip(client):
     assert "immutable" in got.headers.get("cache-control", "")
 
 
-def test_upload_is_content_addressed(client):
-    """同一张图重复上传只占一份空间（内容寻址）。"""
+def test_upload_dedupes_on_disk_but_not_in_the_url(client):
+    """同一张图重复上传只占一份磁盘空间，但**各得一个独立的 URL**。
+
+    这条断言原来写的是 `a == b`，并把内容寻址当成优点。省空间是对的，
+    但省的应该是磁盘、不是 URL：读取端点是匿名的能力 URL，
+    名字一旦由内容决定，持有原图的人就等于持有 URL（FILE-001，37 号 spec）。
+    去重与可达性是两件事，这里把它们分开。
+    """
     user = register(client, "13800008002", "重复上传")
     a = upload(client, user).json()["url"]
     b = upload(client, user).json()["url"]
-    assert a == b
+    assert a != b
+    assert client.get(a).content == client.get(b).content
 
 
 def test_upload_requires_login(client):

@@ -18,10 +18,12 @@ import pytest
 from app.core.db import SessionLocal
 from app.modules.account.deletion import (
     PAYOUT_DISPOSITION,
+    UPLOADED_FILE_DISPOSITION,
     USER_DISPOSITION,
     Disposition,
 )
 from app.modules.account.models import User
+from app.modules.files.models import UploadedFile
 from app.modules.wallet.models import PayoutAccount, WalletAccount
 
 from .conftest import auth, register, topup, verify_user
@@ -148,7 +150,10 @@ def test_accdel013_appealed_dispute_blocks_deactivation(client, requester, worke
 # ---------- ACCDEL-020/021 处置表逐列覆盖模型 ----------
 @pytest.mark.parametrize(
     "model, table",
-    [(User, USER_DISPOSITION), (PayoutAccount, PAYOUT_DISPOSITION)],
+    [(User, USER_DISPOSITION), (PayoutAccount, PAYOUT_DISPOSITION),
+     # FILE-014 V62 新增了一张含个人信息的表。V60 定的规矩
+     # 「新增一列就逼作者做一次决定」在这里第一次真的被使用。
+     (UploadedFile, UPLOADED_FILE_DISPOSITION)],
 )
 def test_accdel021_disposition_table_covers_exactly_the_model_columns(model, table):
     """新增一列就必须做一次决定——不做决定的默认行为不能是「悄悄留下」。

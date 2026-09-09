@@ -8,6 +8,7 @@ JSON + 幂等键 + 鉴权的请求管线完全一致。真实供应商实现应�
 import base64
 import hashlib
 import os
+import secrets
 import uuid
 from typing import Protocol
 
@@ -44,16 +45,39 @@ class LocalStorageProvider:
         self.root = root or os.environ.get("PLATFORM_UPLOAD_DIR", "./data/uploads")
 
     def put(self, data: bytes, content_type: str) -> VendorResult:
+        """FILE-010/011 名字随机，磁盘按内容去重。
+
+        改造前名字是 `sha256(data)[:32]`——**文件名就是文件内容的指纹**。
+        读取端点是匿名的（CDN 直出时也只能是匿名的），靠的是「URL 不可猜」
+        这个能力 URL 前提；而内容哈希对任何持有这份内容的人都是公开的，
+        于是这个端点变成一台存在性预言机：拿着一张候选图片离线算一次
+        sha256，就能问平台「这张图在不在你这儿」。
+
+        省空间是对的，但省的应该是**磁盘**，不是 URL。这里把两件事拆开：
+        blob 按内容哈希存一份，每次上传各给一个随机名，用硬链接指过去。
+        引用计数顺带解决了删除困境——删掉甲的名字，乙的名字仍然有效。
+        """
         ext = ALLOWED[content_type]
-        # 内容寻址：同一张图重复上传不会占两份空间
-        digest = hashlib.sha256(data).hexdigest()[:32]
-        name = f"{digest}{ext}"
-        os.makedirs(self.root, exist_ok=True)
+        digest = hashlib.sha256(data).hexdigest()
+        blob_dir = os.path.join(self.root, "blobs")
+        os.makedirs(blob_dir, exist_ok=True)
+        blob = os.path.join(blob_dir, digest)
+        if not os.path.exists(blob):
+            tmp = blob + ".tmp"
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.replace(tmp, blob)       # 同目录原子替换，避免读到半个文件
+
+        name = f"{secrets.token_hex(16)}{ext}"   # 128 位 CSPRNG，与内容无关
         path = os.path.join(self.root, name)
-        if not os.path.exists(path):
+        try:
+            os.link(blob, path)
+        except OSError:
+            # 跨设备/不支持硬链接：退化为复制。只损失空间，不损失正确性。
             with open(path, "wb") as f:
                 f.write(data)
-        return VendorResult(ok=True, external_ref=name, data={"url": f"/api/v1/files/{name}"})
+        return VendorResult(ok=True, external_ref=name,
+                            data={"url": f"/api/v1/files/{name}", "sha256": digest})
 
     def sign_upload(self, content_type: str) -> VendorResult:  # pragma: no cover - 本地不用直传
         return VendorResult(ok=True, external_ref=uuid.uuid4().hex,
