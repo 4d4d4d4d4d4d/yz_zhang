@@ -389,6 +389,67 @@ def run_escalate_overdue(db: Session = Depends(get_db), _=Depends(require_job_au
     return {"escalated": len(rows)}
 
 
+@router.post("/disputes/jobs/remind-response")
+def run_remind_response(db: Session = Depends(get_db), _=Depends(require_job_auth),
+        __=Depends(job_slot("remind_response"))):
+    """DSPR-020 答辩期将届满而被诉方仍未陈述时提醒。
+
+    V61 给了被诉方开口的手段，但开得了口不等于知道要开口：此前只有开案时
+    一条通知，答辩期静默过去就变成缺席裁决。**一个只在开始时响一次的闹钟，
+    和没有闹钟差别不大。**
+
+    提前量按**答辩期的 1/4** 算（默认 48h → 提前 12h），不写死小时数：
+    `DISPUTE_RESPONSE_HOURS` 是可配置的，写死「截止前 12 小时」在把答辩期
+    调成 6 小时的部署里永远不会触发。这是 DSPC-012 那个硬编码 48 的同类
+    错误，不能再犯一次。
+    """
+    from datetime import timedelta
+
+    from app.core.config import settings
+    from app.modules.notification.service import notify
+
+    from .models import DisputeStatement
+
+    hours = settings.DISPUTE_RESPONSE_HOURS
+    lead = timedelta(hours=max(hours / 4, 1))
+    now = utcnow()
+    rows = (
+        db.query(Dispute)
+        .filter(Dispute.status == "open", Dispute.response_reminded.is_(False))
+        .all()
+    )
+    reminded = 0
+    for d in rows:
+        deadline = response_deadline(d)
+        if now < deadline - lead or now >= deadline:
+            continue                      # 还早，或者已经过期（过期再催没有意义）
+        task = db.get(Task, d.task_id)
+        if not task:
+            continue
+        respondent = task.executor_id if d.opened_by == task.creator_id else task.creator_id
+        if not respondent:
+            continue
+        spoke = (
+            db.query(DisputeStatement)
+            .filter(DisputeStatement.dispute_id == d.id,
+                    DisputeStatement.user_id == respondent)
+            .first()
+        )
+        d.response_reminded = True        # 说过话的也置位，免得每小时再查一遍
+        db.add(d)
+        if spoke:
+            continue                      # DSPR-024 已答辩的不催
+        left = max(int((deadline - now).total_seconds() // 3600), 1)
+        notify(db, respondent, "task", "答辩期即将届满",
+               f"任务 #{task.id} 的纠纷中你还没有提交答辩，约 {left} 小时后截止。"
+               "逾期未答辩，平台可仅凭对方的陈述作出处理决定。"
+               "请在任务详情页提交答辩与证据。",
+               # DSPR-023 与开案通知同理：不允许用一个通知开关放弃自己的陈述权
+               force=True)
+        reminded += 1
+    return {"reminded": reminded, "scanned": len(rows)}
+
+
 @router.get("/disputes/{dispute_id}")
 def get_dispute(dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     dispute, task, _ = _get_dispute(db, dispute_id)

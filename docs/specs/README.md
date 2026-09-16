@@ -60,6 +60,7 @@
 | 35 | 账号注销的资金与个人信息闭环 | [35-account-deletion.md](./35-account-deletion.md) | P0 |
 | 36 | 纠纷的当事人闭环 | [36-dispute-client-loop.md](./36-dispute-client-loop.md) | P0 |
 | 37 | 上传文件的 URL 是能力，不是指纹 | [37-upload-capability-urls.md](./37-upload-capability-urls.md) | P0 |
+| 38 | 被诉方真的收得到、也真的开得了口 | [38-dispute-respondent-reach.md](./38-dispute-respondent-reach.md) | P0 |
 
 ## 功能点编号与优先级约定
 

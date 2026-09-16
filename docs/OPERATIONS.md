@@ -84,7 +84,7 @@ App 与 Web 共用同一个 TS SDK（`packages/core`），
 | **限流（滑动窗口）** | `core/ratelimit.py` | 注册/登录/改密/换绑的暴力尝试 |
 | **对账不变量** | `risk/service.py::reconcile` | 五条硬不变量兜底，不平自动开工单+告警 |
 
-这套组合已被 **569 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
+这套组合已被 **579 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
 「重复接受报名 / 重复托管 / 重复交付 / 重复验收 / 重复里程碑放款」全部拒绝且零副作用。
 
 ### 2.2 多副本并发安全（V42 已补齐，见 [18-concurrency.md](specs/18-concurrency.md)）
@@ -348,7 +348,7 @@ docker compose -f deploy/docker-compose.prod.yml run --rm migrate
 - [ ] 告警接入值班系统（PagerDuty / 电话）
 - [ ] 定期做恢复演练并记录 RTO/RPO
 
-CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 569 测试、
+CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 579 测试、
 前端 46 测试与构建、**alembic 迁移漂移检查**、**真实 HTTP 主闭环冒烟**、
 **沙箱合规态闭环自检**。
 
@@ -505,7 +505,7 @@ CI（`.github/workflows/ci.yml`）每次 push 自动跑：后端 569 测试、
 **已经很扎实的**：交易闭环、资金安全与守恒、纠纷程序正义、账号安全、审计留痕、
 多副本并发安全、外部供应商可替换性、事件投递的失败隔离与可补做、
 个税代扣的资金隔离与可对账、反洗钱的可疑识别与保密、边界防护的跨副本一致性、
-定时任务编排的完整性、处置动作的一致性。这些有 569 个测试钉着。
+定时任务编排的完整性、处置动作的一致性。这些有 579 个测试钉着。
 
 **离真正上线还差的**（按紧迫度）：
 1. ~~Postgres + 行锁/乐观锁~~ —— **V42 已完成**（切库只改环境变量）

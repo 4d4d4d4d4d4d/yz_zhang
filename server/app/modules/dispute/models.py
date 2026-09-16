@@ -37,6 +37,9 @@ class Dispute(Base):
     appealed: Mapped[bool] = mapped_column(Boolean, default=False)
     # DSP-009 SLA 升级标记：超期未结案已进人审队列（幂等去重）
     escalated: Mapped[bool] = mapped_column(Boolean, default=False)
+    # DSPR-022 答辩期届满提醒已发（幂等去重）。没有这个标记，
+    # 「距截止不足 N 小时」会在每次 job 运行时反复成立，变成每小时一条骚扰。
+    response_reminded: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

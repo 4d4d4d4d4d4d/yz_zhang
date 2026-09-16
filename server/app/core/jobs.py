@@ -48,6 +48,9 @@ JOBS: tuple[ScheduledJob, ...] = (
                  "此前 cron 写的路径少了 /contracts 前缀，这个 job 从未跑过"),
     ScheduledJob("/disputes/jobs/escalate-overdue", 3600, "escalate_overdue",
                  "DSP-009 超 SLA 未结案的纠纷升级人审"),
+    ScheduledJob("/disputes/jobs/remind-response", 3600, "remind_response",
+                 "DSPR-020 答辩期将届满而被诉方仍未陈述时提醒——"
+                 "只在开案时响一次的闹钟，和没有闹钟差别不大"),
     ScheduledJob("/missions/jobs/tick-all", 300, "mission_tick_all",
                  "ORC 编排循环推进"),
     ScheduledJob("/tasks/jobs/purge-locations", 86400, "purge_locations",

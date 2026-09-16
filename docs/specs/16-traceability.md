@@ -1,10 +1,42 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V62 全批次完成（2026-09-09）。
-> 后端 569 tests + 前端 49 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V63 全批次完成（2026-09-16）。
+> 后端 579 tests + 前端 49 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V63 批次：只在开始时响一次的闹钟）
+
+> 模块 spec：[38-dispute-respondent-reach.md](38-dispute-respondent-reach.md)
+>
+> **检视结论**：V61 修好了「被诉方在客户端上是哑的」——**但只修了 Web**。
+> `app/App.tsx` 的任务详情里，纠纷相关的按钮只有一个：发起纠纷。
+> 能开，不能答。而线下服务的执行方主要在 App 上，于是修完之后的分布是
+> **最可能坐在被告席上的那群人，恰恰是唯一仍然开不了口的那群人**——
+> 这比原来「所有人都开不了口」更糟，因为它看起来已经修好了。
+>
+> 另一半：开得了口不等于知道要开口。此前只有开案时一条通知，答辩期
+> 48 小时静默过去就变成缺席裁决。**一个只在开始时响一次的闹钟，
+> 和没有闹钟差别不大。**
+>
+> **为什么这个缺口能一直躺着**：`app/` 不在 npm workspaces 里、没有
+> `tsconfig.json`、CI 也不碰它——**从来没有任何东西检查过这个文件**。
+> 本批加的是字面量闸门（可靠、不需要装 expo/react-native）；
+> 完整的类型检查需要改动整个仓库的 `npm install`/`npm test` 行为，
+> 我在本环境无法完整验证，所以**没有推一条自己没跑过的 CI 步骤**，
+> 而是记为 DSPR-042。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **DSPR-010/012 App 纠纷区块** | `DisputeBlock` 经 `disputeByTask(taskId)` 进入（App 和 Web 一样，被诉方只知道任务 id），含陈述时间线、答辩框、接受和解、结案后申诉 | `tests/test_dispute_respondent_reach.py::test_dspr010_app_can_reach_every_respondent_action`；已实测改坏 App 里任一方法名即变红 |
+| **DSPR-011 说清沉默的代价** | 被诉方未答辩且未结案时显著提示「逾期平台可仅凭对方的陈述作出处理决定」+ 剩余小时 | `::test_dspr011_app_states_the_cost_of_staying_silent` |
+| **DSPR-013 结案收起表单** | 服务端本来就会 409，但不该让人在手机上打完一段话才被拒 | `::test_dspr013_app_hides_the_form_once_the_dispute_is_closed` |
+| **不重算服务端规则** | App 用 `response_deadline` / `appealable` 字段，不自己算 48 小时也不自己判断可否申诉——否则就是同一条规则的第三份实现 | `::test_dspr010_app_does_not_recompute_server_side_rules`（并断言 App 里不出现硬编码 48） |
+| **DSPR-020/021 提醒 job** | `POST /disputes/jobs/remind-response`，周期 1h，登记进 `app/core/jobs.py`。提前量按**答辩期的 1/4** 算而非写死小时数——写死「截止前 12 小时」在把答辩期调成 6 小时的部署里永远不触发，是 DSPC-012 那个硬编码 48 的同类错误 | `::test_dspr020_respondent_is_reminded_before_the_window_closes`、`::test_dspr021_lead_time_follows_the_configured_window` |
+| **DSPR-022/030 幂等** | `Dispute.response_reminded`（迁移 `a71e3f9d2b46`）。没有它，「距截止不足 N 小时」每次跑都成立＝每小时一条骚扰 | `::test_dspr030_running_the_job_twice_produces_one_reminder` |
+| **DSPR-023/024 必达且不扰民** | `force=True` 绕过通知开关；已答辩的不催、已结案的不催 | `::test_dspr023_reminder_ignores_the_notification_switch`、`::test_dspr024_*` 两项 |
+| **DSPR-031 新 job 自动被核对** | 调度表 ↔ 路由 ↔ `/jobz` 三方一致由 V57 的 JOB-002 自动覆盖，本批没有新写断言 | `tests/test_job_orchestration.py` 12 项全绿 |
 
 ## 已实现（V62 批次：用文件内容当文件名，等于把钥匙印在锁上）
 

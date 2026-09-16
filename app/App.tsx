@@ -3,7 +3,8 @@
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
 import {
   PlatformClient, TASK_STATUS_LABEL, fmtYuan, taskActions,
-  type Contract, type Me, type Notice, type Task, type Wallet,
+  type Contract, type Dispute, type DisputeStatement,
+  type Me, type Notice, type Task, type Wallet,
 } from '@platform/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -232,9 +233,110 @@ function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
       {actions.includes('review') && (
         <Button title="给对方好评（5星）" onPress={() => act(() => client.review(task.id, 5))} />
       )}
+      {/* DSPR-010 纠纷区块。V61 只补了 Web，而线下服务的执行方主要在 App 上——
+          最可能坐在被告席上的那群人，恰恰是唯一仍然开不了口的那群人。 */}
+      <DisputeBlock client={client} taskId={task.id} meId={me ? me.id : null} />
     </ScrollView>
   );
 }
+
+function DisputeBlock({ client, taskId, meId }: {
+  client: PlatformClient; taskId: number; meId: number | null;
+}) {
+  const [dispute, setDispute] = useState<Dispute | null>(null);
+  const [statements, setStatements] = useState<DisputeStatement[]>([]);
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      // DSPR-012 被诉方只知道任务 id——他收到的通知就只说「任务 #N 有纠纷」
+      const d = await client.disputeByTask(taskId);
+      setDispute(d);
+      setStatements(await client.disputeStatements(d.id));
+    } catch {
+      setDispute(null);
+    }
+  }, [client, taskId]);
+
+  useEffect(() => { void load(); }, [load]);
+  if (!dispute) return null;
+
+  const closed = dispute.status === 'resolved' || dispute.status === 'settled';
+  const iAmRespondent = meId !== null && dispute.respondent_id === meId;
+  // 截止时间由服务端给（DSPC-011）：答辩期长度是服务端配置，客户端不该自己算
+  const hoursLeft = Math.floor(
+    (new Date(dispute.response_deadline + 'Z').getTime() - Date.now()) / 3_600_000,
+  );
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setError('');
+    try { await fn(); await load(); } catch (e) { setError((e as Error).message || '操作失败'); }
+  };
+
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={styles.cardTitle}>纠纷 #{dispute.id} · {DISPUTE_STATUS_LABEL[dispute.status] ?? dispute.status}</Text>
+      <Text style={styles.mutedLeft}>事由：{dispute.reason}</Text>
+      {!closed && (
+        <Text style={styles.mutedLeft}>
+          {hoursLeft > 0 ? `答辩截止还有约 ${hoursLeft} 小时` : '答辩期已过，平台可缺席作出处理决定'}
+        </Text>
+      )}
+      {/* DSPR-011 被诉方没说话时必须说清楚代价 */}
+      {iAmRespondent && !dispute.respondent_spoke && !closed && (
+        <Text style={styles.error}>
+          你尚未答辩。逾期未答辩，平台可仅凭对方的陈述作出处理决定。
+        </Text>
+      )}
+      {statements.length === 0 && <Text style={styles.mutedLeft}>还没有任何陈述。</Text>}
+      {statements.map((s) => (
+        <View key={s.id} style={styles.cardRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>{s.role === 'opener' ? '发起方' : '被诉方'}</Text>
+            <Text style={styles.mutedLeft}>{s.content}</Text>
+          </View>
+        </View>
+      ))}
+      {/* DSPR-013 结案后收起：服务端本来就会 409，但不该让人在手机上打完一段话才被拒 */}
+      {!closed && (
+        <>
+          <TextInput style={styles.input} placeholder="提交答辩与举证说明（至少 5 个字）"
+                     value={draft} onChangeText={setDraft} multiline />
+          <Button title="提交答辩" onPress={() => run(async () => {
+            await client.addDisputeStatement(dispute.id, draft.trim());
+            setDraft('');
+          })} />
+          {dispute.settlement_proposal && dispute.settlement_proposal.proposed_by !== meId && (
+            <Button title={`接受和解（执行方 ${dispute.settlement_proposal.executor_share_bps / 100}%）`}
+                    onPress={() => run(() => client.acceptSettlement(dispute.id))} />
+          )}
+        </>
+      )}
+      {dispute.status === 'resolved' && (
+        <>
+          <Text style={styles.mutedLeft}>
+            处理决定：执行方分得 {(dispute.verdict_executor_share_bps ?? 0) / 100}%
+            {dispute.verdict_reason ? `（${dispute.verdict_reason}）` : ''}
+          </Text>
+          {/* appealable 由服务端算，与端点准入是同一个判断（DSPC-030） */}
+          {dispute.appealable && (
+            <Button title="申诉复核（每案一次）" color="#6b7280"
+                    onPress={() => run(() => client.appealDispute(dispute.id))} />
+          )}
+        </>
+      )}
+      {!!error && <Text style={styles.error}>{error}</Text>}
+    </View>
+  );
+}
+
+const DISPUTE_STATUS_LABEL: Record<string, string> = {
+  open: '处理中',
+  appealed: '申诉复核中',
+  resolved: '平台已作出处理决定',
+  settled: '双方已和解',
+};
 
 function PublishScreen({ client, onDone }: { client: PlatformClient; onDone: () => void }) {
   const [title, setTitle] = useState('');
