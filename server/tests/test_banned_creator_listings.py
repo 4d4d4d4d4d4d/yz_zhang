@@ -7,14 +7,13 @@ import sqlalchemy as sa
 
 from app.core.db import engine
 
-from .conftest import auth, register, topup, verify_user
+from .conftest import auth, ban_user_row, promote_admin, register, topup, verify_user
 from .test_task_flow import publish_task
 
 
 def _make_admin(client, phone):
     admin = register(client, phone, "管理员")
-    with engine.begin() as conn:
-        conn.execute(sa.text("UPDATE users SET is_admin = 1 WHERE id = :id"), {"id": admin["id"]})
+    promote_admin(admin["id"])
     return admin
 
 
@@ -52,17 +51,13 @@ def test_square_excludes_banned_creator_tasks(client, requester, worker):
     assert task["id"] in ids
 
     # 直接改库模拟历史遗留数据（绕过封禁流程的下架逻辑）
-    with engine.begin() as conn:
-        conn.execute(sa.text("UPDATE users SET is_banned = 1 WHERE id = :i"),
-                     {"i": requester["id"]})
+    ban_user_row(requester["id"])
     ids = [t["id"] for t in client.get("/api/v1/tasks").json()]
     assert task["id"] not in ids  # 广场防御性过滤
 
 
 def test_cannot_apply_to_banned_creator_task(client, requester, worker):
     task = publish_task(client, requester, title="不可报名单")
-    with engine.begin() as conn:
-        conn.execute(sa.text("UPDATE users SET is_banned = 1 WHERE id = :i"),
-                     {"i": requester["id"]})
+    ban_user_row(requester["id"])
     r = client.post(f"/api/v1/tasks/{task['id']}/applications", json={}, headers=auth(worker))
     assert r.status_code == 409 and r.json()["detail"]["code"] == "creator_unavailable"

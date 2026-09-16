@@ -24,7 +24,7 @@ from app.core.db import SessionLocal, engine
 from app.modules.account.models import utcnow
 from app.modules.dispute.models import Dispute
 
-from .conftest import auth, register, topup
+from .conftest import auth, promote_admin, register, topup
 from .test_task_flow import match_and_fund, publish_task
 
 CLIENT_TS = "../packages/core/src/client.ts"
@@ -42,8 +42,7 @@ def open_dispute(client, requester, worker, reason="交付不符约定，要求�
 
 def make_admin(client, phone="13922200099"):
     admin = register(client, phone, "仲裁员")
-    with engine.begin() as conn:
-        conn.execute(sa.text("UPDATE users SET is_admin = 1 WHERE id = :id"), {"id": admin["id"]})
+    promote_admin(admin["id"])
     return admin
 
 

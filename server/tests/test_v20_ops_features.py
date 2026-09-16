@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 from app.core.db import engine
 
-from .conftest import auth, register, topup, verify_user
+from .conftest import auth, promote_admin, register, topup, verify_user
 from .test_task_flow import publish_task
 
 
@@ -90,8 +90,7 @@ def test_new_device_login_alerts_known_device_silent(client):
 # ---------- PAY-008 对账告警闭环 ----------
 def test_reconcile_mismatch_opens_ticket_and_alerts(client, requester):
     admin = register(client, "24000000010", "风控管理员")
-    with engine.begin() as conn:
-        conn.execute(sa.text("UPDATE users SET is_admin = 1 WHERE id = :id"), {"id": admin["id"]})
+    promote_admin(admin["id"])
 
     topup(client, requester, 10000)
     # 平账时：不开工单

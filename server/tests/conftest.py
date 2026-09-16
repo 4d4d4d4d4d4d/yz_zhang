@@ -100,3 +100,44 @@ def worker(client):
     user = register(client, "13800000002", "执行者")
     verify_user(client, user, "李四")
     return user
+
+
+def promote_admin(user_id: int) -> None:
+    """把某个用户提成管理员。
+
+    此前这一行裸 SQL 在 13 个测试文件里各抄了一遍：
+
+        conn.execute(sa.text("UPDATE users SET is_admin = 1 WHERE id = :id"), ...)
+
+    `is_admin = 1` 是 SQLite 才接受的写法——Postgres 会直接
+    `column "is_admin" is of type boolean but expression is of type integer`。
+    也就是说整套测试**只能在 SQLite 上跑**，而生产跑的是 Postgres。
+    走 ORM 就没有这个问题，顺便把 13 份实现收成一份。
+    """
+    from app.core.db import SessionLocal
+    from app.modules.account.models import User
+
+    with SessionLocal() as db:
+        user = db.get(User, user_id)
+        user.is_admin = True
+        db.add(user)
+        db.commit()
+
+
+def make_admin(client, phone: str, nickname: str = "管理员") -> dict:
+    """注册一个管理员账号（测试通用前置）。"""
+    admin = register(client, phone, nickname)
+    promote_admin(admin["id"])
+    return admin
+
+
+def ban_user_row(user_id: int) -> None:
+    """直接把某个用户置为封禁（测试前置，绕过管理流程）。"""
+    from app.core.db import SessionLocal
+    from app.modules.account.models import User
+
+    with SessionLocal() as db:
+        user = db.get(User, user_id)
+        user.is_banned = True
+        db.add(user)
+        db.commit()

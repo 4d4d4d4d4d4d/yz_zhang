@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from app.core.db import engine
 
-from .conftest import auth, register, respond_dispute, topup, verify_user
+from .conftest import auth, promote_admin, register, respond_dispute, topup, verify_user
 from .test_task_flow import publish_task
 
 
@@ -23,8 +23,7 @@ def _assert_conserved():
 
 def _make_admin(client, phone):
     admin = register(client, phone, "仲裁员")
-    with engine.begin() as conn:
-        conn.execute(sa.text("UPDATE users SET is_admin = 1 WHERE id = :id"), {"id": admin["id"]})
+    promote_admin(admin["id"])
     return admin
 
 

@@ -122,20 +122,72 @@ jobs:
       - run: python -m scripts.restore_drill
 
   migration-drift:
-    name: 迁移与模型一致性（DEP-020）
+    name: 迁移与模型一致性（DEP-020，SQLite + Postgres 双引擎）
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: server
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: drift
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-      - name: 检查是否有未生成迁移的模型改动
-        run: |
-          alembic upgrade head
-          alembic check
+      # SQLite 与 Postgres 的漂移检测能力**不一样**：列的 nullable 差异在
+      # SQLite 上 `alembic check` 根本看不出来。只跑 SQLite 等于放行了一整类
+      # 会在生产迁移当场失败的问题——V66 就是这么发现两条迁移写错 nullable 的。
+      - name: SQLite 路径
+        run: alembic upgrade head && alembic check
         env:
           PLATFORM_DATABASE_URL: sqlite:///./drift.db
+      - name: Postgres 路径（生产真正跑的引擎）
+        run: alembic upgrade head && alembic check
+        env:
+          PLATFORM_DATABASE_URL: postgresql+psycopg://postgres:ci@localhost:5432/drift
+
+  postgres-acceptance:
+    name: Postgres 部署 + 全链路验收（DEP-070）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: acc
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      PLATFORM_DATABASE_URL: postgresql+psycopg://postgres:ci@localhost:5432/acc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: alembic upgrade head
+      - name: 启动
+        run: |
+          uvicorn app.main:app --port 8000 &
+          for i in $(seq 1 40); do sleep 1; curl -sf http://localhost:8000/readyz && break; done
+      # 47 项全链路：交易、纠纷答辩、提现风控、上传能力 URL、越权、对账、注销
+      - name: 全链路验收
+        run: PLATFORM_API_BASE=http://localhost:8000 python -m scripts.acceptance
+      # DRILL-061：pg_dump → DROP SCHEMA → psql 恢复，与生产脚本同参数
+      - name: Postgres 备份恢复演练
+        run: python -m scripts.restore_drill
+

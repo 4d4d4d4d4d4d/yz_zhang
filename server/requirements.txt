@@ -2,6 +2,12 @@ fastapi>=0.110
 uvicorn[standard]>=0.29
 sqlalchemy>=2.0
 alembic>=1.13          # DEP-020 生产唯一建表路径
+# DEP-004 Postgres 驱动。**这不是可选项**：生产启动自检拒绝 SQLite
+# （registry.startup_check），而 deploy/docker-compose.prod.yml 用的是
+# postgresql+psycopg:// 方言。此前 requirements 里没有任何 Postgres 驱动，
+# 于是一键部署起来的 api 容器会直接 ModuleNotFoundError: No module named 'psycopg'
+# —— 文档里那条生产部署路径从来没有真正跑起来过。
+psycopg[binary]>=3.1
 pydantic>=2.6
 httpx>=0.27
 pytest>=8.0

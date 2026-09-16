@@ -63,6 +63,7 @@
 | 38 | 被诉方真的收得到、也真的开得了口 | [38-dispute-respondent-reach.md](./38-dispute-respondent-reach.md) | P0 |
 | 39 | 上传图片的内容审核与处置 | [39-upload-moderation.md](./39-upload-moderation.md) | P0 |
 | 40 | 那些从来没验证过的东西（演练/告警/压测/依赖） | [40-ops-drills.md](./40-ops-drills.md) | P0 |
+| 41 | 一键部署与全链路验收（Postgres 生产路径） | [41-production-path.md](./41-production-path.md) | P0 |
 
 ## 功能点编号与优先级约定
 

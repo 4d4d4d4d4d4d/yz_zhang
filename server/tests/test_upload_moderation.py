@@ -21,7 +21,7 @@ from app.modules.files.models import UploadedFile
 from app.vendors import registry
 from app.vendors.base import VendorError, VendorResult
 
-from .conftest import auth, register
+from .conftest import auth, promote_admin, register
 
 RAW = b"\x89PNG\r\n\x1a\n" + b"\x07" * 96
 B64 = base64.b64encode(RAW).decode()
@@ -35,8 +35,7 @@ def upload(client, user):
 
 def make_admin(client, phone="13844400099"):
     admin = register(client, phone, "审核员")
-    with engine.begin() as conn:
-        conn.execute(sa.text("UPDATE users SET is_admin = 1 WHERE id = :id"), {"id": admin["id"]})
+    promote_admin(admin["id"])
     return admin
 
 

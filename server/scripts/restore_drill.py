@@ -6,7 +6,7 @@
 
 一份没有恢复过的备份，不是备份，是一个关于备份的假设。
 
-这个演练在 SQLite 上跑完整个循环，CI 每次都跑：
+这个演练跑完整个循环，CI 每次都跑；**SQLite 与 Postgres 两条路径都覆盖**：
 
     1. 建库 → 造一笔真实闭环交易（有钱、有合约、有存证）
     2. 备份
@@ -14,11 +14,13 @@
     4. 从备份恢复
     5. 跑 `scripts.consistency_check`——**和生产恢复时跑的是同一段代码**
 
-它证明不了 Postgres 的 pg_dump 路径能用（见文末缺口），但它证明了这条
-链路上「恢复完还要校验，校验不过就算失败」这个判断是活的，
-以及那段校验代码真的能跑通。
+DRILL-061：Postgres 那条路径此前只存在于 `backup.sh`/`restore.sh` 里，
+从未被执行过。现在设了 `PLATFORM_DATABASE_URL=postgresql+...` 就走真实的
+`pg_dump --clean --if-exists` + `psql` —— 与生产脚本**相同的命令与参数**。
 
-    python -m scripts.restore_drill
+    python -m scripts.restore_drill                      # SQLite 路径
+    PLATFORM_DATABASE_URL=postgresql+psycopg://... \
+        python -m scripts.restore_drill                  # Postgres 路径
 """
 import os
 import shutil
@@ -85,7 +87,99 @@ def seed() -> dict:
     return {"executor_id": bid, "executor_available_cents": wallet["available_cents"]}
 
 
+def _pg_conn_args(url: str) -> list[str]:
+    """把 SQLAlchemy URL 拆成 psql/pg_dump 的连接参数。"""
+    from urllib.parse import parse_qs, urlparse
+
+    u = urlparse(url.replace("postgresql+psycopg://", "postgresql://"))
+    q = parse_qs(u.query)
+    args = ["-d", (u.path or "/").lstrip("/") or "postgres"]
+    host = q.get("host", [u.hostname])[0]
+    if host:
+        args += ["-h", host]
+    port = q.get("port", [str(u.port) if u.port else ""])[0]
+    if port:
+        args += ["-p", port]
+    if u.username:
+        args += ["-U", u.username]
+    return args
+
+
+def _run_pg(cmd: list[str], **kw):
+    import subprocess
+
+    return subprocess.run(cmd, check=True, capture_output=True, text=True, **kw)
+
+
+def _pg_drill(url: str, before: dict) -> int:
+    """Postgres 路径：用与 deploy/backup.sh / restore.sh **完全相同**的命令。"""
+    import subprocess
+
+    conn = _pg_conn_args(url)
+    backup_dir = tempfile.mkdtemp(prefix="drill-backup-")
+    dump = os.path.join(backup_dir, "snapshot.sql")
+
+    print("② 备份（pg_dump --clean --if-exists，与 backup.sh 同参数）…")
+    with open(dump, "w") as f:
+        subprocess.run(["pg_dump", *conn, "--no-owner", "--clean", "--if-exists"],
+                       check=True, stdout=f, text=True)
+    print(f"   → {dump}（{os.path.getsize(dump)} 字节）")
+
+    print("③ 删库（DROP SCHEMA public CASCADE——不是清表）…")
+    _run_pg(["psql", *conn, "-v", "ON_ERROR_STOP=1", "-c",
+             "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"])
+    left = _run_pg(["psql", *conn, "-tAc",
+                    "select count(*) from information_schema.tables "
+                    "where table_schema='public'"]).stdout.strip()
+    assert left == "0", f"库没删干净，还剩 {left} 张表"
+
+    print("④ 恢复（psql -v ON_ERROR_STOP=1，与 restore.sh 同参数）…")
+    with open(dump) as f:
+        subprocess.run(["psql", *conn, "-v", "ON_ERROR_STOP=1"],
+                       check=True, stdin=f, stdout=subprocess.DEVNULL, text=True)
+
+    ok = _verify(before)
+    shutil.rmtree(backup_dir, ignore_errors=True)
+    return 0 if ok else 1
+
+
+def _verify(before: dict) -> bool:
+    print("⑤ 校验（与生产恢复跑的是同一段代码）…")
+    from app.core.db import engine
+
+    engine.dispose()          # 删库前连过旧库，必须重建连接池，否则校验的是缓存
+
+    from scripts.consistency_check import check
+
+    try:
+        result = check()
+    except Exception as exc:
+        print(f"演练失败：恢复后的库读不出来（{type(exc).__name__}: {exc}）")
+        return False
+    print("   资金对账:", result["money"].get("ok"))
+    print("   存证链:", result["chain"].get("valid"))
+
+    from app.core.db import SessionLocal
+    from app.modules.wallet.service import get_or_create
+
+    with SessionLocal() as db:
+        after = get_or_create(db, before["executor_id"]).available_cents
+    print(f"   执行方余额 {after} 分（恢复前 {before['executor_available_cents']} 分）")
+    return result["ok"] and after == before["executor_available_cents"]
+
+
 def main() -> int:
+    pg_url = os.environ.get("PLATFORM_DATABASE_URL", "")
+    if pg_url.startswith("postgresql"):
+        print(f"① 造一笔真实闭环交易（Postgres 路径）…")
+        before = seed()
+        assert before["executor_available_cents"] > 0, "演练数据没造出来"
+        print(f"   执行方到账 {before['executor_available_cents']} 分")
+        rc = _pg_drill(pg_url, before)
+        print("演练通过：删库之后确实能把这笔交易原样恢复，且五条不变量成立。"
+              if rc == 0 else "演练失败：备份恢复后数据或不变量对不上。")
+        return rc
+
     _fresh_env()
     for leftover in (DRILL_DB, DRILL_DB + "-wal", DRILL_DB + "-shm"):
         if os.path.exists(leftover):
@@ -118,32 +212,7 @@ def main() -> int:
     print("④ 恢复…")
     shutil.copy(backup, DRILL_DB)
 
-    print("⑤ 校验（与生产恢复跑的是同一段代码）…")
-    # 引擎在删库前已经连过旧文件，必须重建连接池，否则校验的是缓存
-    from app.core.db import engine
-
-    engine.dispose()
-
-    from scripts.consistency_check import check
-
-    try:
-        result = check()
-    except Exception as exc:                 # 表都不在＝恢复根本没成功
-        # 半夜做真实恢复的人需要的是「演练失败」四个字，不是一段 traceback
-        print(f"演练失败：恢复后的库读不出来（{type(exc).__name__}: {exc}）")
-        return 1
-    print("   资金对账:", result["money"].get("ok"))
-    print("   存证链:", result["chain"].get("valid"))
-
-    # 数据真的回来了吗——不变量通过但表是空的，同样算失败
-    from app.core.db import SessionLocal
-    from app.modules.wallet.service import get_or_create
-
-    with SessionLocal() as db:
-        after = get_or_create(db, before["executor_id"]).available_cents
-    print(f"   执行方余额 {after} 分（恢复前 {before['executor_available_cents']} 分）")
-
-    ok = result["ok"] and after == before["executor_available_cents"]
+    ok = _verify(before)
     shutil.rmtree(backup_dir, ignore_errors=True)
     for f in (DRILL_DB, DRILL_DB + "-wal", DRILL_DB + "-shm"):
         if os.path.exists(f):

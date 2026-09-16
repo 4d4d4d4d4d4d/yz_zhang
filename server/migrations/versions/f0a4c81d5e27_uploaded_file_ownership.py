@@ -33,7 +33,9 @@ def upgrade() -> None:
         sa.Column('sha256', sa.String(length=64), nullable=False),
         sa.Column('content_type', sa.String(length=32), nullable=False),
         sa.Column('size_bytes', sa.Integer(), nullable=False, server_default='0'),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
+        # nullable 必须与模型一致：模型是 Mapped[datetime]（非 Optional）＝ NOT NULL。
+        # 写成 nullable=True 在 SQLite 上 `alembic check` 看不出来，在 Postgres 上会漂移。
+        sa.Column('created_at', sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint('name'),
     )
     op.create_index('ix_uploaded_files_owner_id', 'uploaded_files', ['owner_id'])

@@ -25,8 +25,18 @@ def upgrade() -> None:
     """Upgrade schema."""
     op.add_column('uploaded_files', sa.Column(
         'moderation_status', sa.String(length=12), nullable=False, server_default='pass'))
+    # 先可空加列 → 回填 → 再收紧为 NOT NULL：存量行没有这个值，
+    # 直接 NOT NULL 会在有数据的库上失败。
     op.add_column('uploaded_files', sa.Column(
         'moderation_labels', sa.JSON(), nullable=True))
+    op.execute("UPDATE uploaded_files SET moderation_labels = '[]' "
+               "WHERE moderation_labels IS NULL")
+    # batch 模式：SQLite 不支持 ALTER COLUMN，batch_alter_table 会重建表；
+    # Postgres 上它就是普通 ALTER。两个引擎都要能跑——CI 只跑 SQLite 时
+    # 这类差异会一直藏着，直到生产迁移当场失败。
+    with op.batch_alter_table('uploaded_files') as batch_op:
+        batch_op.alter_column('moderation_labels',
+                              existing_type=sa.JSON(), nullable=False)
 
 
 def downgrade() -> None:

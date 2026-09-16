@@ -26,7 +26,7 @@ from app.modules.account.models import User
 from app.modules.files.models import UploadedFile
 from app.modules.wallet.models import PayoutAccount, WalletAccount
 
-from .conftest import auth, register, topup, verify_user
+from .conftest import auth, promote_admin, register, topup, verify_user
 
 
 def deactivate(client, user):
@@ -90,8 +90,7 @@ def test_accdel030_review_cleared_then_deactivation_leaves_all_buckets_zero(clie
     assert deactivate(client, u).status_code == 409          # 冻结中，先拦住
 
     admin = register(client, "13911100093", "风控员")
-    with engine.begin() as conn:
-        conn.execute(sa.text("UPDATE users SET is_admin = 1 WHERE id = :id"), {"id": admin["id"]})
+    promote_admin(admin["id"])
     ok = client.post(f"/api/v1/wallet/withdraw-requests/{req_id}/approve", headers=auth(admin))
     assert ok.status_code == 200, ok.text
 

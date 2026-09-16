@@ -19,7 +19,7 @@ from app.core.db import SessionLocal, engine
 from app.modules.account.models import utcnow
 from app.modules.dispute.models import Dispute
 
-from .conftest import JOB_HEADERS, auth, register, topup
+from .conftest import JOB_HEADERS, auth, promote_admin, register, topup
 from .test_task_flow import match_and_fund, publish_task
 
 APP_TSX = os.path.join(os.path.dirname(__file__), "..", "..", "app", "App.tsx")
@@ -91,8 +91,7 @@ def test_dspr024_respondent_who_already_spoke_is_not_nagged(client, requester, w
 def test_dspr024_closed_dispute_is_not_reminded(client, requester, worker):
     _, dispute = open_dispute(client, requester, worker)
     admin = register(client, "13955500099", "仲裁员")
-    with engine.begin() as conn:
-        conn.execute(sa.text("UPDATE users SET is_admin = 1 WHERE id = :id"), {"id": admin["id"]})
+    promote_admin(admin["id"])
     near_deadline(dispute["id"], hours_before=-1)          # 答辩期已过，可缺席裁决
     client.post(f"/api/v1/disputes/{dispute['id']}/verdict",
                 json={"executor_share_bps": 5000, "reason": "逾期未答辩，依现有证据处理"},
