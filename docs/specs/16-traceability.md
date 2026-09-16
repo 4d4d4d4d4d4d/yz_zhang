@@ -1,10 +1,44 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V63 全批次完成（2026-09-16）。
-> 后端 579 tests + 前端 49 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V64 全批次完成（2026-09-16）。
+> 后端 589 tests + 前端 49 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V64 批次：预留了 media_urls，却从来没人传过）
+
+> 模块 spec：[39-upload-moderation.md](39-upload-moderation.md)
+>
+> **检视结论**：平台有内容安全供应商抽象、有举报流程、有审核队列、
+> 生产启动自检把 `moderation` 列为 P0 能力——**但图片从来不过审核**。
+>
+> 全仓唯一一处调用是 `get_provider("moderation").check("text", text)`，
+> 只有任务文本。而 `check()` 的第三个参数就叫 `media_urls`，
+> `LocalModerationProvider` 里甚至专门为它写了：
+>
+> ```python
+> if media_urls:
+>     # 本地实现看不了图/视频——明确标记为需人工复核，而不是假装通过
+>     return VendorResult(..., status="review", data={"reason": "media_not_inspectable"})
+> ```
+>
+> **这段分支从来没有被执行过。** 接口预留了、桩实现写好了、生产自检拦着
+> 不让用 mock，唯独没人调用——又是「建好了却没接上」。
+>
+> V62 刚把「这张图是谁传的」落了库，当时给的理由是「归属落库后处置才成为
+> 可能」。**处置就是这一批**——没有它，V62 建的那张表只是一张没人查的表。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **UMOD-010/042 图片真的过审了** | 上传落盘后 `check("image", "", [url])`，走既有的 `vendor_base.call`（幂等/熔断/留痕） | `tests/test_upload_moderation.py::test_umod042_moderation_actually_receives_the_image_url`——断言供应商收到的 `media_urls` 非空，专防「又一次建好了没接上」 |
+| **UMOD-011/040 reject 不留痕迹** | 删命名条目、不落库、400 并说明命中标签 | `::test_umod011_rejected_upload_is_refused_and_leaves_nothing_behind` |
+| **UMOD-041 删一个不伤别人** | 只删名字不动 `blobs/<sha256>`——这正是 V62 改用随机名 + 硬链接的目的 | `::test_umod041_rejecting_one_upload_does_not_break_another_users_copy` |
+| **UMOD-012 review 是队列不是拒绝** | 本地实现对任何图片都返回 `review`，当拒绝会让所有非生产部署完全传不了图——那不是安全，是瘫痪 | `::test_umod012_review_passes_through_but_lands_in_the_queue` |
+| **UMOD-013 供应商故障 fail open** | 本批唯一一个犹豫过的判断：上传物主要是交付凭证与纠纷证据，运维手册自己写着「交付凭证传不上去等于没有证据」。第三方抖一下的代价会落在**被侵害方**而不是违规者身上，所以故障时标 `review` 放行进队列 | `::test_umod013_provider_failure_does_not_block_the_upload` |
+| **UMOD-020/021/022 人审处置** | `GET /admin/uploads/pending`、`POST /admin/uploads/{name}/resolve`；驳回＝物理删除 + 通知上传者 + 记审计。悄悄删掉让页面变裂图是最差的处理 | `::test_umod021_admin_reject_removes_the_file_and_tells_the_uploader`、`::test_umod021_admin_pass_clears_it_from_the_queue`、`::test_upload_queue_is_admin_only` |
+| **UMOD-030/031 存储删除原语** | `LocalStorageProvider.delete(name)`：幂等、拒绝路径穿越、不动 blob。同时是 ACCDEL-041 将来要用的同一个原语 | `::test_umod031_delete_is_idempotent_and_refuses_traversal` |
+| **UMOD-014 进 V60 处置表** | `moderation_status` / `moderation_labels` 均 `RETAIN`——这是**平台的处置留痕**，不是注销者的画像数据 | `tests/test_account_deletion.py::test_accdel021_...` 自动覆盖 |
 
 ## 已实现（V63 批次：只在开始时响一次的闹钟）
 

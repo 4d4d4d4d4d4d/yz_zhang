@@ -9,7 +9,7 @@
 """
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String
+from sqlalchemy import JSON, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -27,4 +27,9 @@ class UploadedFile(Base):
     sha256: Mapped[str] = mapped_column(String(64), index=True)
     content_type: Mapped[str] = mapped_column(String(32))
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    # UMOD-012/014 审核结果。pass = 机审通过；review = 机器看不了/不确定，
+    # 等人看；reject 只会出现在「审核员事后驳回」的路径上——上传时命中 reject
+    # 的图根本不会落库（UMOD-040）
+    moderation_status: Mapped[str] = mapped_column(String(12), default="pass")
+    moderation_labels: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

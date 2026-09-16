@@ -83,6 +83,22 @@ class LocalStorageProvider:
         return VendorResult(ok=True, external_ref=uuid.uuid4().hex,
                             data={"direct_upload": False})
 
+    def delete(self, name: str) -> bool:
+        """UMOD-030 只删命名条目，**不动 blobs/<sha256>**。
+
+        V62 用硬链接实现去重，命名条目各自独立——删掉甲的名字，
+        乙上传过的同一份内容仍然读得到。这正是当初不再用内容当文件名的目的。
+        幂等：删一个不存在的名字返回 False 而不是抛错。
+        """
+        if name != os.path.basename(name):
+            return False
+        path = os.path.join(self.root, name)
+        try:
+            os.remove(path)
+            return True
+        except FileNotFoundError:
+            return False
+
     def read(self, name: str) -> tuple[bytes, str] | None:
         # 只允许 basename，杜绝 ../ 穿越
         if name != os.path.basename(name):

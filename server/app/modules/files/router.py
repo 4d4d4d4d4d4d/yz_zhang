@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.deps import get_current_user
-from app.core.errors import not_found
+from app.core.errors import bad_request, not_found
 from app.modules.account.models import User
 from app.vendors import base as vendor_base
 from app.vendors.base import VendorError
@@ -46,16 +46,62 @@ def upload_file(request: Request, body: UploadIn, user: User = Depends(get_curre
         )
     except VendorError as exc:
         raise exc.as_http() from exc
+
+    name, url = result.external_ref, result.data["url"]
+    status, labels = _moderate(db, name, url)
+    if status == "reject":
+        # UMOD-011/040 被拒的上传不留任何痕迹：删掉命名条目、不落库。
+        # 只删名字不动 blobs/<sha256>——别人上传过的同一份内容仍然有效。
+        getattr(provider, "delete", lambda _n: False)(name)
+        raise bad_request(
+            f"图片未通过内容安全审核（{'、'.join(labels) or '违规内容'}），请更换后重试",
+            "moderation_rejected",
+        )
+
     # FILE-012 归属落库。此前没有任何地方记下是谁传的——举报一张违规图片时，
-    # 平台没有任何途径追溯到上传者。
+    # 平台没有任何途径追溯到上传者。V62 落了这张表，本批才让处置成为可能。
     from .models import UploadedFile
 
     db.add(UploadedFile(
-        name=result.external_ref, owner_id=user.id,
+        name=name, owner_id=user.id,
         sha256=result.data.get("sha256", ""),
         content_type=body.content_type, size_bytes=len(raw),
+        moderation_status=status, moderation_labels=labels,
     ))
-    return {"url": result.data["url"], "ref": result.external_ref}
+    return {"url": url, "ref": name}
+
+
+def _moderate(db: Session, name: str, url: str) -> tuple[str, list[str]]:
+    """UMOD-010/013 图片机审。
+
+    改造前**图片从来不过审核**：全仓唯一一处 `moderation.check()` 只传任务
+    文本，而 `check()` 的第三个参数就叫 `media_urls`，本地实现里甚至专门为它
+    写了「看不了图 → 标记人审」的分支——那段分支从来没有被执行过。
+
+    `review` 放行进人审队列，不是拒绝：本地/沙箱实现对任何图片都返回
+    `review`，把它当拒绝会让所有非生产部署完全传不了图。
+
+    **供应商故障时 fail open**，这是本批唯一一个我犹豫过的判断：
+    内容安全的常规直觉是宁可错杀，但这里的上传物主要是交付凭证与纠纷证据，
+    而运维手册自己写着「交付凭证传不上去等于没有证据」。第三方抖一下的代价
+    会落在**被侵害方**身上而不是违规者身上，所以故障时标 `review` 放行、
+    进人审队列——既没有放弃审核，也没有让第三方的可用性决定一个人能不能自证。
+    """
+    provider = get_provider("moderation")
+    try:
+        verdict = vendor_base.call(
+            db, "moderation", provider.name, "check_image", {"url": url},
+            lambda: provider.check("image", "", [url]),
+        )
+    except VendorError as exc:
+        return "review", [f"provider_error:{exc.code}"]
+    labels = [str(x) for x in (verdict.data.get("labels") or [])]
+    if verdict.status == "reject":
+        return "reject", labels or ["违规内容"]
+    if verdict.status == "review":
+        reason = verdict.data.get("reason")
+        return "review", labels + ([str(reason)] if reason else [])
+    return "pass", labels
 
 
 @router.get("/files/{name}")

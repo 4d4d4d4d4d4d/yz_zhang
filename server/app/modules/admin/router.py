@@ -490,3 +490,69 @@ def metrics(admin: User = Depends(require_admin), db: Session = Depends(get_db))
         "gmv_cents": int(gmv),
         "fee_income_cents": int(fee_income),
     }
+
+
+# ---------- UMOD-020/021 上传审核队列 ----------
+@router.get("/admin/uploads/pending")
+def pending_uploads(
+    limit: int = Query(50, ge=1, le=200),
+    _: User = Depends(require_admin), db: Session = Depends(get_db),
+):
+    """UMOD-020 机审拿不准的图片队列。
+
+    V62 把「这张图是谁传的」落了库，理由是「归属落库后处置才成为可能」。
+    这个端点与下面的 resolve 就是那个处置——没有它们，那张表只是一张没人查的表。
+    """
+    from app.modules.files.models import UploadedFile
+
+    rows = (
+        db.query(UploadedFile)
+        .filter(UploadedFile.moderation_status == "review")
+        .order_by(UploadedFile.created_at).limit(limit).all()
+    )
+    return [
+        {"name": r.name, "url": f"/api/v1/files/{r.name}", "owner_id": r.owner_id,
+         "labels": r.moderation_labels, "content_type": r.content_type,
+         "size_bytes": r.size_bytes, "created_at": r.created_at.isoformat()}
+        for r in rows
+    ]
+
+
+class UploadVerdictIn(BaseModel):
+    action: str = Field(pattern="^(pass|reject)$")
+    reason: str = ""
+
+
+@router.post("/admin/uploads/{name}/resolve")
+def resolve_upload(
+    name: str, body: UploadVerdictIn,
+    admin: User = Depends(require_admin), db: Session = Depends(get_db),
+):
+    """UMOD-021 审核员处置：通过，或**物理删除并告知上传者**。
+
+    UMOD-022：悄悄删掉文件、让页面上变成裂图，是最差的一种处理。
+    """
+    from app.modules.files.models import UploadedFile
+    from app.modules.notification.service import notify
+    from app.vendors.registry import get_provider
+
+    row = db.get(UploadedFile, name)
+    if not row:
+        raise not_found("上传记录不存在")
+    if body.action == "pass":
+        row.moderation_status = "pass"
+        db.add(row)
+        record_audit(db, admin.id, "upload_pass", "upload", None, f"{name}：{body.reason[:200]}")
+        return {"name": name, "moderation_status": "pass"}
+
+    provider = get_provider("storage")
+    # UMOD-030 只删命名条目：别人上传过的同一份内容仍然有效
+    removed = getattr(provider, "delete", lambda _n: False)(name)
+    row.moderation_status = "reject"
+    db.add(row)
+    notify(db, row.owner_id, "system", "一张图片已被移除",
+           "你上传的一张图片经人工复核违反平台内容规范，已被移除。"
+           "如果它是任务交付凭证，请重新上传合规的证据材料。")
+    record_audit(db, admin.id, "upload_reject", "upload", None,
+                 f"{name}：{body.reason[:200]}")
+    return {"name": name, "moderation_status": "reject", "file_removed": removed}

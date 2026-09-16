@@ -270,6 +270,9 @@ class SandboxStorage:
     def read(self, name: str):
         return self._local.read(name)
 
+    def delete(self, name: str) -> bool:
+        return self._local.delete(name)
+
 
 def reset_sandbox() -> None:
     """测试辅助：清空存管账簿与失败注入。"""

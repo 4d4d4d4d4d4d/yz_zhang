@@ -90,6 +90,9 @@ UPLOADED_FILE_DISPOSITION: dict[str, Disposition] = {
     "sha256": R,
     "content_type": R,
     "size_bytes": R,
+    # UMOD-014 审核结果是**平台的处置留痕**，不是注销者的画像数据
+    "moderation_status": R,
+    "moderation_labels": R,
     "created_at": R,
 }
 
