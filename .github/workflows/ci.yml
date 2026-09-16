@@ -79,6 +79,48 @@ jobs:
       - name: 存管 + 可靠签名 + 第三方存证的完整闭环
         run: python -m scripts.sandbox_check
 
+  dependency-audit:
+    name: 依赖漏洞扫描（pip-audit + npm audit）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: pip install pip-audit
+      - name: Python 依赖
+        run: pip-audit -r requirements.txt
+        working-directory: server
+      - run: npm install --no-audit --no-fund
+      # 发给用户的依赖（--omit=dev）是硬闸门：这些代码会进浏览器。
+      - name: 前端生产依赖（阻断）
+        run: npm audit --omit=dev --audit-level=moderate
+      # 构建工具链的漏洞影响的是开发机与 CI，不是用户；报告但不阻断，
+      # 免得一条「Vitest UI 服务监听时可被读文件」——一个我们从不启用的功能——
+      # 把整条流水线卡死。
+      - name: 构建工具链（仅报告）
+        run: npm audit || true
+
+  restore-drill:
+    name: 备份恢复演练（DRILL-020）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      # 造一笔真实闭环 → 备份 → **删库** → 恢复 → 跑与生产恢复相同的一致性校验。
+      # 一份没有恢复过的备份，不是备份，是一个关于备份的假设。
+      - run: python -m scripts.restore_drill
+
   migration-drift:
     name: 迁移与模型一致性（DEP-020）
     runs-on: ubuntu-latest

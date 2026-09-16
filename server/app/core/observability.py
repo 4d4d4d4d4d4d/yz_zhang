@@ -180,7 +180,46 @@ def _business_metrics(db) -> list[str]:
         "# HELP platform_jobs_stale 超过自身周期 3 倍未成功的 job 数",
         "# TYPE platform_jobs_stale gauge",
         f"platform_jobs_stale {stale}",
+        # DRILL-041 以下三个是**为告警规则补的**。写 deploy/alerts.prom.yml 时
+        # 才发现最重要的三条（资金不平、job 静默、审核积压）引用的指标
+        # 根本不存在——引用不存在指标的告警永远不会触发，而且是静默的。
+        # 一个「配了却从不告警」的监控比没有监控更危险：你以为自己被盖住了。
+        "# HELP platform_reconcile_ok 五条资金不变量是否全部成立（1/0）",
+        "# TYPE platform_reconcile_ok gauge",
+        f"platform_reconcile_ok {1 if _reconcile_ok(db) else 0}",
+        "# HELP platform_jobs_unhealthy 从未跑过或已陈旧的 job 数（never_run + stale）",
+        "# TYPE platform_jobs_unhealthy gauge",
+        f"platform_jobs_unhealthy {never_run + stale}",
+        "# HELP platform_uploads_pending_review 待人工复核的上传图片数",
+        "# TYPE platform_uploads_pending_review gauge",
+        f"platform_uploads_pending_review {_pending_uploads(db)}",
     ]
+
+
+def _reconcile_ok(db) -> bool:
+    """对账是只读聚合，指标端点自己就能算——不必等日终 job。
+
+    日终 job 会开差错工单，那是 T+1；这个指标是实时的那一半。
+    """
+    from app.modules.risk import service as risk
+
+    try:
+        return bool(risk.reconcile(db).get("ok"))
+    except Exception:
+        # 指标端点不能因为一个聚合出错就整体 500——那会让**所有**告警一起瞎掉
+        return False
+
+
+def _pending_uploads(db) -> int:
+    from app.modules.files.models import UploadedFile
+
+    try:
+        return int(
+            db.query(func.count(UploadedFile.name))
+            .filter(UploadedFile.moderation_status == "review").scalar() or 0
+        )
+    except Exception:
+        return 0
 
 
 def reset_metrics() -> None:

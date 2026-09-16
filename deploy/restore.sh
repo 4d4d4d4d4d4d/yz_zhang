@@ -32,21 +32,9 @@ echo "重启并校验…"
 docker compose -f docker-compose.prod.yml --env-file .env start api worker
 sleep 5
 
-docker compose -f docker-compose.prod.yml --env-file .env exec -T api python - <<'PY'
-import sys
-
-from app.core.db import SessionLocal
-from app.modules.anchor import service as anchor
-from app.modules.risk import service as risk
-
-with SessionLocal() as db:
-    money = risk.reconcile(db)
-    chain = anchor.verify_chain(db)
-
-print("资金对账:", money.get("ok"), money)
-print("存证链:", chain.get("valid"), {k: v for k, v in chain.items() if k != "head"})
-if not money.get("ok") or not chain.get("valid"):
-    print("恢复后一致性校验未通过——不要对外提供服务，先人工核对。")
-    sys.exit(1)
-print("恢复完成且一致性校验通过。")
-PY
+# DRILL-010 校验逻辑不再内联在这里，而是 scripts/consistency_check.py。
+# 理由：这段 heredoc 需要完整生产栈 + 人工敲 yes 才跑得到，所以从来没被执行过一次。
+# 提出来之后，CI 的恢复演练（scripts/restore_drill.py）跑的就是**同一段代码**——
+# 两份实现迟早会漂移，而漂移的那一天你正在恢复生产库。
+docker compose -f docker-compose.prod.yml --env-file .env exec -T api \
+  python -m scripts.consistency_check

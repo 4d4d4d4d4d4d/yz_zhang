@@ -1,10 +1,46 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V64 全批次完成（2026-09-16）。
-> 后端 589 tests + 前端 49 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V65 全批次完成（2026-09-16）。
+> 后端 597 tests + 前端 49 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+## 已实现（V65 批次：配了却从不告警的监控，比没有监控更危险）
+
+> 模块 spec：[40-ops-drills.md](40-ops-drills.md)
+>
+> **检视结论**：前面几十批修的都是「代码里有个洞」。这一批不一样——
+> 代码可能是对的，但**没有任何证据**。备份从没恢复过、`/metrics` 没有任何
+> 东西消费、容量一无所知、依赖从没扫过。
+>
+> **写告警规则的过程本身就抓到一个洞。** 我写完 `deploy/alerts.prom.yml`
+> 去核对指标名，发现最重要的三条——资金对账不平、定时任务静默、上传审核
+> 积压——引用的指标 `/metrics` **根本不暴露**。告警规则不会因为指标名写错
+> 而报错，**它只是永远沉默**。没有监控时你知道自己是瞎的；
+> 配错了的监控让你以为自己被盖住了。这和这一路修下来的是同一个形状：
+> **写错了不会报错的声明**。
+>
+> **依赖扫描第一次跑就有真东西**：11 条（1 critical / 4 high / 6 moderate）。
+> 但数字会误导，必须分清哪些真的发给用户——`--omit=dev` 下只有 2 条，
+> 全是 react-router。其中 SSR 那条对纯客户端 SPA 不适用；开放重定向那条
+> 要求把用户可控字符串当跳转目标，我核对了全部调用点，当前没有暴露面。
+> **但「当前没有」不是一个可以维护的状态**，所以直接升到 react-router 7
+> 把问题消掉，而不是写一份「暂不受影响」的说明。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **DRILL-041 告警引用的指标必须真的存在** | 补出 `platform_reconcile_ok` / `platform_jobs_unhealthy` / `platform_uploads_pending_review`；断言规则文件里每个 `platform_*` 都在 `/metrics` 里 | `tests/test_ops_drills.py::test_drill041_every_alerted_metric_is_actually_exposed`；已实测改坏一个指标名即变红 |
+| **对账指标真的在算** | 把钱凭空加进钱包，指标必须从 1 翻成 0——防的是写成常数 | `::test_drill040_the_reconciliation_metric_reflects_reality` |
+| **DRILL-042 单个聚合出错不能让所有告警一起瞎** | 指标端点容错，算不出来按最坏情况上报 | `::test_metrics_endpoint_survives_a_broken_aggregate` |
+| **DRILL-010 恢复校验单一实现** | 提成 `scripts/consistency_check.py`，`restore.sh` 改为调用。此前它是一个需要完整生产栈 + 人工敲 yes 才跑得到的 heredoc——**一段从没跑过的校验代码，和没有校验没有区别** | `::test_drill010_restore_script_uses_the_shared_consistency_check` |
+| **DRILL-020 真的删库再恢复** | `scripts/restore_drill.py`：造真实闭环 → 备份 → 删文件 → 恢复 → 跑同一段校验 → 核对余额原样回来。进 CI | `::test_drill020_restore_drill_actually_runs_and_passes`；已实测跳过恢复步骤则退出码 1 |
+| **DRILL-030 压测** | `scripts/loadtest.py`，纯标准库，输出吞吐/错误率/p50-p95-p99。**不设阈值断言**：容量取决于机器，写死数字只会在别人机器上误报 | `::test_drill030_loadtest_reports_the_numbers_that_matter` |
+| **DRILL-050/051 依赖扫描** | CI `dependency-audit`：`pip-audit` + `npm audit --omit=dev`（阻断）+ 全树（仅报告）。升级 react-router 7 / vite 7 / vitest 5，全树归零 | `::test_drill050_ci_runs_the_audits_and_the_drill` |
+
+**首批实测容量**（本容器 / SQLite / 单 worker / 并发 16）：
+读 129 rps、p50 121ms、p95 175ms；写 87 rps、p50 60ms、**p95 769ms、p99 1872ms**。
+写路径 30 倍长尾是 SQLite 单写锁的签名。**这些是地板，不是容量规划。**
 
 ## 已实现（V64 批次：预留了 media_urls，却从来没人传过）
 
