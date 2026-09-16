@@ -22,6 +22,11 @@ class KnowledgeCard(Base):
     outcome: Mapped[str] = mapped_column(String(20), default="completed")  # completed/disputed/cancelled
     # 若为母任务：分解结构快照（AI-DEC-012 模板来源）
     decomposition: Mapped[list] = mapped_column(JSON, default=list)
+    # KB-011 向量索引。`embedding_model` 一起存：换模型后旧向量不可比，
+    # 必须能识别出「这条是旧模型算的」才能增量重建，而不是全表重跑或者
+    # 拿两个模型的向量做余弦（那会得到一堆毫无意义的相似度）。
+    embedding: Mapped[list] = mapped_column(JSON, default=list)
+    embedding_model: Mapped[str] = mapped_column(String(40), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -45,3 +50,6 @@ class FaqEntry(Base):
     question: Mapped[str] = mapped_column(String(200))
     answer: Mapped[str] = mapped_column(Text)
     keywords: Mapped[list] = mapped_column(JSON, default=list)
+    # KB-011 同上：FAQ 也进向量索引，客服检索才不必依赖人工维护关键词表
+    embedding: Mapped[list] = mapped_column(JSON, default=list)
+    embedding_model: Mapped[str] = mapped_column(String(40), default="")

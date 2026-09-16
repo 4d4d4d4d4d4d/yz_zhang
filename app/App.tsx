@@ -8,9 +8,18 @@ import {
 } from '@platform/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Button, FlatList, RefreshControl, SafeAreaView, ScrollView, StyleSheet,
+  Button, FlatList, Platform, RefreshControl, SafeAreaView, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
+
+/** 取推送令牌。接 expo-notifications 后替换为：
+ *    const { data } = await Notifications.getExpoPushTokenAsync();
+ *    return data;
+ *  现在返回 null —— **如实返回「拿不到」，不编一个假令牌**，
+ *  否则服务端会攒一堆永远推不到的死令牌，而通道按量计费。 */
+async function getPushToken(): Promise<string | null> {
+  return null;
+}
 
 const BASE_URL = 'http://localhost:8000'; // 真机调试改为局域网 IP
 
@@ -30,6 +39,24 @@ export default function App() {
   useEffect(() => {
     if (token) client.me().then(setMe).catch(() => setToken(null));
     else setMe(null);
+  }, [token, client]);
+
+  // NTF-002 登录后注册推送令牌。站内信是「记录」，推送是「触达」——
+  // 被诉方的答辩期只有 48 小时，逾期即缺席裁决；用户不主动打开 App，
+  // 一条只存在于站内的答辩提醒和没有提醒差别不大。
+  //
+  // 真机上这里应换成 expo-notifications 取到的 Expo/APNs/FCM 令牌；
+  // 取不到令牌**不能**影响登录流程，所以整段都吞掉错误。
+  useEffect(() => {
+    if (!token) return;
+    void (async () => {
+      try {
+        const deviceToken = await getPushToken();
+        if (deviceToken) await client.registerDevice(deviceToken, Platform.OS === 'ios' ? 'ios' : 'android');
+      } catch {
+        /* 推送注册失败不影响使用 */
+      }
+    })();
   }, [token, client]);
 
   if (!token) return <SafeAreaView style={styles.root}><LoginScreen client={client} onToken={setToken} /></SafeAreaView>;

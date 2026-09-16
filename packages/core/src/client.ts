@@ -769,6 +769,25 @@ export class PlatformClient {
     return this.request<{ id: number; is_banned: boolean }>('POST', `/admin/users/${userId}/unban`);
   }
 
+  /** NTF-002 注册推送令牌。App 每次启动都调——服务端按令牌主键幂等。 */
+  registerDevice(token: string, platform: 'ios' | 'android' | 'web' = 'ios') {
+    return this.request<{ registered: boolean; platform: string }>(
+      'PUT', '/notifications/devices', { token, platform },
+    );
+  }
+  unregisterDevice(token: string) {
+    return this.request<{ ok: boolean }>('DELETE', `/notifications/devices/${token}`);
+  }
+  /** KB-022 统一检索。`semantic`/`degraded` 是有意暴露的——
+   *  缺省 embedding 是词袋哈希不是语义模型，没建索引时还会退化成词面命中。
+   *  悄悄退化的「语义检索」比没有更糟：你不会去修它。 */
+  knowledgeSearch(q: string, kind: 'card' | 'faq' = 'card', topK = 5) {
+    return this.request<{
+      results: Array<{ id: number; score: number; text: string }>;
+      semantic: boolean; degraded: boolean; model: string;
+    }>('GET', `/knowledge/search?q=${encodeURIComponent(q)}&kind=${kind}&top_k=${topK}`);
+  }
+
   openDispute(taskId: number, reason: string) {
     return this.request<Dispute>('POST', `/tasks/${taskId}/disputes`, { reason });
   }

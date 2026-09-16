@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
+from app.core.deps import get_current_user, require_job_auth
+from app.core.locks import job_slot
+from app.modules.account.models import User
 
 from . import service
 
@@ -89,3 +92,30 @@ def cards(category: str | None = None, limit: int = 20, db: Session = Depends(ge
          "outcome": r.outcome, "has_decomposition": bool(r.decomposition)}
         for r in rows
     ]
+
+# ---------- KB-011/022 语义检索与 RAG ----------
+@router.get("/search")
+def knowledge_search(
+    q: str = Query(min_length=1, max_length=200),
+    kind: str = Query("card", pattern="^(card|faq)$"),
+    top_k: int = Query(5, ge=1, le=20),
+    _: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """KB-022 统一检索入口。
+
+    响应里的 `semantic` / `degraded` 是**有意暴露**的：缺省 embedding 是
+    词袋哈希不是语义模型，没建索引时还会退化成词面命中。
+    一个悄悄退化成关键词的「语义检索」比没有更糟——你不会去修它。
+    """
+    from .retrieval import search
+
+    return search(db, q, kind=kind, top_k=top_k)
+
+
+@router.post("/jobs/reindex")
+def run_reindex(db: Session = Depends(get_db), _=Depends(require_job_auth),
+                __=Depends(job_slot("kb_reindex"))):
+    """KB-011 增量重建向量索引：只补没有向量或模型已换的行。"""
+    from .retrieval import reindex
+
+    return reindex(db)

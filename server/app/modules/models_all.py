@@ -28,6 +28,7 @@ from app.modules.support.models import NotificationPref, Ticket  # noqa: F401
 from app.modules.tax.models import InvoiceRequest, TaxWithholding  # noqa: F401
 from app.modules.im.models import Conversation, Message  # noqa: F401
 from app.modules.notification.models import Notification  # noqa: F401
+from app.modules.notification.models_device import DeviceToken  # noqa: F401
 from app.modules.knowledge.models import (  # noqa: F401
     DecompositionTemplate,
     FaqEntry,

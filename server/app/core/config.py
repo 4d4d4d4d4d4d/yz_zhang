@@ -70,7 +70,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.59.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.60.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")
@@ -115,6 +115,18 @@ class Settings:
     NOTARY_PROVIDER = os.environ.get("PLATFORM_NOTARY_PROVIDER", "local")
     # 当前生效的用户协议版本（LAW-030：变更需重新同意）
     AGREEMENT_VERSION = os.environ.get("PLATFORM_AGREEMENT_VERSION", "2026-08-01")
+    # NTF-002 推送通道。none = 只有站内信（用户不打开 App 就收不到）。
+    # http = 通用网关形态，APNs/FCM/极光/个推都能接，只改下面两项。
+    PUSH_PROVIDER = os.environ.get("PLATFORM_PUSH_PROVIDER", "none")
+    PUSH_ENDPOINT = os.environ.get("PLATFORM_PUSH_ENDPOINT", "")
+    PUSH_TOKEN = os.environ.get("PLATFORM_PUSH_TOKEN", "")
+    # KB-011/022 语义检索。none/local = 词袋哈希（管线是真的，语义等同关键词）。
+    # http = 任何 OpenAI 兼容的 /v1/embeddings 服务。
+    EMBEDDING_PROVIDER = os.environ.get("PLATFORM_EMBEDDING_PROVIDER", "local")
+    EMBEDDING_ENDPOINT = os.environ.get("PLATFORM_EMBEDDING_ENDPOINT", "")
+    EMBEDDING_TOKEN = os.environ.get("PLATFORM_EMBEDDING_TOKEN", "")
+    EMBEDDING_MODEL = os.environ.get("PLATFORM_EMBEDDING_MODEL", "local-bow-256")
+    EMBEDDING_DIM = int(os.environ.get("PLATFORM_EMBEDDING_DIM", "256"))
     # ── AML 反洗钱（30 号 spec）─────────────────────────────────────
     # 当日累计达此额度即转人审。**必须有累计口径**：只判单笔的话，
     # 把金额减 1 元多点几次就能绕过（拆分/structuring，探针已复现）

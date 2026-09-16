@@ -6,9 +6,11 @@
 from app.core.config import settings
 
 from .captcha import NoCaptcha, SandboxCaptcha
+from .embedding import HttpEmbedding, LocalBagOfWordsEmbedding
 from .kyc import MockKycProvider
 from .moderation import LocalModerationProvider
 from .payment import MockPaymentProvider
+from .push import HttpPushProvider, NoPush, SandboxPush
 from .sandbox import (
     SandboxCustodyPayment,
     SandboxKycProvider,
@@ -36,13 +38,21 @@ _REGISTRY: dict[str, dict[str, type]] = {
     # 自动化攻击，没接验证码的平台可以上线；但接了它误封率会明显下降，
     # 所以在供应商面板里如实标注等级，让人看得见这个可选项还没接
     "captcha": {"none": NoCaptcha, "sandbox": SandboxCaptcha},
+    # NTF-002 推送。**不列入 P0_KINDS**：没有推送平台也能跑闭环（站内信仍在），
+    # 但「答辩期还剩 12 小时」这种错过就无法挽回的通知只存在于站内时，
+    # 等于没发——所以 /admin/vendors 面板会如实标出它还没接。
+    "push": {"none": NoPush, "sandbox": SandboxPush, "http": HttpPushProvider},
+    # KB-011 向量化。缺省的词袋哈希**不是语义模型**（`semantic=False`），
+    # 它让整条管线是真的（维度/索引/余弦排序/重建 job），接真模型只改环境变量。
+    "embedding": {"local": LocalBagOfWordsEmbedding, "http": HttpEmbedding},
 }
 
 # VND-042 生产必须接真实供应商的能力（涉及资金/身份/合规，模拟实现上线即事故）
 P0_KINDS = ("payment", "sms", "kyc", "moderation")
 # 各 kind 的缺省（退化）实现名
 MOCK_NAMES = {"payment": "mock", "sms": "mock", "kyc": "mock", "moderation": "local",
-              "storage": "local", "tax": "none", "captcha": "none"}
+              "storage": "local", "tax": "none", "captcha": "none", "push": "none",
+              "embedding": "local"}
 # STUB-002 **非生产实现集合**。判定从「等于 mock 名」改为「属于本集合」——
 # 否则新增 sandbox 反而绕开了 V49 建立的上线红线。
 # 补桩是为了让路径可测，**不能顺手削弱拦截**，这是本批次最容易做错的地方。

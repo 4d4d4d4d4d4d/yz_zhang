@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -98,3 +99,57 @@ def mark_read(
     n.is_read = True
     db.add(n)
     return {"ok": True}
+
+# ---------- NTF-002 设备令牌 ----------
+class DeviceIn(BaseModel):
+    token: str = Field(min_length=8, max_length=255)
+    platform: str = Field(default="ios", pattern="^(ios|android|web)$")
+
+
+@router.put("/devices")
+def register_device(
+    body: DeviceIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """NTF-002 注册推送令牌。
+
+    令牌是主键，所以重复注册是**幂等**的——App 每次启动都会调这个接口，
+    攒出重复行的后果是同一条通知推四遍。
+    """
+    from app.modules.account.models import utcnow
+
+    from .models_device import DeviceToken
+
+    row = db.get(DeviceToken, body.token)
+    if row:
+        # 换账号登录同一台设备：令牌要改归属，否则新用户的通知会推给旧用户
+        row.user_id, row.platform = user.id, body.platform
+        row.revoked = False
+        row.last_seen_at = utcnow()
+    else:
+        row = DeviceToken(token=body.token, user_id=user.id, platform=body.platform)
+    db.add(row)
+    return {"registered": True, "platform": row.platform}
+
+
+@router.delete("/devices/{token}")
+def unregister_device(
+    token: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """退出登录/关闭推送时注销令牌。幂等：删一个不存在的也返回 ok。"""
+    from .models_device import DeviceToken
+
+    row = db.get(DeviceToken, token)
+    if row and row.user_id == user.id:
+        row.revoked = True
+        db.add(row)
+    return {"ok": True}
+
+
+@router.get("/devices")
+def list_devices(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from .models_device import DeviceToken
+
+    rows = db.query(DeviceToken).filter(
+        DeviceToken.user_id == user.id, DeviceToken.revoked.is_(False)).all()
+    return [{"platform": r.platform, "token": r.token[:6] + "…",
+             "last_seen_at": r.last_seen_at.isoformat()} for r in rows]
