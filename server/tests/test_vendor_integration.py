@@ -232,7 +232,10 @@ def test_admin_vendor_panel_lists_mocks(client):
     body = r.json()
     kinds = {v["kind"]: v for v in body["vendors"]}
     assert kinds["payment"]["provider"] == "mock" and kinds["payment"]["is_mock"] is True
-    assert set(body["blocking_for_production"]) == {"payment", "sms", "kyc", "moderation"}
+    # ACC-003 起 oauth 也在列：mock 实现等于「客户端说自己是谁就是谁」，
+    # 与支付/实名同一等级的风险
+    assert set(body["blocking_for_production"]) == {
+        "payment", "sms", "kyc", "moderation", "oauth"}
 
 
 def test_production_startup_check_blocks_mock_providers(monkeypatch):

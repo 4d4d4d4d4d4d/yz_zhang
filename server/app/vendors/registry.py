@@ -9,6 +9,7 @@ from .captcha import NoCaptcha, SandboxCaptcha
 from .embedding import HttpEmbedding, LocalBagOfWordsEmbedding
 from .kyc import MockKycProvider
 from .moderation import LocalModerationProvider
+from .oauth import HttpOAuth, MockOAuth
 from .payment import MockPaymentProvider
 from .push import HttpPushProvider, NoPush, SandboxPush
 from .sandbox import (
@@ -45,14 +46,19 @@ _REGISTRY: dict[str, dict[str, type]] = {
     # KB-011 向量化。缺省的词袋哈希**不是语义模型**（`semantic=False`），
     # 它让整条管线是真的（维度/索引/余弦排序/重建 job），接真模型只改环境变量。
     "embedding": {"local": LocalBagOfWordsEmbedding, "http": HttpEmbedding},
+    # ACC-003 第三方登录。mock 实现等于「客户端说自己是谁就是谁」，
+    # 任何人都能冒充任意账号——所以它和支付/实名一样列入 P0_KINDS。
+    "oauth": {"mock": MockOAuth, "http": HttpOAuth},
 }
 
 # VND-042 生产必须接真实供应商的能力（涉及资金/身份/合规，模拟实现上线即事故）
-P0_KINDS = ("payment", "sms", "kyc", "moderation")
+# ACC-003 oauth 也在列：mock 实现等于「客户端说自己是谁就是谁」，
+# 任何人都能冒充任意账号——与支付/实名同一等级的风险。
+P0_KINDS = ("payment", "sms", "kyc", "moderation", "oauth")
 # 各 kind 的缺省（退化）实现名
 MOCK_NAMES = {"payment": "mock", "sms": "mock", "kyc": "mock", "moderation": "local",
               "storage": "local", "tax": "none", "captcha": "none", "push": "none",
-              "embedding": "local"}
+              "embedding": "local", "oauth": "mock"}
 # STUB-002 **非生产实现集合**。判定从「等于 mock 名」改为「属于本集合」——
 # 否则新增 sandbox 反而绕开了 V49 建立的上线红线。
 # 补桩是为了让路径可测，**不能顺手削弱拦截**，这是本批次最容易做错的地方。

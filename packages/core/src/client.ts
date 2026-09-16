@@ -769,6 +769,80 @@ export class PlatformClient {
     return this.request<{ id: number; is_banned: boolean }>('POST', `/admin/users/${userId}/unban`);
   }
 
+  // ---- ACC-003 第三方登录 ----
+  /** App Store 规则：提供了任何第三方登录就必须同时提供 Apple，
+   *  所以画哪几个按钮以这个端点为准，不要硬编码。 */
+  oauthProviders() {
+    return this.request<{ providers: string[]; implementation: string; verifies: boolean }>(
+      'GET', '/auth/oauth/providers',
+    );
+  }
+  /** `needs_phone` / `needs_verification` 是有意返回的：
+   *  第三方登录认证的是「这是同一个微信」，不是「这是张三」——
+   *  接单与提现仍然要走实名。 */
+  oauthLogin(provider: 'wechat' | 'apple' | 'google', credential: string) {
+    return this.request<{
+      token: string; user: Me; created: boolean;
+      needs_phone: boolean; needs_verification: boolean;
+    }>('POST', `/auth/oauth/${provider}`, { credential });
+  }
+
+  // ---- IM-020/021/022 好友与通讯录 ----
+  sendFriendRequest(userId: number, remark = '') {
+    return this.request<{ id: number; status: string }>(
+      'POST', '/friends/requests', { user_id: userId, remark },
+    );
+  }
+  friendRequests() {
+    return this.request<Array<{ id: number; from_user_id: number; created_at: string }>>(
+      'GET', '/friends/requests',
+    );
+  }
+  decideFriendRequest(requestId: number, accept: boolean) {
+    return this.request<{ id: number; status: string }>(
+      'POST', `/friends/requests/${requestId}/decide?accept=${accept}`,
+    );
+  }
+  friends() {
+    return this.request<Array<{ user_id: number; nickname: string; remark: string; credit_score: number }>>(
+      'GET', '/friends',
+    );
+  }
+  setFriendRemark(userId: number, remark: string) {
+    return this.request<{ user_id: number; remark: string }>('PATCH', `/friends/${userId}`, { remark });
+  }
+  removeFriend(userId: number) {
+    return this.request<{ ok: boolean }>('DELETE', `/friends/${userId}`);
+  }
+  /** IM-022 合作过的人：服务端**查**出来的，不是存出来的——不会过时。 */
+  workedWith() {
+    return this.request<Array<{ user_id: number; nickname: string; times: number; credit_score: number }>>(
+      'GET', '/friends/worked-with',
+    );
+  }
+
+  // ---- IM-003 群聊 ----
+  createGroup(name: string, memberIds: number[] = []) {
+    return this.request<{ id: number; name: string; members: number[] }>(
+      'POST', '/conversations/groups', { name, member_ids: memberIds },
+    );
+  }
+  inviteToGroup(convId: number, userIds: number[]) {
+    return this.request<{ id: number; members: number[] }>(
+      'POST', `/conversations/${convId}/members`, { user_ids: userIds },
+    );
+  }
+  removeFromGroup(convId: number, userId: number) {
+    return this.request<{ id: number; members: number[] }>(
+      'DELETE', `/conversations/${convId}/members/${userId}`,
+    );
+  }
+  updateGroup(convId: number, patch: { name?: string; announcement?: string; muted?: number[] }) {
+    return this.request<{ id: number; name: string; announcement: string; muted: number[] }>(
+      'PATCH', `/conversations/${convId}`, patch,
+    );
+  }
+
   /** NTF-002 注册推送令牌。App 每次启动都调——服务端按令牌主键幂等。 */
   registerDevice(token: string, platform: 'ios' | 'android' | 'web' = 'ios') {
     return this.request<{ registered: boolean; platform: string }>(

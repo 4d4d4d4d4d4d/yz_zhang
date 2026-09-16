@@ -6,7 +6,7 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.vendors import sms_service
-from app.core.errors import bad_request, conflict, not_found
+from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.core.security import create_token, hash_password, verify_password
 
 from .models import Block, LoginSession, User
@@ -316,6 +316,107 @@ def revoke_session(
     session.revoked = True
     db.add(session)
     return {"ok": True}
+
+
+# ---------- ACC-003 第三方登录 ----------
+class OAuthIn(BaseModel):
+    credential: str = Field(min_length=6, max_length=4096)
+
+
+@router.post("/auth/oauth/{provider}")
+def oauth_login(
+    provider: str, body: OAuthIn, request: Request,
+    db: Session = Depends(get_db), user_agent: str = Header(default=""),
+):
+    """ACC-003 第三方登录：用凭据换 subject，再换本站会话。
+
+    三条设计判断写在这里，因为它们都属于「做错了不会立刻报错」的那类：
+
+    ① **subject 是身份，邮箱/手机号不是。** 邮箱会变，Apple 还允许用户隐藏
+       真实邮箱；拿它们认人迟早认错。
+
+    ② **第三方登录不等于实名。** 这样建出来的账号没有手机号、`is_verified`
+       为 False，接单与提现仍然要走实名——微信认证的是「这是同一个微信」，
+       不是「这是张三」。把两者混为一谈等于实名形同虚设。
+
+    ③ **占位手机号必须不可拨打**：`oauth:wechat:xxx` 这种形状既不会与真实
+       号码冲突，也永远收不到短信验证码——否则它就成了一条绕过手机验证的路。
+    """
+    from app.core.clientip import client_ip
+    from app.core.guard import guard
+    from app.vendors import base as vendor_base
+    from app.vendors.base import VendorError
+    from app.vendors.oauth import SUPPORTED
+    from app.vendors.registry import get_provider
+
+    from .models_oauth import OAuthIdentity
+
+    if provider not in SUPPORTED:
+        raise bad_request(f"不支持的登录方式：{provider}", "unsupported_provider")
+    guard(request, "login-oauth", provider, limit=20, ip_limit=40)
+
+    impl = get_provider("oauth")
+    try:
+        result = vendor_base.call(
+            db, "oauth", impl.name, "verify", {"provider": provider},
+            lambda: impl.verify(provider, body.credential),
+        )
+    except VendorError as exc:
+        raise exc.as_http() from exc
+
+    subject = result.data["subject"]
+    identity = (
+        db.query(OAuthIdentity)
+        .filter(OAuthIdentity.provider == provider, OAuthIdentity.subject == subject)
+        .first()
+    )
+    if identity:
+        user = db.get(User, identity.user_id)
+        if not user or user.is_deleted:
+            raise forbidden("账号已注销", "account_deleted")
+        if user.is_banned:
+            raise forbidden("账号已被封禁", "account_banned")
+        created = False
+    else:
+        user = User(
+            # ③ 不可拨打的占位号：既不与真实号码冲突，也永远收不到短信验证码
+            phone=f"oauth:{subject}"[:20],
+            nickname=result.data.get("nickname") or f"{provider}用户",
+            password_hash="",          # 没有密码，只能继续用第三方登录
+        )
+        db.add(user)
+        db.flush()
+        db.add(OAuthIdentity(provider=provider, subject=subject, user_id=user.id))
+        created = True
+
+    from app.core.guard import note_auth_success
+
+    note_auth_success(client_ip(request), db)   # 复用本次请求的会话，见函数注释
+    # 复用 _issue_token：新设备提醒、会话可吊销这些行为不该因为「换了个登录
+    # 入口」就消失——同一条规则两份实现是这一路反复踩的坑
+    return {
+        "token": _issue_token(db, user, user_agent),
+        "user": _me(user),
+        "created": created,
+        # ② 明确告诉客户端：还差什么才能接单/提现
+        "needs_phone": user.phone.startswith("oauth:"),
+        "needs_verification": not user.is_verified,
+    }
+
+
+@router.get("/auth/oauth/providers")
+def oauth_providers():
+    """公开：客户端据此决定画哪几个登录按钮。
+
+    App Store 的规则是「提供了任何第三方登录就必须同时提供 Apple」——
+    所以这里如实返回启用了哪几家，客户端不要硬编码。
+    """
+    from app.vendors.oauth import SUPPORTED
+    from app.vendors.registry import get_provider
+
+    impl = get_provider("oauth")
+    return {"providers": list(SUPPORTED), "implementation": impl.name,
+            "verifies": getattr(impl, "verifies", False)}
 
 
 # ---------- 账号注销（ACC-006）----------

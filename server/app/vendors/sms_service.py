@@ -21,8 +21,24 @@ CODE_TTL_MINUTES = 10
 MAX_ATTEMPTS = 5
 
 
+def assert_dialable(phone: str) -> None:
+    """ACC-003 短信链路的入口只接受**真正能拨打的号码**。
+
+    起因是一条真实的认证绕过：第三方登录建出来的账号用
+    `oauth:wechat:xxx` 作占位手机号（不可拨打、收不到短信，这是有意的），
+    但 `POST /auth/login-sms` 只按 `User.phone` 查人——于是任何知道这串
+    占位符的人，都能用模拟通道的固定验证码直接登进那个账号。
+
+    把校验放在**短信链路的公共入口**而不是各个端点里：注册、找回、换绑、
+    短信登录共用这一道，漏掉任何一个端点的可能性就此消失。
+    """
+    if not phone.isdigit() or not (6 <= len(phone) <= 20):
+        raise bad_request("手机号格式不正确", "invalid_phone")
+
+
 def send_code(db: Session, phone: str, scene: str = "verify") -> dict:
     """发送验证码。同一手机号+场景的旧码作废（只保留最新一条有效）。"""
+    assert_dialable(phone)
     provider = get_provider("sms")
     code = generate_code()
     db.query(SmsCode).filter(SmsCode.phone == phone, SmsCode.scene == scene,
@@ -46,7 +62,12 @@ def send_code(db: Session, phone: str, scene: str = "verify") -> dict:
 
 
 def verify_code(db: Session, phone: str, code: str, scene: str = "verify") -> None:
-    """校验并消费验证码；不通过抛 400 `sms_code_invalid`。"""
+    """校验并消费验证码；不通过抛 400 `sms_code_invalid`。
+
+    这里也要校验号码形态，不能只在 `send_code` 里校验：模拟通道下
+    「固定码直通」**不要求先请求验证码**，只挡发送侧等于没挡。
+    """
+    assert_dialable(phone)
     provider = get_provider("sms")
     if getattr(provider, "echoes_code", False):
         # 模拟通道：固定码直通（无需先调用 send-code），保持开发/CI 体验

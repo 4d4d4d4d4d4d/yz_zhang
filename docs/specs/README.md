@@ -65,6 +65,7 @@
 | 40 | 那些从来没验证过的东西（演练/告警/压测/依赖） | [40-ops-drills.md](./40-ops-drills.md) | P0 |
 | 41 | 一键部署与全链路验收（Postgres 生产路径） | [41-production-path.md](./41-production-path.md) | P0 |
 | 42 | 兑现两句写了很久的注释：推送通道与向量检索 | [42-push-and-semantic.md](./42-push-and-semantic.md) | P1 |
+| 43 | 好友、群聊与第三方登录 | [43-social-and-oauth.md](./43-social-and-oauth.md) | P1 |
 
 ## 功能点编号与优先级约定
 

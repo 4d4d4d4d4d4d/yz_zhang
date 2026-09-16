@@ -157,6 +157,10 @@ def send_message(
     conv_id: int, body: MessageIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     conv = _get_conv(db, conv_id, user)
+    # IM-003 禁言必须在这里生效。只把名单存进 `muted` 而不在发消息处读它，
+    # 就是「建好了没接上」——群主以为禁言了，被禁言的人照发不误。
+    if conv.kind == "group" and user.id in (conv.muted or []):
+        raise forbidden("你已被群主禁言", "muted_in_group")
     if conv.kind == "direct":
         from app.modules.account.service import is_blocked_between
 

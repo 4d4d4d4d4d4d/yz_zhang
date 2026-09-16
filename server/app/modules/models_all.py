@@ -5,6 +5,7 @@ from app.core.models_infra import JobLock  # noqa: F401
 from app.core.models_security import SecurityEvent  # noqa: F401
 from app.vendors.models import PaymentOrder, SmsCode, VendorCall  # noqa: F401
 from app.modules.account.models import Block, LoginSession, User  # noqa: F401
+from app.modules.account.models_oauth import OAuthIdentity  # noqa: F401
 from app.modules.aml.models import SuspiciousActivity  # noqa: F401
 from app.modules.analytics.models import AnalyticsEvent, SearchQuery  # noqa: F401
 from app.modules.anchor.models import AnchorEntry, AnchorReceipt  # noqa: F401
@@ -27,6 +28,7 @@ from app.modules.matching.models import Invitation, MatchingConfig, Subscription
 from app.modules.support.models import NotificationPref, Ticket  # noqa: F401
 from app.modules.tax.models import InvoiceRequest, TaxWithholding  # noqa: F401
 from app.modules.im.models import Conversation, Message  # noqa: F401
+from app.modules.im.models_social import Friendship  # noqa: F401
 from app.modules.notification.models import Notification  # noqa: F401
 from app.modules.notification.models_device import DeviceToken  # noqa: F401
 from app.modules.knowledge.models import (  # noqa: F401

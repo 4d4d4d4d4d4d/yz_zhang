@@ -11,9 +11,17 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    kind: Mapped[str] = mapped_column(String(20), default="direct")  # direct 单聊 / task 任务会话
+    # direct 单聊 / task 任务会话 / group 群聊（IM-003）
+    kind: Mapped[str] = mapped_column(String(20), default="direct")
     task_id: Mapped[int | None] = mapped_column(Integer, nullable=True, unique=True)
     participants: Mapped[list] = mapped_column(JSON, default=list)  # 用户 id 列表
+    # IM-003 群聊元信息。放在同一张表而不是另起一张：成员资格就是
+    # `participants`，发消息的鉴权（_get_conv）因此**自动**覆盖群聊——
+    # 另起一张表就要再写一遍鉴权，而那正是「同一条规则两份实现」。
+    owner_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    name: Mapped[str] = mapped_column(String(50), default="")
+    announcement: Mapped[str] = mapped_column(String(500), default="")
+    muted: Mapped[list] = mapped_column(JSON, default=list)  # 被禁言的用户 id
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

@@ -123,13 +123,27 @@ def note_auth_failure(ip: str, scope: str = "login", detail: str = "") -> None:
         db.commit()
 
 
-def note_auth_success(ip: str) -> None:
-    """SECEV-005 成功登录清掉窗口内的失败记录——偶发手滑不该累积成封禁。"""
-    with _fresh_session() as db:
+def note_auth_success(ip: str, db=None) -> None:
+    """SECEV-005 成功登录清掉窗口内的失败记录——偶发手滑不该累积成封禁。
+
+    `db` 可选，但它解决的是一个真实问题：**调用方如果在本次请求里已经写过库**
+    （比如第三方登录会先写一条供应商调用留痕），再开一个独立连接去 commit
+    就会在 SQLite 上撞 `database is locked`。
+
+    与 `note_auth_failure` 的不对称是有意的：失败路径必须用独立事务，
+    因为失败会抛异常、请求事务随即回滚，用调用方的会话记失败等于每次都被
+    自己抹掉；而成功路径本来就会提交，复用调用方的会话既正确又省一个连接。
+    """
+    if db is not None:
         db.query(SecurityEvent).filter(
             SecurityEvent.kind == "auth_failure", SecurityEvent.ip == ip,
         ).delete(synchronize_session=False)
-        db.commit()
+        return
+    with _fresh_session() as db2:
+        db2.query(SecurityEvent).filter(
+            SecurityEvent.kind == "auth_failure", SecurityEvent.ip == ip,
+        ).delete(synchronize_session=False)
+        db2.commit()
 
 
 def recent_failures(ip: str) -> int:

@@ -70,7 +70,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.60.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.61.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")
@@ -117,6 +117,13 @@ class Settings:
     AGREEMENT_VERSION = os.environ.get("PLATFORM_AGREEMENT_VERSION", "2026-08-01")
     # NTF-002 推送通道。none = 只有站内信（用户不打开 App 就收不到）。
     # http = 通用网关形态，APNs/FCM/极光/个推都能接，只改下面两项。
+    # IM-003 群成员上限。原始 spec 写的是「上限可配」——
+    # 写死一个数字意味着不同规模的部署只能改代码。
+    GROUP_MEMBER_LIMIT = int(os.environ.get("PLATFORM_GROUP_MEMBER_LIMIT", "200"))
+    # ACC-003 第三方登录。mock = 客户端说自己是谁就是谁，**绝不可上生产**。
+    OAUTH_PROVIDER = os.environ.get("PLATFORM_OAUTH_PROVIDER", "mock")
+    OAUTH_ENDPOINT = os.environ.get("PLATFORM_OAUTH_ENDPOINT", "")
+    OAUTH_TOKEN = os.environ.get("PLATFORM_OAUTH_TOKEN", "")
     PUSH_PROVIDER = os.environ.get("PLATFORM_PUSH_PROVIDER", "none")
     PUSH_ENDPOINT = os.environ.get("PLATFORM_PUSH_ENDPOINT", "")
     PUSH_TOKEN = os.environ.get("PLATFORM_PUSH_TOKEN", "")
