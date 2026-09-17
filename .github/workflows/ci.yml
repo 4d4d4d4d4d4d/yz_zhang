@@ -34,6 +34,16 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm test
       - run: npm run build:web
+      # DSPR-042 `app/` 不在 workspaces 里、没有 tsconfig，CI 从来不碰它——
+      # 这正是「App 侧被诉方开不了口」那个缺口能一直躺着的原因。
+      # 完整类型检查要装 expo/react-native（会改变整仓的安装行为），
+      # 但**解析**不需要：esbuild 能抓语法与 JSX 错误，成本接近零。
+      # 这不是类型检查，是把「改完连解析都不过」挡在真机之前。
+      - name: App 源码解析检查（非类型检查）
+        run: |
+          for f in app/*.tsx; do
+            npx --no-install esbuild "$f" --jsx=automatic --outfile=/dev/null
+          done
 
   boot-smoke:
     name: 服务启动 + 主闭环冒烟（DEP-060）

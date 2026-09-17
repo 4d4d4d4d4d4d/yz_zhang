@@ -7,6 +7,7 @@ import {
   type Me, type Notice, type Task, type Wallet,
 } from '@platform/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { DiscoverScreen } from './Discover';
 import {
   Button, FlatList, Platform, RefreshControl, SafeAreaView, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
@@ -23,7 +24,7 @@ async function getPushToken(): Promise<string | null> {
 
 const BASE_URL = 'http://localhost:8000'; // 真机调试改为局域网 IP
 
-type Tab = 'tasks' | 'publish' | 'wallet' | 'notices' | 'me';
+type Tab = 'tasks' | 'discover' | 'publish' | 'wallet' | 'notices' | 'me';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(null);
@@ -71,6 +72,8 @@ export default function App() {
         ) : (
           <>
             {tab === 'tasks' && <TasksScreen client={client} onOpen={setActiveTask} />}
+            {/* APP-002 发现流：视差滚动，尊重系统「减弱动态效果」开关 */}
+            {tab === 'discover' && <DiscoverScreen client={client} baseUrl={BASE_URL} />}
             {tab === 'publish' && <PublishScreen client={client} onDone={() => setTab('tasks')} />}
             {tab === 'wallet' && <WalletScreen client={client} />}
             {tab === 'notices' && <NoticesScreen client={client} />}
@@ -80,7 +83,7 @@ export default function App() {
       </View>
       {!activeTask && (
         <View style={styles.tabbar}>
-          {([['tasks', '任务'], ['publish', '＋发布'], ['wallet', '钱包'], ['notices', '通知'], ['me', '我的']] as [Tab, string][]).map(([key, label]) => (
+          {([['tasks', '任务'], ['discover', '发现'], ['publish', '＋发布'], ['wallet', '钱包'], ['notices', '通知'], ['me', '我的']] as [Tab, string][]).map(([key, label]) => (
             <TouchableOpacity key={key} style={styles.tab} onPress={() => setTab(key)}>
               <Text style={[styles.tabText, tab === key && styles.tabActive]}>{label}</Text>
             </TouchableOpacity>
