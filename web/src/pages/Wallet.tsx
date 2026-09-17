@@ -1,4 +1,4 @@
-import { ApiError, fmtYuan, type TaxSummary, type Wallet } from '@platform/core';
+import { ApiError, fmtYuan, ledgerKindLabel, type TaxSummary, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 
@@ -27,11 +27,6 @@ export default function WalletPage() {
   }
 
   const cents = Math.round(parseFloat(amount || '0') * 100);
-  const KIND_LABEL: Record<string, string> = {
-    topup: '充值', withdraw: '提现', escrow_hold: '资金托管', escrow_release: '任务收入',
-    refund: '退款', fee: '平台佣金', dispute_split: '纠纷分割',
-    tax_withheld: '代扣个人所得税',
-  };
 
   return (
     <div className="page">
@@ -58,7 +53,7 @@ export default function WalletPage() {
           <tbody>
             {ledger.map((e) => (
               <tr key={e.id}>
-                <td>{KIND_LABEL[e.kind] ?? e.kind}</td>
+                <td>{ledgerKindLabel(e.kind)}</td>
                 <td style={{ color: e.amount_cents >= 0 ? 'var(--ok)' : 'var(--bad)' }}>
                   {e.amount_cents >= 0 ? '+' : ''}{fmtYuan(e.amount_cents)}
                 </td>

@@ -1,10 +1,61 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V71 全批次完成（2026-09-17）。
-> 后端 668 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V72 全批次完成（2026-09-17）。
+> 后端 681 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
+
+> **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
+> 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
+> 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V72 批次：手抄一份的约定，和一个从没装上过的 App）
+
+> 模块 spec：[47-shared-contract-drift.md](47-shared-contract-drift.md)
+>
+> **起点是三次实测，不是一次代码审阅**：
+>
+> 1. `cd app && npm install` → **E404**。`app/package.json` 写的是
+>    `"@platform/core": "*"`，而 `app` 不在根 `workspaces` 里，
+>    npm 于是去公共 registry 找一个不存在的包。
+>    **`app/README.md` 里那条运行命令，从落笔那天起就没成功过一次。**
+> 2. 把它装起来、配上 `tsconfig.json`，第一次 `tsc --noEmit` 立刻查出
+>    `Property 'deposit_cents' does not exist on type 'Contract'`。
+>    服务端是对的、App 是对的，**只有共享类型是错的**。
+> 3. 顺着 2 往下跑一遍闭环，查出这批真正贵的那条：
+>    执行方接单时 `freeze_deposit()` 把钱从可用划到冻结，而
+>    **合约页不提保证金、App 连「冻结中」都不显示、账单流水里那一行写着
+>    `deposit_hold`**。一个中文界面里，用户的 ¥50 不见了，
+>    唯一的解释是一行英文标识符。
+>
+> **两条根因是同一件事**：跨边界的约定被手抄了一份，然后没人对过。
+> 服务端能产生 20 种账本科目，网页的 `KIND_LABEL` 只有 8 条；
+> 而渲染写的是 `KIND_LABEL[kind] ?? kind`——**少一条不会红、不会崩，
+> 只会默默给用户看英文**。又是那个反复出现的形状：写错了不会报错的声明。
+>
+> **检视时改过一次设计**：第一版打算用 AST 扫 `_log()` 凑出科目全集，
+> 写到一半发现凑不全——`transfer()` 是 `_log(db, id, f"{kind}_out", …)`，
+> 前半截要靠猜调用方传了什么。**靠猜的闸门不是闸门**，改成服务端显式声明
+> `LEDGER_KINDS` 并在 `_log()` 写入点拒收未声明科目。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **SYNC-001 文案全仓唯一一份** | 标签表从 `web/src/pages/Wallet.tsx` 搬进 `packages/core/src/ledger.ts`，Web 与 App 共用。留在 Web 里，App 要显示流水就只能再抄一份，两份变三份 | `tests/test_shared_contract_drift.py::test_sync002_server_kinds_and_sdk_labels_match_exactly` |
+| **SYNC-002 科目全集显式声明，写入点拒收** | `wallet.LEDGER_KINDS` 20 条；`_log()` 遇到未声明科目直接 `ValueError`。在写入点炸掉，比写进账本后靠肉眼在账单里发现一行英文便宜得多 | `::test_sync002_log_rejects_undeclared_kind_at_write_time`、`::test_sync002_transfer_rejects_undeclared_prefix`；已实测漏声明一条即 4 项变红 |
+| **SYNC-002 双向比对** | 服务端全集 ↔ SDK 键集合，缺一条（用户看英文）与多一条（服务端已删而文案没跟）都判失败 | 已实测：SDK 删一条 → 3 红；SDK 多一条 → 1 红 |
+| **SYNC-003 扫描器自己不许静默失败** | AST 扫 `_log()` 字面量科目校验声明表。**我先把 kind 按 `args[1]` 取，扫出零个——而零个会让比对全绿通过**。硬编下界 ≥14 与三个必中科目 | `::test_sync003_every_logged_kind_is_declared`、`::test_sync003_label_parser_fails_loudly_rather_than_returning_empty` |
+| **SYNC-004 前后端约定对齐** | 真的下一单、真的取一次 `GET /contracts/{id}`、真的对键集合与 `interface Contract` 的字段。反方向只提示不失败（`milestones?` 这类可选字段本来就可能不出现） | `::test_sync004_contract_response_keys_are_all_declared_in_sdk`；已实测类型里删掉字段即变红 |
+| **SYNC-005 保证金终于有人说得清** | 共享类型补 `deposit_cents`/`deposit_status`；Web 合约卡片显示金额与状态（冻结中会说明何时退还、何时罚没）；App 补「冻结中」一栏与保证金状态；12 条缺失中文名补齐 | `::test_sync005_no_ledger_row_reaches_the_user_without_a_chinese_label`（复现起因：修前这条是红的） |
+| **APPB-001 app 装得上了** | `"@platform/core": "file:../packages/core"`。不并进根 workspaces 是有意的——否则 Web 的流水线要为它不碰的一个端装下整个 react-native。实测 1139 包 / 29 秒 | `::test_appb001_core_dependency_is_resolvable`；已实测退回 `"*"` 即变红 |
+| **APPB-002/003 能起得来** | 补 `babel.config.js`（没有它 Metro 没有 `babel-preset-expo`，第一个 `<View>` 就是语法错误）与 `metro.config.js`（core 是 app/ 之外的 TS 源码，要 `watchFolders` + `nodeModulesPaths`） | `::test_appb002_babel_config_exists_with_expo_preset`、`::test_appb003_metro_config_reaches_the_workspace_package` |
+| **APPB-004/005 插件↔依赖必须成对** | `app.json` 声明了 `expo-image-picker` 却没装也没 import → `expo prebuild`/EAS build 直接失败在插件解析。删声明（没有功能在用它），并加闸门。VID-041 查 `import`，**看不见配置文件里的插件名** | `::test_appb005_every_declared_expo_plugin_is_an_installed_dependency`；已实测加回一个没装的插件即变红 |
+| **APPB-006 App 真的被类型检查了** | `tsconfig.json`（`strict`）+ `npm run typecheck` + CI `app-typecheck` job。了结挂了很久的 PRLX-041 / DSPR-042 | `::test_appb006_typecheck_is_configured`、`::test_appb006_ci_runs_app_typecheck`；已实测删掉类型字段则 `tsc` 退出码 2 |
+
+**VID-050 部分兑现**：V71 的三个新依赖在本环境装上了并通过类型检查——
+`expo-av@14.0.7`、`expo-network@6.0.1`、`@react-native-async-storage/async-storage@1.23.1`。
+**但「装得上、类型对」不等于「在真机上跑得起来」**，VID-050 降级保留不销账；
+`metro.config.js` 是本批唯一没被机器验证的改动（验它要真起 Metro，要设备）。
 
 ## 已实现（V65 批次：配了却从不告警的监控，比没有监控更危险）
 

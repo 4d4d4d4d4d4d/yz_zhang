@@ -1,5 +1,5 @@
 import {
-  ApiError, TASK_STATUS_LABEL, fmtYuan,
+  ApiError, DEPOSIT_STATUS_LABEL, TASK_STATUS_LABEL, fmtYuan,
   type Contract, type Recommendation, type Task, type TaskTree,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -197,6 +197,16 @@ export default function TaskDetail() {
       {contract && (
         <div className="card">
           <h3>智能合约 #{contract.id}</h3>
+          {/* SYNC-005 保证金此前在网页上**一个字都没有**：执行方接单时 wallet
+              会把这笔钱从可用余额划到冻结，而合约页不提、钱包页只给一个
+              「冻结中」的数字。钱不见了却没有解释，是这一批最该修的一条。 */}
+          {contract.deposit_cents > 0 && (
+            <p className={contract.deposit_status === 'forfeited' ? 'error' : 'muted'}>
+              执行方保证金 {fmtYuan(contract.deposit_cents)} ·{' '}
+              {DEPOSIT_STATUS_LABEL[contract.deposit_status] ?? contract.deposit_status}
+              {contract.deposit_status === 'held' && '（完成或正常取消后退还，违约取消则罚没给发布方）'}
+            </p>
+          )}
           <pre className="muted" style={{ whiteSpace: 'pre-wrap' }}>{contract.terms}</pre>
           <div className="row">
             {((isCreator && !contract.signed_by_requester) || (isExecutor && !contract.signed_by_executor)) && (

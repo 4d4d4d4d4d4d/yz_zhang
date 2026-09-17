@@ -8,6 +8,28 @@ from .models import LedgerEntry, WalletAccount
 
 PLATFORM_USER_ID = 0  # 平台佣金账户
 
+# SYNC-002 账本科目全集。**这是一份声明，不是注释**——`_log()` 会拒绝不在其中的科目。
+#
+# 为什么要显式声明而不是靠扫代码凑：`transfer()` 写的是 `_log(db, id, f"{kind}_out", …)`，
+# 科目是拼出来的，静态扫描只能看到后缀 `_out`，前半截只能靠猜调用方传了什么。
+# 靠猜的闸门不是闸门。
+#
+# 每加一条科目，必须同时在 packages/core/src/ledger.ts 的 LEDGER_KIND_LABEL 里
+# 给它一个中文名，否则 tests/test_shared_contract_drift.py 会红——
+# 因为没有中文名的科目，在用户的账单流水里就是一行英文标识符。
+LEDGER_KINDS: frozenset[str] = frozenset({
+    "topup", "withdraw", "withdraw_hold", "withdraw_refund",
+    "escrow_hold", "escrow_release", "refund", "fee",
+    "deposit_hold", "deposit_return", "deposit_forfeit",
+    "dispute_split",
+    "platform_topup", "platform_settle",
+    "tax_withheld", "tax_remit",
+    "adjust_in", "adjust_out", "subsidy_in", "subsidy_out",
+})
+
+# transfer() 允许的科目前缀（会各自拼出 _in / _out 两条）
+TRANSFER_KINDS: frozenset[str] = frozenset({"adjust", "subsidy"})
+
 
 def get_or_create(db: Session, user_id: int) -> WalletAccount:
     acct = db.get(WalletAccount, user_id)
@@ -19,6 +41,15 @@ def get_or_create(db: Session, user_id: int) -> WalletAccount:
 
 
 def _log(db: Session, user_id: int, kind: str, amount: int, contract_id=None, memo=""):
+    # SYNC-002 在**写入点**拦住未声明的科目。这里抛异常是有意的：
+    # 一笔科目没有中文名就写进账本，之后在用户账单里永远是一行英文，
+    # 而且没有任何东西会报错——只能靠肉眼发现。在写入点炸掉便宜得多。
+    # 这是编码错误而非用户输入错误，所以不走 bad_request（那是 4xx）。
+    if kind not in LEDGER_KINDS:
+        raise ValueError(
+            f"未声明的账本科目 {kind!r}：请加进 wallet.service.LEDGER_KINDS，"
+            f"并在 packages/core/src/ledger.ts 的 LEDGER_KIND_LABEL 里给它中文名"
+        )
     db.add(
         LedgerEntry(
             user_id=user_id, kind=kind, amount_cents=amount, contract_id=contract_id, memo=memo
@@ -231,6 +262,11 @@ def transfer(db: Session, from_id: int, to_id: int, amount: int, contract_id=Non
     补贴单独成科目的理由是对账口径不同——补贴会减少平台账户余额，
     必须计入平台账户不变量，否则日终对账会报「平台佣金不符」。
     """
+    # SYNC-002 拼科目之前先验前缀。不验的话 `kind="foo"` 要等到 _log() 才炸，
+    # 而那时钱已经从 src 扣掉了——同一个事务里会回滚，但报错指向的是拼好的
+    # "foo_out" 而不是调用方传的 "foo"，排查时多绕一圈。
+    if kind not in TRANSFER_KINDS:
+        raise ValueError(f"未声明的转账科目前缀 {kind!r}：请加进 wallet.service.TRANSFER_KINDS")
     if amount <= 0:
         raise bad_request("金额必须为正", "invalid_amount")
     lock_wallets(db, from_id, to_id)  # CONC-011 按 user_id 升序加锁，避免对向转账死锁

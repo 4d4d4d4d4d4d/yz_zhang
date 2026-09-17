@@ -2,7 +2,7 @@
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
 import {
-  PlatformClient, TASK_STATUS_LABEL, fmtYuan, taskActions,
+  DEPOSIT_STATUS_LABEL, PlatformClient, TASK_STATUS_LABEL, fmtYuan, taskActions,
   type Contract, type Dispute, type DisputeStatement,
   type Me, type Notice, type Task, type Wallet,
 } from '@platform/core';
@@ -207,7 +207,9 @@ function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
             <Text style={styles.cardTitle}>合约 #{contract.id} · {contract.status}</Text>
             <Text style={styles.mutedLeft}>
               金额 {fmtYuan(contract.amount_cents)} · 服务费 {(contract.fee_bps / 100).toFixed(1)}%
-              {contract.deposit_cents > 0 ? ` · 保证金 ${fmtYuan(contract.deposit_cents)}` : ''}
+              {contract.deposit_cents > 0
+                ? ` · 保证金 ${fmtYuan(contract.deposit_cents)}（${DEPOSIT_STATUS_LABEL[contract.deposit_status] ?? contract.deposit_status}）`
+                : ''}
             </Text>
             <Text style={styles.mutedLeft}>
               签署：发布方{contract.signed_by_requester ? '✓' : '…'} / 执行方{contract.signed_by_executor ? '✓' : '…'}
@@ -409,6 +411,9 @@ function WalletScreen({ client }: { client: PlatformClient }) {
         <View style={styles.cardRow}>
           <View style={{ flex: 1 }}><Text style={styles.mutedLeft}>可用</Text><Text style={styles.cardTitle}>{fmtYuan(wallet.available_cents)}</Text></View>
           <View style={{ flex: 1 }}><Text style={styles.mutedLeft}>托管中</Text><Text style={styles.cardTitle}>{fmtYuan(wallet.escrow_cents)}</Text></View>
+          {/* SYNC-005 App 此前连「冻结中」都不显示：接单被冻结的保证金
+              只表现为可用余额变少，全端**没有任何一处**提到这笔钱。 */}
+          <View style={{ flex: 1 }}><Text style={styles.mutedLeft}>冻结中</Text><Text style={styles.cardTitle}>{fmtYuan(wallet.frozen_cents)}</Text></View>
         </View>
       )}
       <Button title="充值 ¥100（模拟）" onPress={async () => { await client.topup(10000); await load(); }} />

@@ -33,11 +33,6 @@
       [
         "expo-location",
         { "locationWhenInUsePermission": "用于展示附近任务与到场打卡" }
-      ],
-      [
-        "expo-image-picker",
-        { "photosPermission": "用于从相册选择任务交付凭证",
-          "cameraPermission": "用于拍摄任务交付凭证与到场照片" }
       ]
     ],
     "extra": {

@@ -79,6 +79,11 @@ export interface Contract {
   amount_cents: number;
   released_cents: number;
   fee_bps: number;
+  // SYNC-005 服务端从保证金功能上线起就返回这两个字段，类型里一直没有。
+  // 于是 Web 端压根没写这块显示：执行方接单被冻结的保证金，在合约页上
+  // 没有一个字提到，在钱包里只是「冻结中」的一个数字。
+  deposit_cents: number;
+  deposit_status: string;   // none / held / returned / forfeited
   terms: string;
   status: string;
   signed_by_requester: boolean;

@@ -34,16 +34,34 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm test
       - run: npm run build:web
-      # DSPR-042 `app/` 不在 workspaces 里、没有 tsconfig，CI 从来不碰它——
-      # 这正是「App 侧被诉方开不了口」那个缺口能一直躺着的原因。
-      # 完整类型检查要装 expo/react-native（会改变整仓的安装行为），
-      # 但**解析**不需要：esbuild 能抓语法与 JSX 错误，成本接近零。
-      # 这不是类型检查，是把「改完连解析都不过」挡在真机之前。
+      # 解析闸门（V70 建）。真正的类型检查在下面的 app-typecheck job 里——
+      # 这一道留着是因为它几乎零成本，且在依赖装不上时仍然能挡语法错误。
       - name: App 源码解析检查（非类型检查）
         run: |
           for f in app/*.tsx; do
             npx --no-install esbuild "$f" --jsx=automatic --outfile=/dev/null
           done
+
+  app-typecheck:
+    name: App 安装与类型检查（APPB-006）
+    runs-on: ubuntu-latest
+    # DSPR-042 / PRLX-041 了结于此：`app/` 此前从来没有被装上过一次。
+    # `cd app && npm install` 实测报 E404（"@platform/core": "*" 被当成公开包），
+    # 也就是 app/README.md 里写的那条命令从落笔起就没成功过。
+    # 改用 file: 协议后能装了，第一次 tsc 就查出一处真实类型错误。
+    #
+    # 单独一个 job 而不是塞进 frontend：app 不在根 workspaces 里，
+    # 这是有意的——否则 Web 的流水线要为它不碰的一个端装下整个 react-native。
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
 
   boot-smoke:
     name: 服务启动 + 主闭环冒烟（DEP-060）
