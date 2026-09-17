@@ -14,9 +14,15 @@ from typing import Protocol
 
 from .base import VendorError, VendorResult
 
-# 白名单而非黑名单：只认这几种图片，其余一律拒绝
+# 白名单而非黑名单：只认这几种，其余一律拒绝
 ALLOWED = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+# CNT-014 视频。**单独一张表**而不是并进 ALLOWED，因为两者走的路不一样：
+# 图片可以 base64 过 JSON（压缩后几百 KB），视频不行——
+# 一个 50MB 的视频 base64 之后是 67MB 的 JSON 体，整个读进内存再解码，
+# 几个并发就能把进程打死。视频必须走 `sign_upload` 直传对象存储。
+ALLOWED_VIDEO = {"video/mp4": ".mp4", "video/quicktime": ".mov", "video/webm": ".webm"}
 MAX_BYTES = 2 * 1024 * 1024  # 2MB（客户端压缩后应远小于此）
+MAX_VIDEO_BYTES = 200 * 1024 * 1024   # 直传上限，不经过本进程
 
 # 魔数校验：仅信 Content-Type 等于让调用方自证清白
 _MAGIC = {
@@ -79,9 +85,16 @@ class LocalStorageProvider:
         return VendorResult(ok=True, external_ref=name,
                             data={"url": f"/api/v1/files/{name}", "sha256": digest})
 
-    def sign_upload(self, content_type: str) -> VendorResult:  # pragma: no cover - 本地不用直传
-        return VendorResult(ok=True, external_ref=uuid.uuid4().hex,
-                            data={"direct_upload": False})
+    def sign_upload(self, content_type: str) -> VendorResult:
+        """本地实现**不支持直传**，并且如实说出来。
+
+        视频必须直传对象存储（见 ALLOWED_VIDEO 上的注释）。本地没有 CDN，
+        所以这里返回 `direct_upload: False` 让调用方明确失败，
+        而不是给一个假 URL 让客户端上传到不存在的地方。
+        """
+        return VendorResult(ok=True, external_ref=secrets.token_hex(16),
+                            data={"direct_upload": False,
+                                  "reason": "local_storage_has_no_cdn"})
 
     def delete(self, name: str) -> bool:
         """UMOD-030 只删命名条目，**不动 blobs/<sha256>**。

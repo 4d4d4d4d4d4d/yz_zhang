@@ -514,13 +514,42 @@ export class PlatformClient {
   }
 
   // ---- content / social ----
-  createContent(input: { kind?: string; title?: string; body: string; tags?: string[]; visibility?: string; circle_id?: number; linked_category?: string }) {
+  /** CNT-003 `publish: false` 存草稿——草稿只有作者自己看得见。 */
+  createContent(input: {
+    kind?: string; title?: string; body: string; tags?: string[]; visibility?: string;
+    circle_id?: number; linked_category?: string; media_urls?: string[]; publish?: boolean;
+  }) {
     return this.request<ContentItem>('POST', '/contents', input);
   }
   contentFeed(scope: 'latest' | 'following' = 'latest', params: { tag?: string; kind?: string } = {}) {
     const extra = Object.entries(params).filter(([, v]) => v).map(([k, v]) => `&${k}=${encodeURIComponent(v!)}`).join('');
     return this.request<ContentItem[]>('GET', `/feed?scope=${scope}${extra}`);
   }
+  editContent(contentId: number, patch: {
+    title?: string; body?: string; tags?: string[]; media_urls?: string[]; linked_category?: string;
+  }) {
+    return this.request<ContentItem>('PATCH', `/contents/${contentId}`, patch);
+  }
+  /** 发布时服务端会**重跑机审**：草稿是随便改的，存草稿时审过不算数。 */
+  publishContent(contentId: number) {
+    return this.request<ContentItem>('POST', `/contents/${contentId}/publish`);
+  }
+  myDrafts(limit = 20) {
+    return this.request<Array<{ id: number; title: string; created_at: string }>>(
+      'GET', `/contents/mine?status=draft&limit=${limit}`,
+    );
+  }
+  getContent(contentId: number) {
+    return this.request<ContentItem>('GET', `/contents/${contentId}`);
+  }
+  /** CNT-014 视频直传。视频不能走 base64——50MB 的视频 base64 后是 67MB 的
+   *  JSON 体，整个读进内存再解码，几个并发就能把进程打死。 */
+  signVideoUpload(contentType: string, sizeBytes: number) {
+    return this.request<{ ref: string; direct_upload: boolean; upload_url?: string; reason?: string }>(
+      'POST', '/files/sign-upload', { content_type: contentType, size_bytes: sizeBytes },
+    );
+  }
+
   likeContent(contentId: number) {
     return this.request<{ liked: boolean; like_count: number }>('POST', `/contents/${contentId}/like`);
   }

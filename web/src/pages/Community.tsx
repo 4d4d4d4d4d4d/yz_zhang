@@ -1,10 +1,12 @@
 import { ApiError, type ContentItem } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
+import { BlogEditor } from '../BlogEditor';
+import { VideoFeed } from '../VideoFeed';
 import { useApp } from '../store';
 
 export default function Community() {
   const { client, me } = useApp();
-  const [scope, setScope] = useState<'latest' | 'following'>('latest');
+  const [scope, setScope] = useState<'latest' | 'following' | 'video'>('latest');
   const [items, setItems] = useState<ContentItem[]>([]);
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
@@ -13,7 +15,7 @@ export default function Community() {
   const [commentText, setCommentText] = useState('');
 
   const load = useCallback(async () => {
-    setItems(await client.contentFeed(scope));
+    setItems(await client.contentFeed(scope === 'video' ? 'latest' : scope));
   }, [client, scope]);
 
   useEffect(() => { void load(); }, [load]);
@@ -49,10 +51,26 @@ export default function Community() {
           <button disabled={!body.trim()} onClick={() => void post()}>发布</button>
         </div>
       </div>
+      {/* CNT-003 博客编辑器：Markdown 预览 + 草稿箱 + 插图 + 标签 */}
+      <BlogEditor client={client} onPublished={() => void load()} />
+
       <div className="row">
         <button className={scope === 'latest' ? '' : 'ghost'} onClick={() => setScope('latest')}>最新</button>
         <button className={scope === 'following' ? '' : 'ghost'} onClick={() => setScope('following')}>关注</button>
+        <button className={scope === 'video' ? '' : 'ghost'} onClick={() => setScope('video')}>视频</button>
       </div>
+
+      {/* CNT-014 视频沉浸流：上下滑 / 倍速 / 断点续播 / 流量提醒 */}
+      {scope === 'video' && (
+        <VideoFeed items={items
+          .filter((c) => (c.media_urls ?? []).some((u) => /\.(mp4|mov|webm)$/i.test(u)))
+          .map((c) => ({
+            id: c.id,
+            url: (c.media_urls ?? []).find((u) => /\.(mp4|mov|webm)$/i.test(u)) as string,
+            title: c.title || c.body.slice(0, 20),
+            author: c.author_nickname,
+          }))} />
+      )}
       <div className="list">
         {items.length === 0 && <div className="card muted">{scope === 'following' ? '关注的人还没有动态' : '还没有内容'}</div>}
         {items.map((c) => (

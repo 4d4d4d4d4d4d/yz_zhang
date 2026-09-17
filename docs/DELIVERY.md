@@ -1,7 +1,7 @@
 # 交付总览（Final Delivery Overview）
 
 > 截至 2026-09-16：MVP + V1~V65 全批次完成。
-> 后端 **631 tests** + 前端 **49 tests**（core 32 + web 17）全绿。
+> 后端 **644 tests** + 前端 **55 tests**（core 32 + web 23）全绿。
 > 本文档是对 [docs/specs/](specs/README.md)（功能拆分）与
 > [16-traceability.md](specs/16-traceability.md)（逐条追溯）的收口汇总。
 
@@ -94,6 +94,7 @@ cp deploy/.env.example deploy/.env && ./deploy/up.sh   # 生产栈（自检 → 
 | V57 JOB | 调度表与端点同源、漂移在 CI 就红；`/jobz` 改为对照期望清单；**资金对账日终 job 此前从未被架起来过**（不在表里且调度器调不动），现已修复 |
 | V58 MOD | 处置动作收敛为单一实现：**审核队列的封禁此前只有两行**，影响面/对手方通知/报名关闭/挂单下架/审计全缺；状态机唯一入口改由 AST 扫描强制 |
 | V59 CAP | 人机验证端到端打通：V56 的服务端门**没有任何客户端能满足**（SDK 不传令牌、网页无 UI），接上真实验证码即全站锁死；补 SDK/配置端点/挑战组件，并加生产启动闸门 |
+| V69 CNT | 补最后两条降级实现：博客编辑器（Markdown 预览/草稿箱/插图/标签）与视频沉浸流（上下滑/倍速/断点续播/流量提醒）。`contents` 表此前**连存媒体的字段都没有**。Markdown **不转 HTML** 而是解析成 React 元素——这条路径上不存在 XSS 这个类别；视频走直传，50MB 的视频 base64 后是 67MB 的 JSON 体 |
 | V68 IM/ACC | 补好友体系（**双向同意**）、独立群聊（成员上限可配、群主不能移出/禁言自己）、第三方登录（Apple 为 App 上架合规必需）。过程中我自己的测试抓到一条**认证绕过**：OAuth 账号的占位手机号 `oauth:wechat:xxx` 能走短信登录直接登进去——修在短信链路的公共入口而不是某个端点 |
 | V67 NTF/KB | 兑现两句从 MVP 写到现在的注释：「生产追加 APNs/FCM」与「生产为向量检索」。推送走发件箱（同步打第三方会让一次网络抖动回滚一笔放款）+ 设备令牌表 + 失效令牌清理；向量检索补齐管线（维度/索引/余弦/增量重建/模型切换检测）。**缺省实现不假装成功**：`NoPush` 如实上报没接、检索响应带 `semantic`/`degraded` |
 | V66 PGSQL | **一键部署从来没有真正跑起来过**：`requirements.txt` 里没有 Postgres 驱动，而生产自检拒绝 SQLite——api 容器必然 `ModuleNotFoundError`。补驱动后接真实 Postgres，又查出两条迁移 nullable 漂移（SQLite 的 `alembic check` 对此是瞎的）与 13 份 SQLite-only 裸 SQL。新增 `deploy/oneclick.sh`（以**验收通过**结束而非「容器起来了」）与 `scripts/acceptance.py`（47 项全链路），CI 加 Postgres 双引擎迁移检查与部署验收 |

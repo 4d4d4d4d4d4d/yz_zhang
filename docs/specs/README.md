@@ -66,6 +66,7 @@
 | 41 | 一键部署与全链路验收（Postgres 生产路径） | [41-production-path.md](./41-production-path.md) | P0 |
 | 42 | 兑现两句写了很久的注释：推送通道与向量检索 | [42-push-and-semantic.md](./42-push-and-semantic.md) | P1 |
 | 43 | 好友、群聊与第三方登录 | [43-social-and-oauth.md](./43-social-and-oauth.md) | P1 |
+| 44 | 博客编辑器与视频沉浸流 | [44-blog-and-video.md](./44-blog-and-video.md) | P1 |
 
 ## 功能点编号与优先级约定
 

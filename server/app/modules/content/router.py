@@ -22,6 +22,9 @@ class ContentIn(BaseModel):
     circle_id: int | None = None
     linked_category: str = ""
     source_task_id: int | None = None
+    media_urls: list[str] = Field(default_factory=list, max_length=9)
+    # CNT-003 草稿箱：默认发布，显式传 False 才存草稿
+    publish: bool = True
 
 
 class CommentIn(BaseModel):
@@ -48,6 +51,8 @@ def _dump(c: Content, db: Session, viewer: User | None = None) -> dict:
         "visibility": c.visibility,
         "circle_id": c.circle_id,
         "linked_category": c.linked_category,
+        "media_urls": c.media_urls,
+        "status": c.status,
         "source_task_id": c.source_task_id,
         "like_count": c.like_count,
         "comment_count": c.comment_count,
@@ -85,10 +90,80 @@ def create_content(
         )
         if not member:
             raise forbidden("需先加入该圈层", "not_circle_member")
-    row = Content(author_id=user.id, **body.model_dump())
+    fields = body.model_dump()
+    publish = fields.pop("publish")
+    row = Content(author_id=user.id, status="published" if publish else "draft", **fields)
     db.add(row)
     db.flush()
     return _dump(row, db, user)
+
+
+class ContentPatchIn(BaseModel):
+    title: str | None = Field(default=None, max_length=120)
+    body: str | None = Field(default=None, max_length=20000)
+    tags: list[str] | None = None
+    media_urls: list[str] | None = Field(default=None, max_length=9)
+    linked_category: str | None = None
+
+
+@router.patch("/contents/{content_id}")
+def edit_content(
+    content_id: int, body: ContentPatchIn,
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """CNT-003 编辑（草稿箱靠它反复存）。"""
+    row = db.get(Content, content_id)
+    if not row or row.status == "removed":
+        raise not_found("内容不存在")
+    if row.author_id != user.id:
+        raise forbidden("仅作者可编辑")
+    patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    # 改了文字就要重审：否则「先发一段干净的，再编辑成违规的」是条现成的绕过
+    if "title" in patch or "body" in patch:
+        hit = machine_review(f"{patch.get('title', row.title)} {patch.get('body', row.body)}")
+        if hit:
+            raise bad_request(f"内容含违禁信息（{hit}）", "content_rejected")
+    for k, v in patch.items():
+        setattr(row, k, v)
+    db.add(row)
+    return _dump(row, db, user)
+
+
+@router.post("/contents/{content_id}/publish")
+def publish_content(
+    content_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """草稿 → 发布。**发布时重跑机审**：草稿是随便改的，存草稿时审过不算数。"""
+    row = db.get(Content, content_id)
+    if not row or row.status == "removed":
+        raise not_found("内容不存在")
+    if row.author_id != user.id:
+        raise forbidden("仅作者可发布")
+    if row.status == "published":
+        raise conflict("已经是发布状态", "already_published")
+    if row.kind == "blog" and not row.title:
+        raise bad_request("博客必须有标题", "title_required")
+    hit = machine_review(f"{row.title} {row.body}")
+    if hit:
+        raise bad_request(f"内容含违禁信息（{hit}）", "content_rejected")
+    row.status = "published"
+    db.add(row)
+    return _dump(row, db, user)
+
+
+@router.get("/contents/mine")
+def my_contents(
+    status: str = Query(default="draft", pattern="^(draft|published)$"),
+    limit: int = Query(default=20, le=100),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """CNT-003 草稿箱。草稿**只有作者自己看得见**。"""
+    rows = (
+        db.query(Content)
+        .filter(Content.author_id == user.id, Content.status == status)
+        .order_by(Content.id.desc()).limit(limit).all()
+    )
+    return [_dump(c, db, user) for c in rows]
 
 
 # ---------- KB-003 闭环任务一键生成经验帖 ----------
@@ -174,7 +249,9 @@ def user_contents(user_id: int, db: Session = Depends(get_db), user: User = Depe
 @router.get("/contents/{content_id}")
 def get_content(content_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     c = db.get(Content, content_id)
-    if not c or c.status != "published":
+    # 作者能打开自己的草稿（否则草稿箱里点进去是 404，没法编辑）；
+    # 别人一律看不见——草稿不是「还没推荐」，是「还没公开」
+    if not c or (c.status != "published" and c.author_id != user.id):
         raise not_found("内容不存在")
     return _dump(c, db, user)
 

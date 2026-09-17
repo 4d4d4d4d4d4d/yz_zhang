@@ -19,6 +19,9 @@ class Content(Base):
     title: Mapped[str] = mapped_column(String(120), default="")  # blog/case 用
     body: Mapped[str] = mapped_column(Text)
     tags: Mapped[list] = mapped_column(JSON, default=list)  # CNT-004 与技能标签同体系
+    # CNT-003/014 配图与视频。此前**这张表压根没有存媒体的地方**——
+    # 博客「插图」和视频流都无从谈起，内容只能是纯文本
+    media_urls: Mapped[list] = mapped_column(JSON, default=list)
     visibility: Mapped[str] = mapped_column(String(12), default="public")
     circle_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # CNT-012 圈层内容
     # CNT-005 挂载服务入口：内容页可直达"找我做同款"
@@ -26,7 +29,8 @@ class Content(Base):
     source_task_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # case 卡来源
     like_count: Mapped[int] = mapped_column(Integer, default=0)
     comment_count: Mapped[int] = mapped_column(Integer, default=0)
-    status: Mapped[str] = mapped_column(String(12), default="published")  # published/removed
+    # CNT-003 草稿箱：draft 只有作者自己看得见（feed / 他人主页 / 详情都不给）
+    status: Mapped[str] = mapped_column(String(12), default="published")  # draft/published/removed
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

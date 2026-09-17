@@ -134,3 +134,56 @@ def read_file(name: str):
             "Content-Security-Policy": "default-src 'none'; sandbox",
         },
     )
+
+# ---------- CNT-014 视频直传 ----------
+class SignUploadIn(BaseModel):
+    content_type: str = Field(pattern="^video/(mp4|quicktime|webm)$")
+    size_bytes: int = Field(gt=0)
+
+
+@router.post("/files/sign-upload")
+def sign_video_upload(
+    request: Request, body: SignUploadIn, user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """CNT-014 签发视频直传地址。
+
+    视频**不能**走 `POST /files` 那条 base64 路径：一个 50MB 的视频
+    base64 之后是 67MB 的 JSON 体，整个读进内存再解码，几个并发就能把进程
+    打死。所以视频走对象存储直传——文件根本不经过这个进程。
+
+    本地存储没有 CDN，这里会明确返回 `direct_upload: false` 让客户端失败，
+    **而不是给一个假 URL 让它传到不存在的地方**（FILE-013 同一条原则：
+    宁可明确失败，不要假装成功）。
+    """
+    from app.core.guard import guard
+    from app.vendors.storage import ALLOWED_VIDEO, MAX_VIDEO_BYTES
+
+    guard(request, "sign-upload", str(user.id), limit=10, ip_limit=30)
+    if body.content_type not in ALLOWED_VIDEO:
+        raise bad_request("仅支持 MP4 / MOV / WebM", "unsupported_type")
+    if body.size_bytes > MAX_VIDEO_BYTES:
+        raise bad_request(f"视频超过 {MAX_VIDEO_BYTES // 1024 // 1024}MB 上限", "too_large")
+
+    provider = get_provider("storage")
+    signer = getattr(provider, "sign_upload", None)
+    if signer is None:
+        raise bad_request("当前存储实现不支持视频直传", "direct_upload_unsupported")
+    result = signer(body.content_type)
+    if not result.data.get("direct_upload"):
+        raise bad_request(
+            "当前存储实现不支持视频直传（本地存储没有 CDN）——"
+            "请配置 PLATFORM_STORAGE_PROVIDER 为支持直传的对象存储",
+            "direct_upload_unsupported",
+        )
+    # 直传的文件不经过本进程，所以归属必须在签发时就落库（FILE-012），
+    # 否则举报一个视频时同样答不出「这是谁传的」
+    from .models import UploadedFile
+
+    db.add(UploadedFile(
+        name=result.external_ref, owner_id=user.id, sha256="",
+        content_type=body.content_type, size_bytes=body.size_bytes,
+        # 直传的内容本进程看不到，机审只能在回调/异步扫描里做 → 先进人审队列
+        moderation_status="review", moderation_labels=["direct_upload_not_inspected"],
+    ))
+    return {"ref": result.external_ref, **result.data}

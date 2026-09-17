@@ -100,6 +100,10 @@ export interface ContentItem {
   circle_id: number | null;
   linked_category: string;
   source_task_id: number | null;
+  /** CNT-003/014 配图与视频。此前 contents 表压根没有存媒体的地方。 */
+  media_urls: string[];
+  /** draft 只有作者自己看得见 */
+  status?: string;
   like_count: number;
   comment_count: number;
   liked_by_me: boolean;
