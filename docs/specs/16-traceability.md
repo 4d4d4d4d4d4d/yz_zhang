@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V70 全批次完成（2026-09-17）。
-> 后端 654 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V71 全批次完成（2026-09-17）。
+> 后端 668 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。

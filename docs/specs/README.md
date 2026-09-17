@@ -68,6 +68,7 @@
 | 43 | 好友、群聊与第三方登录 | [43-social-and-oauth.md](./43-social-and-oauth.md) | P1 |
 | 44 | 博客编辑器与视频沉浸流 | [44-blog-and-video.md](./44-blog-and-video.md) | P1 |
 | 45 | App 发现流的视差滚动 | [45-app-parallax.md](./45-app-parallax.md) | P1 |
+| 46 | App 侧视频沉浸流 | [46-app-video-feed.md](./46-app-video-feed.md) | P1 |
 
 ## 功能点编号与优先级约定
 
