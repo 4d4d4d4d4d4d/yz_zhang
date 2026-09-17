@@ -44,6 +44,8 @@ class TaskIn(BaseModel):
     circle_id: int | None = None
     recurrence: str = "none"
     people_needed: int = Field(default=1, ge=1, le=50)
+    # AGT-030 结构化验收标准。auto 项由平台判定，不由执行方自报。
+    acceptance_criteria: list[dict] = []
     publish_now: bool = True
 
 
@@ -128,6 +130,11 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
     if body.recurrence not in ("none", "weekly", "monthly"):
         raise bad_request("非法周期设置", "invalid_recurrence")
     service.validate_category(db, body.category)  # OPS-004 类目启停校验
+    # AGT-030 判据在**发布环节**校验：写错的判据要在开工前发现，
+    # 而不是等 agent 跑完才报错
+    from app.modules.agent import criteria as agent_criteria
+
+    body.acceptance_criteria = agent_criteria.validate(body.acceptance_criteria)
     if body.visibility == "circle":
         # TASK-008/CIR-005 圈层定向任务：发布者必须是活跃成员
         from app.modules.circle.router import active_member
@@ -727,6 +734,13 @@ def deliver(task_id: int, user: User = Depends(get_current_user), db: Session = 
     task = _get_task(db, task_id)
     if user.id != task.executor_id:
         raise forbidden("仅执行者可提交验收")
+    # AGT-013/031 agent 执行的任务：判据没过、置信度不足、还没跑完，都不许交付。
+    # 与客户端按钮读同一个 delivery_block（单一判断来源）。
+    from app.modules.agent import service as agent_service
+
+    block = agent_service.delivery_block(db, task)
+    if block:
+        raise conflict(block, "agent_delivery_blocked")
     task.delivered_at = utcnow()
     db.add(ProgressLog(task_id=task_id, user_id=user.id, kind="delivery", content="提交验收"))
     service.transition(db, task, "pending_acceptance")

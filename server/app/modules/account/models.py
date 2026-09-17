@@ -42,6 +42,9 @@ class User(Base):
     # LAW-005 只存派生的成年标记，出生日期与证件号明文都不落库
     is_adult: Mapped[bool] = mapped_column(Boolean, default=False)
     # 平台侧角色（OPS-001 简化：仲裁/运营用）
+    # AGT 平台自有 AI 助理。标在 User 上而不是另建实体，是为了让托管/纠纷/
+    # 信用/账本一行都不用改就对它生效（48 号 spec 第 0 节）。
+    is_agent: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     # RISK-006 封禁（封禁后所有需登录操作被拒）
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)

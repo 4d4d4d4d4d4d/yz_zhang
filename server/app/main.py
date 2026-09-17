@@ -49,6 +49,7 @@ def create_app() -> FastAPI:
     from app.modules.knowledge import service as knowledge_service
     from app.modules.matching import events as matching_events
     from app.modules.notification import service as notification_service
+    from app.modules.agent import events as agent_events
     from app.modules.task import events as task_events
 
     knowledge_service.register_event_handlers()
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
     notification_service.register_event_handlers()
     matching_events.register_event_handlers()
     task_events.register_event_handlers()
+    agent_events.register_event_handlers()
     anchor_service.register_event_handlers()
     decompose_resilience.register_event_handlers()
 
@@ -72,6 +74,7 @@ def create_app() -> FastAPI:
         task_service.seed_categories(db)
         db.commit()
 
+    from app.modules.agent.router import router as agent_router
     from app.modules.account.router import router as account_router
     from app.modules.admin.router import router as admin_router
     from app.modules.analytics.router import router as analytics_router
@@ -126,6 +129,7 @@ def create_app() -> FastAPI:
         eventops_router,
         tax_router,
         aml_router,
+        agent_router,
     ):
         app.include_router(router, prefix=settings.API_PREFIX)
 

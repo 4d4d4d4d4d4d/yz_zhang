@@ -22,7 +22,25 @@ def _make_engine(url: str):
             parent = os.path.dirname(path)
             if parent:
                 os.makedirs(parent, exist_ok=True)
-        eng = create_engine(url, connect_args={"check_same_thread": False})
+        # CONC-020 SQLite 必须用 NullPool：**连接池会跨请求留下过期的 WAL 读快照**。
+        #
+        # 实测复现：全链路验收里「注销后登录态失效」间歇性失败。注销请求确实
+        # 提交了（库里 users.is_deleted=1、login_sessions.revoked=1），但紧接着
+        # 的 GET /users/me 仍然返回 200——在鉴权处打点看到它读到的是
+        # is_deleted=False / revoked=False，也就是**读到了提交之前的快照**。
+        # 换成 NullPool 后同一条链路稳定通过，打点也变成 True/True。
+        #
+        # 后果比「一条验收项偶尔红」严重得多：它意味着在 SQLite 下
+        # **写完立刻读不保证读到自己刚写的东西**——一个已吊销的会话
+        # 可以在一段时间内继续通过鉴权。
+        #
+        # 只影响 SQLite（开发/测试）。生产是 Postgres，有真正的 MVCC 与
+        # 每事务快照，连接池没有这个问题，所以下面的分支保持不变。
+        # 代价是每次检出都新开一个连接——SQLite 是本地文件，开销可忽略。
+        from sqlalchemy.pool import NullPool
+
+        eng = create_engine(url, connect_args={"check_same_thread": False},
+                            poolclass=NullPool)
 
         @event.listens_for(eng, "connect")
         def _sqlite_pragmas(dbapi_conn, _record):  # pragma: no cover - 驱动回调

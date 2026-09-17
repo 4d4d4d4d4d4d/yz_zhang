@@ -70,6 +70,7 @@
 | 45 | App 发现流的视差滚动 | [45-app-parallax.md](./45-app-parallax.md) | P1 |
 | 46 | App 侧视频沉浸流 | [46-app-video-feed.md](./46-app-video-feed.md) | P1 |
 | 47 | 共享类型与文案的漂移，和一个从没装上过的 App | [47-shared-contract-drift.md](./47-shared-contract-drift.md) | P0 |
+| 48 | 平台自有 Agent 的执行层 | [48-agent-execution.md](./48-agent-execution.md) | P0 |
 
 ## 功能点编号与优先级约定
 

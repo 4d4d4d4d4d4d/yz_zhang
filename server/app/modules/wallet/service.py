@@ -25,10 +25,11 @@ LEDGER_KINDS: frozenset[str] = frozenset({
     "platform_topup", "platform_settle",
     "tax_withheld", "tax_remit",
     "adjust_in", "adjust_out", "subsidy_in", "subsidy_out",
+    "agent_payout_in", "agent_payout_out",
 })
 
 # transfer() 允许的科目前缀（会各自拼出 _in / _out 两条）
-TRANSFER_KINDS: frozenset[str] = frozenset({"adjust", "subsidy"})
+TRANSFER_KINDS: frozenset[str] = frozenset({"adjust", "subsidy", "agent_payout"})
 
 
 def get_or_create(db: Session, user_id: int) -> WalletAccount:

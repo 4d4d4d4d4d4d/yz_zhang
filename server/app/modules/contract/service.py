@@ -45,6 +45,17 @@ def generate(db: Session, task, executor_id: int, amount_cents: int) -> Contract
 
     executor = db.get(User, executor_id)
     fee_bps = credit.fee_bps_for(executor) if executor else settings.PLATFORM_FEE_BPS
+    # AGT-017 责任主体写进**当事人合意**，不是只写在平台规则里——
+    # 定性写进合同才有对抗力（与 FIN-022 同一条理由）。
+    if executor and executor.is_agent:
+        from app.modules.agent.models import AgentProfile
+
+        profile = db.get(AgentProfile, executor_id)
+        terms += (
+            f"\nAI 执行声明: 执行方为平台自有 AI 助理"
+            f"「{profile.name if profile else executor.nickname}」，"
+            f"平台为本任务履约的责任主体；交付质量争议依本合同争议解决条款处理。"
+        )
     contract = Contract(
         task_id=task.id,
         requester_id=task.creator_id,
@@ -56,6 +67,16 @@ def generate(db: Session, task, executor_id: int, amount_cents: int) -> Contract
     )
     db.add(contract)
     db.flush()
+    # AGT-017 平台自有 agent 由平台代签。
+    #
+    # 不是走捷径：agent 没有、也**不该有**登录态，让运营点一次「签署」是表演。
+    # 它的「意思表示」在更早就完成了——管理员启用该 agent + 发布方主动邀请它接单
+    # （agent-apply 不自动派单，正是为了让这个选择是知情的）。
+    # 但**留痕必须是真的**：照常走 record_signature，绑定当刻条款哈希，
+    # 并在 meta 里标明是平台代签，事后能分清哪条签名是人签的、哪条是系统签的。
+    if executor and executor.is_agent:
+        sign(db, contract, executor_id,
+             {"signer": "platform_auto", "reason": "platform_owned_agent"})
     # CRED-005 成交即冻结执行者保证金
     if contract.deposit_cents > 0:
         wallet.freeze_deposit(db, executor_id, contract.deposit_cents, contract.id)

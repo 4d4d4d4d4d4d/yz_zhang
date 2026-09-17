@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V72 全批次完成（2026-09-17）。
-> 后端 681 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V73 全批次完成（2026-09-17）。
+> 后端 705 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,53 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V73 批次：定位是「AI 驱动」，而 LLM 只用在一个点上）
+
+> 模块 spec：[48-agent-execution.md](48-agent-execution.md)
+>
+> **检视结论**：产品一句话定位是「AI 驱动的任务协作平台」，但实测下来
+> LLM 只用在「任务分解」一个点上——`orchestrator/service.py:52` 里
+> 编排器唯一的 tool 是 `publish_task`，**它只会把活派给人**。
+> 「调用特定领域 agent」这一项，代码里一行都没有。
+>
+> **架构上先定的一件事**：agent 复用 `User` 体系（一行 User + 一行 profile），
+> 不另建平行实体。理由不是省事——托管、纠纷、信用、账本、风控**全部以
+> `user_id` 为键**，做成平行实体等于把它们各写第二遍，而第二遍必然抄漏。
+> 这正是 V58 修过的形状：同一个动作两条路，最常走的那条抄了近道。
+>
+> **写的过程中改过一次设计**：本想用 AST 扫 `_log()` 凑账本科目全集，
+> 写到一半发现 `transfer()` 是 `_log(db, id, f"{kind}_out", …)`——
+> 科目是拼出来的，前半截只能靠猜。**靠猜的闸门不是闸门**，
+> 改成服务端显式声明 + 写入点拒收。
+>
+> **顺带查出两条既有缺陷**（都不是这一批引入的）：
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **AGT-010 只能接远程任务** | 排第一位的闸门。平台上大量保洁/跑腿同样有类目、有预算、在招募中——不拦的话 agent 会报名一个上门保洁单，然后交付一段文字 | `tests/test_agent_execution.py::test_agt010_agent_cannot_take_onsite_tasks` |
+| **AGT-011/012 领域与预算上限** | 领域不命中就明确拒绝（好过输出一堆看着像那么回事的东西）；金额超上限交人工——依据是**赔付能力** | `::test_agt011_category_must_be_in_domains`、`::test_agt012_budget_ceiling_is_enforced` |
+| **AGT-013 置信度闸门不是死路** | 低于阈值 → `escalated` + 拒绝交付，但发布方仍可取消退款。建一道没有出口的闸门比不建更坏。拿不到置信度按**最低**处理 | `::test_agt013_low_confidence_escalates_and_blocks_delivery`、`::test_agt013_escalation_is_not_a_dead_end`、`::test_agt013_missing_confidence_is_treated_as_lowest` |
+| **AGT-030 不让 agent 给自己判卷** | 验收判据由**平台**执行，agent 只拿到任务描述。置信度是自报的，正因为自报才需要一道独立的客观闸门压在上面 | `::test_agt030_platform_judges_not_the_agent`（agent 自报 99% 置信度、判据不过 → 仍然失败） |
+| **AGT-031 判据在发布环节校验** | 写错的判据要在开工前发现，不是等 agent 跑完才报错；`manual` 项记 `passed=None` 而不是 False——「还没人判」和「判过没通过」必须分得开 | `::test_agt030_bad_criteria_are_rejected_at_publish_time`、`::test_agt031_manual_criteria_do_not_block_but_are_recorded` |
+| **AGT-015 失败不假装成功** | 与任务分解**故意相反**：分解失败降级到模板是对的（模板分解仍有用、发布方会自己看），交付物降级成模板就是拿废品换钱。所以这里不降级 | `::test_agt015_backend_failure_does_not_fake_success`、`::test_local_runner_cannot_look_like_it_works` |
+| **AGT-016 成本必须落库** | 平台自有 ⇒ API 钱是平台出的 ⇒ **毛利可算**。未验收的任务不计收入而成本已付——把未完成算成收入就是把亏损记成盈利 | `::test_agt016_every_successful_run_records_its_cost`、`::test_agt016_unfinished_tasks_do_not_count_as_revenue` |
+| **AGT-017 责任主体写进合同** | 平台自有 ⇒ 平台是责任主体，写进**当事人合意**而非只写在平台规则里（与 FIN-022 同一理由）。agent 无登录态由平台代签，但照常绑定条款哈希并标明 `platform_auto` | `::test_agt020_agent_goes_through_the_whole_contract_flow` |
+| **AGT-018 不污染普通推荐池** | agent 全部满足「实名 + 开启接单 + 非发布者」，不排的话每个保洁单的推荐里都有 AI 助理 | `::test_agt018_agents_do_not_pollute_the_normal_recommendation_pool`（同时断言真人没被误排） |
+| **AGT-019 收入归集不破坏不变量** | 不另开放款路径，照常 `escrow_release` 再用既有 `transfer()` 归集 | `::test_agt019_earnings_are_swept_to_the_platform_account` |
+| **既有缺陷①：对账不变量是手抄清单** | 平台账户不变量原本是 fee / platform_topup / platform_settle / subsidy_* / adjust_* **五组科目各写一个 term 相加**——加一种新科目就误报。改为**按账户求和**（自维护），失配时附科目构成 | `::test_platform_invariant_is_self_maintaining`、`::test_platform_invariant_still_catches_tampering`（证明没变弱） |
+| **既有缺陷②：连接池的过期读快照（CONC-020）** | SQLite 连接池跨请求留下提交前的 WAL 读快照，**已吊销的会话仍能通过鉴权**。改用 NullPool；只影响 SQLite，生产 Postgres 有真正的 MVCC | `::test_conc020_sqlite_must_not_pool_connections` |
+
+**关于缺陷②的定位过程**（值得记，因为我先判断错了一次）：
+全链路验收「注销后登录态失效」间歇性变红。我先用一次 stash 对比就断言
+「是本批引入的」——**这是错的**，重复跑之后 stash 前的版本同样会红。
+真正定位靠的是在鉴权处打点：库里 `is_deleted=1`/`revoked=1`，
+而请求读到的是 `False`/`False`。换 NullPool 后打点变成 `True`/`True`，
+冷启动三连跑 47/47。**一次对比不足以归因一个间歇性缺陷。**
+
+**这条闸门断言的是配置不是行为**：TestClient 单线程、连接不复用，
+这个缺陷在 pytest 里根本复现不出来（改坏之前 703 个测试全绿）。
+写一条复现不了的行为测试，等于造一个永远不会红的闸门——那比没有闸门更坏。
 
 ## 已实现（V72 批次：手抄一份的约定，和一个从没装上过的 App）
 

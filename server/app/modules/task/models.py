@@ -49,6 +49,8 @@ class Task(Base):
     category: Mapped[str] = mapped_column(String(50), index=True)  # 类目：保洁/跑腿/开发...
     task_type: Mapped[str] = mapped_column(String(20), default="service")
     required_skills: Mapped[list] = mapped_column(JSON, default=list)
+    # AGT-030 结构化验收标准。auto 项由**平台**判定，不由执行方自报。
+    acceptance_criteria: Mapped[list] = mapped_column(JSON, default=list)
 
     budget_cents: Mapped[int] = mapped_column(Integer, default=0)
     pricing: Mapped[str] = mapped_column(String(20), default="fixed")  # fixed 一口价 / bidding 竞价

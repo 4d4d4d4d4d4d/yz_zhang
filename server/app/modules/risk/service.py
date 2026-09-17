@@ -118,40 +118,33 @@ def reconcile(db: Session) -> dict:
     # 4. 平台佣金有据：平台账户可用余额 == 累计佣金 - 已结算
     platform = next((a for a in accounts if a.user_id == PLATFORM_USER_ID), None)
     platform_balance = platform.available_cents if platform else 0
-    total_fee = (
+    # AGT-019 检视时这里是**一份手抄的清单**：fee / platform_topup /
+    # platform_settle / subsidy_* / adjust_* 五组科目各写一个 term 加起来。
+    # 本批加入 agent_payout_* 时它立刻报了「平台佣金不符」——也就是说，
+    # 每加一种动平台账户的科目，都必须记得回来加一个 term，忘了就误报。
+    # 这与 V72 修的是同一个形状：跨边界的约定被手抄了一份，然后没人对过。
+    #
+    # 改成**按账户求和**：平台账户余额 == 它自己那本账的总和。
+    # 这一条是自维护的（新科目自动纳入），而且不比原来弱——
+    # 所有动平台余额的路径都必须经过 `_log()`（SYNC-002 在写入点强制），
+    # 所以「余额 ≠ 自己账本之和」就是被绕过或被篡改。
+    platform_ledger_sum = (
         db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0))
-        .filter(LedgerEntry.user_id == PLATFORM_USER_ID, LedgerEntry.kind == "fee")
+        .filter(LedgerEntry.user_id == PLATFORM_USER_ID)
         .scalar()
     )
-    platform_settled = -(
-        db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0))
-        .filter(LedgerEntry.user_id == PLATFORM_USER_ID, LedgerEntry.kind == "platform_settle")
-        .scalar()
-    )
-    platform_funded = (
-        db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0))
-        .filter(LedgerEntry.user_id == PLATFORM_USER_ID, LedgerEntry.kind == "platform_topup")
-        .scalar()
-    )
-    # GRW-003 补贴净额：发出去为负、退回来为正，一并计入
-    platform_subsidy = (
-        db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0))
-        .filter(LedgerEntry.user_id == PLATFORM_USER_ID,
-                LedgerEntry.kind.in_(("subsidy_out", "subsidy_in")))
-        .scalar()
-    )
-    # 内部调整（申诉纠正性结算）同样会动平台余额
-    platform_adjust = (
-        db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0))
-        .filter(LedgerEntry.user_id == PLATFORM_USER_ID,
-                LedgerEntry.kind.in_(("adjust_out", "adjust_in")))
-        .scalar()
-    )
-    platform_expected = (int(total_fee) + int(platform_funded) - int(platform_settled)
-                         + int(platform_subsidy) + int(platform_adjust))
+    platform_expected = int(platform_ledger_sum)
     if platform_balance != platform_expected:
+        # 失配时把科目构成一并给出：只说「差了多少」没法定位是哪条路径
+        breakdown = dict(
+            db.query(LedgerEntry.kind, func.coalesce(func.sum(LedgerEntry.amount_cents), 0))
+            .filter(LedgerEntry.user_id == PLATFORM_USER_ID)
+            .group_by(LedgerEntry.kind)
+            .all()
+        )
         mismatches.append({"invariant": "platform_fee_backing",
-                           "platform_balance": platform_balance, "expected": platform_expected})
+                           "platform_balance": platform_balance,
+                           "expected": platform_expected, "by_kind": breakdown})
 
     # TAX-012 第五条：税款专户有据
     from app.modules.tax import service as tax_service

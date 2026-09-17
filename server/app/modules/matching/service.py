@@ -46,9 +46,13 @@ def recommend(db: Session, task, limit: int = 10) -> list[dict]:
 
     # 召回：实名认证 + 非发布者本人 + 接单开关开启（ACC-014）；
     # 技能召回 + 同城召回的并集（MVP 全量扫，规模化换索引）
+    # AGT-018 **显式排除 agent**。agent 全部满足「实名 + 开启接单 + 非发布者」，
+    # 不排的话每一个保洁单的推荐列表里都会出现 AI 助理。
+    # 能接的 agent 由 `agent.service.eligible_agents()` 单独追加（见下）。
     candidates = (
         db.query(User).filter(User.is_verified.is_(True), User.id != task.creator_id,
-                              User.accepting_orders.is_(True)).all()
+                              User.accepting_orders.is_(True),
+                              User.is_agent.is_(False)).all()
     )
     # ACC-033 黑名单：双向排除
     blocked_pairs = {
