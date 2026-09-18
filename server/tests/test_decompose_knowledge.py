@@ -11,6 +11,7 @@ PROJECT = {
     "is_remote": True,
     "city": "上海",
     "publish_now": False,
+    "ip_assignment": "assign",
 }
 
 
@@ -94,7 +95,7 @@ def test_kb001_completed_task_creates_knowledge_card_and_price_ref(client, reque
     r = client.post(
         "/api/v1/tasks",
         json={
-            "title": "办公室保洁", "category": "保洁", "budget_cents": 30000,
+            "ip_assignment": "assign", "title": "办公室保洁", "category": "保洁", "budget_cents": 30000,
             "city": "上海", "lat": 31.2, "lng": 121.4, "address_hint": "浦东",
         },
         headers=auth(requester),

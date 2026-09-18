@@ -158,7 +158,7 @@ def test_im004_recall_within_window_keeps_audit_copy(client, requester, worker):
 def test_aidec023_subtask_respawns_after_executor_default(client, requester, worker):
     topup(client, requester, 2000000)
     # 建母任务并分解为两步
-    r = client.post("/api/v1/tasks", json={
+    r = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "门店翻新", "category": "维修", "task_type": "project",
         "budget_cents": 100000, "is_remote": True, "publish_now": False,
     }, headers=auth(requester))

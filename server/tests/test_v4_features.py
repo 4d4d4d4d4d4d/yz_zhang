@@ -159,20 +159,20 @@ def test_task003_template_with_price_reference(client, requester, worker):
 def test_geo030_city_gate(client, requester):
     admin = make_admin(client, "13000000003")
     # 未开通城市的线下任务被拒
-    r = client.post("/api/v1/tasks", json={
+    r = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "成都保洁", "category": "保洁", "budget_cents": 10000,
         "city": "成都", "lat": 30.5, "lng": 104.0, "address_hint": "高新区",
     }, headers=auth(requester))
     assert r.status_code == 400 and "尚未开通" in r.json()["detail"]["message"]
     # 线上任务不受城市限制
-    r = client.post("/api/v1/tasks", json={
+    r = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "远程设计", "category": "设计", "budget_cents": 10000,
         "is_remote": True, "city": "成都",
     }, headers=auth(requester))
     assert r.status_code == 201
     # 开通后可发
     client.post("/api/v1/admin/cities", json={"name": "成都"}, headers=auth(admin))
-    r = client.post("/api/v1/tasks", json={
+    r = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "成都保洁", "category": "保洁", "budget_cents": 10000,
         "city": "成都", "lat": 30.5, "lng": 104.0, "address_hint": "高新区",
     }, headers=auth(requester))

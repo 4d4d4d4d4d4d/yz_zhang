@@ -15,7 +15,7 @@ from .test_task_flow import match_and_fund, publish_task
 
 def _publish_with_future_deadline(client, requester, title, days=3):
     future = (utcnow() + timedelta(days=days)).isoformat()
-    return client.post("/api/v1/tasks", json={
+    return client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": title, "category": "跑腿", "budget_cents": 10000,
         "is_remote": True, "deadline": future, "publish_now": True,
     }, headers=auth(requester)).json()

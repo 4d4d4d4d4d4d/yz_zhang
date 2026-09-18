@@ -87,6 +87,8 @@ TASK = {
     "category": "保洁", "task_type": "service", "required_skills": ["保洁"],
     "budget_cents": 20000, "city": "上海", "lat": 31.2304, "lng": 121.4737,
     "address_hint": "静安寺商圈", "address_exact": "静安区南京西路 1234 号 5 栋 302",
+    # IPC-001（V77 起）发布必须选知识产权归属，无默认值
+    "ip_assignment": "assign",
 }
 
 

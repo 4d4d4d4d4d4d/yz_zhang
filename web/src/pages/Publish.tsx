@@ -1,4 +1,4 @@
-import { ApiError, fmtYuan, type Decomposition, type PriceReference, type Task } from '@platform/core';
+import { ApiError, IP_ASSIGNMENT_LABEL, fmtYuan, type Decomposition, type IpAssignment, type PriceReference, type Task } from '@platform/core';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
@@ -13,6 +13,9 @@ export default function Publish() {
     task_type: 'service', pricing: 'fixed', recurrence: 'none',
     people_needed: '1', deposit_yuan: '0', is_remote: false, city: '上海',
     lat: '31.2304', lng: '121.4737', address_hint: '', address_exact: '',
+    // IPC-001 **没有默认值**——留空时服务端会拒绝，这是有意的：
+    // 替发布方猜归属，对执行方不公平，对含第三方素材的交付物直接就是错的。
+    ip_assignment: '',
   });
   const [categories, setCategories] = useState<Array<{ name: string; required_cert: string }>>([]);
   const [cities, setCities] = useState<string[]>([]);
@@ -72,6 +75,7 @@ export default function Publish() {
         recurrence: form.recurrence,
         people_needed: parseInt(form.people_needed, 10) || 1,
         deposit_cents: Math.round(parseFloat(form.deposit_yuan || '0') * 100),
+        ip_assignment: form.ip_assignment as IpAssignment,
         budget_cents: Math.round(parseFloat(form.budget_yuan) * 100),
         is_remote: form.is_remote,
         city: form.city,
@@ -202,6 +206,24 @@ export default function Publish() {
                 : priceRef.message}
             </p>
           )}
+          {/* IPC-001 知识产权归属：**必选，无默认值**。
+              不选的话按《著作权法》第十七条著作权归执行方——
+              发布方花钱买的 logo 默认不属于他，而这通常不是他想要的。
+              所以这里刻意不预选任何一项，逼一次显式选择。 */}
+          <label>交付成果归谁（必选）
+            <select value={form.ip_assignment}
+                    onChange={(e) => set('ip_assignment', e.target.value)}>
+              <option value="">— 请选择 —</option>
+              {(Object.keys(IP_ASSIGNMENT_LABEL) as IpAssignment[]).map((k) => (
+                <option key={k} value={k}>{IP_ASSIGNMENT_LABEL[k]}</option>
+              ))}
+            </select>
+          </label>
+          <p className="muted" style={{ marginTop: -6 }}>
+            不约定的话，按《著作权法》著作权默认归执行方；署名权等人身权依法
+            不可转让，任何选项下都归作者。
+          </p>
+
           <div className="row">
             <label className="grow">需要人数（&gt;1 自动拆名额）
               <input type="number" min={1} max={50} value={form.people_needed} onChange={(e) => set('people_needed', e.target.value)} />

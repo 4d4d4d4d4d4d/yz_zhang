@@ -46,7 +46,17 @@ class TaskIn(BaseModel):
     people_needed: int = Field(default=1, ge=1, le=50)
     # AGT-030 结构化验收标准。auto 项由平台判定，不由执行方自报。
     acceptance_criteria: list[dict] = []
+    # IPC-001 **无默认值**：不选不让发。替当事人猜归属是这条最容易犯的错。
+    ip_assignment: str = ""
+    # OUT-002 浮动对价的确定上限
+    bonus_cents: int = Field(default=0, ge=0)
     publish_now: bool = True
+
+
+class DeliverIn(BaseModel):
+    """交付说明。浮动对价任务必填——判据得有个判的对象。"""
+
+    note: str = Field(default="", max_length=5000)
 
 
 class ApplyIn(BaseModel):
@@ -117,6 +127,53 @@ def _get_task(db: Session, task_id: int) -> Task:
 
 
 # ---------- 发布（TASK-001/004/005）----------
+
+def _validate_ip_and_pricing(body: "TaskIn") -> None:
+    """IPC-001 / OUT-001~003 发布环节的硬校验。
+
+    放在发布环节而不是成交环节：归属与计价是**双方要事先知道**的东西，
+    等成交后才发现「原来源码不归我」，那已经晚了。
+    """
+    from app.modules.contract.clauses import IP_ASSIGNMENTS
+    from app.modules.finance.compliance import assert_no_finance_offer, check_pricing
+
+    # **顺序有意**：金融红线先判。一个「按利润分红」的任务是平台根本不能做的
+    # 业务，这时回一句「请选择知识产权归属」既没用又误导——
+    # 他会以为选完就能发。
+    check_pricing(body.pricing)
+    assert_no_finance_offer(f"{body.title} {body.description}")
+
+    if body.ip_assignment not in IP_ASSIGNMENTS:
+        raise bad_request(
+            "请选择交付成果的知识产权归属（转让 / 独占许可 / 普通许可 / 执行方保留）。"
+            "不选的话，按《著作权法》著作权默认归执行方——这通常不是发布方想要的。",
+            "ip_assignment_required",
+        )
+    if body.pricing == "outcome":
+        # OUT-002 浮动部分必须是确定的正数上限
+        if body.bonus_cents <= 0:
+            raise bad_request("浮动对价必须给出确定的加付上限金额",
+                              "bonus_required")
+        if body.bonus_cents > body.budget_cents:
+            raise bad_request("浮动部分不得超过基础报酬，超出请改为提高基础报酬",
+                              "bonus_too_large")
+        # OUT-001 必须挂在**本任务的客观判据**上，不能挂外部经营指标
+        if not body.acceptance_criteria:
+            raise bad_request(
+                "浮动对价必须绑定本任务的验收指标——"
+                "没有判据的「做得好多给钱」是一句无法执行的承诺。",
+                "criteria_required_for_outcome",
+            )
+        if not any(c.get("kind") == "auto" for c in body.acceptance_criteria):
+            raise bad_request(
+                "浮动对价至少需要一条由平台判定的客观指标，"
+                "否则达标与否完全由发布方说了算。",
+                "auto_criterion_required",
+            )
+    elif body.bonus_cents:
+        raise bad_request("仅 outcome 计价支持浮动对价", "bonus_not_allowed")
+
+
 @router.post("/tasks", status_code=201)
 def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     # LAW-030 协议更新后，关键动作前必须重新同意（只拦关键动作，不拦全站）
@@ -135,6 +192,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
     from app.modules.agent import criteria as agent_criteria
 
     body.acceptance_criteria = agent_criteria.validate(body.acceptance_criteria)
+    _validate_ip_and_pricing(body)
     if body.visibility == "circle":
         # TASK-008/CIR-005 圈层定向任务：发布者必须是活跃成员
         from app.modules.circle.router import active_member
@@ -730,10 +788,19 @@ def purge_locations(db: Session = Depends(get_db), _=Depends(require_job_auth),
 
 # ---------- 交付与验收（TASK-030/031/033）----------
 @router.post("/tasks/{task_id}/deliver")
-def deliver(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def deliver(task_id: int, body: DeliverIn | None = None,
+            user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     task = _get_task(db, task_id)
     if user.id != task.executor_id:
         raise forbidden("仅执行者可提交验收")
+    note = (body.note if body else "") or ""
+    # OUT-004 浮动对价要按客观判据判，而判据得有个判的对象。
+    # 交付说明就是那个对象——没有它，执行方没有任何地方声明「我交付了什么」。
+    if task.pricing == "outcome" and not note.strip():
+        raise bad_request(
+            "该任务为浮动对价，提交验收时必须填写交付说明（浮动部分按它对照验收指标判定）",
+            "delivery_note_required",
+        )
     # AGT-013/031 agent 执行的任务：判据没过、置信度不足、还没跑完，都不许交付。
     # 与客户端按钮读同一个 delivery_block（单一判断来源）。
     from app.modules.agent import service as agent_service
@@ -742,7 +809,8 @@ def deliver(task_id: int, user: User = Depends(get_current_user), db: Session = 
     if block:
         raise conflict(block, "agent_delivery_blocked")
     task.delivered_at = utcnow()
-    db.add(ProgressLog(task_id=task_id, user_id=user.id, kind="delivery", content="提交验收"))
+    db.add(ProgressLog(task_id=task_id, user_id=user.id, kind="delivery",
+                       content=note.strip() or "提交验收"))
     service.transition(db, task, "pending_acceptance")
     return dump_task(task, user)
 

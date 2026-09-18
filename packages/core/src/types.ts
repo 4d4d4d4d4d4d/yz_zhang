@@ -43,6 +43,11 @@ export interface Task {
   budget_cents: number;
   pricing: string;
   deposit_cents?: number;
+  // IPC-001 知识产权归属。**服务端没有默认值**：不传会被拒。
+  // 替当事人猜归属是这条最容易犯的错，所以客户端也必须让用户显式选。
+  ip_assignment?: IpAssignment;
+  // OUT-002 浮动对价的确定上限（仅 pricing='outcome'）
+  bonus_cents?: number;
   is_remote: boolean;
   city: string;
   lat: number | null;
@@ -70,6 +75,20 @@ export interface Milestone {
   amount_cents: number;
   status: 'pending' | 'delivered' | 'released';
 }
+
+export type IpAssignment =
+  | 'assign'                 // 著作权转让给发布方
+  | 'license_exclusive'      // 著作权留执行方，发布方独占使用
+  | 'license_nonexclusive'   // 普通许可，执行方可再许可他人
+  | 'retain';                // 执行方保留，发布方按约定范围使用
+
+/** 与服务端 contract/clauses.py 的 IP_LABELS 一致 */
+export const IP_ASSIGNMENT_LABEL: Record<IpAssignment, string> = {
+  assign: '著作权转让给我（定制 logo、定制文案）',
+  license_exclusive: '独占许可（我独家使用，作者保留著作权与作品集展示）',
+  license_nonexclusive: '普通许可（我可使用，作者也可再许可他人）',
+  retain: '作者保留（我仅在约定范围内使用）',
+};
 
 export interface Contract {
   id: number;

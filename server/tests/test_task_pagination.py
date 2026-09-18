@@ -9,7 +9,7 @@ from .conftest import auth
 def _make_tasks(client, requester, n):
     ids = []
     for i in range(n):
-        t = client.post("/api/v1/tasks", json={
+        t = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
             "title": f"分页任务{i:02d}", "category": "跑腿", "budget_cents": 10000,
             "is_remote": True, "publish_now": True,
         }, headers=auth(requester)).json()
@@ -42,7 +42,7 @@ def test_limit_capped_and_offset_beyond_end(client, requester):
 def test_geo_pagination(client, requester):
     # 地理检索路径也支持 offset（按距离排序后分页）
     for i in range(6):
-        client.post("/api/v1/tasks", json={
+        client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
             "title": f"附近任务{i}", "category": "跑腿", "budget_cents": 10000,
             "is_remote": False, "city": "上海", "lat": 31.23 + i * 0.001, "lng": 121.47,
             "address_hint": "浦东", "publish_now": True,

@@ -239,7 +239,8 @@ def test_normal_task_not_falsely_blocked(client, requester):
         r = client.post("/api/v1/tasks",
                         json={"title": "正常任务", "description": desc,
                               "category": "软件开发", "budget_cents": 50000,
-                              "city": "杭州", "is_remote": True},
+                              "city": "杭州", "is_remote": True,
+                              "ip_assignment": "assign"},
                         headers=auth(requester))
         assert r.status_code == 201, f"{desc} 被误拦：{r.text}"
 

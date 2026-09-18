@@ -117,7 +117,7 @@ def test_cir005_circle_task_board_hidden_from_square(client, requester, worker):
     client.post(f"/api/v1/circles/{c['id']}/join", headers=auth(worker))
     r = client.post(
         "/api/v1/tasks",
-        json={"title": "圈内保洁单", "category": "保洁", "budget_cents": 10000,
+        json={"ip_assignment": "assign", "title": "圈内保洁单", "category": "保洁", "budget_cents": 10000,
               "is_remote": True, "visibility": "circle", "circle_id": c["id"]},
         headers=auth(requester),
     )
@@ -134,7 +134,7 @@ def test_cir005_circle_task_board_hidden_from_square(client, requester, worker):
     verify_user(client, outsider, "赵六")
     r = client.post(
         "/api/v1/tasks",
-        json={"title": "蹭圈任务", "category": "保洁", "budget_cents": 10000,
+        json={"ip_assignment": "assign", "title": "蹭圈任务", "category": "保洁", "budget_cents": 10000,
               "is_remote": True, "visibility": "circle", "circle_id": c["id"]},
         headers=auth(outsider),
     )

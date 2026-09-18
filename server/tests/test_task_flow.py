@@ -13,6 +13,9 @@ CLEAN_TASK = {
     "lng": 121.4737,
     "address_hint": "静安寺商圈",
     "address_exact": "静安区南京西路 1234 号 5 栋 302",
+    # IPC-001（V77 起）发布必须选知识产权归属，无默认值。
+    # 共享夹具补上它，各用例要测别的档位就 override。
+    "ip_assignment": "assign",
 }
 
 

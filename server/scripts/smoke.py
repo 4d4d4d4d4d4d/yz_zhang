@@ -77,7 +77,8 @@ def main() -> None:
     status, task = req("POST", "/tasks",
                        {"title": f"冒烟任务 {SUFFIX}", "description": "部署冒烟用，勿接",
                         "category": "跑腿", "budget_cents": 20000, "city": "杭州",
-                        "lat": 30.2741, "lng": 120.1551, "address_hint": "西湖区"},
+                        "lat": 30.2741, "lng": 120.1551, "address_hint": "西湖区",
+                        "ip_assignment": "assign"},
                        token=r_tok)
     step("发布任务", status == 201, task if status != 201 else task.get("id"))
 

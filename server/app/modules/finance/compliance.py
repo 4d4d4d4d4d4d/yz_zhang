@@ -16,7 +16,14 @@ import re
 from app.core.errors import bad_request
 
 # FIN-020 计价方式白名单：只允许劳务对价，不接受任何收益分成与股权对价
-ALLOWED_PRICING = ("fixed", "milestone", "hourly", "bidding")
+# OUT-001 `outcome` 是 V77 新增的一档：报酬与**交付成果**挂钩。
+#
+# 它与「收益分成」的区别不在措辞而在结构，三条同时成立才允许：
+#   ① 挂的是本任务的客观验收判据，不是任何外部经营指标；
+#   ② 浮动部分是一个**确定的上限金额**，不是比例、不是开放式承诺；
+#   ③ 浮动部分同样预先托管——不托管的话它就只是一句口头承诺。
+# 这三条在 task/router.py 的发布校验里是硬的。
+ALLOWED_PRICING = ("fixed", "milestone", "hourly", "bidding", "outcome")
 
 # FIN-021 金融话术词表。**刻意与普通违禁词分开**：
 # 这些词本身不下流也不违法，它们的问题是把一个劳务合同变成金融产品，

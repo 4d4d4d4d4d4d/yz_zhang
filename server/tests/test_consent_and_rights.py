@@ -61,7 +61,7 @@ def test_law044_agreement_update_blocks_key_actions(client, requester, bump_vers
     assert body["current_version"] == new_version
     assert all(d["needs_reconsent"] is True for d in body["documents"])
 
-    r = client.post("/api/v1/tasks", json={
+    r = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "协议更新后发布", "description": "x" * 20, "category": "跑腿",
         "task_type": "onsite", "budget_cents": 10000, "city": "北京",
         "lat": 39.9, "lng": 116.4,

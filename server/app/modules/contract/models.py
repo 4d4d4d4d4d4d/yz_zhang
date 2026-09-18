@@ -43,6 +43,9 @@ class Contract(Base):
     # 每次 ORM UPDATE 自动 +1 并进入 WHERE 条件，并发写第二个提交拿到 StaleDataError → 409
     lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     # CRED-005 执行者保证金
+    # OUT-003 浮动对价部分。**与基础报酬一并托管**——不托管的话
+    # 「做得好多给钱」就只是一句口头承诺，执行方干到了水平也没东西可执行。
+    bonus_cents: Mapped[int] = mapped_column(Integer, default=0)
     deposit_cents: Mapped[int] = mapped_column(Integer, default=0)
     deposit_status: Mapped[str] = mapped_column(String(12), default="none")  # none/held/returned/forfeited
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

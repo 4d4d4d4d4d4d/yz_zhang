@@ -28,7 +28,7 @@ def _assert_conserved():
 # ---------- TASK-007 名额预算守恒 ----------
 def test_multiperson_slot_budgets_sum_to_parent(client, requester):
     """不可整除预算（10000/3）：余数并入末位名额，Σ名额 == 母任务预算。"""
-    r = client.post("/api/v1/tasks", json={
+    r = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "传单派发三人组", "description": "商圈派发宣传单页半天",
         "category": "跑腿", "budget_cents": 10000, "is_remote": True,
         "people_needed": 3, "publish_now": True,
@@ -43,7 +43,7 @@ def test_multiperson_slot_budgets_sum_to_parent(client, requester):
 def test_multiperson_full_cycle_conserves_money(client, requester):
     """两个名额分别成交放款，总放款/抽佣与母任务预算精确对应。"""
     topup(client, requester, 50000)
-    r = client.post("/api/v1/tasks", json={
+    r = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "会场布置双人组", "description": "活动会场桌椅布置与撤场",
         "category": "跑腿", "budget_cents": 10001, "is_remote": True,
         "people_needed": 2, "publish_now": True,

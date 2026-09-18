@@ -15,7 +15,7 @@ from .test_task_flow import publish_task
 
 def test_draft_free_edit(client, requester):
     # 未发布任务可自由改所有字段
-    t = client.post("/api/v1/tasks", json={
+    t = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "草稿任务", "category": "跑腿", "budget_cents": 10000,
         "is_remote": True, "publish_now": False,
     }, headers=auth(requester)).json()
@@ -82,7 +82,7 @@ def test_edit_forbidden_after_execution_and_for_non_owner(client, requester, wor
 
 def test_deadline_in_past_rejected(client, requester):
     past = (utcnow() - timedelta(days=1)).isoformat()
-    r = client.post("/api/v1/tasks", json={
+    r = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "过期截止任务", "category": "跑腿", "budget_cents": 10000,
         "is_remote": True, "deadline": past, "publish_now": True,
     }, headers=auth(requester))
@@ -90,7 +90,7 @@ def test_deadline_in_past_rejected(client, requester):
 
     # 未来截止正常
     future = (utcnow() + timedelta(days=3)).isoformat()
-    r = client.post("/api/v1/tasks", json={
+    r = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "正常截止任务", "category": "跑腿", "budget_cents": 10000,
         "is_remote": True, "deadline": future, "publish_now": True,
     }, headers=auth(requester))

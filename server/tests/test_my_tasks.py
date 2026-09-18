@@ -29,7 +29,7 @@ def test_posted_working_all_filters(client, requester, worker):
 
 def test_status_filter_and_draft_visible(client, requester):
     # 草稿（不进广场）也能在「我的」看到
-    draft = client.post("/api/v1/tasks", json={
+    draft = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "我的草稿", "category": "跑腿", "budget_cents": 10000,
         "is_remote": True, "publish_now": False,
     }, headers=auth(requester)).json()

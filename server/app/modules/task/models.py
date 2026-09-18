@@ -51,6 +51,13 @@ class Task(Base):
     required_skills: Mapped[list] = mapped_column(JSON, default=list)
     # AGT-030 结构化验收标准。auto 项由**平台**判定，不由执行方自报。
     acceptance_criteria: Mapped[list] = mapped_column(JSON, default=list)
+    # IPC-001 知识产权归属。**无默认值**——发布时必须选一档。
+    # 最容易犯的错是「默认归发布方」：对执行方不公平，对含第三方素材的
+    # 交付物直接就是错的。
+    ip_assignment: Mapped[str] = mapped_column(String(24), default="")
+    # OUT-002 浮动对价的**确定上限**。不是比例、不是开放式承诺——
+    # 有确定上限的附加对价是价款，随收益浮动的比例是分配，两者性质不同。
+    bonus_cents: Mapped[int] = mapped_column(Integer, default=0)
 
     budget_cents: Mapped[int] = mapped_column(Integer, default=0)
     pricing: Mapped[str] = mapped_column(String(20), default="fixed")  # fixed 一口价 / bidding 竞价

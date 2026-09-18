@@ -65,7 +65,7 @@ def test_acc006_deactivate_blocked_then_succeeds(client, requester, worker):
 # ---------- 多人任务（TASK-007） ----------
 def test_task007_multi_person_slots(client, requester, worker):
     topup(client, requester, 100000)
-    r = client.post("/api/v1/tasks", json={
+    r = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "开业地推", "category": "活动策划", "budget_cents": 30000,
         "is_remote": True, "people_needed": 3,
     }, headers=auth(requester))
@@ -89,7 +89,7 @@ def test_task007_parent_autocompletes_when_all_slots_done(client, requester, wor
     topup(client, requester, 100000)
     second = register(client, "13100000002", "第二人")
     verify_user(client, second, "钱七")
-    r = client.post("/api/v1/tasks", json={
+    r = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "双人搬运", "category": "跑腿", "budget_cents": 20000,
         "is_remote": True, "people_needed": 2,
     }, headers=auth(requester))
@@ -144,13 +144,13 @@ def test_ops004_category_lifecycle(client, requester):
     # 停用类目后发布被拒
     cat_id = [c["id"] for c in cats if c["name"] == "二手交易"][0]
     client.patch(f"/api/v1/admin/categories/{cat_id}", params={"active": False}, headers=auth(admin))
-    r = client.post("/api/v1/tasks", json={
+    r = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "卖旧手机", "category": "二手交易", "budget_cents": 1000, "is_remote": True,
     }, headers=auth(requester))
     assert r.status_code == 400 and "停用" in r.json()["detail"]["message"]
     # 新建类目即可用
     client.post("/api/v1/admin/categories", json={"name": "宠物照看"}, headers=auth(admin))
-    r = client.post("/api/v1/tasks", json={
+    r = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "喂猫三天", "category": "宠物照看", "budget_cents": 6000, "is_remote": True,
     }, headers=auth(requester))
     assert r.status_code == 201

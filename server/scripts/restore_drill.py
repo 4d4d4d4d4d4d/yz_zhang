@@ -66,7 +66,7 @@ def seed() -> dict:
                    json={"real_name": name, "id_number": f"11010119900101{tok[-4:]}"},
                    headers=h(tok))
         c.post("/api/v1/wallet/topup", json={"amount_cents": 50000}, headers=h(a))
-        r = c.post("/api/v1/tasks", json={
+        r = c.post("/api/v1/tasks", json={"ip_assignment": "assign", 
             "title": "演练任务：周末大扫除", "description": "两室一厅深度保洁",
             "category": "保洁", "task_type": "service", "required_skills": ["保洁"],
             "budget_cents": 20000, "city": "上海", "lat": 31.2304, "lng": 121.4737,

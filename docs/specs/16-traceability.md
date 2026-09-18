@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V76 全批次完成（2026-09-17）。
-> 后端 768 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V77 全批次完成（2026-09-17）。
+> 后端 789 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,51 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V77 批次：花钱买的 logo，默认不属于你）
+
+> 模块 spec：[52-ip-confidentiality-outcome-pricing.md](52-ip-confidentiality-outcome-pricing.md)
+>
+> **实测缺陷**：`contract/service.py` 生成的条款有四段——金额、验收、争议、
+> 性质声明。**没有知识产权归属，没有保密条款。**
+>
+> 按《著作权法》第十七条：委托作品，受托人与委托人没有约定或者约定不明的，
+> **著作权属于受托人**。翻译成平台上的事实：发布方花 ¥3000 买一套 logo，
+> 著作权归执行方，他拿到的只是一份范围不明的使用许可；执行方拿到发布方的
+> 客户名单和后台密码，**没有任何保密义务的书面约定**。
+>
+> 而 `软件开发` 类目的发布模板里写着 checklist「约定源码归属」——
+> **平台自己提示用户去约定，然后没有提供任何约定的地方。**
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **IPC-001 归属必须选，无默认值** | 四档（转让 / 独占许可 / 普通许可 / 保留）。**最容易犯的错是「默认归发布方」**：对执行方不公平，对通用组件与含第三方素材的交付物直接就是错的。拒绝时说清楚不选的后果，否则用户只会随便选一个 | `tests/test_ip_and_outcome_pricing.py::test_ipc001_publishing_without_choosing_ip_assignment_is_rejected`、`::test_ipc001_all_four_assignments_are_accepted` |
+| **IPC-003 人身权不可转让** | 条款写明署名权等归执行方。**把「著作权全部转让」写进合同是一句无效的话**，而写无效的话比不写更糟——当事人会以为自己拿到了实际上没有的东西 | `::test_ipc003_moral_rights_are_not_claimed_to_be_transferable` |
+| **IPC-002 保密双向** | 发布方侧与执行方侧都列举，并写例外情形（已公开 / 独立开发 / 依法披露）。**只约束一方的保密条款在谈判上站不住** | `::test_ipc002_confidentiality_is_mutual` |
+| **IPC-004 归属随已签版本走** | 条款在生成时固化。不这样做就有个洞：事后改一下任务字段，等于单方面改了归属 | `::test_ipc004_changing_the_task_does_not_change_a_signed_contract` |
+| **OUT-001 挂交付成果不挂收益** | 浮动部分必须绑定本任务的 `acceptance_criteria`，且至少一条是平台判定的客观指标——全是人工确认的话，达标与否完全由发布方说了算 | `::test_out001_outcome_pricing_requires_criteria`、`::test_out001_outcome_pricing_requires_at_least_one_objective_criterion` |
+| **OUT-002 必须封顶** | **有确定上限的附加对价是价款，随收益浮动的比例是分配**——封顶是把两者分开的关键 | `::test_out002_bonus_must_be_a_capped_positive_amount` |
+| **OUT-003 浮动部分一并托管** | 不托管的话「做得好多给钱」就只是口头承诺：执行方干到了水平，发布方不给，平台没有任何东西可以执行 | `::test_out003_bonus_is_escrowed_upfront` |
+| **OUT-004 平台判达标** | 达标付、不达标原路退回，两条路径资金都守恒 | `::test_out004_bonus_is_paid_when_the_platform_criteria_pass`、`::test_out004_bonus_is_refunded_when_criteria_fail`、`::test_out004_money_is_conserved_either_way` |
+| **金融红线不动** | `outcome` 是与交付成果挂钩，不是与收益挂钩；「按下载量分红」照样被拒 | `::test_finance_redline_still_blocks_revenue_sharing` |
+
+**这一批自己差点犯的错，和为它建的闸门**：
+
+服务端加了必填项 `ip_assignment`，而 Web 发布表单没跟上——**那意味着
+发布功能整个不可用**。这正是 V59（人机验证服务端门没有客户端能满足）、
+V61（纠纷端点无入口）、V64（`media_urls` 从没传下去）反复出现的同一个形状。
+补了两条闸门：客户端确实传了这个字段、且服务端认的四个档位客户端都有中文名
+（双向，与 SYNC-002 同一条规矩）。**已实测：把提交那行删掉即变红。**
+
+**另外两处判断**：
+- **金融红线的判定要排在归属之前**。一个「按利润分红」的任务是平台根本不能
+  做的业务，这时回一句「请选择知识产权归属」既没用又误导——他会以为选完就能发。
+- 浮动退回**复用既有的 `refund` 分账类型**，不新造一个近义的
+  （`bonus_refund` 被分账类型白名单当场挡下，那个闸门起了作用）。
+
+**存量数据的判断**：迁移把 `tasks.ip_assignment` 回填为**空串**而不是 `assign`。
+回填成 `assign` 等于**替当事人做一个他们从没同意过的决定**；
+存量任务的合同已经签了，按签署时的条款走，新任务才强制选。
 
 ## 已实现（V76 批次：一道一直是虚的门）
 

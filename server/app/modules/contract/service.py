@@ -14,6 +14,8 @@ from app.modules.wallet import service as wallet
 
 from app.modules.finance.compliance import CONTRACT_NATURE_CLAUSE
 
+from . import clauses
+
 from .models import ChangeOrder, Contract, ContractSignature, Milestone
 
 # SC-006 取消/违约规则表：执行者获得托管金的比例（万分比），按阶段与责任方
@@ -37,8 +39,19 @@ def generate(db: Session, task, executor_id: int, amount_cents: int) -> Contract
         f"争议: 先经平台按《平台争议处理规则》处理，处理决定自动执行；"
         f"对处理决定不服的，依本合同争议解决条款提请约定仲裁机构或向"
         f"有管辖权的法院解决\n"
-        f"{CONTRACT_NATURE_CLAUSE}"
+        f"{CONTRACT_NATURE_CLAUSE}\n"
+        # IPC-001/002 归属与保密。改造前这两段**完全不存在**——
+        # 按《著作权法》第十七条，无约定时著作权归执行方，
+        # 也就是发布方花钱买的 logo 默认不属于他。
+        f"{clauses.ip_clause(task.ip_assignment or 'assign')}\n"
+        f"{clauses.CONFIDENTIALITY_CLAUSE}\n"
+        f"{clauses.TEMPLATE_NOTICE}"
     )
+    # OUT-001 浮动对价的条款要写清楚上限、判据与判定人，否则它就是口头承诺
+    if task.pricing == "outcome" and task.bonus_cents > 0:
+        terms += "\n" + clauses.outcome_clause(
+            task.budget_cents, task.bonus_cents, task.acceptance_criteria or []
+        )
     # CRED-003 信用等级权益：高信用执行者享费率折扣
     from app.modules.account import service as credit
     from app.modules.account.models import User
@@ -56,11 +69,15 @@ def generate(db: Session, task, executor_id: int, amount_cents: int) -> Contract
             f"「{profile.name if profile else executor.nickname}」，"
             f"平台为本任务履约的责任主体；交付质量争议依本合同争议解决条款处理。"
         )
+    # OUT-003 托管总额 = 基础 + 浮动上限。浮动部分先托管，
+    # 验收时按判据决定放款还是原路退回——这样它才是一个可执行的承诺。
+    bonus = task.bonus_cents if task.pricing == "outcome" else 0
     contract = Contract(
         task_id=task.id,
+        bonus_cents=bonus,
         requester_id=task.creator_id,
         executor_id=executor_id,
-        amount_cents=amount_cents,
+        amount_cents=amount_cents + bonus,
         fee_bps=fee_bps,
         terms=terms,
         deposit_cents=task.deposit_cents or 0,
@@ -83,7 +100,8 @@ def generate(db: Session, task, executor_id: int, amount_cents: int) -> Contract
         contract.deposit_status = "held"
         db.add(contract)
     # SC-004 默认单里程碑=全额；双签前可由发布者重新定义分期
-    db.add(Milestone(contract_id=contract.id, idx=1, title="全部交付", amount_cents=amount_cents))
+    db.add(Milestone(contract_id=contract.id, idx=1, title="全部交付",
+                     amount_cents=amount_cents + bonus))
     return contract
 
 
@@ -297,6 +315,36 @@ def _settle_deposit(db: Session, contract: Contract, forfeit: bool = False) -> N
     db.add(contract)
 
 
+
+def _bonus_earned(db: Session, contract: Contract) -> bool:
+    """OUT-004 浮动对价达标判定。
+
+    `auto` 判据由平台跑——与 AGT-030 同一条道理：让任一方自己说「达标了」
+    或「没达标」，这条对价就没有意义。
+
+    OUT-051 **纯 `manual` 判据在自动验收时不算达标**：没有人确认过，
+    就不能算达标。宁可退回发布方，也不要凭默认把钱付出去。
+    """
+    from app.modules.agent import criteria as crit
+    from app.modules.task.models import ProgressLog, Task
+
+    task = db.get(Task, contract.task_id)
+    criteria = (task.acceptance_criteria or []) if task else []
+    auto = [c for c in criteria if c.get("kind") == "auto"]
+    if not auto:
+        return False
+    # 判据跑在最后一次交付说明上（交付物本身的载体）
+    log = (
+        db.query(ProgressLog)
+        .filter(ProgressLog.task_id == contract.task_id, ProgressLog.kind == "delivery")
+        .order_by(ProgressLog.id.desc())
+        .first()
+    )
+    output = log.content if log else ""
+    _results, all_passed = crit.evaluate(auto, output)
+    return all_passed
+
+
 def release(db: Session, contract: Contract) -> Contract:
     """SC-005 整体验收放款：放出全部剩余托管（已分期放款的部分不重复）。"""
     lock_contract_funds(db, contract)  # CONC-012 放款是重复执行代价最高的路径
@@ -305,6 +353,20 @@ def release(db: Session, contract: Contract) -> Contract:
     if contract.status != "funded":
         raise conflict("合约不在可放款状态", "not_releasable")
     remaining = contract.amount_cents - contract.released_cents
+    # OUT-004 浮动部分由**平台按客观判据**判定，不由任一方说了算。
+    # 没达标的原路退回发布方——这一段必须在放款之前做，
+    # 否则 remaining 里就把 bonus 一起付出去了。
+    if contract.bonus_cents > 0 and remaining >= contract.bonus_cents:
+        if not _bonus_earned(db, contract):
+            wallet.escrow_refund(db, contract.requester_id, contract.bonus_cents,
+                                 contract.id, "浮动对价未达标退回")
+            # 用既有的 `refund` 分账类型，不新造一个近义的——
+            # 语义就是「退还发布方」，memo 已经把场景说清楚了。
+            _settle(db, contract, "refund",
+                    [(contract.requester_id, contract.bonus_cents, "refund")],
+                    "浮动对价未达标退回")
+            remaining -= contract.bonus_cents
+            contract.released_cents += contract.bonus_cents
     if remaining > 0:
         fee = _fee(contract, remaining)
         wallet.escrow_release(

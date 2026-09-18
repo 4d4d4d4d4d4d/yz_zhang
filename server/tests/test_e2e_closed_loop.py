@@ -31,7 +31,7 @@ def test_full_platform_closed_loop(client):
     # ---- 2. 发布母任务（项目型，不直接发布，先分解） ----
     r = client.post(
         "/api/v1/tasks",
-        json={
+        json={"ip_assignment": "assign", 
             "title": "奶茶店小程序", "description": "点单小程序含后台管理系统",
             "category": "软件开发", "task_type": "project",
             "budget_cents": 1000000, "is_remote": True, "city": "上海",

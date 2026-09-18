@@ -241,7 +241,7 @@ def test_agt031_manual_criteria_do_not_block_but_are_recorded(client, requester,
 def test_agt030_bad_criteria_are_rejected_at_publish_time(client, requester):
     """判据在**发布环节**校验：写错的判据要在开工前发现，
     而不是等 agent 跑完才报错。"""
-    r = client.post("/api/v1/tasks", json={
+    r = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "写一篇稿子", "category": "软件开发", "budget_cents": 10000, "is_remote": True,
         "acceptance_criteria": [{"text": "随便", "kind": "auto",
                                  "check": {"op": "eval", "value": "1"}}],
@@ -251,7 +251,7 @@ def test_agt030_bad_criteria_are_rejected_at_publish_time(client, requester):
 
 
 def test_agt030_bad_regex_is_rejected(client, requester):
-    r = client.post("/api/v1/tasks", json={
+    r = client.post("/api/v1/tasks", json={"ip_assignment": "assign", 
         "title": "写一篇稿子", "category": "软件开发", "budget_cents": 10000, "is_remote": True,
         "acceptance_criteria": [{"text": "匹配", "kind": "auto",
                                  "check": {"op": "regex", "value": "([unclosed"}}],

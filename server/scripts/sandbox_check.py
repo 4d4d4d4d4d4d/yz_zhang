@@ -111,7 +111,7 @@ def main() -> None:
              f"{ESCROW_ACCOUNT}={BOOK.balances.get(ESCROW_ACCOUNT, 0)}")
 
         r = client.post("/api/v1/tasks",
-                        json={"title": "沙箱验收任务", "description": "合规态闭环自检",
+                        json={"ip_assignment": "assign", "title": "沙箱验收任务", "description": "合规态闭环自检",
                               "category": "跑腿", "budget_cents": 500000,
                               "city": "杭州", "lat": 30.27, "lng": 120.15,
                               "address_hint": "西湖区"},
