@@ -1,0 +1,20 @@
+{
+  "name": "协作任务平台",
+  "short_name": "任务平台",
+  "description": "AI 驱动的任务协作与本地服务平台：发布、接单、合约托管、验收结算",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f6f8",
+  "theme_color": "#2f6fed",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "发布任务", "url": "/publish" },
+    { "name": "我的消息", "url": "/messages" }
+  ]
+}

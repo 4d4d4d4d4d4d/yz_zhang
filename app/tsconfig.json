@@ -1,0 +1,19 @@
+{
+  "//": "APPB-006 app/ 此前没有 tsconfig，从来没被 typecheck 过。补上之后第一次跑就查出一处真实错误（Contract.deposit_cents 不在共享类型里）。",
+  "compilerOptions": {
+    "target": "esnext",
+    "lib": ["esnext", "dom"],
+    "jsx": "react-jsx",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["*.ts", "*.tsx"]
+}
