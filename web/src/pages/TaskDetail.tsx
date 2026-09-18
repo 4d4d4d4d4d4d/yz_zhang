@@ -1,5 +1,5 @@
 import {
-  ApiError, DEPOSIT_STATUS_LABEL, TASK_STATUS_LABEL, fmtYuan,
+  DEPOSIT_STATUS_LABEL, TASK_STATUS_LABEL, apiErrorText, fmtYuan,
   type Contract, type Recommendation, type Task, type TaskTree,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -61,7 +61,7 @@ export default function TaskDetail() {
       await fn();
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : '网络错误');
+      setError(apiErrorText(err));
     }
   }
 

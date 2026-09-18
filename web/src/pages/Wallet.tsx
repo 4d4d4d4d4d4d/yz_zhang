@@ -1,4 +1,4 @@
-import { ApiError, fmtYuan, ledgerKindLabel, type TaxSummary, type Wallet } from '@platform/core';
+import { ApiError, apiErrorText, fmtYuan, ledgerKindLabel, type TaxSummary, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 
@@ -22,7 +22,7 @@ export default function WalletPage() {
       await fn();
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : '网络错误');
+      setError(apiErrorText(err));
     }
   }
 

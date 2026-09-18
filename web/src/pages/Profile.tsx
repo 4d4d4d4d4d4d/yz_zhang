@@ -1,4 +1,4 @@
-import { ApiError, fmtYuan, type AgreementStatus, type InvitationItem } from '@platform/core';
+import { ApiError, apiErrorText, fmtYuan, type AgreementStatus, type InvitationItem } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
@@ -152,7 +152,7 @@ export default function Profile() {
       await refreshMe();
       setMsg(ok);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : '网络错误');
+      setError(apiErrorText(err));
     }
   }
 
@@ -231,7 +231,7 @@ export default function Profile() {
             setToken(null);
             nav('/');
           } catch (err) {
-            setError(err instanceof ApiError ? err.message : '注销失败');
+            setError(apiErrorText(err));
           }
         }}>注销账号</button>
         {error && <p className="error">{error}</p>}

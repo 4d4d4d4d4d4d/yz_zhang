@@ -1,4 +1,4 @@
-import { ApiError, type ContentItem } from '@platform/core';
+import { ApiError, apiErrorText, type ContentItem } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { BlogEditor } from '../BlogEditor';
 import { VideoFeed } from '../VideoFeed';
@@ -28,7 +28,7 @@ export default function Community() {
       setScope('latest');
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : '网络错误');
+      setError(apiErrorText(err));
     }
   }
 

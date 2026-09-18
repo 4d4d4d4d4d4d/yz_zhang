@@ -6,7 +6,7 @@
 // 写入陈述——那道前置永远只能靠等答辩期超时来满足，也就是说平台上线后的
 // 每一份处理决定都会是缺席裁决。
 import { useCallback, useEffect, useState } from 'react';
-import { ApiError, type Dispute, type DisputeStatement, type PlatformClient } from '@platform/core';
+import { ApiError, apiErrorText, type Dispute, type DisputeStatement, type PlatformClient } from '@platform/core';
 
 const STATUS_LABEL: Record<string, string> = {
   open: '处理中',
@@ -58,7 +58,7 @@ export function DisputePanel({ client, taskId, meId }: {
       await fn();
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : '操作失败');
+      setError(apiErrorText(err));
     } finally {
       setBusy(false);
     }

@@ -1,4 +1,4 @@
-import { ApiError, type CaptchaConfig } from '@platform/core';
+import { ApiError, apiErrorText, type CaptchaConfig } from '@platform/core';
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CaptchaChallenge from '../CaptchaChallenge';
@@ -36,7 +36,7 @@ export default function Login() {
         setError('请完成人机验证后重试');
         return;
       }
-      setError(err instanceof ApiError ? err.message : '网络错误');
+      setError(apiErrorText(err));
     }
   }
 

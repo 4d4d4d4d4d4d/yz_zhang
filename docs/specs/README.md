@@ -77,6 +77,7 @@
 | 52 | 合同缺的两条，和一档能做的浮动对价 | [52-ip-confidentiality-outcome-pricing.md](./52-ip-confidentiality-outcome-pricing.md) | P0 |
 | 53 | 团队账户：预算、权限与审批 | [53-team-accounts.md](./53-team-accounts.md) | P1 |
 | 54 | 开放 API 与 Webhook | [54-open-api-webhooks.md](./54-open-api-webhooks.md) | P2 |
+| 55 | 国际化：先把机制做对 | [55-i18n.md](./55-i18n.md) | P2 |
 
 ## 功能点编号与优先级约定
 

@@ -6,7 +6,7 @@
 // 预览走 `<Markdown>`，它把 Markdown 解析成 React 元素而**不是 HTML 字符串**：
 // 博客正文是别人写的、所有人都会看，转 HTML 塞进 DOM 就是一个现成的
 // 存储型 XSS。
-import { ApiError, type PlatformClient } from '@platform/core';
+import { ApiError, apiErrorText, type PlatformClient } from '@platform/core';
 import { useEffect, useState } from 'react';
 import { Markdown } from './Markdown';
 import PhotoPicker from './PhotoPicker';
@@ -40,7 +40,7 @@ export function BlogEditor({ client, onPublished }: {
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true); setError('');
     try { await fn(); await loadDrafts(); }
-    catch (err) { setError(err instanceof ApiError ? err.message : '操作失败'); }
+    catch (err) { setError(apiErrorText(err)); }
     finally { setBusy(false); }
   };
 
