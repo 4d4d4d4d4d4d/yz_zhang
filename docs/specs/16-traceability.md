@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V74 全批次完成（2026-09-17）。
-> 后端 725 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V75 全批次完成（2026-09-17）。
+> 后端 749 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,50 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V75 批次：份额不是分的，是长出来的）
+
+> 模块 spec：[50-early-cooperation.md](50-early-cooperation.md)
+>
+> 需求定位是**颠覆公司组织形式**：可追溯（有智能合约）、能获得支持
+> （agent / 法律顾问 / 政策 / 发任务给特定人）、持续帮助迭代。
+>
+> **与公司股权最本质的区别**：传统公司先分股权再干活——分的那一刻谁干多少
+> 还不知道，干到一半有人不干了股权还在他手里，早期合作最常死在这。
+> 这里反过来：`份额 = 已确认贡献 ÷ 全体已确认贡献`，**是长出来的**。
+> 后果是三条，每条都是有意的：不干活的人会被稀释、中途加入的人能公平进来、
+> 份额是**算出来的不是存下来的**（存成字段就会漂，且不会有任何东西报错）。
+>
+> **合规不当否决项，当成工作流里的一步**（用户明确要求）：
+> 合规路径引擎按合作体的客观属性判定需要哪些文书与资质、
+> 说明每一项**为什么**需要、给出办理路径，**不阻断任何操作**。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **COOP-010 贡献必须被别人确认** | 提交后是 `proposed`，须**另一名成员**确认才计份额；**计价由确认人给**（贡献人说做了什么，确认人说值多少）——描述与估值分开，防一个人既当运动员又当裁判。自报贡献等于自己发股份，与 agent 自报置信度是同一类无效 | `tests/test_early_cooperation.py::test_coop010_self_reported_contribution_does_not_count`、`::test_coop010_valuation_comes_from_the_confirmer`（提交端点根本不接受金额字段） |
+| **COOP-011 份额随贡献动态变化** | 每次现算，不存字段 | `::test_coop011_shares_grow_with_confirmed_contributions`、`::test_coop011_not_contributing_gets_you_diluted` |
+| **COOP-012 合计恒为 10000 bps** | 余数归最后一个，不各自取整——各自取整合计会差几个基点，分配时就少分或多分 | `::test_coop012_shares_always_sum_to_exactly_10000`（用除不尽的组合专门试） |
+| **COOP-020 只分已实现收益** | 钱只能来自合作体钱包可用余额。**代码里根本不存在「预期收益」这个字段**——这不是法务加的限制，是让模型落在合作内部分配而非涉众性金融的设计本身 | `::test_coop020_can_only_distribute_money_actually_received`、`::test_coop020_distribution_follows_shares_and_conserves_money` |
+| **分配快照留痕** | 份额是算出来的，但分配依据必须留痕，否则事后重算会得到不同数字 | `::test_coop020_distribution_snapshot_is_kept` |
+| **COOP-021 邀请制** | 没有公开加入/浏览端点。邀请人**不能代签**风险揭示书——代签的知情同意不是知情同意 | `::test_coop021_no_public_join_endpoint` |
+| **COOP-022 份额不可转让** | **故意不做，不是以后再说**：一旦可转让，它就是一张可流通的权益凭证，性质全变 | `::test_coop022_shares_cannot_be_transferred`（同时扫源码禁止出现转让实现） |
+| **COOP-030/031 风险揭示是前置** | 不签不能加入，发起人也要签（他承担的风险不比别人少）。四条必备内容在代码里是**常量**，不是运营可改的文案——改软了整个模式的性质就变了 | `::test_coop030_risk_disclosure_is_required_to_join`、`::test_coop031_risk_disclosure_says_the_four_things_that_matter`（逐条断言，不是断言「非空」） |
+| **COOP-040 合规路径只提示不阻断** | 按成员数/资金/累计分配/类目判定文书清单与登记门槛，每项写明**为什么**——只给清单不说理由，用户不知道哪些能省。显式声明**不是法律意见** | `::test_coop040_compliance_path_informs_and_does_not_block`、`::test_coop040_thresholds_trigger_registration_advice`、`::test_coop040_restricted_category_points_at_certification` |
+| **单人合作体的死角被明说** | 只有一个人时没人能确认贡献——合规路径**主动说出来**，而不是让用户自己撞上去 | `::test_coop040_single_member_venture_cannot_confirm_anything` |
+| **COOP-050 合作体有钱包、能发任务** | 合作体 = 一行 User（`is_venture`），与 V73「agent 是 User」同一条理由：钱包/托管/合约/纠纷/发任务全部以 user_id 为键 | `::test_coop050_venture_can_publish_a_task_with_its_own_funds`、`::test_venture_account_is_excluded_from_the_recommendation_pool`（是 User 但不是「人」） |
+| **COOP-060 可追溯 = 哈希链** | 「可追溯」的真实含义不是「有一张表存着」，而是改一条历史记录必须重写整条后继链才不被发现 | `::test_coop060_contribution_and_distribution_are_anchored` |
+
+**与 `finance/compliance.py` 那条红线的关系**（两者方向相反但不冲突）：
+那条管**任务发布**——报酬必须是劳务对价，出现「分红/股权/保本」就拒绝，
+防的是面向不特定多数人发行可分享收益的权益。这里管**合作体内部**——
+已实名成员之间、按已确认贡献、分已经到账的钱。
+两者靠三条结构性设计分开：**邀请制、只分已实现收益、份额不可转让**，
+而那三条在代码里是硬的。
+
+**明确留给用户决定的一条（COOP-051）**：成员退出时历史份额怎么算？
+按当前模型他的历史贡献仍在分母里、仍参与后续分配——这可能是对的
+（他确实贡献过），也可能不是（他不再承担风险）。**这需要一个产品判断，
+我不替用户定**；在定下来之前，退出只是「不再贡献」，份额自然被稀释。
 
 ## 已实现（V74 批次：升级不是换个人重做，是让人来判 AI 做得对不对）
 

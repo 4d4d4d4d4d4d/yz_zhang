@@ -45,6 +45,10 @@ class User(Base):
     # AGT 平台自有 AI 助理。标在 User 上而不是另建实体，是为了让托管/纠纷/
     # 信用/账本一行都不用改就对它生效（48 号 spec 第 0 节）。
     is_agent: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    # COOP 合作体账号。与 is_agent 同一条理由（50 号 spec 第 5 节）：
+    # 钱包/托管/合约/纠纷/发任务全部以 user_id 为键，合作体要有资金池、
+    # 要能发任务，不复用就得把这些各写第二遍。
+    is_venture: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     # RISK-006 封禁（封禁后所有需登录操作被拒）
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)

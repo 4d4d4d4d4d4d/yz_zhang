@@ -69,6 +69,7 @@ USER_DISPOSITION: dict[str, Disposition] = {
     # AGT 平台自有 AI 助理标记。与 is_admin 相反取 R：清掉它会让这行 User
     # 退化成一个「看起来像真人」的账号，而它的历史合约、评价、纠纷都还在。
     # 平台 agent 本就不走用户注销流程，但这张表要覆盖所有列，所以做这个决定。
+    "is_venture": R,          # 同 is_agent：清掉会让这行退化成「看起来像真人」的账号
     "is_agent": R,
     "is_admin": E,              # ACCDEL-024 注销一个管理员，管理员标记不能留着
     "is_banned": R,             # ACCDEL-025 注销不是洗白封禁的手段
