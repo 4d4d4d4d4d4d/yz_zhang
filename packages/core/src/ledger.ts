@@ -61,6 +61,10 @@ export const LEDGER_KIND_LABEL: Record<string, string> = {
   // —— 早期合作体收益分配（COOP-020）——
   coop_distribution_in: '合作体收益分配',
   coop_distribution_out: '合作体分配支出',
+
+  // —— 团队支出（TEAM-020）——
+  team_spend_in: '团队拨款',
+  team_spend_out: '团队支出',
 };
 
 /** 认不出的科目显示原始标识符——宁可给用户一串能发给客服的字符，

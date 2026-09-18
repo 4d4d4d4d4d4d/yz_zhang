@@ -33,6 +33,7 @@ from app.modules.notification.models import Notification  # noqa: F401
 from app.modules.notification.models_device import DeviceToken  # noqa: F401
 from app.modules.account.models_cert import CertificationApplication  # noqa: F401
 from app.modules.agent.models import AgentProfile, AgentRun  # noqa: F401
+from app.modules.team.models import SpendRequest, Team, TeamMember  # noqa: F401
 from app.modules.coop.models import (  # noqa: F401
     Contribution,
     Distribution,

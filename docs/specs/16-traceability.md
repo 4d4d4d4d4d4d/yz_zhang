@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V77 全批次完成（2026-09-17）。
-> 后端 789 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V78 全批次完成（2026-09-17）。
+> 后端 810 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,39 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V78 批次：团队要的不是组织架构，是预算与审批）
+
+> 模块 spec：[53-team-accounts.md](53-team-accounts.md)
+>
+> 「加个企业账号」很容易做成一个空壳——建个组织、拉几个人、然后什么也没变，
+> 每个人还是用自己的钱包发任务。那没有解决任何真实问题。
+>
+> 企业客户真正会卡住的是四件事：**钱是公司的**（员工用自己钱包垫付再报销，
+> 在任何一家公司都走不通）、谁能花多少要事先定、超过某个数要有人批且留痕、
+> 发票开给公司。所以这一批的核心**不是组织架构，是预算与审批**。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **TEAM-001 团队独立钱包** | 团队 = 一行 User（`is_team`）。**第三次用同一条架构判断**（V73 agent / V75 合作体 / 这里）：钱包、托管、合约、纠纷、发任务全部以 user_id 为键 | `tests/test_team_accounts.py::test_team001_team_has_its_own_wallet_separate_from_members`、`::test_team040_team_account_is_not_in_the_recommendation_pool` |
+| **TEAM-010 三档角色，不做通用 RBAC** | 可配置的权限矩阵在这个阶段只会让人配错；三档覆盖绝大多数团队，每一档「能做什么」一句话说得清。**admin 能批支出但不能改额度**——否则审批这道闸门自己就绕过去了 | `::test_team010_only_owner_can_change_roles_and_limits`、`::test_team010_owner_role_is_immutable` |
+| **TEAM-011 单笔额度，不是月度池** | 月度池要处理周期、结转、跨月退款归属，复杂度高一个数量级，而它解决的主要问题单笔额度也能解决大半。额度内直接执行，但**仍然留一条记录**——「谁花了公司多少钱」不该因为在额度内就查不到 | `::test_team011_within_limit_spends_execute_immediately`、`::test_team011_within_limit_spends_are_still_recorded` |
+| **TEAM-020 审批期间不预扣** | 预扣会让一堆待批的申请把预算占死，而审批本来就可能被驳回 | `::test_team011_over_limit_becomes_an_approval_and_does_not_move_money`、`::test_team020_approved_then_executed_moves_the_money` |
+| **TEAM-022 不预扣的代价要明确承担** | 批准到执行之间余额可能已被占用 → **明确报错，不产生半截状态**，并在错误里说清楚为什么会这样 | `::test_team022_execution_fails_clearly_when_funds_ran_out` |
+| **TEAM-021 不能自己批自己** | 与 COOP-010（贡献不能自己确认）、VER-021（当事人不能核验）同一条规矩 | `::test_team021_cannot_approve_your_own_request`、`::test_team021_members_cannot_approve_anything` |
+| **TEAM-030 未核验不能开票** | 一张开给未核验抬头的发票，是税务风险不是便利。营业执照沿用 V76 的敏感材料通道（匿名读拒绝 + 鉴权端点） | `::test_team030_unverified_team_cannot_invoice`、`::test_team030_license_images_are_marked_sensitive` |
+| **TEAM-041 资金守恒** | 团队资金变动全部走既有 `transfer()`，五条不变量仍成立 | `::test_team041_team_money_flows_keep_the_invariants` |
+
+**合作体与团队的区别要说清楚，否则两者会混**：
+
+| | 合作体（COOP） | 团队（TEAM） |
+|---|---|---|
+| 成员关系 | 平等协作，**贡献即份额** | 有层级，**角色即权限** |
+| 钱从哪来 | 合作产生的收入 | 公司充值 |
+| 钱怎么分 | 按份额分配收益 | **不分配**，只用于支出 |
+
+一句话：**合作体是分钱的，团队是花钱的。** 两者都需要资金池但规则完全相反，
+所以是两个模块而不是一个带开关的模块——有一条测试钉住「团队没有分配这个动作」。
 
 ## 已实现（V77 批次：花钱买的 logo，默认不属于你）
 

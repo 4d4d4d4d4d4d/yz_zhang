@@ -75,6 +75,7 @@
 | 50 | 早期合作体：贡献即份额 | [50-early-cooperation.md](./50-early-cooperation.md) | P0 |
 | 51 | 受限类目资质：从「自己填」到「核过才算」 | [51-certification-verification.md](./51-certification-verification.md) | P0 |
 | 52 | 合同缺的两条，和一档能做的浮动对价 | [52-ip-confidentiality-outcome-pricing.md](./52-ip-confidentiality-outcome-pricing.md) | P0 |
+| 53 | 团队账户：预算、权限与审批 | [53-team-accounts.md](./53-team-accounts.md) | P1 |
 
 ## 功能点编号与优先级约定
 

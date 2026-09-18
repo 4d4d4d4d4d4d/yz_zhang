@@ -49,6 +49,9 @@ class User(Base):
     # 钱包/托管/合约/纠纷/发任务全部以 user_id 为键，合作体要有资金池、
     # 要能发任务，不复用就得把这些各写第二遍。
     is_venture: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    # TEAM 团队账户。第三次用同一条判断（agent / 合作体 / 团队）：
+    # 钱包、托管、合约、纠纷、发任务全部以 user_id 为键。
+    is_team: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     # RISK-006 封禁（封禁后所有需登录操作被拒）
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)

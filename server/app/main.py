@@ -77,6 +77,7 @@ def create_app() -> FastAPI:
     from app.modules.agent.router import router as agent_router
     from app.modules.verify.router import router as verify_router
     from app.modules.coop.router import router as coop_router
+    from app.modules.team.router import router as team_router
     from app.modules.account.router import router as account_router
     from app.modules.admin.router import router as admin_router
     from app.modules.analytics.router import router as analytics_router
@@ -134,6 +135,7 @@ def create_app() -> FastAPI:
         agent_router,
         verify_router,
         coop_router,
+        team_router,
     ):
         app.include_router(router, prefix=settings.API_PREFIX)
 
