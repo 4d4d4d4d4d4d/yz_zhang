@@ -64,8 +64,17 @@ def check_category_qualification(db: Session, task, user) -> None:
     """ACC-022 受限类目准入（读类目表，运营后台可配）。"""
     category = get_category(db, task.category)
     required = category.required_cert if category else ""
-    if required and required not in (user.certifications or []):
-        raise bad_request(f"该类目需「{required}」职业资质认证后方可接单", "certification_required")
+    if not required:
+        return
+    # CERT-001/005 读的是**已核准且未过期**的资质，不是 user.certifications 里
+    # 有没有这个名字。改造前那个字段是用户自己 POST 进去的，这道门一直是虚的。
+    from app.modules.account import cert_service
+
+    if not cert_service.has_certification(db, user.id, required):
+        raise bad_request(
+            f"该类目需「{required}」职业资质，请提交证件影像并通过平台核验后接单",
+            "certification_required",
+        )
 
 
 def check_executor_capacity(db: Session, user_id: int) -> None:

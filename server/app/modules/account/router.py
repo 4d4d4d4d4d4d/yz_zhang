@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Header, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -80,7 +82,15 @@ class VerifyIn(BaseModel):
 
 class CertificationIn(BaseModel):
     name: str = Field(min_length=2, max_length=30)  # 如：律师 / 电工
-    license_no: str = Field(min_length=4, max_length=50)
+    # CERT-003 证件上的姓名。服务端与实名严格比对——
+    # **一张别人的电工证也是一张真证件。**
+    holder_name: str = Field(min_length=2, max_length=50)
+    cert_number: str = Field(min_length=4, max_length=60)
+    issuer: str = Field(default="", max_length=80)
+    # CERT-005 有效期。「发了就永久有效」是错的。
+    expires_at: datetime | None = None
+    # CERT-002 证件影像（已上传文件名）。没有影像，审核员看什么。
+    images: list[str] = Field(default_factory=list)
 
 
 def _me(user: User) -> dict:
@@ -593,19 +603,45 @@ def my_blocks(user: User = Depends(get_current_user), db: Session = Depends(get_
     return out
 
 
-# ---------- 职业资质认证（ACC-022，模拟审核即通过）----------
+# ---------- 职业资质（CERT，51 号 spec）----------
+#
+# 改造前这里是一行 `user.certifications += [name]`，注释写着「模拟审核即通过」——
+# 任何实名用户 POST 一个字符串就拿到「电工」资质，而受限类目的接单准入正是
+# 靠这个字段。一个无证的人接了电工单，出事的是人身安全。
 @router.post("/users/me/certifications", status_code=201)
-def add_certification(
+def submit_certification(
     body: CertificationIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    """受限类目（法律咨询/电工等）接单准入凭证。生产接资质核验机构。"""
-    if not user.is_verified:
-        raise conflict("需先完成实名认证", "verification_required")
-    if body.name in user.certifications:
-        raise conflict("已有该资质", "certification_exists")
-    user.certifications = user.certifications + [body.name]
-    db.add(user)
-    return {"certifications": user.certifications}
+    """CERT-001 提交**申请**，不是授予资质。管理员核过之前一个字都不加。"""
+    from . import cert_service
+
+    row = cert_service.submit(
+        db, user, name=body.name, holder_name=body.holder_name,
+        cert_number=body.cert_number, issuer=body.issuer,
+        expires_at=body.expires_at, images=body.images,
+    )
+    return {"id": row.id, "name": row.name, "status": row.status,
+            "certifications": cert_service.active_certifications(db, user.id)}
+
+
+@router.get("/users/me/certifications")
+def my_certifications(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from . import cert_service
+    from .models_cert import CertificationApplication
+
+    rows = (db.query(CertificationApplication)
+            .filter(CertificationApplication.user_id == user.id)
+            .order_by(CertificationApplication.id.desc()).all())
+    return {
+        "active": cert_service.active_certifications(db, user.id),
+        "applications": [
+            {"id": r.id, "name": r.name, "status": r.status,
+             "decision_reason": r.decision_reason,
+             "expires_at": r.expires_at.isoformat() if r.expires_at else None,
+             "created_at": r.created_at.isoformat()}
+            for r in rows
+        ],
+    }
 
 
 # ---------- 个人数据导出（ACC-031，PIPL/GDPR）----------

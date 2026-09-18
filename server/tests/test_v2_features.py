@@ -4,7 +4,7 @@ import sqlalchemy as sa
 
 from app.core.db import engine
 
-from .conftest import JOB_HEADERS, auth, register, topup, verify_user
+from .conftest import JOB_HEADERS, auth, make_admin, register, topup, verify_user
 from .test_task_flow import match_and_fund, publish_task
 
 
@@ -55,13 +55,20 @@ def test_acc022_restricted_category_requires_certification(client, requester, wo
     # 无资质报名被拒
     r = client.post(f"/api/v1/tasks/{task['id']}/applications", json={}, headers=auth(worker))
     assert r.status_code == 400 and "律师" in r.json()["detail"]["message"]
-    # 提交律师资质后可报名
-    r = client.post(
-        "/api/v1/users/me/certifications",
-        json={"name": "律师", "license_no": "A20260001"},
-        headers=auth(worker),
-    )
-    assert r.status_code == 201
+    # CERT-001（V76 起）：提交的是**申请**，不是资质。
+    # 改造前这一步直接把资质写进用户字段，于是这道门一直是虚的。
+    from tests.test_certification import apply_cert
+
+    r = apply_cert(client, worker, name="律师", holder="李四")
+    assert r.status_code == 201 and r.json()["status"] == "pending"
+    still_blocked = client.post(f"/api/v1/tasks/{task['id']}/applications",
+                                json={}, headers=auth(worker))
+    assert still_blocked.status_code == 400, "提交申请就放行了，等于没有审核"
+
+    # 管理员核准后才放行
+    admin = make_admin(client, "13500000099")
+    client.post(f"/api/v1/admin/certifications/{r.json()['id']}/decide",
+                json={"approve": True, "reason": "证件与实名一致"}, headers=auth(admin))
     r = client.post(f"/api/v1/tasks/{task['id']}/applications", json={}, headers=auth(worker))
     assert r.status_code == 201
     # 资质徽章在公开名片可见（联动 ACC-023）

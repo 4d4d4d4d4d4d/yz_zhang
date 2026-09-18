@@ -9,7 +9,7 @@
 """
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -30,6 +30,10 @@ class UploadedFile(Base):
     # UMOD-012/014 审核结果。pass = 机审通过；review = 机器看不了/不确定，
     # 等人看；reject 只会出现在「审核员事后驳回」的路径上——上传时命中 reject
     # 的图根本不会落库（UMOD-040）
+    # CERT-010 敏感个人信息（证件影像等）。`/files/{name}` 是**匿名**能力 URL，
+    # 设计前提是「名字不可猜」。对任务配图那个权衡是对的，对身份证/电工证不是——
+    # 一个匿名可读的 URL 出现在日志、浏览器历史或转发的截图里，就等于把证件交出去了。
+    sensitive: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     moderation_status: Mapped[str] = mapped_column(String(12), default="pass")
     moderation_labels: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

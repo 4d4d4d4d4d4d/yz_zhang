@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V75 全批次完成（2026-09-17）。
-> 后端 749 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V76 全批次完成（2026-09-17）。
+> 后端 768 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,39 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V76 批次：一道一直是虚的门）
+
+> 模块 spec：[51-certification-verification.md](51-certification-verification.md)
+>
+> 需求原话：「受限类目资质需要单独处理，必须要对相关证件，用户身份实名审核才行。」
+>
+> **实测现状**：`POST /users/me/certifications` 的实现是一行
+> `user.certifications += [body.name]`，注释写着「模拟审核即通过」。
+> 也就是说任何实名用户 POST 一个字符串就拿到「电工」资质，
+> 而 `task/service.py` 正是用这个字段拦住电工维修、燃气维修、法律咨询的接单，
+> 管理后台里连审核队列都没有。**这道门一直是虚的。**
+>
+> 这一批的完成定义不是「加了个审核页面」，而是
+> **在资质被人工核过之前，那个类目的接单准入一次都不放行**。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **CERT-001 提交的是申请不是资质** | 端点语义改变，核准前 `user.certifications` 一个字不加 | `tests/test_certification.py::test_cert001_submitting_does_not_grant_the_certification`、`::test_cert004_only_after_approval_can_you_take_the_job` |
+| **CERT-002/003 材料与姓名** | 必须附证件影像；**证件姓名与实名严格比对**——这条最容易漏，漏了前面全白做：**一张别人的电工证也是一张真证件** | `::test_cert002_application_without_images_is_rejected`、`::test_cert003_holder_name_must_match_the_verified_identity` |
+| **CERT-004 人工审核** | 队列 + 通过/驳回 + 审计；**驳回必须带理由**（只说「未通过」，申请人只会一遍遍重交）。队列直接显示「证件姓名 vs 实名是否一致」——让审核员在两个页面间比对，迟早比错 | `::test_cert004_rejection_must_say_why`、`::test_admin_queue_surfaces_the_name_match` |
+| **CERT-005 有效期** | 准入读「已核准**且未过期**」，不是名字在不在列表里。过期记录保留（留痕），仅不再满足准入；到期前可查 | `::test_cert005_expired_certification_does_not_admit`、`::test_expiring_soon_finds_certificates_about_to_lapse` |
+| **CERT-006 存量数据** | 迁移把存量自助资质转成 `pending` 申请（用户看得到「待补充材料」）并清空快照字段。三选一里保留会让这批白做、直接清空会让用户一头雾水 | `::test_cert006_admission_reads_the_application_table_not_the_snapshot`；**已用真实数据实测迁移**：清空生效、两条申请可见 |
+| **CERT-010 证件影像不能匿名读** | `/files/{name}` 是匿名能力 URL，安全性只建立在「名字不可猜」上。对任务配图这个权衡是对的，**对身份证/电工证不是**——URL 一旦出现在日志、浏览器历史或转发截图里就等于把证件交出去了。加 `sensitive` 标记：匿名读一律拒绝，另开鉴权端点只给本人与管理员，且 `no-store` | `::test_cert010_certificate_images_are_not_anonymously_readable`、`::test_cert010_owner_and_admin_can_read_it_through_the_secure_endpoint`、`::test_cert010_sensitive_files_are_not_cached` |
+| **CERT-011 注销删影像** | 申请记录保留（审计），**影像物理删除**——留着一张能被管理员看的身份证，等于注销没有完成 | `::test_cert011_deactivation_physically_removes_certificate_images` |
+
+**测试抓到的一个真实 bug**：`decide()` 改完 status 后直接查 `active_certifications()`
+算快照，但 session 是 `autoflush=False` 的，查询看不到刚改的值，
+快照被算成空——核准了却显示没有资质。补 `db.flush()`。
+
+**没做也没假装做（CERT-050）**：**没有接真实的资质核验机构**。
+现在是「管理员看图判断」，挡得住「拿别人的证」和明显伪造，挡不住高仿。
+代码里留了位置但没有实现，默认实现如实上报 `manual_only`。
 
 ## 已实现（V75 批次：份额不是分的，是长出来的）
 

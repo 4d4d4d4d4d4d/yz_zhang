@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.deps import get_current_user
-from app.core.errors import bad_request, not_found
+from app.core.errors import bad_request, forbidden, not_found
 from app.modules.account.models import User
 from app.vendors import base as vendor_base
 from app.vendors.base import VendorError
@@ -105,7 +105,7 @@ def _moderate(db: Session, name: str, url: str) -> tuple[str, list[str]]:
 
 
 @router.get("/files/{name}")
-def read_file(name: str):
+def read_file(name: str, db: Session = Depends(get_db)):
     """本地实现的读取端点。接真实对象存储后，URL 直接指向 CDN，此端点不再被访问。
 
     FILE-013 **这是一个能力 URL（capability URL）：匿名可读，知道 URL 即有权读。**
@@ -118,6 +118,14 @@ def read_file(name: str):
     算出它的 URL，把这个端点变成一台存在性预言机。名字的随机性是这个端点
     能安全匿名的**唯一**依据，改 `LocalStorageProvider.put()` 时务必记得。
     """
+    # CERT-010 敏感文件**一律不走这条匿名路径**。不是「尽量」，是拒绝——
+    # 这条路径的安全性只建立在「名字不可猜」上，而证件影像一旦泄露就无法挽回。
+    from .models import UploadedFile
+
+    row = db.get(UploadedFile, name)
+    if row is not None and row.sensitive:
+        raise forbidden("该文件为敏感材料，请通过 /files/{name}/secure 读取",
+                        "sensitive_file")
     provider = get_provider("storage")
     got = getattr(provider, "read", lambda _n: None)(name)
     if not got:
@@ -134,6 +142,39 @@ def read_file(name: str):
             "Content-Security-Policy": "default-src 'none'; sandbox",
         },
     )
+
+
+@router.get("/files/{name}/secure")
+def read_sensitive_file(name: str, user=Depends(get_current_user),
+                        db: Session = Depends(get_db)):
+    """CERT-010 敏感材料的读取：必须登录，且只有**上传者本人与管理员**能读。
+
+    审核员需要看证件才能审——所以不能简单地「谁也不给看」，
+    而是把可见范围收到最小：本人 + 管理员。
+    """
+    from .models import UploadedFile
+
+    row = db.get(UploadedFile, name)
+    if not row:
+        raise not_found("文件不存在")
+    if row.owner_id != user.id and not user.is_admin:
+        raise forbidden("无权查看该材料")
+    provider = get_provider("storage")
+    got = getattr(provider, "read", lambda _n: None)(name)
+    if not got:
+        raise not_found("文件不存在")
+    data, content_type = got
+    return Response(
+        content=data, media_type=content_type,
+        headers={
+            # 敏感材料**不缓存**：CDN / 浏览器留一份副本就是多一个泄露点
+            "Cache-Control": "no-store, private",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Disposition": f'inline; filename="{name}"',
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+        },
+    )
+
 
 # ---------- CNT-014 视频直传 ----------
 class SignUploadIn(BaseModel):

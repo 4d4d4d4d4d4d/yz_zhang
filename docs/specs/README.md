@@ -73,6 +73,7 @@
 | 48 | 平台自有 Agent 的执行层 | [48-agent-execution.md](./48-agent-execution.md) | P0 |
 | 49 | 人类核验闭环与争议升级阶梯 | [49-verification-and-escalation.md](./49-verification-and-escalation.md) | P0 |
 | 50 | 早期合作体：贡献即份额 | [50-early-cooperation.md](./50-early-cooperation.md) | P0 |
+| 51 | 受限类目资质：从「自己填」到「核过才算」 | [51-certification-verification.md](./51-certification-verification.md) | P0 |
 
 ## 功能点编号与优先级约定
 

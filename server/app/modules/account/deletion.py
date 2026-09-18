@@ -98,6 +98,10 @@ UPLOADED_FILE_DISPOSITION: dict[str, Disposition] = {
     # UMOD-014 审核结果是**平台的处置留痕**，不是注销者的画像数据
     "moderation_status": R,
     "moderation_labels": R,
+    # CERT-010 敏感标记本身不是个人信息，是这条记录的处置属性。
+    # 注销时影像文件被物理删除（见 _erase_certification_images），
+    # 但「这曾是一份敏感材料」要留着——否则残留记录会被当成普通文件处理。
+    "sensitive": R,
     "created_at": R,
 }
 
@@ -142,6 +146,9 @@ def erase_personal_data(db: Session, user: User) -> dict:
     user.skills = []
     user.interests = []
     user.certifications = []
+    # CERT-011 证件影像是敏感个人信息，注销时**物理删除**，不是标记删除。
+    # 留着一张能被管理员看的身份证，等于注销没有完成。
+    _erase_certification_images(db, user.id)
     user.privacy = {}
     user.service_rate_cents = 0
     user.available_times = ""
@@ -156,3 +163,24 @@ def erase_personal_data(db: Session, user: User) -> dict:
         payout.holder_name = mask_name(payout.holder_name)
         db.add(payout)
     return {"payout_masked": payout is not None}
+
+
+def _erase_certification_images(db, user_id: int) -> None:
+    """CERT-011 删掉资质申请里的证件影像文件与文件名引用。
+
+    申请记录本身保留（审计需要「这个账号当年申请过什么」），
+    但**影像必须真的从磁盘消失**。
+    """
+    from app.modules.account.models_cert import CertificationApplication
+    from app.vendors.registry import get_provider
+
+    provider = get_provider("storage")
+    delete = getattr(provider, "delete", None)
+    rows = (db.query(CertificationApplication)
+            .filter(CertificationApplication.user_id == user_id).all())
+    for row in rows:
+        for name in row.images or []:
+            if delete:
+                delete(name)
+        row.images = []
+        db.add(row)

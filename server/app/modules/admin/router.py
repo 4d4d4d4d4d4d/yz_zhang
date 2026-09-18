@@ -556,3 +556,74 @@ def resolve_upload(
     record_audit(db, admin.id, "upload_reject", "upload", None,
                  f"{name}：{body.reason[:200]}")
     return {"name": name, "moderation_status": "reject", "file_removed": removed}
+
+
+# ---------- CERT 职业资质审核（51 号 spec）----------
+#
+# 改造前**管理后台里根本没有这个队列**：资质是用户自己 POST 进去的，
+# 没有任何人看过任何一张证件。而受限类目的接单准入正是靠它。
+class CertVerdictIn(BaseModel):
+    approve: bool
+    reason: str = ""
+
+
+@router.get("/admin/certifications/pending")
+def pending_certifications(
+    limit: int = Query(50, ge=1, le=200),
+    _: User = Depends(require_admin), db: Session = Depends(get_db),
+):
+    from app.modules.account.models_cert import CertificationApplication
+
+    rows = (db.query(CertificationApplication)
+            .filter(CertificationApplication.status == "pending")
+            .order_by(CertificationApplication.created_at).limit(limit).all())
+    out = []
+    for r in rows:
+        applicant = db.get(User, r.user_id)
+        out.append({
+            "id": r.id, "user_id": r.user_id, "name": r.name,
+            "holder_name": r.holder_name, "cert_number": r.cert_number,
+            "issuer": r.issuer,
+            "expires_at": r.expires_at.isoformat() if r.expires_at else None,
+            # CERT-010 证件影像走**鉴权**端点，不是匿名能力 URL
+            "image_urls": [f"/api/v1/files/{n}/secure" for n in (r.images or [])],
+            # 审核员要能一眼看到「证件姓名 vs 实名」是否一致
+            "real_name": applicant.real_name if applicant else "",
+            "name_matches": bool(applicant and r.holder_name == applicant.real_name),
+            "created_at": r.created_at.isoformat(),
+        })
+    return out
+
+
+@router.post("/admin/certifications/{application_id}/decide")
+def decide_certification(
+    application_id: int, body: CertVerdictIn,
+    admin: User = Depends(require_admin), db: Session = Depends(get_db),
+):
+    from app.modules.account import cert_service
+    from app.modules.account.models_cert import CertificationApplication
+
+    row = db.get(CertificationApplication, application_id)
+    if not row:
+        raise not_found("资质申请不存在")
+    row = cert_service.decide(db, row, admin, body.approve, body.reason)
+    record_audit(db, admin.id, "certification_decide", "certification",
+                 str(application_id), f"{'通过' if body.approve else '驳回'}：{body.reason}")
+    return {"id": row.id, "status": row.status}
+
+
+@router.post("/admin/certifications/{application_id}/revoke")
+def revoke_certification(
+    application_id: int, body: CertVerdictIn,
+    admin: User = Depends(require_admin), db: Session = Depends(get_db),
+):
+    from app.modules.account import cert_service
+    from app.modules.account.models_cert import CertificationApplication
+
+    row = db.get(CertificationApplication, application_id)
+    if not row:
+        raise not_found("资质申请不存在")
+    row = cert_service.revoke(db, row, admin, body.reason or "平台撤销")
+    record_audit(db, admin.id, "certification_revoke", "certification",
+                 str(application_id), body.reason)
+    return {"id": row.id, "status": row.status}
