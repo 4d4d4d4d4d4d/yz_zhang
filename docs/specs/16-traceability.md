@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V78 全批次完成（2026-09-17）。
-> 后端 810 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V79 全批次完成（2026-09-17）。
+> 后端 836 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,36 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V79 批次：给机器的钥匙，不能是给人的那一把）
+
+> 模块 spec：[54-open-api-webhooks.md](54-open-api-webhooks.md)
+>
+> 现状实测：全站唯一的身份是**用户会话 token**（绑 `sid`，改密即全端下线）。
+> 那是给**人**用的。最省事的做法是「让集成方存一个用户 token」，三条都不成立：
+>
+> 1. **会话会被吊销**——用户改一次密码，对方的集成第二天就全挂了，
+>    而他们完全不知道为什么；
+> 2. **权限全有**——会话 token 能提现、能改密、能注销账号。
+>    集成方只想读任务列表，凭什么给他一把能把钱转走的钥匙；
+> 3. **没法审计**——出问题时分不清是本人操作还是集成方调的。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **API-001 只存哈希、只显示一次** | 与密码同一条道理：能解出来就意味着有人能解出来。找回的便利不值得拿「库被拖走时所有集成方凭证同时泄露」去换。因此必须提供**轮换**——那是「丢了怎么办」的唯一出路 | `tests/test_open_api_webhooks.py::test_api001_plaintext_key_is_shown_once_and_only_hashed_at_rest`、`::test_api001_rotation_invalidates_the_old_key_immediately` |
+| **API-002 没有任何动钱的 scope** | 出金是平台上唯一不可逆的动作，而集成密钥泄露概率远高于用户密码（它躺在 CI 变量、日志、截图里），一次错误出金追不回来 | `::test_api002_there_is_no_money_moving_scope_at_all`（同时扫开放端点路径，禁止出现 withdraw/topup/transfer/password 等） |
+| **scope 校验在依赖层** | 不在每个端点写 if——写 if 的话新端点默认是「没检查」而不是「拒绝」，**与 V47 限流那个洞同一形状**（当时限流只有 7 个手写调用点，新端点默认裸奔） | `::test_api002_missing_scope_is_rejected_and_says_which_one`（并要求错误里说清缺哪个） |
+| **API-003 不能超过所属用户** | Key 是用户授权给机器的子集，不是独立权限来源。**被封禁的用户其 Key 必须同时失效**，否则封禁只封了人、没封住机器 | `::test_api003_banning_the_user_kills_their_api_key`、`::test_api003_key_only_sees_its_owners_data` |
+| **API-004 会话专属端点不接受 Key** | 改密、提现、注销 | `::test_api004_api_key_cannot_call_session_only_endpoints` |
+| **HOOK-001 时间戳进签名** | 只签 body 的话，攻击者拿一个旧请求原样重放，签名照样对得上。每个 webhook **独立 secret**——一个泄露不该让所有人的签名都可伪造 | `::test_hook001_signature_covers_the_timestamp`、`::test_hook001_old_requests_are_rejected`、`::test_hook001_each_webhook_gets_its_own_secret` |
+| **HOOK-002 重试、停用、通知** | 指数退避；连续失败自动停用（一个挂掉的 endpoint 会让重试队列无限堆积，拖慢所有人），但**停用必须通知到人**——悄悄停掉比不停更坏，对方会以为平台根本没有事件 | `::test_hook002_failure_retries_then_disables_and_notifies`、`::test_hook002_retry_uses_backoff_not_immediate` |
+| **投递记录** | 没有记录的话，集成方报「我没收到」时平台只能说「我发了」——两边都无法证明，这种争执没有出口 | `::test_hook002_delivery_record_exists_so_disputes_have_an_exit` |
+| **HOOK-003 事件体不带敏感字段** | **webhook 的接收端是我们控制不了的**：一个写进对方日志的手机号，就是我们泄露的手机号。黑名单兜底 + 递归剥离嵌套 | `::test_hook003_sensitive_fields_never_leave_the_platform` |
+| **HOOK-051 事件不是全量开放** | 全量开放要先逐个审事件体里有没有敏感字段——**开放一个没审过的事件比不开放更危险** | `::test_unknown_event_is_rejected`（错误里说明为什么不是全量） |
+
+**明确没做也没假装做**：按 key 的独立限流（API-050，需要配额模型）、
+OAuth 授权码流程（API-051——当前的 key 是**用户给自己的机器用的**，
+不是给第三方应用代表用户用的，两者信任模型不同，混在一起做会两边都不对）。
 
 ## 已实现（V78 批次：团队要的不是组织架构，是预算与审批）
 

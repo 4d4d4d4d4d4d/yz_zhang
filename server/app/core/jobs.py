@@ -48,6 +48,8 @@ JOBS: tuple[ScheduledJob, ...] = (
                  "此前 cron 写的路径少了 /contracts 前缀，这个 job 从未跑过"),
     ScheduledJob("/disputes/jobs/escalate-overdue", 3600, "escalate_overdue",
                  "DSP-009 超 SLA 未结案的纠纷升级人审"),
+    ScheduledJob("/openapi/jobs/deliver-webhooks", 60, "deliver_webhooks",
+                 "HOOK-002 Webhook 投递与指数退避重试；连续失败自动停用并通知拥有者"),
     ScheduledJob("/verify/jobs/expire-orders", 3600, "expire_verifications",
                  "VER-041 核验单超时未接单自动退款（已接单的不自动退——"
                  "钱退了人还在干是更糟的状态，那种走人工）"),
