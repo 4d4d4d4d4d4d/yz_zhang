@@ -71,6 +71,7 @@
 | 46 | App 侧视频沉浸流 | [46-app-video-feed.md](./46-app-video-feed.md) | P1 |
 | 47 | 共享类型与文案的漂移，和一个从没装上过的 App | [47-shared-contract-drift.md](./47-shared-contract-drift.md) | P0 |
 | 48 | 平台自有 Agent 的执行层 | [48-agent-execution.md](./48-agent-execution.md) | P0 |
+| 49 | 人类核验闭环与争议升级阶梯 | [49-verification-and-escalation.md](./49-verification-and-escalation.md) | P0 |
 
 ## 功能点编号与优先级约定
 

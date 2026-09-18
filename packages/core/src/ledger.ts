@@ -52,6 +52,11 @@ export const LEDGER_KIND_LABEL: Record<string, string> = {
   // —— 平台自有 AI 助理收入归集（AGT-019）——
   agent_payout_in: 'AI 助理收入归集',
   agent_payout_out: 'AI 助理收入划出',
+
+  // —— 人类核验（VER-010）——
+  verify_hold: '核验费预扣',
+  verify_payout: '核验报酬',
+  verify_refund: '核验费退回',
 };
 
 /** 认不出的科目显示原始标识符——宁可给用户一串能发给客服的字符，

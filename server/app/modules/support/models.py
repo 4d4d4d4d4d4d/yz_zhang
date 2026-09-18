@@ -16,7 +16,10 @@ class Ticket(Base):
     user_id: Mapped[int] = mapped_column(Integer, index=True)
     subject: Mapped[str] = mapped_column(String(120))
     body: Mapped[str] = mapped_column(Text, default="")
-    status: Mapped[str] = mapped_column(String(12), default="open")  # open/resolved
+    status: Mapped[str] = mapped_column(String(12), default="open")  # open/resolved/escalated
+    # ESCA-001 转纠纷后两边互相能找到。不留这个指针，用户在工单里说过的话
+    # 就和纠纷失联了，而他会被迫再说一遍——两次陈述不一致会被当成翻供。
+    escalated_to_dispute_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reply: Mapped[str] = mapped_column(Text, default="")
     handler_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V73 全批次完成（2026-09-17）。
-> 后端 705 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V74 全批次完成（2026-09-17）。
+> 后端 725 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,56 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V74 批次：升级不是换个人重做，是让人来判 AI 做得对不对）
+
+> 模块 spec：[49-verification-and-escalation.md](49-verification-and-escalation.md)
+>
+> **补 V73 留下的 AGT-050**：`escalated` 当时只做到「拦住 + 可退款」，
+> 没有接到人类专家。需求那句「agent 无法完成或者需要人类专家核验」，
+> 核心是**后半句**。
+>
+> **最重要的一条判断：核验不是重做。** 「AI 做完了但没把握」和「AI 做不了」
+> 对应的成本差一个数量级。把核验做成「重新发一个任务招人干」，
+> 就是按重做收费——**发布方为 AI 的不确定性付了两次全价**，产品立刻不成立。
+> 所以核验是独立实体、按原价 5%~20% 定价。
+>
+> **不复用 Task 与 V73「复用 User」方向相反，标准却是同一条**：
+> 复用能省掉重复实现的就复用（托管/纠纷/信用/账本全以 user_id 为键，
+> 不复用得各写第二遍）；复用只带来仪式的就不复用
+> （核验是一笔 ¥10~50 的活，且常见情形下付款方是平台自己，
+> 让平台对自己做资金托管，除了复杂度什么也没换来）。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **VER-002 谁付费（有立场的判断）** | agent 置信度不足是**平台的问题**，平台付；发布方主动要核验的自己付。后果是阈值调越松平台掏越多——**这正是该有的激励**，调的人承担成本 | `tests/test_verification_escalation.py::test_ver002_escalation_is_paid_by_the_platform`、`::test_ver002_voluntary_verification_is_paid_by_the_requester` |
+| **VER-000 按核验定价不按重做** | 原价 15%，上下限封顶 | `::test_ver000_verification_is_priced_as_review_not_redo` |
+| **VER-020 agent 不能当核验人** | **让 AI 核验 AI 的产出，是把同一个不确定性叠两遍，不是降低它。** 整条升级链路的价值建立在「最后有一个人负责」上 | `::test_ver020_an_agent_cannot_be_a_verifier` |
+| **VER-021 利益冲突不靠自觉** | 本单当事人、付费方一律拒；需该类目完成记录 + 信用达标。不能接的**说明理由**（只给空列表，核验人不知道是资格不够还是没单） | `::test_ver021_parties_to_the_task_cannot_verify_it`、`::test_ver021_needs_a_completion_record_in_that_category`、`::test_open_orders_explain_why_not_claimable` |
+| **VER-022 三档结论各有出口** | approved/revised 解闸门，rejected 不解。没有「部分通过」——不可执行的结论等于没有结论 | `::test_ver022_approved_unblocks_delivery`、`::test_ver022_rejected_does_not_unblock` |
+| **VER-030 修正稿要重新过判据** | **人工核验是加上去的一道，不是用来豁免原有那道的。** 不重跑就有洞：核验人想早点结单，提交一份同样不过判据的修正稿却被放行 | `::test_ver030_revision_must_still_pass_the_platform_criteria` |
+| **VER-040 经验回流** | `KnowledgeCard` 只记类目/价格/工期，**记不下「怎么做才对」**。核验结论恰好是带标注的那份信息，是「持续帮助迭代」的真正载体 | `::test_ver040_verification_writes_a_lesson_without_personal_data`（同时断言经验表不存任何人的 id） |
+| **VER-010/041 资金** | 预扣→支付/退款；超时未接单自动退款，**已接单的不自动退**（钱退了人还在干是更糟的状态） | `::test_ver010_verifier_gets_paid_and_invariants_hold`、`::test_ver041_unclaimed_orders_expire_and_refund` |
+| **ESCA-001 工单转纠纷带上下文** | 不带的话用户要重说一遍——而**两次陈述不一致会被当成翻供**，在纠纷里对他不利 | `::test_esca001_ticket_escalates_to_dispute_with_context`、`::test_esca001_cannot_escalate_the_same_ticket_twice` |
+| **ESCA-002/003 证据包含 AI 履约记录** | 平台是责任主体，agent 的 run 与核验结论必须在材料里，否则「谁做的、做成什么样、谁核过」是空白。诚实标注置信度是**自报**的 | `::test_esca002_evidence_package_includes_ai_execution`、`::test_esca002_absent_ai_trail_says_absent_rather_than_empty` |
+
+**过程中两处自查，都值得记：**
+
+**① 我先自己写了一个证据导出端点，然后发现 `legal` 里已经有一个更完整的**
+（带哈希链验证、第三方存证回执、证明力边界声明）。删掉自己那个、去扩展既有的，
+才是对的——**同一个动作两条路正是 V58 修过的缺陷**。
+留了一条测试钉住「全站只有一个证据导出端点」。
+
+**② 平台给自己预扣核验费，被对账不变量当场抓到。**
+付款方是平台时，`acct` 与 `platform` 是同一个账户：先减后加净额为零，
+却记了一行 -3000 的流水，于是账实不符。正确做法是**平台自付时不做预扣**——
+预扣本来就是防「付款方不付」，而平台既是付款方又是代管方，防不了自己。
+
+**③ 平台账户允许为负**（这是个选择，不是疏忽）：平台的钱来自佣金收入，
+冷启动时是 0。因为「平台没钱」而拒绝下核验单，结果是**用户卡在一个
+交付不了的任务上**——他没做错任何事却要为平台的现金状况买单。
+而负余额本身是有意义的经营信号（核验成本超过佣金收入），
+该出现在财务看板上被看见，不该被一句「余额不足」挡掉。
 
 ## 已实现（V73 批次：定位是「AI 驱动」，而 LLM 只用在一个点上）
 

@@ -26,6 +26,7 @@ LEDGER_KINDS: frozenset[str] = frozenset({
     "tax_withheld", "tax_remit",
     "adjust_in", "adjust_out", "subsidy_in", "subsidy_out",
     "agent_payout_in", "agent_payout_out",
+    "verify_hold", "verify_payout", "verify_refund",
 })
 
 # transfer() 允许的科目前缀（会各自拼出 _in / _out 两条）

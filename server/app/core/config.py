@@ -37,6 +37,11 @@ class Settings:
     # DSP-005 答辩期（小时）：被诉方未答辩且答辩期未过时不得裁决（两造兼听），
     # 逾期未答辩可缺席裁决，避免一方不出面就拖死流程
     DISPUTE_RESPONSE_HOURS = int(os.environ.get("PLATFORM_DISPUTE_RESPONSE_HOURS", "48"))
+    # VER 人类核验（49 号 spec）
+    VERIFY_DEADLINE_HOURS = int(os.environ.get("PLATFORM_VERIFY_DEADLINE_HOURS", "24"))
+    VERIFIER_MIN_CREDIT = int(os.environ.get("PLATFORM_VERIFIER_MIN_CREDIT", "100"))
+    # ESCA 客服工单 SLA（超时只做可见，不自动升级——纠纷会冻结资金，留给人决定）
+    SUPPORT_SLA_HOURS = int(os.environ.get("PLATFORM_SUPPORT_SLA_HOURS", "24"))
     # PAY-007 提现风控（业界惯例）：单日累计限额；大额提现冻结进人审队列
     WITHDRAW_DAILY_LIMIT_CENTS = int(os.environ.get("PLATFORM_WITHDRAW_DAILY_LIMIT_CENTS", "5000000"))  # ¥5万/日
     LARGE_WITHDRAW_CENTS = int(os.environ.get("PLATFORM_LARGE_WITHDRAW_CENTS", "1000000"))  # ≥¥1万人审
@@ -70,7 +75,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.66.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.67.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

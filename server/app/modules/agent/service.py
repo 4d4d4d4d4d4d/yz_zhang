@@ -84,8 +84,13 @@ def delivery_block(db: Session, task) -> str:
         return "执行中，请稍候"
     if run.status == "failed":
         return f"执行失败，无法提交交付：{run.error or '未知错误'}"
+    # VER-022 人工核验通过（或已修正）即解除闸门——这就是 AGT-050 说的那个出口
+    from app.modules.verify import service as verify_service
+
+    if verify_service.verification_unblocks_delivery(db, task.id):
+        return ""
     if run.status == "escalated":
-        return "AI 置信度不足，已转人工核验，暂不能提交交付"
+        return "AI 置信度不足，需人工核验后方可提交交付"
     return ""
 
 

@@ -32,6 +32,10 @@ from app.modules.im.models_social import Friendship  # noqa: F401
 from app.modules.notification.models import Notification  # noqa: F401
 from app.modules.notification.models_device import DeviceToken  # noqa: F401
 from app.modules.agent.models import AgentProfile, AgentRun  # noqa: F401
+from app.modules.verify.models import (  # noqa: F401
+    VerificationLesson,
+    VerificationOrder,
+)
 from app.modules.knowledge.models import (  # noqa: F401
     DecompositionTemplate,
     FaqEntry,

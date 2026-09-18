@@ -200,6 +200,49 @@ def generate_document(
             "disclaimer": "本文书为模板草稿，重要事项请咨询执业律师后使用。"}
 
 
+
+def _ai_execution_trail(db, task) -> dict | None:
+    """ESCA-002 证据包里的 AI 执行与核验段。
+
+    **刻意写成「没有就返回 None」而不是返回空结构**：一个全是空数组的
+    `ai_execution` 会让读材料的人以为「查过了，没有 AI 参与」，
+    而实际上可能是这段根本没接上。没有就说没有。
+    """
+    from app.modules.agent.models import AgentRun
+    from app.modules.verify.models import VerificationOrder
+
+    runs = db.query(AgentRun).filter(AgentRun.task_id == task.id).order_by(AgentRun.id).all()
+    orders = (
+        db.query(VerificationOrder)
+        .filter(VerificationOrder.task_id == task.id)
+        .order_by(VerificationOrder.id)
+        .all()
+    )
+    if not runs and not orders:
+        return None
+    return {
+        "acceptance_criteria": task.acceptance_criteria or [],
+        "agent_runs": [
+            {"id": r.id, "status": r.status, "confidence_bps": r.confidence_bps,
+             "criteria_results": r.criteria_results, "error": r.error,
+             "output": r.output, "cost_cents": r.cost_cents,
+             "at": r.created_at.isoformat()}
+            for r in runs
+        ],
+        "verifications": [
+            {"id": o.id, "trigger": o.trigger, "outcome": o.outcome,
+             "comment": o.comment, "criteria_results": o.criteria_results,
+             "verifier_id": o.verifier_id, "fee_cents": o.fee_cents,
+             "payer_id": o.payer_id}
+            for o in orders
+        ],
+        # 诚实标注：置信度是模型**自报**的，不是平台度量出来的
+        "notice": (
+            "confidence_bps 为 AI 自报置信度，非平台独立度量；"
+            "criteria_results 中 kind=auto 的判定由平台执行，kind=manual 由人判定。"
+        ),
+    }
+
 @router.get("/disputes/{dispute_id}/evidence-export")
 def evidence_export(
     dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
@@ -268,6 +311,10 @@ def evidence_export(
                 "reason": dispute.verdict_reason,
             },
         },
+        # ESCA-002 AI 执行与人类核验的记录。平台自有 agent 时**平台是责任主体**
+        # （AGT-017），所以这两段是平台自己的履约记录，必须在证据包里，
+        # 否则「谁做的、做成什么样、谁核过」在材料里是空白。
+        "ai_execution": _ai_execution_trail(db, task),
         "exported_by": user.id,
         "exported_at": utcnow().isoformat(),
     }
