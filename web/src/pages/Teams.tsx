@@ -155,7 +155,10 @@ function TeamCard({ teamId }: { teamId: number }) {
         {team.invoice_block
           ? <p className="error" data-testid="invoice-block">{team.invoice_block}</p>
           : <p className="muted">企业信息已核验，可以开具企业抬头发票。</p>}
-        <p className="muted">当前：{team.company_name || '未提交'}（{team.company_status}）</p>
+        <p className="muted">
+          当前：{team.company_name || '未提交'}（{team.verify_status}）
+          {team.verify_reason && ` · ${team.verify_reason}`}
+        </p>
         <button className="ghost" onClick={() => {
           const companyName = prompt('企业名称：');
           if (!companyName) return;

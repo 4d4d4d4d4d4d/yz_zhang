@@ -677,8 +677,13 @@ export interface TeamView {
   name: string;
   owner_id: number;
   company_name: string;
-  company_status: string;
-  created_at: string | null;
+  tax_number: string;
+  /** none / pending / verified / rejected —— 服务端字段名是 `verify_status`。
+   *  这里**曾经写成 `company_status`**：类型对不上却没有任何东西会红，
+   *  于是团队页上那行状态在运行时恒为 undefined（CLI-067 抓到的第一条）。 */
+  verify_status: string;
+  verify_reason: string;
+  active: boolean;
 }
 
 export interface TeamDetail extends TeamView {

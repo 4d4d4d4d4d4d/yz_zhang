@@ -82,6 +82,7 @@
 | 57 | 端上接得到：客户端契约覆盖闸门 | [57-client-reachability.md](./57-client-reachability.md) | P0 |
 | 58 | 时间是一条契约（时区） | [58-timezone.md](./58-timezone.md) | P0 |
 | 59 | 有后果的界面：合作体 / 团队 / 开发者 | [59-coop-team-developer-ui.md](./59-coop-team-developer-ui.md) | P0 |
+| 60 | 形状也要对上（请求体与响应体闸门） | [60-shape-alignment.md](./60-shape-alignment.md) | P0 |
 
 ## 功能点编号与优先级约定
 

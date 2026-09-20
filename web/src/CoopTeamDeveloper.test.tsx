@@ -132,10 +132,10 @@ describe('团队', () => {
     localStorage.setItem('token', 'tok');
     const client = makeClient({
       '/users/me': ME,
-      '/teams/mine': [{ id: 4, name: '设计组', owner_id: 1, company_name: '', company_status: 'none', created_at: null, my_role: 'owner', my_spend_limit_cents: 10000 }],
+      '/teams/mine': [{ id: 4, name: '设计组', owner_id: 1, company_name: '', tax_number: '', verify_status: 'none', verify_reason: '', active: true, my_role: 'owner', my_spend_limit_cents: 10000 }],
       '/teams/4': {
-        id: 4, name: '设计组', owner_id: 1, company_name: '', company_status: 'none',
-        created_at: null, balance_cents: 500000, my_role: 'owner', my_spend_limit_cents: 10000,
+        id: 4, name: '设计组', owner_id: 1, company_name: '', tax_number: '',
+        verify_status: 'none', verify_reason: '', active: true, balance_cents: 500000, my_role: 'owner', my_spend_limit_cents: 10000,
         members: [{ user_id: 1, role: 'owner', spend_limit_cents: 10000 }],
         invoice_block: '企业信息尚未核验，暂不能开具企业发票',
       },
@@ -162,10 +162,10 @@ describe('团队', () => {
     localStorage.setItem('token', 'tok');
     const client = makeClient({
       '/users/me': ME,
-      '/teams/mine': [{ id: 4, name: '设计组', owner_id: 1, company_name: '甲公司', company_status: 'verified', created_at: null, my_role: 'member', my_spend_limit_cents: 10000 }],
+      '/teams/mine': [{ id: 4, name: '设计组', owner_id: 1, company_name: '甲公司', tax_number: '91310000X', verify_status: 'verified', verify_reason: '', active: true, my_role: 'member', my_spend_limit_cents: 10000 }],
       '/teams/4': {
-        id: 4, name: '设计组', owner_id: 1, company_name: '甲公司', company_status: 'verified',
-        created_at: null, balance_cents: 0, my_role: 'member', my_spend_limit_cents: 10000,
+        id: 4, name: '设计组', owner_id: 1, company_name: '甲公司', tax_number: '91310000X',
+        verify_status: 'verified', verify_reason: '', active: true, balance_cents: 0, my_role: 'member', my_spend_limit_cents: 10000,
         members: [], invoice_block: '',
       },
       '/teams/4/spends': [

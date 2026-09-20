@@ -1143,7 +1143,7 @@ export class PlatformClient {
   }
   /** TEAM-030 企业信息转人工核验（沿用 V76 那套：材料是敏感文件）。 */
   submitTeamCompany(teamId: number, companyName: string, taxNumber: string, licenseImages: string[] = []) {
-    return this.request<{ id: number; company_status: string }>(
+    return this.request<TeamView>(
       'POST', `/teams/${teamId}/company`,
       { company_name: companyName, tax_number: taxNumber, license_images: licenseImages },
     );

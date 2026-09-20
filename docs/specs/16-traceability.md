@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V84 全批次完成（2026-09-20）。
-> 后端 886 tests + 前端 90 tests（core 56 + web 34）全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V85 全批次完成（2026-09-20）。
+> 后端 893 tests + 前端 90 tests（core 56 + web 34）全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,26 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V85 批次：形状也要对上）
+
+> 模块 spec：[60-shape-alignment.md](60-shape-alignment.md)
+>
+> V82 的客户端闸门只看路径。两批之内，它没管的那一半出事两次；
+> 闸门一上线又立刻抓到第三条，是我自己在 V82/V84 亲手写错的。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **CLI-067(a) 请求体比 OpenAPI schema** | 扫 `client.ts` 的字面量请求体顶层键，与 `requestBody` 的 `properties`/`required` 比。真相来源是 OpenAPI——**它就是服务端的校验规则本身**（pydantic 生成），不是二手描述。实测比对了 63 个请求体 | `tests/test_client_shape_alignment.py::test_cli067_request_bodies_match_the_server_schema`（红验：把一个键名写错即红） |
+| **CLI-067(b) 响应体比真实响应** | 解析 `types.ts` 的 interface（展开 `extends`），与跑真实业务流程拿到的响应**双向**比对。**特意不比 OpenAPI**：大量端点返回手写字典，FastAPI 只知道它返回 `dict`，OpenAPI 里根本没有 schema，而出事的恰恰是这批——**能拿到真东西的时候就别去比声明** | `::test_cli067_{agent_and_verification,venture,team,developer}_shapes`、`::test_cli067_certification_shape` |
+| **双向都要红** | 声明了服务端没给的 → 运行时 undefined；服务端给了没声明的 → 客户端看不见它。**只查一边的闸门，另一边就是自由的** | 同上（红验：改错一个字段名即红） |
+| **TEAM-060 修正 `TeamView`** | 服务端真实字段是 `tax_number`/`verify_status`/`verify_reason`/`active`；团队页改为显示 `verify_status` 与驳回理由，`submitTeamCompany` 的返回类型也从臆造的 `{id, company_status}` 改成 `TeamView` | `::test_cli067_team_shapes` |
+
+**这一批最值得记的一条**：V84 团队页的 web 测试当时是**绿的**，
+因为测试桩是照着那个错类型写的——桩与类型互相印证，两个都错，闭环自洽。
+
+> **在 mock 里自洽，不等于对。**
+> 只有跟真实服务端比，才知道形状对不对。
 
 ## 已实现（V84 批次：有后果的界面）
 
