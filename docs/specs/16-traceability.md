@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V81 全批次完成（2026-09-20）。
-> 后端 870 tests + 前端 64 tests（core 41 + web 23）全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V82 全批次完成（2026-09-20）。
+> 后端 875 tests + 前端 76 tests（core 48 + web 28）全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,34 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V82 批次：端上接得到）
+
+> 模块 spec：[57-client-reachability.md](57-client-reachability.md)
+>
+> 清点结果：**78 个用户可达的服务端端点，共享 SDK 里一个都没有。**
+> V73~V79 六个批次的用户侧入口，端上全是空的——服务端完整、测试全绿、
+> 文档齐备，而用户点不到。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **CLI-060 覆盖闸门** | 从 `app.openapi()` 取**服务端自己声明的**路由表（不是手抄清单），对比 `client.ts` 里扫出的 URL 字面量；剩下的每条要么有 SDK 方法，要么在 `CLIENT_EXEMPT` 里有理由。与 V60 注销处置表同一种做法：**新增一项就逼作者做一次决定** | `tests/test_client_contract_coverage.py::test_cli060_every_user_facing_endpoint_is_reachable_from_the_client`（红验：临时加一个服务端端点，闸门立刻点名它） |
+| **扫描器自己先会红** | 断言「至少扫到 150 条」且已知路径必须在内。SDK 里有 `` `/tasks/mine${qs ? `?${qs}` : ''}` ``——**模板字面量里嵌了第二层模板字面量**，正则会断在第一个反引号上，所以路径提取是手写字符扫描 | `::test_cli061_scanner_actually_finds_paths` |
+| **CLI-061 豁免双向对齐** | 豁免值是一句人话理由（`True` 不算）；且豁免表里不能留已不存在的路径——否则它会变成一张没人敢删的历史清单，闸门覆盖面悄悄缩小（SYNC-002 同款） | `::test_cli061_exemptions_carry_a_real_reason`、`::test_cli061_exemption_table_has_no_dead_entries` |
+| **CLI-062 补齐 SDK** | agent / 核验 / 合作体 / 团队 / 开放 API / 资质 六条线共约 60 个方法 | `::test_cli062_the_six_feature_lines_are_reachable`、`packages/core/src/client.test.ts` 的「六条线的客户端入口」 |
+| **CERT-060 修正漂移的契约** | `addCertification(name, licenseNo)` **调用会 422**：V76 把资质改成了「提交申请 + 证件影像 + 姓名比对」，SDK 停在旧形状上。改为 `submitCertification({...})` | `client.test.ts::黑名单/撤回/资质/存证接口路径`（此前它**断言的就是那个错的契约**） |
+| **CLI-063 Web 两个入口** | 任务详情页的「AI 助理」面板（邀请 / 执行 / 交付闸门 / 申请人工核验）与核验台 `/verify`（可接列表 / 接单 / 看产出与判据 / 提交结论） | `web/src/AgentAndVerify.test.tsx` |
+| **CLI-064 显示服务端给的原因** | `eligible-agents` 与 `verification-orders` 都专门返回了 `reason`，界面必须原样显示——**空列表看起来更干净**，但发布方不知道是要到场还是超预算，核验人不知道是资格不够还是真没单 | `::CLI-064 不可用的助理显示服务端给的理由`、`::CLI-064 不能接的核验单显示资格原因`（两条都做过红验：把 reason 吞掉即红） |
+
+**这一批真正的教训**：
+
+SDK 的测试打的是 mock fetch，它只验证「我发出的请求长这样」，
+**从不验证「服务端认不认这个形状」**。所以 `addCertification` 断言着一个
+服务端早就不接受的请求体，测试照样绿了一整个版本周期。
+
+> **断言一个错的契约比不断言更糟——它会让人以为已经验过了。**
+
+闸门只解决了「路径可达」，没解决「请求体形状对不对」（CLI-067 记账）。
 
 ## 已实现（V81 批次：agent 交付闭环与产出审核）
 

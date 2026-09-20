@@ -13,6 +13,7 @@ import Rewards from './pages/Rewards';
 import Square from './pages/Square';
 import Support from './pages/Support';
 import TaskDetail from './pages/TaskDetail';
+import Verify from './pages/Verify';
 import WalletPage from './pages/Wallet';
 import {
   dismissInstall,
@@ -45,6 +46,7 @@ export default function App() {
         <Link to="/wallet">钱包</Link>
         <Link to="/rewards">优惠</Link>
         <Link to="/support">客服</Link>
+        <Link to="/verify">核验台</Link>
         <span className="spacer" />
         {me ? (
           <>
@@ -71,6 +73,7 @@ export default function App() {
         <Route path="/profile" element={hasToken ? <Profile /> : <Navigate to="/login" />} />
         <Route path="/rewards" element={hasToken ? <Rewards /> : <Navigate to="/login" />} />
         <Route path="/support" element={hasToken ? <Support /> : <Navigate to="/login" />} />
+        <Route path="/verify" element={hasToken ? <Verify /> : <Navigate to="/login" />} />
         <Route path="/admin" element={hasToken ? <Admin /> : <Navigate to="/login" />} />
       </Routes>
 

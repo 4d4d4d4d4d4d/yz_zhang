@@ -1,9 +1,28 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
+  AgentProfileView,
+  AgentRunView,
   AgreementStatus,
+  ApiKeyView,
   CaptchaConfig,
+  CertificationApplicationView,
   CircleInfo,
+  CompliancePath,
   ContentItem,
+  ContributionKind,
+  ContributionView,
+  EligibleAgent,
+  RiskDisclosure,
+  ShareRow,
+  SpendRequestView,
+  TeamDetail,
+  TeamView,
+  VentureDetail,
+  VentureView,
+  VerificationOrderDetail,
+  VerificationOrderView,
+  WebhookDeliveryView,
+  WebhookView,
   CouponTemplate,
   MarketCell,
   MyCoupon,
@@ -681,10 +700,35 @@ export class PlatformClient {
   recallMessage(messageId: number) {
     return this.request<{ ok: boolean }>('POST', `/messages/${messageId}/recall`);
   }
-  addCertification(name: string, licenseNo: string) {
-    return this.request<{ certifications: string[] }>('POST', '/users/me/certifications', {
-      name, license_no: licenseNo,
-    });
+  /** CERT-060 **这个方法此前会 422。**
+   *
+   *  V76 把资质从「POST 一个字符串就拿到」改成了「提交申请 + 证件影像 +
+   *  持证人姓名与实名比对」，服务端契约换了，SDK 停在旧形状上没人发现——
+   *  因为 SDK 的测试打的是 mock fetch，它只验证「我发出的请求长这样」，
+   *  从不验证「服务端认不认这个形状」（57 号 spec 第 0 节）。
+   *
+   *  旧签名保留会更"兼容"，但它兼容的是一个服务端已经不接受的形状，
+   *  留着只会让下一个人以为它能用。
+   */
+  submitCertification(input: {
+    name: string;
+    holderName: string;
+    certNumber: string;
+    issuer?: string;
+    expiresAt?: string | null;
+    images: string[];
+  }) {
+    return this.request<{ id: number; name: string; status: string; certifications: string[] }>(
+      'POST', '/users/me/certifications',
+      {
+        name: input.name,
+        holder_name: input.holderName,
+        cert_number: input.certNumber,
+        issuer: input.issuer ?? '',
+        expires_at: input.expiresAt ?? null,
+        images: input.images,
+      },
+    );
   }
   contractAnchors(contractId: number) {
     return this.request<Array<{ seq: number; event_type: string; chain_hash: string; payload_hash: string; created_at: string }>>(
@@ -922,6 +966,333 @@ export class PlatformClient {
   }
   acceptSettlement(disputeId: number) {
     return this.request<{ id: number; status: string }>('POST', `/disputes/${disputeId}/settlement/accept`);
+  }
+
+  // ==================================================================
+  // CLI-062 以下六条线在 V73~V79 全部只做了服务端。
+  // 清点结果：78 个用户可达端点，SDK 里一个都没有——服务端完整、
+  // 测试全绿、文档齐备，而用户点不到（57 号 spec）。
+  // 覆盖闸门见 server/tests/test_client_contract_coverage.py。
+  // ==================================================================
+
+  // ---- AGT 平台自有 AI 助理 ----
+  /** 平台在售的 AI 助理目录。不含 prompt 与成本——那是平台的实现细节与经营数据。 */
+  agents() {
+    return this.request<AgentProfileView[]>('GET', '/agents');
+  }
+  /** AGT-018 这个任务哪些助理能接，以及**不能接的逐条理由**。
+   *  只回一个空列表没有意义：发布方不知道是因为要到场、还是金额超限，
+   *  也就不知道该改什么。 */
+  eligibleAgents(taskId: number) {
+    return this.request<EligibleAgent[]>('GET', `/tasks/${taskId}/eligible-agents`);
+  }
+  /** 由发布方主动邀请，平台不自动派单——让 AI 接自己的活是一个需要知情的选择。 */
+  inviteAgent(taskId: number, agentUserId: number) {
+    return this.request<{ id: number; status: string; agent_user_id: number }>(
+      'POST', `/tasks/${taskId}/agent-apply?agent_user_id=${agentUserId}`,
+    );
+  }
+  /** 触发执行。AGT-060：成功即由平台代为提交交付（agent 没有登录态）。 */
+  runAgent(taskId: number) {
+    return this.request<AgentRunView & { delivered: boolean; task_status: string }>(
+      'POST', `/tasks/${taskId}/agent-run`,
+    );
+  }
+  agentRuns(taskId: number) {
+    return this.request<{ runs: AgentRunView[]; delivery_block: string }>(
+      'GET', `/tasks/${taskId}/agent-runs`,
+    );
+  }
+
+  // ---- VER 人类核验 ----
+  /** VER-002 谁付费由服务端判断：置信度不足自动升级 → 平台付；
+   *  主动核验一个已成功的 run → 发布方付。响应里的 `payer_id` 就是答案。 */
+  requestVerification(taskId: number) {
+    return this.request<VerificationOrderView>('POST', `/tasks/${taskId}/verification`);
+  }
+  /** 可接的核验单。不能接的带 `reason`——**只显示空列表，核验人不知道
+   *  是资格不够还是真没单**。 */
+  openVerificationOrders() {
+    return this.request<Array<VerificationOrderView & {
+      category: string; task_title: string; claimable: boolean; reason: string;
+    }>>('GET', '/verification-orders');
+  }
+  claimVerificationOrder(orderId: number) {
+    return this.request<VerificationOrderView>('POST', `/verification-orders/${orderId}/claim`);
+  }
+  /** 核验人要看的就是这三样：AI 产出 + 自报置信度 + 平台判据逐条结果。 */
+  verificationOrder(orderId: number) {
+    return this.request<VerificationOrderDetail>('GET', `/verification-orders/${orderId}`);
+  }
+  submitVerificationOutcome(
+    orderId: number, outcome: 'approved' | 'revised' | 'rejected',
+    comment = '', revisedOutput = '',
+  ) {
+    return this.request<{ outcome: string; unblocked: boolean; delivered: boolean }>(
+      'POST', `/verification-orders/${orderId}/outcome`,
+      { outcome, comment, revised_output: revisedOutput },
+    );
+  }
+
+  // ---- COOP 早期合作体 ----
+  /** COOP-030 加入前要签的那份。**公开可读**——要求人签一份他看不到的东西是荒谬的。 */
+  ventureRiskDisclosure(name = '（待定）') {
+    return this.request<RiskDisclosure>('GET', `/ventures/risk-disclosure?name=${encodeURIComponent(name)}`);
+  }
+  createVenture(name: string, purpose: string, category: string, riskDisclosureVersion: string) {
+    return this.request<VentureView>('POST', '/ventures', {
+      name, purpose, category, risk_disclosure_version: riskDisclosureVersion,
+    });
+  }
+  myVentures() {
+    return this.request<Array<VentureView & { role: string }>>('GET', '/ventures/mine');
+  }
+  venture(ventureId: number) {
+    return this.request<VentureDetail>('GET', `/ventures/${ventureId}`);
+  }
+  /** COOP-021 邀请制，没有公开加入端点——这是让它落在合作内部而非公开募集的
+   *  结构性设计之一。 */
+  inviteToVenture(ventureId: number, userId: number) {
+    return this.request<{ invited: number; venture_id: number; risk_disclosure_version: string }>(
+      'POST', `/ventures/${ventureId}/invitations`, { user_id: userId },
+    );
+  }
+  /** 风险揭示书由**被邀请人自己**签：代签的知情同意不是知情同意。 */
+  joinVenture(ventureId: number, riskDisclosureVersion: string) {
+    return this.request<{ venture_id: number; user_id: number; role: string }>(
+      'POST', `/ventures/${ventureId}/members`, { risk_disclosure_version: riskDisclosureVersion },
+    );
+  }
+  submitContribution(ventureId: number, kind: ContributionKind, description: string, evidence: string[] = []) {
+    return this.request<{ id: number; status: string }>(
+      'POST', `/ventures/${ventureId}/contributions`, { kind, description, evidence },
+    );
+  }
+  ventureContributions(ventureId: number) {
+    return this.request<ContributionView[]>('GET', `/ventures/${ventureId}/contributions`);
+  }
+  /** 提交时不计价：贡献人说「我做了什么」，确认人说「这值多少」。 */
+  confirmContribution(ventureId: number, contributionId: number, valuedCents: number, note = '', accept = true) {
+    return this.request<{ id: number; status: string; valued_cents: number; shares: ShareRow[] }>(
+      'POST', `/ventures/${ventureId}/contributions/${contributionId}/confirm`,
+      { accept, valued_cents: valuedCents, note },
+    );
+  }
+  ventureShares(ventureId: number) {
+    return this.request<{ shares: ShareRow[]; total_bps: number; basis: string }>(
+      'GET', `/ventures/${ventureId}/shares`,
+    );
+  }
+  distributeVenture(ventureId: number, amountCents: number, memo = '') {
+    return this.request<{ id: number; total_cents: number; share_snapshot: ShareRow[] }>(
+      'POST', `/ventures/${ventureId}/distributions`, { amount_cents: amountCents, memo },
+    );
+  }
+  ventureDistributions(ventureId: number) {
+    return this.request<Array<{ id: number; total_cents: number; memo: string; share_snapshot: ShareRow[]; created_at: string }>>(
+      'GET', `/ventures/${ventureId}/distributions`,
+    );
+  }
+  /** COOP-040 **告诉你需要什么，不拦住你**：结构化清单 + 每项理由 + 当前状态。 */
+  ventureCompliancePath(ventureId: number) {
+    return this.request<CompliancePath>('GET', `/ventures/${ventureId}/compliance-path`);
+  }
+
+  // ---- TEAM 团队账户 ----
+  createTeam(name: string) {
+    return this.request<TeamView>('POST', '/teams', { name });
+  }
+  myTeams() {
+    return this.request<Array<TeamView & { my_role: string; my_spend_limit_cents: number }>>('GET', '/teams/mine');
+  }
+  team(teamId: number) {
+    return this.request<TeamDetail>('GET', `/teams/${teamId}`);
+  }
+  addTeamMember(teamId: number, userId: number, role: 'admin' | 'member' = 'member', spendLimitCents = 0) {
+    return this.request<{ team_id: number; user_id: number; role: string; spend_limit_cents: number }>(
+      'POST', `/teams/${teamId}/members`, { user_id: userId, role, spend_limit_cents: spendLimitCents },
+    );
+  }
+  updateTeamMember(teamId: number, memberUserId: number, patch: { role?: 'admin' | 'member'; spend_limit_cents?: number }) {
+    return this.request<{ user_id: number; role: string; spend_limit_cents: number }>(
+      'PATCH', `/teams/${teamId}/members/${memberUserId}`, patch,
+    );
+  }
+  removeTeamMember(teamId: number, memberUserId: number) {
+    return this.request<{ removed: number }>('DELETE', `/teams/${teamId}/members/${memberUserId}`);
+  }
+  /** 超出个人额度时服务端返回 `needed_approval`，不是直接失败——
+   *  申请已经建好了，等的是审批。 */
+  requestTeamSpend(teamId: number, amountCents: number, purpose = '', taskId?: number) {
+    return this.request<{ id: number; status: string; needed_approval: boolean; reason: string }>(
+      'POST', `/teams/${teamId}/spends`, { amount_cents: amountCents, purpose, task_id: taskId ?? null },
+    );
+  }
+  teamSpends(teamId: number) {
+    return this.request<SpendRequestView[]>('GET', `/teams/${teamId}/spends`);
+  }
+  decideTeamSpend(teamId: number, requestId: number, approve: boolean, reason = '') {
+    return this.request<{ id: number; status: string }>(
+      'POST', `/teams/${teamId}/spends/${requestId}/decide`, { approve, reason },
+    );
+  }
+  executeTeamSpend(teamId: number, requestId: number) {
+    return this.request<{ id: number; status: string; amount_cents: number }>(
+      'POST', `/teams/${teamId}/spends/${requestId}/execute`,
+    );
+  }
+  /** TEAM-030 企业信息转人工核验（沿用 V76 那套：材料是敏感文件）。 */
+  submitTeamCompany(teamId: number, companyName: string, taxNumber: string, licenseImages: string[] = []) {
+    return this.request<{ id: number; company_status: string }>(
+      'POST', `/teams/${teamId}/company`,
+      { company_name: companyName, tax_number: taxNumber, license_images: licenseImages },
+    );
+  }
+
+  // ---- OAPI 开放 API 与 Webhook ----
+  apiScopes() {
+    return this.request<{ scopes: Array<{ name: string; description: string }>; note: string }>(
+      'GET', '/developer/scopes',
+    );
+  }
+  /** API-001 明文 key **只在这个响应里出现一次**，库里只存哈希。 */
+  createApiKey(name: string, scopes: string[]) {
+    return this.request<{ id: number; name: string; scopes: string[]; key_prefix: string; key: string; warning: string }>(
+      'POST', '/developer/api-keys', { name, scopes },
+    );
+  }
+  apiKeys() {
+    return this.request<ApiKeyView[]>('GET', '/developer/api-keys');
+  }
+  revokeApiKey(keyId: number) {
+    return this.request<{ id: number; active: boolean }>('DELETE', `/developer/api-keys/${keyId}`);
+  }
+  /** 明文找不回来，所以轮换是「丢了怎么办」的唯一出路。 */
+  rotateApiKey(keyId: number) {
+    return this.request<{ id: number; key: string; revoked_id: number; warning: string }>(
+      'POST', `/developer/api-keys/${keyId}/rotate`,
+    );
+  }
+  createWebhook(url: string, events: string[]) {
+    return this.request<{ id: number; url: string; events: string[]; secret: string; signature_howto: string }>(
+      'POST', '/developer/webhooks', { url, events },
+    );
+  }
+  webhooks() {
+    return this.request<WebhookView[]>('GET', '/developer/webhooks');
+  }
+  /** HOOK-002 投递记录。没有它，集成方报「我没收到」时两边都无法证明。 */
+  webhookDeliveries(webhookId: number) {
+    return this.request<WebhookDeliveryView[]>('GET', `/developer/webhooks/${webhookId}/deliveries`);
+  }
+  deleteWebhook(webhookId: number) {
+    return this.request<{ deleted: number }>('DELETE', `/developer/webhooks/${webhookId}`);
+  }
+
+  // ---- 其余用户侧端点（闸门点名的零散项）----
+  smsLogin(phone: string, smsCode: string) {
+    return this.request<{ token: string; user: Me }>('POST', '/auth/login-sms', {
+      phone, sms_code: smsCode,
+    });
+  }
+  myCertifications() {
+    return this.request<{ active: string[]; applications: CertificationApplicationView[] }>(
+      'GET', '/users/me/certifications',
+    );
+  }
+  publishTask(taskId: number) {
+    return this.request<Task>('POST', `/tasks/${taskId}/publish`);
+  }
+  /** GEO-022 行程共享开关：到场类任务的安全功能，不是位置追踪。 */
+  setTripShare(taskId: number, enabled: boolean) {
+    return this.request<{ enabled: boolean }>('POST', `/tasks/${taskId}/trip-share?enabled=${enabled}`);
+  }
+  trip(taskId: number) {
+    return this.request<{ shared: boolean; points: Array<{ lat: number; lng: number; at: string }> }>(
+      'GET', `/tasks/${taskId}/trip`,
+    );
+  }
+  sos(taskId: number, lat: number, lng: number) {
+    return this.request<{ id: number; notified: number }>('POST', `/tasks/${taskId}/sos`, { lat, lng });
+  }
+  circleMembers(circleId: number) {
+    return this.request<Array<{ user_id: number; nickname: string; credit_score: number }>>(
+      'GET', `/circles/${circleId}/members`,
+    );
+  }
+  removeCircleMember(circleId: number, userId: number) {
+    return this.request<{ removed: number }>('POST', `/circles/${circleId}/members/${userId}/remove`);
+  }
+  rejectChangeOrder(contractId: number, orderId: number) {
+    return this.request<{ id: number; status: string }>(
+      'POST', `/contracts/${contractId}/change-orders/${orderId}/reject`,
+    );
+  }
+  userContents(userId: number) {
+    return this.request<ContentItem[]>('GET', `/users/${userId}/contents`);
+  }
+  createTicket(subject: string, body = '') {
+    return this.request<{ id: number; status: string; reply: string }>('POST', '/support/tickets', { subject, body });
+  }
+  myTickets() {
+    return this.request<Array<{ id: number; subject: string; body: string; status: string; reply: string; created_at: string }>>(
+      'GET', '/support/tickets',
+    );
+  }
+  /** ESCA-001 工单转纠纷**带上下文**：不带的话用户要把刚说过的话重说一遍，
+   *  而两次陈述不一致会在纠纷里被当成翻供。 */
+  escalateTicket(ticketId: number, taskId: number, reason: string) {
+    return this.request<{ dispute_id: number; ticket_id: number }>(
+      'POST', `/support/tickets/${ticketId}/escalate-to-dispute`, { task_id: taskId, reason },
+    );
+  }
+  notificationPrefs() {
+    return this.request<Array<{ category: string; enabled: boolean; label: string; forced?: boolean }>>(
+      'GET', '/notifications/prefs',
+    );
+  }
+  setNotificationPref(category: string, enabled: boolean) {
+    return this.request<{ category: string; enabled: boolean }>(
+      'PUT', `/notifications/prefs?category=${encodeURIComponent(category)}&enabled=${enabled}`,
+    );
+  }
+  trendingTerms(limit = 10) {
+    return this.request<Array<{ term: string; count: number }>>('GET', `/search/trending?limit=${limit}`);
+  }
+  searchSuggest(q: string) {
+    return this.request<string[]>('GET', `/search/suggest?q=${encodeURIComponent(q)}`);
+  }
+  /** 13.C 客户端漏斗埋点。 */
+  trackEvent(name: string, refType = '', refId = 0) {
+    return this.request<{ ok: boolean }>('POST', '/events', { name, ref_type: refType, ref_id: refId });
+  }
+  knowledgeCards(category?: string, limit = 20) {
+    const q = category ? `?category=${encodeURIComponent(category)}&limit=${limit}` : `?limit=${limit}`;
+    return this.request<Array<{ id: number; category: string; title: string; body: string }>>(
+      'GET', `/knowledge/cards${q}`,
+    );
+  }
+  decompositionTemplate(category: string, q = '') {
+    return this.request<{ found: boolean; items: DecompositionItem[] }>(
+      'GET', `/knowledge/templates?category=${encodeURIComponent(category)}&q=${encodeURIComponent(q)}`,
+    );
+  }
+  categoryDemand() {
+    return this.request<Array<{ category: string; open_tasks: number; completed: number; gmv_cents: number; suppliers: number }>>(
+      'GET', '/knowledge/category-demand',
+    );
+  }
+  /** TAX-022 只开**平台服务费**那部分：执行者的劳务报酬平台没有开票资格，
+   *  含糊其辞地「帮你开全额发票」是虚开，不是服务。 */
+  requestInvoice(contractId: number, title: string, taxNo = '') {
+    return this.request<{ id: number; status: string; amount_cents: number; scope: string }>(
+      'POST', '/finance/invoices', { contract_id: contractId, title, tax_no: taxNo },
+    );
+  }
+  myInvoices() {
+    return this.request<Array<{ id: number; contract_id: number; title: string; amount_cents: number; status: string; created_at: string }>>(
+      'GET', '/finance/invoices',
+    );
   }
 }
 

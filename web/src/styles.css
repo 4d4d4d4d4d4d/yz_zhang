@@ -114,3 +114,18 @@ input, textarea, select { font-size: 16px; }
   }
   .install-tip button { min-height: 36px; padding: 6px 12px; }
 }
+
+/* CLI-063 AI 产出与修正稿：等宽 + 保留换行，且**可选中复制**——
+   核验人要把它贴到别处去比对，不能是一段不可选的图。 */
+.agent-output {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f8fafc;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  font-size: 13px;
+  max-height: 320px;
+  overflow: auto;
+}

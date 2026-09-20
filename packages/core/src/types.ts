@@ -526,3 +526,206 @@ export interface DisputeStatement {
   attachments: string[];
   created_at: string;
 }
+
+// =====================================================================
+// CLI-062 V73~V79 六个批次的用户侧类型。改造前一个都没有——
+// 服务端完整而端上零入口（57 号 spec）。
+// =====================================================================
+
+/** AGT 平台自有助理的公开档案。**不含 system_prompt 与成本**：
+ *  prompt 泄露等于交出判据之外的实现细节，成本是平台的经营数据。 */
+export interface AgentProfileView {
+  user_id: number;
+  name: string;
+  domains: string[];
+  max_task_budget_cents: number;
+  runs_total: number;
+  runs_succeeded: number;
+  is_active: boolean;
+}
+
+/** `reason` 是这条类型存在的理由：不能接时必须说明为什么。 */
+export interface EligibleAgent extends AgentProfileView {
+  eligible: boolean;
+  reason: string;
+}
+
+export interface AgentCriterionResult {
+  text: string;
+  /** auto 平台判据（阻断交付） / manual 人判（不阻断） */
+  kind: string;
+  passed: boolean;
+  detail?: string;
+}
+
+export interface AgentRunView {
+  id: number;
+  task_id: number;
+  /** running / succeeded / escalated / failed */
+  status: string;
+  /** AGT-013 **自报**的置信度（万分比），正因为自报才需要平台判据压着它。 */
+  confidence_bps: number;
+  output: string;
+  criteria_results: AgentCriterionResult[];
+  error: string;
+  /** AGT-051 内容审核结论：pass / review / reject（reject 时 output 为空）。 */
+  moderation_status: string;
+  created_at: string | null;
+  finished_at: string | null;
+}
+
+/** VER 核验单。`payer_id` 是有意暴露的：升级触发平台付，主动核验发布方付。 */
+export interface VerificationOrderView {
+  id: number;
+  task_id: number;
+  /** open / claimed / done / cancelled / expired */
+  status: string;
+  /** escalation 自动升级 / requested 发布方主动 */
+  trigger: string;
+  fee_cents: number;
+  payer_id: number;
+  verifier_id: number | null;
+  outcome: string;
+  comment: string;
+  revised_output: string;
+  criteria_results: AgentCriterionResult[];
+  deadline: string | null;
+  created_at: string | null;
+}
+
+export interface VerificationOrderDetail extends VerificationOrderView {
+  task_title: string;
+  task_description: string;
+  category: string;
+  acceptance_criteria: Array<{ text: string; kind: string }>;
+  agent_output: string;
+  agent_confidence_bps: number | null;
+  agent_criteria_results: AgentCriterionResult[];
+}
+
+/** COOP 风险揭示书。加入前必签，**公开可读**。 */
+export interface RiskDisclosure {
+  version: string;
+  title: string;
+  points: string[];
+  text: string;
+}
+
+export type ContributionKind = 'time' | 'money' | 'ip' | 'resource' | 'other';
+
+export interface VentureView {
+  id: number;
+  name: string;
+  purpose: string;
+  category: string;
+  status: string;
+  founder_id: number;
+  created_at: string | null;
+}
+
+export interface ShareRow {
+  user_id: number;
+  share_bps: number;
+  valued_cents: number;
+}
+
+export interface VentureDetail extends VentureView {
+  members: Array<{ user_id: number; role: string; joined_at: string | null }>;
+  shares: ShareRow[];
+  /** 「已实现」是字面意思：这就是合作体**真的收到**的钱，不是估值。 */
+  realized_funds_cents: number;
+}
+
+export interface ContributionView {
+  id: number;
+  user_id: number;
+  kind: ContributionKind;
+  description: string;
+  status: string;
+  valued_cents: number;
+  confirmed_by: number | null;
+  confirm_note: string;
+  evidence: string[];
+  created_at: string | null;
+  /** 与服务端同一判断：自己的贡献不能自己确认。 */
+  can_confirm: boolean;
+}
+
+/** COOP-040 合规路径：告诉你需要什么，不拦住你。`disclaimer` 必须显示。 */
+export interface CompliancePath {
+  items: Array<{ key: string; title: string; why: string; status: string; how: string }>;
+  disclaimer: string;
+}
+
+export interface TeamView {
+  id: number;
+  name: string;
+  owner_id: number;
+  company_name: string;
+  company_status: string;
+  created_at: string | null;
+}
+
+export interface TeamDetail extends TeamView {
+  balance_cents: number;
+  my_role: string;
+  my_spend_limit_cents: number;
+  members: Array<{ user_id: number; role: string; spend_limit_cents: number }>;
+  /** TEAM-030 客户端的「开票」按钮读这个，与服务端同一判断。 */
+  invoice_block: string;
+}
+
+export interface SpendRequestView {
+  id: number;
+  requester_id: number;
+  amount_cents: number;
+  purpose: string;
+  status: string;
+  task_id: number | null;
+  decided_by: number | null;
+  decision_reason: string;
+  created_at: string;
+  /** TEAM-021 「审批」按钮读这个：自己批自己不算审批。 */
+  can_decide: boolean;
+}
+
+export interface ApiKeyView {
+  id: number;
+  name: string;
+  scopes: string[];
+  key_prefix: string;
+  active: boolean;
+  last_used_at: string | null;
+  created_at: string;
+}
+
+export interface WebhookView {
+  id: number;
+  url: string;
+  events: string[];
+  active: boolean;
+  consecutive_failures: number;
+  /** 连续失败自动停用时写在这里——悄悄停掉比不停更坏。 */
+  disabled_reason: string;
+}
+
+export interface WebhookDeliveryView {
+  id: number;
+  event_type: string;
+  status: string;
+  attempts: number;
+  response_code: number | null;
+  response_excerpt: string;
+  created_at: string;
+}
+
+/** CERT 资质申请的状态。`decision_reason` 是被拒时唯一能改进的依据。 */
+export interface CertificationApplicationView {
+  id: number;
+  name: string;
+  /** pending / approved / rejected / revoked */
+  status: string;
+  decision_reason: string;
+  expires_at: string | null;
+  created_at: string;
+}

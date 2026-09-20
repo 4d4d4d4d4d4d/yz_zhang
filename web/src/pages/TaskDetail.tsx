@@ -4,6 +4,7 @@ import {
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { AgentPanel } from '../AgentPanel';
 import { DisputePanel } from '../DisputePanel';
 import PhotoPicker from '../PhotoPicker';
 import { useApp } from '../store';
@@ -125,6 +126,10 @@ export default function TaskDetail() {
           )}
         </div>
       </div>
+
+      {/* CLI-063 AI 助理面板：邀请、执行、交付闸门与人工核验入口。
+          V73/V74 把服务端做完了，网页上此前一个入口都没有。 */}
+      {isCreator && <AgentPanel task={task} onChanged={() => void load()} />}
 
       {/* 母任务驾驶舱（AI-DEC-021/TASK-036） */}
       {tree && tree.children.length > 0 && (

@@ -103,7 +103,10 @@ describe('V1 接口', () => {
     const { client, fetchImpl } = makeClient(200, {});
     await client.toggleBlock(9);
     await client.recallMessage(11);
-    await client.addCertification('律师', 'A1234');
+    await client.submitCertification({
+      name: '律师', holderName: '张三', certNumber: 'A1234',
+      issuer: '司法局', expiresAt: '2030-01-01T00:00:00', images: ['f1.png'],
+    });
     await client.verifyAnchorChain();
     const urls = fetchImpl.mock.calls.map((c) => c[0]);
     expect(urls).toEqual([
@@ -112,8 +115,14 @@ describe('V1 接口', () => {
       'http://x/api/v1/users/me/certifications',
       'http://x/api/v1/anchors/verify',
     ]);
+    // CERT-060 这里原本断言的是 `{name, license_no}`——**服务端在 V76 就不收这个形状了**，
+    // 而这条测试照样绿，因为它打的是 mock fetch：只验证「我发出的请求长这样」，
+    // 从不验证「服务端认不认」。断言一个错的契约比不断言更糟，它会让人以为已经验过了。
     const [, certInit] = fetchImpl.mock.calls[2];
-    expect(JSON.parse(certInit.body)).toEqual({ name: '律师', license_no: 'A1234' });
+    expect(JSON.parse(certInit.body)).toEqual({
+      name: '律师', holder_name: '张三', cert_number: 'A1234',
+      issuer: '司法局', expires_at: '2030-01-01T00:00:00', images: ['f1.png'],
+    });
   });
 
   it('澄清/模板/会话/导出接口（V3/V4）', async () => {
@@ -229,5 +238,74 @@ describe('helpers', () => {
     for (const s of ['draft', 'published', 'matched', 'in_progress', 'pending_acceptance', 'completed', 'cancelled', 'disputed']) {
       expect(TASK_STATUS_LABEL[s]).toBeTruthy();
     }
+  });
+});
+
+// =====================================================================
+// CLI-062 V73~V79 六条线的客户端入口。改造前它们在 SDK 里**一个方法都没有**：
+// 服务端完整、测试全绿、文档齐备，而用户点不到（57 号 spec）。
+// =====================================================================
+describe('六条线的客户端入口', () => {
+  it('AGT 邀请助理把 agent_user_id 放在查询串上（服务端就是这么收的）', async () => {
+    const { client, fetchImpl } = makeClient(201, { id: 1, status: 'pending', agent_user_id: 9 });
+    await client.inviteAgent(3, 9);
+    expect(fetchImpl.mock.calls[0][0]).toBe('http://x/api/v1/tasks/3/agent-apply?agent_user_id=9');
+  });
+
+  it('AGT 可用助理返回里带不可用的理由——界面要显示的是它，不是空列表', async () => {
+    const { client } = makeClient(200, [
+      { user_id: 9, name: '开发助理', domains: ['软件开发'], eligible: false,
+        reason: '需到场完成的任务不能由 AI 助理执行',
+        max_task_budget_cents: 50000, runs_total: 0, runs_succeeded: 0, is_active: true },
+    ]);
+    const rows = await client.eligibleAgents(3);
+    expect(rows[0].eligible).toBe(false);
+    expect(rows[0].reason).toContain('到场');
+  });
+
+  it('VER 提交结论三个字段都带上（revised 时修正稿是交付物）', async () => {
+    const { client, fetchImpl } = makeClient(200, { outcome: 'revised', unblocked: true, delivered: true });
+    await client.submitVerificationOutcome(5, 'revised', '补齐了缺的一节', '修正稿正文');
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(url).toBe('http://x/api/v1/verification-orders/5/outcome');
+    expect(JSON.parse(init.body)).toEqual({
+      outcome: 'revised', comment: '补齐了缺的一节', revised_output: '修正稿正文',
+    });
+  });
+
+  it('COOP 加入合作体必须自己带风险揭示书版本（代签的知情同意不是知情同意）', async () => {
+    const { client, fetchImpl } = makeClient(201, { venture_id: 2, user_id: 7, role: 'member' });
+    await client.joinVenture(2, 'v1');
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(url).toBe('http://x/api/v1/ventures/2/members');
+    expect(JSON.parse(init.body)).toEqual({ risk_disclosure_version: 'v1' });
+  });
+
+  it('TEAM 支出申请把 task_id 显式置 null，而不是漏掉这个键', async () => {
+    const { client, fetchImpl } = makeClient(201, { id: 1, status: 'pending', needed_approval: false, reason: '' });
+    await client.requestTeamSpend(4, 5000, '买素材');
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({
+      amount_cents: 5000, purpose: '买素材', task_id: null,
+    });
+  });
+
+  it('OAPI 轮换密钥是 POST，吊销是 DELETE——两个动作语义不同', async () => {
+    const { client, fetchImpl } = makeClient(200, {});
+    await client.rotateApiKey(3);
+    await client.revokeApiKey(3);
+    expect(fetchImpl.mock.calls[0][0]).toBe('http://x/api/v1/developer/api-keys/3/rotate');
+    expect(fetchImpl.mock.calls[0][1].method).toBe('POST');
+    expect(fetchImpl.mock.calls[1][1].method).toBe('DELETE');
+  });
+
+  it('CERT 提交资质带影像与持证人姓名（V76 的真实契约）', async () => {
+    const { client, fetchImpl } = makeClient(201, { id: 1, name: '电工', status: 'pending', certifications: [] });
+    await client.submitCertification({
+      name: '电工', holderName: '李四', certNumber: 'E-9', images: ['a.png'],
+    });
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({
+      name: '电工', holder_name: '李四', cert_number: 'E-9',
+      issuer: '', expires_at: null, images: ['a.png'],
+    });
   });
 });
