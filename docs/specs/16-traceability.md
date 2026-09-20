@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V80 全批次完成（2026-09-17）。
-> 后端 850 tests + 前端 55 tests 全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V81 全批次完成（2026-09-20）。
+> 后端 870 tests + 前端 64 tests（core 41 + web 23）全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,50 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V81 批次：agent 交付闭环与产出审核）
+
+> 模块 spec：[56-agent-delivery-closure.md](56-agent-delivery-closure.md)
+>
+> 起点是一次探针（完整 HTTP 链路，非服务层）：
+>
+> ```
+> RUN STATUS: succeeded | OUTPUT: 交付内容：已完成。
+> DELIVER as requester: 403 {'code': 'forbidden', 'message': '仅执行者可提交验收'}
+> TASK STATUS after run: in_progress
+> ```
+>
+> **由 agent 执行的任务，在生产里永远交付不了。** 钱躺在托管里，任务停在
+> `in_progress`，两边都没有任何按钮能往前走。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **AGT-060 平台代交付** | `agent.service.submit_agent_delivery()`：执行成功即由平台提交交付。**不是**放宽 `deliver` 的身份校验——那条校验同时管着所有人类任务，为一个 AI 的特例放宽一条通用身份闸门代价不对等；而平台本来就是 AI 履约的责任主体（AGT-017 已写进合同条款），由责任主体发起交付身份自洽 | `tests/test_agent_delivery_closure.py::test_agt060_agent_task_can_actually_be_delivered_over_http`（整条链路一次 `SessionLocal` 都不用——这正是改造前做不到的事）、`::test_agt060_requester_still_cannot_press_deliver_himself` |
+| **AGT-061 新路必须比原路更窄** | 代交付**调** `delivery_block` 而不重写它。加一条「平台可以代交付」的路径，如果它绕过闸门，48/49 两批建的闸门就全部作废 | `::test_agt061_failed_criteria_still_blocks_the_platform_delivery`、`::test_agt061_low_confidence_still_blocks_the_platform_delivery`、`::test_agt061_gate_is_not_bypassed_when_block_is_non_empty`（指着那一行红） |
+| **AGT-062 幂等** | 已 `pending_acceptance` / `completed` 的任务再调不产生第二条交付记录、不重置 `delivered_at` | `::test_agt062_repeated_runs_produce_one_delivery` |
+| **AGT-063 核验通过即交付** | 此前闸门解除了却**没有任何东西去推那一下**：核验人交了结论、核验费也付了，任务还停在 `in_progress`。`revised` 时交付物是**修正稿**——修正稿之所以存在正因为原始产出不合格 | `::test_agt063_approved_verification_delivers`、`::test_agt063_revised_delivers_the_revision_not_the_original`、`::test_agt063_rejected_verification_does_not_deliver` |
+| **AGT-064 交付物进证据链** | `ProgressLog(kind="delivery")`，`user_id` 写 **agent 的 user 行**：证据链里必须能看出这份交付物是谁交的，写成发布方就是在证据里撒谎。`agent_runs` 与 `progress_logs` 是两本账 | `::test_agt064_delivery_log_is_attributed_to_the_agent`、`::test_agt064_delivery_text_reaches_the_dispute_evidence_export` |
+| **AGT-067 判据没过的 run 只有「已修正」能解锁** | 同一形状的第二个死胡同：`failed` 分支排在核验分支前面，发布方自费核验 + 核验人交了**重新过判据**的修正稿，任务照样交付不了。但也不能简单把核验分支提前——那会让 `approved` 覆盖掉客观判据，而 AGT-030 的整个立论就是「不让执行方自己判卷」，换成核验人判也一样 | `::test_agt067_approved_cannot_unlock_a_criteria_failure`、`::test_agt067_revision_unlocks_a_criteria_failure` |
+| **AGT-051 产出过内容审核** | V73 记下的欠账。它此前不是紧急的，因为未经审核的产出只有当事人看得见；**本批把产出接到了交付上**（进证据链、被验收、被引用），所以接交付的同一批必须接审核，否则是在给一个已知的洞加流量 | `::test_agt051_output_is_actually_sent_to_moderation`（专防「又一次建好了没接上」）、`::test_agt051_rejected_output_fails_the_run_and_is_not_stored` |
+| **AGT-065 审核先于判据** | 一份违规的产出，判据过没过不重要。送审文本**不进 vendor 调用日志**（只记字符数）——抄一份到日志里等于给违规内容多开一个落点 | `::test_agt065_moderation_runs_before_criteria`、`::test_agt065_moderation_text_does_not_leak_into_the_vendor_log` |
+| **AGT-066 供应商故障升级人审** | 不放行、也不销毁。与 UMOD-010 的 fail-open **方向一致但程度不同**：上传物的用途是自证，挡住它伤的是被侵害方；agent 产出的用途是换钱，放过它伤的是发布方和平台自己。**分界线是代价落在谁身上** | `::test_agt066_moderation_outage_escalates_instead_of_delivering` |
+
+**这一批真正的教训**，值得单独记（56 号 spec 第 0 节）：
+
+`test_agt019` 里有一句注释——「agent 没有登录态（也不该有），所以交付与验收
+走服务层」。**两个分句都对，合起来是个洞**：测试绕开 HTTP 只说明了测试能绕开，
+生产里没有人能绕开。注释解释了为什么绕，却没有人问一句「那生产里谁来走这一步」。
+
+> **当一个测试为了「走通」而绕过了入口层，绕过去的那段就是没有被测的那段。**
+
+同一形状此前出现过三次（V59 验证码、V61 纠纷陈述、V64 media_urls）都是
+「服务端建了闸门，客户端没有路径满足它」；这次是更彻底的版本——
+**服务端建了闸门，连服务端自己都没有路径去过它**。
+
+**查这一批时发现的下一个缺口（AGT-072 / VER-052）**：48、49 两号 spec
+从头到尾没有一个字提客户端，`packages/core` 里也没有任何 agent / 核验单的方法。
+发布方无法在 Web 上邀请 AI 助理，核验人无法看到、接下、提交任何一张核验单。
+服务端完整，端上零入口。单独成批。
 
 ## 已实现（V80 批次：先把机制做对，不做一次性的机械搬运）
 

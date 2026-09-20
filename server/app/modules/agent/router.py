@@ -50,6 +50,9 @@ def _dump_run(r: AgentRun) -> dict:
         "id": r.id, "task_id": r.task_id, "status": r.status,
         "confidence_bps": r.confidence_bps, "output": r.output,
         "criteria_results": r.criteria_results, "error": r.error,
+        # AGT-051 审核结论对当事人可见；labels 不出（命中的违禁词本身
+        # 就是违禁内容，没必要再回显一遍，理由已经在 error 里说清楚了）
+        "moderation_status": r.moderation_status,
         "created_at": r.created_at.isoformat() if r.created_at else None,
         "finished_at": r.finished_at.isoformat() if r.finished_at else None,
     }
@@ -199,7 +202,10 @@ def trigger_run(task_id: int, user: User = Depends(get_current_user),
         raise conflict("任务尚未成交", "no_executor")
     contract = db.query(Contract).filter(Contract.task_id == task.id).first()
     run = service.run_agent(db, task, contract.id if contract else None)
-    return _dump_run(run)
+    # AGT-060 执行成功即由平台代为提交交付。少了这一步，任务在生产里
+    # 永远停在 in_progress——agent 没有登录态，没人能替它按「提交交付」。
+    delivered = service.submit_agent_delivery(db, task)
+    return {**_dump_run(run), "delivered": delivered, "task_status": task.status}
 
 
 @router.get("/tasks/{task_id}/agent-runs")

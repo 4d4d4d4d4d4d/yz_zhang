@@ -71,8 +71,8 @@ def latest_run(db: Session, task_id: int) -> AgentRun | None:
 def delivery_block(db: Session, task) -> str:
     """AGT-013/031 agent 执行的任务能不能提交交付。
 
-    同样是单一判断来源：`deliver` 端点与客户端按钮读同一个函数。
-    非 agent 任务恒返回空——这条闸门只管 agent。
+    同样是单一判断来源：`deliver` 端点、平台代交付（AGT-060）与客户端按钮
+    读同一个函数。非 agent 任务恒返回空——这条闸门只管 agent。
     """
     executor = db.get(User, task.executor_id) if task.executor_id else None
     if not executor or not executor.is_agent:
@@ -82,16 +82,113 @@ def delivery_block(db: Session, task) -> str:
         return "尚未执行，无法提交交付"
     if run.status == "running":
         return "执行中，请稍候"
-    if run.status == "failed":
-        return f"执行失败，无法提交交付：{run.error or '未知错误'}"
     # VER-022 人工核验通过（或已修正）即解除闸门——这就是 AGT-050 说的那个出口
     from app.modules.verify import service as verify_service
 
-    if verify_service.verification_unblocks_delivery(db, task.id):
-        return ""
+    outcome = verify_service.unblocking_outcome(db, task.id)
+    if run.status == "failed":
+        # AGT-067 判据/审核没过的 run，**只有「已修正」能解锁**。
+        # 修正稿在 VER-030 里被强制重跑了一遍平台判据，不过就报错——
+        # 客观闸门一次也没被绕过，变的是那份被判的文本。
+        # 而 `approved` 只是一个人说了句「行」，那是**覆盖**判据而不是满足判据，
+        # 与 AGT-030「不让执行方自己判卷」同一条理由（换成核验人判也一样）。
+        if outcome == "revised":
+            return ""
+        return f"执行失败，无法提交交付：{run.error or '未知错误'}"
     if run.status == "escalated":
+        # 置信度不足只是「没把握」，不是「判据没过」，所以 approved 也能解锁
+        if outcome:
+            return ""
         return "AI 置信度不足，需人工核验后方可提交交付"
     return ""
+
+
+# 交付正文入 `ProgressLog.content`（Text 列）。截断只为防一次巨量粘贴撑爆
+# 纠纷证据导出，不是业务上限。
+DELIVERY_CONTENT_MAX = 20000
+
+
+def submit_agent_delivery(db: Session, task, note: str = "") -> bool:
+    """AGT-060 **平台代 agent 提交交付**；返回是否真的交付了。
+
+    这一条补的是 48/49 两批合起来漏掉的最后一步：agent 没有登录态
+    （AGT-017，也不该有），而 `POST /tasks/{id}/deliver` 要求
+    `user.id == task.executor_id`——于是**生产里没有任何人能替它交付**，
+    任务永远停在 `in_progress`，发布方的钱永远躺在托管里。
+    测试没红，只因为它自己绕开 HTTP 直接调服务层（见 56 号 spec 第 0 节）。
+
+    为什么由平台发起，而不是放宽 `deliver` 的身份校验：那条校验同时管着
+    所有人类任务，为一个 AI 的特例去放宽一条通用身份闸门，代价不对等。
+    而平台本来就是 AI 履约的**责任主体**（AGT-017 已写进合同条款），
+    由责任主体发起交付，身份是自洽的。
+    """
+    from app.modules.task import service as task_service
+    from app.modules.task.models import ProgressLog
+
+    executor = db.get(User, task.executor_id) if task.executor_id else None
+    if not executor or not executor.is_agent:
+        return False
+    # V76 那个坑：`delivery_block` 会**再查一次库**，而会话是 autoflush=False。
+    # 调用方（run_agent / submit_outcome）刚在内存里改完状态，不 flush 的话
+    # 那次查询看不见，代交付会被自己刚解除的闸门挡住。
+    db.flush()
+    # AGT-062 幂等：已交付（pending_acceptance）或已完成的任务再调一次，
+    # 不产生第二条交付记录、不重置 delivered_at
+    if task.status != "in_progress":
+        return False
+    # AGT-061 **新开的路必须比原来的路更窄**：代交付调闸门，不重写闸门
+    if delivery_block(db, task):
+        return False
+    run = latest_run(db, task.id)
+    content = (note or (run.output if run else "")).strip()
+    if not content:
+        return False
+
+    task.delivered_at = utcnow()
+    # AGT-064 user_id 写 **agent 的 user 行**，不写发布方：
+    # 纠纷证据链里必须能看出这份交付物是谁交的，写成发布方就是在证据里撒谎
+    db.add(ProgressLog(task_id=task.id, user_id=executor.id, kind="delivery",
+                       content=content[:DELIVERY_CONTENT_MAX]))
+    task_service.transition(db, task, "pending_acceptance")
+    return True
+
+
+def moderate_output(db: Session, text: str) -> tuple[str, list[str]]:
+    """AGT-051 产出送内容审核，返回 (status, labels)，status ∈ pass/review/reject。
+
+    48 号 spec 把这条记成「本批没做」，理由是当时未经审核的产出只有当事人
+    看得见。**本批把产出接到了交付上**——它会成为交付物、进纠纷证据链、
+    被验收——所以接交付的同一批必须把审核接上，否则是在给一个已知的洞加流量。
+
+    供应商故障时**不放行、也不销毁**，升级人审。与 UMOD-010 的 fail-open
+    方向一致（不因第三方抖动而销毁内容），但不 open 到直接交付：上传物的
+    用途是自证，挡住它伤的是被侵害方；agent 产出的用途是换钱，放过它伤的是
+    发布方和平台自己。**分界线是代价落在谁身上。**
+    """
+    from app.vendors import base as vendor_base
+    from app.vendors.base import VendorError
+    from app.vendors.registry import get_provider
+
+    if not text.strip():
+        return "pass", []
+    provider = get_provider("moderation")
+    try:
+        verdict = vendor_base.call(
+            db, "moderation", provider.name, "check_agent_output",
+            # 送审文本**不进调用日志**，只记字符数：把待审文本抄一份到日志里，
+            # 等于给违规内容多开一个落点
+            {"chars": len(text)},
+            lambda: provider.check("text", text),
+        )
+    except VendorError as exc:
+        return "review", [f"provider_error:{exc.code}"]
+    labels = [str(x) for x in (verdict.data.get("labels") or [])]
+    if verdict.status == "reject":
+        return "reject", labels or ["违规内容"]
+    if verdict.status == "review":
+        reason = verdict.data.get("reason")
+        return "review", labels + ([str(reason)] if reason else [])
+    return "pass", labels
 
 
 def run_agent(db: Session, task, contract_id: int | None = None) -> AgentRun:
@@ -138,6 +235,19 @@ def run_agent(db: Session, task, contract_id: int | None = None) -> AgentRun:
     # 代价落在别人身上时往保守一侧倒
     run.confidence_bps = max(0, min(10000, int(result.confidence_bps or 0)))
 
+    # AGT-051/065 **审核先于判据**：一份违规的产出，判据过没过不重要。
+    mod_status, mod_labels = moderate_output(db, result.output)
+    run.moderation_status = mod_status
+    run.moderation_labels = mod_labels
+    if mod_status == "reject":
+        # 被拒的产出**不入库**（与 UMOD-011 对称），但 labels 留下来
+        run.output = ""
+        run.status = "failed"
+        run.error = ("产出未通过内容安全审核：" + "、".join(mod_labels))[:300]
+        profile.runs_failed += 1
+        run.finished_at = utcnow()
+        return run
+
     # AGT-030 客观判据由平台执行。agent 自报的置信度再高，判据不过就是不过。
     results, all_auto_passed = crit.evaluate(task.acceptance_criteria or [], result.output)
     run.criteria_results = results
@@ -147,6 +257,12 @@ def run_agent(db: Session, task, contract_id: int | None = None) -> AgentRun:
         failed = [r["text"] for r in results if r["kind"] == "auto" and not r["passed"]]
         run.error = "验收判据未通过：" + "；".join(failed)[:260]
         profile.runs_failed += 1
+    elif mod_status == "review":
+        # AGT-066 审核拿不准（或供应商挂了）→ 升级人审，不自动交付。
+        # 这不是「审核失败」：本地/沙箱实现看不了图，扔掉会让非生产部署不可用。
+        run.status = "escalated"
+        run.error = ("产出需人工核验：" + "、".join(mod_labels))[:300]
+        profile.runs_escalated += 1
     elif run.confidence_bps < profile.confidence_threshold_bps:
         run.status = "escalated"
         run.error = (

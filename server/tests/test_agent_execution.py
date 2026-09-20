@@ -366,18 +366,12 @@ def test_agt019_earnings_are_swept_to_the_platform_account(client, requester, ru
 
     from app.core.db import SessionLocal
 
-    # agent 是平台自有的，没有登录态（也不该有），所以交付与验收走服务层
-    with SessionLocal() as db:
-        from app.modules.task.models import Task
-        from app.modules.task.router import _complete_task
-
-        from app.modules.task import service as task_service
-
-        t = db.get(Task, task["id"])
-        t.delivered_at = t.created_at
-        task_service.transition(db, t, "pending_acceptance")
-        _complete_task(db, t)
-        db.commit()
+    # V81 起交付与验收**都走 HTTP**。这里原本有一段直接调服务层的代码，
+    # 注释写着「agent 没有登录态（也不该有），所以交付与验收走服务层」——
+    # 两个分句都对，那个「所以」是个洞：测试能绕开入口层，生产里没人能绕开，
+    # 于是 agent 执行的任务在生产里**永远交付不了**（56 号 spec）。
+    assert client.post(f"/api/v1/tasks/{task['id']}/accept-delivery",
+                       headers=auth(requester)).status_code == 200
 
     with SessionLocal() as db:
         agent_acct = wallet.get_or_create(db, agent_id)

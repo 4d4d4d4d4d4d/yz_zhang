@@ -170,7 +170,26 @@ def submit_outcome(db: Session, order: VerificationOrder, task, *, outcome: str,
     wallet._log(db, order.verifier_id, "verify_payout", order.fee_cents, None, "核验报酬")
 
     _record_lesson(db, order, task)
-    return {"outcome": outcome, "unblocked": outcome in UNBLOCKING_OUTCOMES}
+
+    # AGT-063 核验通过即代 agent 提交交付。
+    # 在此之前，闸门解除了却**没有任何东西去推那一下**：核验人交了结论、
+    # 核验费也付了，任务还停在 in_progress，两边都没有按钮可按。
+    #
+    # `revised` 时交付物是**修正稿**，不是 agent 的原始产出——修正稿之所以
+    # 存在正是因为原始产出不合格，把原始产出交出去等于让发布方验收一份
+    # 已被判定为不合格的东西，而他还刚为核验费买过单。
+    delivered = False
+    if outcome in UNBLOCKING_OUTCOMES:
+        from app.modules.agent import service as agent_service
+
+        delivered = agent_service.submit_agent_delivery(
+            db, task, note=order.revised_output if outcome == "revised" else "",
+        )
+    return {
+        "outcome": outcome,
+        "unblocked": outcome in UNBLOCKING_OUTCOMES,
+        "delivered": delivered,
+    }
 
 
 def _record_lesson(db: Session, order: VerificationOrder, task) -> None:
@@ -201,10 +220,21 @@ def latest_order(db: Session, task_id: int) -> VerificationOrder | None:
     )
 
 
-def verification_unblocks_delivery(db: Session, task_id: int) -> bool:
-    """VER-022 有没有一份「通过 / 已修正」的核验，能解除 agent 的交付闸门。"""
+def unblocking_outcome(db: Session, task_id: int) -> str:
+    """VER-022 最新一张已结核验单的解锁性结论（`approved` / `revised`），否则空串。
+
+    返回结论本身而不是布尔：AGT-067 要按结论分开判——判据没过的 run
+    只有「已修正」能解锁，「通过」不能（那是覆盖判据，不是满足判据）。
+    """
     order = latest_order(db, task_id)
-    return bool(order and order.status == "done" and order.outcome in UNBLOCKING_OUTCOMES)
+    if order and order.status == "done" and order.outcome in UNBLOCKING_OUTCOMES:
+        return order.outcome
+    return ""
+
+
+def verification_unblocks_delivery(db: Session, task_id: int) -> bool:
+    """VER-022 有没有一份「通过 / 已修正」的核验。"""
+    return bool(unblocking_outcome(db, task_id))
 
 
 def expire_overdue(db: Session) -> dict:

@@ -78,6 +78,7 @@
 | 53 | 团队账户：预算、权限与审批 | [53-team-accounts.md](./53-team-accounts.md) | P1 |
 | 54 | 开放 API 与 Webhook | [54-open-api-webhooks.md](./54-open-api-webhooks.md) | P2 |
 | 55 | 国际化：先把机制做对 | [55-i18n.md](./55-i18n.md) | P2 |
+| 56 | Agent 交付闭环与产出审核 | [56-agent-delivery-closure.md](./56-agent-delivery-closure.md) | P0 |
 
 ## 功能点编号与优先级约定
 

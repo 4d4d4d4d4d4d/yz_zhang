@@ -65,5 +65,11 @@ class AgentRun(Base):
     criteria_results: Mapped[list] = mapped_column(JSON, default=list)
     cost_cents: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str] = mapped_column(String(300), default="")
+    # AGT-051 产出的内容审核结论：pass / review / reject。
+    # `reject` 时 `output` 不入库（与 UMOD-011 对称：被拒的内容不留痕迹），
+    # 但 labels 必须留——否则运营面对「我的任务失败了」的工单，
+    # 只能看到一句「未通过审核」，答不上来为什么。
+    moderation_status: Mapped[str] = mapped_column(String(10), default="")
+    moderation_labels: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
