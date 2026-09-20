@@ -214,3 +214,48 @@ def test_tz060_iso_helper_round_trips():
     aware = datetime(2026, 9, 20, 16, 0, tzinfo=timezone(timedelta(hours=8)))
     assert iso(aware) == "2026-09-20T08:00:00Z"
     assert to_utc_naive("不是时间") == "不是时间"      # 非时间值原样放过
+
+
+# --------------------------------------------- TZ-063 客户端只用一个入口解析
+WEB_SRC = Path(__file__).resolve().parents[2] / "web" / "src"
+APP_SRC = Path(__file__).resolve().parents[2] / "app"
+# `new Date()` 取当前时间没问题；**带参数**的才是病灶
+NEW_DATE_WITH_ARG = re.compile(r"new Date\(\s*[^)\s]")
+
+
+def _client_sources() -> list[Path]:
+    out: list[Path] = []
+    for root in (WEB_SRC, APP_SRC):
+        for path in root.rglob("*.ts*"):
+            if "node_modules" in path.parts:
+                continue
+            out.append(path)
+    return out
+
+
+def test_tz063_clients_never_parse_server_time_themselves():
+    """不是「建议用 formatDateTime」，是**禁止**再出现带参数的 `new Date(...)`。
+
+    全站九处 `new Date(服务端字符串)` 里，只有两处倒计时被发现并就地补了
+    `+ 'Z'`——因为倒计时错了会算成负数、肉眼可见；而「这条流水是几点」
+    错 8 小时，没有人会立刻察觉。一个能直接这么写的代码库，迟早有人这么写。
+
+    这条扫描放在 Python 这边而不是 vitest 里，是因为它要读文件系统：
+    web 的 tsconfig 不带 node 类型，写成 .ts 测试会让 `tsc -p web` 直接报错
+    ——V83 就是这么把 CI 的类型检查搞红的（本批修正）。
+    """
+    files = _client_sources()
+    # 扫描器自检：扫不到文件就等于没有闸门
+    assert len(files) >= 15, f"只扫到 {len(files)} 个客户端源文件，扫描逻辑可能坏了"
+    assert any(f.name == "Wallet.tsx" for f in files)
+    assert any(f.name == "App.tsx" for f in files)
+
+    offenders = []
+    for path in files:
+        for i, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+            if NEW_DATE_WITH_ARG.search(line):
+                offenders.append(f"{path.name}:{i} {line.strip()}")
+    assert not offenders, (
+        "客户端不许自己解析服务端时间，请用 @platform/core 的 "
+        f"parseServerTime / formatDateTime / millisUntil：{offenders}"
+    )

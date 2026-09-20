@@ -1,6 +1,6 @@
 import { ApiError, apiErrorText, fmtYuan, formatDateTime, type AgreementStatus, type InvitationItem } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
 
 function ServicePricing() {
@@ -161,6 +161,10 @@ export default function Profile() {
       <div className="card">
         <h3>{me.nickname} {me.is_verified ? <span className="badge ok">已实名</span> : <span className="badge warn">未实名</span>}</h3>
         <p className="muted">信用分 {me.credit_score} · 评分 {me.rating_avg || '暂无'} · 已完成 {me.tasks_completed} 单 · {me.city || '未设置城市'}</p>
+        <p className="muted">
+          <Link to="/developer">开发者设置</Link>（API 密钥与 Webhook） ·{' '}
+          <Link to="/ventures">我的合作体</Link> · <Link to="/teams">我的团队</Link>
+        </p>
         {!me.is_verified && (
           <div style={{ marginTop: 12 }}>
             <p className="muted">接单与提现需先实名认证（模拟 eKYC，任意合法格式即可通过）</p>

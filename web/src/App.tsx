@@ -13,6 +13,9 @@ import Rewards from './pages/Rewards';
 import Square from './pages/Square';
 import Support from './pages/Support';
 import TaskDetail from './pages/TaskDetail';
+import Developer from './pages/Developer';
+import Teams from './pages/Teams';
+import Ventures from './pages/Ventures';
 import Verify from './pages/Verify';
 import WalletPage from './pages/Wallet';
 import {
@@ -47,6 +50,8 @@ export default function App() {
         <Link to="/rewards">优惠</Link>
         <Link to="/support">客服</Link>
         <Link to="/verify">核验台</Link>
+        <Link to="/ventures">合作体</Link>
+        <Link to="/teams">团队</Link>
         <span className="spacer" />
         {me ? (
           <>
@@ -74,6 +79,9 @@ export default function App() {
         <Route path="/rewards" element={hasToken ? <Rewards /> : <Navigate to="/login" />} />
         <Route path="/support" element={hasToken ? <Support /> : <Navigate to="/login" />} />
         <Route path="/verify" element={hasToken ? <Verify /> : <Navigate to="/login" />} />
+        <Route path="/ventures" element={hasToken ? <Ventures /> : <Navigate to="/login" />} />
+        <Route path="/teams" element={hasToken ? <Teams /> : <Navigate to="/login" />} />
+        <Route path="/developer" element={hasToken ? <Developer /> : <Navigate to="/login" />} />
         <Route path="/admin" element={hasToken ? <Admin /> : <Navigate to="/login" />} />
       </Routes>
 

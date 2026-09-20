@@ -651,9 +651,24 @@ export interface ContributionView {
   can_confirm: boolean;
 }
 
-/** COOP-040 合规路径：告诉你需要什么，不拦住你。`disclaimer` 必须显示。 */
+/** COOP-040 合规路径：告诉你需要什么，不拦住你。
+ *
+ *  每一项都带 `why`——**只给一张清单而不说理由，用户不知道哪些能省、
+ *  哪些不能，最后要么全不做要么全找律师**。`disclaimer` 必须显示：
+ *  这不是法律意见。 */
+export interface CompliancePathItem {
+  key: string;
+  title: string;
+  why: string;
+  /** ready / todo / na */
+  status: string;
+  action: string;
+}
+
 export interface CompliancePath {
-  items: Array<{ key: string; title: string; why: string; status: string; how: string }>;
+  documents: CompliancePathItem[];
+  registrations: CompliancePathItem[];
+  notices: string[];
   disclaimer: string;
 }
 
