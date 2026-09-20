@@ -13,6 +13,7 @@ from app.core.security import create_token, hash_password, verify_password
 
 from .models import Block, LoginSession, User
 from .service import credit_level
+from app.core.timefmt import UtcDatetime, iso
 
 router = APIRouter(tags=["account"])
 
@@ -88,7 +89,7 @@ class CertificationIn(BaseModel):
     cert_number: str = Field(min_length=4, max_length=60)
     issuer: str = Field(default="", max_length=80)
     # CERT-005 有效期。「发了就永久有效」是错的。
-    expires_at: datetime | None = None
+    expires_at: UtcDatetime | None = None
     # CERT-002 证件影像（已上传文件名）。没有影像，审核员看什么。
     images: list[str] = Field(default_factory=list)
 
@@ -311,7 +312,7 @@ def my_sessions(user: User = Depends(get_current_user), db: Session = Depends(ge
         .all()
     )
     return [
-        {"id": s.id, "device": s.device or "未知设备", "created_at": s.created_at.isoformat()}
+        {"id": s.id, "device": s.device or "未知设备", "created_at": iso(s.created_at)}
         for s in rows
     ]
 
@@ -637,8 +638,8 @@ def my_certifications(user: User = Depends(get_current_user), db: Session = Depe
         "applications": [
             {"id": r.id, "name": r.name, "status": r.status,
              "decision_reason": r.decision_reason,
-             "expires_at": r.expires_at.isoformat() if r.expires_at else None,
-             "created_at": r.created_at.isoformat()}
+             "expires_at": iso(r.expires_at),
+             "created_at": iso(r.created_at)}
             for r in rows
         ],
     }
@@ -664,17 +665,17 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
         "tasks": [{"id": t.id, "title": t.title, "status": t.status, "budget_cents": t.budget_cents,
                    "role": "creator" if t.creator_id == user.id else "executor"} for t in tasks],
         "ledger": [{"kind": e.kind, "amount_cents": e.amount_cents,
-                    "created_at": e.created_at.isoformat()} for e in ledger],
+                    "created_at": iso(e.created_at)} for e in ledger],
         "contents": [{"id": c.id, "kind": c.kind, "body": c.body,
-                      "created_at": c.created_at.isoformat()} for c in contents],
+                      "created_at": iso(c.created_at)} for c in contents],
         "reviews_written": [{"task_id": r.task_id, "stars": r.stars, "comment": r.comment}
                             for r in reviews],
         # LAW-032 同意记录本身也是个人信息，且是「平台凭什么处理我的数据」的答案，
         # 导出里少了它，用户就没法核对平台的处理是否越界
         "consents": [
             {"scope": c.scope, "version": c.version, "notice": c.notice,
-             "granted_at": c.granted_at.isoformat(),
-             "revoked_at": c.revoked_at.isoformat() if c.revoked_at else None}
+             "granted_at": iso(c.granted_at),
+             "revoked_at": iso(c.revoked_at)}
             for c in db.query(UserConsent).filter(UserConsent.user_id == user.id)
             .order_by(UserConsent.id).all()
         ],

@@ -9,6 +9,7 @@ from app.modules.account.models import User
 
 from . import service
 from .models import LedgerEntry
+from app.core.timefmt import iso
 
 router = APIRouter(prefix="/wallet", tags=["wallet"])
 
@@ -157,7 +158,7 @@ def list_withdraw_requests(
     )
     return [
         {"id": r.id, "user_id": r.user_id, "amount_cents": r.amount_cents,
-         "status": r.status, "created_at": r.created_at.isoformat()}
+         "status": r.status, "created_at": iso(r.created_at)}
         for r in rows
     ]
 
@@ -216,7 +217,7 @@ def ledger(user: User = Depends(get_current_user), db: Session = Depends(get_db)
             "amount_cents": r.amount_cents,
             "contract_id": r.contract_id,
             "memo": r.memo,
-            "created_at": r.created_at.isoformat(),
+            "created_at": iso(r.created_at),
         }
         for r in rows
     ]

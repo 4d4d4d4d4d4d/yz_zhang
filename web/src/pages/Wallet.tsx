@@ -1,4 +1,4 @@
-import { ApiError, apiErrorText, fmtYuan, ledgerKindLabel, type TaxSummary, type Wallet } from '@platform/core';
+import { ApiError, apiErrorText, fmtYuan, formatDate, formatDateTime, ledgerKindLabel, type TaxSummary, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 
@@ -58,7 +58,7 @@ export default function WalletPage() {
                   {e.amount_cents >= 0 ? '+' : ''}{fmtYuan(e.amount_cents)}
                 </td>
                 <td className="muted">{e.memo}</td>
-                <td className="muted">{new Date(e.created_at).toLocaleString()}</td>
+                <td className="muted">{formatDateTime(e.created_at)}</td>
               </tr>
             ))}
           </tbody>
@@ -93,7 +93,7 @@ function TaxDetail() {
               <td>{fmtYuan(t.income_cents)}</td>
               <td className="muted">{fmtYuan(t.taxable_cents)}</td>
               <td style={{ color: 'var(--bad)' }}>-{fmtYuan(t.withheld_cents)}</td>
-              <td className="muted">{new Date(t.at).toLocaleDateString()}</td>
+              <td className="muted">{formatDate(t.at)}</td>
             </tr>
           ))}
         </tbody>

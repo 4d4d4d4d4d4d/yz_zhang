@@ -9,6 +9,7 @@ from app.core.errors import not_found
 from app.modules.account.models import User
 
 from .models import Notification
+from app.core.timefmt import iso
 
 router = APIRouter(prefix="/notifications", tags=["notification"])
 
@@ -27,7 +28,7 @@ def list_notifications(
     rows = query.order_by(Notification.id.desc()).offset(offset).limit(limit).all()
     return [
         {"id": n.id, "category": n.category, "title": n.title, "body": n.body,
-         "is_read": n.is_read, "created_at": n.created_at.isoformat()}
+         "is_read": n.is_read, "created_at": iso(n.created_at)}
         for n in rows
     ]
 
@@ -152,4 +153,4 @@ def list_devices(user: User = Depends(get_current_user), db: Session = Depends(g
     rows = db.query(DeviceToken).filter(
         DeviceToken.user_id == user.id, DeviceToken.revoked.is_(False)).all()
     return [{"platform": r.platform, "token": r.token[:6] + "…",
-             "last_seen_at": r.last_seen_at.isoformat()} for r in rows]
+             "last_seen_at": iso(r.last_seen_at)} for r in rows]

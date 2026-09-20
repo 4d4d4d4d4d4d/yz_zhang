@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.events import subscribe
 
 from .models import AnchorEntry, AnchorReceipt
+from app.core.timefmt import iso
 
 GENESIS = "0" * 64
 
@@ -139,7 +140,7 @@ def coverage(db: Session) -> dict:
         "receipts": [
             {"seq_from": r.seq_from, "seq_to": r.seq_to, "receipt_no": r.receipt_no,
              "authority": r.authority, "backed": r.backed, "detail": r.detail,
-             "at": r.created_at.isoformat()}
+             "at": iso(r.created_at)}
             for r in receipts
         ],
         "note": (

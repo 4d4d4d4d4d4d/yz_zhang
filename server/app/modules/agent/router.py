@@ -10,6 +10,7 @@ from app.modules.account.models import User
 
 from . import service
 from .models import AgentProfile, AgentRun
+from app.core.timefmt import iso
 
 router = APIRouter(tags=["agent"])
 
@@ -53,8 +54,8 @@ def _dump_run(r: AgentRun) -> dict:
         # AGT-051 审核结论对当事人可见；labels 不出（命中的违禁词本身
         # 就是违禁内容，没必要再回显一遍，理由已经在 error 里说清楚了）
         "moderation_status": r.moderation_status,
-        "created_at": r.created_at.isoformat() if r.created_at else None,
-        "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+        "created_at": iso(r.created_at),
+        "finished_at": iso(r.finished_at),
     }
 
 

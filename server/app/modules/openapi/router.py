@@ -7,6 +7,7 @@ from app.core.db import get_db
 from app.core.deps import get_current_user, require_job_auth
 from app.core.errors import forbidden, not_found
 from app.core.locks import job_slot
+from app.core.timefmt import iso
 from app.modules.account.models import User
 
 from . import service
@@ -67,8 +68,8 @@ def list_keys(user: User = Depends(get_current_user), db: Session = Depends(get_
     return [
         {"id": r.id, "name": r.name, "scopes": r.scopes, "key_prefix": r.key_prefix,
          "active": r.active,
-         "last_used_at": r.last_used_at.isoformat() if r.last_used_at else None,
-         "created_at": r.created_at.isoformat()}
+         "last_used_at": iso(r.last_used_at),
+         "created_at": iso(r.created_at)}
         for r in rows
     ]
 
@@ -143,7 +144,7 @@ def list_deliveries(webhook_id: int, user: User = Depends(get_current_user),
         {"id": r.id, "event_type": r.event_type, "status": r.status,
          "attempts": r.attempts, "response_code": r.response_code,
          "response_excerpt": r.response_excerpt,
-         "created_at": r.created_at.isoformat()}
+         "created_at": iso(r.created_at)}
         for r in rows
     ]
 
@@ -171,7 +172,7 @@ def open_list_tasks(limit: int = 20, offset: int = 0,
     return [
         {"id": t.id, "title": t.title, "category": t.category, "status": t.status,
          "budget_cents": t.budget_cents, "executor_id": t.executor_id,
-         "created_at": t.created_at.isoformat()}
+         "created_at": iso(t.created_at)}
         for t in rows
     ]
 
@@ -189,7 +190,7 @@ def open_get_task(task_id: int, principal=Depends(require_scope("tasks:read")),
             "category": t.category, "status": t.status,
             "budget_cents": t.budget_cents, "executor_id": t.executor_id,
             "acceptance_criteria": t.acceptance_criteria,
-            "created_at": t.created_at.isoformat()}
+            "created_at": iso(t.created_at)}
 
 
 @router.get("/open/v1/wallet")

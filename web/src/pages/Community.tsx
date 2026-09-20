@@ -1,4 +1,4 @@
-import { ApiError, apiErrorText, type ContentItem } from '@platform/core';
+import { ApiError, apiErrorText, formatDateTime, type ContentItem } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { BlogEditor } from '../BlogEditor';
 import { VideoFeed } from '../VideoFeed';
@@ -85,7 +85,7 @@ export default function Community() {
                 </button>
               )}
               <span className="spacer muted" style={{ flex: 1, textAlign: 'right' }}>
-                {new Date(c.created_at).toLocaleString()}
+                {formatDateTime(c.created_at)}
               </span>
             </div>
             {c.title && <h3>{c.title}</h3>}

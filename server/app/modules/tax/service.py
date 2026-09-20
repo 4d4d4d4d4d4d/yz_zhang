@@ -12,6 +12,7 @@ from app.modules.wallet import service as wallet
 from app.vendors.tax import TaxAssessment
 
 from .models import TaxWithholding
+from app.core.timefmt import iso
 
 # 代扣税款专户。平台佣金是 0，这里用 -1：负数一眼就能看出「不是普通用户」
 TAX_USER_ID = -1
@@ -128,7 +129,7 @@ def my_summary(db, user_id: int) -> dict:
             {"id": r.id, "contract_id": r.contract_id, "kind": r.settlement_kind,
              "income_cents": r.income_cents, "taxable_cents": r.taxable_cents,
              "withheld_cents": r.withheld_cents, "rule": r.rule, "note": r.note,
-             "at": r.created_at.isoformat()}
+             "at": iso(r.created_at)}
             for r in rows
         ],
         "disclaimer": (
@@ -156,7 +157,7 @@ def ledger(db, limit: int = 200) -> dict:
         "items": [
             {"id": r.id, "user_id": r.user_id, "contract_id": r.contract_id,
              "income_cents": r.income_cents, "withheld_cents": r.withheld_cents,
-             "rule": r.rule, "at": r.created_at.isoformat()}
+             "rule": r.rule, "at": iso(r.created_at)}
             for r in rows
         ],
     }

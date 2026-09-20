@@ -1,5 +1,5 @@
 // GRW 用户侧运营页：新人任务进度 / 我的券 / 领券 / 邀请战绩。
-import { fmtYuan, type CouponTemplate, type MyCoupon } from '@platform/core';
+import { fmtYuan, formatDate, type CouponTemplate, type MyCoupon } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 
@@ -111,7 +111,7 @@ export default function Rewards() {
               <div>
                 <strong>{c.title}</strong>
                 <p className="muted">
-                  {couponValue(c)} · 有效期至 {new Date(c.expires_at).toLocaleDateString()}
+                  {couponValue(c)} · 有效期至 {formatDate(c.expires_at)}
                 </p>
               </div>
               <span className={`badge ${c.status === 'unused' ? 'ok' : ''}`}>

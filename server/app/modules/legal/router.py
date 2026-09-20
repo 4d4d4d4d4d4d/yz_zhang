@@ -12,6 +12,7 @@ from app.core.errors import forbidden, not_found
 from app.modules.account.models import User, utcnow
 from app.modules.dispute.models import Dispute
 from app.modules.task.models import Task
+from app.core.timefmt import iso
 
 router = APIRouter(prefix="/legal", tags=["legal"])
 
@@ -226,7 +227,7 @@ def _ai_execution_trail(db, task) -> dict | None:
             {"id": r.id, "status": r.status, "confidence_bps": r.confidence_bps,
              "criteria_results": r.criteria_results, "error": r.error,
              "output": r.output, "cost_cents": r.cost_cents,
-             "at": r.created_at.isoformat()}
+             "at": iso(r.created_at)}
             for r in runs
         ],
         "verifications": [
@@ -294,7 +295,7 @@ def evidence_export(
         "settlements": finance.contract_trail(db, contract.id) if contract else [],
         "progress_logs": [
             {"id": r.id, "user_id": r.user_id, "kind": r.kind, "content": r.content,
-             "images": r.images or [], "at": r.created_at.isoformat()}
+             "images": r.images or [], "at": iso(r.created_at)}
             for r in logs
         ],
         "dispute": {
@@ -302,7 +303,7 @@ def evidence_export(
             "evidence": dispute.evidence, "status": dispute.status,
             "statements": [
                 {"user_id": r.user_id, "role": r.role, "content": r.content,
-                 "attachments": r.attachments or [], "at": r.created_at.isoformat()}
+                 "attachments": r.attachments or [], "at": iso(r.created_at)}
                 for r in statements
             ],
             # LAW-021 用词：平台内部处理不是法律意义上的仲裁裁决
@@ -316,7 +317,7 @@ def evidence_export(
         # 否则「谁做的、做成什么样、谁核过」在材料里是空白。
         "ai_execution": _ai_execution_trail(db, task),
         "exported_by": user.id,
-        "exported_at": utcnow().isoformat(),
+        "exported_at": iso(utcnow()),
     }
     canonical = json.dumps(package, ensure_ascii=False, sort_keys=True)
     chain = anchor.verify_chain(db)

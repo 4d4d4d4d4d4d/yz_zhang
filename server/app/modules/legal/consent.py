@@ -16,6 +16,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base
 from app.core.errors import bad_request, conflict
 from app.modules.account.models import utcnow
+from app.core.timefmt import iso
 
 # LAW-030 三份文书独立成文、独立版本
 DOCUMENTS = {
@@ -250,7 +251,7 @@ def status(db, user_id: int) -> dict:
     sensitive = [
         {"key": k, "purpose": purpose,
          "granted": k in by_scope,
-         "granted_at": by_scope[k].granted_at.isoformat() if k in by_scope else None,
+         "granted_at": iso(by_scope[k].granted_at) if k in by_scope else None,
          "revocable": True,
          "revocation_effect": _revocation_effect(k)}
         for k, purpose in SENSITIVE_SCOPES.items()

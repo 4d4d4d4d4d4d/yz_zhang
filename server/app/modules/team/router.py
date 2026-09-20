@@ -11,6 +11,7 @@ from app.modules.wallet import service as wallet
 
 from . import service
 from .models import ROLES, SpendRequest, Team, TeamMember
+from app.core.timefmt import iso
 
 router = APIRouter(prefix="/teams", tags=["team"])
 
@@ -210,7 +211,7 @@ def list_spends(team_id: int, user: User = Depends(get_current_user),
         {"id": r.id, "requester_id": r.requester_id, "amount_cents": r.amount_cents,
          "purpose": r.purpose, "status": r.status, "task_id": r.task_id,
          "decided_by": r.decided_by, "decision_reason": r.decision_reason,
-         "created_at": r.created_at.isoformat(),
+         "created_at": iso(r.created_at),
          # 客户端的「审批」按钮读这个，与服务端同一判断（TEAM-021）
          "can_decide": (r.status == "pending" and me.role in ("owner", "admin")
                         and r.requester_id != user.id)}

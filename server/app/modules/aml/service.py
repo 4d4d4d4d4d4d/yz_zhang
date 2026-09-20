@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.modules.account.models import utcnow
 
 from .models import PATTERNS, SuspiciousActivity
+from app.core.timefmt import iso
 
 # AML-031 用户可见的中性措辞。**唯一**允许给用户看的说法。
 NEUTRAL_REVIEW_MESSAGE = "该笔提现需人工复核，通常 1 个工作日内处理完成"
@@ -207,7 +208,7 @@ def listing(db, status: str = "pending", limit: int = 100) -> dict:
              "pattern_label": PATTERNS.get(r.pattern, r.pattern),
              "detail": r.detail, "amount_cents": r.amount_cents,
              "ref_type": r.ref_type, "ref_id": r.ref_id, "status": r.status,
-             "review_note": r.review_note, "at": r.created_at.isoformat()}
+             "review_note": r.review_note, "at": iso(r.created_at)}
             for r in rows
         ],
         "note": (

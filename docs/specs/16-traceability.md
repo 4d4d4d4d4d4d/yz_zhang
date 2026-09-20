@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V82 全批次完成（2026-09-20）。
-> 后端 875 tests + 前端 76 tests（core 48 + web 28）全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V83 全批次完成（2026-09-20）。
+> 后端 885 tests + 前端 86 tests（core 56 + web 30）全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,31 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V83 批次：时间是一条契约）
+
+> 模块 spec：[58-timezone.md](58-timezone.md)
+>
+> 缺口的证据是代码里现成的两行补丁：Web 与 App 各有一处
+> `new Date(iso + 'Z')`。**补丁本身就是缺陷报告**——同样的问题全仓还有
+> 七处没补，而且两个端各自独立补了一次。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **TZ-060 出口一律带 `Z`** | 74 处 `.isoformat()` 收敛到 `app/core/timefmt.py::iso()`。服务端的时间本来就是 UTC，问题是它**没有说出来**；而 JS 对不带偏移的 ISO 日期时间按本地时间解析，于是全站每处时间显示都偏了用户所在时区的偏移量 | `tests/test_timezone.py::test_tz060_real_responses_all_carry_a_zone`（跑真实流程、递归走响应，并**自检查到的时间条数**，零条也要红）、`::test_tz060_dispute_deadline_is_zoned` |
+| **TZ-061 两道闸门** | 源码闸门（AST 扫 `app/modules/**`，放行 `.date().isoformat()`）+ 出口闸门。两道都要：**源码扫描挡不住 FastAPI 自己序列化字典里的裸 `datetime`**，那里没有 `.isoformat()` 可扫 | `::test_tz061_no_bare_isoformat_in_modules`、`::test_tz061_iso_helper_is_actually_used_everywhere`（防「把闸门满足成删掉时间字段」） |
+| **TZ-062 入口换算而不是截断** | `UtcDatetime`（`AfterValidator`）：带偏移的换算到 UTC，朴素值视为 UTC。改造前 `+08:00` 的 10:00 存成 10:00，**差 8 小时且不报错**；夏威夷用户填「2 小时后」直接 400 | `::test_tz062_offset_is_converted_not_truncated`、`::test_tz062_two_hours_from_now_works_in_any_timezone[8/-10/0]`（三个时区发同一时刻，落库必须一致） |
+| **契约定在哪一层** | 选「出入都是带时区的 UTC，本地化只在展示层」，与「金额用整数分、只在展示层转元」同一条线：**业务层永远只有一个口径，歧义留在最外面那一层**。**刻意不存用户时区**——浏览器已经知道用户在哪，多存一份就多一个会过期、会不一致的事实 | — |
+| **TZ-063 客户端一个入口** | `packages/core/src/time.ts`：`parseServerTime`（**无偏移按 UTC 解析**，防御既有数据）/ `formatDateTime` / `formatDate` / `millisUntil` / `localInputToServerTime`；两处手工 `+ 'Z'` 删掉 | `packages/core/src/time.test.ts`、`web/src/time-gate.test.ts`（**禁止**带参数的 `new Date(...)`；做过红验：改回一处即红） |
+| **TZ-064 网页上根本没有截止时间** | 服务端有校验、有到期下架 job、有临期提醒，而 `Publish` 页上没有任何地方能填——线上所有任务的 `deadline` 都是空的，那个 job 从来没有活可干。补了输入框，并且发出去的是**带偏移**的 ISO | `web` 类型检查 + `localInputToServerTime` 的单测 |
+
+**这一批自己犯并修掉的错**：74 处的机械替换用的是正则，
+把三处**条件不同**的写法一起吞了——`x.isoformat() if row is not None and x else None`
+被压成 `iso(x)`，`by_scope[k].granted_at.isoformat() if k in by_scope else None`
+同理。全部由既有回归测试抓出（`/jobz` 与同意状态直接 500）。
+
+> **机械替换要按「条件是否等价」分类，不能只看形状。**
+> 这次侥幸的是那三处都有测试盯着；没测试的那部分，形状一样并不代表语义一样。
 
 ## 已实现（V82 批次：端上接得到）
 

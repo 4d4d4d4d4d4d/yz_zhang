@@ -12,6 +12,7 @@ from app.modules.wallet import service as wallet
 
 from . import service
 from .models import VerificationOrder
+from app.core.timefmt import iso
 
 router = APIRouter(tags=["verify"])
 
@@ -28,8 +29,8 @@ def _dump(o: VerificationOrder) -> dict:
         "fee_cents": o.fee_cents, "payer_id": o.payer_id, "verifier_id": o.verifier_id,
         "outcome": o.outcome, "comment": o.comment,
         "revised_output": o.revised_output, "criteria_results": o.criteria_results,
-        "deadline": o.deadline.isoformat() if o.deadline else None,
-        "created_at": o.created_at.isoformat() if o.created_at else None,
+        "deadline": iso(o.deadline),
+        "created_at": iso(o.created_at),
     }
 
 
@@ -194,7 +195,7 @@ def escalate_ticket(ticket_id: int, body: EscalateIn,
     evidence["from_ticket"] = {
         "ticket_id": ticket.id, "subject": ticket.subject,
         "body": ticket.body, "support_reply": ticket.reply,
-        "created_at": ticket.created_at.isoformat(),
+        "created_at": iso(ticket.created_at),
     }
     dispute.evidence = evidence
     ticket.escalated_to_dispute_id = dispute.id

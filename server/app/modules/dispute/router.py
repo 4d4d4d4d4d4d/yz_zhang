@@ -16,6 +16,7 @@ from app.modules.task.models import ProgressLog, Task
 from app.modules.task.service import transition
 
 from .models import Dispute
+from app.core.timefmt import iso
 
 router = APIRouter(tags=["dispute"])
 
@@ -69,8 +70,8 @@ def _dump(d: Dispute, task: Task | None = None, db: Session | None = None) -> di
         "split_base_cents": d.split_base_cents,  # DSP-008 裁决/复核分账基数
         "escalated": d.escalated,  # DSP-009 SLA 超期升级标记
         # DSPC-011 以下四项客户端算不出来：答辩期长度与申诉窗口都是服务端配置
-        "resolved_at": d.resolved_at.isoformat() if d.resolved_at else None,
-        "response_deadline": response_deadline(d).isoformat(),
+        "resolved_at": iso(d.resolved_at),
+        "response_deadline": iso(response_deadline(d)),
         "appealable": _appeal_block(d) == "",
     }
     if task is not None and db is not None:
@@ -117,7 +118,7 @@ def open_dispute(
         "conversation_id": conv.id if conv else None,
         "message_count": msg_count,
         "progress_logs": [
-            {"kind": log.kind, "content": log.content, "at": log.created_at.isoformat()}
+            {"kind": log.kind, "content": log.content, "at": iso(log.created_at)}
             for log in logs
         ],
         "reject_count": task.reject_count,
@@ -186,7 +187,7 @@ def add_statement(
     if other:
         notify(db, other, "task", "纠纷有新陈述",
                f"任务 #{task.id} 的纠纷中对方提交了新的答辩/举证，请及时查看并回应。")
-    return {"id": row.id, "role": role, "created_at": row.created_at.isoformat()}
+    return {"id": row.id, "role": role, "created_at": iso(row.created_at)}
 
 
 @router.get("/disputes/{dispute_id}/statements")
@@ -206,7 +207,7 @@ def list_statements(
     )
     return [
         {"id": r.id, "user_id": r.user_id, "role": r.role, "content": r.content,
-         "attachments": r.attachments, "created_at": r.created_at.isoformat()}
+         "attachments": r.attachments, "created_at": iso(r.created_at)}
         for r in rows
     ]
 

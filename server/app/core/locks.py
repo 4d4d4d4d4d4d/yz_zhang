@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import supports_row_lock
+from app.core.timefmt import iso
 
 # 本副本标识：写进锁记录，排障时能看出是谁在持锁
 INSTANCE_ID = f"{socket.gethostname()}-{os.getpid()}"
@@ -182,8 +183,7 @@ def job_health(db: Session) -> list[dict]:
             "job": job.lock_name,
             "path": job.path,
             "period_seconds": job.period_seconds,
-            "last_success_at": row.last_success_at.isoformat()
-            if row is not None and row.last_success_at else None,
+            "last_success_at": iso(row.last_success_at) if row is not None else None,
             "seconds_since_success": age,
             "last_error": row.last_error if row is not None else "",
             "holder": row.holder if row is not None else "",
@@ -197,8 +197,7 @@ def job_health(db: Session) -> list[dict]:
         if name not in {j.lock_name for j in DECLARED}:
             out.append({
                 "job": name, "path": "", "period_seconds": None,
-                "last_success_at": row.last_success_at.isoformat()
-                if row.last_success_at else None,
+                "last_success_at": iso(row.last_success_at),
                 "seconds_since_success": None, "last_error": row.last_error,
                 "holder": row.holder, "never_run": False, "stale": False,
                 "purpose": "⚠️ 不在声明表中：可能是改名后遗留的旧锁",

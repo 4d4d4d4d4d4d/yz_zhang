@@ -15,6 +15,7 @@ from app.modules.account.models import User
 
 from . import service
 from .models import Mission, MissionEvent, MissionStep, StepReview
+from app.core.timefmt import iso
 
 router = APIRouter(tags=["orchestrator"])
 
@@ -40,7 +41,7 @@ def _dump(m: Mission) -> dict:
         "completion_pct": m.completion_pct, "quality_pct": m.quality_pct,
         "model_calls": m.model_calls,
         "acceptance_criteria": m.acceptance_criteria,
-        "last_error": m.last_error, "created_at": m.created_at.isoformat(),
+        "last_error": m.last_error, "created_at": iso(m.created_at),
     }
 
 
@@ -105,7 +106,7 @@ def get_mission(
         # AIO-023 时间线：人类可读的「做了什么 / 卡在哪 / 下一步」
         "timeline": [
             {"iteration": e.iteration, "action": e.action, "summary": e.summary,
-             "at": e.created_at.isoformat()}
+             "at": iso(e.created_at)}
             for e in db.query(MissionEvent)
             .filter(MissionEvent.mission_id == mission_id)
             .order_by(MissionEvent.id).all()
@@ -132,7 +133,7 @@ def step_reviews(
         {"id": r.id, "reviewer": r.reviewer, "prompt_version": r.prompt_version,
          "verdict": r.verdict, "score": r.score, "reasons": r.reasons,
          "missing": r.missing, "input_digest": r.input_digest,
-         "duration_ms": r.duration_ms, "at": r.created_at.isoformat()}
+         "duration_ms": r.duration_ms, "at": iso(r.created_at)}
         for r in rows
     ]}
 

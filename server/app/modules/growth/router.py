@@ -17,6 +17,7 @@ from app.modules.account.models import User, utcnow
 
 from . import service
 from .models import Campaign, Coupon, UserCoupon
+from app.core.timefmt import iso
 
 router = APIRouter(tags=["growth"])
 
@@ -46,7 +47,7 @@ def _dump_coupon(c: Coupon) -> dict:
         "newcomer_only": c.newcomer_only, "total_quota": c.total_quota,
         "issued_count": c.issued_count, "per_user_limit": c.per_user_limit,
         "valid_days": c.valid_days, "active": c.active,
-        "ends_at": c.ends_at.isoformat(), "campaign_id": c.campaign_id,
+        "ends_at": iso(c.ends_at), "campaign_id": c.campaign_id,
     }
 
 
@@ -116,7 +117,7 @@ def _dump_campaign(c: Campaign) -> dict:
         "id": c.id, "name": c.name, "city": c.city, "category": c.category,
         "budget_cap_cents": c.budget_cap_cents, "spent_cents": c.spent_cents,
         "remaining_cents": max(0, c.budget_cap_cents - c.spent_cents),
-        "active": c.active, "ends_at": c.ends_at.isoformat(),
+        "active": c.active, "ends_at": iso(c.ends_at),
     }
 
 
@@ -179,7 +180,7 @@ def claim_coupon(coupon_id: int, user: User = Depends(get_current_user),
     """GRW-002 领取（幂等由每人限领上限约束）。"""
     row = service.claim(db, coupon_id, user)
     return {"id": row.id, "coupon_id": row.coupon_id, "status": row.status,
-            "expires_at": row.expires_at.isoformat()}
+            "expires_at": iso(row.expires_at)}
 
 
 @router.get("/me/coupons")
@@ -200,7 +201,7 @@ def my_coupons(user: User = Depends(get_current_user), db: Session = Depends(get
             "percent_bps": coupon.percent_bps if coupon else 0,
             "max_discount_cents": coupon.max_discount_cents if coupon else 0,
             "category": coupon.category if coupon else "",
-            "expires_at": r.expires_at.isoformat(),
+            "expires_at": iso(r.expires_at),
             "discount_cents": r.discount_cents, "contract_id": r.contract_id,
         })
     return {"coupons": out}

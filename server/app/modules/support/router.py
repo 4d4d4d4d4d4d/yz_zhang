@@ -7,6 +7,7 @@ from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.modules.account.models import User
 from app.modules.knowledge import service as kb
+from app.core.timefmt import iso
 
 router = APIRouter(prefix="/support", tags=["support"])
 
@@ -65,6 +66,6 @@ def my_tickets(user: User = Depends(get_current_user), db: Session = Depends(get
     rows = db.query(Ticket).filter(Ticket.user_id == user.id).order_by(Ticket.id.desc()).all()
     return [
         {"id": t.id, "subject": t.subject, "status": t.status, "reply": t.reply,
-         "created_at": t.created_at.isoformat()}
+         "created_at": iso(t.created_at)}
         for t in rows
     ]

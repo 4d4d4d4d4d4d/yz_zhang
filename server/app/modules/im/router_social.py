@@ -12,6 +12,7 @@ from app.modules.account.models import User, utcnow
 
 from .models import Conversation
 from .models_social import Friendship
+from app.core.timefmt import iso
 
 router = APIRouter(tags=["social"])
 
@@ -85,7 +86,7 @@ def list_friend_requests(user: User = Depends(get_current_user), db: Session = D
     rows = db.query(Friendship).filter(
         Friendship.addressee_id == user.id, Friendship.status == "pending").all()
     return [{"id": r.id, "from_user_id": r.requester_id,
-             "created_at": r.created_at.isoformat()} for r in rows]
+             "created_at": iso(r.created_at)} for r in rows]
 
 
 @router.post("/friends/requests/{req_id}/decide")

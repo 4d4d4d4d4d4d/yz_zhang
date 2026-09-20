@@ -10,6 +10,7 @@ from app.modules.contract.models import Contract
 
 from . import service
 from .models import AnchorEntry
+from app.core.timefmt import iso
 
 router = APIRouter(prefix="/anchors", tags=["anchor"])
 
@@ -50,6 +51,6 @@ def contract_anchors(
     )
     return [
         {"seq": r.seq, "event_type": r.event_type, "chain_hash": r.chain_hash,
-         "payload_hash": r.payload_hash, "created_at": r.created_at.isoformat()}
+         "payload_hash": r.payload_hash, "created_at": iso(r.created_at)}
         for r in rows
     ]

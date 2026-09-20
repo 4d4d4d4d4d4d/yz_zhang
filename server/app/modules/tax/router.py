@@ -11,6 +11,7 @@ from app.modules.account.models import User
 
 from . import service
 from .models import InvoiceRequest
+from app.core.timefmt import iso
 
 router = APIRouter(prefix="/finance", tags=["tax"])
 
@@ -94,6 +95,6 @@ def my_invoices(user: User = Depends(get_current_user), db: Session = Depends(ge
     return [
         {"id": r.id, "kind": r.kind, "contract_id": r.contract_id,
          "amount_cents": r.amount_cents, "title": r.title, "status": r.status,
-         "note": r.note, "at": r.created_at.isoformat()}
+         "note": r.note, "at": iso(r.created_at)}
         for r in rows
     ]

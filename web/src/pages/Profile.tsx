@@ -1,4 +1,4 @@
-import { ApiError, apiErrorText, fmtYuan, type AgreementStatus, type InvitationItem } from '@platform/core';
+import { ApiError, apiErrorText, fmtYuan, formatDateTime, type AgreementStatus, type InvitationItem } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
@@ -51,7 +51,7 @@ function DeviceSessions() {
       <div className="list" style={{ marginTop: 8 }}>
         {sessions.map((s) => (
           <div className="task-item" key={s.id}>
-            <span className="muted">{s.device.slice(0, 60) || '未知设备'} · {new Date(s.created_at).toLocaleString()}</span>
+            <span className="muted">{s.device.slice(0, 60) || '未知设备'} · {formatDateTime(s.created_at)}</span>
             <button className="ghost" style={{ padding: '2px 10px' }}
                     onClick={async () => { await client.revokeSession(s.id); await load(); }}>
               下线

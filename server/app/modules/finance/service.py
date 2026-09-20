@@ -14,6 +14,7 @@ from app.core.errors import bad_request
 from app.modules.account.models import utcnow
 
 from .models import SETTLEMENT_KINDS, SPLIT_PURPOSES, SettlementOrder, SettlementSplit
+from app.core.timefmt import iso
 
 
 @dataclass
@@ -103,7 +104,7 @@ def contract_trail(db: Session, contract_id: int) -> list[dict]:
             "id": order.id, "kind": order.kind, "total_cents": order.total_cents,
             "backend": order.backend, "status": order.status,
             "custody_ref": order.custody_ref, "memo": order.memo,
-            "at": order.created_at.isoformat(),
+            "at": iso(order.created_at),
             "splits": [{"payee_user_id": r.payee_user_id, "amount_cents": r.amount_cents,
                         "purpose": r.purpose} for r in rows],
         })

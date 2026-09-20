@@ -17,6 +17,7 @@ from app.modules.finance.compliance import CONTRACT_NATURE_CLAUSE
 from . import clauses
 
 from .models import ChangeOrder, Contract, ContractSignature, Milestone
+from app.core.timefmt import iso
 
 # SC-006 取消/违约规则表：执行者获得托管金的比例（万分比），按阶段与责任方
 CANCEL_RULES = {
@@ -228,7 +229,7 @@ def verify_signatures(db: Session, contract: Contract) -> dict:
             "matches_current_terms": hash_ok,
             "signature_valid": sig_ok,
             "reliability": row.reliability, "provider": row.provider,
-            "signed_at": row.signed_at.isoformat(),
+            "signed_at": iso(row.signed_at),
         })
     return {
         "valid": not tampered,

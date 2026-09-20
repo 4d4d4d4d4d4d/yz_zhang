@@ -11,6 +11,7 @@ from app.modules.account.models import User
 from . import compliance_path as cpath
 from . import service
 from .models import CONTRIBUTION_KINDS, Contribution, Distribution, Venture, VentureMember
+from app.core.timefmt import iso
 
 router = APIRouter(prefix="/ventures", tags=["coop"])
 
@@ -50,7 +51,7 @@ class DistributeIn(BaseModel):
 def _dump(v: Venture) -> dict:
     return {"id": v.user_id, "name": v.name, "purpose": v.purpose,
             "category": v.category, "status": v.status, "founder_id": v.founder_id,
-            "created_at": v.created_at.isoformat() if v.created_at else None}
+            "created_at": iso(v.created_at)}
 
 
 def _get(db: Session, venture_id: int) -> Venture:
@@ -127,7 +128,7 @@ def get_venture(venture_id: int, user: User = Depends(get_current_user),
         **_dump(v),
         "members": [
             {"user_id": m.user_id, "role": m.role,
-             "joined_at": m.joined_at.isoformat() if m.joined_at else None}
+             "joined_at": iso(m.joined_at)}
             for m in service.members(db, venture_id)
         ],
         "shares": service.shares_bps(db, venture_id),
@@ -196,7 +197,7 @@ def list_contributions(venture_id: int, user: User = Depends(get_current_user),
          "status": c.status, "valued_cents": c.valued_cents,
          "confirmed_by": c.confirmed_by, "confirm_note": c.confirm_note,
          "evidence": c.evidence,
-         "created_at": c.created_at.isoformat() if c.created_at else None,
+         "created_at": iso(c.created_at),
          # 客户端的「确认」按钮读这个，与服务端同一判断（单一来源）
          "can_confirm": c.status == "proposed" and c.user_id != user.id}
         for c in rows
@@ -250,7 +251,7 @@ def list_distributions(venture_id: int, user: User = Depends(get_current_user),
             .order_by(Distribution.id.desc()).all())
     return [{"id": d.id, "total_cents": d.total_cents, "memo": d.memo,
              "share_snapshot": d.share_snapshot,
-             "created_at": d.created_at.isoformat() if d.created_at else None}
+             "created_at": iso(d.created_at)}
             for d in rows]
 
 

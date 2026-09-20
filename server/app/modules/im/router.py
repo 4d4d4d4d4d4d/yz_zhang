@@ -9,6 +9,7 @@ from app.modules.account.models import User
 
 from . import service
 from .models import Conversation, Message
+from app.core.timefmt import iso
 
 router = APIRouter(tags=["im"])
 
@@ -73,7 +74,7 @@ def my_conversations(user: User = Depends(get_current_user), db: Session = Depen
             "last_message": None if not last else {
                 "id": last.id, "sender_id": last.sender_id, "kind": last.kind,
                 "content": "[消息已撤回]" if last.recalled else last.content[:100],
-                "created_at": last.created_at.isoformat(),
+                "created_at": iso(last.created_at),
             },
         })
     # 有未读的会话优先，其次按最后消息时间倒序（业界聊天列表排序）
@@ -201,7 +202,7 @@ def list_messages(conv_id: int, user: User = Depends(get_current_user), db: Sess
          # IM-004 撤回消息展示层隐藏（管理员仲裁时可见审计副本）
          "content": "[消息已撤回]" if m.recalled and not user.is_admin else m.content,
          "recalled": m.recalled,
-         "risk_flagged": m.risk_flagged, "created_at": m.created_at.isoformat()}
+         "risk_flagged": m.risk_flagged, "created_at": iso(m.created_at)}
         for m in rows
     ]
 

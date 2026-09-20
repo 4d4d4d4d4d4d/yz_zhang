@@ -25,6 +25,7 @@ from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
+from app.core.timefmt import iso
 
 logger = logging.getLogger("app.events")
 
@@ -278,6 +279,6 @@ def dead_letters(db, limit: int = 100) -> list[dict]:
     return [
         {"id": r.id, "event": r.event, "event_id": r.event_id, "handler": r.handler,
          "attempts": r.attempts, "last_error": r.last_error,
-         "at": r.updated_at.isoformat()}
+         "at": iso(r.updated_at)}
         for r in rows
     ]

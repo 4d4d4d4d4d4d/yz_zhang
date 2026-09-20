@@ -6,7 +6,7 @@
 // 写入陈述——那道前置永远只能靠等答辩期超时来满足，也就是说平台上线后的
 // 每一份处理决定都会是缺席裁决。
 import { useCallback, useEffect, useState } from 'react';
-import { ApiError, apiErrorText, type Dispute, type DisputeStatement, type PlatformClient } from '@platform/core';
+import { ApiError, apiErrorText, millisUntil, type Dispute, type DisputeStatement, type PlatformClient } from '@platform/core';
 
 const STATUS_LABEL: Record<string, string> = {
   open: '处理中',
@@ -16,7 +16,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function deadlineText(iso: string): string {
-  const left = new Date(iso + 'Z').getTime() - Date.now();
+  const left = millisUntil(iso);
   if (left <= 0) return '答辩期已过，平台可缺席作出处理决定';
   const hours = Math.floor(left / 3_600_000);
   return hours >= 1 ? `答辩截止还有约 ${hours} 小时` : '答辩截止不足 1 小时';

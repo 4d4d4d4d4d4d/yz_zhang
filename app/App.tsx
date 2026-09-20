@@ -1,11 +1,7 @@
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
-import {
-  DEPOSIT_STATUS_LABEL, PlatformClient, TASK_STATUS_LABEL, fmtYuan, taskActions,
-  type Contract, type Dispute, type DisputeStatement,
-  type Me, type Notice, type Task, type Wallet,
-} from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, PlatformClient, TASK_STATUS_LABEL, fmtYuan, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type Me, type Notice, type Task, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DiscoverScreen } from './Discover';
 import { VideoFeedScreen } from './VideoFeed';
@@ -301,7 +297,7 @@ function DisputeBlock({ client, taskId, meId }: {
   const iAmRespondent = meId !== null && dispute.respondent_id === meId;
   // 截止时间由服务端给（DSPC-011）：答辩期长度是服务端配置，客户端不该自己算
   const hoursLeft = Math.floor(
-    (new Date(dispute.response_deadline + 'Z').getTime() - Date.now()) / 3_600_000,
+    millisUntil(dispute.response_deadline) / 3_600_000,
   );
 
   const run = async (fn: () => Promise<unknown>) => {

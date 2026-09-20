@@ -19,6 +19,7 @@ from app.modules.matching import service as matching
 
 from . import service
 from .models import TASK_TYPES, Application, ProgressLog, Review, Task
+from app.core.timefmt import UtcDatetime, iso
 
 router = APIRouter(tags=["task"])
 
@@ -39,7 +40,9 @@ class TaskIn(BaseModel):
     lng: float | None = None
     address_hint: str = ""
     address_exact: str = ""
-    deadline: datetime | None = None
+    # TZ-062 带偏移的时间**换算**到 UTC，不是把偏移丢掉。
+    # 改造前 "2030-01-01T10:00:00+08:00" 直接存成 10:00，差了整整 8 小时且不报错。
+    deadline: UtcDatetime | None = None
     visibility: str = "public"
     circle_id: int | None = None
     recurrence: str = "none"
@@ -113,9 +116,9 @@ def dump_task(task: Task, viewer: User | None = None) -> dict:
         "recurrence": task.recurrence,
         "recurred_from_id": task.recurred_from_id,
         "status": task.status,
-        "deadline": task.deadline.isoformat() if task.deadline else None,
+        "deadline": iso(task.deadline),
         "reject_count": task.reject_count,
-        "created_at": task.created_at.isoformat(),
+        "created_at": iso(task.created_at),
     }
 
 
@@ -254,7 +257,7 @@ class TaskEditIn(BaseModel):
     required_skills: list[str] | None = None
     address_hint: str | None = None
     address_exact: str | None = None
-    deadline: datetime | None = None
+    deadline: UtcDatetime | None = None
 
 
 # 已发布任务上「实质性」字段（影响报名者决策），有人报名后受保护（TASK-014 防调包）
@@ -362,7 +365,7 @@ def my_applications(
         out.append({
             "application_id": a.id, "task_id": a.task_id, "status": a.status,
             "bid_cents": a.bid_cents, "message": a.message,
-            "created_at": a.created_at.isoformat(),
+            "created_at": iso(a.created_at),
             "task_title": t.title if t else None,
             "task_status": t.status if t else None,
             "task_budget_cents": t.budget_cents if t else None,
@@ -700,7 +703,7 @@ def list_progress(task_id: int, user: User = Depends(get_current_user), db: Sess
     rows = db.query(ProgressLog).filter(ProgressLog.task_id == task_id).order_by(ProgressLog.id).all()
     return [
         {"id": r.id, "user_id": r.user_id, "kind": r.kind, "content": r.content,
-         "images": r.images or [], "created_at": r.created_at.isoformat()}
+         "images": r.images or [], "created_at": iso(r.created_at)}
         for r in rows
     ]
 
@@ -738,7 +741,7 @@ def get_trip(task_id: int, user: User = Depends(get_current_user), db: Session =
     )
     if not last:
         return {"lat": None, "lng": None, "at": None}
-    return {"lat": last.lat, "lng": last.lng, "at": last.created_at.isoformat()}
+    return {"lat": last.lat, "lng": last.lng, "at": iso(last.created_at)}
 
 
 @router.post("/tasks/{task_id}/sos", status_code=201)
@@ -1055,7 +1058,7 @@ def user_reviews(
         "tag_counts": tag_counts,
         "items": [
             {"task_id": r.task_id, "reviewer_id": r.reviewer_id, "stars": r.stars,
-             "tags": r.tags, "comment": r.comment, "created_at": r.created_at.isoformat()}
+             "tags": r.tags, "comment": r.comment, "created_at": iso(r.created_at)}
             for r in page
         ],
     }

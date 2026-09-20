@@ -9,6 +9,7 @@ from app.modules.account.models import User
 from app.modules.task.service import machine_review
 
 from .models import CONTENT_KINDS, VISIBILITIES, Comment, Content, Follow, Like
+from app.core.timefmt import iso
 
 router = APIRouter(tags=["content"])
 
@@ -57,7 +58,7 @@ def _dump(c: Content, db: Session, viewer: User | None = None) -> dict:
         "like_count": c.like_count,
         "comment_count": c.comment_count,
         "liked_by_me": liked,
-        "created_at": c.created_at.isoformat(),
+        "created_at": iso(c.created_at),
     }
 
 
@@ -311,7 +312,7 @@ def list_comments(content_id: int, db: Session = Depends(get_db)):
         author = db.get(User, r.author_id)
         out.append(
             {"id": r.id, "author_id": r.author_id, "author_nickname": author.nickname if author else "",
-             "body": r.body, "reply_to_id": r.reply_to_id, "created_at": r.created_at.isoformat()}
+             "body": r.body, "reply_to_id": r.reply_to_id, "created_at": iso(r.created_at)}
         )
     return out
 

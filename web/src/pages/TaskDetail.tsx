@@ -1,7 +1,4 @@
-import {
-  DEPOSIT_STATUS_LABEL, TASK_STATUS_LABEL, apiErrorText, fmtYuan,
-  type Contract, type Recommendation, type Task, type TaskTree,
-} from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, TASK_STATUS_LABEL, apiErrorText, fmtYuan, formatDateTime, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -274,7 +271,7 @@ export default function TaskDetail() {
           <div className="list">
             {progress.map((p) => (
               <div key={p.id}>
-                <p className="muted">[{p.kind}] {p.content} · {new Date(p.created_at).toLocaleString()}</p>
+                <p className="muted">[{p.kind}] {p.content} · {formatDateTime(p.created_at)}</p>
                 {!!p.images?.length && (
                   <div className="row" style={{ gap: 6, marginTop: 4 }}>
                     {p.images.map((u) => (

@@ -16,6 +16,7 @@ from app.modules.dispute.models import Dispute
 from app.modules.task.models import Task
 
 from .models import AdminAudit, Report
+from app.core.timefmt import iso
 
 router = APIRouter(tags=["admin"])
 
@@ -104,7 +105,7 @@ def audit_log(
     return [
         {"id": r.id, "admin_id": r.admin_id, "action": r.action,
          "target_type": r.target_type, "target_id": r.target_id,
-         "detail": r.detail, "created_at": r.created_at.isoformat()}
+         "detail": r.detail, "created_at": iso(r.created_at)}
         for r in rows
     ]
 
@@ -138,7 +139,7 @@ def report_queue(
     rows = db.query(Report).filter(Report.status == status).order_by(Report.id).limit(100).all()
     return [
         {"id": r.id, "reporter_id": r.reporter_id, "target_type": r.target_type,
-         "target_id": r.target_id, "reason": r.reason, "created_at": r.created_at.isoformat()}
+         "target_id": r.target_id, "reason": r.reason, "created_at": iso(r.created_at)}
         for r in rows
     ]
 
@@ -196,7 +197,7 @@ def ticket_queue(status: str = "open", admin: User = Depends(require_admin), db:
     rows = db.query(Ticket).filter(Ticket.status == status).order_by(Ticket.id).limit(100).all()
     return [
         {"id": t.id, "user_id": t.user_id, "subject": t.subject, "body": t.body,
-         "created_at": t.created_at.isoformat()}
+         "created_at": iso(t.created_at)}
         for t in rows
     ]
 
@@ -513,7 +514,7 @@ def pending_uploads(
     return [
         {"name": r.name, "url": f"/api/v1/files/{r.name}", "owner_id": r.owner_id,
          "labels": r.moderation_labels, "content_type": r.content_type,
-         "size_bytes": r.size_bytes, "created_at": r.created_at.isoformat()}
+         "size_bytes": r.size_bytes, "created_at": iso(r.created_at)}
         for r in rows
     ]
 
@@ -584,13 +585,13 @@ def pending_certifications(
             "id": r.id, "user_id": r.user_id, "name": r.name,
             "holder_name": r.holder_name, "cert_number": r.cert_number,
             "issuer": r.issuer,
-            "expires_at": r.expires_at.isoformat() if r.expires_at else None,
+            "expires_at": iso(r.expires_at),
             # CERT-010 证件影像走**鉴权**端点，不是匿名能力 URL
             "image_urls": [f"/api/v1/files/{n}/secure" for n in (r.images or [])],
             # 审核员要能一眼看到「证件姓名 vs 实名」是否一致
             "real_name": applicant.real_name if applicant else "",
             "name_matches": bool(applicant and r.holder_name == applicant.real_name),
-            "created_at": r.created_at.isoformat(),
+            "created_at": iso(r.created_at),
         })
     return out
 

@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from . import service
 from .models import ChangeOrder, Contract, Milestone
+from app.core.timefmt import iso
 
 router = APIRouter(prefix="/contracts", tags=["contract"])
 
@@ -146,7 +147,7 @@ def export_contract(
         *[f"{m.idx}. {m.title}  {m.amount_cents / 100:.2f} 元  [{m.status}]" for m in milestones],
         "",
         "── 结算凭证（资金流水） ──",
-        *[f"{e.created_at.isoformat()}  {e.kind}  {e.amount_cents / 100:+.2f} 元  {e.memo}"
+        *[f"{iso(e.created_at)}  {e.kind}  {e.amount_cents / 100:+.2f} 元  {e.memo}"
           for e in ledger],
     ]
     if anchors:

@@ -1,4 +1,4 @@
-import { ApiError, apiErrorText, IP_ASSIGNMENT_LABEL, fmtYuan, type Decomposition, type IpAssignment, type PriceReference, type Task } from '@platform/core';
+import { ApiError, apiErrorText, IP_ASSIGNMENT_LABEL, fmtYuan, localInputToServerTime, type Decomposition, type IpAssignment, type PriceReference, type Task } from '@platform/core';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
@@ -13,6 +13,9 @@ export default function Publish() {
     task_type: 'service', pricing: 'fixed', recurrence: 'none',
     people_needed: '1', deposit_yuan: '0', is_remote: false, city: '上海',
     lat: '31.2304', lng: '121.4737', address_hint: '', address_exact: '',
+    // TZ-064 截止时间此前**网页上根本没有地方填**：服务端有校验、有到期下架 job、
+    // 有临期提醒，而线上所有任务的 deadline 都是空的，那个 job 从来没有活可干。
+    deadline_local: '',
     // IPC-001 **没有默认值**——留空时服务端会拒绝，这是有意的：
     // 替发布方猜归属，对执行方不公平，对含第三方素材的交付物直接就是错的。
     ip_assignment: '',
@@ -83,6 +86,9 @@ export default function Publish() {
         lng: form.is_remote ? null : parseFloat(form.lng),
         address_hint: form.address_hint,
         address_exact: form.address_exact,
+        // TZ-063 发出去的是**带偏移**的 ISO：datetime-local 给的是没有偏移的
+        // 本地字符串，直发的话服务端会当 UTC，差一个时区
+        ...(form.deadline_local ? { deadline: localInputToServerTime(form.deadline_local) } : {}),
         publish_now: !isProject,
       });
       if (isProject) {
@@ -230,6 +236,10 @@ export default function Publish() {
             </label>
             <label className="grow">执行者保证金（元，0=不要求）
               <input type="number" min={0} value={form.deposit_yuan} onChange={(e) => set('deposit_yuan', e.target.value)} />
+            </label>
+            <label className="grow">截止时间（可选）
+              <input type="datetime-local" value={form.deadline_local}
+                     onChange={(e) => set('deadline_local', e.target.value)} />
             </label>
             <label className="grow">周期
               <select value={form.recurrence} onChange={(e) => set('recurrence', e.target.value)}>
