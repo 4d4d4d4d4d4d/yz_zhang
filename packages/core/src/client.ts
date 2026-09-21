@@ -12,6 +12,7 @@ import type {
   ContributionKind,
   ContributionView,
   EligibleAgent,
+  IpAssignment,
   RiskDisclosure,
   ShareRow,
   SpendRequestView,
@@ -135,9 +136,21 @@ export class PlatformClient {
   }
 
   // ---- tasks ----
+  /** APP-060 `ip_assignment` 是**必需参数**，不是可选的。
+   *
+   *  服务端从 V77 起强制它（留空直接 400），但 SDK 的签名是
+   *  `Partial<Task> & {...}`——每个业务字段都可选，于是 App 漏掉它时
+   *  **类型系统认为这段代码完全正确**，而那个「发布」按钮每次点击都返回 400，
+   *  一直到 V88 才被探针发现。
+   *
+   *  **服务端的「必填」如果没有变成类型上的「必填」，那它只是一句口头约定。**
+   *  放在类型里比再加一条测试好：它覆盖所有客户端（包括以后写的那个）、
+   *  在写代码时就红、而且不需要有人记得去写那条测试。
+   */
   createTask(input: Partial<Task> & {
     title: string;
     category: string;
+    ip_assignment: IpAssignment;
     publish_now?: boolean;
     people_needed?: number;
   }) {

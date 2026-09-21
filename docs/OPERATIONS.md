@@ -75,10 +75,13 @@ App 与 Web 共用同一个 TS SDK（`packages/core`），
 `app.json` 已配 bundle id、深链 scheme（`taskplat://`）、Universal Link / App Links、
 相机与相册权限的中文用途说明。
 
-⚠️ 缺口：App 发版需 Expo + Apple/Google 开发者账号（平台侧无法代劳）；
-提审必查项（账号注销 / 举报 / 拉黑 / 协议入口）在 Web 已有、App 侧待接入，
+提审必查四项（账号注销 / 举报 / 拉黑 / 协议入口）**V88 已在 App 内接上**，
 清单见 [app/STORE_CHECKLIST.md](../app/STORE_CHECKLIST.md)。
-推送通知需 APNs/FCM 通道。
+
+⚠️ 缺口：App 发版需 Expo + Apple/Google 开发者账号（平台侧无法代劳）；
+推送通知需 APNs/FCM 通道；App 仍然没有单元测试，只有 `tsc`——
+V88 把最关键的一条（发布必填字段）提升成了类型约束，但
+**「点了按钮会不会 400」这类问题类型系统答不了**，真要答需要真机/模拟器冒烟。
 
 ---
 

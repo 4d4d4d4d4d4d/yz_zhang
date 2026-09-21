@@ -1,7 +1,7 @@
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
-import { DEPOSIT_STATUS_LABEL, PlatformClient, TASK_STATUS_LABEL, fmtYuan, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type Me, type Notice, type Task, type Wallet } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, PlatformClient, TASK_STATUS_LABEL, apiErrorText, fmtYuan, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type Me, type Notice, type Task, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DiscoverScreen } from './Discover';
 import { VideoFeedScreen } from './VideoFeed';
@@ -197,6 +197,7 @@ function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
       </Text>
       {!!task.description && <Text>{task.description}</Text>}
       {!!task.address_exact && <Text style={styles.mutedLeft}>📍 {task.address_exact}</Text>}
+      <ReportAndBlock client={client} task={task} meId={meId} />
       {contract && (
         <View style={styles.cardRow}>
           <View style={{ flex: 1 }}>
@@ -270,6 +271,53 @@ function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
     </ScrollView>
   );
 }
+
+/** APP-062/063 举报与拉黑。审核必查项里的两条，Web 上早就有。
+ *
+ * 举报**要能选类型**：`POST /reports` 收 target_type + target_id + reason，
+ * 做成一个只发 reason 的按钮，运营侧收到的是一堆不知道在说什么的工单。
+ */
+function ReportAndBlock({ client, task, meId }: {
+  client: PlatformClient; task: Task; meId: number | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [notice, setNotice] = useState('');
+  const other = meId === task.creator_id ? task.executor_id : task.creator_id;
+
+  return (
+    <View style={{ gap: 6 }}>
+      <TouchableOpacity onPress={() => setOpen(!open)}>
+        <Text style={styles.linkRow}>举报 / 拉黑</Text>
+      </TouchableOpacity>
+      {open && (
+        <View style={{ gap: 6 }}>
+          <TextInput style={styles.input} placeholder="说明问题（会进入人工审核队列）"
+                     value={reason} onChangeText={setReason} />
+          <Button title="举报这个任务" onPress={async () => {
+            setNotice('');
+            try {
+              await client.report('task', task.id, reason || '内容不当');
+              setNotice('已提交，运营会在审核队列里看到');
+              setReason('');
+            } catch (e) { setNotice(apiErrorText(e)); }
+          }} />
+          {other != null && (
+            <Button title="拉黑对方（不再收到 TA 的私信）" onPress={async () => {
+              setNotice('');
+              try {
+                const r = await client.toggleBlock(other);
+                setNotice(r.blocked ? '已拉黑' : '已取消拉黑');
+              } catch (e) { setNotice(apiErrorText(e)); }
+            }} />
+          )}
+          {!!notice && <Text style={styles.mutedLeft}>{notice}</Text>}
+        </View>
+      )}
+    </View>
+  );
+}
+
 
 function DisputeBlock({ client, taskId, meId }: {
   client: PlatformClient; taskId: number; meId: number | null;
@@ -369,30 +417,50 @@ const DISPUTE_STATUS_LABEL: Record<string, string> = {
   settled: '双方已和解',
 };
 
+/** APP-060 这个按钮此前**每次点击都返回 400**。
+ *
+ * V77 把 `ip_assignment` 改成必填时，Web、测试、四个闭环脚本都改了，
+ * 唯独 App 没有——而 App 没有任何测试，CI 只做 `tsc`，
+ * 漏一个字段在 `Partial<Task>` 面前不是类型错误。
+ * 现在它是了（SDK 里改成必需参数），这段代码漏掉它就编译不过。
+ */
 function PublishScreen({ client, onDone }: { client: PlatformClient; onDone: () => void }) {
   const [title, setTitle] = useState('');
   const [budget, setBudget] = useState('200');
+  // 没有默认值是有意的（IPC-001）：替发布方猜归属，对执行方不公平，
+  // 对含第三方素材的交付物直接就是错的
+  const [ip, setIp] = useState<IpAssignment | ''>('');
   const [error, setError] = useState('');
   return (
-    <View style={styles.center}>
+    <ScrollView contentContainerStyle={styles.center}>
       <Text style={styles.title}>发布任务</Text>
       <TextInput style={styles.input} placeholder="标题（如：帮忙取快递）" value={title} onChangeText={setTitle} />
       <TextInput style={styles.input} placeholder="预算（元）" value={budget} onChangeText={setBudget} keyboardType="numeric" />
+      <Text style={styles.mutedLeft}>交付成果归谁（必选）</Text>
+      {(Object.keys(IP_ASSIGNMENT_LABEL) as IpAssignment[]).map((key) => (
+        <TouchableOpacity key={key} onPress={() => setIp(key)}>
+          <Text style={ip === key ? styles.optionActive : styles.option}>
+            {ip === key ? '● ' : '○ '}{IP_ASSIGNMENT_LABEL[key]}
+          </Text>
+        </TouchableOpacity>
+      ))}
       {!!error && <Text style={styles.error}>{error}</Text>}
       <Button title="发布（线上任务）" onPress={async () => {
         setError('');
+        if (!ip) { setError('请选择交付成果的知识产权归属'); return; }
         try {
           await client.createTask({
             title, category: '跑腿', task_type: 'event',
             budget_cents: Math.round(parseFloat(budget || '0') * 100),
+            ip_assignment: ip,
             is_remote: true, publish_now: true,
           });
           onDone();
         } catch (e) {
-          setError(e instanceof Error ? e.message : '发布失败');
+          setError(apiErrorText(e));
         }
       }} />
-    </View>
+    </ScrollView>
   );
 }
 
@@ -437,12 +505,22 @@ function NoticesScreen({ client }: { client: PlatformClient }) {
   );
 }
 
+/** APP-061~064 应用商店**审核必查项**：账号注销、举报、拉黑、协议入口。
+ *
+ * `STORE_CHECKLIST.md` 里这四行长期是「⚠️ 待接入」——它们不是「最好有」，
+ * **缺任何一条会被直接打回**，而前三条在 Web 上早就有了，
+ * 差的只是 App 上这几个按钮。
+ */
 function MeScreen({ client, me, refresh, onLogout }: {
   client: PlatformClient; me: Me | null; refresh: () => void; onLogout: () => void;
 }) {
+  const [notice, setNotice] = useState('');
+  const [agreements, setAgreements] = useState<string[]>([]);
+  const [docText, setDocText] = useState('');
+
   if (!me) return <Text style={styles.muted}>加载中…</Text>;
   return (
-    <View style={styles.center}>
+    <ScrollView contentContainerStyle={styles.center}>
       <Text style={styles.title}>{me.nickname}</Text>
       <Text style={styles.muted}>
         信用分 {me.credit_score} · 已完成 {me.tasks_completed} 单 · {me.is_verified ? '已实名' : '未实名'}
@@ -453,8 +531,43 @@ function MeScreen({ client, me, refresh, onLogout }: {
           refresh();
         }} />
       )}
+
+      {/* APP-064 协议与隐私政策：审核员会点开看 */}
+      <TouchableOpacity onPress={async () => {
+        const status = await client.myAgreements().catch(() => null);
+        if (!status) { setDocText('暂时读取不到，请检查网络'); return; }
+        setAgreements(status.documents.map(
+          (d) => `${d.name}（当前 ${d.current_version}${d.needs_reconsent ? ' · 有更新待同意' : ''}）`,
+        ));
+        // LAW-032 数据主体权利入口一并列出——「有能力但用户找不到」等于没有
+        setDocText(Object.entries(status.rights).map(([k, v]) => `${k}：${v}`).join('\n'));
+      }}>
+        <Text style={styles.linkRow}>用户协议与隐私政策 ›</Text>
+      </TouchableOpacity>
+      {agreements.map((t) => <Text key={t} style={styles.mutedLeft}>{t}</Text>)}
+      {!!docText && <Text style={styles.mutedLeft}>{docText}</Text>}
+
+      {/* APP-061 注销。**不能做成一个直接调接口的按钮**：服务端会拦
+          （有钱、有在途合约、有纠纷），而用户看到的会是一个莫名其妙的报错。
+          所以把服务端给的拦截理由原样显示出来（CLI-064 同一条）。 */}
+      <TouchableOpacity onPress={async () => {
+        setNotice('');
+        try {
+          await client.deactivateAccount();
+          onLogout();
+        } catch (e) {
+          setNotice(apiErrorText(e));
+        }
+      }}>
+        <Text style={styles.linkRow}>注销账号</Text>
+      </TouchableOpacity>
+      <Text style={styles.mutedLeft}>
+        注销后实名与交易记录按法定要求脱敏保留，钱包余额需先提现、在途合约需先了结。
+      </Text>
+      {!!notice && <Text style={styles.error}>{notice}</Text>}
+
       <Button title="退出登录" onPress={onLogout} />
-    </View>
+    </ScrollView>
   );
 }
 
@@ -475,4 +588,7 @@ const styles = StyleSheet.create({
   tab: { flex: 1, padding: 14, alignItems: 'center' },
   tabText: { color: '#6b7280' },
   tabActive: { color: '#2f6fed', fontWeight: '700' },
+  option: { color: '#1a1d24', paddingVertical: 6 },
+  optionActive: { color: '#2f6fed', fontWeight: '600', paddingVertical: 6 },
+  linkRow: { color: '#2f6fed', paddingVertical: 10 },
 });
