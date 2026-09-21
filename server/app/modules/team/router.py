@@ -204,6 +204,8 @@ def request_spend(team_id: int, body: SpendIn, user: User = Depends(get_current_
         db.flush()
         result = service.execute_spend(db, req, user)
         return {**result, "needed_approval": False}
+    # TEAM-060 只有真的进审批才通知——额度内自动批准的那条路没有人要做事
+    service.notify_pending(db, team, req, user)
     return {"id": req.id, "status": req.status, "amount_cents": req.amount_cents,
             "needed_approval": True, "reason": block}
 
@@ -238,7 +240,9 @@ def decide(team_id: int, request_id: int, body: DecideIn,
     if not req or req.team_id != team_id:
         raise not_found("支出申请不存在")
     req = service.decide_spend(db, req, user, body.approve, body.reason)
-    return {"id": req.id, "status": req.status}
+    # TEAM-061 理由要当场回给调用方：平台强制写了它，就别再逼界面
+    # 重新拉一次列表才能显示
+    return {"id": req.id, "status": req.status, "decision_reason": req.decision_reason}
 
 
 @router.post("/{team_id}/spends/{request_id}/execute")

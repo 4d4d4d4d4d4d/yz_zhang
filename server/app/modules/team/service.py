@@ -115,6 +115,21 @@ def spend_block(db: Session, team: Team, member: TeamMember, amount_cents: int) 
     return ""
 
 
+def approvers(db: Session, team_id: int, exclude_user_id: int | None = None) -> list[int]:
+    """能审批这个团队支出的人。
+
+    与 `decide_spend` 的判断同源——**自己不能批自己**，所以发起人本人
+    不在通知名单里（给他发一条「等你审批」是纯噪音）。
+    """
+    rows = (
+        db.query(TeamMember)
+        .filter(TeamMember.team_id == team_id, TeamMember.active.is_(True),
+                TeamMember.role.in_(("owner", "admin")))
+        .all()
+    )
+    return [m.user_id for m in rows if m.user_id != exclude_user_id]
+
+
 def create_spend_request(db: Session, team: Team, user: User, amount_cents: int,
                          purpose: str, task_id: int | None = None) -> SpendRequest:
     if amount_cents <= 0:
@@ -126,6 +141,41 @@ def create_spend_request(db: Session, team: Team, user: User, amount_cents: int,
     db.flush()
     # 审批期间**不动钱**（见 models 里的理由）
     return row
+
+
+def notify_pending(db: Session, team: Team, req: SpendRequest, requester: User) -> None:
+    """TEAM-060 告诉审批人有东西等他批。
+
+    改造前这里什么都不发：员工的活被卡住，而**卡住他的那个人从头到尾
+    不知道**。这笔申请可以一直躺着——没有超时，也没有催办。
+    """
+    from app.modules.notification.service import notify
+
+    for uid in approvers(db, team.user_id, exclude_user_id=req.requester_id):
+        notify(db, uid, "team", "支出待审批",
+               f"{requester.nickname} 申请从「{team.name}」支出 "
+               f"¥{req.amount_cents / 100:.2f}（{req.purpose or '未填用途'}），等待你审批。")
+
+
+def notify_decided(db: Session, team: Team, req: SpendRequest) -> None:
+    """TEAM-061 把审批结果——**连同那段被强制写下的理由**——送到发起人面前。
+
+    服务端强制驳回必须写原因（`reason_required`），然后把这段话存进
+    `decision_reason` 就不管了：发起人不主动再拉一次支出列表就看不到。
+    **「必须写」和「送到了」是两件事**（V89 的「必须选」和「看得见」同一条）。
+
+    理由的全部价值在于被驳回的人读到它——他要据此决定是改金额、改用途，
+    还是去跟老板谈。送不到，这条强制就只是给审批人加了一道手续。
+    """
+    from app.modules.notification.service import notify
+
+    if req.status == "approved":
+        body = (f"你从「{team.name}」申请的 ¥{req.amount_cents / 100:.2f} 已获批准，"
+                f"可以在支出列表里执行。")
+    else:
+        body = (f"你从「{team.name}」申请的 ¥{req.amount_cents / 100:.2f} 被驳回："
+                f"{req.decision_reason}")
+    notify(db, req.requester_id, "team", "支出审批结果", body)
 
 
 def decide_spend(db: Session, req: SpendRequest, decider: User, approve: bool,
@@ -146,6 +196,9 @@ def decide_spend(db: Session, req: SpendRequest, decider: User, approve: bool,
     req.decision_reason = reason
     req.decided_at = utcnow()
     db.add(req)
+    team = db.get(Team, req.team_id)
+    if team:
+        notify_decided(db, team, req)
     return req
 
 

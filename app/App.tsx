@@ -4,6 +4,7 @@
 import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, PlatformClient, TASK_STATUS_LABEL, apiErrorText, fmtYuan, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DiscoverScreen } from './Discover';
+import { SUB_SCREEN_LABEL, SubScreenHost, type SubScreen } from './TeamCoopDev';
 import { VideoFeedScreen } from './VideoFeed';
 import {
   Button, FlatList, Platform, RefreshControl, SafeAreaView, ScrollView, StyleSheet,
@@ -625,6 +626,8 @@ function NoticesScreen({ client }: { client: PlatformClient }) {
 function MeScreen({ client, me, refresh, onLogout }: {
   client: PlatformClient; me: Me | null; refresh: () => void; onLogout: () => void;
 }) {
+  // APP-069 三条线挂在「我的」下面，不再加 Tab——七个已经够多了
+  const [sub, setSub] = useState<SubScreen | null>(null);
   const [notice, setNotice] = useState('');
   const [agreements, setAgreements] = useState<string[]>([]);
   const [docText, setDocText] = useState('');
@@ -638,6 +641,7 @@ function MeScreen({ client, me, refresh, onLogout }: {
       .catch(() => {});
   }, [client]);
 
+  if (sub) return <SubScreenHost client={client} screen={sub} onBack={() => setSub(null)} />;
   if (!me) return <Text style={styles.muted}>加载中…</Text>;
   return (
     <ScrollView contentContainerStyle={styles.center}>
@@ -651,6 +655,15 @@ function MeScreen({ client, me, refresh, onLogout }: {
           refresh();
         }} />
       )}
+
+      {/* APP-069 团队 / 合作体 / 开发者。三条线此前**只有网页看得见**，
+          而 V92 刚给团队审批加了通知——通知把人叫来、他点进去无路可走，
+          比没有通知更糟（APP-066 同一条教训）。 */}
+      {(['teams', 'ventures', 'developer'] as SubScreen[]).map((key) => (
+        <TouchableOpacity key={key} onPress={() => setSub(key)}>
+          <Text style={styles.linkRow}>{SUB_SCREEN_LABEL[key]} ›</Text>
+        </TouchableOpacity>
+      ))}
 
       {/* APP-064 协议与隐私政策：审核员会点开看 */}
       <TouchableOpacity onPress={async () => {

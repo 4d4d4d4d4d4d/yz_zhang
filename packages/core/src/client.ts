@@ -1148,8 +1148,11 @@ export class PlatformClient {
   teamSpends(teamId: number) {
     return this.request<SpendRequestView[]>('GET', `/teams/${teamId}/spends`);
   }
+  /** TEAM-061 驳回时 `reason` 是**服务端强制**的（`reason_required`）。
+   *  响应里带回 `decision_reason`，界面当场就能显示——不必再拉一次列表。
+   *  改造前平台认真地把这段话收上来存好，**然后不送给任何人**。 */
   decideTeamSpend(teamId: number, requestId: number, approve: boolean, reason = '') {
-    return this.request<{ id: number; status: string }>(
+    return this.request<{ id: number; status: string; decision_reason: string }>(
       'POST', `/teams/${teamId}/spends/${requestId}/decide`, { approve, reason },
     );
   }

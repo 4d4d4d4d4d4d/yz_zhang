@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V91 全批次完成（2026-09-21）。
-> 后端 938 tests + 前端 95 tests（core 56 + web 39）全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V92 全批次完成（2026-09-21）。
+> 后端 956 tests + 前端 95 tests（core 56 + web 39）全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,26 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V92 批次：没有人被告知）
+
+> 模块 spec：[67-nobody-was-told.md](67-nobody-was-told.md)
+>
+> ```
+> OWNER 收到的通知 : []
+> DECIDE  : 200 {"id":1,"status":"rejected"}
+> STAFF 收到的通知 : []
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **TEAM-060 审批人要被告知** | `notify_pending`：超额申请提交后通知 owner 与 admin。改造前 `team` 模块**一处 `notify()` 都没有**——员工的活被卡住，而卡住他的那个人从头到尾不知道，申请可以一直躺着 | `tests/test_team_approval_notice.py::test_team060_approvers_are_told_there_is_something_to_approve` |
+| **发起人不收「等你审批」** | 通知名单与 `decide_spend` 的准入同源（自己不能批自己）。**红验时第一版不红**：测试拿 member 当发起人，而 member 根本不在 owner/admin 名单里，**压根没碰到那行排除逻辑**——改成 admin 超额申请才真的钉住 | `::test_team060_requester_is_not_told_to_approve_his_own_request` |
+| **额度内不打扰任何人** | 自动批准那条路上没有人要做事。「有通知总比没有好」是错的——噪音会让真正要处理的那条被划过去 | `::test_team060_in_limit_spend_notifies_nobody` |
+| **TEAM-061 理由要送到** | 服务端**强制**驳回写原因（`reason_required`），然后把这段话存进 `decision_reason` 就不管了。**「必须写」和「送到了」是两件事**——这是 V89「必须选 vs 看得见」、V91「请先 X vs X 的入口」之后的第三次。通知正文带上理由，`decide` 响应也带回它 | `::test_team061_rejection_notice_carries_the_reason_it_forced_you_to_write`（红验：改成「请到支出列表查看」即红）、`::test_team061_decide_response_returns_the_reason` |
+| **TEAM-062 这两条不进 `MUST_REACH`** | 申请不会因为没人看就作废，理由也一直躺在列表里可查。**V90 的标准是拿来做减法的**——全做成不可关，用户会连真正重要的几条一起屏蔽 | `::test_team062_approval_notices_are_not_must_reach` |
+| **APP-069 三条线到 App** | `app/TeamCoopDev.tsx`：团队（额度/预算池/申请/**审批含必填驳回理由**/执行/发票）、合作体（份额/贡献/确认/风险揭示）、开发者（API Key 一次性明文与吊销、Webhook 与签名说明）。挂在「我的」下，不再加 Tab。按钮可用性读服务端的 `can_decide` / `invoice_block`，**第二份实现必然抄漏** | `tests/test_notice_actions.py::test_app069_the_three_lines_exist_on_the_app` |
+| **CLI-074 通知让你做的事要做得到** | `NOTICE_ACTIONS` 声明表：(类别,标题) → 动作的 SDK 方法 → 必须做得到的端 → **这条通知在叫他做什么**。V91 那条手写断言（必达通知指向人工核验）并入表中。**先发通知、界面下批再补，等于先把人叫醒再告诉他没事可做** | `::test_cli074_the_action_a_notice_asks_for_is_reachable`（红验：删掉 App 审批入口即红）、`::test_cli074_declared_titles_are_really_sent_by_the_server`（红验：改标题即红）、`::test_cli074_scanner_self_check` |
 
 ## 已实现（V91 批次：钱能进不能出）
 
