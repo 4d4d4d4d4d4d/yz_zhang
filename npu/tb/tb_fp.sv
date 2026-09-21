@@ -81,6 +81,33 @@ module tb_fp;
     n++; if (bf16_to_fp32(16'h0041) !== 32'h00000000) begin
       errors++; $display("FAIL subnormal input must flush to zero"); end
 
+    // ---- fp <-> fixed conversion ----
+    for (int t = 0; t < 2000; t++) begin
+      int    sh;
+      int    iv;
+      real   rv;
+      logic [31:0] f;
+      sh = $urandom_range(0, 12);
+      iv = $urandom_range(0, 60000) - 30000;
+      f  = int_to_fp32(iv, 5'(sh));
+      n++;
+      if (relerr(f2d(f), real'(iv) / (2.0 ** sh)) > 1.0e-7) begin
+        errors++;
+        if (errors < 15)
+          $display("FAIL i2f: %0d>>%0d got %g want %g", iv, sh, f2d(f),
+                   real'(iv) / (2.0 ** sh));
+      end
+      rv = (($urandom_range(0, 200000) / 1000.0) - 100.0);
+      n++;
+      // $rtoi truncates toward zero, which is the declared rounding mode
+      if (fp32_to_int(d2f(rv), 5'(sh)) !== 32'(signed'($rtoi(rv * (2.0 ** sh))))) begin
+        errors++;
+        if (errors < 15)
+          $display("FAIL f2i: %g<<%0d got %0d want %0d", rv, sh,
+                   fp32_to_int(d2f(rv), 5'(sh)), $rtoi(rv * (2.0 ** sh)));
+      end
+    end
+
     if (errors == 0) $display("TEST PASSED (tb_fp): %0d checks", n);
     else             $display("TEST FAILED (tb_fp): %0d/%0d errors", errors, n);
     $finish;

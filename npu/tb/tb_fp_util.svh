@@ -6,6 +6,7 @@
 `ifndef TB_FP_UTIL_SVH
 `define TB_FP_UTIL_SVH
 
+/* verilator lint_off UNUSEDSIGNAL */
 function automatic logic [31:0] d2f(input real r);
   logic [63:0]        d;
   logic               s;
@@ -39,6 +40,8 @@ function automatic real f2d(input logic [31:0] f);
   end
   return $bitstoreal(d);
 endfunction
+
+/* verilator lint_on UNUSEDSIGNAL */
 
 function automatic logic [15:0] d2bf(input real r);
   return npu_fp::fp32_to_bf16(d2f(r));
