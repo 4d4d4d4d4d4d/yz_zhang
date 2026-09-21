@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V88 全批次完成（2026-09-21）。
-> 后端 912 tests + 前端 91 tests（core 56 + web 35）全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V89 全批次完成（2026-09-21）。
+> 后端 916 tests + 前端 92 tests（core 56 + web 36）全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,24 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V89 批次：声明了却不给，给了却不声明）
+
+> 模块 spec：[64-declared-but-not-returned.md](64-declared-but-not-returned.md)
+>
+> ```
+> KEYS Task: 声明有服务端没给=['bonus_cents', 'distance_m', 'ip_assignment']
+> KEYS Me:   服务端给了没声明=['certifications', 'credit_level', 'referral_code']
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **TASK-060 浮动上限要给到当事人** | `dump_task` 补 `bonus_cents`。OUT-002 的立论是「浮动部分必须是**确定的上限**」，而托管时已按 budget+bonus 全额锁了钱——**一个没给到要靠它决策的人的上限，对他不成立** | `tests/test_client_shape_alignment.py::test_cli070_core_domain_shapes`（红验：删掉该字段即红）、`web/src/AgentAndVerify.test.tsx::TASK-060/061` |
+| **TASK-061 归属要看得见** | `dump_task` 补 `ip_assignment`，任务页显示成人话。V77 强制发布方选，理由是「替他猜对执行方不公平」；但不返回这个字段，执行方在报名前照样不知道——**「必须选」和「看得见」是两件事** | 同上 |
+| **写成可选就等于没钉** | 这两个字段原本在 TS 里是 `?:`，于是「服务端根本不返回」被闸门放过。改成**必填**才真的钉住——第一次红验没红，就是这个原因 | 同上（第二次红验通过） |
+| **TASK-062 `Me` 的三个字段进类型** | `certifications` / `credit_level` / `referral_code` 服务端一直在返回，类型里一直没有，于是没有任何界面能用上（信用等级挂着 CRED-003 的费率折扣） | `::test_cli070_core_domain_shapes` |
+| **CLI-068 比值的类型** | 键名之外比类型：`number` 收到 `"200"` 这类错，键名比对一个都抓不到。规则**刻意克制**：可选字段缺失不报警、联合类型逐个试、字面量按值比、自定义别名当字符串——**一个假报警多的闸门会被人关掉** | `::test_cli068_type_mismatch_is_caught`（闸门自己的红验，不等以后有人写错才知道） |
+| **CLI-070 覆盖老接口** | Task / Contract / Me / Wallet / Dispute / DisputeStatement / Notice / Mission / MissionStep 全部纳入。覆盖 Mission 时立刻掉出 V86 刚加的 `allow_agents`、`agent_user_id` 没进类型 | `::test_cli070_{core_domain,dispute_and_message,mission}_shapes` |
 
 ## 已实现（V88 批次：App 上那个发不出任务的按钮）
 

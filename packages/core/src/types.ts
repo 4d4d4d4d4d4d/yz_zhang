@@ -15,6 +15,12 @@ export interface Me {
   credit_score: number;
   rating_avg: number;
   tasks_completed: number;
+  /** TASK-062 这三个服务端一直在返回，**类型里一直没有**——
+   *  于是没有任何界面能用上：用户看不到自己的资质过没过，
+   *  也看不到信用等级给他带来了什么（CRED-003 的费率折扣就挂在它上面）。 */
+  certifications: string[];
+  credit_level: string;
+  referral_code: string;
 }
 
 export type TaskStatus =
@@ -45,9 +51,14 @@ export interface Task {
   deposit_cents?: number;
   // IPC-001 知识产权归属。**服务端没有默认值**：不传会被拒。
   // 替当事人猜归属是这条最容易犯的错，所以客户端也必须让用户显式选。
-  ip_assignment?: IpAssignment;
-  // OUT-002 浮动对价的确定上限（仅 pricing='outcome'）
-  bonus_cents?: number;
+  //
+  // TASK-061 **必填而不是可选**：服务端每次都返回它。写成可选的后果不是
+  // 「宽容」——是闸门放过「服务端根本不返回」这件事，而那正是改造前的状态：
+  // 发布方被强制选归属，执行方在报名前却看不见选的是什么。
+  ip_assignment: IpAssignment | '';
+  // OUT-002 浮动对价的确定上限。非 outcome 任务恒为 0，同样每次都返回——
+  // 一个没给到当事人的「确定上限」，对他不成立（TASK-060）。
+  bonus_cents: number;
   is_remote: boolean;
   city: string;
   lat: number | null;
@@ -261,6 +272,9 @@ export interface Mission {
   /** AIO-020 已完成步的平均评审分。达标要求「全部完成」且「均分过线」。 */
   quality_pct: number;
   model_calls: number;
+  /** ORC-061 是否允许把步骤派给平台 AI 助理。**默认关**：发起人授权了
+   *  「自动花钱」，不等于授权「活由 AI 做」。 */
+  allow_agents: boolean;
   acceptance_criteria: string[];
   last_error: string;
   created_at: string;
@@ -297,6 +311,8 @@ export interface MissionStep {
   status: 'pending' | 'dispatched' | 'done' | 'failed' | 'superseded';
   observation: string;
   is_remedy: boolean;
+  /** ORC-060 这一步派给了哪个平台 AI 助理（没派则为 null）。 */
+  agent_user_id: number | null;
   budget_cents?: number;
   /** AIO-022 修复步指向被它接续的原步（幂等键，取代原先的标题匹配）。 */
   parent_step_id: number | null;

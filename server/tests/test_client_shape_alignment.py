@@ -36,9 +36,10 @@ CLIENT_TS = ROOT / "packages" / "core" / "src" / "client.ts"
 
 # ----------------------------------------------------------------- TS 接口解析
 def _parse_interfaces(src: str) -> dict[str, dict]:
-    """从 types.ts 里取出每个 interface 的**顶层**字段名与它继承的接口。
+    """从 types.ts 里取出每个 interface 的**顶层**字段（名 → 类型声明）与继承。
 
     只认顶层：嵌套对象字面量里的字段属于那个子对象，不该被算成本接口的键。
+    可选字段（`foo?:`）单独记下来——CLI-068 比类型时，可选字段缺失不算错。
     """
     out: dict[str, dict] = {}
     for m in re.finditer(r"export interface (\w+)(?:\s+extends\s+([\w, ]+))?\s*\{", src):
@@ -54,16 +55,20 @@ def _parse_interfaces(src: str) -> dict[str, dict]:
                     break
             j += 1
         body = src[i + 1:j]
-        fields, nested = [], 0
+        fields: dict[str, str] = {}
+        optional: set[str] = set()
+        nested = 0
         for line in body.split("\n"):
-            stripped = line.strip()
-            if nested == 0:
-                fm = re.match(r"(\w+)\??\s*:", stripped)
+            stripped = re.sub(r"//.*$", "", line.strip()).strip()
+            if nested == 0 and stripped and not stripped.startswith(("*", "/*")):
+                fm = re.match(r"(\w+)(\??)\s*:\s*(.+?);?\s*$", stripped)
                 if fm:
-                    fields.append(fm.group(1))
+                    fields[fm.group(1)] = fm.group(3).rstrip(";").strip()
+                    if fm.group(2):
+                        optional.add(fm.group(1))
             nested += (line.count("{") + line.count("[")
                        - line.count("}") - line.count("]"))
-        out[name] = {"fields": fields,
+        out[name] = {"fields": fields, "optional": optional,
                      "bases": [b.strip() for b in (bases or "").split(",") if b.strip()]}
     return out
 
@@ -71,13 +76,49 @@ def _parse_interfaces(src: str) -> dict[str, dict]:
 INTERFACES = _parse_interfaces(TYPES_TS.read_text(encoding="utf-8"))
 
 
-def _fields(name: str) -> set[str]:
+def _typed(name: str) -> tuple[dict[str, str], set[str]]:
     spec = INTERFACES[name]
-    out = set(spec["fields"])
+    types: dict[str, str] = {}
+    optional: set[str] = set()
     for base in spec["bases"]:
         if base in INTERFACES:
-            out |= _fields(base)
-    return out
+            btypes, bopt = _typed(base)
+            types.update(btypes)
+            optional |= bopt
+    types.update(spec["fields"])
+    optional |= spec["optional"]
+    return types, optional
+
+
+def _fields(name: str) -> set[str]:
+    return set(_typed(name)[0])
+
+
+def _matches(decl: str, value) -> bool:
+    """CLI-068 值的类型对不对得上声明。**刻意宽容**，只抓「类型层级错了」这一类。
+
+    规则克制的理由：**一个假报警多的闸门会被人关掉**（V80 的教训）。
+    所以联合类型逐个试、字面量按值比、自定义别名（`IpAssignment`）一律当字符串
+    ——**不去解析别名的定义**，那是编译器的活。
+    """
+    for part in [p.strip() for p in decl.split("|")]:
+        if value is None and part in ("null", "undefined"):
+            return True
+        if isinstance(value, bool) and part == "boolean":
+            return True
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and part == "number":
+            return True
+        if isinstance(value, str):
+            if part == "string" or part.strip("'\"") == value:
+                return True
+            if part[:1].isupper() or part.startswith("Record<"):
+                return True          # 自定义别名/枚举，当字符串处理
+        if isinstance(value, list) and (part.endswith("[]") or part.startswith("Array<")):
+            return True
+        if isinstance(value, dict) and (part.startswith("{") or part.startswith("Record<")
+                                        or part in INTERFACES):
+            return True
+    return False
 
 
 def test_cli067_interface_parser_actually_works():
@@ -91,18 +132,25 @@ def test_cli067_interface_parser_actually_works():
 
 # ------------------------------------------------------- CLI-067(a) 响应形状
 def _assert_shape(payload: dict, interface: str, *, optional: set[str] = frozenset()):
-    """真实响应的键必须与 TS 接口声明的字段一致。
+    """真实响应的键与**值的类型**必须与 TS 接口一致。
 
     多出来的键 = 客户端拿不到（类型里没有，写代码时看不见）；
-    少掉的键 = 客户端以为有（`x.foo` 编译通过，运行时 undefined）。
-    两个方向都要红——**只查一边的闸门，另一边就是自由的**。
+    少掉的键 = 客户端以为有（`x.foo` 编译通过，运行时 undefined）；
+    类型对不上 = 两边都以为自己是对的。
+    三个方向都要红——**只查一边的闸门，另一边就是自由的**。
     """
-    declared = _fields(interface)
+    declared, ts_optional = _typed(interface)
     actual = set(payload)
-    missing = declared - actual - optional
-    extra = actual - declared
+    missing = set(declared) - actual - set(optional) - ts_optional
+    extra = actual - set(declared)
     assert not missing, f"{interface} 声明了服务端没给的字段：{sorted(missing)}"
     assert not extra, f"服务端给了 {interface} 没声明的字段（客户端看不见它）：{sorted(extra)}"
+    wrong = [
+        f"{k}: 声明 {declared[k]}，实际 {type(v).__name__}={v!r}"
+        for k, v in payload.items()
+        if k in declared and not _matches(declared[k], v)
+    ]
+    assert not wrong, f"{interface} 的字段类型对不上：{wrong}"
 
 
 @pytest.fixture()
@@ -357,3 +405,84 @@ def test_cli067_request_bodies_match_the_server_schema():
     # 自检：一条都没比过说明白跑了
     assert checked >= 40, f"只比对了 {checked} 个请求体，闸门可能形同虚设"
     assert not problems, "SDK 的请求体与服务端 schema 对不上：\n  " + "\n  ".join(problems)
+
+
+# ------------------------------------------- CLI-070 闸门扩到老接口
+def test_cli070_core_domain_shapes(client, requester):
+    """V85 的闸门只盯着 V73~V79 那六条新线，把同样的比对跑一遍老接口，
+    立刻掉出两条：`Task` 声明了 `bonus_cents` / `ip_assignment` 而服务端不返回，
+    `Me` 返回了三个类型里没有的字段。
+
+    老接口没有一次性对齐过，闸门第一次覆盖它们时掉出东西是正常的——
+    **把它们修掉、然后不许再漂**，这正是目的。
+    """
+    worker = register(client, "13800064001", "执行者")
+    verify_user(client, worker, name="执行")
+    topup(client, requester, 200000)
+    task = publish_task(client, requester)
+    contract_id = match_and_fund(client, requester, worker, task)
+
+    detail = client.get(f"/api/v1/tasks/{task['id']}", headers=auth(requester)).json()
+    # 详情视角字段只在 GET /tasks/{id} 出现，列表里没有——它们在 TS 里是可选的
+    _assert_shape(detail, "Task")
+    # 广场列表里的任务是另一条序列化路径（没有详情视角字段），单独比一次
+    listed = publish_task(client, requester, title="另一单保洁")
+    rows = client.get("/api/v1/tasks", headers=auth(worker)).json()
+    assert any(t["id"] == listed["id"] for t in rows), "刚发布的任务不在广场上"
+    _assert_shape([t for t in rows if t["id"] == listed["id"]][0], "Task")
+    _assert_shape(client.get(f"/api/v1/contracts/{contract_id}",
+                             headers=auth(requester)).json(), "Contract",
+                  optional={"milestones"})
+    _assert_shape(client.get("/api/v1/wallet", headers=auth(requester)).json(), "Wallet")
+    _assert_shape(client.get("/api/v1/users/me", headers=auth(requester)).json(), "Me")
+
+
+def test_cli070_dispute_and_message_shapes(client, requester):
+    worker = register(client, "13800064010", "执行者")
+    verify_user(client, worker, name="执行")
+    topup(client, requester, 200000)
+    task = publish_task(client, requester)
+    match_and_fund(client, requester, worker, task)
+
+    d = client.post(f"/api/v1/tasks/{task['id']}/disputes",
+                    json={"reason": "交付不符约定，要求重做"}, headers=auth(requester)).json()
+    _assert_shape(d, "Dispute")
+    client.post(f"/api/v1/disputes/{d['id']}/statements",
+                json={"content": "我方已按约定交付，附证据"}, headers=auth(worker))
+    rows = client.get(f"/api/v1/disputes/{d['id']}/statements", headers=auth(worker)).json()
+    _assert_shape(rows[0], "DisputeStatement")
+
+    notices = client.get("/api/v1/notifications", headers=auth(worker)).json()
+    items = notices if isinstance(notices, list) else notices.get("items", [])
+    if items:
+        _assert_shape(items[0], "Notice")
+
+
+def test_cli070_mission_shapes(client, requester):
+    """V86 刚给 Mission 加了 `allow_agents`、给 MissionStep 加了 `agent_user_id`。
+    闸门覆盖到这里，它们有没有同步进类型就不再靠人记得。"""
+    topup(client, requester, 100000)
+    m = client.post("/api/v1/missions", json={
+        "goal": "搬家统筹", "detail": "", "category": "跑腿",
+        "budget_cap_cents": 30000, "max_iterations": 3, "acceptance_criteria": [],
+    }, headers=auth(requester)).json()
+    _assert_shape(m, "Mission")
+
+    client.post(f"/api/v1/missions/{m['id']}/tick", headers=auth(requester))
+    detail = client.get(f"/api/v1/missions/{m['id']}", headers=auth(requester)).json()
+    if detail["steps"]:
+        _assert_shape(detail["steps"][0], "MissionStep")
+
+
+def test_cli068_type_mismatch_is_caught():
+    """类型闸门自己的红验：声明 number 而给字符串，必须红。
+
+    不靠「以后有人写错时才知道」——**闸门本身要被验证过会红**。
+    """
+    import pytest as _pytest
+
+    with _pytest.raises(AssertionError, match="类型对不上"):
+        _assert_shape({"available_cents": "200", "escrow_cents": 0, "frozen_cents": 0}, "Wallet")
+    # 可选字段缺失不报警
+    _assert_shape({"id": 1, "category": "system", "title": "t", "body": "b",
+                   "is_read": False, "created_at": "2026-09-21T00:00:00Z"}, "Notice")

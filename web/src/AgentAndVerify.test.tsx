@@ -20,7 +20,7 @@ const TASK = {
   id: 7, title: '写一篇接口文档', description: '', category: '软件开发', status: 'published',
   budget_cents: 20000, creator_id: 1, executor_id: null, is_remote: true, city: '',
   address_hint: '', address_exact: '', parent_id: null, task_type: 'simple',
-  pricing: 'fixed', deposit_status: 'none',
+  pricing: 'outcome', bonus_cents: 5000, ip_assignment: 'assign', deposit_status: 'none',
 };
 
 function makeClient(routes: Record<string, unknown>, calls: string[] = []): PlatformClient {
@@ -117,6 +117,22 @@ describe('AI 助理面板', () => {
     expect(screen.getByText('申请人工核验')).toBeTruthy();
     // AGT-013 界面必须说清楚置信度是**助理自报的**
     expect(screen.getByText(/自报置信度/)).toBeTruthy();
+  });
+});
+
+describe('任务详情的合同要件', () => {
+  it('TASK-060/061 浮动上限与知识产权归属必须显示（此前服务端根本不返回）', async () => {
+    localStorage.setItem('token', 'tok');
+    const client = makeClient({ '/users/me': ME, '/agents': [], '/tasks/7': TASK });
+    render(
+      <MemoryRouter initialEntries={['/tasks/7']}>
+        <AppProvider client={client}><App /></AppProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByTestId('task-terms')).toBeTruthy());
+    const text = screen.getByTestId('task-terms').textContent ?? '';
+    expect(text).toContain('¥50.00');          // 浮动上限
+    expect(text).toContain('著作权转让给我');     // 归属说成人话，不是 'assign'
   });
 });
 

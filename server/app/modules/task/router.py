@@ -103,6 +103,16 @@ def dump_task(task: Task, viewer: User | None = None) -> dict:
         "required_skills": task.required_skills,
         "budget_cents": task.budget_cents,
         "pricing": task.pricing,
+        # OUT-002 浮动上限**必须给到要靠它决策的那个人**。
+        # 改造前只回了 `pricing: "outcome"`：执行方看到「浮动对价」四个字，
+        # 却看不到浮动部分有多少——而平台托管时已经按 budget+bonus 全额锁了钱，
+        # 只有他不知道这笔钱存在。一个没给到当事人的「确定上限」，对他不成立。
+        "bonus_cents": task.bonus_cents,
+        # IPC-001 V77 强制发布方选归属，理由是「替他猜对执行方不公平」；
+        # 但**不返回这个字段**，执行方在报名前照样不知道自己做的东西归谁——
+        # 他能看到的最早时点是签约时的合同条款，而那时他已经决定接了。
+        # 「必须选」和「看得见」是两件事，只做前一件，公平没有兑现。
+        "ip_assignment": task.ip_assignment,
         "deposit_cents": task.deposit_cents,
         "is_remote": task.is_remote,
         "city": task.city,

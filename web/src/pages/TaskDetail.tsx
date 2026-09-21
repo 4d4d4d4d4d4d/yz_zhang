@@ -1,4 +1,4 @@
-import { DEPOSIT_STATUS_LABEL, TASK_STATUS_LABEL, apiErrorText, fmtYuan, formatDateTime, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, fmtYuan, formatDateTime, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -75,6 +75,17 @@ export default function TaskDetail() {
           </span>
         </div>
         <p className="muted">{task.category} · {task.is_remote ? '线上' : `${task.city} ${task.address_hint}`} · 预算 <span className="price">{fmtYuan(task.budget_cents)}</span></p>
+        {/* TASK-060/061 这两条此前服务端根本不返回：执行方看到「浮动对价」
+            却看不到浮动多少，被强制选定的知识产权归属他也看不见。
+            必须选 ≠ 看得见——只做前一件，公平没有兑现。 */}
+        <p className="muted" data-testid="task-terms">
+          {task.pricing === 'outcome' && (
+            <>达标可加付至多 <span className="price">{fmtYuan(task.bonus_cents)}</span>（按验收指标判定） · </>
+          )}
+          交付成果归属：{task.ip_assignment
+            ? IP_ASSIGNMENT_LABEL[task.ip_assignment]
+            : '未声明'}
+        </p>
         {task.description && <p style={{ marginTop: 8 }}>{task.description}</p>}
         {task.address_exact && <p className="muted">📍 详细地址（当事人可见）：{task.address_exact}</p>}
         {error && <p className="error">{error}</p>}
