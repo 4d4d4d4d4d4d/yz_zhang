@@ -1,0 +1,14 @@
+`verilator_config
+// Project-wide lint waivers, each scoped as narrowly as the tool allows.
+
+// Library files legitimately hold several small modules.
+lint_off -rule DECLFILENAME -file "*/npu_prim.sv"
+lint_off -rule DECLFILENAME -file "*/npu_ecc.sv"
+lint_off -rule DECLFILENAME -file "*/npu_mte.sv"
+
+// The package is a shared contract; not every consumer uses every field.
+lint_off -rule UNUSEDPARAM  -file "*/npu_pkg.sv"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_pkg.sv"
+
+// Descriptor word 1 upper half is architecturally reserved.
+lint_off -rule UNUSEDSIGNAL -file "*/npu_opsched.sv" -match "*in_desc*"
