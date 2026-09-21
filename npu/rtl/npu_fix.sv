@@ -172,6 +172,11 @@ module npu_fix
             end
           end
 
+`ifdef NPU_DEBUG
+          if (drain)
+            $display("[fix] t=%0t write addr=%03h beat=%0d data=%064h",
+                     $time, wr_addr, wbeat, wr_data);
+`endif
           if (drain) begin
             if (wbeat == 5'(LANES - 1)) begin
               wbeat       <= '0;

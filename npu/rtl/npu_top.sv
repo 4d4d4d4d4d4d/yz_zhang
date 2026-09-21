@@ -122,6 +122,15 @@ module npu_top
     .s_valid(sk_s_valid), .s_ready(sk_s_ready), .s_data(sk_s_data),
     .m_valid(sk_m_valid), .m_ready(sk_m_ready), .m_data(sk_m_data));
 
+  // A descriptor parked in the skid buffer is in neither the message queue
+  // nor the issue window. Leaving it out of the idle term makes the machine
+  // report "done" for the cycle or two it takes to hand over -- software
+  // then reads a result that has not been produced, and the Q-Channel would
+  // accept a power-down request with work still to do. The global barrier
+  // needs the same term for a different reason; see npu_opsched.
+  logic fetch_empty;
+  assign fetch_empty = mq_empty && !sk_m_valid && !sk_s_valid;
+
   // ================= scheduler =================
   logic [NEVT-1:0] evt_nz, cons_mask;
   logic            cons_en;
@@ -143,7 +152,7 @@ module npu_top
     .in_desc(sk_m_data[DESC_W-1:0]),
     .in_qid (sk_m_data[DESC_W +: QIDW]),
     .in_mcu (sk_m_data[DESC_W+QIDW +: MCUW]),
-    .in_ready(sk_m_ready),
+    .in_ready(sk_m_ready), .fetch_empty(fetch_empty),
     .evt_nz(evt_nz), .cons_en(cons_en), .cons_mask(cons_mask),
     .iss_valid(iss_valid), .iss_op(iss_op),
     .cpl_valid(cpl_valid), .cpl(cpl),
@@ -259,7 +268,7 @@ module npu_top
     .bvalid(s_bvalid), .bready(s_bready), .bresp(s_bresp),
     .arvalid(s_arvalid), .arready(s_arready), .araddr(s_araddr), .arid(s_arid),
     .rvalid(s_rvalid), .rready(s_rready), .rdata(s_rdata), .rresp(s_rresp),
-    .idle(sched_idle && mq_empty),
+    .idle(sched_idle && fetch_empty),
     .err_illegal(err_illegal), .err_task(err_task), .err_hang(err_hang),
     .err_evt_ovf(err_evt_ovf), .hang_snapshot(hang_snapshot),
     .err_tag(err_tag), .stat_issued(stat_issued),
@@ -274,7 +283,7 @@ module npu_top
   npu_qch u_qch (
     .clk(clk), .rst_n(rst_n),
     .qreqn(qreqn), .qacceptn(qacceptn), .qdeny(qdeny), .qactive(qactive),
-    .sched_idle(sched_idle), .queues_empty(mq_empty),
+    .sched_idle(sched_idle), .queues_empty(fetch_empty),
     .ext_rd_outstanding(mte_in_outst), .ext_wr_outstanding(mte_out_outst),
     .q_stop(q_stop));
 

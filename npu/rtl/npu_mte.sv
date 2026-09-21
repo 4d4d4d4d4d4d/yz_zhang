@@ -508,6 +508,15 @@ module npu_mte_out
       endcase
       if (awvalid && awready) aw_pending <= 1'b0;
 
+`ifdef NPU_DEBUG
+      if (accept)
+        $display("[mteo] t=%0t burst ext=%0h buf=%03h len=%0d",
+                 $time, agu_ext, agu_buf, agu_len);
+      if (rd_rvalid)
+        $display("[mteo] t=%0t rdata=%064h", $time, rd_rdata);
+      if (wvalid && wready)
+        $display("[mteo] t=%0t W data=%064h last=%0d", $time, wdata, wlast);
+`endif
       // buffer reads feed the data FIFO in burst order
       if (rd_req && rd_gnt) begin
         rd_left <= rd_left - 9'd1;

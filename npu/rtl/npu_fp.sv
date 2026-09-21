@@ -216,6 +216,10 @@ package npu_fp;
 
   // ---------------- fp <-> fixed conversion ----------------
   // fp32_to_int returns round-toward-zero of a * 2^sh, saturated to int32.
+  // Declared semantics for the non-finite cases: infinity saturates to the
+  // signed extreme, NaN converts to zero. NaN carries no payload here, so
+  // there is nothing to preserve and saturating it would silently look like
+  // a legitimate large value.
   function automatic logic signed [31:0] fp32_to_int(input logic [31:0] a,
                                                      input logic [4:0]  sh);
     logic [7:0]         e;
@@ -224,7 +228,10 @@ package npu_fp;
     logic [63:0]        w;
     e = a[30:23];
     if (e == 8'h00) return 32'sd0;                       // includes FTZ input
-    if (e == 8'hFF) return a[31] ? -32'sd2147483648 : 32'sd2147483647;
+    if (e == 8'hFF) begin
+      if (a[22:0] != 23'd0) return 32'sd0;               // NaN -> 0
+      return a[31] ? -32'sd2147483648 : 32'sd2147483647; // +-inf saturates
+    end
     m     = {1'b1, a[22:0]};
     shamt = 11'(signed'({3'd0, e})) - 11'sd150 + 11'(signed'({6'd0, sh}));
     if (shamt >= 11'sd40)       w = 64'hFFFF_FFFF_FFFF_FFFF;
