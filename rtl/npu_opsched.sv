@@ -38,6 +38,9 @@ module npu_opsched
   input  logic [MCUW-1:0]             in_mcu,
   output logic                        in_ready,
 
+  // fetch path empty: nothing left in the message queues or the skid buffer
+  input  logic                        fetch_empty,
+
   // ---- semaphores ----
   input  logic [NEVT-1:0]             evt_nz,
   output logic                        cons_en,
@@ -102,6 +105,7 @@ module npu_opsched
     automatic logic            older_q;
     automatic logic            older_pq;
     automatic logic            any_older;
+    automatic logic            fenced;
     automatic logic            ok;
 
     sel_v   = '0;
@@ -114,6 +118,7 @@ module npu_opsched
     older_q = 1'b0;
     older_pq  = 1'b0;
     any_older = 1'b0;
+    fenced    = 1'b0;
     ok        = 1'b0;
 
     // an illegal op is discarded, never executed -- but only once it is
@@ -131,20 +136,27 @@ module npu_opsched
         if (!found && wv[i] && !dropped[i] && legal[i]
             && (win[i].hdr.pipe == PIPEW'(p))) begin
 
-          // (pipe,queue) predecessor still in the window?
+          // (pipe,queue) predecessor still in the window? And is there an
+          // un-retired barrier ahead that this op must not pass? A barrier
+          // that has not yet issued fences everything younger: the global
+          // one fences every queue, the queue-scope one only its own. Until
+          // it leaves the window, nothing behind it may go.
           older_pq  = 1'b0;
           older_q   = 1'b0;
           any_older = 1'b0;
+          fenced    = 1'b0;
           for (int j = 0; j < WIN; j++)
             if (j < i && wv[j]) begin
               any_older = 1'b1;
+              if (win[j].hdr.bar_g) fenced = 1'b1;
               if (!dropped[j] && (win[j].qid == win[i].qid)) begin
                 older_q = 1'b1;
+                if (win[j].hdr.bar_q)                  fenced  = 1'b1;
                 if (win[j].hdr.pipe == win[i].hdr.pipe) older_pq = 1'b1;
               end
             end
 
-          ok = !older_pq
+          ok = !older_pq && !fenced
             && (credit[p] != '0)
             && ((win[i].wait_mask & ~evt_nz) == '0)      // dependency
             && ((win[i].wait_mask &  tk)     == '0);     // one consumer/bit/cycle
@@ -153,9 +165,18 @@ module npu_opsched
           if (win[i].hdr.bar_q)
             ok = ok && !older_q && (ifq[win[i].qid] == '0);
 
-          // global barrier: oldest in the window and the machine is drained
+          // Global barrier: oldest in the window, the machine drained, AND
+          // nothing still sitting in the fetch path. The last term is what
+          // makes it a real program-order fence. Window position alone is
+          // not program order: the message queue pops round-robin, so a
+          // descriptor pushed earlier on another queue can arrive after the
+          // barrier and would otherwise be fenced to the wrong side of it.
+          // Software must therefore let the machine drain before submitting
+          // a global barrier; the hardware simply will not let it pass
+          // otherwise. The queue-scope barrier has no such cost, which is
+          // why it is the one to use in an inner loop.
           if (win[i].hdr.bar_g)
-            ok = ok && !any_older && (iftot == '0);
+            ok = ok && !any_older && (iftot == '0) && fetch_empty;
 
           if (ok) begin
             found      = 1'b1;
@@ -234,7 +255,11 @@ module npu_opsched
   assign hang_snapshot = snap_q;
   assign err_tag       = errtag_q;
   assign stat_issued   = issued_q;
-  assign idle          = (wcnt == '0) && (iftot == '0);
+  // wcnt is the NEXT window occupancy. Using it here opens a one-cycle
+  // hole: in the cycle an op issues, wcnt is already 0 while iftot has not
+  // yet counted it, and the machine claims to be idle with work in flight.
+  // The registered valid vector has no such gap.
+  assign idle          = (wv == '0) && (iftot == '0);
 
   always_comb
     for (int p = 0; p < NPIPE; p++)
@@ -279,6 +304,20 @@ module npu_opsched
       iftot <= iftot + (IFW+3)'(n_iss) - (IFW+3)'(n_cpl);
 
       issued_q <= clr_stat ? '0 : issued_q + 32'(n_iss);
+`ifdef NPU_TRACE
+      for (int p = 0; p < NPIPE; p++)
+        if (sel_v[p])
+          $display("[iss] t=%0t pipe=%0d tag=%0d qid=%0d wait=%04h",
+                   $time, p, win[sel_i[p]].hdr.tag, win[sel_i[p]].qid,
+                   win[sel_i[p]].wait_mask);
+      for (int i = 0; i < WIN; i++)
+        if (dropped[i])
+          $display("[drop] t=%0t tag=%0d pipe=%0d", $time, win[i].hdr.tag,
+                   win[i].hdr.pipe);
+      if (accept)
+        $display("[fetch] t=%0t tag=%0d pipe=%0d qid=%0d", $time,
+                 nop.hdr.tag, nop.hdr.pipe, nop.qid);
+`endif
 
       // ---- error capture ----
       if (clr_stat) begin
@@ -303,6 +342,18 @@ module npu_opsched
         err_hang_q <= 1'b1;
         for (int p = 0; p < NPIPE; p++)
           snap_q[p*4 +: 4] <= 4'(CREDIT) - 4'(credit[p]);
+`ifdef NPU_DEBUG
+        $display("[hang] window (evt_nz=%04h iftot=%0d fetch_empty=%0d in_valid=%0d):",
+                 evt_nz, iftot, fetch_empty, in_valid);
+        for (int i = 0; i < WIN; i++)
+          if (wv[i])
+            $display("  [%0d] pipe=%0d qid=%0d opc=%0d tag=%0d wait=%04h set=%0d/%0d barq=%0d barg=%0d",
+                     i, win[i].hdr.pipe, win[i].qid, win[i].hdr.opc,
+                     win[i].hdr.tag, win[i].wait_mask, win[i].hdr.set_en,
+                     win[i].hdr.set_evt, win[i].hdr.bar_q, win[i].hdr.bar_g);
+        for (int p = 0; p < NPIPE; p++)
+          $display("  credit[%0d]=%0d", p, credit[p]);
+`endif
       end
     end
   end

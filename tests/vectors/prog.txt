@@ -1,0 +1,2 @@
+# empty smoke program: the machine must come up idle with no errors
+S 000 4e505501

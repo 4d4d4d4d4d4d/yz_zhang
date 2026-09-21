@@ -185,14 +185,19 @@ module npu_vec
   // B operand per lane, by fetch mode
   logic [BUS_W-1:0] bval;
   always_comb begin
-    automatic logic [15:0] col;
-    bval = '0;
-    col  = '0;
+    automatic logic [15:0]      col;
+    automatic logic [BUS_W-1:0] cbeat;
+    bval  = '0;
+    col   = '0;
+    cbeat = '0;
     unique case (bm)
       BM_STR:  bval = bbeat;
       BM_ONCE: bval = bheld;                            // row vector
       BM_COL: begin
-                col = bheld[row[3:0]*ELEM_W +: ELEM_W]; // one scalar per row
+                // On the row that consumes a new beat the latched copy is
+                // still the previous one -- take it straight from the FIFO.
+                cbeat = (row[3:0] == 4'd0) ? bbeat : bheld;
+                col   = cbeat[row[3:0]*ELEM_W +: ELEM_W];  // one scalar per row
                 for (int l = 0; l < LANES; l++) bval[l*ELEM_W +: ELEM_W] = col;
               end
       default: ;

@@ -23,12 +23,18 @@ RTL := $(RTL_DIR)/npu_pkg.sv      \
        $(RTL_DIR)/npu_qch.sv      \
        $(RTL_DIR)/npu_top.sv
 
+# testbench support models, compiled with every testbench
+TB_LIB := $(TB_DIR)/axi_mem.sv
+
 VFLAGS := --binary -j 4 --timing -Wall -Wno-fatal \
-          --assert -Irtl $(RTL_DIR)/npu.vlt \
-          --Mdir $(BUILD) -CFLAGS "-O2"
+          --assert -Irtl -Itb $(RTL_DIR)/npu.vlt \
+          -CFLAGS "-O2"
 
 # every tb/tb_*.sv is a self-checking testbench
 TBS  := $(notdir $(basename $(wildcard $(TB_DIR)/tb_*.sv)))
+
+# extra plusargs for a run, e.g. make tb_npu_prog RUNARGS=+prog=foo.txt
+RUNARGS ?=
 
 .PHONY: all lint test clean $(TBS)
 
@@ -39,10 +45,11 @@ lint:
 	   $(RTL) --top-module npu_top
 
 # make tb_foo -> build and run tb/tb_foo.sv
-$(TBS): %: $(TB_DIR)/%.sv $(RTL)
+$(TBS): %: $(TB_DIR)/%.sv $(RTL) $(TB_LIB)
 	@mkdir -p $(BUILD)
-	@$(VERILATOR) $(VFLAGS) --Mdir $(BUILD)/$@ --top-module $@ $(RTL) $< -o $@ >/dev/null
-	@./$(BUILD)/$@/$@
+	@$(VERILATOR) $(VFLAGS) --Mdir $(BUILD)/$@ --top-module $@ \
+	   $(RTL) $(TB_LIB) $< -o $@ >/dev/null
+	@./$(BUILD)/$@/$@ $(RUNARGS)
 
 test:
 	@bash scripts/run_tests.sh
