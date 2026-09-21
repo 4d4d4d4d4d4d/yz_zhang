@@ -1,7 +1,7 @@
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, PlatformClient, TASK_STATUS_LABEL, apiErrorText, fmtYuan, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type Me, type Notice, type Task, type Wallet } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, PlatformClient, TASK_STATUS_LABEL, apiErrorText, fmtYuan, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DiscoverScreen } from './Discover';
 import { VideoFeedScreen } from './VideoFeed';
@@ -255,6 +255,14 @@ function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
       {actions.includes('reject_delivery') && (
         <Button title="驳回返工" onPress={() => act(() => client.rejectDelivery(task.id, '不符合要求，请修改'))} />
       )}
+      {/* APP-066 人工核验入口。V90 给 AI 交付的待验收通知写了这句话：
+          「如需人工把关，可在任务详情页申请人工核验」——而 requestVerification
+          此前只在 web/src/AgentPanel.tsx 被调用过一次，**App 的任务详情页
+          没有这个入口**。必达通知里指的路，必须在收到它的端上走得通。 */}
+      {actions.includes('accept_delivery') && (
+        <Button title="申请人工核验（平台付费）" color="#6b7280"
+                onPress={() => act(() => client.requestVerification(task.id))} />
+      )}
       {actions.includes('open_dispute') && (
         <Button title="发起纠纷（冻结资金）" color="#dc2626"
                 onPress={() => act(() => client.openDispute(task.id, '双方对交付结果有分歧，申请平台介入'))} />
@@ -464,12 +472,39 @@ function PublishScreen({ client, onDone }: { client: PlatformClient; onDone: () 
   );
 }
 
+/** APP-065 钱包。改造前这一页**只有充值，没有提现**——
+ *  而 Web 的提现按钮每次点击都返回 400（没有任何端能绑收款账户）。
+ *  合起来就是：**钱能进，不能出。**
+ */
 function WalletScreen({ client }: { client: PlatformClient }) {
   const [wallet, setWallet] = useState<Wallet | null>(null);
-  const load = useCallback(async () => setWallet(await client.wallet()), [client]);
+  const [rows, setRows] = useState<LedgerRow[]>([]);
+  const [amount, setAmount] = useState('100');
+  const [error, setError] = useState('');
+  const [hint, setHint] = useState('');
+
+  const load = useCallback(async () => {
+    setWallet(await client.wallet());
+    setRows(await client.ledger().catch(() => []));
+  }, [client]);
   useEffect(() => { void load(); }, [load]);
+
+  const cents = Math.round(parseFloat(amount || '0') * 100);
+
+  async function act(fn: () => Promise<unknown>) {
+    setError(''); setHint('');
+    try {
+      await fn();
+      await load();
+    } catch (e) {
+      // CLI-064 拦截理由原样显示。「请先绑定收款账户」这句话只有配上
+      // 下面那个绑定表单才有意义——光显示理由，用户照样无处可去。
+      setError(apiErrorText(e));
+    }
+  }
+
   return (
-    <View style={{ gap: 12 }}>
+    <ScrollView contentContainerStyle={{ gap: 12 }}>
       <Text style={styles.title}>我的钱包</Text>
       {wallet && (
         <View style={styles.cardRow}>
@@ -480,7 +515,83 @@ function WalletScreen({ client }: { client: PlatformClient }) {
           <View style={{ flex: 1 }}><Text style={styles.mutedLeft}>冻结中</Text><Text style={styles.cardTitle}>{fmtYuan(wallet.frozen_cents)}</Text></View>
         </View>
       )}
-      <Button title="充值 ¥100（模拟）" onPress={async () => { await client.topup(10000); await load(); }} />
+      <TextInput style={styles.input} keyboardType="numeric" value={amount}
+                 onChangeText={setAmount} placeholder="金额（元）" />
+      <Button title={`充值 ${fmtYuan(cents)}（模拟）`} onPress={() => act(() => client.topup(cents))} />
+      <Button title={`提现 ${fmtYuan(cents)}`} color="#6b7280" onPress={() => act(async () => {
+        const r = await client.withdraw(cents);
+        // AML-030/031 tipping-off：大额进人审时**原样显示服务端的中性话术**，
+        // 绝不能自己编一句「你的提现触发了风控」——那等于教他下次怎么规避。
+        setHint(r.status === 'pending_review' ? (r.message ?? '提现申请已提交，等待处理') : '提现已受理');
+      })} />
+      {!!hint && <Text style={styles.mutedLeft}>{hint}</Text>}
+      {!!error && <Text style={styles.error}>{error}</Text>}
+
+      <PayoutAccountBlock client={client} />
+
+      {/* APP-065 账单流水。此前这一页只有三个数字：「余额少了一百块」
+          而看不到为什么，是最容易变成工单的一类问题。 */}
+      <Text style={styles.cardTitle}>账单流水</Text>
+      {rows.length === 0 && <Text style={styles.mutedLeft}>暂无流水</Text>}
+      {rows.map((e) => (
+        <View key={e.id} style={styles.cardRow}>
+          <View style={{ flex: 1 }}>
+            {/* LEDG-004 科目中文名走共享 SDK，不在 App 里另写一份 */}
+            <Text style={styles.cardTitle}>{ledgerKindLabel(e.kind)}</Text>
+            <Text style={styles.mutedLeft}>{e.memo || '—'}</Text>
+          </View>
+          <Text style={[styles.cardTitle, { color: e.amount_cents >= 0 ? '#16a34a' : '#dc2626' }]}>
+            {e.amount_cents >= 0 ? '+' : ''}{fmtYuan(e.amount_cents)}
+          </Text>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+/** PAY-030 收款账户绑定。**提现的前置条件，此前全仓没有任何界面能满足它。**
+ *
+ * 服务端 `POST /wallet/withdraw` 第一行就是「没绑收款账户就拒」，而
+ * `bindPayoutAccount` 在 Web 和 App 上都没有被调用过一次。
+ * 服务端的「请先 X」，如果 X 在客户端没有入口，那这句话不是提示，是死路。
+ */
+function PayoutAccountBlock({ client }: { client: PlatformClient }) {
+  const [acct, setAcct] = useState<PayoutAccountView | null>(null);
+  const [accountNo, setAccountNo] = useState('');
+  const [holder, setHolder] = useState('');
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setAcct(await client.getPayoutAccount().catch(() => null));
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={styles.cardTitle}>收款账户</Text>
+      <Text style={styles.mutedLeft}>
+        {acct?.bound
+          // 服务端返回的就是脱敏卡号（6222****0000），照此显示，别试图拼回去
+          ? `已绑定 · ${acct.kind === 'alipay' ? '支付宝' : '银行卡'} ${acct.account_no}（${acct.holder_name}）`
+          : '未绑定收款账户，提现会被拒绝。'}
+      </Text>
+      <TextInput style={styles.input} value={accountNo} onChangeText={setAccountNo}
+                 placeholder="银行卡号 / 支付宝账号" />
+      <TextInput style={styles.input} value={holder} onChangeText={setHolder} placeholder="开户姓名" />
+      {/* PAY-005 收款人须与实名一致（防代提/洗钱）。先说，别让他提交完才知道 */}
+      <Text style={styles.mutedLeft}>收款人姓名须与实名认证一致，否则会被拒绝。</Text>
+      <Button title={acct?.bound ? '更换收款账户' : '绑定收款账户'} onPress={async () => {
+        setError('');
+        try {
+          await client.bindPayoutAccount(accountNo.trim(), holder.trim());
+          setAccountNo('');
+          await load();
+        } catch (e) {
+          // AML-012 账户聚集等风控拒绝：理由原样显示
+          setError(apiErrorText(e));
+        }
+      }} />
+      {!!error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
 }
@@ -517,6 +628,15 @@ function MeScreen({ client, me, refresh, onLogout }: {
   const [notice, setNotice] = useState('');
   const [agreements, setAgreements] = useState<string[]>([]);
   const [docText, setDocText] = useState('');
+  const [needsReconsent, setNeedsReconsent] = useState(false);
+
+  // 进页面就查一次：**协议更新是平台单方面发生的**，不该等用户先去点一下
+  // 「用户协议」才发现自己已经被挡住了
+  useEffect(() => {
+    void client.myAgreements()
+      .then((s) => setNeedsReconsent(s.documents.some((d) => d.needs_reconsent)))
+      .catch(() => {});
+  }, [client]);
 
   if (!me) return <Text style={styles.muted}>加载中…</Text>;
   return (
@@ -546,6 +666,21 @@ function MeScreen({ client, me, refresh, onLogout }: {
       </TouchableOpacity>
       {agreements.map((t) => <Text key={t} style={styles.mutedLeft}>{t}</Text>)}
       {!!docText && <Text style={styles.mutedLeft}>{docText}</Text>}
+      {/* LAW-030 协议更新后必须重新同意，否则**发布/接单/资金都会被 409 挡住**
+          （`agreement_update_required`）。App 此前只能「看」协议状态，不能同意——
+          一次协议更新就能把 App 用户卡成只读，而他在 App 上无处可点。 */}
+      {needsReconsent && (
+        <Button title="阅读并同意更新后的协议" onPress={async () => {
+          setNotice('');
+          try {
+            await client.acceptAgreements();
+            setNeedsReconsent(false);
+            setNotice('已同意最新版本');
+          } catch (e) {
+            setNotice(apiErrorText(e));
+          }
+        }} />
+      )}
 
       {/* APP-061 注销。**不能做成一个直接调接口的按钮**：服务端会拦
           （有钱、有在途合约、有纠纷），而用户看到的会是一个莫名其妙的报错。

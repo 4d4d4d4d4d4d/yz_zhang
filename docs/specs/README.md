@@ -88,6 +88,7 @@
 | 63 | App：发不出任务的按钮与四条必查项 | [63-app-store-readiness.md](./63-app-store-readiness.md) | P0 |
 | 64 | 声明了却不给，给了却不声明 | [64-declared-but-not-returned.md](./64-declared-but-not-returned.md) | P0 |
 | 65 | 错过就无法挽回的通知，不能被一个开关关掉 | [65-deadline-notices.md](./65-deadline-notices.md) | P0 |
+| 66 | 钱能进不能出：所有端都点不动的提现按钮 | [66-money-can-get-in-but-not-out.md](./66-money-can-get-in-but-not-out.md) | P0 |
 
 ## 功能点编号与优先级约定
 

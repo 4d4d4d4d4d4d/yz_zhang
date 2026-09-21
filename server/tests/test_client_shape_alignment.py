@@ -437,6 +437,29 @@ def test_cli070_core_domain_shapes(client, requester):
     _assert_shape(client.get("/api/v1/users/me", headers=auth(requester)).json(), "Me")
 
 
+def test_cli073_wallet_money_out_shapes(client, requester):
+    """PAY-030 提现这条路上的两个形状：收款账户与账单流水。
+
+    它们此前在 SDK 里是**行内匿名类型**，闸门够不着；而这条路正是
+    「钱能进不能出」那批要修的——修完就得钉住，别再漂回去。
+    """
+    topup(client, requester, 100000)
+    _assert_shape(client.get("/api/v1/wallet/payout-account",
+                             headers=auth(requester)).json(), "PayoutAccountView")
+    client.put("/api/v1/wallet/payout-account",
+               # PAY-005 收款人姓名必须与实名一致（防代提/洗钱），
+               # 所以这里用的是 verify_user 的默认实名，不是昵称
+               json={"kind": "bank", "account_no": "6222020000001111", "holder_name": "张三"},
+               headers=auth(requester))
+    bound = client.get("/api/v1/wallet/payout-account", headers=auth(requester)).json()
+    _assert_shape(bound, "PayoutAccountView")
+    assert "*" in bound["account_no"], "回显了完整卡号"
+
+    rows = client.get("/api/v1/wallet/ledger", headers=auth(requester)).json()
+    assert rows, "充值之后账单流水是空的"
+    _assert_shape(rows[0], "LedgerRow")
+
+
 def test_cli070_dispute_and_message_shapes(client, requester):
     worker = register(client, "13800064010", "执行者")
     verify_user(client, worker, name="执行")

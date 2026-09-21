@@ -177,6 +177,26 @@ export interface Wallet {
   frozen_cents: number;
 }
 
+/** LEDG-004 账单流水一行。`kind` 是账本科目，中文名走 `ledgerKindLabel()`——
+ *  **不要在任何一个端里另写一份中文**（V84 立的那条：科目与中文名双向相等）。 */
+export interface LedgerRow {
+  id: number;
+  kind: string;
+  amount_cents: number;
+  contract_id: number | null;
+  memo: string;
+  created_at: string;
+}
+
+/** PAY-030 收款账户。`account_no` 是**脱敏后**的（`6222****0000`）——
+ *  服务端本来就不返回完整卡号，任何一端都不要试图拼回去。 */
+export interface PayoutAccountView {
+  bound: boolean;
+  kind?: string;
+  account_no?: string;
+  holder_name?: string;
+}
+
 export interface Recommendation {
   user_id: number;
   nickname: string;

@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V90 全批次完成（2026-09-21）。
-> 后端 925 tests + 前端 92 tests（core 56 + web 36）全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V91 全批次完成（2026-09-21）。
+> 后端 938 tests + 前端 95 tests（core 56 + web 39）全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,28 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V91 批次：钱能进不能出）
+
+> 模块 spec：[66-money-can-get-in-but-not-out.md](66-money-can-get-in-but-not-out.md)
+>
+> ```
+> SDK 245 个方法：Web 用到 135，App 用到 33
+> WITHDRAW: 400 {"code":"no_payout_account","message":"请先绑定收款账户"}
+> $ grep -rn "bindPayoutAccount" web/src app/   →  （无输出）
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **PAY-030 收款账户绑定入口** | 服务端 `PUT /wallet/payout-account` 从一开始就在，**Web 和 App 都没有调用过它一次**。于是 Web 的提现按钮每次点击都回 400，而用户读到的「请先绑定收款账户」在整个产品里无处可解。补 `PayoutAccount`（Web）与 `PayoutAccountBlock`（App），回显**服务端返回的脱敏卡号**，并把「收款人须与实名一致」提前说出来（`Me` 上没有 `real_name`，填不了默认值，只能提示） | `tests/test_remedy_ui.py::test_pay030_bind_then_withdraw_completes_the_round_trip`、`web/src/Wallet.test.tsx`（3 项，红验：删掉绑定块三项全红） |
+| **APP-065 App 钱包能把钱取出去** | App 钱包页此前**只有充值**。补提现、收款账户、账单流水；科目中文名走共享 SDK 的 `ledgerKindLabel`，不在端里另写一份 | `::test_app065_app_wallet_can_take_money_out` |
+| **AML-030/031 中性话术原样显示** | 大额进人审时服务端给的是中性话术，两端都原样显示。**不许自己编一句「触发了风控」**——那等于告诉他哪条规则命中了。SDK 的 `withdraw` 返回类型里原本**没有 `message` 字段**，于是这句话没有任何界面显示得了 | `::test_app065_*`（只扫用户可见文案，注释不算）、`Wallet.test.tsx::AML-030` |
+| **APP-066 人工核验入口** | V90 在必达通知里写了「可在任务详情页申请人工核验」，而 `requestVerification` 当时只在 `web/src/AgentPanel.tsx` 出现过一次——**上一批自己挖的坑**：通知里指的路，在一半的端上不存在 | `::test_app066_app_can_reach_the_verification_it_was_promised` |
+| **LAW-030 App 能同意更新后的协议** | App 此前只能「看」协议状态不能同意，而协议更新后发布/接单/资金全被 409 挡住——一次协议更新就把 App 用户卡成只读 | `::test_cli073_every_precondition_has_a_way_out[agreement_update_required]` |
+| **CLI-073 「请先 X」必须有 X 的入口** | `REMEDY_UI` 声明表：错误码 → (补救的 SDK 方法, 必须有入口的端, 理由)。**V88 的孪生**：服务端的「必填」没变成类型上的必填只是口头约定；服务端的「请先 X」在客户端没有入口就不是提示，是死路。CLI-064 立过半条（理由原样显示），**第二半是那个理由得有地方去解决** | `::test_cli073_every_precondition_has_a_way_out`（逐条参数化，红验：把 App 的绑定调用改名即红）、`::test_cli073_declared_codes_are_really_raised_by_the_server`、`::test_cli073_declared_methods_exist_in_the_shared_sdk` |
+| **闸门自检** | 断言扫描器真的读到了源码、能扫到已知成员（`topup`）、且扫不到编造的方法名。**扫不到等于全绿，是最糟的一种绿** | `::test_cli073_scanner_can_actually_see_the_sources` |
+| **假报警会让闸门被关掉** | 第一版「不许出现风控字样」把注释也扫了，于是**解释这条规矩的那句注释自己先红了**。改成只扫用户可见的字面量 | 同上 |
+| **CLI-073 两个新形状进闸门** | `LedgerRow` / `PayoutAccountView` 此前是 SDK 里的**行内匿名类型**，V89 的形状闸门够不着 | `tests/test_client_shape_alignment.py::test_cli073_wallet_money_out_shapes` |
 
 ## 已实现（V90 批次：错过就无法挽回的通知，不能被一个开关关掉）
 

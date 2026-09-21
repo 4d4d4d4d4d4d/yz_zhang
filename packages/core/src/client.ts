@@ -51,6 +51,8 @@ import type {
   TaskTree,
   TaxSummary,
   Wallet,
+  LedgerRow,
+  PayoutAccountView,
 } from './types';
 
 export class ApiError extends Error {
@@ -286,17 +288,21 @@ export class PlatformClient {
     }>('POST', '/wallet/topup', { amount_cents: amountCents });
   }
   getPayoutAccount() {
-    return this.request<{ bound: boolean; kind?: string; account_no?: string; holder_name?: string }>(
-      'GET', '/wallet/payout-account',
-    );
+    return this.request<PayoutAccountView>('GET', '/wallet/payout-account');
   }
   bindPayoutAccount(accountNo: string, holderName: string, kind: 'bank' | 'alipay' = 'bank') {
     return this.request<{ bound: boolean; kind: string; account_no: string }>(
       'PUT', '/wallet/payout-account', { kind, account_no: accountNo, holder_name: holderName },
     );
   }
+  /** PAY-005 提现。**前置是先绑收款账户**（`no_payout_account`），
+   *  所以任何给出这个按钮的端，都必须同时给出 `bindPayoutAccount` 的入口。
+   *
+   *  `message` 是大额进人审时服务端给的**中性话术**（AML-030/031 tipping-off）：
+   *  原样显示，**绝不能自己编一句「你的提现触发了风控」**——那等于告诉他
+   *  哪条规则命中了。此前类型里没有这个字段，于是没有任何界面显示得了它。 */
   withdraw(amountCents: number) {
-    return this.request<{ status: 'done' | 'pending_review'; request_id?: number; available_cents: number; frozen_cents: number }>(
+    return this.request<{ status: 'done' | 'pending_review'; request_id?: number; message?: string; available_cents: number; frozen_cents: number }>(
       'POST', '/wallet/withdraw', { amount_cents: amountCents },
     );
   }
@@ -362,9 +368,7 @@ export class PlatformClient {
     return this.request<Task[]>('GET', '/users/me/bookmarks');
   }
   ledger() {
-    return this.request<Array<{ id: number; kind: string; amount_cents: number; contract_id: number | null; memo: string; created_at: string }>>(
-      'GET', '/wallet/ledger',
-    );
+    return this.request<LedgerRow[]>('GET', '/wallet/ledger');
   }
 
   // ---- orchestrator（Agent Harness：发任务给人=工具调用）----
