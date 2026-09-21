@@ -47,9 +47,20 @@ package npu_pkg;
   // ---------------- external memory (AXI4) ----------------
   parameter int AXI_AW   = 32;
   parameter int AXI_DW   = BUS_W;            // 256 bit data bus
+  // Burst length and outstanding depth trade off against each other: what
+  // matters is whether their product covers the memory latency. Both are
+  // build-time overridable so the trade can actually be measured.
+`ifdef NPU_AXI_IDW
+  parameter int AXI_IDW  = `NPU_AXI_IDW;
+`else
   parameter int AXI_IDW  = 2;                // 4 outstanding IDs
+`endif
   parameter int NID      = 1 << AXI_IDW;
+`ifdef NPU_MAX_BURST
+  parameter int MAX_BURST= `NPU_MAX_BURST;
+`else
   parameter int MAX_BURST= 16;               // beats per AXI burst
+`endif
 
   // ---------------- AXI4-Lite control ----------------
   parameter int LT_AW    = 12;

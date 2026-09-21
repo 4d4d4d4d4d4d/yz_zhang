@@ -26,7 +26,7 @@ machine rather than choices:
     happens-before path. verify() fails loudly rather than producing a
     program that passes by luck of the issue order.
 """
-from npu_isa import NEVT, NPIPE, nop
+from npu_isa import NEVT, NPIPE, WIN, CREDIT, nop
 
 
 class _NeedBarrier(Exception):
@@ -58,13 +58,16 @@ class Builder:
     """Collects ops, works out what must happen before what, and emits a
     descriptor stream with the events wired up."""
 
-    def __init__(self, n_queues=1, verbose=False):
+    def __init__(self, n_queues=1, verbose=False, single_queue=False):
         self.ops = []
         self.n_queues = n_queues
         self.verbose = verbose
+        self.single_queue = single_queue
         self.stats = {}
 
     def add(self, pipe, build, reads=(), writes=(), qid=0, mcu=0, name=""):
+        if self.single_queue and qid != 0:
+            raise ValueError("single_queue builder: every op must use queue 0")
         o = Op(pipe, build, reads, writes, qid, mcu, name)
         o.idx = len(self.ops)
         self.ops.append(o)
@@ -181,12 +184,24 @@ class Builder:
         free_until = [None] * NEVT           # last consumer index of the holder
         for si, (j, cs, end) in enumerate(slots):
             got = None
+            first = min(cs)
             for e in range(NEVT):
                 if free_until[e] is None:
                     got = e
                     break
-                if free_until[e] < j and any(free_until[e] < bb <= j
-                                             for bb in bars):
+                if free_until[e] >= j:
+                    continue
+                if any(free_until[e] < bb <= j for bb in bars):
+                    got = e
+                    break
+                # On a single queue the message queue delivers in program
+                # order, so the issue window always holds a contiguous run of
+                # the oldest un-issued ops. Two consumers of the same event
+                # can therefore only coexist in it if they are fewer than WIN
+                # apart, and a reuse distance of at least WIN needs no
+                # barrier. Across queues the round-robin pop destroys that
+                # property and only a barrier will do.
+                if self.single_queue and first - free_until[e] >= WIN:
                     got = e
                     break
             if got is None:

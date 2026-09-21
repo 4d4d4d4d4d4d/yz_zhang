@@ -121,9 +121,10 @@ module axi_mem #(
         sleft[rsel] <= sleft[rsel] - 9'd1;
         if (sleft[rsel] == 9'd1) sv[rsel] <= 1'b0;
         if (OOO) begin
-          // rotate so a different ID gets priority next beat
+          // rotate so a different ID gets priority on the next beat: bursts
+          // from different IDs come back interleaved and out of order, which
+          // is the case the read engine has to survive
           rrot <= IDW'((int'(rrot) + 1) % NSLOT);
-          sdly[rsel] <= 16'($urandom_range(0, 2));
         end
       end
     end
