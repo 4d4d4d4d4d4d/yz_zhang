@@ -214,6 +214,64 @@ package npu_fp;
     return fp32_to_bf16({a[15], eo[7:0], frac});
   endfunction
 
+  // ---------------- fp <-> fixed conversion ----------------
+  // fp32_to_int returns round-toward-zero of a * 2^sh, saturated to int32.
+  function automatic logic signed [31:0] fp32_to_int(input logic [31:0] a,
+                                                     input logic [4:0]  sh);
+    logic [7:0]         e;
+    logic [23:0]        m;
+    logic signed [10:0] shamt;
+    logic [63:0]        w;
+    e = a[30:23];
+    if (e == 8'h00) return 32'sd0;                       // includes FTZ input
+    if (e == 8'hFF) return a[31] ? -32'sd2147483648 : 32'sd2147483647;
+    m     = {1'b1, a[22:0]};
+    shamt = 11'(signed'({3'd0, e})) - 11'sd150 + 11'(signed'({6'd0, sh}));
+    if (shamt >= 11'sd40)       w = 64'hFFFF_FFFF_FFFF_FFFF;
+    else if (shamt >= 11'sd0)   w = {40'd0, m} << shamt[5:0];
+    else if (shamt > -11'sd25)  w = {40'd0, m} >> (-shamt[5:0]);
+    else                        w = 64'd0;
+    if (w > 64'sd2147483647)
+      return a[31] ? -32'sd2147483648 : 32'sd2147483647;
+    return a[31] ? -32'(signed'(w[31:0])) : 32'(signed'(w[31:0]));
+  endfunction
+
+  // int_to_fp32 returns v * 2^-sh, rounded to nearest even.
+  function automatic logic [31:0] int_to_fp32(input logic signed [31:0] v,
+                                              input logic [4:0]         sh);
+    logic [31:0]        u;
+    logic               sgn;
+    int                 msb;
+    logic               found;
+    logic signed [10:0] e;
+    logic [54:0]        norm;
+    logic [23:0]        frac;
+    logic               rup;
+    if (v == 32'sd0) return 32'd0;
+    sgn = v[31];
+    u   = sgn ? 32'(-v) : 32'(v);
+    msb   = 0;
+    found = 1'b0;
+    for (int k = 31; k >= 0; k--)
+      if (!found && u[k]) begin
+        found = 1'b1;
+        msb   = k;
+      end
+    // value = u * 2^-sh, leading one at bit msb
+    e    = 11'sd127 + 11'(msb) - 11'(signed'({6'd0, sh}));
+    norm = {23'd0, u} << (54 - msb);        // leading one lands on bit 54
+    // keep 24 significand bits, round to nearest even on the rest
+    rup  = norm[30] && (|norm[29:0] || norm[31]);
+    frac = norm[54:31] + 24'(rup);
+    if (frac[23] == 1'b0 && rup) begin      // rounded up out of range
+      frac = 24'h800000;
+      e    = e + 11'sd1;
+    end
+    if (e <= 11'sd0)   return {sgn, 31'd0};
+    if (e >= 11'sd255) return {sgn, 8'hFF, 23'd0};
+    return {sgn, e[7:0], frac[22:0]};
+  endfunction
+
   // ---------------- fixed point helpers ----------------
   function automatic logic [15:0] sat16(input logic signed [31:0] v);
     if (v >  32'sd32767)  return 16'h7FFF;

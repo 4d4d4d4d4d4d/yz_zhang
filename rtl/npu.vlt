@@ -12,3 +12,45 @@ lint_off -rule UNUSEDSIGNAL -file "*/npu_pkg.sv"
 
 // Descriptor word 1 upper half is architecturally reserved.
 lint_off -rule UNUSEDSIGNAL -file "*/npu_opsched.sv" -match "*in_desc*"
+
+// Execution pipes deliberately ignore the input-FIFO 'full'/'count' outputs:
+// the scheduler's per-pipe issue credit is what guarantees no overflow, and
+// wiring a ready back would reintroduce the combinational path the credit
+// scheme exists to remove.
+lint_off -rule UNUSEDSIGNAL -file "*/npu_cube.sv" -match "*'q_cnt'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_cube.sv" -match "*'f_full'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_vec.sv"  -match "*'q_cnt'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_vec.sv"  -match "*'f_full'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_fix.sv"  -match "*'q_cnt'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_fix.sv"  -match "*'f_full'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_mte.sv"  -match "*'q_cnt'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_mte.sv"  -match "*'f_full'*"
+
+// Reserved descriptor fields: the payload is a fixed 192-bit envelope and
+// each pipe decodes only the fields its opcode class defines.
+lint_off -rule UNUSEDSIGNAL -file "*/npu_cube.sv" -match "*'cur'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_cube.sv" -match "*'cfg'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_cube.sv" -match "*'o'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_cube.sv" -match "*'c'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_vec.sv"  -match "*'cur'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_vec.sv"  -match "*'cfg'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_vec.sv"  -match "*'o'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_vec.sv"  -match "*'c'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_fix.sv"  -match "*'cur'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_fix.sv"  -match "*'cfg'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_fix.sv"  -match "*'o'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_fix.sv"  -match "*'c'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_mte.sv"  -match "*'cur'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_mte.sv"  -match "*'cfg'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_mte.sv"  -match "*'o'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_mte.sv"  -match "*'c'*"
+
+// CSR data bus is 32 bit; the control fields occupy the low bits and the
+// rest is architecturally reserved.
+lint_off -rule UNUSEDSIGNAL -file "*/npu_csr.sv" -match "*'wdata'*"
+
+// rst_n is asynchronous everywhere it drives logic. The only synchronous
+// reads of it are inside simulation-only assertion blocks (npu_check and
+// the credit assertion in npu_top), which are compiled out for synthesis.
+lint_off -rule SYNCASYNCNET -file "*/npu_top.sv"  -match "*rst_n*"
+lint_off -rule SYNCASYNCNET -file "*/npu_prim.sv" -match "*rst_n*"

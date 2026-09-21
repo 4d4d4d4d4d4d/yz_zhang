@@ -64,6 +64,12 @@ package npu_pkg;
     P_MTE_OUT = 3'd4
   } pipe_e;
 
+  // Universal no-op, accepted by every pipe. A descriptor may set exactly
+  // one event, so waking N consumers costs N-1 trailing NOPs on the same
+  // pipe. This is a real ISA limit; see docs/spec_isa.md for the bitmap
+  // alternative that was considered and deferred.
+  parameter logic [5:0] OPC_NOP  = 6'h3F;
+
   // CUBE opcodes
   parameter logic [5:0] C_MM     = 6'd0;   // C = A^T * B  (outer-product accumulate)
 
