@@ -27,6 +27,8 @@ class MissionIn(BaseModel):
     budget_cap_cents: int = Field(gt=0)
     max_iterations: int = Field(default=5, ge=1, le=20)
     acceptance_criteria: list[str] = Field(default_factory=list)
+    # ORC-061 默认关：发起人授权了「自动花钱」，不等于授权「活由 AI 做」。
+    allow_agents: bool = False
 
 
 def _dump(m: Mission) -> dict:
@@ -39,7 +41,7 @@ def _dump(m: Mission) -> dict:
         "committed_cents": m.committed_cents, "spent_cents": m.spent_cents,
         "iteration": m.iteration, "max_iterations": m.max_iterations,
         "completion_pct": m.completion_pct, "quality_pct": m.quality_pct,
-        "model_calls": m.model_calls,
+        "model_calls": m.model_calls, "allow_agents": m.allow_agents,
         "acceptance_criteria": m.acceptance_criteria,
         "last_error": m.last_error, "created_at": iso(m.created_at),
     }
@@ -62,7 +64,7 @@ def create_mission(
     m = Mission(
         owner_id=user.id, goal=body.goal, detail=body.detail, category=body.category,
         budget_cap_cents=body.budget_cap_cents, max_iterations=body.max_iterations,
-        acceptance_criteria=body.acceptance_criteria,
+        acceptance_criteria=body.acceptance_criteria, allow_agents=body.allow_agents,
     )
     db.add(m)
     db.flush()
@@ -98,6 +100,8 @@ def get_mission(
              "task_id": s.task_id, "status": s.status, "observation": s.observation,
              "is_remedy": bool(s.is_remedy), "budget_cents": s.args.get("budget_cents"),
              "parent_step_id": s.parent_step_id, "attempt": s.attempt,
+             # ORC-060 这一步是不是给了 AI 助理——发起人有权看见这件事
+             "agent_user_id": s.agent_user_id,
              "acceptance": s.acceptance or [],
              "review_verdict": s.review_verdict, "review_score": s.review_score,
              "review_missing": s.review_missing or []}

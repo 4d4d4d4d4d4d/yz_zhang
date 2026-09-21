@@ -254,3 +254,47 @@ def expire_overdue(db: Session) -> dict:
         order.status = "expired"
         order.finished_at = now
     return {"expired": len(rows)}
+
+
+# ------------------------------------------------------- VER-051 经验回流
+# 上限是刻意的：提示词不能随数据增长无限膨胀，否则今天能跑的 agent
+# 三个月后会因为超长而失败。**一个会随数据增长而变坏的机制是定时炸弹，
+# 不是功能。**
+LESSON_LIMIT = 5
+LESSON_REASON_CHARS = 300
+LESSON_REVISION_CHARS = 400
+# 只取「没通过」的：`approved` 说的是「这次做对了」，对下一次没有指导价值，
+# 而提示词长度是有成本的。
+LESSON_OUTCOMES = ("revised", "rejected")
+
+
+def lessons_for(db: Session, category: str, limit: int = LESSON_LIMIT) -> list[VerificationLesson]:
+    """同类目最近的非通过核验结论。
+
+    **不跨类目**：保洁的核验结论对写代码没有帮助，混进去只会稀释真正相关的内容。
+    """
+    if not category:
+        return []
+    return (
+        db.query(VerificationLesson)
+        .filter(VerificationLesson.category == category,
+                VerificationLesson.outcome.in_(LESSON_OUTCOMES))
+        .order_by(VerificationLesson.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+def lessons_prompt(rows: list[VerificationLesson]) -> str:
+    """把核验结论拼成一段提示词。空列表返回空串——**不产生一段空的「经验」抬头**，
+    那会让模型以为自己漏看了什么。"""
+    if not rows:
+        return ""
+    lines = ["", "【同类任务上，人工核验指出过的问题】",
+             "（以下来自真实核验结论，按时间倒序；请在本次产出中避免重蹈覆辙）"]
+    for i, row in enumerate(rows, 1):
+        verdict = "被要求修正" if row.outcome == "revised" else "被判定不通过"
+        lines.append(f"{i}. 「{row.task_title}」{verdict}：{row.reason[:LESSON_REASON_CHARS]}")
+        if row.revision_summary:
+            lines.append(f"   核验人给出的修正方向：{row.revision_summary[:LESSON_REVISION_CHARS]}")
+    return "\n".join(lines)

@@ -71,5 +71,9 @@ class AgentRun(Base):
     # 只能看到一句「未通过审核」，答不上来为什么。
     moderation_status: Mapped[str] = mapped_column(String(10), default="")
     moderation_labels: Mapped[list] = mapped_column(JSON, default=list)
+    # ORC-063 这次实际喂进提示词的核验经验（VerificationLesson id 列表）。
+    # 没有它，「经验回流」就是一句无法验证的话——与 AGT-051 当初那句
+    # 「产出过内容审核」同一个形状：写着，但没接。
+    lessons_used: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

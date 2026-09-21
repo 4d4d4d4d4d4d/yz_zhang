@@ -8,7 +8,7 @@ Loop：plan（规划下一步）→ dispatch（发任务=调用工具）→ obse
 """
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -53,6 +53,14 @@ class Mission(Base):
     quality_pct: Mapped[int] = mapped_column(Integer, default=0)
     # AIO-034 模型调用配额：达上限即降级规则评审，不静默烧 API 账单
     model_calls: Mapped[int] = mapped_column(Integer, default=0)
+    # ORC-061 **允许把步骤派给平台 AI 助理**，默认关。
+    #
+    # 发起人授权了「自动花钱」，但他**没有**授权「活由 AI 做」——这是两件
+    # 不同的事：一个人可能很愿意让系统自动去市场上找人，同时完全不接受
+    # 交付物是机器写的。V73 定的规矩是「不自动派单给 AI」，这个开关是
+    # 那条规矩在编排里的形态：**一次授权覆盖整个 mission**，
+    # 既保住知情同意，又不毁掉自动化（每步再问一次就没有编排了）。
+    allow_agents: Mapped[bool] = mapped_column(Boolean, default=False)
     # ORC-005 验收标准：每步产出按此校验（人工验收 + 规则校验的依据）
     acceptance_criteria: Mapped[list] = mapped_column(JSON, default=list)
     last_error: Mapped[str] = mapped_column(String(300), default="")
@@ -80,6 +88,9 @@ class MissionStep(Base):
     # 变成「[修复] [修复] [修复] X」，且匹配本身很脆）
     parent_step_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     attempt: Mapped[int] = mapped_column(Integer, default=1)  # 第几次尝试（标题保持稳定）
+    # ORC-060 这一步是不是交给了平台 AI 助理。记下来有两个用处：
+    # 观测时要分辨「AI 试过了」与「还没人接」，迭代时要保证**同一形态不再给 AI**。
+    agent_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # AIO-001 本步的验收要点（下发给执行者，也是评审的判据）
     acceptance: Mapped[list] = mapped_column(JSON, default=list)
     # AIO-010~013 评审结果：verdict pass/revise/fail，score 0-100

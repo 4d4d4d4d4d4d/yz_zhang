@@ -209,10 +209,19 @@ def run_agent(db: Session, task, contract_id: int | None = None) -> AgentRun:
     db.flush()
     profile.runs_total += 1
 
+    # VER-051 **经验回流**：同类目最近的非通过核验结论拼进系统提示词。
+    # 这张表从 V74 起一直在写，而全仓没有任何地方读它——需求里那句
+    # 「能够持续帮助迭代任务完成」的载体，此前只落了一半。
+    from app.modules.verify import service as verify_service
+
+    lessons = verify_service.lessons_for(db, task.category)
+    run.lessons_used = [row.id for row in lessons]
+    system_prompt = profile.system_prompt + verify_service.lessons_prompt(lessons)
+
     try:
         result = get_runner().run(
             model=profile.model,
-            system_prompt=profile.system_prompt,
+            system_prompt=system_prompt,
             title=task.title,
             description=task.description,
             category=task.category,

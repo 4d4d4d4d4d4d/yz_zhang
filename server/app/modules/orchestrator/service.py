@@ -119,6 +119,133 @@ def _dispatch_step(db: Session, mission: Mission, step: MissionStep) -> None:
     step.status = "dispatched"
     mission.committed_cents += budget
     db.add_all([step, mission])
+    _maybe_hand_to_agent(db, mission, step, task)
+
+
+def _maybe_hand_to_agent(db: Session, mission: Mission, step: MissionStep, task) -> None:
+    """ORC-060/061 允许时，把这一步交给合格的平台 AI 助理。
+
+    **照常建任务、照常签约托管**，只是执行方是 agent——与 AGT-020 同一条：
+    agent 走完整合约链路，不开后门。托管、评审、纠纷、封禁、毛利统计全部
+    以 `task_id` / `user_id` 为键，另开一条「直接调模型」的路等于把它们各写第二遍。
+
+    三道闸门一道不少：`allow_agents` 没开不派；**修复步不派**（同一形态失败过
+    一次就换人做）；`eligible_agents` 仍然管到场/类目/预算。
+
+    整段指派放在 SAVEPOINT 里（与 V53 的事件隔离同一手法）：余额不够、
+    并发抢单等任何失败都回滚到「任务照常挂在广场上」，而不是留下一个
+    已成交却没托管的半截状态——**半截状态比没做更难收拾**。
+    """
+    if not mission.allow_agents or step.is_remedy:
+        return
+    from fastapi import HTTPException
+
+    from app.modules.agent import service as agent_service
+
+    candidates = agent_service.eligible_agents(db, task)
+    if not candidates:
+        return
+    profile = candidates[0]
+
+    sp = db.begin_nested()
+    try:
+        contract = _assign_agent(db, mission, task, profile)
+        sp.commit()
+    except HTTPException as exc:
+        sp.rollback()
+        # 指派不成不是编排失败：任务还在广场上，人照样能接
+        step.observation = f"未能指派 AI 助理（{_http_reason(exc)}），任务继续面向人工招募"
+        db.add(step)
+        return
+    step.agent_user_id = profile.user_id
+    step.observation = f"已指派平台 AI 助理「{profile.name}」执行"
+    db.add(step)
+    _run_agent_step(db, mission, step, task, contract)
+
+
+def _http_reason(exc) -> str:
+    detail = getattr(exc, "detail", None)
+    if isinstance(detail, dict):
+        return str(detail.get("message") or detail.get("code") or detail)
+    return str(detail or exc)
+
+
+def _assign_agent(db: Session, mission: Mission, task, profile):
+    """成交 → 签署 → 托管。走的都是既有服务层函数，不复制它们的规则。"""
+    from app.modules.contract import service as contract_service
+    from app.modules.task.models import Application
+    from app.modules.task.service import transition as task_transition
+
+    application = Application(
+        task_id=task.id, applicant_id=profile.user_id, bid_cents=task.budget_cents,
+        status="accepted",
+        message=f"由平台 AI 助理「{profile.name}」承接（编排 #{mission.id} 自动指派）",
+    )
+    db.add(application)
+    task.executor_id = profile.user_id
+    db.add(task)
+    db.flush()
+    # generate() 里平台会代 agent 签署（AGT-017），所以这里只差发起人这一签
+    contract = contract_service.generate(db, task, profile.user_id, task.budget_cents)
+    task_transition(db, task, "matched", {"executor_id": profile.user_id})
+    contract_service.sign(db, contract, mission.owner_id,
+                          {"signer": "orchestrator", "mission_id": mission.id})
+    contract_service.fund(db, contract, mission.owner_id)
+    # 托管完成 → 任务进入执行中（03 状态机联动）。这一步在 HTTP 那条路上
+    # 是 fund 端点做的，服务层没做——**所以这里必须显式补上**，
+    # 否则任务停在 matched，而 agent 的代交付要求 in_progress。
+    task_transition(db, task, "in_progress")
+    return contract
+
+
+def _run_agent_step(db: Session, mission: Mission, step: MissionStep, task, contract) -> None:
+    """立即执行一次；三种结局分别落到步骤状态上。
+
+    ORC-062 `escalated` / `failed` 都**不等人工核验**：核验单是一条人工链路，
+    适合「这一单我要一个确定的结果」；而编排是批量、自动、有预算上限的，
+    在这里等一个不确定何时被接单的核验会把整个编排卡住。
+    **两条路都在，选哪条取决于是谁在等。**
+    """
+    from app.modules.agent import service as agent_service
+
+    run = agent_service.run_agent(db, task, contract.id if contract else None)
+    if run.status == "succeeded":
+        agent_service.submit_agent_delivery(db, task)
+        step.observation = (
+            f"AI 助理已交付（自报置信度 {run.confidence_bps / 100:.1f}%），待发布方验收"
+        )
+        db.add(step)
+        return
+    _abandon_agent_step(db, mission, step, task, run)
+
+
+def _abandon_agent_step(db: Session, mission: Mission, step: MissionStep, task, run) -> None:
+    """ORC-062 AI 做不成就退场：全额退款、释放占用，交给修复步重发给人。
+
+    取消**以执行方名义**发起（`CANCEL_RULES[("funded_early","executor")] == 0`），
+    发布方全额拿回。以发布方名义取消会按规则补偿执行者 20%——
+    **AI 搞砸了还收补偿金**，那是把规则套错了对象。
+    信用扣分照常落在 agent 头上：同一条规则对所有执行者一视同仁，
+    为 AI 开例外才是需要解释的那个选择。
+    """
+    from app.modules.account import service as credit
+    from app.modules.contract.models import Contract
+    from app.modules.contract import service as contract_service
+    from app.modules.task.service import transition as task_transition
+
+    budget = int(step.args.get("budget_cents", 0))
+    contract = db.query(Contract).filter(Contract.task_id == task.id).first()
+    if contract and contract.status not in ("cancelled", "refunded", "released", "split"):
+        contract_service.cancel(db, contract, task.executor_id)
+        credit.adjust_credit(db, task.executor_id, credit.CREDIT_CANCEL_PENALTY)
+    task_transition(db, task, "cancelled", {"cancelled_by": "executor"})
+    mission.committed_cents = max(0, mission.committed_cents - budget)
+    step.status = "failed"
+    step.observation = (
+        f"AI 助理未能完成（{run.status}）：{run.error or '未说明'}；"
+        f"已取消该任务并全额退款，改由人工承接"
+    )
+    db.add_all([step, mission])
 
 
 def observe(db: Session, mission: Mission) -> list[dict]:

@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V85 全批次完成（2026-09-20）。
-> 后端 893 tests + 前端 90 tests（core 56 + web 34）全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V86 全批次完成（2026-09-21）。
+> 后端 902 tests + 前端 90 tests（core 56 + web 34）全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,28 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V86 批次：让 AI 真的参与，并且越做越好）
+
+> 模块 spec：[61-orchestrator-agents-and-lessons.md](61-orchestrator-agents-and-lessons.md)
+>
+> 两条欠账各挂了三个批次：编排器的工具只有 `publish_task`（agent loop 里没有 agent），
+> `verification_lessons` 表只写不读（全仓 grep 只有定义、注册、写入三处）。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **ORC-060 编排调 agent 不开后门** | 照常建任务、签约、托管，只是执行方是 agent。与 AGT-020 同一条理由：托管/评审/纠纷/封禁/毛利全部以 `task_id`、`user_id` 为键，另开一条「直接调模型」的路等于把它们各写第二遍 | `tests/test_orchestrator_agents.py::test_orc060_agent_step_goes_through_the_whole_contract_chain`（查合同状态与「AI 执行声明」条款）、`::test_orc060_eligibility_gates_still_apply` |
+| **ORC-061 自动派单给 AI 要一次显式授权** | `allow_agents` 默认关。发起人授权了「自动花钱」，**不等于**授权「活由 AI 做」——一个人可能很愿意让系统自动去市场上找人，同时完全不接受交付物是机器写的。一次授权覆盖整个 mission：每步再问一次就没有编排了 | `::test_orc061_agents_are_not_used_without_explicit_permission`（红验：去掉闸门即红） |
+| **ORC-062 做不成就退场，全额退款** | 取消**以执行方名义**发起（`CANCEL_RULES[("funded_early","executor")] == 0`）。以发布方名义会按规则补偿执行者 20%——**AI 搞砸了还收补偿金**，那是把规则套错了对象。修复步不再派给 AI | `::test_orc062_failed_agent_run_cancels_and_refunds`（钱分毫不差回到发布方 + 五条不变量）、`::test_orc062_remedy_steps_are_never_handed_to_agents_again` |
+| **指派失败不留半截状态** | 整段指派放在 SAVEPOINT 里（V53 事件隔离同一手法）：余额不够、并发抢单等任何失败都回滚到「任务照常挂在广场上」。**半截状态（已成交却没托管）比没做更难收拾** | 同上 |
+| **VER-051 经验回流** | 同类目最近的**非通过**核验结论拼进系统提示词。`approved` 不进（「这次做对了」不指导下一次），跨类目不进（保洁的结论对写代码没帮助，只会稀释相关内容） | `::test_ver051_lessons_reach_the_agent_prompt`、`::test_ver051_approved_lessons_and_other_categories_stay_out` |
+| **上限是刻意的** | 条数与长度都有上限：**一个会随数据增长而变坏的机制是定时炸弹，不是功能**——今天能跑的 agent 三个月后会因为提示词超长而失败 | `::test_ver051_prompt_does_not_grow_without_bound` |
+| **ORC-063 喂了什么落库** | `AgentRun.lessons_used` 记下实际使用的条目 id。没有它，「经验回流」就是一句无法验证的话——与 AGT-051 当初那句「产出过内容审核」同一个形状：写着，但没接 | `::test_ver051_lessons_reach_the_agent_prompt` |
+
+**顺带发现的一处不对称**：`fund` 之后把任务推到 `in_progress` 的那一步
+**只写在 HTTP 端点里，服务层没有**。编排走服务层，于是任务停在 `matched`，
+而 agent 的代交付要求 `in_progress`——测试立刻红。已在编排侧显式补上，
+并记一笔：**端点里做的联动动作，服务层的调用方一个都拿不到。**
 
 ## 已实现（V85 批次：形状也要对上）
 
