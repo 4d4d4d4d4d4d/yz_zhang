@@ -125,7 +125,10 @@ module npu_mte_in
   output logic                 busy,
   output logic                 outstanding   // AR issued but R not complete
 );
-  localparam int FD  = 2 * MAX_BURST;
+  // Sized so the landing FIFO is never the binding constraint: what limits
+  // how much latency can be hidden should be burst length times outstanding
+  // depth, not an arbitrary buffer.
+  localparam int FD  = NID * MAX_BURST;
   localparam int FCW = $clog2(FD + 1);
 
   logic q_pop, q_empty, q_full_unused;
@@ -328,7 +331,7 @@ module npu_mte_out
   output logic                 busy,
   output logic                 outstanding
 );
-  localparam int FD  = 2 * MAX_BURST;
+  localparam int FD  = NID * MAX_BURST;
   localparam int FCW = $clog2(FD + 1);
 
   logic q_pop, q_empty, q_full_unused;
