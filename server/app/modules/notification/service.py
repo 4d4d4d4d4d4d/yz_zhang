@@ -11,6 +11,27 @@ from app.core.events import subscribe
 from .models import Notification
 
 
+# NTF-060 **必达通知声明表**：(类别, 标题) → 为什么它不能被关掉。
+#
+# 判定标准只有一条：
+#   **错过它，用户会失去一个他本可以行使的权利，或者失去一笔钱。**
+#
+# 不满足这条的**不该**进表——把所有通知都做成不可关，等于把开关变成摆设，
+# 用户会连真正重要的这几条一起屏蔽掉。
+#
+# 立这张表是因为：全仓三十多处 notify()，此前只有 3 处 force=True，
+# 「哪些该必达」只存在于写的人当时的脑子里。待验收提醒就是这么漏的——
+# 三天后钱自动放给对方，而提醒他的那条通知**可以被一个开关关掉**。
+MUST_REACH: dict[tuple[str, str], str] = {
+    ("task", "待验收提醒"): "不处理就等于默认同意：到期自动验收并放款",
+    ("task", "纠纷已受理"): "错过答辩期 = 平台可缺席作出处理决定",
+    ("task", "答辩期即将届满"): "同上，这是最后一次提醒",
+    ("contract", "合约签署超期作废"): "作废后要重新走一遍成交，错过没法补",
+    ("task", "任务已逾期"): "逾期直接影响违约与补偿的判定",
+    ("task", "交付被驳回"): "执行方不知道被驳回就没法在期限内整改",
+}
+
+
 def notify(db: Session, user_id: int, category: str, title: str, body: str = "",
            force: bool = False) -> None:
     """DSPC-013 `force=True` 表示这条通知**不可被偏好开关关掉**。
@@ -20,7 +41,9 @@ def notify(db: Session, user_id: int, category: str, title: str, body: str = "",
     等于允许用户用一个通知开关放弃自己的陈述权。
     """
     # NTF-003 偏好开关（funds 类为资金必达通知，不可关闭 —— 12.B）
-    if category != "funds" and not force:
+    # NTF-060 声明表里的也一样：进了表就不用每个调用点都记得写 force=True，
+    # **要不要必达是一条产品判断，不该散落在三十个调用点里**
+    if category != "funds" and not force and (category, title) not in MUST_REACH:
         from app.modules.support.models import NotificationPref
 
         pref = (
@@ -69,10 +92,35 @@ def _on_contract_released(db, payload):
 
 
 def _on_task_pending_acceptance(db, payload):
+    """NTF-061/AGT-070 说清三件事：谁交的、几天后自动放款、还能做什么。
+
+    改造前这句是「已提交验收，超时将自动通过」——**没说几天**，
+    而 `AUTO_ACCEPT_DAYS` 默认是 3。用户无从知道该什么时候回来看。
+    与 V61 修过的纠纷通知同一条：**通知里的数字不许是字面量，也不许没有**。
+    """
+    from app.core.config import settings
+    from app.modules.account.models import User
+
     task = _task(db, payload["task_id"])
-    if task:
-        notify(db, task.creator_id, "task", "待验收提醒",
-               f"任务《{task.title}》已提交验收，超时将自动通过")
+    if not task:
+        return
+    days = settings.AUTO_ACCEPT_DAYS
+    executor = db.get(User, task.executor_id) if task.executor_id else None
+    if executor and executor.is_agent:
+        # AGT-070 发布方可能根本没意识到这一单是 AI 做的（尽管是他自己邀请的），
+        # 而 N 天后就自动放款了。人工核验那条路 V74 就建好了，
+        # 他只是在这个时点不知道它存在。
+        body = (
+            f"任务《{task.title}》由平台 AI 助理完成并提交交付，平台为本任务履约的"
+            f"责任主体。请在 {days} 天内验收或驳回；逾期未处理将自动验收并放款。"
+            f"如需人工把关，可在任务详情页申请人工核验。"
+        )
+    else:
+        body = (
+            f"任务《{task.title}》已提交验收。请在 {days} 天内验收或驳回；"
+            f"逾期未处理将自动验收并放款。"
+        )
+    notify(db, task.creator_id, "task", "待验收提醒", body)
 
 
 def _on_dispute_opened(db, payload):

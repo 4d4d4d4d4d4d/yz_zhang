@@ -1266,10 +1266,14 @@ export class PlatformClient {
       'POST', `/support/tickets/${ticketId}/escalate-to-dispute`, { task_id: taskId, reason },
     );
   }
+  /** NTF-003 可开关的通知类别与当前状态。服务端返回的是 `{类别: 是否开启}`
+   *  的字典（不是数组）——V82 把它写成数组是臆造的，**没有任何东西会红**，
+   *  因为形状闸门当时只覆盖那六条新线（这正是 CLI-070 要扩覆盖面的理由）。
+   *
+   *  注意：**这里只有可关的类别**。资金类与 `MUST_REACH` 声明表里的通知
+   *  根本不出现在开关列表里——它们错过就无法挽回。 */
   notificationPrefs() {
-    return this.request<Array<{ category: string; enabled: boolean; label: string; forced?: boolean }>>(
-      'GET', '/notifications/prefs',
-    );
+    return this.request<Record<string, boolean>>('GET', '/notifications/prefs');
   }
   setNotificationPref(category: string, enabled: boolean) {
     return this.request<{ category: string; enabled: boolean }>(

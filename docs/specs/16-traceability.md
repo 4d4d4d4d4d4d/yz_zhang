@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V89 全批次完成（2026-09-21）。
-> 后端 916 tests + 前端 92 tests（core 56 + web 36）全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V90 全批次完成（2026-09-21）。
+> 后端 925 tests + 前端 92 tests（core 56 + web 36）全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,24 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V90 批次：错过就无法挽回的通知，不能被一个开关关掉）
+
+> 模块 spec：[65-deadline-notices.md](65-deadline-notices.md)
+>
+> ```python
+> notify(db, task.creator_id, "task", "待验收提醒",
+>        f"任务《{task.title}》已提交验收，超时将自动通过")   # 可关；且没说几天
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **NTF-060 必达通知要有声明表** | `notification/service.py` 的 `MUST_REACH`：键是 `(category, title)`，值是**理由**而不是 `True`。判定标准只有一条——**错过它，用户会失去一个他本可以行使的权利，或者失去一笔钱**。`notify()` 里查表放行 | `tests/test_deadline_notices.py::test_ntf060_pending_acceptance_notice_survives_the_switch`、`::test_ntf060_every_declared_notice_actually_reaches`（**真的调用偏好端点把开关关掉**再验送达，不检查 `force=True` 写没写）、`::test_ntf060_declaration_table_says_why` |
+| **开关不能变成摆设** | 表外的通知照常可关。全做成不可关的结果是用户把真正重要的那几条一起屏蔽掉 | `::test_ntf060_ordinary_notices_can_still_be_switched_off` |
+| **NTF-061 期限要说出来且取自配置** | 文案改成「**{N} 天内未处理将自动验收并放款**」，`N = settings.AUTO_ACCEPT_DAYS`。与 V61 的硬编码 `48` 同一条教训：**通知里的数字不许是字面量** | `::test_ntf061_notice_states_the_deadline_from_config`（monkeypatch 改成 7 天，文案必须跟着变） |
+| **AGT-070 AI 交的要说是 AI 交的** | 平台代 agent 交付（V81）后的通知单独成文：说明是 AI 助理产出、平台是责任主体、并给出**人工核验**入口——那条路 V74 就建好了，发布方只是在这个时点不知道它存在 | `::test_agt070_agent_delivery_notice_says_it_was_ai` |
+| **AGT-071 「拿不准」下单，「没判成」不下单** | `_maybe_auto_verify`：审核明确返回 `review` → 自动开平台付费核验单（`trigger="escalation"`）；标签带 `provider_error:` → 不下单。**两条路的区别不是「要不要人来看」，是「这次拿不准是谁的问题」**——花钱雇人去补一次宕机是把成本花在错误的地方，而且故障是批量的 | `::test_agt071_genuine_review_opens_a_platform_paid_order`（含对账不变量）、`::test_agt071_provider_outage_does_not_open_orders`（红验：去掉守卫即红）、`::test_agt071_low_confidence_alone_does_not_auto_open` |
+| **顺手修的 SDK 漂移** | `notificationPrefs()` 在共享 SDK 里声明成数组，服务端返回的是 `Record<string, boolean>` | `packages/core` 类型 + `web` tsc |
 
 ## 已实现（V89 批次：声明了却不给，给了却不声明）
 

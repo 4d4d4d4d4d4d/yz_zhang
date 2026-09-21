@@ -284,7 +284,46 @@ def run_agent(db: Session, task, contract_id: int | None = None) -> AgentRun:
         profile.runs_succeeded += 1
 
     run.finished_at = utcnow()
+    if run.status == "escalated" and mod_status == "review":
+        _maybe_auto_verify(db, task, run, mod_labels)
     return run
+
+
+# AGT-071 「拿不准」与「没判成」是两件事
+PROVIDER_ERROR_PREFIX = "provider_error:"
+
+
+def _maybe_auto_verify(db: Session, task, run, labels: list[str]) -> None:
+    """AGT-071 审核明确说「拿不准」时，平台自费下一张核验单。
+
+    V81 把这条记成「先观察」，理由是「会让审核供应商抖一下直接产生平台成本」。
+    把这条理由拆开看，它指向的其实是一条更精确的分界：
+
+    | `review` 的来源            | 自动下单 | 为什么 |
+    |---------------------------|---------|--------|
+    | 供应商明确返回 `review`     | **下**   | 这正是人工核验存在的理由：机器判不了的交给人 |
+    | 供应商故障（provider_error）| **不下** | 这是基础设施问题；**花钱雇人去补一次宕机**，
+    |                           |         | 是把成本花在错误的地方，而且故障是批量的，
+    |                           |         | 一次抖动会瞬间下一堆单 |
+
+    故障那条路保持现状：标 `escalated`、不交付、发布方仍可手动下单。
+    **两条路的区别不是「要不要人来看」，而是「这次拿不准是谁的问题」。**
+    """
+    if any(str(x).startswith(PROVIDER_ERROR_PREFIX) for x in labels):
+        return
+    from app.modules.verify import service as verify_service
+    from app.modules.wallet import service as wallet
+
+    db.flush()      # create_order 会再查一次库（autoflush=False）
+    try:
+        verify_service.create_order(
+            db, task, trigger="escalation", agent_run_id=run.id,
+            payer_id=wallet.PLATFORM_USER_ID,
+        )
+    except Exception:
+        # 已有进行中的核验单等情形：不下第二张，也不让它影响这次执行的结论。
+        # 核验单没下成，任务仍然是 escalated——发布方手动下单那条路还在。
+        pass
 
 
 def gross_margin_cents(db: Session, agent_user_id: int) -> dict:
