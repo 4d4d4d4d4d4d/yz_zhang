@@ -136,6 +136,7 @@ describe('团队', () => {
       '/teams/4': {
         id: 4, name: '设计组', owner_id: 1, company_name: '', tax_number: '',
         verify_status: 'none', verify_reason: '', active: true, balance_cents: 500000, my_role: 'owner', my_spend_limit_cents: 10000,
+        monthly_budget_cents: 300000, month_spent_cents: 50000, my_month_spent_cents: 20000,
         members: [{ user_id: 1, role: 'owner', spend_limit_cents: 10000 }],
         invoice_block: '企业信息尚未核验，暂不能开具企业发票',
       },
@@ -156,6 +157,8 @@ describe('团队', () => {
     expect(screen.getByTestId('invoice-block').textContent).toContain('尚未核验');
     // can_decide=true → 审批按钮在
     expect(screen.getByText('批准')).toBeTruthy();
+    // TEAM-052 预算池要说清「还剩多少」
+    expect(screen.getByTestId('team-budget').textContent).toContain('剩余 ¥2500.00');
   });
 
   it('UI-075 can_decide=false 时没有审批按钮（自己批自己不算审批）', async () => {
@@ -166,6 +169,7 @@ describe('团队', () => {
       '/teams/4': {
         id: 4, name: '设计组', owner_id: 1, company_name: '甲公司', tax_number: '91310000X',
         verify_status: 'verified', verify_reason: '', active: true, balance_cents: 0, my_role: 'member', my_spend_limit_cents: 10000,
+        monthly_budget_cents: 0, month_spent_cents: 0, my_month_spent_cents: 0,
         members: [], invoice_block: '',
       },
       '/teams/4/spends': [

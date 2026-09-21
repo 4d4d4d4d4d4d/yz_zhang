@@ -689,10 +689,16 @@ export interface TeamView {
 export interface TeamDetail extends TeamView {
   balance_cents: number;
   my_role: string;
+  /** TEAM-050 **月度累计**额度（V87 起），不是单笔——只管单笔的额度
+   *  拆单就能绕过，那是 V55 在提现上修过的同一个洞。 */
   my_spend_limit_cents: number;
   members: Array<{ user_id: number; role: string; spend_limit_cents: number }>;
   /** TEAM-030 客户端的「开票」按钮读这个，与服务端同一判断。 */
   invoice_block: string;
+  /** TEAM-052 团队月度预算池（0 = 不设池）与本月用量。 */
+  monthly_budget_cents: number;
+  month_spent_cents: number;
+  my_month_spent_cents: number;
 }
 
 export interface SpendRequestView {

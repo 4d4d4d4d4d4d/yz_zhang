@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V86 全批次完成（2026-09-21）。
-> 后端 902 tests + 前端 90 tests（core 56 + web 34）全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V87 全批次完成（2026-09-21）。
+> 后端 912 tests + 前端 90 tests（core 56 + web 34）全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,31 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V87 批次：额度必须是累计的）
+
+> 模块 spec：[62-team-monthly-budget.md](62-team-monthly-budget.md)
+>
+> 探针实测，一个「单笔额度 ¥10」的普通成员零审批划走了 ¥200：
+>
+> ```
+> 团队余额: 80000   成员到手: 20000
+> 成员单笔额度 1000，无需任何审批就划走了： 20000
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **TEAM-050 额度从单笔改成月度累计** | 与 V55 提现风控修过的是同一个洞（「只判单笔，连提 5 笔 ¥9,999 可以 ¥49,995 零人审出账」）。一个数字而不是两个：**超过月额度的单笔天然过不去**，单笔限额在有了累计之后是冗余的 | `tests/test_team_budget.py::test_team050_splitting_no_longer_bypasses_the_limit`（发 20 次只过 1 次，其余转审批）、`::test_team050_single_spend_over_the_monthly_limit_needs_approval` |
+| **提示要说还剩多少** | 只说「超额」的话，对方不知道该改金额还是该走审批 | `::test_team050_limit_message_says_how_much_is_left` |
+| **TEAM-051 admin 不再无限额** | owner 豁免**讲得通**（他就是定额度的人，给他设限不增加安全性）；admin 豁免**讲不通**——admin 是被授予权限的人，不是授予权限的人 | `::test_team051_admins_are_bounded_too`、`::test_team051_owner_stays_exempt` |
+| **TEAM-052 团队月度预算池** | 个人额度是**权限**，预算池是**总量**：按人设额度解决不了「每个人都在自己额度内、加起来仍然爆表」。所以它对所有路径生效，包括 owner；只有 owner 能改池子（让 admin 自己改，等于让他绕过自己受的约束） | `::test_team052_pool_binds_everyone_including_the_owner`、`::test_team052_only_owner_can_change_the_pool`、`::test_team052_zero_pool_means_no_pool` |
+| **TEAM-053 执行时再判一次池子** | 审批期间不预扣（TEAM-022 既有判断），累计只能按已执行算；由此有条缝：批准 10 笔逐个执行。与它本来就在做的「余额是否仍然够」是同一类检查——**审批到执行之间，世界会变** | `::test_team053_approved_requests_still_hit_the_pool_at_execution`（池子 ¥300、批 3 笔 ¥200，只过 1 笔） |
+| **TEAM-054 月份按 UTC 切** | 平台不存用户时区（TZ-065），所以东八区团队每月 1 日 08:00 重置。**写出来，而不是让人自己发现** | `::test_team054_last_months_spending_does_not_count` |
+
+**顺带被既有闸门抓到的一条**：新错误码 `monthly_budget_exceeded` 一加进去，
+V80 的 i18n 闸门立刻红——「这些错误码客户端既没有文案、也没声明为用服务端消息」。
+它的消息里带着本月已用与剩余金额，属于拼接消息，已声明为 `SERVER_WORDED_CODES`。
+**闸门在替后来的人问那个当时没人问的问题。**
 
 ## 已实现（V86 批次：让 AI 真的参与，并且越做越好）
 

@@ -38,6 +38,13 @@ class Team(Base):
     verify_status: Mapped[str] = mapped_column(String(12), default="none", index=True)
     verify_reason: Mapped[str] = mapped_column(Text, default="")
 
+    # TEAM-052 团队月度预算池（0 = 不设池）。
+    #
+    # 它与个人额度**性质不同**：个人额度是权限（能不能自助花、要不要审批），
+    # 预算池是总量（这个月团队总共花多少）。按人设额度解决不了
+    # 「每个人都在自己额度内、加起来仍然爆表」。
+    monthly_budget_cents: Mapped[int] = mapped_column(Integer, default=0)
+
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -49,9 +56,16 @@ class TeamMember(Base):
     team_id: Mapped[int] = mapped_column(Integer, index=True)
     user_id: Mapped[int] = mapped_column(Integer, index=True)
     role: Mapped[str] = mapped_column(String(10), default="member")
-    # TEAM-011 **单笔**额度，不是月度池。
-    # 月度池要处理周期、结转、跨月退款归属，复杂度高一个数量级，
-    # 而它解决的主要问题（防一个人把钱花光）单笔额度也能解决大半。
+    # TEAM-050 **月度累计**额度（V87 起）。
+    #
+    # 这里原来写的是「单笔额度」，并且注释说「它解决的主要问题（防一个人
+    # 把钱花光）单笔额度也能解决大半」——**探针证明这句话是错的**：
+    # 单笔额度 ¥10 的成员，把同一笔申请发 20 次，零审批划走了 ¥200。
+    # 与 V55 在提现上修过的是同一个洞（「只判单笔，连提 5 笔 ¥9,999
+    # 可以 ¥49,995 零人审出账」）。
+    #
+    # **一个只管单笔的额度不是额度，是一张可以无限刷的卡。**
+    # 语义换成月度累计后，单笔限额是冗余的：超过月额度的单笔天然过不去。
     spend_limit_cents: Mapped[int] = mapped_column(Integer, default=0)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

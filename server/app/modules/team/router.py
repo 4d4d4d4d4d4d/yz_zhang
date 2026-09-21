@@ -42,6 +42,12 @@ class DecideIn(BaseModel):
     reason: str = Field(default="", max_length=1000)
 
 
+class BudgetIn(BaseModel):
+    # 0 = 不设池。允许调低到已用量之下：那表示「这个月不许再花了」，
+    # 是一个合法的意思表示，不该被拦。
+    monthly_budget_cents: int = Field(ge=0)
+
+
 class CompanyIn(BaseModel):
     company_name: str = Field(min_length=2, max_length=120)
     tax_number: str = Field(min_length=6, max_length=40)
@@ -114,6 +120,11 @@ def get_team(team_id: int, user: User = Depends(get_current_user),
                      "spend_limit_cents": m.spend_limit_cents} for m in members],
         # TEAM-030 客户端的「开票」按钮读这个，与服务端同一判断
         "invoice_block": service.can_invoice(team),
+        # TEAM-052 预算池与本月用量：界面要能说清「还剩多少」，
+        # 只显示「超额」的话，人不知道该改金额还是该改池子
+        "monthly_budget_cents": team.monthly_budget_cents,
+        "month_spent_cents": service.team_spent_this_month(db, team_id),
+        "my_month_spent_cents": service.member_spent_this_month(db, team_id, user.id),
     }
 
 
@@ -238,6 +249,22 @@ def execute(team_id: int, request_id: int, user: User = Depends(get_current_user
     if not req or req.team_id != team_id:
         raise not_found("支出申请不存在")
     return service.execute_spend(db, req, user)
+
+
+@router.post("/{team_id}/budget")
+def set_budget(team_id: int, body: BudgetIn, user: User = Depends(get_current_user),
+               db: Session = Depends(get_db)):
+    """TEAM-052 设团队月度预算池。**只有 owner 能改**：
+
+    池子是「这个月团队总共花多少」的总量声明，而 admin 是被授予权限的人。
+    让 admin 自己改池子，等于让他绕过自己受的约束。
+    """
+    team = _get(db, team_id)
+    service.require_role(db, team_id, user.id, "owner")
+    team.monthly_budget_cents = body.monthly_budget_cents
+    db.add(team)
+    return {"id": team.user_id, "monthly_budget_cents": team.monthly_budget_cents,
+            "month_spent_cents": service.team_spent_this_month(db, team_id)}
 
 
 # --------------------------------------------------------------- 企业信息与发票

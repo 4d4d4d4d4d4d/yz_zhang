@@ -31,21 +31,87 @@ def require_role(db: Session, team_id: int, user_id: int, *allowed: str) -> Team
     return m
 
 
+def month_start(now=None):
+    """TEAM-054 本月起点，**按 UTC 自然月**。
+
+    平台内部全部是 UTC（V83），也刻意不存用户时区（TZ-065）。
+    代价说清楚：东八区的团队，额度在每月 1 日 08:00（当地时间）重置，
+    不是 00:00。这个偏差对额度的意义不大，但**要写出来**，
+    而不是让人自己发现。
+    """
+    now = now or utcnow()
+    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _spent_since(db: Session, team_id: int, since, user_id: int | None = None) -> int:
+    """TEAM-053 只算**已执行**的。
+
+    审批期间不预扣（TEAM-022 的既有判断），所以「已批准未执行」还没花钱，
+    不该占额度；但正因为如此，执行时必须**再判一次**——
+    审批到执行之间，世界会变。
+    """
+    q = (
+        db.query(SpendRequest)
+        .filter(SpendRequest.team_id == team_id,
+                SpendRequest.status == "executed",
+                SpendRequest.created_at >= since)
+    )
+    if user_id is not None:
+        q = q.filter(SpendRequest.requester_id == user_id)
+    return sum(r.amount_cents for r in q.all())
+
+
+def member_spent_this_month(db: Session, team_id: int, user_id: int) -> int:
+    return _spent_since(db, team_id, month_start(), user_id)
+
+
+def team_spent_this_month(db: Session, team_id: int) -> int:
+    return _spent_since(db, team_id, month_start())
+
+
+def pool_block(db: Session, team: Team, amount_cents: int) -> str:
+    """TEAM-052 团队月度预算池；空串表示还在池子里。
+
+    **对所有路径生效**，包括已被 admin 批准的申请，也包括 owner 自己：
+    审批权限不能突破总量——要突破就去改池子，那是一个留痕的、显式的动作，
+    而不是审批时顺手放过去。
+    """
+    if team.monthly_budget_cents <= 0:
+        return ""                      # 0 = 不设池，既有团队行为不变
+    used = team_spent_this_month(db, team.user_id)
+    left = team.monthly_budget_cents - used
+    if amount_cents > left:
+        return (f"超出团队本月预算池（本月已用 ¥{used / 100:.2f}，"
+                f"剩余 ¥{max(0, left) / 100:.2f}）")
+    return ""
+
+
 def spend_block(db: Session, team: Team, member: TeamMember, amount_cents: int) -> str:
-    """TEAM-011 这笔支出能不能直接花；空串表示可以。
+    """TEAM-050 这笔支出能不能**自助**花（不经审批）；空串表示可以。
 
     单一判断来源：客户端的「需要审批」提示与服务端走同一个函数。
+
+    额度是**月度累计**的，不是单笔的——改造前只判单笔，于是同一笔申请
+    发 20 次就能零审批划走 20 倍的钱（探针实测）。
     """
     if not team.active:
         return "团队已停用"
-    # owner 无额度限制——他就是那个定额度的人，给他设限没有意义
+    # 预算池排在最前：它是总量约束，谁都绕不过（包括 owner）
+    pool = pool_block(db, team, amount_cents)
+    if pool:
+        return pool
+    # TEAM-051 owner 豁免个人额度是**讲得通**的：他就是定额度的那个人，
+    # 给他设限不增加任何安全性（他随手调高即可）。
+    # 但 admin 豁免讲不通——**admin 是被授予权限的人，不是授予权限的人**。
     if member.role == "owner":
         return ""
-    if member.role == "admin":
-        return ""
-    if amount_cents > member.spend_limit_cents:
-        return (f"超出你的单笔额度（¥{member.spend_limit_cents / 100:.2f}），"
-                f"需管理员审批")
+    used = member_spent_this_month(db, team.user_id, member.user_id)
+    left = member.spend_limit_cents - used
+    if amount_cents > left:
+        # 提示要说**还剩多少**，不是只说「超额」：
+        # 只说超额的话，对方不知道该改金额还是该走审批
+        return (f"超出你本月额度（额度 ¥{member.spend_limit_cents / 100:.2f}，"
+                f"已用 ¥{used / 100:.2f}，剩余 ¥{max(0, left) / 100:.2f}），需管理员审批")
     return ""
 
 
@@ -93,6 +159,14 @@ def execute_spend(db: Session, req: SpendRequest, actor: User) -> dict:
         raise conflict("该申请尚未批准或已执行", "not_approved")
     if req.requester_id != actor.id:
         raise forbidden("仅发起人可执行自己的支出申请")
+    # TEAM-053 预算池**在执行时再判一次**。
+    # 不判的话有条明显的缝：批准 10 笔、逐个执行，池子形同虚设。
+    # 这与下面那条「余额是否仍然够」是同一类检查、同一个理由：
+    # **审批到执行之间，世界会变。**
+    team = db.get(Team, req.team_id)
+    pool = pool_block(db, team, req.amount_cents) if team else ""
+    if pool:
+        raise bad_request(pool + "；请调整本月预算池后再执行", "monthly_budget_exceeded")
     team_acct = wallet.get_or_create(db, req.team_id)
     if team_acct.available_cents < req.amount_cents:
         raise bad_request(

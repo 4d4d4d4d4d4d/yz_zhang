@@ -84,6 +84,7 @@
 | 59 | 有后果的界面：合作体 / 团队 / 开发者 | [59-coop-team-developer-ui.md](./59-coop-team-developer-ui.md) | P0 |
 | 60 | 形状也要对上（请求体与响应体闸门） | [60-shape-alignment.md](./60-shape-alignment.md) | P0 |
 | 61 | 让 AI 真的参与，并且越做越好 | [61-orchestrator-agents-and-lessons.md](./61-orchestrator-agents-and-lessons.md) | P0 |
+| 62 | 额度必须是累计的（团队月度预算池） | [62-team-monthly-budget.md](./62-team-monthly-budget.md) | P0 |
 
 ## 功能点编号与优先级约定
 

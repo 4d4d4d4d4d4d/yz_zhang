@@ -91,7 +91,28 @@ function TeamCard({ teamId }: { teamId: number }) {
         <h3>{team.name}</h3>
         <p className="muted">
           余额 <span className="price">{fmtYuan(team.balance_cents)}</span> ·
-          我的角色 {team.my_role} · 我的额度 {fmtYuan(team.my_spend_limit_cents)}
+          我的角色 {team.my_role} ·{' '}
+          {/* TEAM-050 额度是**月度累计**的，界面要说清楚，不能让人以为是单笔 */}
+          我的本月额度 {fmtYuan(team.my_spend_limit_cents)}（已用 {fmtYuan(team.my_month_spent_cents)}）
+        </p>
+        {/* TEAM-052 预算池与本月用量：只显示「超额」的话，
+            人不知道该改金额还是该改池子 */}
+        <p className="muted" data-testid="team-budget">
+          {team.monthly_budget_cents > 0
+            ? `团队本月预算池 ${fmtYuan(team.monthly_budget_cents)}，已用 ${fmtYuan(team.month_spent_cents)}，剩余 ${fmtYuan(Math.max(0, team.monthly_budget_cents - team.month_spent_cents))}`
+            : `未设预算池（本月已花 ${fmtYuan(team.month_spent_cents)}）`}
+          {team.my_role === 'owner' && (
+            <button className="ghost" style={{ marginLeft: 8, padding: '2px 8px' }}
+                    onClick={() => {
+                      const yuan = prompt('团队本月预算池（元，0 = 不设池）：',
+                        String(team.monthly_budget_cents / 100));
+                      if (yuan !== null) {
+                        void act(() => client.setTeamBudget(teamId, Math.round(parseFloat(yuan || '0') * 100)));
+                      }
+                    }}>
+              设置
+            </button>
+          )}
         </p>
         {error && <p className="error">{error}</p>}
         {notice && <p className="muted" data-testid="spend-notice">{notice}</p>}

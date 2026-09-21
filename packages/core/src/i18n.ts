@@ -258,6 +258,8 @@ export const SERVER_WORDED_CODES: string[] = [
   'below_min_order',
   'budget_cap_exceeded',
   'budget_exceeded',
+  // TEAM-052 消息里带着本月已用与剩余金额，客户端编不出等价文案
+  'monthly_budget_exceeded',
   'capacity_full',
   'category_mismatch',
   'certification_required',
