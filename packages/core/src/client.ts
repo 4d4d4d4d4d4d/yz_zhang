@@ -53,6 +53,7 @@ import type {
   Wallet,
   LedgerRow,
   PayoutAccountView,
+  SosResult,
 } from './types';
 
 export class ApiError extends Error {
@@ -1231,16 +1232,26 @@ export class PlatformClient {
     return this.request<Task>('POST', `/tasks/${taskId}/publish`);
   }
   /** GEO-022 行程共享开关：到场类任务的安全功能，不是位置追踪。 */
+  /** GEO-022 行程分享开关。服务端返回的键是 `trip_share_enabled`——
+   *  此前 SDK 声明成 `enabled`，**两边都以为自己是对的**。 */
   setTripShare(taskId: number, enabled: boolean) {
-    return this.request<{ enabled: boolean }>('POST', `/tasks/${taskId}/trip-share?enabled=${enabled}`);
+    return this.request<{ trip_share_enabled: boolean }>(
+      'POST', `/tasks/${taskId}/trip-share?enabled=${enabled}`,
+    );
   }
   trip(taskId: number) {
     return this.request<{ shared: boolean; points: Array<{ lat: number; lng: number; at: string }> }>(
       'GET', `/tasks/${taskId}/trip`,
     );
   }
+  /** GEO-023 一键求助。**服务端返回的是 `{ ok, guidance }`，不是 `{ id, notified }`**——
+   *  声明错了这么久没人发现，因为**两端都没有任何一处调用过它**：
+   *  服务端连「求助不该被合规弹窗挡住」（PIPL 十三条四项）都想清楚了，
+   *  而那个按钮一直不存在。
+   *
+   *  `guidance` 要**原样显示**：它是这一刻唯一对用户有用的那句话。 */
   sos(taskId: number, lat: number, lng: number) {
-    return this.request<{ id: number; notified: number }>('POST', `/tasks/${taskId}/sos`, { lat, lng });
+    return this.request<SosResult>('POST', `/tasks/${taskId}/sos`, { lat, lng });
   }
   circleMembers(circleId: number) {
     return this.request<Array<{ user_id: number; nickname: string; credit_score: number }>>(

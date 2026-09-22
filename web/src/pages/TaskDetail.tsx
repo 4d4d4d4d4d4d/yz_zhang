@@ -312,11 +312,62 @@ export default function TaskDetail() {
           )}
         </div>
       )}
+      {/* GEO-023/022 安全区块。服务端两条都早就实现了——`sos` 的注释甚至
+          为了让按钮**不被合规弹窗挡住**特意去查了 PIPL 第十三条第(四)项——
+          而这个按钮在任何一个端上都不存在。 */}
+      {(isCreator || isExecutor) && task
+        && ['in_progress', 'pending_acceptance'].includes(task.status) && !task.is_remote && (
+        <SafetyPanel taskId={taskId} isExecutor={!!isExecutor} />
+      )}
       {/* DSPC-021 纠纷面板。当事人（含被诉方）从这里答辩、和解、申诉——
           此前这三件事在任何客户端上都做不了，唯一能做的动作是发起纠纷 */}
       {(isCreator || isExecutor) && (
         <DisputePanel client={client} taskId={taskId} meId={me ? me.id : null} />
       )}
+    </div>
+  );
+}
+
+
+/** GEO-023 一键求助 / GEO-022 行程分享。
+ *
+ * 只在**进行中**的线下任务上出现：任务没开始或已结束时摆一个求助按钮，
+ * 只会稀释它。 */
+function SafetyPanel({ taskId, isExecutor }: { taskId: number; isExecutor: boolean }) {
+  const { client } = useApp();
+  const [guidance, setGuidance] = useState('');
+  const [shared, setShared] = useState<boolean | null>(null);
+  const [error, setError] = useState('');
+
+  return (
+    <div className="card">
+      <h3>安全</h3>
+      <div className="row">
+        <button className="danger" onClick={async () => {
+          setError('');
+          try {
+            // 浏览器上拿不到可靠定位时也要照发：求助不能因为定位失败而发不出去
+            const r = await client.sos(taskId, 0, 0);
+            setGuidance(r.guidance);   // 服务端给的指引原样显示
+          } catch (err) {
+            setError(apiErrorText(err));
+          }
+        }}>🆘 一键求助</button>
+        {isExecutor && (
+          <button className="ghost" onClick={async () => {
+            setError('');
+            try {
+              const r = await client.setTripShare(taskId, !shared);
+              setShared(r.trip_share_enabled);
+            } catch (err) {
+              setError(apiErrorText(err));
+            }
+          }}>{shared ? '关闭行程分享' : '开启行程分享'}</button>
+        )}
+      </div>
+      {guidance && <p className="error" data-testid="sos-guidance">{guidance}</p>}
+      {error && <p className="error">{error}</p>}
+      <p className="muted">求助会立即通知任务对方与平台并留痕；遇到危险请先拨打 110。</p>
     </div>
   );
 }

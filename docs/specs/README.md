@@ -90,6 +90,7 @@
 | 65 | 错过就无法挽回的通知，不能被一个开关关掉 | [65-deadline-notices.md](./65-deadline-notices.md) | P0 |
 | 66 | 钱能进不能出：所有端都点不动的提现按钮 | [66-money-can-get-in-but-not-out.md](./66-money-can-get-in-but-not-out.md) | P0 |
 | 67 | 没有人被告知：审批两端沉默与 App 三条线 | [67-nobody-was-told.md](./67-nobody-was-told.md) | P0 |
+| 68 | 建好了，可是没有一个人能按下去（求助/改密码/会话） | [68-nobody-can-press-it.md](./68-nobody-can-press-it.md) | P0 |
 
 ## 功能点编号与优先级约定
 

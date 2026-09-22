@@ -188,6 +188,17 @@ export interface LedgerRow {
   created_at: string;
 }
 
+/** GEO-023 一键求助的回执。
+ *
+ *  `guidance` 是这一刻**唯一对用户有用的那句话**（「如遇危险请立即拨打 110」），
+ *  必须原样显示。此前 SDK 把这个响应声明成 `{ id, notified }`——
+ *  服务端从来没返回过这两个键，而**错了这么久没人发现，
+ *  因为两端都没有任何一处调用过它**。 */
+export interface SosResult {
+  ok: boolean;
+  guidance: string;
+}
+
 /** PAY-030 收款账户。`account_no` 是**脱敏后**的（`6222****0000`）——
  *  服务端本来就不返回完整卡号，任何一端都不要试图拼回去。 */
 export interface PayoutAccountView {
@@ -252,6 +263,13 @@ export interface Message {
   content: string;
   risk_flagged: boolean;
   created_at: string;
+  /** IM-009 `quote` 是报价卡（内容是结构化 JSON），其余为 `text`。
+   *  服务端一直在返回这个键，类型里一直没有——于是没有任何界面能把
+   *  报价卡渲染成卡片。 */
+  kind: string;
+  /** IM-004 已撤回。服务端把内容替换成「[消息已撤回]」并置这个标记；
+   *  声明了它，界面才能把撤回的消息显示成灰条而不是一句正常的话。 */
+  recalled: boolean;
 }
 
 export interface Notice {

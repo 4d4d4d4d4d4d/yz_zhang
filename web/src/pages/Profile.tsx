@@ -39,6 +39,43 @@ function ServicePricing() {
   );
 }
 
+/** ACC-040 修改密码。服务端 `changePassword` / `resetPassword` 一直都在，
+ *  **两端都没有入口**——用户怀疑密码泄露时，能做的只有注销账号。
+ *
+ *  改完服务端会换发 token（旧的失效），所以这里把新 token 换上，
+ *  否则用户会莫名其妙被登出。 */
+function ChangePassword() {
+  const { client, setToken } = useApp();
+  const [oldPw, setOldPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+  return (
+    <div className="card">
+      <h3>修改密码</h3>
+      <div className="row">
+        <input type="password" placeholder="当前密码" value={oldPw}
+               onChange={(e) => setOldPw(e.target.value)} />
+        <input type="password" placeholder="新密码（至少 8 位）" value={newPw}
+               onChange={(e) => setNewPw(e.target.value)} />
+        <button disabled={!oldPw || newPw.length < 8} onClick={async () => {
+          setMsg(''); setError('');
+          try {
+            const r = await client.changePassword(oldPw, newPw);
+            setToken(r.token);          // 服务端换发的新 token
+            setOldPw(''); setNewPw('');
+            setMsg('密码已修改，其他设备上的登录态已失效');
+          } catch (err) {
+            setError(apiErrorText(err));
+          }
+        }}>确认修改</button>
+      </div>
+      {msg && <p className="muted">{msg}</p>}
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 function DeviceSessions() {
   const { client } = useApp();
   const [sessions, setSessions] = useState<Array<{ id: number; device: string; created_at: string }>>([]);
@@ -220,6 +257,7 @@ export default function Profile() {
       )}
       <ServicePricing />
       <PrivacyConsents />
+      <ChangePassword />
       <DeviceSessions />
       <div className="card row">
         <button className="danger" onClick={() => { setToken(null); nav('/'); }}>退出登录</button>

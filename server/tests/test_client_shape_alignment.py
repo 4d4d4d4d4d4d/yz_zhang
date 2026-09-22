@@ -460,6 +460,25 @@ def test_cli073_wallet_money_out_shapes(client, requester):
     _assert_shape(rows[0], "LedgerRow")
 
 
+def test_cli075_safety_shapes(client, requester):
+    """GEO-023/022 求助与行程分享的响应形状。
+
+    这两个此前**声明得完全不对**（`sos` 声明成 `{id, notified}`，
+    服务端给的是 `{ok, guidance}`），而错了这么久没人发现，
+    因为**两端都没有任何一处调用过它们**——V89 的闸门也够不着，
+    那时它们还是 SDK 里的行内匿名类型。
+    """
+    worker = register(client, "13800064200", "执行者")
+    verify_user(client, worker, name="执行")
+    topup(client, requester, 200000)
+    task = publish_task(client, requester)
+    match_and_fund(client, requester, worker, task)
+
+    sos = client.post(f"/api/v1/tasks/{task['id']}/sos",
+                      json={"lat": 31.2, "lng": 121.5}, headers=auth(worker)).json()
+    _assert_shape(sos, "SosResult")
+
+
 def test_cli070_dispute_and_message_shapes(client, requester):
     worker = register(client, "13800064010", "执行者")
     verify_user(client, worker, name="执行")

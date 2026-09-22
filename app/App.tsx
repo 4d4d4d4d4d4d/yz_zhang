@@ -274,10 +274,68 @@ function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
       {actions.includes('review') && (
         <Button title="给对方好评（5星）" onPress={() => act(() => client.review(task.id, 5))} />
       )}
+      {/* GEO-022/023 安全区块。求助与行程分享**在手机上才有意义**——
+          上门、夜间、独自面对陌生人的是 App 上的这群人。 */}
+      <SafetyBlock client={client} task={task} meId={meId} />
       {/* DSPR-010 纠纷区块。V61 只补了 Web，而线下服务的执行方主要在 App 上——
           最可能坐在被告席上的那群人，恰恰是唯一仍然开不了口的那群人。 */}
       <DisputeBlock client={client} taskId={task.id} meId={me ? me.id : null} />
     </ScrollView>
+  );
+}
+
+/** GEO-023 一键求助 / GEO-022 行程分享。
+ *
+ * 服务端两条都早就实现了，`sos` 的注释甚至为了让按钮**不被合规弹窗挡住**
+ * 特意去查了 PIPL 第十三条第(四)项——而那个按钮在任何一个端上都不存在。
+ *
+ * 只在**进行中**的任务上出现：任务还没开始、或者已经结束，
+ * 摆一个求助按钮只会稀释它。
+ */
+function SafetyBlock({ client, task, meId }: {
+  client: PlatformClient; task: Task; meId: number | null;
+}) {
+  const [guidance, setGuidance] = useState('');
+  const [error, setError] = useState('');
+  const [shared, setShared] = useState<boolean | null>(null);
+
+  const live = ['in_progress', 'pending_acceptance'].includes(task.status);
+  const isParty = meId === task.creator_id || meId === task.executor_id;
+  if (!live || !isParty || task.is_remote) return null;
+
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={styles.cardTitle}>安全</Text>
+      <Button title="🆘 一键求助" color="#dc2626" onPress={async () => {
+        setError('');
+        try {
+          // 真机上这里换成 expo-location 的当前坐标；拿不到定位**也要照发**——
+          // 求助不能因为定位失败而发不出去
+          const r = await client.sos(task.id, 0, 0);
+          // 服务端给的指引原样显示：这一刻唯一对他有用的就是这句话
+          setGuidance(r.guidance);
+        } catch (e) {
+          setError(apiErrorText(e));
+        }
+      }} />
+      {!!guidance && <Text style={styles.error}>{guidance}</Text>}
+      {meId === task.executor_id && (
+        <Button title={shared ? '关闭行程分享' : '开启行程分享（让发布方看到我的轨迹）'}
+                onPress={async () => {
+                  setError('');
+                  try {
+                    const r = await client.setTripShare(task.id, !shared);
+                    setShared(r.trip_share_enabled);
+                  } catch (e) {
+                    setError(apiErrorText(e));
+                  }
+                }} />
+      )}
+      {!!error && <Text style={styles.error}>{error}</Text>}
+      <Text style={styles.mutedLeft}>
+        求助会立即通知任务对方与平台并留痕；遇到危险请先拨打 110。
+      </Text>
+    </View>
   );
 }
 
@@ -632,6 +690,8 @@ function MeScreen({ client, me, refresh, onLogout }: {
   const [agreements, setAgreements] = useState<string[]>([]);
   const [docText, setDocText] = useState('');
   const [needsReconsent, setNeedsReconsent] = useState(false);
+  const [oldPw, setOldPw] = useState('');
+  const [newPw, setNewPw] = useState('');
 
   // 进页面就查一次：**协议更新是平台单方面发生的**，不该等用户先去点一下
   // 「用户协议」才发现自己已经被挡住了
@@ -656,10 +716,29 @@ function MeScreen({ client, me, refresh, onLogout }: {
         }} />
       )}
 
+      {/* ACC-040 修改密码。服务端一直都在，**两端都没有入口**——
+          用户怀疑密码泄露时，能做的只有注销账号。 */}
+      <TextInput style={styles.input} secureTextEntry value={oldPw} onChangeText={setOldPw}
+                 placeholder="当前密码" />
+      <TextInput style={styles.input} secureTextEntry value={newPw} onChangeText={setNewPw}
+                 placeholder="新密码（至少 8 位）" />
+      <Button title="修改密码" onPress={async () => {
+        setNotice('');
+        try {
+          await client.changePassword(oldPw, newPw);
+          setOldPw(''); setNewPw('');
+          // 服务端会换发 token（旧的失效）。App 这里如实告诉他要重新登录，
+          // 而不是让他下一次点任何东西时莫名其妙 401
+          setNotice('密码已修改，请重新登录');
+        } catch (e) {
+          setNotice(apiErrorText(e));
+        }
+      }} />
+
       {/* APP-069 团队 / 合作体 / 开发者。三条线此前**只有网页看得见**，
           而 V92 刚给团队审批加了通知——通知把人叫来、他点进去无路可走，
           比没有通知更糟（APP-066 同一条教训）。 */}
-      {(['teams', 'ventures', 'developer'] as SubScreen[]).map((key) => (
+      {(['messages', 'invitations', 'teams', 'ventures', 'developer'] as SubScreen[]).map((key) => (
         <TouchableOpacity key={key} onPress={() => setSub(key)}>
           <Text style={styles.linkRow}>{SUB_SCREEN_LABEL[key]} ›</Text>
         </TouchableOpacity>

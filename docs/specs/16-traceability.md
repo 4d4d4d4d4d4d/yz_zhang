@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V92 全批次完成（2026-09-21）。
-> 后端 956 tests + 前端 95 tests（core 56 + web 39）全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V93 全批次完成（2026-09-22）。
+> 后端 970 tests + 前端 98 tests（core 56 + web 42）全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,26 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V93 批次：建好了，可是没有一个人能按下去）
+
+> 模块 spec：[68-nobody-can-press-it.md](68-nobody-can-press-it.md)
+>
+> ```
+> SDK: 245   web: 137   app: 58
+> 两端都没人调用: 105   ← 其中有 sos / changePassword / openDirect / recallMessage
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **GEO-023 一键求助** | 服务端实现完整，注释甚至为了让按钮**不被合规弹窗挡住**特意查了 PIPL 第十三条第(四)项（「紧急情况下为保护自然人的生命健康所必需」无需同意）——**写这句话的时候，那个按钮在任何一个端上都不存在**。两端补上，只在**进行中的线下任务**上出现，并**原样显示服务端的指引**（「如遇危险请立即拨打 110」） | `tests/test_reachable_capabilities.py::test_geo023_sos_notifies_the_other_party_and_returns_guidance`（红验：拿掉 guidance 即红）、`::test_geo023_sos_is_only_for_the_two_parties`、`::test_geo023_sos_does_not_require_location_consent`（撤回位置同意后仍必须通）、`web/src/Safety.test.tsx`（3 项） |
+| **SOS/行程分享的形状是错的** | SDK 把 `sos` 声明成 `{id, notified}`，服务端返回 `{ok, guidance}`；`setTripShare` 声明 `{enabled}`，服务端给 `{trip_share_enabled}`。**错了这么久没人发现，正因为两端都没有一处调用过它们**——V89 的闸门也够不着，那时它们还是行内匿名类型 | `tests/test_client_shape_alignment.py::test_cli075_safety_shapes` |
+| **ACC-040 修改密码** | 服务端 `changePassword`/`resetPassword` 一直都在，**两端都没有入口**——用户怀疑密码泄露时能做的只有注销账号。Web 换上服务端新发的 token，App 如实提示需重新登录 | `::test_cli075_capability_is_reachable[changePassword]` |
+| **IM-020 成交前说得上话** | 任务会话要等**合约托管成功**才自动建（IM-002），而「你几点能到」「要不要带工具」全发生在托管之前。`openDirect` 建好了没人调用 | `::test_cli075_capability_is_reachable[openDirect]` |
+| **IM-021 2 分钟撤回** | 服务端给了撤回窗口，**没有任何一个端能点**。过期与否由服务端判并给理由，客户端不重算那 2 分钟 | `::test_cli075_capability_is_reachable[recallMessage]` |
+| **Message 少声明两个键** | 服务端一直返回 `kind`（报价卡）与 `recalled`，类型里都没有——于是没有界面能把撤回的消息显示成灰条，也没有界面能渲染报价卡 | 形状闸门 |
+| **APP-067/068 App 的消息与邀约** | `app/MessagesAndInvites.tsx`：会话列表、未读、发送（**风控提醒原样显示**）、撤回、发起会话；邀约列表与接受/谢绝。服务端**会发**「收到任务邀约」，而 App 此前看不到也应不了 | `tests/test_notice_actions.py::test_cli074_the_action_a_notice_asks_for_is_reachable`（新增该条，红验：拿掉 App 的接受入口即红） |
+| **CLI-075 按不到就有后果的能力** | `MUST_BE_REACHABLE` 声明表：SDK 方法 → 必须能按到的端 → **按不到会怎样**。判定标准：按不到会面临人身风险、账号被别人继续用，或一笔钱/一个权利落空。**105 条全塞进来，这张表就变成待办清单而不是红线**——其余约 95 条如实记成缺口，逐批清理 | `::test_cli075_capability_is_reachable`（逐条参数化）、`::test_cli075_table_says_what_happens_if_you_cannot_press_it`、`::test_cli075_scanner_self_check` |
 
 ## 已实现（V92 批次：没有人被告知）
 
