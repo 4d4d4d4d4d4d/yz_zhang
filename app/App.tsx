@@ -292,7 +292,7 @@ function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
  * 只在**进行中**的任务上出现：任务还没开始、或者已经结束，
  * 摆一个求助按钮只会稀释它。
  */
-function SafetyBlock({ client, task, meId }: {
+export function SafetyBlock({ client, task, meId }: {
   client: PlatformClient; task: Task; meId: number | null;
 }) {
   const [guidance, setGuidance] = useState('');
@@ -535,7 +535,7 @@ function PublishScreen({ client, onDone }: { client: PlatformClient; onDone: () 
  *  而 Web 的提现按钮每次点击都返回 400（没有任何端能绑收款账户）。
  *  合起来就是：**钱能进，不能出。**
  */
-function WalletScreen({ client }: { client: PlatformClient }) {
+export function WalletScreen({ client }: { client: PlatformClient }) {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [rows, setRows] = useState<LedgerRow[]>([]);
   const [amount, setAmount] = useState('100');

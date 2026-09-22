@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V93 全批次完成（2026-09-22）。
-> 后端 970 tests + 前端 98 tests（core 56 + web 42）全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V94 全批次完成（2026-09-22）。
+> 后端 970 tests + 前端 110 tests（core 56 + web 42 + App 12）全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,26 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V94 批次：扫描闸门证明不了的那一半）
+
+> 模块 spec：[69-app-unit-tests.md](69-app-unit-tests.md)
+
+V91~V93 给 App 加了十几块功能，验证方式全是**扫源码里有没有 `.someMethod(`**
+加 `tsc`。这两样挡得住「这个端上根本没有这条路」，对下面这些一律是绿的：
+理由没传上去、把服务端的中性话术换成自编文案、把求助指引吞掉、
+客户端自己重写一遍服务端的判断、把按钮摆给非当事人——
+**每一条都恰好是前三批 spec 里反复强调的那种错**。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **APP-070 测试跑得起来** | `jest-expo` + `@testing-library/react-native`。App **不在根 workspaces 里**（V88 的有意决定），所以测试依赖装在 `app/` 内。原生模块用官方 mock 替身 | `cd app && npm test` |
+| **钱包这条路** | 提现打对端点、大额进人审的**中性话术原样显示**、绑卡带上 `holder_name`、账单科目中文名走共享 SDK | `app/money-and-safety.test.tsx`（3 项） |
+| **求助这条路** | 求助打对端点、**服务端指引原样显示**、线上任务与非当事人不显示入口、行程分享读 `trip_share_enabled` | 同上（4 项） |
+| **团队审批这条路** | 驳回**把理由真的发上去**、审批按钮读服务端 `can_decide`、已驳回的理由显示出来、开票读 `invoice_block` | `app/team-approval.test.tsx`（5 项） |
+| **四次红验全红** | 丢掉驳回理由 / 客户端重写审批判断 / 把中性话术换成「你触发了风控」/ 把求助指引换成「已提交」 | 四条改坏后对应测试各自变红 |
+| **CI 真的跑它** | `app-typecheck` job 加 `npm test`。此前 App 的 CI **只有 `tsc`** | `.github/workflows/ci.yml` |
+| **测试文件自己不能把 CI 弄红** | 加测试后 `tsc` 立刻因 jest 全局符号缺类型而红——**App 的 CI 闸门就是 `tsc`**，所以补 `@types/jest` 而不是让它黄着 | `npm run typecheck` |
 
 ## 已实现（V93 批次：建好了，可是没有一个人能按下去）
 

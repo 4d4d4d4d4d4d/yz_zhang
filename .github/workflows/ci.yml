@@ -43,7 +43,7 @@ jobs:
           done
 
   app-typecheck:
-    name: App 安装与类型检查（APPB-006）
+    name: App 安装、类型检查与单元测试（APPB-006 / APP-070）
     runs-on: ubuntu-latest
     # DSPR-042 / PRLX-041 了结于此：`app/` 此前从来没有被装上过一次。
     # `cd app && npm install` 实测报 E404（"@platform/core": "*" 被当成公开包），
@@ -62,6 +62,11 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund
       - run: npm run typecheck
+      # APP-070 类型检查只能证明「代码说得通」。V91~V93 三批的 App 行为
+      # 全靠 Python 扫描闸门 + 共享 SDK 类型覆盖——那两样挡得住「入口不存在」，
+      # 挡不住「入口在、按下去做错事」：调错方法、把服务端算好的话吞掉、
+      # 自己重写一遍服务端的判断。这一步跑的就是那些。
+      - run: npm test
 
   boot-smoke:
     name: 服务启动 + 主闭环冒烟（DEP-060）
