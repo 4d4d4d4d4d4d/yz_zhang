@@ -251,7 +251,37 @@ def reject_change(
         raise forbidden("提案方不能自行处理")
     order.status = "rejected"
     db.add(order)
+    service._notify_change(db, contract, order, proposed=False)
     return {"id": order.id, "status": "rejected"}
+
+
+@router.get("/{contract_id}/change-orders")
+def list_change_orders(
+    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """SC-007 列出变更单。
+
+    改造前**没有这个接口**：提案建得出来，而对方拿不到 `order_id`，
+    于是就算界面上有按钮也点不了。缺的不只是按钮——
+    **只补按钮不补列表，按钮点不了。**
+
+    `can_decide` 与服务端 `accept_change` 的准入同源（提案人自己不能接受）——
+    客户端不重写这个判断，**第二份实现必然抄漏**（UI-075 / TEAM-021 同一条）。
+    """
+    contract = _get(db, contract_id, user)
+    rows = (
+        db.query(ChangeOrder)
+        .filter(ChangeOrder.contract_id == contract.id)
+        .order_by(ChangeOrder.id.desc())
+        .all()
+    )
+    return [
+        {"id": r.id, "contract_id": r.contract_id, "proposed_by": r.proposed_by,
+         "new_amount_cents": r.new_amount_cents, "reason": r.reason, "status": r.status,
+         "created_at": iso(r.created_at),
+         "can_decide": r.status == "pending" and r.proposed_by != user.id}
+        for r in rows
+    ]
 
 
 @router.post("/{contract_id}/sign")

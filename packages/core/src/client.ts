@@ -54,6 +54,7 @@ import type {
   LedgerRow,
   PayoutAccountView,
   SosResult,
+  ChangeOrderView,
 } from './types';
 
 export class ApiError extends Error {
@@ -545,6 +546,11 @@ export class PlatformClient {
     return this.request<{ id: number; status: string }>('POST', `/contracts/${contractId}/change-orders`, {
       new_amount_cents: newAmountCents, reason,
     });
+  }
+  /** SC-007 列出变更单。改造前**服务端根本没有这个接口**：
+   *  提案建得出来，而对方拿不到 `order_id`，界面上就算有按钮也点不了。 */
+  changeOrders(contractId: number) {
+    return this.request<ChangeOrderView[]>('GET', `/contracts/${contractId}/change-orders`);
   }
   acceptChange(contractId: number, orderId: number) {
     return this.request<Contract>('POST', `/contracts/${contractId}/change-orders/${orderId}/accept`);

@@ -48,6 +48,11 @@ NOTICE_ACTIONS: dict[tuple[str, str], tuple[str, tuple[str, ...], str]] = {
         "有人点名请他接这一单。App 上此前既看不到邀约也应不了——"
         "**又一条把人叫来了却无路可走的通知**（V93 才补上）",
     ),
+    ("contract", "收到合约变更单"): (
+        "acceptChange", ("web", "app"),
+        "这条通知就是叫他去确认或拒绝改价的。点进去没有入口，"
+        "任务范围变了却只能走取消或纠纷",
+    ),
     ("contract", "合约签署超期作废"): (
         "signContract", ("web", "app"),
         "叫他去签，就得让他签得了——作废后要重新走一遍成交，错过没法补",

@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V94 全批次完成（2026-09-22）。
-> 后端 970 tests + 前端 110 tests（core 56 + web 42 + App 12）全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V95 全批次完成（2026-09-24）。
+> 后端 987 tests + 前端 120 tests（core 56 + web 46 + App 18）全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,29 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V95 批次：算得很清楚的钱，没有人能动）
+
+> 模块 spec：[70-money-nobody-can-move.md](70-money-nobody-can-move.md)
+>
+> ```
+> proposeChange / acceptChange / rejectChangeOrder / defineMilestones
+> checkin / myApplications / exportEvidence        ← web=0 app=0
+> PROPOSE CHANGE: 201   ACCEPT CHANGE: 200（差额自动补托管）
+> CHECKIN: 400 {"code":"too_far","message":"距任务地点 4205 米，超出打卡范围"}
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **SC-007 变更单：三层都缺** | 服务端做得很完整（改价、差额多退少补、版本 +1、任务预算同步，还有多轮随机改价的守恒测试），而缺的**不只是按钮**：①两端都没入口；②**`GET /contracts/{id}/change-orders` 服务端根本不存在**——对方拿不到 `order_id`，有按钮也点不了；③没有通知，没人知道该去看。三层一起补 | `tests/test_change_order_loop.py::test_sc007_counterparty_can_list_the_change_order`、`::test_sc007_accepting_tops_up_escrow_and_keeps_money_conserved`（含对账不变量） |
+| **没有变更单的后果** | 任务范围一变，双方只剩取消（按违约规则算补偿）或发起纠纷——**一件本该好商量的事，产品逼着他们走对抗路径** | 见 spec §1 |
+| **SC-007 通知两头** | 提案 → 通知对方（带**金额与事由**，那是对方判断的依据）；裁决 → 通知提案人（他是等这个答复才能决定下一步的人）。刻意**不**进 `MUST_REACH`：变更单不会因为没人看就自动生效（TEAM-062 同一条判断） | `::test_sc007_counterparty_is_told_a_change_order_is_waiting`（红验：正文去掉金额与事由即红）、`::test_sc007_proposer_is_told_the_outcome`、`::test_sc007_rejection_also_notifies`、`::test_sc007_change_notices_are_not_must_reach` |
+| **`can_decide` 与准入同源** | 新接口按 `can_decide` 的老办法把「提案人自己不能接受」算好给客户端，客户端不重写——**第二份实现必然抄漏** | `::test_sc007_can_decide_matches_the_server_admission`（同时验真实准入回 `not_counterparty`；红验：去掉排除条件即红） |
+| **SC-004 分期从来没被用过** | 定义窗口只在双签前（签署后 `milestones_locked`），而两端都没人调用 ⇒ **生产环境里每份合约都只有一期**；网页那张分期表的渲染条件 `length > 1` 永远不成立，是一段跑不到的代码。Web 补定义界面，把「还差多少」实时算给用户看，**判定仍以服务端为准** | `::test_sc004_milestones_can_only_be_defined_before_both_signatures`、`web/src/ChangeOrder.test.tsx` |
+| **GEO-021 到场打卡** | 带距离校验，没有入口 ⇒ **到场证据链从来没产生过一条**。只做 App（浏览器定位在上门场景没意义）；超距时**原样显示服务端算出的实际距离**——只说「超出范围」，他不知道是差 50 米还是 5 公里 | `app/change-and-checkin.test.tsx`（3 项，红验：吞掉服务端消息即红） |
+| **TASK-065 我的报名** | 接口有、分页测过、两端都没界面——报完名找不到自己报过哪些单。两端补上，并带撤回报名 | `test_reachable_capabilities.py::test_cli075_capability_is_reachable[myApplications]` |
+| **LAW 证据包** | 当事人自己留底的唯一手段，此前没有入口。导出时**把哈希一起写进文件**——不然这份留底自己不可自证 | `::test_cli075_capability_is_reachable[exportEvidence]` |
+| **CLI-076 新接口当场进闸门** | `ChangeOrderView` 建的时候就纳入形状闸门，不等它漂了才补 | `tests/test_client_shape_alignment.py::test_cli076_change_order_shape` |
 
 ## 已实现（V94 批次：扫描闸门证明不了的那一半）
 

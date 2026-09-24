@@ -460,6 +460,22 @@ def test_cli073_wallet_money_out_shapes(client, requester):
     _assert_shape(rows[0], "LedgerRow")
 
 
+def test_cli076_change_order_shape(client, requester):
+    """SC-007 变更单列表的形状。这个接口是 V95 新建的——
+    **建的时候就进闸门**，别等它漂了才补。"""
+    worker = register(client, "13800064300", "执行者")
+    verify_user(client, worker, name="执行")
+    topup(client, requester, 300000)
+    topup(client, worker, 100000)
+    task = publish_task(client, requester)
+    cid = match_and_fund(client, requester, worker, task)
+    client.post(f"/api/v1/contracts/{cid}/change-orders",
+                json={"new_amount_cents": 30000, "reason": "加了两个房间"},
+                headers=auth(requester))
+    rows = client.get(f"/api/v1/contracts/{cid}/change-orders", headers=auth(worker)).json()
+    _assert_shape(rows[0], "ChangeOrderView")
+
+
 def test_cli075_safety_shapes(client, requester):
     """GEO-023/022 求助与行程分享的响应形状。
 

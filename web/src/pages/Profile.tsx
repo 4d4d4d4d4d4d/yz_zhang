@@ -76,6 +76,48 @@ function ChangePassword() {
   );
 }
 
+/** TASK-065 我的报名。接口有、分页测过、**两端都没有界面**——
+ *  报完名，用户在产品里找不到自己报过哪些单，只能回广场一个个翻。 */
+function MyApplications() {
+  const { client } = useApp();
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof client.myApplications>>>([]);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setRows(await client.myApplications({ limit: 50 }).catch(() => []));
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+
+  if (rows.length === 0) return null;
+  return (
+    <div className="card">
+      <h3>我的报名（{rows.length}）</h3>
+      <div className="list" style={{ marginTop: 8 }}>
+        {rows.map((r) => (
+          <div className="task-item" key={r.application_id}>
+            <div>
+              <Link to={`/tasks/${r.task_id}`}>{r.task_title ?? `任务 #${r.task_id}`}</Link>
+              <p className="muted">
+                {r.task_budget_cents !== null ? fmtYuan(r.task_budget_cents) : '—'} ·
+                我的报价 {fmtYuan(r.bid_cents)} · {r.status}
+                {r.task_status ? ` · 任务 ${r.task_status}` : ''}
+              </p>
+            </div>
+            {r.status === 'pending' && (
+              <button className="ghost" disabled={busy} style={{ padding: '2px 10px' }}
+                      onClick={async () => {
+                        setBusy(true);
+                        try { await client.withdrawApplication(r.application_id); await load(); }
+                        finally { setBusy(false); }
+                      }}>撤回报名</button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DeviceSessions() {
   const { client } = useApp();
   const [sessions, setSessions] = useState<Array<{ id: number; device: string; created_at: string }>>([]);
@@ -256,6 +298,7 @@ export default function Profile() {
         </div>
       )}
       <ServicePricing />
+      <MyApplications />
       <PrivacyConsents />
       <ChangePassword />
       <DeviceSessions />

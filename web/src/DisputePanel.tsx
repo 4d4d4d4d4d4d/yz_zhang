@@ -135,6 +135,18 @@ export function DisputePanel({ client, taskId, meId }: {
             <button className="ghost" disabled={busy}
               onClick={() => run(() => client.appealDispute(dispute.id))}>申诉复核（每案一次）</button>
           )}
+          {/* LAW 证据包：当事人自己留底的唯一手段（V50 特意做了
+              「诚实标注证明力边界」），而此前**没有任何入口**。
+              哈希一并存下来——**不然这份留底自己就不可自证** */}
+          <button className="ghost" disabled={busy} onClick={async () => {
+            const pack = await client.exportEvidence(dispute.id);
+            const text = JSON.stringify({ ...pack.package, sha256: pack.sha256 }, null, 2);
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([text], { type: 'application/json;charset=utf-8' }));
+            a.download = `dispute-${dispute.id}-evidence.json`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+          }}>导出证据包</button>
         </div>
       )}
       {error && <p className="error">{error}</p>}

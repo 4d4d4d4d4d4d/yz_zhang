@@ -1,7 +1,7 @@
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, PlatformClient, TASK_STATUS_LABEL, apiErrorText, fmtYuan, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, PlatformClient, TASK_STATUS_LABEL, apiErrorText, fmtYuan, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DiscoverScreen } from './Discover';
 import { SUB_SCREEN_LABEL, SubScreenHost, type SubScreen } from './TeamCoopDev';
@@ -274,6 +274,11 @@ function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
       {actions.includes('review') && (
         <Button title="给对方好评（5星）" onPress={() => act(() => client.review(task.id, 5))} />
       )}
+      {/* SC-007 变更单。「加了两个房间，多给你 100」——改造前这件事
+          在产品里没有任何地方可以落地，双方只剩取消或纠纷两条对抗路径。 */}
+      {contract && ['signed', 'funded'].includes(contract.status) && !contract.frozen && (
+        <ChangeOrderBlock client={client} contract={contract} onChanged={reload} />
+      )}
       {/* GEO-022/023 安全区块。求助与行程分享**在手机上才有意义**——
           上门、夜间、独自面对陌生人的是 App 上的这群人。 */}
       <SafetyBlock client={client} task={task} meId={meId} />
@@ -281,6 +286,86 @@ function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
           最可能坐在被告席上的那群人，恰恰是唯一仍然开不了口的那群人。 */}
       <DisputeBlock client={client} taskId={task.id} meId={me ? me.id : null} />
     </ScrollView>
+  );
+}
+
+/** 取当前坐标。拿不到定位时返回 0,0 交给服务端去判——
+ *  **不因为定位失败就把人挡在门外**：求助与打卡都宁可被服务端拒，
+ *  也不要在客户端先卡住。 */
+async function currentPosition(): Promise<{ lat: number; lng: number }> {
+  try {
+    const Location = await import('expo-location');
+    const perm = await Location.requestForegroundPermissionsAsync();
+    if (perm.status !== 'granted') return { lat: 0, lng: 0 };
+    const pos = await Location.getCurrentPositionAsync({});
+    return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  } catch {
+    return { lat: 0, lng: 0 };
+  }
+}
+
+/** SC-007 变更单。服务端连「列出变更单」的接口都没有（本批补上）——
+ *  提案建得出来而对方拿不到 order_id，**有按钮也点不了**。 */
+export function ChangeOrderBlock({ client, contract, onChanged }: {
+  client: PlatformClient; contract: Contract; onChanged: () => Promise<void>;
+}) {
+  const [rows, setRows] = useState<ChangeOrderView[]>([]);
+  const [amount, setAmount] = useState('');
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setRows(await client.changeOrders(contract.id).catch(() => []));
+  }, [client, contract.id]);
+  useEffect(() => { void load(); }, [load]);
+
+  async function act(fn: () => Promise<unknown>) {
+    setError('');
+    try { await fn(); await load(); await onChanged(); }
+    catch (e) { setError(apiErrorText(e)); }
+  }
+
+  const pending = rows.find((r) => r.status === 'pending');
+
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={styles.cardTitle}>变更单</Text>
+      {rows.length === 0 && (
+        <Text style={styles.mutedLeft}>没有变更单。范围或价格有调整时，从这里提出。</Text>
+      )}
+      {rows.map((r) => (
+        <View key={r.id} style={styles.cardRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>改为 {fmtYuan(r.new_amount_cents)}</Text>
+            <Text style={styles.mutedLeft}>{r.status}{r.reason ? ` · ${r.reason}` : ''}</Text>
+          </View>
+          {/* 读服务端的 can_decide：提案人自己不能接受，客户端不重判 */}
+          {r.can_decide && (
+            <View style={{ gap: 6 }}>
+              <Button title="接受" onPress={() => act(() => client.acceptChange(contract.id, r.id))} />
+              <Button title="拒绝" color="#dc2626"
+                      onPress={() => act(() => client.rejectChangeOrder(contract.id, r.id))} />
+            </View>
+          )}
+        </View>
+      ))}
+      {!pending && (
+        <>
+          <TextInput style={styles.input} keyboardType="numeric" value={amount}
+                     onChangeText={setAmount} placeholder="新金额（元）" />
+          <TextInput style={styles.input} value={reason} onChangeText={setReason}
+                     placeholder="事由（对方会看到）" />
+          <Button title="提出变更" onPress={() => act(async () => {
+            await client.proposeChange(contract.id, Math.round(parseFloat(amount || '0') * 100), reason);
+            setAmount(''); setReason('');
+          })} />
+        </>
+      )}
+      <Text style={styles.mutedLeft}>
+        当前金额 {fmtYuan(contract.amount_cents)}；对方接受后差额自动补托管或退回。
+      </Text>
+      {!!error && <Text style={styles.error}>{error}</Text>}
+    </View>
   );
 }
 
@@ -298,6 +383,7 @@ export function SafetyBlock({ client, task, meId }: {
   const [guidance, setGuidance] = useState('');
   const [error, setError] = useState('');
   const [shared, setShared] = useState<boolean | null>(null);
+  const [checkin, setCheckin] = useState('');
 
   const live = ['in_progress', 'pending_acceptance'].includes(task.status);
   const isParty = meId === task.creator_id || meId === task.executor_id;
@@ -311,7 +397,8 @@ export function SafetyBlock({ client, task, meId }: {
         try {
           // 真机上这里换成 expo-location 的当前坐标；拿不到定位**也要照发**——
           // 求助不能因为定位失败而发不出去
-          const r = await client.sos(task.id, 0, 0);
+          const pos = await currentPosition();
+          const r = await client.sos(task.id, pos.lat, pos.lng);
           // 服务端给的指引原样显示：这一刻唯一对他有用的就是这句话
           setGuidance(r.guidance);
         } catch (e) {
@@ -332,6 +419,24 @@ export function SafetyBlock({ client, task, meId }: {
                 }} />
       )}
       {!!error && <Text style={styles.error}>{error}</Text>}
+      {/* GEO-021 到场打卡。服务端带距离校验（探针实测 4205 米被拒），
+          而此前**没有任何端能打卡**——到场证据链从来没有产生过一条。
+          只做 App：浏览器里的定位在上门场景里没有意义。 */}
+      {meId === task.executor_id && (
+        <Button title="到场打卡" onPress={async () => {
+          setError(''); setCheckin('');
+          try {
+            const pos = await currentPosition();
+            const r = await client.checkin(task.id, pos.lat, pos.lng);
+            setCheckin(`打卡成功，距任务地点 ${r.distance_m} 米`);
+          } catch (e) {
+            // too_far 时服务端会把**实际距离**写在消息里，原样显示——
+            // 只说「超出范围」的话，他不知道是差 50 米还是差 5 公里
+            setError(apiErrorText(e));
+          }
+        }} />
+      )}
+      {!!checkin && <Text style={styles.mutedLeft}>{checkin}</Text>}
       <Text style={styles.mutedLeft}>
         求助会立即通知任务对方与平台并留痕；遇到危险请先拨打 110。
       </Text>
@@ -738,7 +843,7 @@ function MeScreen({ client, me, refresh, onLogout }: {
       {/* APP-069 团队 / 合作体 / 开发者。三条线此前**只有网页看得见**，
           而 V92 刚给团队审批加了通知——通知把人叫来、他点进去无路可走，
           比没有通知更糟（APP-066 同一条教训）。 */}
-      {(['messages', 'invitations', 'teams', 'ventures', 'developer'] as SubScreen[]).map((key) => (
+      {(['messages', 'invitations', 'applications', 'teams', 'ventures', 'developer'] as SubScreen[]).map((key) => (
         <TouchableOpacity key={key} onPress={() => setSub(key)}>
           <Text style={styles.linkRow}>{SUB_SCREEN_LABEL[key]} ›</Text>
         </TouchableOpacity>

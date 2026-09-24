@@ -188,6 +188,22 @@ export interface LedgerRow {
   created_at: string;
 }
 
+/** SC-007 变更单。任务范围一变（「加了两个房间」），这是产品里唯一
+ *  能把它落地的路——否则双方只剩取消或纠纷两条对抗路径。
+ *
+ *  `can_decide` 与服务端 `accept_change` 的准入同源（提案人自己不能接受）：
+ *  **客户端不重写这个判断**（UI-075 / TEAM-021 同一条）。 */
+export interface ChangeOrderView {
+  id: number;
+  contract_id: number;
+  proposed_by: number;
+  new_amount_cents: number;
+  reason: string;
+  status: string;
+  created_at: string;
+  can_decide: boolean;
+}
+
 /** GEO-023 一键求助的回执。
  *
  *  `guidance` 是这一刻**唯一对用户有用的那句话**（「如遇危险请立即拨打 110」），

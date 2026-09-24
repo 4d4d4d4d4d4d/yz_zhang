@@ -1,4 +1,4 @@
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, fmtYuan, formatDateTime, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, fmtYuan, formatDateTime, type ChangeOrderView, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -241,6 +241,22 @@ export default function TaskDetail() {
               URL.revokeObjectURL(a.href);
             }}>导出合约凭证</button>
           </div>
+          {/* SC-007 变更单。任务范围一变（「加了两个房间，多给你 100」），
+              改造前这件事在产品里**没有任何地方可以落地**——双方只剩
+              取消（要按违约规则算补偿）或发起纠纷两条对抗路径。 */}
+          {(isCreator || isExecutor) && ['signed', 'funded'].includes(contract.status)
+            && !contract.frozen && (
+            <ChangeOrders contractId={contract.id} amountCents={contract.amount_cents}
+                          onChanged={async () => setContract(await client.getContract(contract.id))} />
+          )}
+          {/* SC-004 分期定义。窗口**只在双签前**：签署后服务端会回
+              `milestones_locked`（改价要走变更单）。此前没有任何端能定义分期，
+              于是生产环境里每一份合约都只有一期——下面那张表的渲染条件
+              `length > 1` 永远不成立，是一段跑不到的代码。 */}
+          {isCreator && contract.status === 'pending_signatures' && (
+            <DefineMilestones contractId={contract.id} amountCents={contract.amount_cents}
+                              onDefined={async () => setContract(await client.getContract(contract.id))} />
+          )}
           {/* SC-004 里程碑分期 */}
           {contract.milestones && contract.milestones.length > 1 && (
             <table style={{ marginTop: 10 }}>
@@ -368,6 +384,124 @@ function SafetyPanel({ taskId, isExecutor }: { taskId: number; isExecutor: boole
       {guidance && <p className="error" data-testid="sos-guidance">{guidance}</p>}
       {error && <p className="error">{error}</p>}
       <p className="muted">求助会立即通知任务对方与平台并留痕；遇到危险请先拨打 110。</p>
+    </div>
+  );
+}
+
+
+/** SC-007 变更单：提案 / 接受 / 拒绝。
+ *
+ * 服务端做得很完整（改价、差额多退少补、版本 +1、任务预算同步，
+ * 还有多轮随机改价的资金守恒测试），而整条路对用户不存在——
+ * 而且缺的**不只是按钮**：连「列出变更单」的接口都没有，
+ * 对方拿不到 `order_id`，有按钮也点不了。三层一起补才通。
+ */
+function ChangeOrders({ contractId, amountCents, onChanged }: {
+  contractId: number; amountCents: number; onChanged: () => Promise<void>;
+}) {
+  const { client } = useApp();
+  const [rows, setRows] = useState<ChangeOrderView[]>([]);
+  const [amount, setAmount] = useState('');
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setRows(await client.changeOrders(contractId).catch(() => []));
+  }, [client, contractId]);
+  useEffect(() => { void load(); }, [load]);
+
+  async function act(fn: () => Promise<unknown>) {
+    setError('');
+    try { await fn(); await load(); await onChanged(); }
+    catch (err) { setError(apiErrorText(err)); }
+  }
+
+  const pending = rows.find((r) => r.status === 'pending');
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <h4>变更单</h4>
+      {rows.length === 0 && <p className="muted">没有变更单。范围或价格有调整时，从这里提出。</p>}
+      {rows.map((r) => (
+        <p key={r.id} className="muted">
+          #{r.id} 改为 <strong>{fmtYuan(r.new_amount_cents)}</strong> · {r.status}
+          {r.reason && ` · ${r.reason}`}
+          {/* 读服务端的 can_decide：提案人自己不能接受，客户端不重判 */}
+          {r.can_decide && (
+            <span className="row" style={{ display: 'inline-flex', marginLeft: 8 }}>
+              <button style={{ padding: '2px 10px' }}
+                      onClick={() => act(() => client.acceptChange(contractId, r.id))}>接受</button>
+              <button className="danger" style={{ padding: '2px 10px' }}
+                      onClick={() => act(() => client.rejectChangeOrder(contractId, r.id))}>拒绝</button>
+            </span>
+          )}
+        </p>
+      ))}
+      {!pending && (
+        <div className="row">
+          <input style={{ width: 130 }} type="number" min={0.01} step={0.01} placeholder="新金额（元）"
+                 value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <input className="grow" placeholder="事由（对方会看到）" value={reason}
+                 onChange={(e) => setReason(e.target.value)} />
+          <button disabled={!amount} onClick={() => act(async () => {
+            await client.proposeChange(contractId, Math.round(parseFloat(amount) * 100), reason);
+            setAmount(''); setReason('');
+          })}>提出变更</button>
+        </div>
+      )}
+      <p className="muted">当前金额 {fmtYuan(amountCents)}；对方接受后差额自动补托管或退回。</p>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
+/** SC-004 双签前定义分期。合计必须等于合约金额——**服务端会拒**，
+ *  这里把「还差多少」实时算给用户看，但**判定仍以服务端为准**。 */
+function DefineMilestones({ contractId, amountCents, onDefined }: {
+  contractId: number; amountCents: number; onDefined: () => Promise<void>;
+}) {
+  const { client } = useApp();
+  const [items, setItems] = useState<Array<{ title: string; amount: string }>>([
+    { title: '第一期', amount: '' }, { title: '第二期', amount: '' },
+  ]);
+  const [error, setError] = useState('');
+
+  const cents = items.map((i) => Math.round(parseFloat(i.amount || '0') * 100));
+  const total = cents.reduce((a, b) => a + b, 0);
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <h4>分期（只能在双签前设置）</h4>
+      {items.map((it, idx) => (
+        <div className="row" key={idx}>
+          <input className="grow" value={it.title} placeholder="这一期交付什么"
+                 onChange={(e) => setItems(items.map((x, i) => i === idx ? { ...x, title: e.target.value } : x))} />
+          <input style={{ width: 120 }} type="number" min={0.01} step={0.01} placeholder="金额（元）"
+                 value={it.amount}
+                 onChange={(e) => setItems(items.map((x, i) => i === idx ? { ...x, amount: e.target.value } : x))} />
+        </div>
+      ))}
+      <div className="row" style={{ marginTop: 6 }}>
+        <button className="ghost" onClick={() => setItems([...items, { title: `第${items.length + 1}期`, amount: '' }])}>
+          加一期
+        </button>
+        <button onClick={async () => {
+          setError('');
+          try {
+            await client.defineMilestones(contractId, items.map((it, i) => ({
+              title: it.title || `第${i + 1}期`, amount_cents: cents[i],
+            })));
+            await onDefined();
+          } catch (err) {
+            setError(apiErrorText(err));   // amount_mismatch 的理由原样显示
+          }
+        }}>保存分期</button>
+        <span className="muted" data-testid="milestone-sum">
+          合计 {fmtYuan(total)} / 合约 {fmtYuan(amountCents)}
+          {total !== amountCents && `（还差 ${fmtYuan(amountCents - total)}）`}
+        </span>
+      </div>
+      {error && <p className="error">{error}</p>}
     </div>
   );
 }

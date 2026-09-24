@@ -179,6 +179,47 @@ export function InvitationsScreen({ client }: { client: PlatformClient }) {
   );
 }
 
+/** TASK-065 我的报名。接口有、分页测过、**两端都没有界面**——
+ *  报完名，用户在产品里找不到自己报过哪些单，只能回广场一个个翻。 */
+export function ApplicationsScreen({ client }: { client: PlatformClient }) {
+  type Row = Awaited<ReturnType<PlatformClient['myApplications']>>[number];
+  const [rows, setRows] = useState<Row[]>([]);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setRows(await client.myApplications({ limit: 50 }).catch(() => []));
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <ScrollView contentContainerStyle={{ gap: 10, paddingBottom: 24 }}>
+      <Text style={s.title}>我的报名</Text>
+      {!!error && <Text style={s.error}>{error}</Text>}
+      {rows.length === 0 && <Text style={s.muted}>你还没有报名任何任务。</Text>}
+      {rows.map((r) => (
+        <View key={r.application_id} style={s.card}>
+          <Text style={s.cardTitle}>{r.task_title ?? `任务 #${r.task_id}`}</Text>
+          <Text style={s.muted}>
+            我的报价 {fmtYuan(r.bid_cents)} · {r.status}
+            {r.task_status ? ` · 任务 ${r.task_status}` : ''}
+          </Text>
+          {r.status === 'pending' && (
+            <Button title="撤回报名" color="#6b7280" onPress={async () => {
+              setError('');
+              try {
+                await client.withdrawApplication(r.application_id);
+                await load();
+              } catch (e) {
+                setError(apiErrorText(e));
+              }
+            }} />
+          )}
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
 const s = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '700', color: '#2f6fed' },
   cardTitle: { fontSize: 16, fontWeight: '600' },

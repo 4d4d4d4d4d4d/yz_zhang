@@ -460,7 +460,39 @@ def propose_change(db: Session, contract: Contract, user_id: int, new_amount: in
     )
     db.add(order)
     db.flush()
+    _notify_change(db, contract, order, proposed=True)
     return order
+
+
+def _notify_change(db: Session, contract: Contract, order: ChangeOrder, *, proposed: bool) -> None:
+    """SC-007 变更单要告诉对方。
+
+    改造前这条路三层都缺：没有入口、**没有列表接口**（对方拿不到 order_id）、
+    也没有通知。三层是叠在一起的——只补按钮不补列表，按钮点不了；
+    补了列表不补通知，没人知道该去看。
+
+    这两条**不**进 `MUST_REACH`：变更单不会因为没人看就自动生效，
+    金额也不会自己变；对方随时可以在合约页看到它。
+    V90 那张表的标准是拿来做减法的（TEAM-062 同一条判断）。
+    """
+    from app.modules.notification.service import notify
+    from app.modules.task.models import Task
+
+    task = db.get(Task, contract.task_id)
+    title = task.title if task else f"合约 #{contract.id}"
+    if proposed:
+        other = (contract.executor_id if order.proposed_by == contract.requester_id
+                 else contract.requester_id)
+        if other:
+            notify(db, other, "contract", "收到合约变更单",
+                   f"任务《{title}》的对方提出把金额改为 "
+                   f"¥{order.new_amount_cents / 100:.2f}"
+                   f"（事由：{order.reason or '未填写'}），请在合约里确认或拒绝。")
+        return
+    # 裁决结果回给提案人——他是等着这个答复才能决定下一步的人
+    done = "已被接受，合约金额与托管已同步调整" if order.status == "accepted" else "被拒绝"
+    notify(db, order.proposed_by, "contract", "变更单处理结果",
+           f"任务《{title}》的变更单（改为 ¥{order.new_amount_cents / 100:.2f}）{done}。")
 
 
 def accept_change(db: Session, contract: Contract, user_id: int, order: ChangeOrder) -> Contract:
@@ -507,6 +539,7 @@ def accept_change(db: Session, contract: Contract, user_id: int, order: ChangeOr
     if task:
         task.budget_cents = order.new_amount_cents
         db.add(task)
+    _notify_change(db, contract, order, proposed=False)
     return contract
 
 
