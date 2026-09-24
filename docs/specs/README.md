@@ -1,0 +1,111 @@
+# 任务协作平台 · 功能拆分 Spec 总目录
+
+> 状态：草案 v0.1（仅拆分功能点，暂不进入构建阶段）
+> 更新日期：2026-07-02
+
+## 产品一句话定位
+
+一个「AI 驱动的任务协作与本地服务平台」：用户可以发布任务（大到项目、小到一笔交易/一次打扫卫生），
+平台通过 AI 将大任务分解为子任务、智能推荐执行人选、以智能合约保障履约与结算，
+并通过内容（视频/博客/朋友圈）、社交（聊天/社群/圈层）沉淀信任关系，
+用 AI 知识库积累闭环任务经验，最终形成「发布 → 分解 → 匹配 → 执行 → 结算 → 经验沉淀」的正向飞轮。
+
+## 端与系统划分
+
+| 端/系统 | 说明 | Spec |
+|---|---|---|
+| Web 前端 | 桌面浏览器端，全功能 | [13-clients.md](./13-clients.md) |
+| App（iOS/Android） | 移动端，主打 LBS 任务 + 社交 + 内容消费 | [13-clients.md](./13-clients.md) |
+| 后端服务 | 微服务/模块化单体，见架构篇 | [14-backend-architecture.md](./14-backend-architecture.md) |
+| 管理后台 | 运营、审核、风控、客服工作台 | [12-platform-foundation.md](./12-platform-foundation.md) |
+
+## 模块 Spec 索引
+
+| 编号 | 模块 | 文档 | 优先级 |
+|---|---|---|---|
+| 01 | 产品总览：角色、术语、核心流程 | [01-overview.md](./01-overview.md) | P0 |
+| 02 | 账户、认证与信用体系 | [02-user-account.md](./02-user-account.md) | P0 |
+| 03 | 任务核心：发布 / 推荐人选 / 执行 / 完成 | [03-task-core.md](./03-task-core.md) | P0 |
+| 04 | AI 任务分解与编排 | [04-ai-task-decomposition.md](./04-ai-task-decomposition.md) | P0 |
+| 05 | 智能合约与资金结算 | [05-smart-contract.md](./05-smart-contract.md) | P0 |
+| 06 | AI 知识库（闭环任务经验积累） | [06-ai-knowledge-base.md](./06-ai-knowledge-base.md) | P1 |
+| 07 | 地域能力（LBS 与本地小任务） | [07-geo-lbs.md](./07-geo-lbs.md) | P0 |
+| 08 | 内容：知识分享 / 视频 / 博客 / 朋友圈 | [08-content.md](./08-content.md) | P1 |
+| 09 | 社交：聊天 / 社群 / 兴趣与能力圈层 | [09-social.md](./09-social.md) | P1 |
+| 10 | 智能客服 | [10-ai-customer-service.md](./10-ai-customer-service.md) | P1 |
+| 11 | 法律与纠纷解决 | [11-legal-dispute.md](./11-legal-dispute.md) | P1 |
+| 12 | 平台基础：支付钱包 / 通知 / 搜索 / 审核风控 / 管理后台 | [12-platform-foundation.md](./12-platform-foundation.md) | P0 |
+| 13 | 客户端功能点（Web / App） | [13-clients.md](./13-clients.md) | P0 |
+| 14 | 后端架构与数据模型概要 | [14-backend-architecture.md](./14-backend-architecture.md) | P0 |
+| 15 | 阶段规划（MVP → V1 → V2） | [15-roadmap.md](./15-roadmap.md) | — |
+| 16 | Spec → 实现 → 测试 追溯矩阵 | [16-traceability.md](./16-traceability.md) | — |
+| 17 | 编排循环 Agent Harness（发任务即调工具） | [17-orchestrator.md](./17-orchestrator.md) | P1 |
+| 18 | 并发与生产化硬化 | [18-concurrency.md](./18-concurrency.md) | P0 |
+| 19 | 外部供应商接入抽象层 | [19-vendor-integration.md](./19-vendor-integration.md) | P0 |
+| 20 | 部署、可观测与运维 | [20-deployment.md](./20-deployment.md) | P0 |
+| 21 | 移动端与 PWA | [21-mobile-pwa.md](./21-mobile-pwa.md) | P0 |
+| 22 | 增长、运营与市场 | [22-growth-ops.md](./22-growth-ops.md) | P0 |
+| 23 | 分布式部署与抗攻击 | [23-network-security.md](./23-network-security.md) | P0 |
+| 24 | AI 编排增强：模型驱动的验收与迭代 | [24-ai-orchestration.md](./24-ai-orchestration.md) | P0 |
+| 25 | 资金合规与分账（含**上线红线**） | [25-financial-compliance.md](./25-financial-compliance.md) | P0 |
+| 26 | 智能合约的法律效力与纠纷解决 | [26-legal-enforceability.md](./26-legal-enforceability.md) | P0 |
+| 27 | 沙箱桩实现（让预留接口跑得通） | [27-sandbox-stubs.md](./27-sandbox-stubs.md) | P0 |
+| 28 | 事件投递：失败隔离、可重试、跨副本 | [28-event-delivery.md](./28-event-delivery.md) | P0 |
+| 29 | 个税代扣代缴与发票 | [29-tax-withholding.md](./29-tax-withholding.md) | P0 |
+| 30 | 反洗钱与可疑交易 | [30-aml.md](./30-aml.md) | P0 |
+| 31 | 安全事件落库、跨副本封禁与人机验证 | [31-security-events.md](./31-security-events.md) | P0 |
+| 32 | 定时任务编排的完整性 | [32-job-orchestration.md](./32-job-orchestration.md) | P0 |
+| 33 | 处置动作的单一实现 | [33-moderation-actions.md](./33-moderation-actions.md) | P0 |
+| 34 | 人机验证的端到端闭环 | [34-captcha-e2e.md](./34-captcha-e2e.md) | P0 |
+| 35 | 账号注销的资金与个人信息闭环 | [35-account-deletion.md](./35-account-deletion.md) | P0 |
+| 36 | 纠纷的当事人闭环 | [36-dispute-client-loop.md](./36-dispute-client-loop.md) | P0 |
+| 37 | 上传文件的 URL 是能力，不是指纹 | [37-upload-capability-urls.md](./37-upload-capability-urls.md) | P0 |
+| 38 | 被诉方真的收得到、也真的开得了口 | [38-dispute-respondent-reach.md](./38-dispute-respondent-reach.md) | P0 |
+| 39 | 上传图片的内容审核与处置 | [39-upload-moderation.md](./39-upload-moderation.md) | P0 |
+| 40 | 那些从来没验证过的东西（演练/告警/压测/依赖） | [40-ops-drills.md](./40-ops-drills.md) | P0 |
+| 41 | 一键部署与全链路验收（Postgres 生产路径） | [41-production-path.md](./41-production-path.md) | P0 |
+| 42 | 兑现两句写了很久的注释：推送通道与向量检索 | [42-push-and-semantic.md](./42-push-and-semantic.md) | P1 |
+| 43 | 好友、群聊与第三方登录 | [43-social-and-oauth.md](./43-social-and-oauth.md) | P1 |
+| 44 | 博客编辑器与视频沉浸流 | [44-blog-and-video.md](./44-blog-and-video.md) | P1 |
+| 45 | App 发现流的视差滚动 | [45-app-parallax.md](./45-app-parallax.md) | P1 |
+| 46 | App 侧视频沉浸流 | [46-app-video-feed.md](./46-app-video-feed.md) | P1 |
+| 47 | 共享类型与文案的漂移，和一个从没装上过的 App | [47-shared-contract-drift.md](./47-shared-contract-drift.md) | P0 |
+| 48 | 平台自有 Agent 的执行层 | [48-agent-execution.md](./48-agent-execution.md) | P0 |
+| 49 | 人类核验闭环与争议升级阶梯 | [49-verification-and-escalation.md](./49-verification-and-escalation.md) | P0 |
+| 50 | 早期合作体：贡献即份额 | [50-early-cooperation.md](./50-early-cooperation.md) | P0 |
+| 51 | 受限类目资质：从「自己填」到「核过才算」 | [51-certification-verification.md](./51-certification-verification.md) | P0 |
+| 52 | 合同缺的两条，和一档能做的浮动对价 | [52-ip-confidentiality-outcome-pricing.md](./52-ip-confidentiality-outcome-pricing.md) | P0 |
+| 53 | 团队账户：预算、权限与审批 | [53-team-accounts.md](./53-team-accounts.md) | P1 |
+| 54 | 开放 API 与 Webhook | [54-open-api-webhooks.md](./54-open-api-webhooks.md) | P2 |
+| 55 | 国际化：先把机制做对 | [55-i18n.md](./55-i18n.md) | P2 |
+| 56 | Agent 交付闭环与产出审核 | [56-agent-delivery-closure.md](./56-agent-delivery-closure.md) | P0 |
+| 57 | 端上接得到：客户端契约覆盖闸门 | [57-client-reachability.md](./57-client-reachability.md) | P0 |
+| 58 | 时间是一条契约（时区） | [58-timezone.md](./58-timezone.md) | P0 |
+| 59 | 有后果的界面：合作体 / 团队 / 开发者 | [59-coop-team-developer-ui.md](./59-coop-team-developer-ui.md) | P0 |
+| 60 | 形状也要对上（请求体与响应体闸门） | [60-shape-alignment.md](./60-shape-alignment.md) | P0 |
+| 61 | 让 AI 真的参与，并且越做越好 | [61-orchestrator-agents-and-lessons.md](./61-orchestrator-agents-and-lessons.md) | P0 |
+| 62 | 额度必须是累计的（团队月度预算池） | [62-team-monthly-budget.md](./62-team-monthly-budget.md) | P0 |
+| 63 | App：发不出任务的按钮与四条必查项 | [63-app-store-readiness.md](./63-app-store-readiness.md) | P0 |
+| 64 | 声明了却不给，给了却不声明 | [64-declared-but-not-returned.md](./64-declared-but-not-returned.md) | P0 |
+| 65 | 错过就无法挽回的通知，不能被一个开关关掉 | [65-deadline-notices.md](./65-deadline-notices.md) | P0 |
+| 66 | 钱能进不能出：所有端都点不动的提现按钮 | [66-money-can-get-in-but-not-out.md](./66-money-can-get-in-but-not-out.md) | P0 |
+| 67 | 没有人被告知：审批两端沉默与 App 三条线 | [67-nobody-was-told.md](./67-nobody-was-told.md) | P0 |
+| 68 | 建好了，可是没有一个人能按下去（求助/改密码/会话） | [68-nobody-can-press-it.md](./68-nobody-can-press-it.md) | P0 |
+| 69 | 扫描闸门证明不了的那一半（App 单元测试） | [69-app-unit-tests.md](./69-app-unit-tests.md) | P0 |
+| 70 | 算得很清楚的钱，没有人能动（变更单/分期/打卡） | [70-money-nobody-can-move.md](./70-money-nobody-can-move.md) | P0 |
+
+## 功能点编号与优先级约定
+
+- 功能点编号：`<模块前缀>-<三位序号>`，如 `TASK-001`、`AI-DEC-003`。
+- 优先级：
+  - **P0**：MVP 必须，缺失则核心闭环跑不通。
+  - **P1**：V1 重要，显著提升体验/留存，但闭环可先用人工/简化方案兜底。
+  - **P2**：V2 及以后，增值/规模化能力。
+- 每个功能点包含：描述、优先级、关键验收点（AC）、依赖。
+
+## 全局非功能性要求（摘要）
+
+- 多端一致：Web 与 App 共享同一套后端 API 与账号体系。
+- 数据合规：实名信息、位置信息、支付信息加密存储；遵循当地隐私法规（如 PIPL/GDPR）。
+- 可用性：核心链路（发布/接单/支付）目标 99.9%。
+- 国际化：文案 i18n 预留，首期中文。
