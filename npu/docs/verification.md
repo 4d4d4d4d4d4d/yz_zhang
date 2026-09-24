@@ -13,7 +13,7 @@ every entry says why.
 | unit | `tb_ecc` | every single-bit flip in a 352-bit line is corrected with data preserved; every in-lane double flip is flagged; a cross-lane double is two independent corrections |
 | unit | `tb_fp` | 14000 assertions against IEEE doubles: exact bf16 multiply, RNE addition, a 256-term accumulation, reciprocal within 0.35%, FTZ, canonical NaN, both conversions |
 | unit | `tb_cube` | CUBE against a behavioural model through the real crossbar: both numeric modes, tail tiles, ReLU, a K=256 accumulator hand-off across two descriptors, address-overflow reporting, zero-length ops |
-| integration | `tb_ctrl` | ECC inject and reporting, read-to-acquire semaphores with owner enforcement, queue priority, all four error classes, queue barrier, Q-Channel deny/accept/gate/resume |
+| integration | `tb_ctrl` | ECC inject and reporting, read-to-acquire semaphores with owner enforcement, queue priority, all four error classes, queue barrier, Q-Channel deny/accept/gate/resume, the interrupt line and mask, and a hang-and-recover cycle driven by a memory that stops answering |
 | system | `tb_npu_prog` | generated programs run on the real top level and are compared beat for beat against the bit-exact model |
 
 ## 2. The cross-check that matters
@@ -67,13 +67,39 @@ and all but the last two were invisible to directed tests.
 6. **NaN to fixed-point conversion disagreed** between model and RTL, which
    forced the semantics to be written down rather than left implicit.
 
+Adding per-pipe soft reset found two more, both in the same place and both
+only reachable once a unit could be reset out from under the bus:
+
+7. **AXI IDs were re-allocated while the bus still owed responses.** A soft
+   reset abandons outstanding transactions; the interconnect has not
+   forgotten them. Reusing the ID immediately made a late beat from the
+   abandoned burst land at the new transfer's address and count against its
+   length. The ownership tracker now lives outside the unit's reset domain.
+8. **A discarded beat returned an outstanding credit it never took.** The
+   credit counter underflowed to its maximum, read as "no room" forever,
+   and hung the very pipe the reset was supposed to recover — a recovery
+   mechanism that only worked once.
+
+Neither is exotic. Both are what happens when reset state and bus state
+disagree about what is in flight, and neither is visible until you build
+something that can actually hang a unit on purpose.
+
 Two more were testbench defects worth recording because they look exactly
 like design bugs: a driver that cleared `push_valid` in the same delta as
 the rising edge silently dropped one descriptor per occurrence, and the
 first version of the global-barrier driver deadlocked by keeping the queues
 fed across a fence.
 
-## 5. Measured results
+## 5. Fault injection
+
+`axi_mem` takes a `stall_r` input: while it is high the model accepts reads
+and never answers them. A memory that goes away is exactly the failure a
+unit-level soft reset exists for, and it is the only way to hang a pipe
+without inventing a debug hook inside the design. `tb_ctrl` uses it to
+drive a full cycle — hang, watchdog, snapshot naming the pipe, soft reset,
+and a fresh transfer on the recovered pipe that has to complete correctly.
+
+## 6. Measured results
 
 GEMM, `M=32 N=64 K=128`, memory latency 20 cycles:
 
@@ -93,7 +119,12 @@ Encoder layer, `S=32 d=32 d_ff=64`: 189 descriptors, 10 live events, 7717
 cycles, no pipe above 39% busy, issue window full 93% of the time. At this
 size the limit is the dependency chain, not any one unit.
 
-## 6. What is not verified
+Crossbar bank contention, now that it is counted: 0% of cycles on a blocked
+GEMM, 12% on an encoder layer before VEC learned to alias a two-source op
+whose B operand is the same stream as A, 9% after. The remainder is
+cross-pipe and belongs to the compiler's buffer assignment.
+
+## 7. What is not verified
 
 Stated plainly, because a coverage claim is worth less than a list of gaps.
 
@@ -102,9 +133,6 @@ Stated plainly, because a coverage claim is worth less than a list of gaps.
 - **No coverage metric.** There is no functional or code coverage
   collection, so "every VEC opcode is swept" means exactly that and not
   that every path inside each one is taken.
-- **Crossbar arbitration conflicts are not observable.** There is no
-  counter for how often two requesters contend for the same bank, so the
-  cost of a bad buffer assignment can only be inferred from cycle counts.
 - **AXI compliance is checked only against the model's own assumptions.**
   `axi_mem` asserts on burst type and size and nothing else; there is no
   protocol-compliance IP in this repo.

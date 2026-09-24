@@ -96,6 +96,12 @@ module npu_mte_in
 (
   input  logic                 clk,
   input  logic                 rst_n,
+  // Global reset, NOT cleared by a soft reset of this unit. The bus does
+  // not forget: a soft reset abandons transactions the interconnect still
+  // owes responses for, and if an ID were reused immediately those late R
+  // beats would be counted against the new transfer. The ownership tracker
+  // therefore has to outlive the unit's own reset.
+  input  logic                 grst_n,
 
   input  logic                 iss_valid,
   input  op_t                  iss_op,
@@ -123,7 +129,8 @@ module npu_mte_in
   output logic                 cpl_valid,
   output cpl_t                 cpl,
   output logic                 busy,
-  output logic                 outstanding   // AR issued but R not complete
+  output logic                 outstanding,  // this transfer is not finished
+  output logic                 bus_busy      // the bus still owes responses
 );
   // Sized so the landing FIFO is never the binding constraint: what limits
   // how much latency can be hidden should be burst length times outstanding
@@ -160,21 +167,36 @@ module npu_mte_in
     .v(agu_v), .ext_beat(agu_ext), .buf_addr(agu_buf), .len(agu_len));
 
   // ---- per-ID burst bookkeeping ----
-  logic [NID-1:0]            id_busy;
+  logic [NID-1:0]            id_busy;     // this transfer owns it
+  logic [NID-1:0]            id_out;      // the bus still owes a response
   logic [NID-1:0][GAW-1:0]   id_base;
   logic [NID-1:0][8:0]       id_cnt;
   logic [AXI_IDW-1:0]        alloc_id;
   logic                      id_free;
 
+  // Allocation looks at id_out, not id_busy: an ID whose response is still
+  // owed cannot be handed out again even though this transfer has forgotten
+  // about it.
   always_comb begin
     id_free  = 1'b0;
     alloc_id = '0;
     for (int i = NID - 1; i >= 0; i--)
-      if (!id_busy[i]) begin
+      if (!id_out[i]) begin
         id_free  = 1'b1;
         alloc_id = AXI_IDW'(i);
       end
   end
+
+  // Survives a soft reset of this unit.
+  always_ff @(posedge clk or negedge grst_n) begin
+    if (!grst_n) begin
+      id_out <= '0;
+    end else begin
+      if (arvalid && arready)          id_out[alloc_id] <= 1'b1;
+      if (rvalid && rready && rlast)   id_out[rid]      <= 1'b0;
+    end
+  end
+  assign bus_busy = |id_out;
 
   // ---- landing FIFO: {dest, data} ----
   logic            fpush, fpop, fempty, ffull;
@@ -199,8 +221,19 @@ module npu_mte_in
   assign arid    = alloc_id;
   assign agu_next = arvalid && arready;
 
+  // A beat whose ID is no longer allocated belongs to a burst this engine
+  // has abandoned -- after a soft reset the bus still owes responses for
+  // transactions the engine has forgotten. Accept them so the bus does not
+  // stall, and drop them so they do not land in a buffer.
   assign rready = !ffull;
-  assign fpush  = rvalid && rready;
+  assign fpush  = rvalid && rready && id_busy[rid];
+  // Only a beat this transfer owns consumed a reserved slot, so only that
+  // beat gives one back. A stale beat from an abandoned burst reserved
+  // nothing, and letting it decrement the credit underflows the counter --
+  // which reads as "no room" forever and hangs the very pipe the soft
+  // reset was supposed to recover.
+  logic r_take;
+  assign r_take = fpush;
   assign fwd    = {GAW'(id_base[rid] + GAW'(id_cnt[rid])), rdata};
 
   // ---- buffer writer ----
@@ -270,19 +303,29 @@ module npu_mte_in
         default: st <= S_IDLE;
       endcase
 
+`ifdef NPU_TRACE
+      if (st == S_RUN && !arvalid && agu_v)
+        $display("[mtei] t=%0t stalled: id_free=%0d room=%0d id_out=%b fcnt=%0d reserved=%0d",
+                 $time, id_free, room, id_out, fcnt, reserved);
+      if (arvalid && arready)
+        $display("[mtei] t=%0t AR id=%0d len=%0d", $time, alloc_id, agu_len);
+      if (rvalid && rready)
+        $display("[mtei] t=%0t R id=%0d last=%0d landed=%0d", $time, rid, rlast,
+                 id_busy[rid]);
+`endif
       // allocate on AR, release on RLAST
       if (arvalid && arready) begin
         id_busy[alloc_id] <= 1'b1;
         id_base[alloc_id] <= agu_buf;
         id_cnt[alloc_id]  <= '0;
       end
-      if (rvalid && rready) begin
+      if (r_take) begin
         id_cnt[rid] <= id_cnt[rid] + 9'd1;
         if (rlast) id_busy[rid] <= 1'b0;
       end
 
       // outstanding credit: reserve on AR, release as beats land
-      case ({arvalid && arready, rvalid && rready})
+      case ({arvalid && arready, r_take})
         2'b10: reserved <= reserved + FCW'(agu_len);
         2'b01: reserved <= reserved - 1'b1;
         2'b11: reserved <= reserved + FCW'(agu_len) - 1'b1;
@@ -300,6 +343,7 @@ module npu_mte_out
 (
   input  logic                 clk,
   input  logic                 rst_n,
+  input  logic                 grst_n,      // see npu_mte_in
 
   input  logic                 iss_valid,
   input  op_t                  iss_op,
@@ -329,7 +373,8 @@ module npu_mte_out
   output logic                 cpl_valid,
   output cpl_t                 cpl,
   output logic                 busy,
-  output logic                 outstanding
+  output logic                 outstanding,
+  output logic                 bus_busy
 );
   localparam int FD  = NID * MAX_BURST;
   localparam int FCW = $clog2(FD + 1);
@@ -431,6 +476,20 @@ module npu_mte_out
   assign wlast  = (w_left == 9'd1);
   assign fpop   = wvalid && wready;
   assign lpop   = wvalid && wready && wlast;
+
+  // Write responses outstanding on the bus, tracked outside this unit's
+  // soft reset for the same reason as the read IDs.
+  logic [7:0] b_bus;
+  always_ff @(posedge clk or negedge grst_n) begin
+    if (!grst_n) b_bus <= '0;
+    else
+      case ({awvalid && awready, bvalid && bready})
+        2'b10:   b_bus <= b_bus + 8'd1;
+        2'b01:   b_bus <= b_bus - 8'd1;
+        default: ;
+      endcase
+  end
+  assign bus_busy = (b_bus != 8'd0);
 
   logic [7:0] b_out;
   assign bready = 1'b1;

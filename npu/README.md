@@ -105,7 +105,17 @@ MAC units would not have helped; more accumulators would.
 deadlock in this design reported itself as `err_hang = 1` with an all-zero
 in-flight snapshot — every pipe idle and the machine still not moving,
 which points at the scheduler rather than at any unit. Without the snapshot
-the same symptom is a hang with no suspect.
+the same symptom is a hang with no suspect. The same thing happened again
+with bank contention: adding one counter turned an unexplained cycle count
+into "12% of the encoder layer, and here is the instruction pattern
+causing it".
+
+**Recovery is where reset state and bus state disagree.** Per-pipe soft
+reset is three lines of intent and two real bugs. A unit that is reset has
+forgotten its outstanding AXI transactions; the interconnect has not. Reuse
+an ID too early and a late beat lands in the new transfer. Let a discarded
+beat return an outstanding credit and the counter underflows, reads as "no
+room" forever, and hangs the very pipe the reset was meant to recover.
 
 **Saturating counters need a flag.** A 3-bit event counter that swallows an
 eighth set is a finite-resource consequence, not a bug. A *silent* one is.
@@ -126,15 +136,11 @@ eighth set is a finite-resource consequence, not a bug. A *silent* one is.
 
 The specification lists these; they are not oversights.
 
-- No interrupts — completion is observed by polling `STATUS`
 - No MMU; descriptors carry physical addresses
 - No clock gating hierarchy or DVFS above the Q-Channel handshake
-- No trace port; observability is CSR polling
-- `err_hang` reports and does not recover — there is no unit-level soft
-  reset, so after `err_task` software's only option is a full reset
-- Crossbar arbitration conflicts are not counted
+- No trace port; observability is CSR polling and the interrupt line
+- Nothing triggers recovery automatically: `err_hang` reports and
+  `SOFT_RST` recovers, but a supervisor has to decide
 - fp16 is not supported and is not recommended: bf16 shares fp32's exponent
   range, and the measured error is dominated by the piecewise-linear
   approximations, not by mantissa width
-
-Interrupts and unit-level soft reset are the two worth doing first.

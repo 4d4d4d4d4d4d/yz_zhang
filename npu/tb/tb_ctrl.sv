@@ -32,10 +32,12 @@ module tb_ctrl;
   logic [LT_DW/8-1:0] s_wstrb;
   logic [1:0] s_bresp, s_rresp;
   logic qreqn = 1, qacceptn, qdeny, qactive;
+  logic irq;
 
   npu_top u_dut (.*);
+  logic mem_stall = 1'b0;
   axi_mem #(.LAT(4), .OOO(1)) u_mem (
-    .clk(clk), .rst_n(rst_n),
+    .clk(clk), .rst_n(rst_n), .stall_r(mem_stall),
     .arvalid(m_arvalid), .arready(m_arready), .araddr(m_araddr),
     .arlen(m_arlen), .arsize(m_arsize), .arburst(m_arburst), .arid(m_arid),
     .rvalid(m_rvalid), .rready(m_rready), .rdata(m_rdata),
@@ -152,7 +154,7 @@ module tb_ctrl;
 
     // ================= MAGIC =================
     csr_rd(12'h000, 2'd0, v);
-    chk("MAGIC", v === 32'h4E50_5501);
+    chk("MAGIC", v === 32'h4E50_5502);
 
     // ================= hardware semaphores =================
     // read-to-acquire: the grant is decided in the transaction that
@@ -300,6 +302,94 @@ module tb_ctrl;
     for (int i = 0; i < 16; i++)
       chk($sformatf("work resumed after quiescence, beat %0d", i),
           u_mem.mem[32'h700 + i] === u_mem.mem[i]);
+
+    // ================= interrupts =================
+    csr_wr(12'h080, 2'd0, 32'h1);              // clear counters and IRQ_STATUS
+    csr_wr(12'h02C, 2'd0, 32'h0000_0002);      // enable IRQ_IDLE only
+    chk("irq low with nothing pending", irq === 1'b0);
+    push(0, 3'd0, mk(3'(P_MTE_IN), 6'd0, 8'h90,
+                     dma_pl(48'h0, 16'h0050, 1, 4)));
+    // wait for the completion without polling STATUS: the line is the point
+    begin
+      int guard = 0;
+      while (irq !== 1'b1 && guard < 20000) begin
+        @(posedge clk);
+        guard++;
+      end
+    end
+    chk("IRQ_IDLE raised the line", irq === 1'b1);
+    csr_rd(12'h028, 2'd0, v);
+    chk("IRQ_STATUS records idle",      v[1] === 1'b1);
+    chk("IRQ_STATUS records completion", v[0] === 1'b1);
+    csr_wr(12'h028, 2'd0, 32'h0000_0002);      // write 1 to clear IRQ_IDLE
+    chk("clearing the enabled source drops the line", irq === 1'b0);
+    csr_rd(12'h028, 2'd0, v);
+    chk("a masked source stays set", v[0] === 1'b1);
+    csr_wr(12'h02C, 2'd0, 32'h0000_0001);      // now enable IRQ_DONE
+    chk("enabling a set source raises the line", irq === 1'b1);
+    csr_wr(12'h028, 2'd0, 32'hFFFF_FFFF);
+    chk("clearing everything drops the line", irq === 1'b0);
+    csr_wr(12'h02C, 2'd0, 32'h0);
+
+    // ================= soft reset recovers a hung pipe =================
+    csr_wr(12'h080, 2'd0, 32'h1);
+    mem_stall = 1'b1;                          // the memory stops answering
+    push(0, 3'd0, mk(3'(P_MTE_IN), 6'd0, 8'hA0,
+                     dma_pl(48'h0, 16'h0060, 1, 16)));
+    // it must hang, and the watchdog must say where
+    begin
+      int guard = 0;
+      forever begin
+        csr_rd(12'h004, 2'd0, v);
+        if (v[3]) break;                       // err_hang
+        guard++;
+        if (guard > 20000) begin
+          chk("watchdog fired on a stalled memory", 1'b0);
+          break;
+        end
+      end
+    end
+    chk("err_hang raised", v[3] === 1'b1);
+    csr_rd(12'h024, 2'd0, v);
+    chk("the snapshot blames MTE_IN", v[P_MTE_IN*4 +: 4] != 4'd0);
+    csr_rd(12'h004, 2'd0, v);
+    chk("the machine is not idle while hung", v[4] === 1'b0);
+
+    // reset just that pipe
+    mem_stall = 1'b0;
+    csr_wr(12'h098, 2'd0, 32'(1 << P_MTE_IN));
+    begin
+      int guard = 0;
+      forever begin
+        csr_rd(12'h098, 2'd0, v);
+        if (v[P_MTE_IN] === 1'b0) break;
+        guard++;
+        if (guard > 1000) begin
+          chk("soft reset completed", 1'b0);
+          break;
+        end
+      end
+    end
+    csr_rd(12'h004, 2'd0, v);
+    chk("the machine is idle again after the reset", v[4] === 1'b1);
+    chk("err_hang cleared by the recovery", v[3] === 1'b0);
+
+    // and it still works: a fresh transfer on the reset pipe must complete
+    push(0, 3'd0, mk(3'(P_MTE_IN), 6'd0, 8'hA1,
+                     dma_pl(48'h0, 16'h0070, 1, 8), '0, 1'b1, 4'd7));
+    push(0, 3'd0, mk(3'(P_MTE_OUT), 6'd0, 8'hA2,
+                     dma_pl(48'h10000, 16'h0070, 1, 8), 16'h0080));
+    wait_idle();
+    csr_rd(12'h004, 2'd0, v);
+    chk("no errors after recovery", v[3:0] === 4'd0);
+    for (int i = 0; i < 8; i++)
+      chk($sformatf("pipe works after soft reset, beat %0d", i),
+          u_mem.mem[32'h800 + i] === u_mem.mem[i]);
+
+    // ================= crossbar conflict counter =================
+    csr_rd(12'h09C, 2'd0, v);
+    csr_rd(12'h0A0, 2'd0, v2);
+    $display("  xbar conflicts: read %0d cycles, write %0d cycles", v, v2);
 
     if (errors == 0) $display("TEST PASSED (tb_ctrl)");
     else             $display("TEST FAILED (tb_ctrl): %0d errors", errors);

@@ -159,15 +159,34 @@ Honest list; each of these is real work in a production SoC.
   ICG hierarchy and no voltage/frequency control.
 - **Debug / trace port.** Observability is CSR polling only; there is no
   CoreSight-style trace output.
-- **Watchdog / unit-level soft reset.** `err_hang` reports and does not
-  recover. After `err_task` software has no option but a full reset.
 - **AXI QoS.** Queue priority is not forwarded to `AxQOS`.
+- **Watchdog timeout policy.** `err_hang` reports and a soft reset
+  recovers, but nothing triggers that recovery automatically; a supervisor
+  has to decide.
 
-Of these, interrupts and unit-level soft reset are the two worth doing
-first: the former is an efficiency problem, the latter decides whether an
-error costs a kernel or the whole chip.
+Interrupts (`IRQ_STATUS` / `IRQ_ENABLE`) and per-pipe soft reset
+(`SOFT_RST`) were the two gaps worth closing first and both are now
+implemented — see `spec_csr.md` sections 2.1 and 2.2. The interesting part
+turned out to be neither the interrupt controller nor the reset itself but
+what a reset does to state the bus still remembers.
 
-## 9. Debug build options
+## 9. Observability of bank contention
+
+`XBAR_RCONF` / `XBAR_WCONF` count cycles in which a requester asked for a
+bank and was refused. This is the direct cost of a buffer assignment that
+puts two live operands in the same bank, and it is not otherwise visible —
+it shows up only as an unexplained cycle count.
+
+Measured: a blocked GEMM has zero read conflicts (A, B and C are in three
+different banks by construction), while an encoder layer lost 12% of all
+cycles to them. Most of that was one pattern — a two-source VEC op whose B
+operand is literally the same stream as A, as in the LayerNorm variance
+term `x*x`, making both read ports hit the same bank every cycle. VEC now
+detects that case and reuses the A beat instead of issuing a second read,
+which took the layer to 9%. What remains is cross-pipe contention, which is
+the compiler's allocation to fix rather than the hardware's.
+
+## 10. Debug build options
 
 Two guarded trace levels, both compiled out by default:
 

@@ -83,7 +83,10 @@ module npu_top
   input  logic                        qreqn,
   output logic                        qacceptn,
   output logic                        qdeny,
-  output logic                        qactive
+  output logic                        qactive,
+
+  // ---- interrupt ----
+  output logic                        irq
 );
 
   localparam int NRD = 6;   // CUBE.A CUBE.B VEC.A VEC.B FIX MTE_OUT
@@ -146,6 +149,16 @@ module npu_top
   logic [NPIPE-1:0][3:0] inflight_pipe;
   logic             clr_stat;
 
+  // Per-pipe soft reset. Holding a unit's reset low is the whole mechanism:
+  // its FSM, its input queue and its operand FIFOs all clear, and the
+  // scheduler takes back the credits on rst_done. CUBE loses its
+  // accumulator, which is the documented cost -- a partial sum being
+  // relayed through a reset pipe does not survive.
+  logic [NPIPE-1:0] rst_active, rst_done;
+  logic [NPIPE-1:0] prst_n;
+  always_comb
+    for (int p = 0; p < NPIPE; p++) prst_n[p] = rst_n && !rst_active[p];
+
   npu_opsched u_sched (
     .clk(clk), .rst_n(rst_n), .clr_stat(clr_stat),
     .in_valid(sk_m_valid),
@@ -156,6 +169,7 @@ module npu_top
     .evt_nz(evt_nz), .cons_en(cons_en), .cons_mask(cons_mask),
     .iss_valid(iss_valid), .iss_op(iss_op),
     .cpl_valid(cpl_valid), .cpl(cpl),
+    .rst_active(rst_active), .rst_done(rst_done),
     .idle(sched_idle), .stat_issued(stat_issued),
     .stat_win_full(stat_win_full),
     .err_illegal(err_illegal), .err_task(err_task), .err_hang(err_hang),
@@ -168,7 +182,7 @@ module npu_top
 
   always_comb
     for (int p = 0; p < NPIPE; p++) begin
-      set_en[p]  = cpl_valid[p] && cpl[p].set_en;
+      set_en[p]  = cpl_valid[p] && !rst_active[p] && cpl[p].set_en;
       set_evt[p] = cpl[p].set_evt;
     end
 
@@ -190,6 +204,7 @@ module npu_top
   logic [BUFIDW-1:0]         ecc_inj_buf;
   logic                      ecc_ce, ecc_ue;
   logic [BUFIDW+BUF_AW-1:0]  ecc_loc;
+  logic                      rd_conflict, wr_conflict;
 
   npu_xbar #(.NRD(NRD), .NWR(NWR)) u_xbar (
     .clk(clk), .rst_n(rst_n),
@@ -198,13 +213,14 @@ module npu_top
     .wr_req(wr_req), .wr_addr(wr_addr), .wr_data(wr_data),
     .wr_mask(wr_mask), .wr_gnt(wr_gnt),
     .ecc_inj(ecc_inj), .ecc_inj_buf(ecc_inj_buf),
-    .ecc_ce(ecc_ce), .ecc_ue(ecc_ue), .ecc_loc(ecc_loc));
+    .ecc_ce(ecc_ce), .ecc_ue(ecc_ue), .ecc_loc(ecc_loc),
+    .rd_conflict(rd_conflict), .wr_conflict(wr_conflict));
 
   // ================= execution pipes =================
   logic [NPIPE-1:0] pipe_busy;
 
   npu_cube u_cube (
-    .clk(clk), .rst_n(rst_n),
+    .clk(clk), .rst_n(prst_n[P_CUBE]),
     .iss_valid(iss_valid[P_CUBE]), .iss_op(iss_op[P_CUBE]),
     .rd_req(rd_req[1:0]), .rd_addr(rd_addr[1:0]), .rd_gnt(rd_gnt[1:0]),
     .rd_rvalid(rd_rvalid[1:0]), .rd_rdata(rd_rdata[1:0]),
@@ -214,7 +230,7 @@ module npu_top
     .busy(pipe_busy[P_CUBE]));
 
   npu_vec u_vec (
-    .clk(clk), .rst_n(rst_n),
+    .clk(clk), .rst_n(prst_n[P_VEC]),
     .iss_valid(iss_valid[P_VEC]), .iss_op(iss_op[P_VEC]),
     .rd_req(rd_req[3:2]), .rd_addr(rd_addr[3:2]), .rd_gnt(rd_gnt[3:2]),
     .rd_rvalid(rd_rvalid[3:2]), .rd_rdata(rd_rdata[3:2]),
@@ -224,7 +240,7 @@ module npu_top
     .busy(pipe_busy[P_VEC]));
 
   npu_fix u_fix (
-    .clk(clk), .rst_n(rst_n),
+    .clk(clk), .rst_n(prst_n[P_FIX]),
     .iss_valid(iss_valid[P_FIX]), .iss_op(iss_op[P_FIX]),
     .rd_req(rd_req[4]), .rd_addr(rd_addr[4]), .rd_gnt(rd_gnt[4]),
     .rd_rvalid(rd_rvalid[4]), .rd_rdata(rd_rdata[4]),
@@ -234,9 +250,10 @@ module npu_top
     .busy(pipe_busy[P_FIX]));
 
   logic mte_in_outst, mte_out_outst;
+  logic mte_in_bus,   mte_out_bus;
 
   npu_mte_in u_mte_in (
-    .clk(clk), .rst_n(rst_n),
+    .clk(clk), .rst_n(prst_n[P_MTE_IN]), .grst_n(rst_n),
     .iss_valid(iss_valid[P_MTE_IN]), .iss_op(iss_op[P_MTE_IN]),
     .wr_req(wr_req[3]), .wr_addr(wr_addr[3]), .wr_data(wr_data[3]),
     .wr_mask(wr_mask[3]), .wr_gnt(wr_gnt[3]),
@@ -245,10 +262,11 @@ module npu_top
     .rvalid(m_rvalid), .rready(m_rready), .rdata(m_rdata),
     .rid(m_rid), .rlast(m_rlast),
     .cpl_valid(cpl_valid[P_MTE_IN]), .cpl(cpl[P_MTE_IN]),
-    .busy(pipe_busy[P_MTE_IN]), .outstanding(mte_in_outst));
+    .busy(pipe_busy[P_MTE_IN]), .outstanding(mte_in_outst),
+    .bus_busy(mte_in_bus));
 
   npu_mte_out u_mte_out (
-    .clk(clk), .rst_n(rst_n),
+    .clk(clk), .rst_n(prst_n[P_MTE_OUT]), .grst_n(rst_n),
     .iss_valid(iss_valid[P_MTE_OUT]), .iss_op(iss_op[P_MTE_OUT]),
     .rd_req(rd_req[5]), .rd_addr(rd_addr[5]), .rd_gnt(rd_gnt[5]),
     .rd_rvalid(rd_rvalid[5]), .rd_rdata(rd_rdata[5]),
@@ -258,7 +276,8 @@ module npu_top
     .wstrb(m_wstrb), .wlast(m_wlast),
     .bvalid(m_bvalid), .bready(m_bready),
     .cpl_valid(cpl_valid[P_MTE_OUT]), .cpl(cpl[P_MTE_OUT]),
-    .busy(pipe_busy[P_MTE_OUT]), .outstanding(mte_out_outst));
+    .busy(pipe_busy[P_MTE_OUT]), .outstanding(mte_out_outst),
+    .bus_busy(mte_out_bus));
 
   // ================= CSR =================
   npu_csr u_csr (
@@ -273,18 +292,23 @@ module npu_top
     .err_evt_ovf(err_evt_ovf), .hang_snapshot(hang_snapshot),
     .err_tag(err_tag), .stat_issued(stat_issued),
     .stat_win_full(stat_win_full), .stat_mq_full(mq_full_stat),
-    .ext_rd_busy(mte_in_outst), .ext_wr_busy(mte_out_outst),
+    .ext_rd_busy(mte_in_outst || mte_in_bus),
+    .ext_wr_busy(mte_out_outst || mte_out_bus),
     .pipe_busy(pipe_busy),
     .ecc_ce(ecc_ce), .ecc_ue(ecc_ue), .ecc_loc(ecc_loc),
+    .rd_conflict(rd_conflict), .wr_conflict(wr_conflict),
+    .any_cpl(|cpl_valid),
     .clr_stat(clr_stat), .qprio(qprio),
-    .ecc_inj(ecc_inj), .ecc_inj_buf(ecc_inj_buf));
+    .ecc_inj(ecc_inj), .ecc_inj_buf(ecc_inj_buf),
+    .irq(irq), .rst_active(rst_active), .rst_done(rst_done));
 
   // ================= Q-Channel =================
   npu_qch u_qch (
     .clk(clk), .rst_n(rst_n),
     .qreqn(qreqn), .qacceptn(qacceptn), .qdeny(qdeny), .qactive(qactive),
     .sched_idle(sched_idle), .queues_empty(fetch_empty),
-    .ext_rd_outstanding(mte_in_outst), .ext_wr_outstanding(mte_out_outst),
+    .ext_rd_outstanding(mte_in_outst || mte_in_bus),
+    .ext_wr_outstanding(mte_out_outst || mte_out_bus),
     .q_stop(q_stop));
 
   // ================= protocol checkers (simulation only) =================
