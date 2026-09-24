@@ -19,6 +19,12 @@ module axi_mem #(
   input  logic          clk,
   input  logic          rst_n,
 
+  // Fault injection: while stall_r is high the model accepts reads and
+  // never answers them. A memory that goes away is exactly the failure a
+  // unit-level soft reset exists to recover from, and it is the only way
+  // to hang a pipe without inventing a debug hook inside the design.
+  input  logic          stall_r,
+
   input  logic          arvalid,
   output logic          arready,
   input  logic [AW-1:0] araddr,
@@ -93,7 +99,7 @@ module axi_mem #(
     end
   end
 
-  assign rvalid = rsel_v;
+  assign rvalid = rsel_v && !stall_r;
   assign rdata  = rsel_v ? mem[sbeat[rsel][$clog2(WORDS)-1:0]] : '0;
   assign rid    = sid[rsel];
   assign rlast  = rsel_v && (sleft[rsel] == 9'd1);
@@ -116,7 +122,7 @@ module axi_mem #(
         sdly[free_i]  <= 16'(LAT) + (OOO ? 16'($urandom_range(0, 7)) : 16'd0);
       end
 
-      if (rvalid && rready) begin
+      if (rvalid && rready && !stall_r) begin
         sbeat[rsel] <= sbeat[rsel] + 32'd1;
         sleft[rsel] <= sleft[rsel] - 9'd1;
         if (sleft[rsel] == 9'd1) sv[rsel] <= 1'b0;

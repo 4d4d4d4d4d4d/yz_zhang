@@ -41,7 +41,14 @@ module npu_xbar
   input  logic [BUFIDW-1:0]           ecc_inj_buf,
   output logic                        ecc_ce,
   output logic                        ecc_ue,
-  output logic [BUFIDW+BUF_AW-1:0]    ecc_loc
+  output logic [BUFIDW+BUF_AW-1:0]    ecc_loc,
+
+  // ---- bank contention, for the CSR counters ----
+  // A requester that asked and was not granted is a cycle lost to two
+  // operands sharing a bank. Without this the cost of a bad buffer
+  // assignment is only visible as an unexplained cycle count.
+  output logic                        rd_conflict,
+  output logic                        wr_conflict
 );
 
   // ------------------------------------------------ per-bank signals
@@ -81,6 +88,7 @@ module npu_xbar
     rd_gnt = '0;
     for (int b = 0; b < NBUF; b++) rd_gnt |= rgnt_b[b];
   end
+  assign rd_conflict = |(rd_req & ~rd_gnt);
 
   // route responses back: exactly one bank can have granted a given
   // requester in a given cycle, so an OR-mux is safe
@@ -126,6 +134,7 @@ module npu_xbar
     wr_gnt = '0;
     for (int b = 0; b < NBUF; b++) wr_gnt |= wgnt_b[b];
   end
+  assign wr_conflict = |(wr_req & ~wr_gnt);
 
   // ------------------------------------------------ banks
   for (genvar b = 0; b < NBUF; b++) begin : g_buf

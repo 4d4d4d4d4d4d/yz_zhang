@@ -8,7 +8,7 @@ burst, no ID reordering. A configuration read must not queue behind a
 
 | Offset | Name | Access | Contents |
 |---|---|---|---|
-| `0x00` | `MAGIC` | RO | `0x4E505501` — identity and version |
+| `0x00` | `MAGIC` | RO | `0x4E505502` — identity and version |
 | `0x04` | `STATUS` | RO | `{ [4] idle, [3] err_hang, [2] err_task, [1] err_evt_ovf, [0] err_illegal }` |
 | `0x08` | `ISSUED` | RO | ops issued since the last clear |
 | `0x0C` | `CYCLE` | RO | cycles since the last clear |
@@ -18,6 +18,8 @@ burst, no ID reordering. A configuration read must not queue behind a
 | `0x1C` | `EXT_WR` | RO | cycles with a write outstanding |
 | `0x20` | `ERR_TAG` | RO | `{tag[12:5], mcu[4:3], pipe[2:0]}` of the first failing op |
 | `0x24` | `HANG_SNAP` | RO | per-pipe in-flight count at the moment the watchdog fired, 4 bits each |
+| `0x28` | `IRQ_STATUS` | RW1C | sticky interrupt sources, see below |
+| `0x2C` | `IRQ_ENABLE` | RW | mask; `irq = \|(IRQ_STATUS & IRQ_ENABLE)` |
 | `0x40 + 4i` | `BUSY[i]` | RO | busy cycles of pipe *i* — *which pipe is the bottleneck* |
 | `0x80` | `CTRL` | WO | bit 0 clears all counters, error flags and event counters |
 | `0x84` | `QPRIO` | RW | high-priority queue bitmap |
@@ -25,6 +27,9 @@ burst, no ID reordering. A configuration read must not queue behind a
 | `0x8C` | `ECC_CE` | RO | corrected single-bit errors |
 | `0x90` | `ECC_UE` | RO | uncorrectable double-bit errors |
 | `0x94` | `ECC_FIRST` | RO | `{buffer[9:8], beat[7:0]}` of the first error |
+| `0x98` | `SOFT_RST` | RW | one bit per pipe; write 1 to reset, reads 0 when done |
+| `0x9C` | `XBAR_RCONF` | RO | cycles a read requester asked and was refused |
+| `0xA0` | `XBAR_WCONF` | RO | cycles a write requester asked and was refused |
 | `0x100 + 4i` | `LOCK[i]` | R/W | hardware semaphore, read to acquire |
 
 Writes are whole-word: a partial byte strobe is accepted on the bus and
@@ -47,6 +52,52 @@ Pop uses two priority levels: any non-empty high-priority queue wins, with
 round-robin inside each level so neither level starves internally. The
 bitmap is `QPRIO`.
 
+## 2.1 Interrupts
+
+| Bit | Source |
+|---|---|
+| 0 | `IRQ_DONE` — an op completed |
+| 1 | `IRQ_IDLE` — the machine went idle (rising edge) |
+| 2..5 | `err_illegal`, `err_evt_ovf`, `err_task`, `err_hang` |
+| 6,7 | corrected and uncorrectable ECC errors |
+
+All sources are sticky and cleared by writing a one. `IRQ_IDLE` is the
+edge, not the level: it is what a submitting core actually waits for, and
+it is what removes the `STATUS` polling loop. Masking a source with
+`IRQ_ENABLE` hides it from the line but does not stop it being recorded, so
+software can enable one source, sleep, and then read the full picture.
+
+## 2.2 Per-pipe soft reset
+
+`SOFT_RST` takes one bit per pipe. Writing a one holds that unit's reset
+for a few cycles; the bit reads back zero once the unit is up and the
+scheduler has taken back what the abandoned ops were holding:
+
+- every issue credit for that pipe
+- the in-flight accounting, which is tracked per (pipe, queue) precisely so
+  a reset can give back exactly what one pipe owed — the queue-scope
+  barrier reads `ifq` and would deadlock on a stale count
+- the sticky `err_hang`, since the machine has demonstrably recovered
+
+While a reset is active the scheduler issues nothing to that pipe and
+ignores any completion it emits.
+
+**What a soft reset costs.** CUBE loses its accumulator, so a partial sum
+being relayed across descriptors does not survive. Any AXI transaction the
+unit had outstanding is abandoned: the interconnect still owes responses
+for it, and those responses will arrive after the unit has forgotten them.
+Two things follow, and both are implemented:
+
+1. The AXI ID ownership tracker lives **outside** the unit's reset domain.
+   An ID whose response is still owed cannot be re-allocated, or a late
+   beat from the abandoned burst would be counted against the new transfer.
+2. A beat arriving for an ID this transfer does not own is accepted (so the
+   bus does not stall) and discarded (so it does not land in a buffer) —
+   and it does **not** return an outstanding credit, because it never
+   reserved one. Letting it do so underflows the credit counter, which then
+   reads as "no room" forever and hangs the very pipe the reset was
+   supposed to recover.
+
 ## 3. Completion
 
 Every pipe returns `{tag, mcu_id, qid, set_evt, set_en, err}`. The
@@ -64,7 +115,7 @@ Four sticky error bits, each for a different failure class:
 | `err_illegal` | undefined pipe encoding | the op is discarded and the pipeline keeps running |
 | `err_evt_ovf` | an event counter saturated | turns "software set/wait is unbalanced" from a silent hang into something locatable |
 | `err_task` | descriptor configuration error | carries `{tag, mcu, pipe}`, so it points at one descriptor |
-| `err_hang` | no issue and no completion for 4096 cycles with work outstanding | carries a per-pipe in-flight snapshot |
+| `err_hang` | no issue and no completion for 4096 cycles with work outstanding | carries a per-pipe in-flight snapshot; recoverable with a per-pipe soft reset |
 
 The snapshot is what makes `err_hang` useful. A cross-core deadlock in this
 design showed up as `err_hang = 1` with `HANG_SNAP = 0x00000` — every pipe

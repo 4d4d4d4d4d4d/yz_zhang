@@ -49,12 +49,13 @@ module tb_npu_prog;
   logic [1:0] s_bresp, s_rresp;
 
   logic qreqn = 1, qacceptn, qdeny, qactive;
+  logic irq;
 
   npu_top u_dut (.*);
 
   axi_mem #(.LAT(`ifdef MEM_LAT `MEM_LAT `else 20 `endif),
             .OOO(1)) u_mem (
-    .clk(clk), .rst_n(rst_n),
+    .clk(clk), .rst_n(rst_n), .stall_r(1'b0),
     .arvalid(m_arvalid), .arready(m_arready), .araddr(m_araddr),
     .arlen(m_arlen), .arsize(m_arsize), .arburst(m_arburst), .arid(m_arid),
     .rvalid(m_rvalid), .rready(m_rready), .rdata(m_rdata),
@@ -372,6 +373,14 @@ module tb_npu_prog;
     csr_read(12'h01C, 2'd0, ew);
     $display("  STATS cycles=%0d issued=%0d win_full=%0d mq_full=%0d ext_rd=%0d ext_wr=%0d",
              cy, iss, wf, mf, er, ew);
+    begin
+      logic [31:0] rc, wc;
+      csr_read(12'h09C, 2'd0, rc);
+      csr_read(12'h0A0, 2'd0, wc);
+      $display("  XBAR read-conflict=%0d (%0d%%)  write-conflict=%0d (%0d%%)",
+               rc, (cy == 0) ? 0 : (rc * 100) / cy,
+               wc, (cy == 0) ? 0 : (wc * 100) / cy);
+    end
     for (int p = 0; p < NPIPE; p++) begin
       csr_read(LT_AW'(12'h040 + 12'(p*4)), 2'd0, bz);
       $display("  BUSY[%0d]=%0d  (%0d%% of cycles)", p, bz,

@@ -62,17 +62,46 @@ module npu_csr
   input  logic                ecc_ce,
   input  logic                ecc_ue,
   input  logic [BUFIDW+BUF_AW-1:0] ecc_loc,
+  input  logic                rd_conflict,
+  input  logic                wr_conflict,
+  input  logic                any_cpl,
 
   // ---- control out ----
   output logic                clr_stat,
   output logic [NQ-1:0]       qprio,
   output logic [1:0]          ecc_inj,
-  output logic [BUFIDW-1:0]   ecc_inj_buf
+  output logic [BUFIDW-1:0]   ecc_inj_buf,
+
+  // ---- interrupt ----
+  output logic                irq,
+
+  // ---- per-pipe soft reset ----
+  output logic [NPIPE-1:0]    rst_active,
+  output logic [NPIPE-1:0]    rst_done
 );
 
-  parameter logic [31:0] MAGIC = 32'h4E50_5501;   // "NPU" + version 1
+  parameter logic [31:0] MAGIC = 32'h4E50_5502;   // "NPU" + version 2
 
-  logic [31:0] cyc, win_full, mq_full, ext_rd, ext_wr;
+  // Soft reset is held for a few cycles so the unit's asynchronous reset
+  // is seen for certain and any grant it had in flight has retired.
+  localparam int RST_CYCLES = 4;
+
+  // Interrupt sources, in IRQ_STATUS bit order.
+  localparam int IRQ_DONE    = 0;   // an op completed
+  localparam int IRQ_IDLE    = 1;   // the machine went idle
+  localparam int IRQ_ILLEGAL = 2;
+  localparam int IRQ_EVT_OVF = 3;
+  localparam int IRQ_TASK    = 4;
+  localparam int IRQ_HANG    = 5;
+  localparam int IRQ_ECC_CE  = 6;
+  localparam int IRQ_ECC_UE  = 7;
+  localparam int IRQ_N       = 8;
+
+  logic [31:0] cyc, win_full, mq_full, ext_rd, ext_wr, rd_conf, wr_conf;
+  logic [IRQ_N-1:0] irq_stat, irq_en;
+  logic             idle_q;
+  logic [NPIPE-1:0] rst_req;
+  logic [$clog2(RST_CYCLES+1)-1:0] rst_ctr [NPIPE];
   logic [31:0] busy_c [NPIPE];
   logic [31:0] ce_cnt, ue_cnt;
   logic [BUFIDW+BUF_AW-1:0] ecc_first;
@@ -134,6 +163,8 @@ module npu_csr
         8'h1C:   rd_mux = ext_wr;
         8'h20:   rd_mux = {19'd0, err_tag};
         8'h24:   rd_mux = {12'd0, hang_snapshot};
+        8'h28:   rd_mux = {{(32-IRQ_N){1'b0}}, irq_stat};
+        8'h2C:   rd_mux = {{(32-IRQ_N){1'b0}}, irq_en};
         8'h40,
         8'h44,
         8'h48,
@@ -144,6 +175,9 @@ module npu_csr
         8'h8C:   rd_mux = ce_cnt;
         8'h90:   rd_mux = ue_cnt;
         8'h94:   rd_mux = {22'd0, ecc_first};
+        8'h98:   rd_mux = {{(32-NPIPE){1'b0}}, rst_active};
+        8'h9C:   rd_mux = rd_conf;
+        8'hA0:   rd_mux = wr_conf;
         default: rd_mux = 32'd0;
       endcase
     end
@@ -158,6 +192,10 @@ module npu_csr
       for (int p = 0; p < NPIPE; p++) busy_c[p] <= '0;
       ce_cnt <= '0; ue_cnt <= '0; ecc_first <= '0; ecc_first_v <= 1'b0;
       qprio <= '0; ecc_inj <= '0; ecc_inj_buf <= '0; clr_stat <= 1'b0;
+      rd_conf <= '0; wr_conf <= '0;
+      irq_stat <= '0; irq_en <= '0; idle_q <= 1'b1;
+      rst_req <= '0; rst_active <= '0; rst_done <= '0;
+      for (int p = 0; p < NPIPE; p++) rst_ctr[p] <= '0;
       lock_held <= '0;
       for (int l = 0; l < NLOCK; l++) lock_owner[l] <= '0;
     end else begin
@@ -182,6 +220,10 @@ module npu_csr
             lock_held[wa[4:2]] <= 1'b0;
         end else begin
           unique casez (wa[7:0])
+            8'h28: irq_stat <= irq_stat & ~wdata[IRQ_N-1:0];   // write 1 to clear
+            8'h2C: irq_en   <= wdata[IRQ_N-1:0];
+            8'h98: for (int p = 0; p < NPIPE; p++)
+                     if (wdata[p]) rst_req[p] <= 1'b1;
             8'h80: if (wdata[0]) clr_stat <= 1'b1;
             8'h84: qprio <= wdata[NQ-1:0];
             8'h88: begin
@@ -212,8 +254,11 @@ module npu_csr
       if (clr_stat) begin
         cyc <= '0; win_full <= '0; mq_full <= '0; ext_rd <= '0; ext_wr <= '0;
         ce_cnt <= '0; ue_cnt <= '0; ecc_first_v <= 1'b0;
+        rd_conf <= '0; wr_conf <= '0; irq_stat <= '0;
         for (int p = 0; p < NPIPE; p++) busy_c[p] <= '0;
       end else begin
+        if (rd_conflict) rd_conf <= rd_conf + 32'd1;
+        if (wr_conflict) wr_conf <= wr_conf + 32'd1;
         cyc <= cyc + 32'd1;
         if (stat_win_full) win_full <= win_full + 32'd1;
         if (stat_mq_full)  mq_full  <= mq_full  + 32'd1;
@@ -227,9 +272,46 @@ module npu_csr
           ecc_first   <= ecc_loc;
           ecc_first_v <= 1'b1;
         end
+
+        // ---- interrupt sources ----
+        // Sticky, write-1-to-clear. IRQ_IDLE fires on the rising edge of
+        // idle, which is the event an MCU is actually waiting for -- it is
+        // what replaces polling STATUS in a loop.
+        if (any_cpl)                irq_stat[IRQ_DONE]    <= 1'b1;
+        if (idle && !idle_q)        irq_stat[IRQ_IDLE]    <= 1'b1;
+        if (err_illegal)            irq_stat[IRQ_ILLEGAL] <= 1'b1;
+        if (err_evt_ovf)            irq_stat[IRQ_EVT_OVF] <= 1'b1;
+        if (err_task)               irq_stat[IRQ_TASK]    <= 1'b1;
+        if (err_hang)               irq_stat[IRQ_HANG]    <= 1'b1;
+        if (ecc_ce)                 irq_stat[IRQ_ECC_CE]  <= 1'b1;
+        if (ecc_ue)                 irq_stat[IRQ_ECC_UE]  <= 1'b1;
+      end
+      idle_q <= idle;
+
+      // ---- per-pipe soft reset sequencer ----
+      // A request holds the unit's reset for RST_CYCLES, then pulses done
+      // for one cycle. The scheduler uses rst_active to stop issuing and
+      // rst_done to take back the credits and in-flight accounting the
+      // abandoned ops were holding.
+      for (int p = 0; p < NPIPE; p++) begin
+        rst_done[p] <= 1'b0;
+        if (rst_req[p] && !rst_active[p]) begin
+          rst_req[p]    <= 1'b0;
+          rst_active[p] <= 1'b1;
+          rst_ctr[p]    <= $clog2(RST_CYCLES+1)'(RST_CYCLES);
+        end else if (rst_active[p]) begin
+          if (rst_ctr[p] != '0) begin
+            rst_ctr[p] <= rst_ctr[p] - 1'b1;
+          end else begin
+            rst_active[p] <= 1'b0;
+            rst_done[p]   <= 1'b1;
+          end
+        end
       end
     end
   end
+
+  assign irq = |(irq_stat & irq_en);
 
 endmodule
 

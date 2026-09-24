@@ -54,6 +54,14 @@ module npu_opsched
   input  logic [NPIPE-1:0]            cpl_valid,
   input  cpl_t [NPIPE-1:0]            cpl,
 
+  // ---- per-pipe soft reset ----
+  // rst_active[p] holds while the unit is being reset: no issue goes out
+  // and any completion it emits is ignored. rst_done[p] is a single-cycle
+  // pulse once the unit is back, and it is what returns the credits and
+  // the in-flight accounting the abandoned ops were holding.
+  input  logic [NPIPE-1:0]            rst_active,
+  input  logic [NPIPE-1:0]            rst_done,
+
   // ---- status / statistics ----
   output logic                        idle,
   output logic [31:0]                 stat_issued,
@@ -77,6 +85,11 @@ module npu_opsched
   logic [CRDW-1:0] credit [NPIPE];
   logic [IFW-1:0]  ifq    [NQ];
   logic [IFW+2:0]  iftot;
+  // In-flight is tracked per (pipe, queue), not just per queue. A soft
+  // reset abandons whatever one pipe was holding, and the queue-scope
+  // barrier depends on ifq being right afterwards -- without the finer
+  // breakdown there is no way to know how much to give back.
+  logic [CRDW-1:0] ifpq   [NPIPE][NQ];
 
   // ------------------------------------------------ decode ingress
   op_t nop;
@@ -157,6 +170,7 @@ module npu_opsched
             end
 
           ok = !older_pq && !fenced
+            && !rst_active[p]
             && (credit[p] != '0)
             && ((win[i].wait_mask & ~evt_nz) == '0)      // dependency
             && ((win[i].wait_mask &  tk)     == '0);     // one consumer/bit/cycle
@@ -234,12 +248,16 @@ module npu_opsched
   assign stat_win_full = (kept == WCW'(WIN));
 
   // ------------------------------------------------ state update
+  // A unit under reset produces nothing the scheduler should believe.
+  logic [NPIPE-1:0] cpl_ok;
+  assign cpl_ok = cpl_valid & ~rst_active;
+
   logic [2:0] n_iss, n_cpl;
   always_comb begin
     n_iss = '0; n_cpl = '0;
     for (int p = 0; p < NPIPE; p++) begin
-      if (sel_v[p])     n_iss = n_iss + 3'd1;
-      if (cpl_valid[p]) n_cpl = n_cpl + 3'd1;
+      if (sel_v[p])   n_iss = n_iss + 3'd1;
+      if (cpl_ok[p])  n_cpl = n_cpl + 3'd1;
     end
   end
 
@@ -271,6 +289,8 @@ module npu_opsched
       wv <= '0;
       for (int p = 0; p < NPIPE; p++) credit[p] <= CRDW'(CREDIT);
       for (int q = 0; q < NQ; q++)    ifq[q]    <= '0;
+      for (int p = 0; p < NPIPE; p++)
+        for (int q = 0; q < NQ; q++)  ifpq[p][q] <= '0;
       iftot         <= '0;
       hang_ctr      <= '0;
       err_illegal_q <= 1'b0;
@@ -283,25 +303,48 @@ module npu_opsched
       for (int i = 0; i < WIN; i++) win[i] <= nxt_win[i];
       wv <= nxt_wv;
 
-      // credits: one issue and one completion per pipe per cycle
+      // credits: one issue and one completion per pipe per cycle. A
+      // completed reset hands back every credit the unit was holding.
       for (int p = 0; p < NPIPE; p++)
-        case ({sel_v[p], cpl_valid[p]})
-          2'b10:   credit[p] <= credit[p] - 1'b1;
-          2'b01:   credit[p] <= credit[p] + 1'b1;
-          default: ;
-        endcase
+        if (rst_done[p]) credit[p] <= CRDW'(CREDIT);
+        else
+          case ({sel_v[p], cpl_ok[p]})
+            2'b10:   credit[p] <= credit[p] - 1'b1;
+            2'b01:   credit[p] <= credit[p] + 1'b1;
+            default: ;
+          endcase
 
-      // per-queue in-flight, used by the queue-scope barrier
+      // in-flight per (pipe, queue), and the per-queue roll-up the
+      // queue-scope barrier reads
       for (int q = 0; q < NQ; q++) begin
-        automatic logic [IFW-1:0] up = '0;
-        automatic logic [IFW-1:0] dn = '0;
+        automatic logic [IFW-1:0] up  = '0;
+        automatic logic [IFW-1:0] dn  = '0;
+        automatic logic [IFW-1:0] aba = '0;      // abandoned by a reset
         for (int p = 0; p < NPIPE; p++) begin
-          if (sel_v[p]     && (win[sel_i[p]].qid == QIDW'(q))) up = up + 1'b1;
-          if (cpl_valid[p] && (cpl[p].qid        == QIDW'(q))) dn = dn + 1'b1;
+          if (sel_v[p] && (win[sel_i[p]].qid == QIDW'(q))) up = up + 1'b1;
+          if (cpl_ok[p] && (cpl[p].qid       == QIDW'(q))) dn = dn + 1'b1;
+          if (rst_done[p]) aba = aba + IFW'(ifpq[p][q]);
         end
-        ifq[q] <= ifq[q] + up - dn;
+        ifq[q] <= ifq[q] + up - dn - aba;
       end
-      iftot <= iftot + (IFW+3)'(n_iss) - (IFW+3)'(n_cpl);
+
+      for (int p = 0; p < NPIPE; p++)
+        for (int q = 0; q < NQ; q++) begin
+          automatic logic u = sel_v[p]  && (win[sel_i[p]].qid == QIDW'(q));
+          automatic logic d = cpl_ok[p] && (cpl[p].qid        == QIDW'(q));
+          if (rst_done[p])            ifpq[p][q] <= '0;
+          else if (u && !d)           ifpq[p][q] <= ifpq[p][q] + 1'b1;
+          else if (!u && d)           ifpq[p][q] <= ifpq[p][q] - 1'b1;
+        end
+
+      begin
+        automatic logic [IFW+2:0] aba_tot = '0;
+        for (int p = 0; p < NPIPE; p++)
+          if (rst_done[p])
+            for (int q = 0; q < NQ; q++)
+              aba_tot = aba_tot + (IFW+3)'(ifpq[p][q]);
+        iftot <= iftot + (IFW+3)'(n_iss) - (IFW+3)'(n_cpl) - aba_tot;
+      end
 
       issued_q <= clr_stat ? '0 : issued_q + 32'(n_iss);
 `ifdef NPU_TRACE
@@ -327,15 +370,17 @@ module npu_opsched
       end else begin
         if (|dropped) err_illegal_q <= 1'b1;
         for (int p = 0; p < NPIPE; p++)
-          if (cpl_valid[p] && cpl[p].err) begin
+          if (cpl_ok[p] && cpl[p].err) begin
             err_task_q <= 1'b1;
             if (!err_task_q) errtag_q <= {cpl[p].tag, cpl[p].mcu, PIPEW'(p)};
           end
       end
 
       // ---- hang watchdog ----
-      if ((n_iss != '0) || (n_cpl != '0) || ((wcnt == '0) && (iftot == '0))) begin
+      if ((n_iss != '0) || (n_cpl != '0) || (|rst_active) || (|rst_done)
+          || ((wcnt == '0) && (iftot == '0))) begin
         hang_ctr <= '0;
+        if (|rst_done) err_hang_q <= 1'b0;   // recovered
       end else if (hang_ctr != $clog2(HANG_LIMIT+1)'(HANG_LIMIT)) begin
         hang_ctr <= hang_ctr + 1'b1;
       end else if (!err_hang_q) begin

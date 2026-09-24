@@ -168,11 +168,22 @@ module npu_vec
   logic [15:0] bcnt;
   assign bcnt = bcount_of(bm, rows);
 
+  // Operand aliasing. A two-source op whose B operand is literally the same
+  // stream as A (x*x, x+x, max(x,x)) does not need a second read: the beat
+  // is already in hand. Without this the two read ports hit the same bank
+  // every cycle and the op runs at half rate -- it showed up as 12% of all
+  // cycles lost to read conflicts on an encoder layer, almost all of it the
+  // LayerNorm variance term.
+  logic b_alias;
+  assign b_alias = (bm == BM_STR) && (cfg.src_b == cfg.src_a)
+                   && (cfg.b_stride == cfg.a_stride);
+
   logic run_or_pre;
   assign run_or_pre = (st == S_RUN) || (st == S_PRE);
 
   assign rd_req[0]  = (st == S_RUN) && !err_q && (ka < rows) && can_req[0];
-  assign rd_req[1]  = run_or_pre && !err_q && (kb < bcnt) && can_req[1];
+  assign rd_req[1]  = run_or_pre && !err_q && !b_alias && (kb < bcnt)
+                      && can_req[1];
   assign rd_addr[0] = GAW'(16'(cfg.src_a) + ka * cfg.a_stride);
   assign rd_addr[1] = GAW'(16'(cfg.src_b) + kb * cfg.b_stride);
 
@@ -191,7 +202,7 @@ module npu_vec
     col   = '0;
     cbeat = '0;
     unique case (bm)
-      BM_STR:  bval = bbeat;
+      BM_STR:  bval = b_alias ? abeat : bbeat;
       BM_ONCE: bval = bheld;                            // row vector
       BM_COL: begin
                 // On the row that consumes a new beat the latched copy is
@@ -331,7 +342,7 @@ module npu_vec
   logic b_needed;
   always_comb begin
     unique case (bm)
-      BM_STR:  b_needed = 1'b1;
+      BM_STR:  b_needed = !b_alias;
       BM_COL:  b_needed = (row[3:0] == 4'd0);
       default: b_needed = 1'b0;
     endcase
