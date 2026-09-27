@@ -32,6 +32,12 @@ from npu_sim.evaluation.fidelity import (
     chip_fidelity,
 )
 from npu_sim.evaluation.energy import EnergyReport, analyze_energy
+from npu_sim.evaluation.data_movement import (
+    DataMovementReport,
+    data_movement_energy_pj,
+    onchip_capacity_bytes,
+    op_traffic_bytes,
+)
 from npu_sim.evaluation.snapshot import (
     ConnectionSnapshot,
     FieldDiff,
@@ -78,6 +84,7 @@ def estimate_plan(
 
 __all__ = [
     "ChipFidelityReport",
+    "DataMovementReport",
     "EnergyReport",
     "ComparisonReport",
     "ModuleFidelity",
@@ -98,6 +105,9 @@ __all__ = [
     "SweepReport",
     "analyze_pipeline_bottleneck",
     "analyze_energy",
+    "data_movement_energy_pj",
+    "onchip_capacity_bytes",
+    "op_traffic_bytes",
     "chip_fidelity",
     "capture_state",
     "compare",

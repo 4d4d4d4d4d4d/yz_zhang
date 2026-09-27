@@ -206,6 +206,12 @@ def edram_read_energy_pj(n_bytes: float) -> float:
     return sram_read_energy_pj(n_bytes) * _EDRAM_READ_FACTOR
 
 
+def dram_access_energy_pj(n_bytes: float) -> float:
+    """Off-chip DRAM access energy of ``n_bytes`` (pJ). Horowitz: a 32-bit
+    (4-byte) DRAM access ≈ 640 pJ → 160 pJ/byte (~128× an SRAM read)."""
+    return E_DRAM_RD_32B_PJ * (n_bytes / 4.0)
+
+
 def embedding_table_area_um2(table_kb: float) -> float:
     """Embedding-table area (µm²): modeled as on-chip eDRAM, not SRAM."""
     return edram_macro_area_um2(table_kb * 1024)

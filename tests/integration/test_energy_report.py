@@ -34,8 +34,11 @@ class TestEnergyDecomposition:
         ops = load_ops(str(FIXTURES / TRACE))
         return analyze_energy(ops, arch)
 
-    def test_total_is_dynamic_plus_static(self, report):
-        assert report.total_pj == pytest.approx(report.dynamic_pj + report.static_pj)
+    def test_total_is_compute_plus_movement_plus_static(self, report):
+        # SPEC-014: total now includes the data-movement term.
+        assert report.total_pj == pytest.approx(
+            report.dynamic_pj + report.movement_pj + report.static_pj
+        )
 
     def test_dynamic_matches_mapped_per_op_sum(self, report):
         arch = elaborate(str(FIXTURES / CHIP))

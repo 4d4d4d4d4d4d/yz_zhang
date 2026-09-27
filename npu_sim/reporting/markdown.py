@@ -515,9 +515,11 @@ def render_energy_report(report: "EnergyReport", arch_name: str = "") -> str:
     """Render a workload energy report (dynamic + static → total) as Markdown."""
     title = f"Workload energy — `{arch_name}`" if arch_name else "Workload energy"
     parts: list[str] = [f"# {title}"]
+    spill = "  ⚠ weights spill to DRAM" if report.weights_spilled else ""
     parts.append(_two_col_table("Metric", "Value", [
         ("ops", str(report.n_ops)),
-        ("dynamic energy", f"{report.dynamic_pj:,.0f} pJ"),
+        ("compute energy", f"{report.dynamic_pj:,.0f} pJ"),
+        ("data-movement energy", f"{report.movement_pj:,.0f} pJ{spill}"),
         ("static energy", f"{report.static_pj:,.0f} pJ"),
         ("total energy", f"{report.total_pj:,.0f} pJ ({report.total_pj/1000:,.1f} nJ)"),
         ("energy / op", f"{report.energy_per_op_pj:,.0f} pJ"),
