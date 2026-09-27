@@ -1,0 +1,21 @@
+schema_version: "1.0"
+name: "CMDQ depth 16 — baseline"
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+modules:
+  - id: host
+    type: Producer
+    clock: main_clk
+    config: { n_tokens: 4, send_rate_cycles_per_token: 1, payload_size_bytes: 8 }
+  - id: cmdq
+    type: CMDQ
+    clock: main_clk
+    config: { queue_depth: 16, enable_priority: false }
+  - id: mcu_sink
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+connections:
+  - { from: host.out, to: cmdq.host_in, fifo_depth: 32, latency_cycles: 1 }
+  - { from: cmdq.mcu_out, to: mcu_sink.in, fifo_depth: 16, latency_cycles: 1 }

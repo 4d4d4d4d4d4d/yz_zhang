@@ -1,0 +1,7 @@
+schema_version: "1.0"
+name: "CMDQ depth 256 + priority — variant"
+base: usecase_cmdq_16.yaml
+overrides:
+  modules:
+    cmdq:
+      config: { queue_depth: 256, enable_priority: true }

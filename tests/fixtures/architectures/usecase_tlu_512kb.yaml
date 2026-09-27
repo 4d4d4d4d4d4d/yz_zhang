@@ -1,0 +1,21 @@
+schema_version: "1.0"
+name: "TLU 512 KB embedding table — baseline"
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config: { n_tokens: 4, send_rate_cycles_per_token: 1, payload_size_bytes: 8 }
+  - id: tlu
+    type: TLU
+    clock: main_clk
+    config: { table_size_kb: 512, embedding_dim_bytes: 256 }
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+connections:
+  - { from: prod.out, to: tlu.index_in, fifo_depth: 16, latency_cycles: 1 }
+  - { from: tlu.embedding_out, to: cons.in, fifo_depth: 16, latency_cycles: 1 }

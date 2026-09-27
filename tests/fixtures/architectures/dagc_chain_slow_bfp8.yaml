@@ -1,0 +1,13 @@
+schema_version: "1.0"
+name: "DAGC chain (variant: bfp8_unpack_throughput halved)"
+description: >
+  Halve DAGC's BFP8 unpack throughput to verify SPEC-005 §2 knob has an
+  observable drain-time / stall impact via the comparator.
+
+base: dagc_chain.yaml
+
+overrides:
+  modules:
+    dagc:
+      config:
+        bfp8_unpack_throughput: 4

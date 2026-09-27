@@ -1,0 +1,44 @@
+schema_version: "1.0"
+name: "TAU + DMA baseline (split address-gen and bulk transfer)"
+description: |
+  SPEC-007 §6.3 evaluation baseline: Producer drives the descriptor stream
+  through a TAU → DMA chain. Two stages, no inter-stage overlap.
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 8
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 8
+
+  - id: tau_0
+    type: TAU
+    clock: main_clk
+    config:
+      bursts_per_token: 8
+
+  - id: dma_0
+    type: DMA
+    clock: main_clk
+    config:
+      bursts_per_token: 8
+      payload_bytes_per_token: 1024
+      dram_burst_latency: 40
+      bus_width_bytes: 32
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+
+connections:
+  - { from: prod.out, to: tau_0.descriptor_in, fifo_depth: 8, latency_cycles: 1 }
+  - { from: tau_0.addr_stream_out, to: dma_0.addr_stream_in, fifo_depth: 16, latency_cycles: 1 }
+  - { from: dma_0.data_out, to: cons.in, fifo_depth: 8, latency_cycles: 1 }

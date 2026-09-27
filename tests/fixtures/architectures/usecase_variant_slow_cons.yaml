@@ -1,0 +1,14 @@
+schema_version: "1.0"
+name: "Use case variant: consumer 4× slower"
+description: "Evaluates the impact of halving (here: quartering) consumer throughput. Mirrors the SPEC-003 §7 'AGU-W bandwidth half' archetype."
+
+metadata:
+  tags: ["experimental"]
+
+base: usecase_baseline.yaml
+
+overrides:
+  modules:
+    cons:
+      config:
+        receive_rate_cycles_per_token: 4

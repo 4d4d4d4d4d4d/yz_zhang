@@ -1,0 +1,36 @@
+schema_version: "1.0"
+name: "AGU shallow pipeline (depth=1)"
+description: |
+  SPEC-007 §7.3 algorithm-stimulus baseline: AGU with shallow pipeline
+  (depth=1) — no fill stall, 1 addr/cycle steady-state.
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 4
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 8
+
+  - id: agu_0
+    type: AGU
+    clock: main_clk
+    config:
+      client_module_id: mac_pseudo
+      agu_pipeline_depth: 1
+      addresses_per_token: 64
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+
+connections:
+  - { from: prod.out, to: agu_0.op_in, fifo_depth: 8, latency_cycles: 1 }
+  - { from: agu_0.inner_addr_out, to: cons.in, fifo_depth: 8, latency_cycles: 1 }

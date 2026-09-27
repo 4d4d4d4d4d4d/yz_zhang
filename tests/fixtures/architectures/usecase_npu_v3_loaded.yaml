@@ -1,0 +1,22 @@
+schema_version: "1.0"
+name: "NPU v3 loaded — 5-spec stacked variant"
+description: |
+  Step-7 variant. Flips one knob in each spec family via a single overrides
+  block: WB capacity (008), IM2COL kernel (009), RDC width (009), PMU
+  counters (010), SYNC participants (010). Aggregate area delta verifies
+  19 modules' area models compose without overlap.
+
+base: usecase_npu_v3_full_stack.yaml
+
+overrides:
+  modules:
+    wb:
+      config: { capacity_kb: 256 }
+    im2col:
+      config: { kernel_h: 3, kernel_w: 3 }
+    rdc:
+      config: { tree_width: 16 }
+    pmu:
+      config: { n_counters: 8 }
+    sync:
+      config: { n_participants: 8 }

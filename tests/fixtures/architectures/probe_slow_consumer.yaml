@@ -1,0 +1,25 @@
+schema_version: "1.0"
+name: "Probe slow consumer"
+description: "Producer 1/cycle into a Consumer that takes 4 cycles/token through a 2-deep FIFO."
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 8
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 8
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 4
+
+connections:
+  - { from: prod.out, to: cons.in, fifo_depth: 2, latency_cycles: 1 }

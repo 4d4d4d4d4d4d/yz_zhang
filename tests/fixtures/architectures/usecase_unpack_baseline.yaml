@@ -1,0 +1,37 @@
+schema_version: "1.0"
+name: "DAGC unpack chain — full unpack (large-token workload, baseline)"
+description: |
+  Mirror of usecase_unpack_compact.yaml without compact_unpack — pair them
+  to evaluate SPEC-005 v1.1 §U.2.
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 8
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 128
+
+  - id: dagc
+    type: DAGC
+    clock: main_clk
+    config:
+      bfp8_unpack_throughput: 8
+      bfp16_unpack_throughput: 4
+      bfp_ratio: "2:1"
+      enable_compact_unpack: false
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+
+connections:
+  - { from: prod.out, to: dagc.in_packed, fifo_depth: 4, latency_cycles: 1 }
+  - { from: dagc.out_unpacked, to: cons.in, fifo_depth: 4, latency_cycles: 1 }

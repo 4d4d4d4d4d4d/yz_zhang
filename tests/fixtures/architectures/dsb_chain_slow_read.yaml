@@ -1,0 +1,13 @@
+schema_version: "1.0"
+name: "DSB chain (variant: read_throughput halved)"
+description: >
+  Halve DSB's read_throughput to verify SPEC-005 §2.4 knob has an observable
+  drain-time / stall impact via the comparator.
+
+base: dsb_chain.yaml
+
+overrides:
+  modules:
+    dsb:
+      config:
+        read_throughput: 4

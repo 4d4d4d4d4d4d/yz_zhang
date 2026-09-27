@@ -1,0 +1,38 @@
+schema_version: "1.0"
+name: "DAGC chain with 2× clock (high-freq variant)"
+description: |
+  SPEC-001 v1.1 §3.1.x + SPEC-003 v1.1 §2.1 use case: same data path as
+  dagc_chain.yaml but the clock runs at 2× the frequency (500 ps period vs
+  1000 ps). Demonstrates that the existing clock_domains infrastructure
+  already covers the "提频" evaluation — no new contract required.
+
+clock_domains:
+  - id: main_clk
+    period_ps: 500   # 2 GHz vs baseline 1 GHz
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 16
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 8
+
+  - id: dagc
+    type: DAGC
+    clock: main_clk
+    config:
+      bfp8_unpack_throughput: 8
+      bfp16_unpack_throughput: 4
+      bfp_ratio: "2:1"
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+
+connections:
+  - { from: prod.out, to: dagc.in_packed, fifo_depth: 4, latency_cycles: 1 }
+  - { from: dagc.out_unpacked, to: cons.in, fifo_depth: 4, latency_cycles: 1 }

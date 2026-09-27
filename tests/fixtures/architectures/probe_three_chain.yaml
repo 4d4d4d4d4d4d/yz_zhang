@@ -1,0 +1,31 @@
+schema_version: "1.0"
+name: "Probe three-module chain"
+description: "prod → mid → cons. cons is slow; both prod and mid should record OUTPUT_FULL stalls; tracer should pin cons as the bottleneck."
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 8
+      send_rate_cycles_per_token: 1
+
+  - id: mid
+    type: Passthrough
+    clock: main_clk
+    config:
+      forward_rate_cycles_per_token: 1
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 4
+
+connections:
+  - { from: prod.out, to: mid.in,  fifo_depth: 2, latency_cycles: 1 }
+  - { from: mid.out,  to: cons.in, fifo_depth: 2, latency_cycles: 1 }

@@ -1,0 +1,37 @@
+schema_version: "1.0"
+name: "OB small tile (8 KB) — baseline"
+description: |
+  SPEC-008 §2.8 evaluation baseline. Producer simulates MAC output by
+  tagging tokens with tile_id / partial_idx; OB accumulates and flushes.
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 8
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 256
+
+  - id: ob
+    type: OB
+    clock: main_clk
+    config:
+      tile_kb: 8
+      max_in_flight_tiles: 1
+      accumulate_depth: 1
+      support_fp32_acc: true
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+
+connections:
+  - { from: prod.out, to: ob.psum_in, fifo_depth: 8, latency_cycles: 1 }
+  - { from: ob.acc_out, to: cons.in, fifo_depth: 8, latency_cycles: 1 }

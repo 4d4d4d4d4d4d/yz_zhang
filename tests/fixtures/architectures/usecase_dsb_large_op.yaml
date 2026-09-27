@@ -1,0 +1,17 @@
+schema_version: "1.0"
+name: "DSB large-op variant (1024-byte tokens, same total bytes)"
+description: |
+  "DSB / 大算子对能效" use case — fewer, larger tokens carry the same
+  total payload as the small-op baseline (4 × 1024 B = 4096 B ≈ 16 × 8 B
+  × 32-ish for similar work). Amortising per-token cost over more bytes
+  should improve effective throughput; static area stays identical.
+
+base: dsb_chain.yaml
+
+overrides:
+  modules:
+    prod:
+      config:
+        n_tokens: 4
+        send_rate_cycles_per_token: 1
+        payload_size_bytes: 1024

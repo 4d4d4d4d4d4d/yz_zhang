@@ -1,0 +1,25 @@
+schema_version: "1.0"
+name: "Probe chain"
+description: "Producer → Consumer over a 4-deep FIFO. Phase 2 backpressure rig."
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 16
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 8
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+
+connections:
+  - { from: prod.out, to: cons.in, fifo_depth: 4, latency_cycles: 1 }

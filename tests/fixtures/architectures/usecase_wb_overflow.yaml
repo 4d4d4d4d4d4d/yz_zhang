@@ -1,0 +1,15 @@
+schema_version: "1.0"
+name: "WB overflow — workload exceeds capacity"
+description: |
+  SPEC-008 §1.4.4 / §1.7.1: large weight tokens exceed the small WB
+  capacity (4 KB) → weight_overflow stall reason should appear in the
+  trace. Pairs with usecase_wb_small_capacity.yaml (which fits): variant
+  forces overflow by shrinking capacity below total payload.
+
+base: usecase_wb_small_capacity.yaml
+
+overrides:
+  modules:
+    wb:
+      config:
+        capacity_kb: 4  # 4 KB vs 8 × 1024 B = 8 KB payload → overflow

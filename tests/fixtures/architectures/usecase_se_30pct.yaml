@@ -1,0 +1,21 @@
+schema_version: "1.0"
+name: "SE sparsity 30% — baseline"
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config: { n_tokens: 4, send_rate_cycles_per_token: 1, payload_size_bytes: 64 }
+  - id: se
+    type: SE
+    clock: main_clk
+    config: { sparsity_ratio: 0.3, enable_structured_pruning: false }
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+connections:
+  - { from: prod.out, to: se.sparse_in, fifo_depth: 8, latency_cycles: 1 }
+  - { from: se.dense_out, to: cons.in, fifo_depth: 8, latency_cycles: 1 }

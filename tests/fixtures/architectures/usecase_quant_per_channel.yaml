@@ -1,0 +1,13 @@
+schema_version: "1.0"
+name: "Quant: per-channel scale (variant)"
+description: |
+  §3.7 per-tensor vs per-channel: per_channel adds 4000 μm² of LUT +
+  1 cycle/token overhead.
+
+base: usecase_quant_baseline.yaml
+
+overrides:
+  modules:
+    q:
+      config:
+        enable_per_channel: true

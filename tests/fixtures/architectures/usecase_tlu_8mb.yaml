@@ -1,0 +1,7 @@
+schema_version: "1.0"
+name: "TLU 8 MB embedding — LLM-scale variant"
+base: usecase_tlu_512kb.yaml
+overrides:
+  modules:
+    tlu:
+      config: { table_size_kb: 8192, enable_scatter: true }

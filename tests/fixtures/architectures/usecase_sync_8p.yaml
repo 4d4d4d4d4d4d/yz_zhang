@@ -1,0 +1,7 @@
+schema_version: "1.0"
+name: "SYNC n_participants=8 — wider barrier"
+base: usecase_sync_2p.yaml
+overrides:
+  modules:
+    sync:
+      config: { n_participants: 8 }

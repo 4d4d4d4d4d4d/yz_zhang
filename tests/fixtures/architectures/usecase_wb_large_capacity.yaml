@@ -1,0 +1,13 @@
+schema_version: "1.0"
+name: "WB large capacity (256 KB) — capacity-sweep variant"
+description: |
+  SPEC-008 §1.8 — area should scale with capacity_kb × 1200 μm²/KB.
+  Same workload as baseline; only WB capacity differs.
+
+base: usecase_wb_small_capacity.yaml
+
+overrides:
+  modules:
+    wb:
+      config:
+        capacity_kb: 256

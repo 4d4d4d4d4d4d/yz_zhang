@@ -1,0 +1,38 @@
+schema_version: "1.0"
+name: "WB small capacity (64 KB) — baseline for capacity sweep"
+description: |
+  SPEC-008 §1.8 evaluation baseline. Producer drives weight tokens into
+  WB, MAC-style Consumer drains weight_out. Small WB capacity (64 KB)
+  pairs with the variant's 256 KB to surface area / overflow tradeoffs.
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 8
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 1024
+
+  - id: wb
+    type: WB
+    clock: main_clk
+    config:
+      capacity_kb: 64
+      write_bw_bytes_per_cycle: 32
+      read_bw_bytes_per_cycle: 64
+      enable_prefetch: false
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+
+connections:
+  - { from: prod.out, to: wb.weight_in, fifo_depth: 8, latency_cycles: 1 }
+  - { from: wb.weight_out, to: cons.in, fifo_depth: 8, latency_cycles: 1 }

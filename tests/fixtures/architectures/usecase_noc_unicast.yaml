@@ -1,0 +1,31 @@
+schema_version: "1.0"
+name: "NoC unicast — 2 sources, 2 sinks"
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+modules:
+  - id: prod_a
+    type: Producer
+    clock: main_clk
+    config: { n_tokens: 4, send_rate_cycles_per_token: 1, payload_size_bytes: 16 }
+  - id: prod_b
+    type: Producer
+    clock: main_clk
+    config: { n_tokens: 4, send_rate_cycles_per_token: 1, payload_size_bytes: 16 }
+  - id: noc
+    type: NoC
+    clock: main_clk
+    config: { route_cycles: 2, enable_multicast: false }
+  - id: cons_a
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+  - id: cons_b
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+connections:
+  - { from: prod_a.out, to: noc.port_0_in, fifo_depth: 8, latency_cycles: 1 }
+  - { from: prod_b.out, to: noc.port_1_in, fifo_depth: 8, latency_cycles: 1 }
+  - { from: noc.port_1_out, to: cons_a.in, fifo_depth: 8, latency_cycles: 1 }
+  - { from: noc.port_2_out, to: cons_b.in, fifo_depth: 8, latency_cycles: 1 }

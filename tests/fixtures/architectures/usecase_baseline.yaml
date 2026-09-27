@@ -1,0 +1,28 @@
+schema_version: "1.0"
+name: "Use case baseline (balanced producer/consumer)"
+description: "Producer and consumer at matched rate 1; should complete without stalls."
+
+metadata:
+  tags: ["promoted"]
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 16
+      send_rate_cycles_per_token: 1
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+      max_to_accept: 16
+
+connections:
+  - { from: prod.out, to: cons.in, fifo_depth: 4, latency_cycles: 1 }

@@ -1,0 +1,7 @@
+schema_version: "1.0"
+name: "Transpose 3D — area variant"
+base: usecase_transpose_2d.yaml
+overrides:
+  modules:
+    tr:
+      config: { enable_3d: true }

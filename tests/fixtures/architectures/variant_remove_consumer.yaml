@@ -1,0 +1,8 @@
+schema_version: "1.0"
+name: "Dummy - consumer removed"
+description: "Removes consumer; producer.out_data → consumer.in_data should auto-prune."
+
+base: baseline_dummy.yaml
+
+overrides:
+  remove_modules: [consumer]

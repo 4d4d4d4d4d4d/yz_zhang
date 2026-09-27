@@ -1,0 +1,21 @@
+schema_version: "1.0"
+name: "RDC tree_width=4 — small reducer"
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config: { n_tokens: 4, send_rate_cycles_per_token: 1, payload_size_bytes: 32 }
+  - id: rdc
+    type: RDC
+    clock: main_clk
+    config: { tree_width: 4, mode: sum, element_bytes: 4 }
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+connections:
+  - { from: prod.out, to: rdc.vec_in, fifo_depth: 8, latency_cycles: 1 }
+  - { from: rdc.reduced_out, to: cons.in, fifo_depth: 8, latency_cycles: 1 }

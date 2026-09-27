@@ -1,0 +1,26 @@
+schema_version: "1.0"
+name: "NPU v2 loaded — bigger memory, per-channel quant, trig SFU"
+description: |
+  Step-5 variant exercising 4 SPEC-008 knobs at once via one overrides
+  block. Drain time stays comparable (Quant per-channel adds a few
+  cycles) but area should reflect WB capacity + OB tile bump + per-
+  channel scale LUT + SFU trig cost.
+
+base: usecase_npu_v2_baseline.yaml
+
+overrides:
+  modules:
+    wb:
+      config:
+        capacity_kb: 256
+        enable_prefetch: true
+    ob:
+      config:
+        tile_kb: 32
+        max_in_flight_tiles: 2
+    q_act:
+      config:
+        enable_per_channel: true
+    sfu:
+      config:
+        enable_trig: true

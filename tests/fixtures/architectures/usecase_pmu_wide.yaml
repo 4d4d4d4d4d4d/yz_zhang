@@ -1,0 +1,7 @@
+schema_version: "1.0"
+name: "PMU n_counters=8 — wide variant"
+base: usecase_pmu_small.yaml
+overrides:
+  modules:
+    pmu:
+      config: { n_counters: 8 }

@@ -1,0 +1,42 @@
+schema_version: "1.0"
+name: "Dummy baseline"
+description: "Phase 3 fixture: two Dummy modules connected by a single link."
+
+metadata:
+  author: "test"
+  tags: ["promoted"]
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: producer
+    type: Dummy
+    clock: main_clk
+    config:
+      throughput_elems_per_cycle: 2
+      support_extra: true
+      internal_fifo_depth: 8
+
+  - id: consumer
+    type: Dummy
+    clock: main_clk
+    config:
+      throughput_elems_per_cycle: 1
+      support_extra: false
+      internal_fifo_depth: 4
+
+connections:
+  - { from: producer.out_data, to: consumer.in_data, fifo_depth: 4, latency_cycles: 1 }
+
+topology:
+  type: single_die
+  dies:
+    - id: die_0
+      process_node: "5nm"
+      modules: [producer, consumer]
+
+constraints:
+  total_area_mm2: { max: 1.0 }
+  total_static_power_w: { max: 0.5 }

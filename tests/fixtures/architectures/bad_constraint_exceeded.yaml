@@ -1,0 +1,20 @@
+schema_version: "1.0"
+name: "Constraint violation"
+description: "Sets an absurdly low area budget so the elaborator emits a warning."
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: a
+    type: Dummy
+    clock: main_clk
+    config:
+      throughput_elems_per_cycle: 1
+      support_extra: true
+
+connections: []
+
+constraints:
+  total_area_mm2: { max: 0.00000001 }

@@ -1,0 +1,128 @@
+schema_version: "1.0"
+name: "NPU v2 baseline — SPEC-005 + SPEC-007 + SPEC-008 minimal"
+description: |
+  Step-5 integration: the full module set running together as a single
+  elaborated arch. Data plane datapath (DAGC → DSB → MAC → VAU → AVP)
+  alongside SPEC-008 memory modules (WB feeding MAC weights, OB collecting
+  MAC psums, Quant on the VAU output, SFU for transcendentals). Control
+  plane: MCU + AGU. This baseline keeps the SPEC-008 modules at minimal
+  config; the variant exercises capacity / precision / trig knobs.
+
+metadata:
+  tags: ["full_system_v2", "spec005+007+008"]
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  # ============ Data plane ============
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 8
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 8
+
+  - id: dagc
+    type: DAGC
+    clock: main_clk
+    config:
+      bfp8_unpack_throughput: 8
+      bfp16_unpack_throughput: 4
+      bfp_ratio: "2:1"
+
+  - id: dsb
+    type: DSB
+    clock: main_clk
+    config:
+      buffer_kb: 64
+      read_throughput: 8
+      enable_double_buffer: true
+
+  - id: mac
+    type: MAC
+    clock: main_clk
+    config:
+      array_rows: 32
+      array_cols: 32
+      support_bfp16: true
+      psums_per_tile: 1
+
+  - id: vau
+    type: VAU
+    clock: main_clk
+    config:
+      lanes: 16
+
+  - id: avp
+    type: AVP
+    clock: main_clk
+    config:
+      vector_width: 16
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+
+  # ============ Control plane (SPEC-007) ============
+  - id: mcu_0
+    type: MCU
+    clock: main_clk
+    config:
+      has_ogu_peer: false
+      threads: 1
+
+  - id: agu_mac
+    type: AGU
+    clock: main_clk
+    config:
+      client_module_id: mac
+      agu_pipeline_depth: 3
+      addresses_per_token: 64
+
+  # ============ Memory / precision plane (SPEC-008) ============
+  - id: wb
+    type: WB
+    clock: main_clk
+    config:
+      capacity_kb: 64
+      enable_prefetch: false
+
+  - id: ob
+    type: OB
+    clock: main_clk
+    config:
+      tile_kb: 8
+      max_in_flight_tiles: 1
+      accumulate_depth: 1
+      support_fp32_acc: true
+
+  - id: q_act
+    type: Quant
+    clock: main_clk
+    config:
+      direction: quant
+      bits_in: 32
+      bits_out: 8
+      enable_per_channel: false
+      symmetric: true
+
+  - id: sfu
+    type: SFU
+    clock: main_clk
+    config:
+      enable_trig: false
+      default_op: exp
+
+connections:
+  # Data plane chain unchanged.
+  - { from: prod.out,          to: dagc.in_packed, fifo_depth: 4, latency_cycles: 1 }
+  - { from: dagc.out_unpacked, to: dsb.in_data,    fifo_depth: 4, latency_cycles: 1 }
+  - { from: dsb.out_data,      to: mac.in_act,     fifo_depth: 4, latency_cycles: 1 }
+  - { from: mac.out_psum,      to: vau.in_a,       fifo_depth: 4, latency_cycles: 1 }
+  - { from: vau.out,           to: avp.in_data,    fifo_depth: 4, latency_cycles: 1 }
+  - { from: avp.out_data,      to: cons.in,        fifo_depth: 4, latency_cycles: 1 }

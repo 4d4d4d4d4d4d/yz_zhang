@@ -1,0 +1,13 @@
+schema_version: "1.0"
+name: "Fully-wired chip — single-knob variant (Quant per-channel)"
+description: |
+  与 usecase_chip_full_wired.yaml 完全同拓扑,只改芯片输出端 Quant 的一个
+  knob(per-channel scale)。断言:单模块的改动通过 12 条真实连接传导,
+  改变整颗芯片的端到端 drain_time —— 证明这是交互中的芯片,不是模块陈列。
+
+base: usecase_chip_full_wired.yaml
+
+overrides:
+  modules:
+    q_out:
+      config: { enable_per_channel: true }

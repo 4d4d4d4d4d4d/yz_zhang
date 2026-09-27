@@ -1,0 +1,40 @@
+schema_version: "1.0"
+name: "Two producers into a slow merger"
+description: "prod_a and prod_b both push 4 tokens at rate 1; the merger costs 2 cycles per forward so aggregate offered load (2/cycle) exceeds throughput (0.5/cycle). One side stalls and the contention is visible at the merger inputs."
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod_a
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 4
+      send_rate_cycles_per_token: 1
+
+  - id: prod_b
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 4
+      send_rate_cycles_per_token: 1
+
+  - id: merger
+    type: Merger
+    clock: main_clk
+    config:
+      forward_rate_cycles_per_token: 2
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+      max_to_accept: 8
+
+connections:
+  - { from: prod_a.out, to: merger.in0, fifo_depth: 1, latency_cycles: 1 }
+  - { from: prod_b.out, to: merger.in1, fifo_depth: 1, latency_cycles: 1 }
+  - { from: merger.out, to: cons.in,    fifo_depth: 2, latency_cycles: 1 }

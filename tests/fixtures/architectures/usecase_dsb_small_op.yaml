@@ -1,0 +1,16 @@
+schema_version: "1.0"
+name: "DSB small-op baseline (8-byte tokens)"
+description: |
+  Workload-size baseline for DSB energy/throughput evaluation. Producer
+  emits many tiny tokens; per-token control overhead dominates over the
+  data transfer cost.
+
+base: dsb_chain.yaml
+
+overrides:
+  modules:
+    prod:
+      config:
+        n_tokens: 16
+        send_rate_cycles_per_token: 1
+        payload_size_bytes: 8

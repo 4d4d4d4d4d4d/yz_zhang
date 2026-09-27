@@ -1,0 +1,7 @@
+schema_version: "1.0"
+name: "MMU tlb=256 hit_rate=0.95 — hot variant"
+base: usecase_mmu_tlb16.yaml
+overrides:
+  modules:
+    mmu:
+      config: { tlb_entries: 256, tlb_hit_rate: 0.95 }

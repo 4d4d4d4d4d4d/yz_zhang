@@ -1,0 +1,17 @@
+schema_version: "1.0"
+name: "MAC mixed precision variant (INT8 + BFP16 + FP16)"
+description: |
+  "精度不归一" use case — same MAC, but three precisions enabled at once
+  (INT8 + BFP16 + FP16). The MAC's declared capability set grows, so the
+  area aggregation (SPEC-001 v1.1 §3.2.5) picks up the extra silicon
+  required for BFP16/FP16 lanes; functional / drain_time stays the same
+  for an INT8 workload.
+
+base: mac_chain.yaml
+
+overrides:
+  modules:
+    mac:
+      config:
+        support_bfp16: true
+        support_fp16: true

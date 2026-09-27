@@ -1,0 +1,52 @@
+schema_version: "1.0"
+name: "Trace-driven MLP block (ops span two modules)"
+description: |
+  SPEC-006 §8 cost-model demo:一个 MLP block 的算子跨两个模块
+  (fc1/fc2 matmul → MAC,relu → VAU)。因为 relu 在 VAU、matmul 在 MAC,
+  两者可 overlap → bottleneck 估算(busiest 模块串行总量)明显小于
+  op-serial 求和,更贴近真实 pipeline。
+
+clock_domains:
+  - { id: main_clk, period_ps: 1000 }
+
+modules:
+  - id: trace_src
+    type: TraceProducer
+    clock: main_clk
+    config:
+      ops:
+        - { op_type: matmul, m: 32, k: 32, n: 32, precision: int8 }   # fc1
+        - { op_type: relu,   n_elements: 256 }                        # act
+        - { op_type: matmul, m: 32, k: 32, n: 32, precision: int8 }   # fc2
+        - { op_type: relu,   n_elements: 256 }
+        - { op_type: matmul, m: 32, k: 32, n: 32, precision: int8 }
+        - { op_type: relu,   n_elements: 256 }
+      send_rate_cycles_per_token: 1
+      repeat: 1
+  - id: dagc
+    type: DAGC
+    clock: main_clk
+    config: { bfp8_unpack_throughput: 8, bfp16_unpack_throughput: 4, bfp_ratio: "2:1" }
+  - id: dsb
+    type: DSB
+    clock: main_clk
+    config: { buffer_kb: 64, read_throughput: 8, enable_double_buffer: true }
+  - id: mac
+    type: MAC
+    clock: main_clk
+    config: { array_rows: 32, array_cols: 32, support_bfp16: true }
+  - id: vau
+    type: VAU
+    clock: main_clk
+    config: { lanes: 16 }
+  - id: sink
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+
+connections:
+  - { from: trace_src.out,     to: dagc.in_packed, fifo_depth: 8, latency_cycles: 1 }
+  - { from: dagc.out_unpacked, to: dsb.in_data,    fifo_depth: 8, latency_cycles: 1 }
+  - { from: dsb.out_data,      to: mac.in_act,     fifo_depth: 8, latency_cycles: 1 }
+  - { from: mac.out_psum,      to: vau.in_a,       fifo_depth: 8, latency_cycles: 1 }
+  - { from: vau.out,           to: sink.in,        fifo_depth: 8, latency_cycles: 1 }

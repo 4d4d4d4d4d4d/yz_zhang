@@ -1,0 +1,113 @@
+schema_version: "1.0"
+name: "NPU v3 full-stack baseline — SPEC-005 + 007 + 008 + 009 + 010"
+description: |
+  Step-7 integration: the complete platform module set in a single
+  elaborated arch. Data plane (DAGC/DSB/MAC/VAU/AVP) + control plane
+  (MCU/AGU) + memory/precision (WB/OB/Quant/SFU) + workload-shape
+  /interconnect (IM2COL/RDC/NoC/CDE/Transpose) + system infrastructure
+  (PMU/SYNC). 19 module instances coexist; the variant flips knobs
+  across all five spec families.
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  # Data plane (SPEC-005)
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config: { n_tokens: 6, send_rate_cycles_per_token: 1, payload_size_bytes: 16 }
+  - id: dagc
+    type: DAGC
+    clock: main_clk
+    config: { bfp8_unpack_throughput: 8, bfp16_unpack_throughput: 4, bfp_ratio: "2:1" }
+  - id: dsb
+    type: DSB
+    clock: main_clk
+    config: { buffer_kb: 64, read_throughput: 8, enable_double_buffer: true }
+  - id: mac
+    type: MAC
+    clock: main_clk
+    config: { array_rows: 32, array_cols: 32, support_bfp16: true, psums_per_tile: 1 }
+  - id: vau
+    type: VAU
+    clock: main_clk
+    config: { lanes: 16 }
+  - id: avp
+    type: AVP
+    clock: main_clk
+    config: { vector_width: 16 }
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+
+  # Control plane (SPEC-007)
+  - id: mcu
+    type: MCU
+    clock: main_clk
+    config: { has_ogu_peer: false, threads: 1 }
+  - id: agu
+    type: AGU
+    clock: main_clk
+    config: { client_module_id: mac, agu_pipeline_depth: 3, addresses_per_token: 64 }
+
+  # Memory & precision plane (SPEC-008)
+  - id: wb
+    type: WB
+    clock: main_clk
+    config: { capacity_kb: 64, enable_prefetch: false }
+  - id: ob
+    type: OB
+    clock: main_clk
+    config: { tile_kb: 8, max_in_flight_tiles: 1, accumulate_depth: 1, support_fp32_acc: true }
+  - id: q_act
+    type: Quant
+    clock: main_clk
+    config: { direction: quant, bits_in: 32, bits_out: 8, enable_per_channel: false, symmetric: true }
+  - id: sfu
+    type: SFU
+    clock: main_clk
+    config: { enable_trig: false, default_op: exp }
+
+  # Workload-shape & interconnect plane (SPEC-009)
+  - id: im2col
+    type: IM2COL
+    clock: main_clk
+    config: { kernel_h: 1, kernel_w: 1, stride: 1 }
+  - id: rdc
+    type: RDC
+    clock: main_clk
+    config: { tree_width: 8, mode: sum, element_bytes: 4 }
+  - id: noc
+    type: NoC
+    clock: main_clk
+    config: { route_cycles: 2, enable_multicast: false }
+  - id: cde
+    type: CDE
+    clock: main_clk
+    config: { direction: compress, compression_ratio: 0.5, enable_zlib: false }
+  - id: tr
+    type: Transpose
+    clock: main_clk
+    config: { enable_3d: false, element_bytes: 4 }
+
+  # System infrastructure plane (SPEC-010)
+  - id: pmu
+    type: PMU
+    clock: main_clk
+    config: { n_counters: 3, report_period_cycles: 50 }
+  - id: sync
+    type: SYNC
+    clock: main_clk
+    config: { n_participants: 2, barrier_overhead_cycles: 2 }
+
+connections:
+  # Data plane chain.
+  - { from: prod.out,          to: dagc.in_packed, fifo_depth: 4, latency_cycles: 1 }
+  - { from: dagc.out_unpacked, to: dsb.in_data,    fifo_depth: 4, latency_cycles: 1 }
+  - { from: dsb.out_data,      to: mac.in_act,     fifo_depth: 4, latency_cycles: 1 }
+  - { from: mac.out_psum,      to: vau.in_a,       fifo_depth: 4, latency_cycles: 1 }
+  - { from: vau.out,           to: avp.in_data,    fifo_depth: 4, latency_cycles: 1 }
+  - { from: avp.out_data,      to: cons.in,        fifo_depth: 4, latency_cycles: 1 }

@@ -1,0 +1,15 @@
+schema_version: "1.0"
+name: "Dequant: INT8 → FP32 (direction variant)"
+description: |
+  §3.7 direction sweep: dequant expands token width 4× (downstream FIFO
+  pressure visible).
+
+base: usecase_quant_baseline.yaml
+
+overrides:
+  modules:
+    q:
+      config:
+        direction: dequant
+        bits_in: 8
+        bits_out: 32

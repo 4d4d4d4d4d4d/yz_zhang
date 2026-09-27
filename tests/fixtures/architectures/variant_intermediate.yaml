@@ -1,0 +1,11 @@
+schema_version: "1.0"
+name: "Intermediate variant"
+description: "A variant that itself has a base. Used to demonstrate chain inheritance ban."
+
+base: baseline_dummy.yaml
+
+overrides:
+  modules:
+    producer:
+      config:
+        throughput_elems_per_cycle: 4

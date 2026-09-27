@@ -1,0 +1,13 @@
+schema_version: "1.0"
+name: "OB double-buffer (max_in_flight_tiles=2)"
+description: |
+  §2.8 double-buffer variant. max_in_flight_tiles doubles → area doubles
+  for accumulator storage; in real pipelines it hides flush latency.
+
+base: usecase_ob_small_tile.yaml
+
+overrides:
+  modules:
+    ob:
+      config:
+        max_in_flight_tiles: 2

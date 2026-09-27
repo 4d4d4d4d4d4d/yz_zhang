@@ -1,0 +1,34 @@
+schema_version: "1.0"
+name: "MAC chain, slow consumer"
+description: "Producer -> MAC -> slow Consumer. MAC output stalls, caused_by cons."
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 16
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 8
+
+  - id: mac
+    type: MAC
+    clock: main_clk
+    config:
+      array_rows: 32
+      array_cols: 32
+      support_bfp16: true
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 8
+
+connections:
+  - { from: prod.out, to: mac.in_act, fifo_depth: 4, latency_cycles: 1 }
+  - { from: mac.out_psum, to: cons.in, fifo_depth: 2, latency_cycles: 1 }

@@ -1,0 +1,13 @@
+schema_version: "1.0"
+name: "SFU default_op=div (slower op)"
+description: |
+  §4.7 op-latency sweep: div costs 14 cycles/op vs exp's 8 → drain time
+  rises by (14-8)*N_tokens.
+
+base: usecase_sfu_baseline.yaml
+
+overrides:
+  modules:
+    sfu:
+      config:
+        default_op: div

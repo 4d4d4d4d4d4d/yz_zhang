@@ -1,0 +1,20 @@
+schema_version: "1.0"
+name: "PMU n_counters=2 — baseline"
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config: { n_tokens: 4, send_rate_cycles_per_token: 1, payload_size_bytes: 8 }
+  - id: pmu
+    type: PMU
+    clock: main_clk
+    config: { n_counters: 2, report_period_cycles: 50 }
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+connections:
+  - { from: prod.out, to: cons.in, fifo_depth: 8, latency_cycles: 1 }

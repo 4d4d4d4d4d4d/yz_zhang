@@ -1,0 +1,21 @@
+schema_version: "1.0"
+name: "IM2COL 1x1 (no-op conv) — baseline"
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config: { n_tokens: 6, send_rate_cycles_per_token: 1, payload_size_bytes: 16 }
+  - id: im
+    type: IM2COL
+    clock: main_clk
+    config: { kernel_h: 1, kernel_w: 1, stride: 1 }
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+connections:
+  - { from: prod.out, to: im.act_in, fifo_depth: 8, latency_cycles: 1 }
+  - { from: im.im2col_out, to: cons.in, fifo_depth: 8, latency_cycles: 1 }

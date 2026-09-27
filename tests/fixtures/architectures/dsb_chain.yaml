@@ -1,0 +1,34 @@
+schema_version: "1.0"
+name: "DSB staging chain"
+description: "Producer -> DSB -> Consumer. Staging buffer in the runtime rig."
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 16
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 8
+
+  - id: dsb
+    type: DSB
+    clock: main_clk
+    config:
+      buffer_kb: 64
+      read_throughput: 8
+      enable_double_buffer: true
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+
+connections:
+  - { from: prod.out, to: dsb.in_data, fifo_depth: 4, latency_cycles: 1 }
+  - { from: dsb.out_data, to: cons.in, fifo_depth: 4, latency_cycles: 1 }

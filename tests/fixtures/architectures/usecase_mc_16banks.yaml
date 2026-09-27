@@ -1,0 +1,7 @@
+schema_version: "1.0"
+name: "MC 16 banks — area-scale variant"
+base: usecase_mc_8banks.yaml
+overrides:
+  modules:
+    mc:
+      config: { n_banks: 16 }

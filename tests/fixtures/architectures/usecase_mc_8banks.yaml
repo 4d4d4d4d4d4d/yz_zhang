@@ -1,0 +1,21 @@
+schema_version: "1.0"
+name: "MC 8 banks — baseline"
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config: { n_tokens: 4, send_rate_cycles_per_token: 1, payload_size_bytes: 8 }
+  - id: mc
+    type: MC
+    clock: main_clk
+    config: { n_banks: 8, row_hit_cycles: 4, row_miss_cycles: 40 }
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config: { receive_rate_cycles_per_token: 1 }
+connections:
+  - { from: prod.out, to: mc.req_in, fifo_depth: 16, latency_cycles: 1 }
+  - { from: mc.data_out, to: cons.in, fifo_depth: 16, latency_cycles: 1 }

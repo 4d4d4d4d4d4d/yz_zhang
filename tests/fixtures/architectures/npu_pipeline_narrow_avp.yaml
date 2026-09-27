@@ -1,0 +1,17 @@
+schema_version: "1.0"
+name: "NPU datapath pipeline (variant: narrow AVP)"
+description: >
+  Same datapath as baseline, but AVP vector width quartered (16 -> 4) — AVP
+  becomes the throughput bottleneck. Used to show the comparator detecting
+  drain-time / stall regressions. Reference: SPEC-003 §6 override form.
+
+base: npu_pipeline.yaml
+
+metadata:
+  tags: ["pipeline", "phase2", "variant"]
+
+overrides:
+  modules:
+    avp:
+      config:
+        vector_width: 4

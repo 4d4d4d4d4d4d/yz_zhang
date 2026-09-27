@@ -1,0 +1,7 @@
+schema_version: "1.0"
+name: "NoC route_cycles=4 — slower route variant"
+base: usecase_noc_unicast.yaml
+overrides:
+  modules:
+    noc:
+      config: { route_cycles: 4 }

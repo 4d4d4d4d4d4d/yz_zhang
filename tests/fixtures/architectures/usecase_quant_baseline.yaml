@@ -1,0 +1,38 @@
+schema_version: "1.0"
+name: "Quant: per-tensor INT8 quantize (baseline)"
+description: |
+  SPEC-008 §3.7 evaluation baseline. Producer emits FP32 act tokens;
+  Quant scales them to INT8 (4× size shrink); Consumer drains.
+
+clock_domains:
+  - id: main_clk
+    period_ps: 1000
+
+modules:
+  - id: prod
+    type: Producer
+    clock: main_clk
+    config:
+      n_tokens: 4
+      send_rate_cycles_per_token: 1
+      payload_size_bytes: 64
+
+  - id: q
+    type: Quant
+    clock: main_clk
+    config:
+      direction: quant
+      bits_in: 32
+      bits_out: 8
+      enable_per_channel: false
+      symmetric: true
+
+  - id: cons
+    type: Consumer
+    clock: main_clk
+    config:
+      receive_rate_cycles_per_token: 1
+
+connections:
+  - { from: prod.out, to: q.data_in, fifo_depth: 4, latency_cycles: 1 }
+  - { from: q.data_out, to: cons.in, fifo_depth: 4, latency_cycles: 1 }

@@ -1,0 +1,14 @@
+schema_version: "1.0"
+name: "WB with prefetch enabled — prefetch-benefit variant"
+description: |
+  SPEC-008 §1.8 — enable_prefetch flips the capability flag on the same
+  WB. Adds the prefetch capability area but doesn't change topology;
+  prefetch traffic would arrive on prefetch_cmd_in in a real workload.
+
+base: usecase_wb_small_capacity.yaml
+
+overrides:
+  modules:
+    wb:
+      config:
+        enable_prefetch: true

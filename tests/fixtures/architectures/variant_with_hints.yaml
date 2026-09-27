@@ -1,0 +1,10 @@
+schema_version: "1.0"
+name: "Dummy with mapping hints"
+
+base: baseline_dummy.yaml
+
+overrides:
+  mapping_hints:
+    passthrough:
+      stage_1: producer
+      stage_2: [producer, consumer]
