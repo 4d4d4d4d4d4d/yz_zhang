@@ -21,9 +21,17 @@
 
 ## 2. 缺失(按重要性,🔴 最关键)
 
-### 🔴 A. 数据搬运能量 + 访存带宽/dataflow 建模(最大缺口)
+### 🟡 A. 数据搬运能量(v0.1 已落地)+ 带宽/dataflow(v0.2 待做)
 
-**现状(已验证)**:workload 动态能量 = Σ 每算子**计算**能量(MAC = macs ×
+**更新(2026-09-27,SPEC-014 v0.1 落地)**:数据搬运**能量**已建模并计入 workload
+能量——每算子按 operand 字节(激活/权重/输出),依"权重放不放得进片上缓冲"判
+SRAM(1.25 pJ/B)vs DRAM 溢出(160 pJ/B),计入 `energy`/设计研究。实测:搬运能量
+与计算同量级,且**总能量现在随设计分化**(片上缓冲成为能量杠杆),修正了早先
+"能量设计不变"的假象(`docs/NPU-Design-Study.md` §3.2 已更新)。**仍缺(v0.2)**:
+dataflow/tiling/data-reuse(现为 no-reuse 上界)、带宽 roofline(访存→计算 stall)、
+激活的 DRAM 溢出。
+
+**原始记录(缺口发现时)**:workload 动态能量曾只算每算子**计算**能量(MAC = macs ×
 per-mac),**不含**从 L2/DRAM/HBM 取操作数、模块间搬数据的能量;**无
 bandwidth/roofline/data-reuse/tiling/dataflow 模型**。MC 只是模块,DRAM 带宽
 未耦合到计算 stall,DRAM 访问能量未计入 workload 总能量。

@@ -21,6 +21,8 @@ NPU simulation platform implementing the v1.0 spec set:
 - **SPEC-006** Rule-based Mapper (op→module) + §8 estimate-vs-measured
 - **SPEC-013** Physical PPA models — literature-grounded area/energy
   (`npu_sim/physical.py`), replacing the placeholder coefficients
+- **SPEC-014** Data-movement energy — per-op operand traffic → SRAM/DRAM
+  access energy, counted in workload energy (`evaluation/data_movement.py`)
 - **ADR-001** Six key technical decisions
 - **ADR-002** Module identity criteria (new IModule subclass vs. capability flag)
 

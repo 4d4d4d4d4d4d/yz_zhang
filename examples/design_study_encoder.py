@@ -22,6 +22,7 @@ import yaml
 
 import npu_sim.modules  # noqa: F401  (registers modules)
 from npu_sim.evaluation import chip_fidelity, elaborate
+from npu_sim.evaluation.data_movement import data_movement_energy_pj
 from npu_sim.evaluation.trace_ops import ops_from_list
 from npu_sim.mapping import RuleBasedMapper
 
@@ -78,8 +79,8 @@ def main() -> None:
     print(f"# Encoder layer: {len(ops)} ops | model = ×{N_LAYERS} layers")
     print(f"# matmul MACs/layer = {macs:,}  → model {macs*N_LAYERS/1e9:.2f} G-MAC\n")
 
-    hdr = (f"{'design':14} | {'area mm²':>9} | {'cyc/layer':>10} | {'model ms':>9} "
-           f"| {'dyn nJ/L':>10} | {'stat nJ/L':>9} | {'model mJ':>9}")
+    hdr = (f"{'design':14} | {'area mm²':>9} | {'model ms':>9} | {'cmp nJ/L':>9} "
+           f"| {'mov nJ/L':>9} | {'stat nJ/L':>9} | {'model mJ':>9} | spill")
     print(hdr)
     print("-" * len(hdr))
     rows = []
@@ -88,17 +89,20 @@ def main() -> None:
         plan = RuleBasedMapper(strict=False).map(ops, arch)
         cyc = plan.total_typical_cycles
         dyn_pj = plan.total_dynamic_pj
+        dm = data_movement_energy_pj(ops, arch)          # SPEC-014 data movement
         area_mm2 = chip_fidelity(arch).total_area_um2 / 1e6
         power_uw = sum(m.static_power_uw() for m in arch.modules.values())
         stat_pj = power_uw * (cyc * PERIOD_PS) * 1e-6
         model_ms = cyc * PERIOD_PS * 1e-12 * N_LAYERS * 1e3
-        model_mj = (dyn_pj + stat_pj) / 1000 * N_LAYERS / 1e6
+        model_mj = (dyn_pj + dm.total_pj + stat_pj) / 1000 * N_LAYERS / 1e6
         rows.append((name, area_mm2, cyc, model_ms, model_mj))
-        print(f"{name:14} | {area_mm2:9.2f} | {cyc:10,} | {model_ms:9.2f} "
-              f"| {dyn_pj/1000:10.1f} | {stat_pj/1000:9.1f} | {model_mj:9.3f}")
+        print(f"{name:14} | {area_mm2:9.2f} | {model_ms:9.2f} | {dyn_pj/1000:9.1f} "
+              f"| {dm.total_pj/1000:9.1f} | {stat_pj/1000:9.1f} | {model_mj:9.3f} "
+              f"| {'DRAM' if dm.any_weight_spilled else 'on-chip'}")
 
     print("\n# best latency:", min(rows, key=lambda r: r[2])[0])
     print("# best area   :", min(rows, key=lambda r: r[1])[0])
+    print("# best energy :", min(rows, key=lambda r: r[4])[0])
     print("# best EDP    :", min(rows, key=lambda r: r[3] * r[4])[0])
 
 

@@ -33,6 +33,7 @@ Owners：架构组
 | [SPEC-011 DRAM 子系统与专用计算](./SPEC-011-DRAM-Specialized.md) | MC / L2 / SE / TLU / CMDQ / MMU | v0.1 Draft（全 6 §§ 实现 + 测试）|
 | [SPEC-012 Trace-Driven 激励](./SPEC-012-Trace-Driven-Stimulus.md) | TraceProducer — 播放真实模型算子序列 | v0.1 Draft（实现 + 测试）|
 | [SPEC-013 物理 PPA 模型](./SPEC-013-Physical-PPA-Models.md) | literature-grounded 面积/能量(`physical.py`),替换占位系数;compute + 全部片上存储已迁移 | v0.1 Draft（实现 + 测试 + 验证）|
+| [SPEC-014 数据搬运能量](./SPEC-014-Data-Movement-Energy.md) | 每算子 operand 流量 → SRAM/DRAM 能量,计入 workload 能量;总能量随缓冲设计分化 | v0.1 Draft（能量已落地;带宽/dataflow 待 v0.2）|
 | [SPEC-001 v1.1 增订](./SPEC-001-v1.1-amendment.md) | Area 维度 + clock_domain | v1.1 Draft（Review pending）|
 | [SPEC-003 v1.1 增订](./SPEC-003-v1.1-amendment.md) | `__relocate__` / `clock_domains` / `physical_dimension` | v1.1 Draft（Review pending）|
 | [SPEC-005 v1.1 增订](./SPEC-005-v1.1-amendment.md) | 现存模块 area 系数 + UNPACK capability | v1.1 Draft（Review pending）|
@@ -97,14 +98,13 @@ v1.0 已 Accepted,以此为契约启动实现。任何与 spec 不符的实现�
 ### v1.1 候选项
 
 源自平台能力评估(`docs/Platform-Capability-Assessment.md`,按优先级):
-- 🔴 **数据搬运能量 + 访存带宽/dataflow 建模(最高优先)** —— 当前 workload
-  动态能量只算每算子**计算**能量(MAC=macs×per-mac),**不含**operand/weight
-  的 DRAM↔on-chip 搬运能量;无 bandwidth/roofline/data-reuse/tiling 模型,MC
-  带宽未耦合到计算 stall。Horowitz:DRAM 访问 640pJ vs MAC ~1pJ(640×),真实
-  NPU 的 PPA 常由数据搬运主导,故当前总能量可能低估数倍,且"能量随设计不变"
-  是此缺失的假象(`docs/NPU-Design-Study.md` §3.2)。需求:给算子加访存字节 →
-  流量 → per-access 能量 + roofline;SPEC-005/006 增订"每 op 的 operand 流量与
-  搬运能量"口径。
+- 🟡 **数据搬运能量(SPEC-014 v0.1 已落地)+ 带宽/dataflow(v0.2 待做)** ——
+  ✅ 已建模数据搬运**能量**:每算子 operand 字节 → 依片上缓冲 fit 判 SRAM/DRAM →
+  per-access 能量,计入 `energy`/设计研究;总能量现在**随设计分化**(修正"能量
+  设计不变"假象,`docs/NPU-Design-Study.md` §3.2)。**仍缺(v0.2)**:dataflow/
+  tiling/data-reuse(现为 no-reuse 上界)、带宽 roofline(访存→计算 stall)、
+  激活 DRAM 溢出。原始记录:workload 能量曾只算计算能量,不含搬运,无 bandwidth/
+  roofline;Horowitz DRAM 640pJ vs MAC ~1pJ,真实 NPU PPA 常由数据搬运主导。
 - 🟠 **Mapper 升级为 cost-model + DAG** —— 扁平算子表 → DAG/依赖边;空间映射
   (systolic tiling/sharding);dataflow(weight/output/row-stationary)loop-nest;
   cost-model/ILP/RL 搜索;`optimize` 支持缩小过配置的级(现仅加宽)。含 SPEC-006
