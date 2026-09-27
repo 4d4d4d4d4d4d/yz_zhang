@@ -460,6 +460,26 @@ def test_cli073_wallet_money_out_shapes(client, requester):
     _assert_shape(rows[0], "LedgerRow")
 
 
+def test_cli077_admin_review_shapes(client):
+    """PAY-040 / AML-021 管理端两个形状。
+
+    管理后台**整体在覆盖闸门之外**（`_server_paths` 跳过 `/admin`），
+    所以这两个形状此前没有任何东西看着。建的时候就进闸门。
+    """
+    from tests.conftest import make_admin
+    from tests.test_withdraw_review_loop import _pending_withdraw
+
+    _u, admin, _rid = _pending_withdraw(client, "13800064400", "13800064409")
+    rows = client.get("/api/v1/wallet/withdraw-requests?status=pending",
+                      headers=auth(admin)).json()
+    _assert_shape(rows[0], "WithdrawRequestRow")
+
+    items = client.get("/api/v1/admin/aml/activities?status=pending",
+                       headers=auth(admin)).json()["items"]
+    assert items, "大额提现进人审却没有留下可疑活动记录"
+    _assert_shape(items[0], "SuspiciousActivityRow")
+
+
 def test_cli076_change_order_shape(client, requester):
     """SC-007 变更单列表的形状。这个接口是 V95 新建的——
     **建的时候就进闸门**，别等它漂了才补。"""

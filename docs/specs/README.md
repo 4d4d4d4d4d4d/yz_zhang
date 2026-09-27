@@ -93,6 +93,7 @@
 | 68 | 建好了，可是没有一个人能按下去（求助/改密码/会话） | [68-nobody-can-press-it.md](./68-nobody-can-press-it.md) | P0 |
 | 69 | 扫描闸门证明不了的那一半（App 单元测试） | [69-app-unit-tests.md](./69-app-unit-tests.md) | P0 |
 | 70 | 算得很清楚的钱，没有人能动（变更单/分期/打卡） | [70-money-nobody-can-move.md](./70-money-nobody-can-move.md) | P0 |
+| 71 | 进了人审，就再也出不来（提现复核台与运营侧闸门） | [71-into-review-never-out.md](./71-into-review-never-out.md) | P0 |
 
 ## 功能点编号与优先级约定
 

@@ -156,11 +156,43 @@ def list_withdraw_requests(
         db.query(WithdrawRequest).filter(WithdrawRequest.status == status)
         .order_by(WithdrawRequest.id).limit(200).all()
     )
-    return [
-        {"id": r.id, "user_id": r.user_id, "amount_cents": r.amount_cents,
-         "status": r.status, "created_at": iso(r.created_at)}
-        for r in rows
-    ]
+    # PAY-040 复核台要给够判断的依据。
+    #
+    # 改造前每行只有 id / user_id / amount_cents / status / created_at——
+    # 一个风控岗要为三万块做放行判断，拿到的是一个用户 ID。
+    #
+    # 这里带出的**命中标记**只出现在 require_admin 的响应里：
+    # AML-030/031 的分界是「合规官看得到为什么，用户只看到中性话术」。
+    from app.modules.aml.models import SuspiciousActivity
+
+    from .models import LedgerEntry
+
+    out = []
+    for r in rows:
+        u = db.get(User, r.user_id)
+        withdrawn = sum(
+            -e.amount_cents for e in db.query(LedgerEntry).filter(
+                LedgerEntry.user_id == r.user_id, LedgerEntry.kind == "withdraw").all()
+        )
+        flags = (
+            db.query(SuspiciousActivity)
+            .filter(SuspiciousActivity.user_id == r.user_id,
+                    SuspiciousActivity.ref_type == "withdraw_request",
+                    SuspiciousActivity.ref_id == r.id)
+            .all()
+        )
+        out.append({
+            "id": r.id, "user_id": r.user_id, "amount_cents": r.amount_cents,
+            "status": r.status, "created_at": iso(r.created_at),
+            "nickname": u.nickname if u else "",
+            "is_verified": bool(u and u.is_verified),
+            "registered_at": iso(u.created_at) if u else None,
+            "withdrawn_total_cents": withdrawn,
+            # 命中依据要带**具体数值**：只写「疑似拆分」，复核的人无从判断
+            "flags": [{"pattern": f.pattern, "detail": f.detail,
+                       "amount_cents": f.amount_cents} for f in flags],
+        })
+    return out
 
 
 @router.post("/withdraw-requests/{request_id}/approve")

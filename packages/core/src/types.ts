@@ -188,6 +188,41 @@ export interface LedgerRow {
   created_at: string;
 }
 
+/** PAY-040 提现复核台的一行。
+ *
+ *  `flags` 是这笔申请命中的可疑模式，**只出现在管理端响应里**——
+ *  AML-030/031 的分界是「合规官看得到为什么，用户只看到中性话术」。
+ *  改造前这一行只有 id/user_id/amount_cents：一个风控岗要为三万块
+ *  做放行判断，拿到的是一个用户 ID。 */
+export interface WithdrawRequestRow {
+  id: number;
+  user_id: number;
+  amount_cents: number;
+  status: string;
+  created_at: string;
+  nickname: string;
+  is_verified: boolean;
+  registered_at: string | null;
+  withdrawn_total_cents: number;
+  flags: Array<{ pattern: string; detail: string; amount_cents: number }>;
+}
+
+/** AML-021 可疑活动。整条线**只对管理员开放**：可疑标记一旦出现在用户
+ *  能看到的任何地方（包括数据导出）就构成 tipping-off。 */
+export interface SuspiciousActivityRow {
+  id: number;
+  user_id: number;
+  pattern: string;
+  pattern_label: string;
+  detail: string;
+  amount_cents: number;
+  ref_type: string;
+  ref_id: number;
+  status: string;
+  review_note: string;
+  at: string;
+}
+
 /** SC-007 变更单。任务范围一变（「加了两个房间」），这是产品里唯一
  *  能把它落地的路——否则双方只剩取消或纠纷两条对抗路径。
  *

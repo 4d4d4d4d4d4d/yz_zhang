@@ -175,7 +175,31 @@ def decide_withdraw(db: Session, req, approve: bool, admin_id: int) -> dict:
     req.decided_by = admin_id
     req.decided_at = utcnow()
     db.add_all([acct, req])
+    _notify_withdraw_decision(db, req, approve)
     return {"status": req.status, "amount_cents": req.amount_cents}
+
+
+def _notify_withdraw_decision(db: Session, req, approve: bool) -> None:
+    """PAY-041 裁决要告诉用户——而**驳回不能说原因**。
+
+    改造前这里一个字都不发：用户看到「通常 1 个工作日内处理完成」，
+    然后钱要么回来要么不回来，平台全程静音。三万块。
+
+    驳回文案刻意中性。不给原因不是敷衍：AML-030/031（《反洗钱法》第五条的
+    保密义务）不允许告诉他命中了什么，而且说了就等于教他下次怎么规避。
+
+    归 `funds` 类——`notify()` 的既有规则里 funds 本来就不可被开关关掉，
+    所以**不需要进 `MUST_REACH`**（那张表是给「本该可关却不能关」的用的）。
+    """
+    from app.modules.notification.service import notify
+
+    yuan = f"¥{req.amount_cents / 100:.2f}"
+    if approve:
+        notify(db, req.user_id, "funds", "提现已通过复核",
+               f"你的提现 {yuan} 已通过复核并发起打款，到账时间取决于银行处理。")
+    else:
+        notify(db, req.user_id, "funds", "提现未通过复核",
+               f"你的提现 {yuan} 未通过复核，款项已退回可用余额，你可以重新发起。")
 
 
 def escrow_hold(db: Session, user_id: int, amount: int, contract_id: int):

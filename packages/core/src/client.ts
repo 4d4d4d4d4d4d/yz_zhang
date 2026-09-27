@@ -55,6 +55,8 @@ import type {
   PayoutAccountView,
   SosResult,
   ChangeOrderView,
+  WithdrawRequestRow,
+  SuspiciousActivityRow,
 } from './types';
 
 export class ApiError extends Error {
@@ -308,8 +310,11 @@ export class PlatformClient {
       'POST', '/wallet/withdraw', { amount_cents: amountCents },
     );
   }
+  /** PAY-040 提现复核队列（管理端）。V82 的豁免表里写着这两个动作
+   *  「在管理后台做」——而管理后台里此前没有这一条，**那句话是一个
+   *  没人核对过的承诺**。 */
   withdrawRequests(status = 'pending') {
-    return this.request<Array<{ id: number; user_id: number; amount_cents: number; status: string; created_at: string }>>(
+    return this.request<WithdrawRequestRow[]>(
       'GET', `/wallet/withdraw-requests?status=${status}`,
     );
   }
@@ -337,6 +342,23 @@ export class PlatformClient {
     return this.request<{ delivered: number }>('POST', '/admin/announcements', {
       title, body, verified_only: verifiedOnly,
     });
+  }
+  // ---- AML 合规官视图（全部 require_admin，AML-030 tipping-off）----
+  /** AML-021 可疑活动清单。V55 就建好了这三个端点，**SDK 里一个都没有**
+   *  （它们在 /admin 下，被覆盖闸门整体跳过了），于是标记躺在库里没人复核。 */
+  amlActivities(status = 'pending') {
+    return this.request<{ items: SuspiciousActivityRow[]; note: string }>(
+      'GET', `/admin/aml/activities?status=${status}`,
+    );
+  }
+  amlStats() {
+    return this.request<Record<string, number>>('GET', '/admin/aml/stats');
+  }
+  /** `decision`: cleared（复核无问题）/ to_report（待报送）/ reported（已报送）。 */
+  reviewAmlActivity(activityId: number, decision: 'cleared' | 'to_report' | 'reported', note = '') {
+    return this.request<{ id: number; status: string }>(
+      'POST', `/admin/aml/activities/${activityId}/review`, { decision, note },
+    );
   }
   platformFinance() {
     return this.request<{ balance_cents: number; total_fee_cents: number; settled_cents: number; fee_count: number }>(

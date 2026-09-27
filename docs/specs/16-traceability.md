@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V95 全批次完成（2026-09-24）。
-> 后端 987 tests + 前端 120 tests（core 56 + web 46 + App 18）全绿；`scripts/smoke.py`（mock 态）与
+> 状态：MVP + V1~V96 全批次完成（2026-09-27）。
+> 后端 1004 tests + 前端 125 tests（core 56 + web 51 + App 18）全绿；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
 > 剩余项均依赖外部供应商/云服务，见文末。
@@ -9,6 +9,30 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V96 批次：进了人审，就再也出不来）
+
+> 模块 spec：[71-into-review-never-out.md](71-into-review-never-out.md)
+>
+> ```
+> WITHDRAW: 200 {"status":"pending_review","frozen_cents":3000000, ...}
+> 用户收到的通知: []
+> withdrawRequests: web=0 app=0     decideWithdraw: web=0 app=0
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **PAY-040 提现复核台此前不存在** | 管理后台有用户、举报、封禁、指标——**没有提现复核**。V91 把提现接通后，大额进人审的 ¥30000 冻在用户账上，端点通而**没有任何界面能打它** | `web/src/WithdrawReview.test.tsx`（5 项）、`tests/test_admin_console_reachability.py` |
+| **为什么能漏这么久** | V82 的豁免表写着「提现人审是风控岗位的动作，**在管理后台做**」——理由是对的，同时是一个承诺，而**没有任何东西核对过那个地方是否真有这一条**。更结构性的一层：同一闸门里 `if "/admin" in rel: continue`，**整个管理后台在所有闸门的覆盖范围之外**，而动钱的决定大半发生在那里 | 见 spec §1 |
+| **PAY-040 队列要给够判断依据** | 改造前每行只有 `id/user_id/amount_cents`——风控岗为三万块做放行判断，拿到的是一个用户 ID。补昵称、实名、注册时间、历史提现累计，以及**这笔申请命中的 AML 标记**（V55 就在写库，此前没人读），标记带**具体数值** | `tests/test_withdraw_review_loop.py::test_pay040_queue_carries_what_a_reviewer_needs_to_decide`（红验：`flags` 置空即红） |
+| **两侧措辞的分界守住** | 合规官看得到命中了什么；**用户只看到中性话术**。用户拉不到该队列（403），账单里也不出现风控字样 | `::test_pay040_flags_never_leak_to_the_user` |
+| **PAY-041 裁决要告诉用户** | 改造前一个字都不发：用户看到「通常 1 个工作日内处理完成」，然后钱要么回来要么不回来。批准说清打款已发起；**驳回中性、不含任何原因**（《反洗钱法》第五条 + 说了等于教对方规避），但**必须说钱退回了哪里** | `::test_pay041_approval_tells_the_user_the_money_is_on_its_way`、`::test_pay041_rejection_is_neutral_and_says_where_the_money_went`（红验：文案写出「命中可疑拆分」即红） |
+| **归 `funds` 类而非进 `MUST_REACH`** | `notify()` 既有规则里 funds 本来就不可关。**表是给「本该可关却不能关」的用的**——不是每次都往里加 | `::test_pay041_decision_notices_are_funds_category_not_must_reach`（关掉所有可关类别后仍送达） |
+| **谁批的要留痕** | 三万块的放行必须可追溯 | `::test_pay041_audit_records_who_approved_it` |
+| **AML-040 合规官队列没人读** | `/admin/aml/activities`、`/stats`、`/review` V55 就建好了，**SDK 里一个都没有**（在 `/admin` 下被闸门跳过），可疑活动躺在库里没人复核也没人能标「待报送」 | `web/src/WithdrawReview.test.tsx::AML-040`（服务端那句保密提示原样显示） |
+| **CLI-077 把承诺变成会红的东西** | ①豁免理由里说「在管理后台做」的端点，后台必须真的调它，且新增这类豁免时要一起登记兑现它的方法；②`ADMIN_CONSOLE` 声明表：运营侧必须可达的能力 → 不做会怎样（判定标准：**只有运营/风控能做，而不做就有人的钱或权利卡住**；报表指标类不进表） | `::test_cli077_exemptions_that_promise_the_admin_console_are_kept`、`::test_cli077_admin_capability_is_reachable` |
+| **闸门第一版放过了「写了没挂上」** | 红验时把 `<WithdrawReview />` 从页面摘掉，组件函数还在文件里，**闸门照样绿**。改成：定位调用该方法的组件，再要求那个组件**被挂到页面上** | 红验第二次通过（三处破坏全红） |
+| **CLI-077 管理端形状进闸门** | `WithdrawRequestRow` / `SuspiciousActivityRow`——管理后台整体在覆盖闸门之外，这两个形状此前没有任何东西看着 | `tests/test_client_shape_alignment.py::test_cli077_admin_review_shapes` |
 
 ## 已实现（V95 批次：算得很清楚的钱，没有人能动）
 
