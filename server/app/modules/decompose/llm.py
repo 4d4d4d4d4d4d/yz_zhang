@@ -8,12 +8,32 @@
 网关的选择由环境变量驱动：设置 ANTHROPIC_API_KEY 即启用 AnthropicLLM。
 """
 import json
+import logging
 import os
 from typing import Protocol
 
 from sqlalchemy.orm import Session
 
 from app.modules.knowledge import service as kb
+
+logger = logging.getLogger(__name__)
+
+# AGT-054 降级计数：按异常类型分桶，暴露到 /metrics。
+# 「降级了多少次、因为什么」必须看得见——否则一个过期的型号字面量
+# 可以在生产里静默生效好几个月。
+_fallbacks: dict[str, int] = {}
+
+
+def record_fallback(kind: str) -> None:
+    _fallbacks[kind] = _fallbacks.get(kind, 0) + 1
+
+
+def fallback_counts() -> dict[str, int]:
+    return dict(_fallbacks)
+
+
+def reset_fallbacks() -> None:
+    _fallbacks.clear()
 
 
 class LLMGateway(Protocol):
@@ -88,10 +108,28 @@ SYSTEM_PROMPT = (
 )
 
 
-class AnthropicLLM:
-    """生产实现：claude-opus-4-8 分解，JSON Schema 强约束 + 校验，失败降级模板。"""
+# AGT-054 默认模型。**这个字面量过期过一次**：写下的是 `claude-opus-4-8`，
+# 而那个型号早已不在售。配上 Key 之后，每一次分解都会 404，
+# 然后被下面那个 `except Exception` 静默吞掉、回落模板——
+# 平台看起来一切正常，`真实 LLM 分解已接入` 这句话却从来没有成立过。
+#
+# 所以这里同时留一张**在售型号表**，由测试钉住（见 test_llm_model_id.py）：
+# 型号会换，而一个过期的字面量不该靠人偶然发现。
+DEFAULT_MODEL = "claude-opus-5"
 
-    def __init__(self, model: str = "claude-opus-4-8"):
+# 当前 Claude 5 家族 + 仍在售的 4.5。配置成表外的型号，生产启动自检会拒。
+KNOWN_MODELS = frozenset({
+    "claude-opus-5",
+    "claude-sonnet-5",
+    "claude-fable-5-1",
+    "claude-haiku-4-5-20251001",
+})
+
+
+class AnthropicLLM:
+    """生产实现：JSON Schema 强约束 + 校验，失败降级模板。"""
+
+    def __init__(self, model: str = DEFAULT_MODEL):
         self.model = model
         self._fallback = TemplateLLM()
 
@@ -143,14 +181,28 @@ class AnthropicLLM:
                     }
                 )
             return out
-        except Exception:
-            # 04.E 降级路径：任何失败（无 Key/超时/输出不合规）回落模板引擎
+        except Exception as exc:
+            # 04.E 降级路径：任何失败（无 Key/超时/输出不合规）回落模板引擎。
+            #
+            # **但降级不能是静默的。** 改造前这里是裸 `except Exception: return 模板`：
+            # 一个过期的型号字面量让每次调用都 404，而平台看起来完全正常——
+            # 「有 Key 即用」这句话不成立，却没有任何信号说出来。
+            #
+            # 降级本身是对的（宁可给模板结果也不要让发布卡住），
+            # 要的是**它发生过这件事被记下来**。
+            record_fallback(type(exc).__name__)
+            logger.warning(
+                "llm_decompose_fallback",
+                extra={"model": self.model, "error_type": type(exc).__name__,
+                       # 异常文本可能带上游返回内容，交给既有的日志脱敏
+                       "error": str(exc)[:200]},
+            )
             return self._fallback.decompose(db, title, description, category, budget_cents)
 
 
 def _default_gateway() -> LLMGateway:
     if os.environ.get("ANTHROPIC_API_KEY"):
-        return AnthropicLLM(os.environ.get("PLATFORM_LLM_MODEL", "claude-opus-4-8"))
+        return AnthropicLLM(os.environ.get("PLATFORM_LLM_MODEL", DEFAULT_MODEL))
     return TemplateLLM()
 
 

@@ -25,51 +25,15 @@ import pytest
 
 from tests.test_client_contract_coverage import CLIENT_EXEMPT
 
-REPO = Path(__file__).resolve().parents[2]
-ADMIN_SRC = REPO / "web" / "src" / "pages" / "Admin.tsx"
-SDK = REPO / "packages" / "core" / "src" / "client.ts"
-
-
-def _admin_source() -> str:
-    """管理后台页面，以及它 import 的本地组件。
-
-    只扫一个文件会把「组件拆出去了」误判成「功能没了」。
-    """
-    src = ADMIN_SRC.read_text(encoding="utf-8")
-    for rel in re.findall(r"from '(\.{1,2}/[^']+)'", src):
-        for cand in (ADMIN_SRC.parent / rel, ADMIN_SRC.parent / f"{rel}.tsx",
-                     ADMIN_SRC.parent / f"{rel}.ts"):
-            if cand.is_file():
-                src += "\n" + cand.read_text(encoding="utf-8")
-    return src
+# 扫描实现只有一份（tests/clientscan.py）。这个文件原本自带一份 `_calls`，
+# 而那一份漏了「组件得挂上」那一层——红验时把 `<WithdrawReview />` 摘掉，
+# 闸门照样是绿的。**第二份实现必然抄漏**，对测试代码同样成立。
+from tests.clientscan import calls as _client_calls
+from tests.clientscan import sdk_has, sources
 
 
 def _calls(method: str) -> bool:
-    """这个能力在管理后台里**真的被用上了**。
-
-    不只看「有没有 `.method(`」——第一版就是那样，而红验时发现：
-    把 `<WithdrawReview />` 从页面上摘掉，组件函数还在文件里，
-    **闸门照样是绿的**。「组件写了但没挂上」是一种很常见的写错方式，
-    而它和「功能没做」对用户是一回事。
-
-    所以：定位调用它的那个组件，再要求那个组件**被挂到页面上**。
-    """
-    src = _admin_source()
-    if not re.search(r"\." + re.escape(method) + r"\s*\(", src):
-        return False
-    # 找出包含这个调用的组件（函数声明到下一个顶层 function / export 之间）
-    blocks = re.split(r"\n(?=(?:export default )?function )", src)
-    owners = [
-        m.group(1)
-        for b in blocks
-        if re.search(r"\." + re.escape(method) + r"\s*\(", b)
-        for m in [re.match(r"(?:export default )?function (\w+)", b.lstrip())]
-        if m
-    ]
-    if not owners:
-        return False
-    # 顶层页面组件自己不需要被别处挂载
-    return any(o == "Admin" or re.search(r"<" + o + r"[\s/>]", src) for o in owners)
+    return _client_calls("admin", method)
 
 
 # 运营侧必须可达的能力 -> 为什么
@@ -97,7 +61,7 @@ ADMIN_CONSOLE: dict[str, str] = {
 
 def test_cli077_scanner_can_see_the_admin_page():
     """扫不到等于全绿，是最糟的一种绿。"""
-    src = _admin_source()
+    src = sources("admin")
     assert len(src) > 2000, "管理后台源码短得不像真的——路径写错了？"
     assert _calls("adminMetrics"), "扫不到已知成员，正则或路径坏了"
     assert not _calls("definitelyNotAnSdkMethod")
@@ -107,9 +71,7 @@ def test_cli077_table_says_why():
     assert len(ADMIN_CONSOLE) >= 5
     for method, why in ADMIN_CONSOLE.items():
         assert len(why) >= 15, f"{method} 的理由太敷衍：{why}"
-        assert re.search(r"^  " + re.escape(method) + r"\s*\(",
-                         SDK.read_text(encoding="utf-8"), re.M), \
-            f"{method} 在 SDK 上不存在"
+        assert sdk_has(method), f"{method} 在 SDK 上不存在"
 
 
 @pytest.mark.parametrize("method", sorted(ADMIN_CONSOLE))

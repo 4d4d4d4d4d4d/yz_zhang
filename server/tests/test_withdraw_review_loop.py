@@ -131,3 +131,61 @@ def test_pay041_audit_records_who_approved_it(client):
         rows = db.query(AdminAudit).filter(AdminAudit.action == "withdraw_approve").all()
     assert rows, "批准提现没有留下审计记录"
     assert rows[-1].admin_id == admin["id"]
+
+
+# ------------------------------------------------- PERF 复核台的查询次数有上界
+def _queries_for(client, admin, n_expected: int) -> int:
+    from sqlalchemy import event
+
+    from app.core.db import engine
+
+    counted: list[str] = []
+
+    def _count(conn, cursor, statement, params, context, executemany):
+        counted.append(statement)
+
+    event.listen(engine, "before_cursor_execute", _count)
+    try:
+        r = client.get("/api/v1/wallet/withdraw-requests?status=pending", headers=auth(admin))
+        assert r.status_code == 200
+        assert len(r.json()) == n_expected, f"队列里应该有 {n_expected} 笔"
+    finally:
+        event.remove(engine, "before_cursor_execute", _count)
+    return len(counted)
+
+
+def _add_pending_rows(user_id: int, n: int) -> None:
+    """直接往库里插待审行。
+
+    这条测试量的是**读路径**的查询次数，不是写路径；而用真实注册去造
+    9 个用户会撞上注册限流（那是平台在正常工作）。所以这里只造数据。
+    """
+    from app.modules.wallet.models import WithdrawRequest
+
+    with SessionLocal() as db:
+        for _ in range(n):
+            db.add(WithdrawRequest(user_id=user_id, amount_cents=1000000))
+        db.commit()
+
+
+def test_pay040_queue_does_not_scale_queries_with_rows(client):
+    """队列的查询次数**不随行数增长**。
+
+    上一批把这一页写成了逐行 `db.get(User)` + **整表扫流水** + 一条标记查询：
+    上限 200 行就是 600 次查询，其中 200 次是对 `ledger_entries` 的无界扫描。
+    复核台是风控岗每天要开很多次的页面，这个代价不该由它承担。
+
+    断言的是**行数翻倍时查询数不跟着涨**，而不是一个猜出来的常数上界：
+    第一版写成 `<= 12`，而三行的 N+1 刚好也在 12 以内——**红验时它没红**。
+    「不随行数增长」这句话得直接量出来。
+    """
+    u, admin, _rid = _pending_withdraw(client, "13800094100", "13800094109")
+    few = _queries_for(client, admin, 1)
+
+    _add_pending_rows(u["id"], 8)
+    many = _queries_for(client, admin, 9)
+
+    assert many <= few + 2, (
+        f"1 行打了 {few} 条 SQL，9 行打了 {many} 条——查询数在跟着行数涨。\n"
+        "复核台上限 200 行，这样下去就是几百次查询加上对流水表的逐行扫描。"
+    )

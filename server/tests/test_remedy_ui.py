@@ -21,12 +21,32 @@ from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[2]
-CLIENT_SRC = {
-    # 端 -> 该端的源码文件（排除测试：**测试里调过一次不等于用户点得到**）
-    "web": [p for p in (REPO / "web" / "src").rglob("*.ts*") if ".test." not in p.name],
-    "app": sorted((REPO / "app").glob("*.tsx")),
-}
+# 扫描实现只有一份（tests/clientscan.py）。此前 remedy_ui 与
+# admin_console_reachability 各写了一份，而第二份漏了「组件得挂上」那一层——
+# **第二份实现必然抄漏**，这条规矩对测试代码同样成立。
+from tests.clientscan import CLIENT_SRC, REPO, calls as _client_calls, sdk_has, server_source
+from tests.clientscan import sources as _sources
+
+
+def _calls(client: str, method: str) -> bool:
+    return _client_calls(client, method)
+
+
+def _strip_comments(src: str) -> str:
+    """注释不是用户看得见的文案。
+
+    第一版把注释也扫了，于是**解释「不许说风控」的那句注释自己先红了**——
+    一个假报警多的闸门会被人关掉（V89 立过这条），所以先把注释去掉。
+    """
+    src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+    return re.sub(r"(?<!:)//[^\n]*", "", src)
+
+
+def _user_facing_strings(client: str) -> str:
+    """端上会显示给用户的字面量：引号里的内容 + JSX 文本节点。"""
+    src = _strip_comments(_sources(client))
+    quoted = re.findall(r"'([^'\n]*)'|\"([^\"\n]*)\"|`([^`]*)`", src)
+    return "\n".join(x for group in quoted for x in group if x)
 
 
 # 服务端错误码 -> (能解决它的 SDK 方法, 必须有入口的端, 为什么用户必须能自己解决)
@@ -56,33 +76,6 @@ REMEDY_UI: dict[str, tuple[str, tuple[str, ...], str]] = {
         "本批没有真机可验证，宁可如实记成缺口（APP-071）也不上一段没验过的原生依赖",
     ),
 }
-
-
-def _sources(client: str) -> str:
-    return "\n".join(p.read_text(encoding="utf-8") for p in CLIENT_SRC[client])
-
-
-def _strip_comments(src: str) -> str:
-    """注释不是用户看得见的文案。
-
-    第一版把注释也扫了，于是**解释「不许说风控」的那句注释自己先红了**——
-    一个假报警多的闸门会被人关掉（V89 立过这条），所以先把注释去掉。
-    """
-    src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
-    return re.sub(r"(?<!:)//[^\n]*", "", src)
-
-
-def _user_facing_strings(client: str) -> str:
-    """端上会显示给用户的字面量：引号里的内容 + JSX 文本节点。"""
-    src = _strip_comments(_sources(client))
-    quoted = re.findall(r"'([^'\n]*)'|\"([^\"\n]*)\"|`([^`]*)`", src)
-    return "\n".join(x for group in quoted for x in group if x)
-
-
-def _calls(client: str, method: str) -> bool:
-    """`.method(` 就算调用过。刻意宽松——这道闸门要答的是
-    「这个端上到底有没有这条路」，不是「调用姿势对不对」。"""
-    return re.search(r"\." + re.escape(method) + r"\s*\(", _sources(client)) is not None
 
 
 # --------------------------------------------------- 扫描器自检（先于断言别人）

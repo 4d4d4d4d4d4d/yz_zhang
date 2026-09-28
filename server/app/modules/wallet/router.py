@@ -167,20 +167,34 @@ def list_withdraw_requests(
 
     from .models import LedgerEntry
 
+    # PERF 一次把三类关联数据取齐，而不是每行三条查询。
+    # 上一批写成了逐行 `db.get(User)` + **整表扫 LedgerEntry** + 一条标记查询：
+    # 队列上限 200 行 = 600 次查询，其中 200 次是对流水表的无界扫描。
+    # 复核台是风控岗每天要开很多次的页面，这个代价不该由它承担。
+    from sqlalchemy import func
+
+    user_ids = {r.user_id for r in rows}
+    req_ids = [r.id for r in rows]
+    users = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+    withdrawn_by_user = dict(
+        db.query(LedgerEntry.user_id, func.coalesce(func.sum(-LedgerEntry.amount_cents), 0))
+        .filter(LedgerEntry.user_id.in_(user_ids), LedgerEntry.kind == "withdraw")
+        .group_by(LedgerEntry.user_id)
+        .all()
+    ) if user_ids else {}
+    flags_by_req: dict[int, list] = {}
+    if req_ids:
+        for f in (db.query(SuspiciousActivity)
+                  .filter(SuspiciousActivity.ref_type == "withdraw_request",
+                          SuspiciousActivity.ref_id.in_(req_ids))
+                  .all()):
+            flags_by_req.setdefault(f.ref_id, []).append(f)
+
     out = []
     for r in rows:
-        u = db.get(User, r.user_id)
-        withdrawn = sum(
-            -e.amount_cents for e in db.query(LedgerEntry).filter(
-                LedgerEntry.user_id == r.user_id, LedgerEntry.kind == "withdraw").all()
-        )
-        flags = (
-            db.query(SuspiciousActivity)
-            .filter(SuspiciousActivity.user_id == r.user_id,
-                    SuspiciousActivity.ref_type == "withdraw_request",
-                    SuspiciousActivity.ref_id == r.id)
-            .all()
-        )
+        u = users.get(r.user_id)
+        withdrawn = int(withdrawn_by_user.get(r.user_id, 0))
+        flags = flags_by_req.get(r.id, [])
         out.append({
             "id": r.id, "user_id": r.user_id, "amount_cents": r.amount_cents,
             "status": r.status, "created_at": iso(r.created_at),

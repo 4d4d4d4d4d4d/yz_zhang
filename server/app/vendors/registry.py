@@ -3,6 +3,8 @@
 `get_provider(kind)` 是业务侧唯一入口。新增供应商 = 在 `_REGISTRY` 里
 登记一个实现类 + 设 `PLATFORM_<KIND>_PROVIDER` 环境变量。
 """
+import os
+
 from app.core.config import settings
 
 from .captcha import NoCaptcha, SandboxCaptcha
@@ -165,6 +167,22 @@ def startup_check() -> None:
             "但没有配 PLATFORM_CAPTCHA_SITE_KEY：网页与 App 渲染不出挑战，"
             "用户永远交不出验证令牌，连续输错几次密码后将被锁在门外"
         )
+    # AGT-054 一个过期的模型字面量不会报错，只会让每次调用 404，
+    # 然后被 decompose 的降级路径静默吞掉——平台看起来一切正常，
+    # 而「真实 LLM 分解已接入」这句话从来没有成立过。
+    #
+    # 拦在启动，而不是等某天有人偶然去看 source 字段。
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        from app.modules.decompose.llm import DEFAULT_MODEL, KNOWN_MODELS
+
+        model = os.environ.get("PLATFORM_LLM_MODEL", DEFAULT_MODEL)
+        if model not in KNOWN_MODELS:
+            problems.append(
+                f"PLATFORM_LLM_MODEL={model} 不在已知在售型号表内"
+                f"（{', '.join(sorted(KNOWN_MODELS))}）。"
+                "配了 Key 却用一个不存在的型号，结果是每次分解都静默回落模板；"
+                "换型号时请同时更新 llm.py 的 KNOWN_MODELS"
+            )
     if settings.JWT_SECRET == "dev-secret-change-me":
         problems.append("PLATFORM_JWT_SECRET 仍是默认值")
     if settings.JOB_TOKEN == "dev-job-token-change-me":

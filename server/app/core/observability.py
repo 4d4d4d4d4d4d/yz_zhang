@@ -123,6 +123,20 @@ def render_metrics(db=None) -> str:
     lines.append(f"http_request_duration_seconds_sum {total_sum:.6f}")
     lines.append(f"http_request_duration_seconds_count {total_count}")
 
+    # AGT-054 LLM 降级次数。降级本身是对的（宁可给模板结果也不要让发布卡住），
+    # 但**它必须看得见**：一个过期的型号字面量曾经可以让每次调用都 404，
+    # 而平台看起来完全正常。
+    from app.modules.decompose.llm import fallback_counts
+
+    counts = fallback_counts()
+    lines += ["# HELP llm_decompose_fallback_total 分解降级到模板引擎的次数",
+              "# TYPE llm_decompose_fallback_total counter"]
+    if counts:
+        for kind, n in sorted(counts.items()):
+            lines.append(f'llm_decompose_fallback_total{{error_type="{_escape(kind)}"}} {n}')
+    else:
+        lines.append('llm_decompose_fallback_total{error_type="none"} 0')
+
     if db is not None:
         lines += _business_metrics(db)
     return "\n".join(lines) + "\n"
