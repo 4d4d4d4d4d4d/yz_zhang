@@ -25,13 +25,19 @@ def test_admin060_audit_log_answers_who_approved_that_payout(client):
     rid = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 3000000},
                       headers=auth(u)).json()["request_id"]
     admin = make_admin(client, "13800092009")
-    client.post(f"/api/v1/wallet/withdraw-requests/{rid}/approve", headers=auth(admin))
+    # PAY-042 大额出款要两个人先后确认；这条测试验的是**审计可读**，
+    # 所以把流程走完，用 approve_fully 而不是把金额调小
+    from tests.test_withdraw_review_loop import approve_fully
+
+    approve_fully(client, admin, rid, "13800092008")
 
     rows = client.get("/api/v1/admin/audit-log?action=withdraw_approve&limit=20",
                       headers=auth(admin)).json()
     assert rows, "批准提现的审计行读不出来"
     row = rows[0]
-    assert row["admin_id"] == admin["id"], "看不出是谁批的"
+    # 终局那一行是第二个人记的；初次复核人在 detail 里指回去
+    assert row["admin_id"] != admin["id"], "终局应由第二个人记下"
+    assert str(admin["id"]) in row["detail"], "看不出初次复核是谁"
     assert row["target_id"] == rid
     assert "3000000" in row["detail"] or "30000" in row["detail"], \
         f"明细里没有金额，回溯时还得再查一次：{row['detail']}"

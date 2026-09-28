@@ -46,8 +46,14 @@ class WithdrawRequest(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, index=True)
     amount_cents: Mapped[int] = mapped_column(Integer)
-    status: Mapped[str] = mapped_column(String(12), default="pending")  # pending/approved/rejected
+    # pending / awaiting_second（大额已一审、等第二人确认）/ approved / rejected
+    status: Mapped[str] = mapped_column(String(16), default="pending")
     decided_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # PAY-042 四眼原则：大额出款的第一次批准记在这里，**钱不动**；
+    # 第二个管理员确认后才放款。两次必须是不同的人——
+    # 否则就是同一个人点两次，等于没有这条规则。
+    first_approved_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    first_approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

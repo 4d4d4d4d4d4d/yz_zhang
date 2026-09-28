@@ -11,6 +11,27 @@
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
 
+## 已实现（V99 批次：一个人不能把不可逆的钱决定做完）
+
+> 模块 spec：[74-four-eyes.md](74-four-eyes.md)
+>
+> ```
+> 一审:        200      # 执行方分成 5000bps
+> 申诉:        200
+> 二审(同一人): 200      # 执行方分成 9000bps —— 钱跟着二审动了
+> 最终 arbiter: 3   admin: 3
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **DSP-030 二审必须换人** | 同一个管理员做完一审又裁决自己的申诉，把执行方分成从 50% 改成 90%，**钱跟着动了**。而 V82 的豁免表里这条规则被明确写下来过（「必须与一审不是同一个人」）——**规则被写成承诺，代码里没有**。`appeal_verdict` 增加 `same_arbiter` 准入；拒绝文案直说「需要第二个人」，别让运营以为是权限问题 | `tests/test_four_eyes.py::test_dsp030_original_arbiter_cannot_hear_the_appeal`（红验：去掉判断即红）、`::test_dsp030_a_second_admin_can_review_and_money_follows`（含对账不变量） |
+| **只有一个管理员时申诉办不了** | **这是对的**：申诉复核需要第二个人是流程要求，不是代码的不便。所以文案直说，让运营去加人而不是去改代码 | 见 spec §2 |
+| **PAY-042 大额出款双人确认** | 门槛（`WITHDRAW_DUAL_APPROVAL_CENTS`，默认 ¥2 万）以上：第一次批准只记「谁、什么时候」，**钱一分不动**；第二个人确认后才打出去。同一人点两次被拒（`same_approver`）。刻意不改门槛以下的语义——**把每一笔都做成双人，运营会绕过它，那比没有更糟** | `::test_pay042_first_approval_does_not_move_money`、`::test_pay042_same_admin_cannot_confirm_his_own_approval`（红验：去掉判断即红）、`::test_pay042_second_admin_confirms_and_money_goes_out`、`::test_pay042_threshold_is_configurable_and_small_amounts_stay_one_step` |
+| **驳回仍是一个人** | 驳回是**可逆**的（钱退回可用余额）。把拒绝也做成双人只会让积压更久，而积压本身就是用户的钱被冻着 | `::test_pay042_rejection_still_takes_one_person` |
+| **两步要能分开审计** | 都记成 `withdraw_approve` 的话，审计里看不出这是一个人还是两个人。第一次记 `withdraw_first_approve`，终局那一行指回初次复核人 | `tests/test_withdraw_review_loop.py::test_pay041_audit_records_who_approved_it` |
+| **等二次确认的不能从界面消失** | 复核台同时拉 `pending` 与 `awaiting_second`——只看 pending 的话，**钱冻着等人的那些会消失**，就没人会去处理。行里显示初次复核人，按钮文案跟着状态变 | `web/src/WithdrawReview.test.tsx::PAY-042`、`::test_pay042_queue_tells_the_second_reviewer_who_gave_the_first_opinion` |
+| **CLI-078 承诺必须能被核对** | 第二次栽在同一件事上（V96 是「在管理后台做」而后台没有），所以把规律变成闸门：豁免理由里出现「必须/不得/只能/管理后台」这类**承诺性措辞**的，必须登记兑现它的东西（后台调用，或服务端的那个错误码），没登记就红、登记了兑现不了也红 | `tests/test_admin_console_reachability.py::test_cli078_promises_in_exemption_reasons_are_fulfilled`（两个方向都红验过） |
+
 ## 已实现（V98 批次：盲封与查不到的那笔钱）
 
 > 模块 spec：[73-admin-oversight.md](73-admin-oversight.md)

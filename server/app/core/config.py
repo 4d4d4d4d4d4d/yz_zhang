@@ -44,6 +44,11 @@ class Settings:
     SUPPORT_SLA_HOURS = int(os.environ.get("PLATFORM_SUPPORT_SLA_HOURS", "24"))
     # PAY-007 提现风控（业界惯例）：单日累计限额；大额提现冻结进人审队列
     WITHDRAW_DAILY_LIMIT_CENTS = int(os.environ.get("PLATFORM_WITHDRAW_DAILY_LIMIT_CENTS", "5000000"))  # ¥5万/日
+    # PAY-042 超过这个金额的出款需要**两个不同管理员**先后确认（maker-checker）。
+    # 门槛走配置，通知与拒绝文案里的数字一律取自这里——V61/V90 立过：
+    # 通知里的数字不许是字面量，运维改了配置那句话要跟着变。
+    WITHDRAW_DUAL_APPROVAL_CENTS = int(
+        os.environ.get("PLATFORM_WITHDRAW_DUAL_APPROVAL_CENTS", "2000000"))  # ¥2万
     LARGE_WITHDRAW_CENTS = int(os.environ.get("PLATFORM_LARGE_WITHDRAW_CENTS", "1000000"))  # ≥¥1万人审
     # 到场打卡允许误差（米，GEO-020）
     CHECKIN_RADIUS_M = int(os.environ.get("PLATFORM_CHECKIN_RADIUS_M", "500"))
@@ -75,7 +80,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.91.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.92.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

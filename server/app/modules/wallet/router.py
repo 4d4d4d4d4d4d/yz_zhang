@@ -198,6 +198,9 @@ def list_withdraw_requests(
         out.append({
             "id": r.id, "user_id": r.user_id, "amount_cents": r.amount_cents,
             "status": r.status, "created_at": iso(r.created_at),
+            # PAY-042 第一次复核是谁——第二个人必须知道自己是在确认谁的意见，
+            # 也才看得出「这是不是我自己刚批的那一笔」
+            "first_approved_by": r.first_approved_by,
             "nickname": u.nickname if u else "",
             "is_verified": bool(u and u.is_verified),
             "registered_at": iso(u.created_at) if u else None,
@@ -223,8 +226,13 @@ def approve_withdraw(
     result = service.decide_withdraw(db, req, approve=True, admin_id=admin.id)
     from app.modules.admin.router import record_audit
 
-    record_audit(db, admin.id, "withdraw_approve", "withdraw_request", request_id,
-                 f"批准提现 {req.amount_cents} 分")
+    # PAY-042 两步要能分开看：四眼原则的意义在于**谁给了意见、谁确认的**，
+    # 两行都记成同一个动作，审计里就看不出这是一个人还是两个人了。
+    action = "withdraw_first_approve" if result["status"] == "awaiting_second" else "withdraw_approve"
+    detail = f"批准提现 {req.amount_cents} 分"
+    if action == "withdraw_approve" and result.get("first_approved_by"):
+        detail += f"（二次确认；初次复核 #{result['first_approved_by']}）"
+    record_audit(db, admin.id, action, "withdraw_request", request_id, detail)
     return result
 
 

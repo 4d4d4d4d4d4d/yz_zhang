@@ -216,6 +216,9 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   scope_required: '必须至少指定一个权限范围',
   self_apply: '不能报名自己发布的任务',
   self_approval: '不能审批自己发起的支出',
+  // DSP-030 申诉的意义在于换一个人再看一遍；只有一个管理员时这条会挡住申诉，
+  // 那是流程要求（该去加人），不是权限问题——所以文案要把「第二个人」说出来
+  same_arbiter: '申诉复核必须由作出原决定之外的第二个人进行，请转交另一位管理员',
   self_block: '不能拉黑自己',
   self_confirmation: '不能确认自己提交的贡献',
   self_follow: '不能关注自己',
@@ -260,6 +263,9 @@ export const SERVER_WORDED_CODES: string[] = [
   'budget_exceeded',
   // TEAM-052 消息里带着本月已用与剩余金额，客户端编不出等价文案
   'monthly_budget_exceeded',
+  // PAY-042 消息里带着**取自配置的门槛金额**（运维改了那句话要跟着变），
+  // 客户端编不出等价文案
+  'same_approver',
   'capacity_full',
   'category_mismatch',
   'certification_required',

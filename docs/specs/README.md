@@ -96,6 +96,7 @@
 | 71 | 进了人审，就再也出不来（提现复核台与运营侧闸门） | [71-into-review-never-out.md](./71-into-review-never-out.md) | P0 |
 | 72 | **状态台账**：做了什么/没做什么/哪些「没做」其实已做 | [72-status-ledger.md](./72-status-ledger.md) | — |
 | 73 | 盲封与查不到的那笔钱（运营侧监督四条） | [73-admin-oversight.md](./73-admin-oversight.md) | P0 |
+| 74 | 一个人不能把不可逆的钱决定做完（四眼原则） | [74-four-eyes.md](./74-four-eyes.md) | P0 |
 
 ## 功能点编号与优先级约定
 

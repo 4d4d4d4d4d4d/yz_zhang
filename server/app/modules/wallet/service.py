@@ -155,11 +155,39 @@ def withdraw(db: Session, user_id: int, amount: int) -> dict:
 
 
 def decide_withdraw(db: Session, req, approve: bool, admin_id: int) -> dict:
-    """PAY-007 人审裁决：批准=冻结划出（落 withdraw 流水），驳回=解冻退回。"""
+    """PAY-007 人审裁决：批准=冻结划出（落 withdraw 流水），驳回=解冻退回。
+
+    PAY-042 超过 `WITHDRAW_DUAL_APPROVAL_CENTS` 的出款要**两个不同管理员**
+    先后确认（maker-checker）：第一次批准只记下「谁、什么时候」，**钱不动**；
+    第二个人确认后才真的打出去。
+
+    刻意不改既有语义：门槛以下仍然一人批准即放款，行为与改造前一致。
+    """
+    from app.core.config import settings
     from app.modules.account.models import utcnow
 
-    if req.status != "pending":
+    if req.status not in ("pending", "awaiting_second"):
         raise bad_request("该提现申请已处理", "request_closed")
+
+    dual = req.amount_cents > settings.WITHDRAW_DUAL_APPROVAL_CENTS
+    if approve and dual:
+        if req.status == "pending":
+            # 第一次批准：只记人和时间，钱一分不动
+            req.first_approved_by = admin_id
+            req.first_approved_at = utcnow()
+            req.status = "awaiting_second"
+            db.add(req)
+            _notify_withdraw_first_pass(db, req)
+            return {"status": req.status, "amount_cents": req.amount_cents,
+                    "first_approved_by": admin_id,
+                    "message": "已记录你的复核意见，需另一位管理员确认后才会打款"}
+        if req.first_approved_by == admin_id:
+            # 同一个人点两次，等于没有这条规则
+            raise bad_request(
+                f"超过 ¥{settings.WITHDRAW_DUAL_APPROVAL_CENTS / 100:.2f} 的出款需要"
+                "两个不同管理员先后确认。第一次复核就是你——请转交另一位管理员确认",
+                "same_approver",
+            )
     lock_wallets(db, req.user_id)  # CONC-012
     acct = get_or_create(db, req.user_id)
     acct.frozen_cents -= req.amount_cents
@@ -176,7 +204,21 @@ def decide_withdraw(db: Session, req, approve: bool, admin_id: int) -> dict:
     req.decided_at = utcnow()
     db.add_all([acct, req])
     _notify_withdraw_decision(db, req, approve)
-    return {"status": req.status, "amount_cents": req.amount_cents}
+    return {"status": req.status, "amount_cents": req.amount_cents,
+            "first_approved_by": req.first_approved_by}
+
+
+def _notify_withdraw_first_pass(db: Session, req) -> None:
+    """PAY-042 第一次复核通过时也要告诉用户一句——他的钱还在冻结里。
+
+    不说的话，他看到的是「等 1 个工作日」之后什么都没发生；
+    而措辞仍然中性：**不解释为什么要两个人看**（AML-030/031 同一条）。
+    """
+    from app.modules.notification.service import notify
+
+    notify(db, req.user_id, "funds", "提现复核进行中",
+           f"你的提现 ¥{req.amount_cents / 100:.2f} 已完成初次复核，"
+           f"按规定需再经一位负责人确认后打款。")
 
 
 def _notify_withdraw_decision(db: Session, req, approve: bool) -> None:

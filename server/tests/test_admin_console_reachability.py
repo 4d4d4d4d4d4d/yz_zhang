@@ -97,6 +97,62 @@ def test_cli077_admin_capability_is_reachable(method):
     )
 
 
+# CLI-078 豁免理由里的**承诺性措辞** → 兑现它的东西。
+#
+# `CLIENT_EXEMPT` 的理由分两种：
+#   1. 说明这条路给谁用（「开放 API 给第三方」「支付供应商回调」）——无需核对；
+#   2. **承诺了一条规则或一个去处**（「在管理后台做」「必须与一审不是同一个人」）
+#      ——必须能被核对。
+#
+# 第二次栽在第二种上了：V96 是「在管理后台做」而后台里没有；
+# V99 是「必须与一审不是同一个人」而代码里没实现——同一个管理员
+# 把执行方分成从 50% 改成 90%，钱跟着动了。
+#
+# **一张豁免表如果没人核对它的理由，它就只是一句无人负责的承诺。**
+PROMISE_WORDS = ("必须", "不得", "只能", "管理后台", "后台")
+
+# 路径 -> 兑现它的东西（后台调用的 SDK 方法，或实现/测试里的一个锚点）
+FULFILLED_BY: dict[str, tuple[str, str]] = {
+    "/wallet/withdraw-requests/{x}/approve": ("admin_call", "decideWithdraw"),
+    "/wallet/withdraw-requests/{x}/reject": ("admin_call", "decideWithdraw"),
+    # 规则类承诺：拦在服务端的那个错误码就是它的兑现物
+    "/disputes/{x}/appeal-verdict": ("server_code", "same_arbiter"),
+}
+
+
+def test_cli078_promises_in_exemption_reasons_are_fulfilled():
+    """豁免理由里出现承诺性措辞的，必须登记**兑现它的东西**，并且真的兑现。
+
+    没登记就红（免得又多一句没人核对的话）；登记了但兑现不了也红。
+    """
+    from tests.clientscan import server_source
+
+    promising = {
+        path: why for path, why in CLIENT_EXEMPT.items()
+        if any(w in why for w in PROMISE_WORDS)
+    }
+    assert promising, "豁免表里一条承诺性理由都没有？断言写错了"
+
+    server = server_source()
+    for path, why in sorted(promising.items()):
+        entry = FULFILLED_BY.get(path)
+        assert entry, (
+            f"豁免 {path} 的理由里有承诺性措辞（「{why}」），"
+            f"但没登记是什么东西兑现它。\n"
+            f"新增这类豁免时要一起登记——否则又是一句没人核对的承诺。"
+        )
+        kind, token = entry
+        if kind == "admin_call":
+            assert _calls(token), (
+                f"豁免 {path} 承诺了「{why}」，而管理后台里没有 {token}() 的调用。"
+            )
+        else:
+            assert f'"{token}"' in server, (
+                f"豁免 {path} 承诺了「{why}」，而服务端找不到兑现它的 {token}——"
+                f"**规则被写成承诺，代码里没有。**"
+            )
+
+
 def test_cli077_exemptions_that_promise_the_admin_console_are_kept():
     """**豁免理由里说「在管理后台做」的，管理后台必须真的做得到。**
 

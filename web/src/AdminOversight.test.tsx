@@ -43,9 +43,11 @@ function makeClient(
   calls: Array<{ method: string; path: string; body: unknown }> = [],
 ): PlatformClient {
   const fetchImpl = vi.fn(async (url: string, init?: { method?: string; body?: string }) => {
-    const path = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+    const full = String(url).replace(/^.*\/api\/v1/, '');
+    const path = full.split('?')[0];
     calls.push({ method: init?.method ?? 'GET', path, body: init?.body ? JSON.parse(init.body) : null });
-    const hit = Object.keys(routes).find((k) => k === path);
+    const hit = Object.keys(routes).find((k) => k === full)
+      ?? Object.keys(routes).find((k) => k === path);
     return { ok: true, status: 200, text: async () => JSON.stringify(hit ? routes[hit] : []) };
   }) as unknown as typeof fetch;
   return new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl });
@@ -61,7 +63,8 @@ function openAdmin(
     '/admin/metrics': METRICS,
     '/admin/reports': [],
     '/admin/users': [USER],
-    '/wallet/withdraw-requests': [],
+    '/wallet/withdraw-requests?status=pending': [],
+    '/wallet/withdraw-requests?status=awaiting_second': [],
     '/admin/aml/activities': { items: [], note: '' },
     '/admin/audit-log': [],
     '/admin/platform-finance': { balance_cents: 80000, total_fee_cents: 80000, settled_cents: 0, fee_count: 4 },

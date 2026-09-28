@@ -214,7 +214,11 @@ def test_cs013_ticket_from_escalation_and_resolution(client, requester):
 
 # ---------- 申诉复核（DSP-008） ----------
 def test_dsp008_appeal_corrective_settlement(client, requester, worker):
+    # DSP-030 一审与二审必须是两个人。这条测试原本用同一个 admin 走完两步——
+    # 而那正是 V82 豁免表里明确禁止的行为（「必须与一审不是同一个人」），
+    # **它编码的是一个当时没人实现、也没人核对的规则的反面**。
     admin = make_admin(client, "13100000006")
+    senior = make_admin(client, "13100000007")
     topup(client, requester, 40000)
     task = publish_task(client, requester)
     match_and_fund(client, requester, worker, task)
@@ -233,7 +237,8 @@ def test_dsp008_appeal_corrective_settlement(client, requester, worker):
     # 复核改为 60% → 差额 30% (6000) 从发布者划转给执行者
     before = client.get("/api/v1/wallet", headers=auth(worker)).json()["available_cents"]
     r = client.post(f"/api/v1/disputes/{dispute['id']}/appeal-verdict",
-                    json={"executor_share_bps": 6000, "reason": "部分履约认定过低"}, headers=auth(admin))
+                    json={"executor_share_bps": 6000, "reason": "部分履约认定过低"},
+                    headers=auth(senior))
     assert r.json()["corrective_delta_cents"] == 6000
     after = client.get("/api/v1/wallet", headers=auth(worker)).json()["available_cents"]
     assert after - before == 6000

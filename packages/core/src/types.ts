@@ -233,7 +233,11 @@ export interface WithdrawRequestRow {
   id: number;
   user_id: number;
   amount_cents: number;
+  /** `pending` / `awaiting_second`（大额已一审、等第二人确认）/ `approved` / `rejected` */
   status: string;
+  /** PAY-042 第一次复核人。第二个人必须知道自己在确认谁的意见——
+   *  也才看得出「这是不是我自己刚批的那一笔」。 */
+  first_approved_by: number | null;
   created_at: string;
   nickname: string;
   is_verified: boolean;

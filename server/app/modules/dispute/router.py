@@ -331,6 +331,24 @@ def appeal_verdict(
     dispute, task, contract = _get_dispute(db, dispute_id)
     if dispute.status != "appealed":
         raise conflict("纠纷不在申诉复核中", "not_in_appeal")
+    # DSP-030 复核人不得是原决定的作出人。
+    #
+    # 申诉的全部意义在于**换一个人再看一遍**：让做出原决定的人复核自己的
+    # 决定，等于把申诉做成一道形式——他要推翻的是自己刚写下的理由，
+    # 而当事人看到的「已复核」和没复核没有区别。而这一步**会真的动钱**
+    # （差额纠正性划转）。
+    #
+    # 这条规则 V82 就写在豁免表的理由里（「必须与一审不是同一个人」），
+    # 而代码里一直没有——探针实测：同一个管理员把执行方分成从 50% 改成 90%。
+    #
+    # 平台只有一个管理员时这条会让申诉无法处理，**这是对的**：
+    # 申诉复核需要第二个人，是流程要求，不是代码的不便。所以文案直说。
+    if dispute.arbiter_id is not None and dispute.arbiter_id == senior.id:
+        raise forbidden(
+            "申诉复核必须由作出原决定之外的第二个人进行。"
+            "你就是本案原决定的作出人——请转交另一位管理员复核",
+            "same_arbiter",
+        )
     if not body.reason:
         raise conflict("复核裁决必须给出理由", "reason_required")
     old_share = dispute.split_base_cents * (dispute.verdict_executor_share_bps or 0) // 10000

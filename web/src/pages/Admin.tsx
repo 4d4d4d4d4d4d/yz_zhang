@@ -317,7 +317,13 @@ function WithdrawReview() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    setRows(await client.withdrawRequests('pending').catch(() => []));
+    // PAY-042 两个队列都要看得到：只看 pending 的话，**等二次确认的那些
+    // 会从界面上消失**——而那正是钱冻着等人的状态。
+    const [pending, awaiting] = await Promise.all([
+      client.withdrawRequests('pending').catch(() => []),
+      client.withdrawRequests('awaiting_second').catch(() => []),
+    ]);
+    setRows([...awaiting, ...pending]);
   }, [client]);
   useEffect(() => { void load(); }, [load]);
 
@@ -348,6 +354,11 @@ function WithdrawReview() {
                 {r.registered_at && ` · 注册于 ${formatDateTime(r.registered_at)}`}
                 {` · 历史已提现 ${fmtYuan(r.withdrawn_total_cents)}`}
               </p>
+              {r.status === 'awaiting_second' && (
+                <p className="muted" data-testid={`wd-first-${r.id}`}>
+                  已由管理员 #{r.first_approved_by} 初次复核，等待第二人确认（钱仍在冻结中）
+                </p>
+              )}
               {/* 命中依据带具体数值：只写「疑似拆分」，复核的人无从判断 */}
               {r.flags.length > 0 && (
                 <p className="error" data-testid={`wd-flags-${r.id}`}>
@@ -356,7 +367,11 @@ function WithdrawReview() {
               )}
             </div>
             <span className="row">
-              <button disabled={busy} onClick={() => decide(r.id, true)}>批准打款</button>
+              {/* PAY-042 大额出款要两个人先后确认。按钮文案跟着状态变——
+                  第二个人必须知道自己是在「确认别人的意见」，而不是在初审 */}
+              <button disabled={busy} onClick={() => decide(r.id, true)}>
+                {r.status === 'awaiting_second' ? '二次确认并打款' : '批准打款'}
+              </button>
               <button className="danger" disabled={busy} onClick={() => decide(r.id, false)}>驳回退回</button>
             </span>
           </div>

@@ -18,6 +18,25 @@ from tests.conftest import auth, make_admin, register, topup, verify_user
 BIG = 3000000     # 触发人审的大额
 
 
+def approve_fully(client, admin, rid: int, second_phone: str):
+    """走完批准流程。
+
+    PAY-042 之后，超过门槛的出款需要**两个不同管理员**先后确认：
+    第一次只记意见、钱不动。这个助手把两步都走完，
+    让那些「验通知」的测试继续验它们本来在验的东西。
+    """
+    first = client.post(f"/api/v1/wallet/withdraw-requests/{rid}/approve",
+                        headers=auth(admin))
+    assert first.status_code == 200, first.text
+    if first.json()["status"] == "approved":
+        return first                      # 门槛以下，一人即可
+    second = make_admin(client, second_phone)
+    r = client.post(f"/api/v1/wallet/withdraw-requests/{rid}/approve", headers=auth(second))
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "approved"
+    return r
+
+
 def notices(user_id: int, title: str | None = None) -> list[Notification]:
     with SessionLocal() as db:
         q = db.query(Notification).filter(Notification.user_id == user_id)
@@ -72,8 +91,7 @@ def test_pay040_flags_never_leak_to_the_user(client):
 # ------------------------------------------------- PAY-041 裁决要告诉用户
 def test_pay041_approval_tells_the_user_the_money_is_on_its_way(client):
     u, admin, rid = _pending_withdraw(client, "13800094020", "13800094029")
-    r = client.post(f"/api/v1/wallet/withdraw-requests/{rid}/approve", headers=auth(admin))
-    assert r.status_code == 200, r.text
+    approve_fully(client, admin, rid, "13800094028")
 
     got = notices(u["id"], "提现已通过复核")
     assert got, "批准了却不告诉用户——他看着冻结的钱不知道发生了什么"
@@ -112,7 +130,7 @@ def test_pay041_decision_notices_are_funds_category_not_must_reach(client):
     for category in ("task", "system", "interaction"):
         client.put(f"/api/v1/notifications/prefs?category={category}&enabled=false",
                    headers=auth(u))
-    client.post(f"/api/v1/wallet/withdraw-requests/{rid}/approve", headers=auth(admin))
+    approve_fully(client, admin, rid, "13800094048")
 
     rows = notices(u["id"], "提现已通过复核")
     assert rows, "资金类通知被开关拦住了"
@@ -122,15 +140,28 @@ def test_pay041_decision_notices_are_funds_category_not_must_reach(client):
 
 
 def test_pay041_audit_records_who_approved_it(client):
-    """谁批了这笔三万块，必须留痕——这是合规底线，不是可选项。"""
+    """谁批了这笔三万块，必须留痕——这是合规底线，不是可选项。
+
+    PAY-042 之后是**两个人**，所以两行都要留，而且两步的动作名要分开：
+    都记成 `withdraw_approve` 的话，审计里就看不出这是一个人还是两个人了。
+    """
     from app.modules.admin.models import AdminAudit
 
     u, admin, rid = _pending_withdraw(client, "13800094050", "13800094059")
-    client.post(f"/api/v1/wallet/withdraw-requests/{rid}/approve", headers=auth(admin))
+    approve_fully(client, admin, rid, "13800094058")
     with SessionLocal() as db:
-        rows = db.query(AdminAudit).filter(AdminAudit.action == "withdraw_approve").all()
-    assert rows, "批准提现没有留下审计记录"
-    assert rows[-1].admin_id == admin["id"]
+        first = db.query(AdminAudit).filter(
+            AdminAudit.action == "withdraw_first_approve",
+            AdminAudit.target_id == rid).all()
+        final = db.query(AdminAudit).filter(
+            AdminAudit.action == "withdraw_approve",
+            AdminAudit.target_id == rid).all()
+    assert first, "第一次复核没有留痕"
+    assert final, "二次确认没有留痕"
+    assert first[-1].admin_id == admin["id"], "第一次复核人记错了"
+    assert final[-1].admin_id != admin["id"], "二次确认记成了同一个人"
+    # 终局那一行要指回第一次是谁——否则回溯时还要自己去拼
+    assert str(admin["id"]) in final[-1].detail
 
 
 # ------------------------------------------------- PERF 复核台的查询次数有上界

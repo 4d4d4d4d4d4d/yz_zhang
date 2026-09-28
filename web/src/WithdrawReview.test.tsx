@@ -33,9 +33,11 @@ function makeClient(
   calls: Array<{ method: string; path: string }> = [],
 ): PlatformClient {
   const fetchImpl = vi.fn(async (url: string, init?: { method?: string }) => {
-    const path = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+    const full = String(url).replace(/^.*\/api\/v1/, '');
+    const path = full.split('?')[0];
     calls.push({ method: init?.method ?? 'GET', path });
-    const hit = Object.keys(routes).find((k) => k === path);
+    const hit = Object.keys(routes).find((k) => k === full)
+      ?? Object.keys(routes).find((k) => k === path);
     return { ok: true, status: 200, text: async () => JSON.stringify(hit ? routes[hit] : []) };
   }) as unknown as typeof fetch;
   return new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl });
@@ -51,7 +53,8 @@ function openAdmin(
     '/admin/metrics': METRICS,
     '/admin/reports': [],
     '/admin/users': [],
-    '/wallet/withdraw-requests': [ROW],
+    '/wallet/withdraw-requests?status=pending': [ROW],
+    '/wallet/withdraw-requests?status=awaiting_second': [],
     '/admin/aml/activities': { items: [], note: '' },
     ...routes,
   }, calls);
@@ -118,4 +121,21 @@ describe('PAY-040 提现复核台', () => {
     // 这句提示原样来自服务端：平台不自动对外报送，报送与否由合规官判断
     expect(screen.getByText(/依《反洗钱法》第五条应予保密/)).toBeTruthy();
   });
+  it('PAY-042 等二次确认的申请要出现在队列里，并说清钱还冻着', async () => {
+    // 只看 pending 的话，**等二次确认的那些会从界面上消失**——
+    // 而那正是钱冻着等人的状态，消失了就没人会去处理
+    openAdmin({
+      '/wallet/withdraw-requests?status=pending': [],
+      '/wallet/withdraw-requests?status=awaiting_second': [
+        { ...ROW, id: 6, status: 'awaiting_second', first_approved_by: 3 },
+      ],
+    });
+    await waitFor(() => expect(screen.getByTestId('wd-first-6')).toBeTruthy());
+    const line = screen.getByTestId('wd-first-6').textContent ?? '';
+    expect(line).toContain('#3');
+    expect(line).toContain('钱仍在冻结中');
+    // 按钮文案跟着状态变：第二个人要知道自己在确认别人的意见，不是初审
+    expect(screen.getByText('二次确认并打款')).toBeTruthy();
+  });
 });
+
