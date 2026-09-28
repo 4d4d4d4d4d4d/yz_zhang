@@ -23,7 +23,7 @@ module npu_sem
 
   // produce: up to NPIPE completions per cycle may target the same event
   input  logic [NPIPE-1:0]        set_en,
-  input  logic [NPIPE-1:0][3:0]   set_evt,
+  input  logic [NPIPE-1:0][EVTIDW-1:0] set_evt,
 
   output logic [NEVT-1:0]         nonzero,
   output logic                    ovf
@@ -38,7 +38,7 @@ module npu_sem
     for (int e = 0; e < NEVT; e++) begin
       inc[e] = '0;
       for (int p = 0; p < NPIPE; p++)
-        if (set_en[p] && (set_evt[p] == 4'(e))) inc[e] = inc[e] + 3'd1;
+        if (set_en[p] && (set_evt[p] == EVTIDW'(e))) inc[e] = inc[e] + 3'd1;
       dec[e]     = cons_en && cons_mask[e];
       nonzero[e] = (cnt[e] != '0);
     end

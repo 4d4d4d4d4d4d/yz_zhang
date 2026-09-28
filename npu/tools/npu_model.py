@@ -198,9 +198,9 @@ def decode(d):
     return {
         "vld": bits(h, 0, 0), "pipe": bits(h, 3, 1), "opc": bits(h, 9, 4),
         "tag": bits(h, 17, 10), "set_en": bits(h, 18, 18),
-        "set_evt": bits(h, 22, 19), "bar_q": bits(h, 23, 23),
-        "bar_g": bits(h, 24, 24), "fp": bits(h, 25, 25),
-        "wait": bits(d, 47, 32), "pl": bits(d, 255, 64),
+        "set_evt": bits(h, 23, 19), "bar_q": bits(h, 24, 24),
+        "bar_g": bits(h, 25, 25), "fp": bits(h, 26, 26),
+        "wait": bits(d, 63, 32), "pl": bits(d, 255, 64),
     }
 
 

@@ -15,6 +15,8 @@
 //   X <beat_hex> <64 hex> <64 hex> check a beat under a lane mask
 //   S <csr_hex> <val_hex>          check a CSR word
 //   N <label>                      print a progress note
+//   A <win> <nevt> <credit>        the hardware parameters this program
+//                                  assumes; checked against CONFIG
 // =====================================================================
 module tb_npu_prog;
   import npu_pkg::*;
@@ -111,6 +113,7 @@ module tb_npu_prog;
   logic [BUS_W-1:0]  chk_m [$];
   int                csr_a [$];
   logic [31:0]       csr_e [$];
+  int                as_win = 0, as_nevt = 0, as_cred = 0;
 
   int errors = 0;
 
@@ -197,6 +200,14 @@ module tb_npu_prog;
             csr_e.push_back(t2[31:0]);
           end
         end
+        "A": begin
+          code = $sscanf(line, "A %s %s %s", a1, a2, a3);
+          if (code == 3) begin
+            t1 = hex256(a1); as_win  = int'(t1[15:0]);
+            t1 = hex256(a2); as_nevt = int'(t1[15:0]);
+            t1 = hex256(a3); as_cred = int'(t1[15:0]);
+          end
+        end
         "N": $display("  note: %s", line);
         default: ;
       endcase
@@ -243,7 +254,7 @@ module tb_npu_prog;
       // ops fenced behind it while the descriptor it depends on is stuck
       // in a message queue. This is exactly why the queue-scope barrier
       // exists -- it fences one queue and needs no drain at all.
-      if (prog[idx].d[24]) begin
+      if (prog[idx].d[25]) begin
         // Change the drive only on the falling edge. Clearing push_valid in
         // the same delta as the rising edge races the DUT's own sampling of
         // it and silently drops the descriptor offered that cycle.
@@ -259,7 +270,7 @@ module tb_npu_prog;
       @(negedge clk);
       for (int m = 0; m < NMCU; m++) begin
         push_valid[m] = 1'b0;
-        if (idx < prog.size() && prog[idx].mcu == m && !prog[idx].d[24]) begin
+        if (idx < prog.size() && prog[idx].mcu == m && !prog[idx].d[25]) begin
           push_valid[m] = 1'b1;
           push_qid[m]   = QIDW'(prog[idx].qid);
           push_desc[m]  = prog[idx].d;
@@ -297,6 +308,28 @@ module tb_npu_prog;
     load(progfile);
     $display("  program: %0d descriptors, %0d memory checks, %0d csr checks",
              prog.size(), chk_a.size(), csr_a.size());
+
+    // ---- the program's hardware assumptions, against CONFIG ----
+    if (as_win != 0) begin
+      logic [31:0] c0, c1;
+      csr_read(12'h030, 2'd0, c0);
+      csr_read(12'h034, 2'd0, c1);
+      if (int'(c0[7:0]) > as_win) begin
+        errors++;
+        $display("FAIL: program assumes an issue window of at most %0d, hardware has %0d",
+                 as_win, c0[7:0]);
+      end
+      if (int'(c1[7:0]) < as_nevt) begin
+        errors++;
+        $display("FAIL: program needs %0d events, hardware has %0d",
+                 as_nevt, c1[7:0]);
+      end
+      if (int'(c0[23:16]) < as_cred) begin
+        errors++;
+        $display("FAIL: program needs %0d credits, hardware has %0d",
+                 as_cred, c0[23:16]);
+      end
+    end
 
     csr_write(12'h080, 2'd0, 32'h1);        // clear statistics
 
@@ -348,7 +381,7 @@ module tb_npu_prog;
       got = u_mem.mem[chk_a[i]];
       if ((got & chk_m[i]) !== (chk_d[i] & chk_m[i])) begin
         errors++;
-        if (errors < 12)
+        if (errors < 4000)
           $display("FAIL beat %0h:\n  got  %064h\n  want %064h\n  mask %064h",
                    chk_a[i], got, chk_d[i], chk_m[i]);
       end
@@ -374,12 +407,19 @@ module tb_npu_prog;
     $display("  STATS cycles=%0d issued=%0d win_full=%0d mq_full=%0d ext_rd=%0d ext_wr=%0d",
              cy, iss, wf, mf, er, ew);
     begin
-      logic [31:0] rc, wc;
+      logic [31:0] rc, wc, sd, sc, so;
       csr_read(12'h09C, 2'd0, rc);
       csr_read(12'h0A0, 2'd0, wc);
       $display("  XBAR read-conflict=%0d (%0d%%)  write-conflict=%0d (%0d%%)",
                rc, (cy == 0) ? 0 : (rc * 100) / cy,
                wc, (cy == 0) ? 0 : (wc * 100) / cy);
+      csr_read(12'h0A4, 2'd0, sd);
+      csr_read(12'h0A8, 2'd0, sc);
+      csr_read(12'h0AC, 2'd0, so);
+      $display("  STALL dependency=%0d (%0d%%)  credit=%0d (%0d%%)  ordering=%0d (%0d%%)",
+               sd, (cy == 0) ? 0 : (sd * 100) / cy,
+               sc, (cy == 0) ? 0 : (sc * 100) / cy,
+               so, (cy == 0) ? 0 : (so * 100) / cy);
     end
     for (int p = 0; p < NPIPE; p++) begin
       csr_read(LT_AW'(12'h040 + 12'(p*4)), 2'd0, bz);
