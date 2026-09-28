@@ -84,6 +84,27 @@ Neither is exotic. Both are what happens when reset state and bus state
 disagree about what is in flight, and neither is visible until you build
 something that can actually hang a unit on purpose.
 
+Tightening the encoder schedule then found three more, and the first of
+them had been shipped:
+
+9. **The single-queue event-recycling rule was unsound** and had been in
+   the compiler for several commits. It assumed the issue window spans a
+   bounded stretch of program order; it does not. A looser schedule
+   exposed it as eleven wrong beats at the end of an encoder layer.
+10. **Event assignments were not cleared between allocation attempts.**
+    Inserting a barrier re-runs allocation, and the stale assignment from
+    the failed attempt survived, so the emitted program was a mixture of
+    two schedules. It only bit once barriers became common.
+11. **The dependency analysis tracked on-chip beats only.** Any
+    producer/consumer pair communicating *through external memory* -- a
+    weight tile stored out and immediately streamed back in -- was
+    unordered. It had been hidden by an accidental on-chip serialisation
+    that the optimisation removed, and it read as zeros.
+
+The pattern in 9 and 11 is the same: a schedule that was correct only
+because it was accidentally serial. Making it faster is what proved it was
+never correct.
+
 Two more were testbench defects worth recording because they look exactly
 like design bugs: a driver that cleared `push_valid` in the same delta as
 the rising edge silently dropped one descriptor per occurrence, and the
@@ -118,6 +139,25 @@ instead of 8× and ranks the corners differently.
 Encoder layer, `S=32 d=32 d_ff=64`: 189 descriptors, 10 live events, 7717
 cycles, no pipe above 39% busy, issue window full 93% of the time. At this
 size the limit is the dependency chain, not any one unit.
+
+Issue window depth, with the program regenerated for each depth so the
+contract holds:
+
+| WIN | encoder cycles | GEMM cycles | dependency stall |
+|---|---|---|---|
+| 8 | 6815 | 3705 | 85% |
+| 16 | ~7600 | ~3900 | 87% |
+| 32 | ~8000 | ~3975 | 78% |
+
+Deeper is not better. The window being full 90% of the time reads like
+"too shallow" and is not: the graph is serial, and a deeper window
+lengthens the compiler's event live ranges, which buys barriers instead of
+overlap.
+
+Dependency turnaround, from `tools/gen_chain.py`: a minimal one-beat VEC op
+in a chain ordered by the (pipe, queue) FIFO costs 6 cycles, of which one
+is useful work. That bounds how fast any serial chain -- a softmax, a
+LayerNorm -- can run.
 
 Crossbar bank contention, now that it is counted: 0% of cycles on a blocked
 GEMM, 12% on an encoder layer before VEC learned to alias a two-source op

@@ -66,6 +66,12 @@ module npu_opsched
   output logic                        idle,
   output logic [31:0]                 stat_issued,
   output logic                        stat_win_full,
+  // Why did nothing issue this cycle? Attributed to the oldest un-issued
+  // op, because that is the one gating progress in program order. Exactly
+  // one of these is high in a stalled cycle.
+  output logic                        stall_dep,
+  output logic                        stall_cred,
+  output logic                        stall_ord,
   output logic                        err_illegal,
   output logic                        err_task,
   output logic                        err_hang,
@@ -95,7 +101,7 @@ module npu_opsched
   op_t nop;
   always_comb begin
     nop.hdr       = hdr_t'(in_desc[31:0]);
-    nop.wait_mask = in_desc[47:32];
+    nop.wait_mask = in_desc[32 + NEVT - 1 : 32];
     nop.pl        = in_desc[255:64];
     nop.qid       = in_qid;
     nop.mcu       = in_mcu;
@@ -113,26 +119,28 @@ module npu_opsched
       legal[i] = win[i].hdr.vld && (win[i].hdr.pipe < PIPEW'(NPIPE));
 
   always_comb begin
-    automatic logic [NEVT-1:0] tk;
-    automatic logic            found;
-    automatic logic            older_q;
-    automatic logic            older_pq;
-    automatic logic            any_older;
-    automatic logic            fenced;
-    automatic logic            ok;
+    automatic logic [NEVT-1:0]  tk;
+    automatic logic [NPIPE-1:0] pipe_taken;
+    automatic logic             older_q;
+    automatic logic             older_pq;
+    automatic logic             any_older;
+    automatic logic             fenced;
+    automatic logic             ok;
+    automatic logic [PIPEW-1:0] p;
 
-    sel_v   = '0;
-    sel_i   = '0;
-    issued  = '0;
-    dropped = '0;
-    tk      = '0;
-    taken   = '0;
-    found   = 1'b0;
-    older_q = 1'b0;
-    older_pq  = 1'b0;
-    any_older = 1'b0;
-    fenced    = 1'b0;
-    ok        = 1'b0;
+    sel_v      = '0;
+    sel_i      = '0;
+    issued     = '0;
+    dropped    = '0;
+    tk         = '0;
+    taken      = '0;
+    pipe_taken = '0;
+    older_q    = 1'b0;
+    older_pq   = 1'b0;
+    any_older  = 1'b0;
+    fenced     = 1'b0;
+    ok         = 1'b0;
+    p          = '0;
 
     // an illegal op is discarded, never executed -- but only once it is
     // the oldest of its queue, so queue order is still respected
@@ -143,62 +151,66 @@ module npu_opsched
       if (wv[i] && !legal[i] && !older_q) dropped[i] = 1'b1;
     end
 
-    for (int p = 0; p < NPIPE; p++) begin
-      found = 1'b0;
-      for (int i = 0; i < WIN; i++) begin
-        if (!found && wv[i] && !dropped[i] && legal[i]
-            && (win[i].hdr.pipe == PIPEW'(p))) begin
+    // Selection walks the WINDOW oldest first, not the pipes in index
+    // order. Scanning by pipe made the pipe number the tie-breaker when two
+    // candidates wanted the same event bit in the same cycle, so a younger
+    // op on a lower-numbered pipe could take a set meant for an older one.
+    // Age is the only defensible priority here, and it is also what keeps a
+    // long-waiting op from being starved by a busier pipe.
+    for (int i = 0; i < WIN; i++) begin
+      if (wv[i] && !dropped[i] && legal[i]) begin
+        p = win[i].hdr.pipe;
 
-          // (pipe,queue) predecessor still in the window? And is there an
-          // un-retired barrier ahead that this op must not pass? A barrier
-          // that has not yet issued fences everything younger: the global
-          // one fences every queue, the queue-scope one only its own. Until
-          // it leaves the window, nothing behind it may go.
-          older_pq  = 1'b0;
-          older_q   = 1'b0;
-          any_older = 1'b0;
-          fenced    = 1'b0;
-          for (int j = 0; j < WIN; j++)
-            if (j < i && wv[j]) begin
-              any_older = 1'b1;
-              if (win[j].hdr.bar_g) fenced = 1'b1;
-              if (!dropped[j] && (win[j].qid == win[i].qid)) begin
-                older_q = 1'b1;
-                if (win[j].hdr.bar_q)                  fenced  = 1'b1;
-                if (win[j].hdr.pipe == win[i].hdr.pipe) older_pq = 1'b1;
-              end
+        // (pipe,queue) predecessor still in the window? And is there an
+        // un-retired barrier ahead that this op must not pass? A barrier
+        // that has not yet issued fences everything younger: the global
+        // one fences every queue, the queue-scope one only its own. Until
+        // it leaves the window, nothing behind it may go.
+        older_pq  = 1'b0;
+        older_q   = 1'b0;
+        any_older = 1'b0;
+        fenced    = 1'b0;
+        for (int j = 0; j < WIN; j++)
+          if (j < i && wv[j]) begin
+            any_older = 1'b1;
+            if (win[j].hdr.bar_g) fenced = 1'b1;
+            if (!dropped[j] && (win[j].qid == win[i].qid)) begin
+              older_q = 1'b1;
+              if (win[j].hdr.bar_q)                   fenced   = 1'b1;
+              if (win[j].hdr.pipe == win[i].hdr.pipe) older_pq = 1'b1;
             end
-
-          ok = !older_pq && !fenced
-            && !rst_active[p]
-            && (credit[p] != '0)
-            && ((win[i].wait_mask & ~evt_nz) == '0)      // dependency
-            && ((win[i].wait_mask &  tk)     == '0);     // one consumer/bit/cycle
-
-          // queue-scope barrier: nothing older in this queue, anywhere
-          if (win[i].hdr.bar_q)
-            ok = ok && !older_q && (ifq[win[i].qid] == '0);
-
-          // Global barrier: oldest in the window, the machine drained, AND
-          // nothing still sitting in the fetch path. The last term is what
-          // makes it a real program-order fence. Window position alone is
-          // not program order: the message queue pops round-robin, so a
-          // descriptor pushed earlier on another queue can arrive after the
-          // barrier and would otherwise be fenced to the wrong side of it.
-          // Software must therefore let the machine drain before submitting
-          // a global barrier; the hardware simply will not let it pass
-          // otherwise. The queue-scope barrier has no such cost, which is
-          // why it is the one to use in an inner loop.
-          if (win[i].hdr.bar_g)
-            ok = ok && !any_older && (iftot == '0) && fetch_empty;
-
-          if (ok) begin
-            found      = 1'b1;
-            sel_v[p]   = 1'b1;
-            sel_i[p]   = WIW'(i);
-            issued[i]  = 1'b1;
-            tk         = tk | win[i].wait_mask;
           end
+
+        ok = !older_pq && !fenced
+          && !pipe_taken[p]                              // one issue per pipe
+          && !rst_active[p]
+          && (credit[p] != '0)
+          && ((win[i].wait_mask & ~evt_nz) == '0)        // dependency
+          && ((win[i].wait_mask &  tk)     == '0);       // one consumer/bit
+
+        // queue-scope barrier: nothing older in this queue, anywhere
+        if (win[i].hdr.bar_q)
+          ok = ok && !older_q && (ifq[win[i].qid] == '0);
+
+        // Global barrier: oldest in the window, the machine drained, AND
+        // nothing still sitting in the fetch path. The last term is what
+        // makes it a real program-order fence. Window position alone is
+        // not program order: the message queue pops round-robin, so a
+        // descriptor pushed earlier on another queue can arrive after the
+        // barrier and would otherwise be fenced to the wrong side of it.
+        // Software must therefore let the machine drain before submitting
+        // a global barrier; the hardware simply will not let it pass
+        // otherwise. The queue-scope barrier has no such cost, which is
+        // why it is the one to use in an inner loop.
+        if (win[i].hdr.bar_g)
+          ok = ok && !any_older && (iftot == '0) && fetch_empty;
+
+        if (ok) begin
+          sel_v[p]      = 1'b1;
+          sel_i[p]      = WIW'(i);
+          pipe_taken[p] = 1'b1;
+          issued[i]     = 1'b1;
+          tk            = tk | win[i].wait_mask;
         end
       end
     end
@@ -246,6 +258,31 @@ module npu_opsched
 
   assign in_ready      = (kept < WCW'(WIN));
   assign stat_win_full = (kept == WCW'(WIN));
+
+  // ------------------------------------------------ stall attribution
+  always_comb begin
+    automatic logic        found;
+    automatic logic [WIW-1:0] i0;
+    automatic logic [PIPEW-1:0] p0;
+    stall_dep  = 1'b0;
+    stall_cred = 1'b0;
+    stall_ord  = 1'b0;
+    found      = 1'b0;
+    i0         = '0;
+    p0         = '0;
+    if ((wv != '0) && (sel_v == '0) && (dropped == '0)) begin
+      for (int i = 0; i < WIN; i++)
+        if (!found && wv[i]) begin
+          found = 1'b1;
+          i0    = WIW'(i);
+        end
+      p0 = win[i0].hdr.pipe;
+      if (!legal[i0])                                    stall_ord  = 1'b1;
+      else if ((win[i0].wait_mask & ~evt_nz) != '0)      stall_dep  = 1'b1;
+      else if (rst_active[p0] || (credit[p0] == '0))     stall_cred = 1'b1;
+      else                                               stall_ord  = 1'b1;
+    end
+  end
 
   // ------------------------------------------------ state update
   // A unit under reset produces nothing the scheduler should believe.

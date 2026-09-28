@@ -28,9 +28,19 @@ package npu_pkg;
   parameter int MCUW     = 2;
   parameter int NPIPE    = 5;
   parameter int PIPEW    = 3;
-  parameter int NEVT     = 16;
+  // 16 events forced a global barrier roughly every 20 producer groups,
+  // and a barrier costs a full machine drain. The descriptor had the room,
+  // so the answer to running out of events is more events rather than a
+  // cleverer recycling rule -- see tools/npu_sched.py for the two rules
+  // that looked cheaper and were both unsound.
+  parameter int NEVT     = 32;
+  parameter int EVTIDW   = 5;                // $clog2(NEVT)
   parameter int EVT_W    = 3;                // saturating event counter
+`ifdef NPU_WIN
+  parameter int WIN      = `NPU_WIN;
+`else
   parameter int WIN      = 8;                // issue window depth
+`endif
   parameter int CREDIT   = 4;                // per-pipe issue credits
   parameter int CRDW     = 3;                // $clog2(CREDIT)+1
   parameter int TAG_W    = 8;
@@ -120,11 +130,11 @@ package npu_pkg;
   // =================== descriptor ===================
   // word 0 : header
   typedef struct packed {
-    logic [5:0]  rsvd;
+    logic [4:0]  rsvd;
     logic        fp;          // 0 = int16 fixed, 1 = bf16 float
     logic        bar_g;       // global barrier
     logic        bar_q;       // queue-scope barrier
-    logic [3:0]  set_evt;
+    logic [EVTIDW-1:0] set_evt;
     logic        set_en;
     logic [7:0]  tag;
     logic [5:0]  opc;
@@ -132,7 +142,7 @@ package npu_pkg;
     logic        vld;         // must be 1; 0 => err_illegal
   } hdr_t;                    // 32 bit
 
-  // word 1 : { 16'b0, wait_mask }
+  // word 1 : wait_mask, one bit per event
   // words 2..7 : pipe specific payload (192 bit)
 
   typedef struct packed {          // CUBE payload, 192 bit
@@ -202,7 +212,7 @@ package npu_pkg;
     logic [TAG_W-1:0]  tag;
     logic [MCUW-1:0]   mcu;
     logic [QIDW-1:0]   qid;
-    logic [3:0]        set_evt;
+    logic [EVTIDW-1:0] set_evt;
     logic              set_en;
     logic              err;      // configuration error (addr overflow, bad shape)
   } cpl_t;

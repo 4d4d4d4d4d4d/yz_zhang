@@ -70,9 +70,10 @@ GEMM `M=32 N=64 K=128`, memory latency 20 cycles, ideal 1024 cycles:
 | burst 4 | 5316 | 3073 | 3038 |
 | burst 16 | 2316 | 2218 | 2218 |
 
-Encoder layer `S=32 d=32 d_ff=64`: 189 descriptors, 10 live events, 32
-transposes, 7717 cycles, stage error against float64 between 0.31% and
-2.05%.
+Encoder layer `S=32 d=32 d_ff=64`: 196 descriptors, 32 transposes, 6815
+cycles, stage error against float64 between 0.31% and 2.05%. 85% of those
+cycles are stalled on a dependency and 0% on ordering, and a deeper issue
+window makes it slightly worse rather than better.
 
 ## What the work actually taught
 
@@ -109,6 +110,22 @@ the same symptom is a hang with no suspect. The same thing happened again
 with bank contention: adding one counter turned an unexplained cycle count
 into "12% of the encoder layer, and here is the instruction pattern
 causing it".
+
+**A schedule that only works because it is accidentally serial is not a
+working schedule.** Two of the compiler's dependency rules were wrong and
+both had been passing tests for commits: an event-recycling distance rule
+that assumed the issue window spans a bounded stretch of program order,
+and a dependency analysis that tracked on-chip buffers but not external
+memory. Neither was reachable until the schedule got tight enough to
+reorder the pair that mattered. Optimising is how you find out whether you
+were ever correct.
+
+**Counting semaphores carry no identity.** A consumer that finds its event
+non-zero cannot tell whose set it is taking. Every cheap rule for reusing
+an event turns out to be unsound for that one reason, including one that
+is circular in a way that takes a while to see. The sound rule needs a
+full drain, which is why the event file is 32 wide rather than 16 — the
+answer to running out of events is more events.
 
 **Recovery is where reset state and bus state disagree.** Per-pipe soft
 reset is three lines of intent and two real bugs. A unit that is reset has

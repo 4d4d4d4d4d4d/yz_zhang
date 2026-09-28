@@ -13,7 +13,18 @@ machine rather than choices:
     sets are swallowed and the matching waits hang forever, so the fan-out
     of one event is capped and a wide fan-out is split across events.
   * an event may not be recycled while an earlier producer's consumers
-    could still be waiting on it. Naive live-range colouring is NOT enough:
+    could still be waiting on it, and a global barrier is the ONLY thing
+    that establishes that. An earlier version of this file allowed reuse on
+    a single queue at a distance of WIN ops, on the argument that in-order
+    delivery makes the issue window a contiguous run of program order. That
+    argument is wrong: the window holds the oldest un-issued op plus later
+    fetched ops, and as the ops between them issue and leave, fetching
+    continues -- so the program-order span the window covers has no bound.
+    Two consumers of one event can sit in it arbitrarily far apart. The
+    testbench caught it as eleven wrong beats at the end of an encoder
+    layer, which is what an under-constrained schedule looks like.
+
+    Naive live-range colouring is NOT enough either:
     a counting semaphore is anonymous, so a much later consumer of the same
     event that happens to be sitting in the issue window will happily
     consume the earlier producer's set and the real consumer hangs. That is
@@ -28,6 +39,23 @@ machine rather than choices:
 """
 from npu_isa import NEVT, NPIPE, WIN, CREDIT, nop
 
+# The issue-window depth this build's programs are allowed to assume. The
+# single-queue event-recycling rule below is sound only while the hardware
+# window is no deeper than this: a deeper one can hold two consumers of the
+# same event at once again, which is the anonymous-semaphore hazard all over
+# again. Programs record the assumption and the testbench checks it against
+# the CONFIG register, so a mismatch is a named failure rather than a hang.
+_win_assumed = WIN
+
+
+def set_window(n):
+    global _win_assumed
+    _win_assumed = int(n)
+
+
+def window():
+    return _win_assumed
+
 
 class _NeedBarrier(Exception):
     """Raised during allocation when a region needs more than NEVT events."""
@@ -41,17 +69,16 @@ EVT_MAX = 7                      # 2^EVT_W - 1, matches npu_pkg::EVT_W = 3
 
 class Op:
     __slots__ = ("idx", "pipe", "qid", "mcu", "build", "reads", "writes",
-                 "name", "evt", "waits", "bar_g", "fanout")
+                 "name", "evts", "waits", "bar_g")
 
     def __init__(self, pipe, build, reads, writes, qid, mcu, name):
         self.pipe, self.build = pipe, build
         self.reads, self.writes = frozenset(reads), frozenset(writes)
         self.qid, self.mcu, self.name = qid, mcu, name
         self.idx = -1
-        self.evt = None
+        self.evts = set()
         self.waits = set()
         self.bar_g = False
-        self.fanout = 0
 
 
 class Builder:
@@ -155,6 +182,15 @@ class Builder:
         raise RuntimeError("event allocation did not converge")
 
     def _build_once(self):
+        # Allocation may be attempted several times, once per inserted
+        # barrier. Every attempt starts from a clean slate: leaving the
+        # previous attempt's event assignments in place emits a mixture of
+        # two schedules, which is a program whose dependencies are simply
+        # wrong -- it showed up as a store reading a buffer nothing had
+        # written yet.
+        for o in self.ops:
+            o.evts = set()
+            o.waits = set()
         need, reach = self._deps()
         n = len(self.ops)
 
@@ -172,19 +208,34 @@ class Builder:
                 chunk = cs[k:k + EVT_MAX]
                 slots.append([j, chunk, max(chunk)])
 
-        # An event may be handed to a new producer only once a global barrier
-        # separates it from the previous holder's last consumer. Without that
-        # separation the new producer's set can be stolen by a stale waiter
-        # that is still sitting in the issue window -- the counter carries no
-        # identity, so "which set is this" is not a question the hardware can
-        # answer. Running out of reusable events inserts a barrier.
+        # An event may be handed to a new producer only once a global
+        # barrier separates it from the previous holder's last consumer.
+        #
+        # Two weaker rules were tried and both are unsound, for the same
+        # underlying reason -- the counter carries no identity, so a
+        # consumer cannot tell whose set it is taking:
+        #
+        #   "at least WIN ops apart on a single queue" assumed the issue
+        #   window spans a bounded stretch of program order. It does not:
+        #   the window holds the oldest un-issued op plus later fetched
+        #   ops, and as the ops between them retire, fetching continues.
+        #
+        #   "a happens-before path from every old consumer to the new
+        #   producer" is circular. The only thing ordering a new consumer
+        #   is its own wait on this event, so the path runs through the
+        #   very edge being aliased; an outstanding old set satisfies the
+        #   new consumer and starves the old one.
+        #
+        # A barrier is the one construct that breaks the circularity,
+        # because passing it requires the machine to be drained. The cost
+        # is real -- ten barriers on an encoder layer -- and the honest
+        # answer for a longer program is more events, not a cleverer rule.
         slots.sort(key=lambda s: s[0])
         bars = sorted(i for i, o in enumerate(self.ops) if o.bar_g)
         colour = {}
         free_until = [None] * NEVT           # last consumer index of the holder
         for si, (j, cs, end) in enumerate(slots):
             got = None
-            first = min(cs)
             for e in range(NEVT):
                 if free_until[e] is None:
                     got = e
@@ -192,16 +243,6 @@ class Builder:
                 if free_until[e] >= j:
                     continue
                 if any(free_until[e] < bb <= j for bb in bars):
-                    got = e
-                    break
-                # On a single queue the message queue delivers in program
-                # order, so the issue window always holds a contiguous run of
-                # the oldest un-issued ops. Two consumers of the same event
-                # can therefore only coexist in it if they are fewer than WIN
-                # apart, and a reuse distance of at least WIN needs no
-                # barrier. Across queues the round-robin pop destroys that
-                # property and only a barrier will do.
-                if self.single_queue and first - free_until[e] >= WIN:
                     got = e
                     break
             if got is None:
@@ -212,8 +253,7 @@ class Builder:
         # attach events
         for si, (j, cs, _end) in enumerate(slots):
             e = colour[si]
-            self.ops[j].evt = e if self.ops[j].evt is None else self.ops[j].evt
-            self.ops[j].fanout = max(self.ops[j].fanout, 0)
+            self.ops[j].evts.add(e)
             for c in cs:
                 self.ops[c].waits.add(e)
 
@@ -263,7 +303,7 @@ class Builder:
             for j in need[i]:
                 oj = self.ops[j]
                 same_fifo = (oi.pipe == oj.pipe and oi.qid == oj.qid)
-                by_event = (oj.evt is not None and oj.evt in oi.waits)
+                by_event = bool(oj.evts & oi.waits)
                 by_barrier = oi.bar_g or oj.bar_g
                 if not (same_fifo or by_event or by_barrier):
                     raise AssertionError(
@@ -275,6 +315,20 @@ class Builder:
                   % self.stats)
 
 
+# On-chip and external beats share one dependency namespace, kept disjoint
+# by this offset. Tracking only on-chip beats leaves every producer/consumer
+# pair that communicates THROUGH external memory unordered -- a weight tile
+# streamed back in right after being stored out is exactly that shape, and
+# it reads zeros if the schedule is allowed to reorder them. That bug hid
+# behind an accidental on-chip serialisation for a long time.
+EXT_BASE = 1 << 20
+
+
 def beats(base, count, stride=1):
     """The set of on-chip beats an operand window touches."""
     return {base + i * stride for i in range(count)}
+
+
+def ext_beats(base, count, stride=1):
+    """The set of external beats a DMA window touches."""
+    return {EXT_BASE + base + i * stride for i in range(count)}

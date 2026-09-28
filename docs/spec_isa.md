@@ -9,8 +9,7 @@ schedules them.
 | Bits | Field |
 |---|---|
 | 255:64 | pipe-specific payload (192 bit) |
-| 63:48 | reserved, must be zero |
-| 47:32 | `wait_mask` — one bit per event |
+| 63:32 | `wait_mask` — one bit per event |
 | 31:0 | header |
 
 ### Header, bits 31:0
@@ -22,11 +21,11 @@ schedules them.
 | 9:4 | `opc` | pipe-specific; `0x3F` is the universal NOP |
 | 17:10 | `tag` | software-supplied, echoed in the completion and in `ERR_TAG` |
 | 18 | `set_en` | set one event on completion |
-| 22:19 | `set_evt` | which event |
-| 23 | `bar_q` | queue-scope barrier |
-| 24 | `bar_g` | global barrier |
-| 25 | `fp` | 0 = int16 fixed, 1 = bf16 float |
-| 31:26 | reserved |
+| 23:19 | `set_evt` | which of the 32 events |
+| 24 | `bar_q` | queue-scope barrier |
+| 25 | `bar_g` | global barrier |
+| 26 | `fp` | 0 = int16 fixed, 1 = bf16 float |
+| 31:27 | reserved |
 
 `qid` and `mcu_id` are **not** in the descriptor. Hardware fills them from
 the queue the descriptor lands in and the ingress port it arrived on, so
@@ -45,6 +44,12 @@ limit. Widening `set_evt` into a bitmap would remove it at the cost of 12
 more descriptor bits and a wider increment port on the semaphore file; it
 is the first thing to change if the sync no-op count ever becomes
 significant (it is 16 of 189 descriptors in the encoder layer, about 8%).
+
+There are 32 events. Sixteen forced a global barrier roughly every twenty
+producer groups and a barrier costs a full machine drain, so the event file
+was widened into descriptor bits that were already reserved. That is the
+right answer to running out of events: two cheaper recycling rules were
+tried and both are unsound (`docs/spec_csr.md` §2.3).
 
 Event counters are 3 bits and **saturate**. More than 7 pending sets are
 swallowed and the matching waits then hang forever. That is unavoidable for

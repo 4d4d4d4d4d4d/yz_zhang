@@ -96,13 +96,13 @@ module tb_ctrl;
                                            input logic [191:0] pl,
                                            input logic [NEVT-1:0] wm = '0,
                                            input logic set_en = 1'b0,
-                                           input logic [3:0] set_evt = '0,
+                                           input logic [EVTIDW-1:0] set_evt = '0,
                                            input logic bar_q = 1'b0,
                                            input logic vld = 1'b1);
     hdr_t h;
-    h = '{rsvd: 6'd0, fp: 1'b0, bar_g: 1'b0, bar_q: bar_q, set_evt: set_evt,
+    h = '{rsvd: 5'd0, fp: 1'b0, bar_g: 1'b0, bar_q: bar_q, set_evt: set_evt,
           set_en: set_en, tag: tag, opc: opc, pipe: pipe, vld: vld};
-    return {pl, 16'd0, wm, h};
+    return {pl, wm, h};
   endfunction
 
   function automatic logic [191:0] dma_pl(input logic [47:0] ext,
@@ -154,7 +154,7 @@ module tb_ctrl;
 
     // ================= MAGIC =================
     csr_rd(12'h000, 2'd0, v);
-    chk("MAGIC", v === 32'h4E50_5502);
+    chk("MAGIC", v === 32'h4E50_5503);
 
     // ================= hardware semaphores =================
     // read-to-acquire: the grant is decided in the transaction that

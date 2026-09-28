@@ -8,7 +8,7 @@ burst, no ID reordering. A configuration read must not queue behind a
 
 | Offset | Name | Access | Contents |
 |---|---|---|---|
-| `0x00` | `MAGIC` | RO | `0x4E505502` — identity and version |
+| `0x00` | `MAGIC` | RO | `0x4E505503` — identity and version |
 | `0x04` | `STATUS` | RO | `{ [4] idle, [3] err_hang, [2] err_task, [1] err_evt_ovf, [0] err_illegal }` |
 | `0x08` | `ISSUED` | RO | ops issued since the last clear |
 | `0x0C` | `CYCLE` | RO | cycles since the last clear |
@@ -97,6 +97,49 @@ Two things follow, and both are implemented:
    reserved one. Letting it do so underflows the credit counter, which then
    reads as "no room" forever and hangs the very pipe the reset was
    supposed to recover.
+
+## 2.3 Event recycling: a contract, not a convention
+
+A counting semaphore carries no identity. A consumer that finds its event
+non-zero cannot tell whose set it is taking, so reusing an event for a new
+producer while an old consumer might still be waiting lets the new
+consumer steal the old set. That is a hang, and it is what
+`STATUS.err_hang` exists to report.
+
+Two cheaper rules were tried against this and both are unsound. They are
+recorded because both look correct:
+
+1. *"At least WIN ops apart, on a single queue."* This assumed the issue
+   window spans a bounded stretch of program order. It does not — the
+   window holds the oldest un-issued op plus later fetched ops, and as the
+   ops between them retire fetching continues, so the span has no bound.
+2. *"A happens-before path from every old consumer to the new producer."*
+   Circular: the only thing ordering a new consumer is its own wait on this
+   event, so the path runs through the very edge being aliased.
+
+The sound rule is a global barrier between the old consumer and the new
+producer, because passing one requires the machine to be drained. It is
+expensive, which is why the event file is 32 wide rather than 16 — the
+answer to running out of events is more events.
+
+`CONFIG` (0x30 / 0x34 / 0x38) reports `WIN`, `CREDIT`, `NEVT`, `NBUF`,
+`NQ`, `NPIPE`, `BUF_D` and `LANES`, because the compiler bakes some of them
+into what it emits. A program records what it assumed and the testbench
+checks it; a window deeper than the one a program targeted is a named
+failure rather than a hang.
+
+## 2.4 Stall attribution
+
+`WIN_FULL` alone cannot distinguish "the window is too shallow" from "the
+dependency graph is serial", and those want opposite fixes. `STALL_DEP`
+(0xA4), `STALL_CRED` (0xA8) and `STALL_ORD` (0xAC) count stalled cycles
+attributed to the oldest un-issued op, which is the one gating progress.
+
+Measured, and it settles the question: an encoder layer spends 85% of its
+cycles stalled on a dependency and 0% on ordering, and making the window
+16 or 32 deep does not help — it is slightly *worse*, because a deeper
+window makes the compiler's event live ranges longer and buys barriers
+rather than overlap.
 
 ## 3. Completion
 

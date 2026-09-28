@@ -55,6 +55,9 @@ module npu_csr
   input  logic [TAG_W+MCUW+PIPEW-1:0] err_tag,
   input  logic [31:0]         stat_issued,
   input  logic                stat_win_full,
+  input  logic                stall_dep,
+  input  logic                stall_cred,
+  input  logic                stall_ord,
   input  logic                stat_mq_full,
   input  logic                ext_rd_busy,
   input  logic                ext_wr_busy,
@@ -80,7 +83,7 @@ module npu_csr
   output logic [NPIPE-1:0]    rst_done
 );
 
-  parameter logic [31:0] MAGIC = 32'h4E50_5502;   // "NPU" + version 2
+  parameter logic [31:0] MAGIC = 32'h4E50_5503;   // "NPU" + version 3
 
   // Soft reset is held for a few cycles so the unit's asynchronous reset
   // is seen for certain and any grant it had in flight has retired.
@@ -98,6 +101,7 @@ module npu_csr
   localparam int IRQ_N       = 8;
 
   logic [31:0] cyc, win_full, mq_full, ext_rd, ext_wr, rd_conf, wr_conf;
+  logic [31:0] st_dep, st_cred, st_ord;
   logic [IRQ_N-1:0] irq_stat, irq_en;
   logic             idle_q;
   logic [NPIPE-1:0] rst_req;
@@ -165,6 +169,13 @@ module npu_csr
         8'h24:   rd_mux = {12'd0, hang_snapshot};
         8'h28:   rd_mux = {{(32-IRQ_N){1'b0}}, irq_stat};
         8'h2C:   rd_mux = {{(32-IRQ_N){1'b0}}, irq_en};
+        // Capability registers. The compiler bakes some of these into the
+        // programs it emits -- the event-recycling rule in particular is
+        // only sound for a window no deeper than the one it assumed -- so
+        // they have to be discoverable rather than assumed.
+        8'h30:   rd_mux = {8'(MAX_BURST), 8'(NID), 8'(CREDIT), 8'(WIN)};
+        8'h34:   rd_mux = {8'(NBUF), 8'(NQ), 8'(NPIPE), 8'(NEVT)};
+        8'h38:   rd_mux = {16'(BUF_D), 8'(LANES), 8'(EVT_W)};
         8'h40,
         8'h44,
         8'h48,
@@ -178,6 +189,9 @@ module npu_csr
         8'h98:   rd_mux = {{(32-NPIPE){1'b0}}, rst_active};
         8'h9C:   rd_mux = rd_conf;
         8'hA0:   rd_mux = wr_conf;
+        8'hA4:   rd_mux = st_dep;
+        8'hA8:   rd_mux = st_cred;
+        8'hAC:   rd_mux = st_ord;
         default: rd_mux = 32'd0;
       endcase
     end
@@ -193,6 +207,7 @@ module npu_csr
       ce_cnt <= '0; ue_cnt <= '0; ecc_first <= '0; ecc_first_v <= 1'b0;
       qprio <= '0; ecc_inj <= '0; ecc_inj_buf <= '0; clr_stat <= 1'b0;
       rd_conf <= '0; wr_conf <= '0;
+      st_dep <= '0; st_cred <= '0; st_ord <= '0;
       irq_stat <= '0; irq_en <= '0; idle_q <= 1'b1;
       rst_req <= '0; rst_active <= '0; rst_done <= '0;
       for (int p = 0; p < NPIPE; p++) rst_ctr[p] <= '0;
@@ -255,10 +270,14 @@ module npu_csr
         cyc <= '0; win_full <= '0; mq_full <= '0; ext_rd <= '0; ext_wr <= '0;
         ce_cnt <= '0; ue_cnt <= '0; ecc_first_v <= 1'b0;
         rd_conf <= '0; wr_conf <= '0; irq_stat <= '0;
+        st_dep <= '0; st_cred <= '0; st_ord <= '0;
         for (int p = 0; p < NPIPE; p++) busy_c[p] <= '0;
       end else begin
         if (rd_conflict) rd_conf <= rd_conf + 32'd1;
         if (wr_conflict) wr_conf <= wr_conf + 32'd1;
+        if (stall_dep)   st_dep  <= st_dep  + 32'd1;
+        if (stall_cred)  st_cred <= st_cred + 32'd1;
+        if (stall_ord)   st_ord  <= st_ord  + 32'd1;
         cyc <= cyc + 32'd1;
         if (stat_win_full) win_full <= win_full + 32'd1;
         if (stat_mq_full)  mq_full  <= mq_full  + 32'd1;

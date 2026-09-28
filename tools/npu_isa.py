@@ -9,7 +9,8 @@ a handful of encodings against values dumped by the RTL testbench.
 LANES, ELEM_W, BUS_W = 16, 16, 256
 NBUF, BUF_D, BUF_AW, BUFIDW = 4, 256, 8, 2
 BEAT_B = BUS_W // 8
-NQ, NMCU, NPIPE, NEVT = 8, 4, 5, 16
+NQ, NMCU, NPIPE, NEVT = 8, 4, 5, 32
+EVTIDW = 5
 WIN, CREDIT, MAX_BURST = 8, 4, 16
 
 # ---------------- pipes ----------------
@@ -56,14 +57,15 @@ def _pack(fields, total):
 
 
 def header(pipe, opc, tag=0, set_evt=0, set_en=0, bar_q=0, bar_g=0, fp=0):
-    return _pack([(6, 0), (1, fp), (1, bar_g), (1, bar_q), (4, set_evt),
+    return _pack([(5, 0), (1, fp), (1, bar_g), (1, bar_q), (EVTIDW, set_evt),
                   (1, set_en), (8, tag), (6, opc), (3, pipe), (1, 1)], 32)
 
 
 def desc(pipe, opc, payload, wait_mask=0, **kw):
     """Assemble a 256-bit descriptor."""
     assert payload < (1 << 192)
-    return (payload << 64) | ((wait_mask & 0xFFFF) << 32) | header(pipe, opc, **kw)
+    assert wait_mask < (1 << NEVT)
+    return (payload << 64) | (wait_mask << 32) | header(pipe, opc, **kw)
 
 
 # ---------------- payloads ----------------
@@ -155,6 +157,15 @@ class Program:
 
     def note(self, s):
         self.lines.append(f"N {s}")
+
+    def assume(self, win, nevt=NEVT, credit=CREDIT):
+        """Record the hardware parameters this program depends on.
+
+        The event-recycling rule is only sound for a window no deeper than
+        the one the scheduler assumed, so the assumption travels with the
+        program and the testbench checks it against the CONFIG register.
+        """
+        self.lines.append(f"A {win:x} {nevt:x} {credit:x}")
 
     def comment(self, s):
         self.lines.append(f"# {s}")

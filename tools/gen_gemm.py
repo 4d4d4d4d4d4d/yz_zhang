@@ -31,8 +31,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import npu_isa as I
+import npu_sched
 import npu_model as M
-from npu_sched import Builder, beats
+from npu_sched import Builder, beats, ext_beats
 
 L = I.LANES
 
@@ -99,6 +100,7 @@ def gen(m, n, k, kb, fp, seed, shift):
         b.add(I.P_MTE_IN,
               (lambda e: (lambda **kw: I.dma(
                   I.P_MTE_IN, e, ABUF, 1, k, **kw)))(aext),
+              reads=ext_beats(aext // I.BEAT_B, k),
               writes=beats(ABUF, k), name="ldA[%d]" % mi)
 
         for ni in range(nt):
@@ -111,6 +113,7 @@ def gen(m, n, k, kb, fp, seed, shift):
                 b.add(I.P_MTE_IN,
                       (lambda e, d: (lambda **kw: I.dma(
                           I.P_MTE_IN, e, d, 1, kb, **kw)))(bext, bd),
+                      reads=ext_beats(bext // I.BEAT_B, kb),
                       writes=beats(bd, kb), name="ldB[%d,%d]" % (ni, kbi))
 
                 cont = 1 if kbi > 0 else 0
@@ -128,7 +131,9 @@ def gen(m, n, k, kb, fp, seed, shift):
             b.add(I.P_MTE_OUT,
                   (lambda e: (lambda **kw: I.dma(
                       I.P_MTE_OUT, e, CBUF, 1, L, **kw)))(cext),
-                  reads=beats(CBUF, L), name="stC[%d,%d]" % (mi, ni))
+                  reads=beats(CBUF, L),
+                  writes=ext_beats(cext // I.BEAT_B, L),
+                  name="stC[%d,%d]" % (mi, ni))
 
     descs = b.build()
     for _q, _m, d in descs:
@@ -139,6 +144,7 @@ def gen(m, n, k, kb, fp, seed, shift):
         for r in range(m):
             prog.check(C0 + ni * m + r, mach.mem_word(C0 + ni * m + r))
 
+    prog.assume(npu_sched.window())
     ideal = mt * nt * k                       # one beat pair per cycle
     prog.note("gemm M=%d N=%d K=%d kb=%d fp=%d ideal_cycles=%d"
               % (m, n, k, kb, int(fp), ideal))
@@ -155,8 +161,11 @@ def main():
     ap.add_argument("--fp", action="store_true")
     ap.add_argument("-s", "--seed", type=int, default=1)
     ap.add_argument("--shift", type=int, default=10)
+    ap.add_argument("--win", type=int, default=I.WIN,
+                    help="issue window depth to target")
     ap.add_argument("-o", "--out", default="tests/vectors/gemm.txt")
     a = ap.parse_args()
+    npu_sched.set_window(a.win)
     prog, stats, ideal = gen(a.M, a.N, a.K, a.kb, a.fp, a.seed, a.shift)
     prog.write(a.out)
     print("wrote %s: %d descriptors (%d sync no-ops), %d events, "

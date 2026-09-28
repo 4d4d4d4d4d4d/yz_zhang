@@ -17,8 +17,9 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import npu_isa as I
+import npu_sched
 import npu_model as M
-from npu_sched import Builder, beats
+from npu_sched import Builder, beats, ext_beats
 
 VEC_POOL_INT = [I.V_MOV, I.V_ADDI, I.V_MULI, I.V_MAXI, I.V_ADD, I.V_SUB,
                 I.V_MUL, I.V_MAX, I.V_MIN, I.V_BRC_R, I.V_BRC_C,
@@ -77,14 +78,17 @@ def gen(seed, fp, n_vec, only=None):
     s = nxt()
     b.add(I.P_MTE_IN,
           lambda **k: I.dma(I.P_MTE_IN, EXT_A * I.BEAT_B, A0, 1, K, **k),
+          reads=ext_beats(EXT_A, K),
           writes=beats(A0, K), qid=q(s), mcu=m(s), name="load A")
     s = nxt()
     b.add(I.P_MTE_IN,
           lambda **k: I.dma(I.P_MTE_IN, EXT_B * I.BEAT_B, B0, 1, K, **k),
+          reads=ext_beats(EXT_B, K),
           writes=beats(B0, K), qid=q(s), mcu=m(s), name="load B")
     s = nxt()
     b.add(I.P_MTE_IN,
           lambda **k: I.dma(I.P_MTE_IN, EXT_T * I.BEAT_B, T0, 1, 2, **k),
+          reads=ext_beats(EXT_T, 2),
           writes=beats(T0, 2), qid=q(s), mcu=m(s), name="load table")
 
     # ---- one matrix multiply ----
@@ -167,7 +171,8 @@ def gen(seed, fp, n_vec, only=None):
     b.add(I.P_MTE_OUT,
           lambda **k: I.dma(I.P_MTE_OUT, EXT_OUT * I.BEAT_B, TR, 1,
                             I.LANES, **k),
-          reads=beats(TR, I.LANES), qid=q(s), mcu=m(s), name="store")
+          reads=beats(TR, I.LANES), writes=ext_beats(EXT_OUT, I.LANES),
+          qid=q(s), mcu=m(s), name="store")
 
     descs = b.build()
 
@@ -179,6 +184,7 @@ def gen(seed, fp, n_vec, only=None):
         prog.push(d, qid=_qid, mcu=_mcu)
     for i in range(I.LANES):
         prog.check(EXT_OUT + i, mach.mem_word(EXT_OUT + i))
+    prog.assume(npu_sched.window())
     prog.note("random seed=%d fp=%d vec_ops=%d live_beats=%d"
               % (seed, int(fp), n_vec, live))
     return prog, b.stats
@@ -189,9 +195,12 @@ def main():
     ap.add_argument("-s", "--seed", type=int, default=1)
     ap.add_argument("--fp", action="store_true", help="bf16 instead of int16")
     ap.add_argument("-n", "--vec-ops", type=int, default=18)
+    ap.add_argument("--win", type=int, default=I.WIN,
+                    help="issue window depth to target")
     ap.add_argument("-o", "--out", default="tests/vectors/random.txt")
     ap.add_argument("--op", help="repeat a single VEC opcode by name")
     a = ap.parse_args()
+    npu_sched.set_window(a.win)
     only = None
     if a.op:
         names = {v: k for k, v in I.VEC_NAMES.items()}

@@ -29,9 +29,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import npu_isa as I
+import npu_sched
 import npu_model as M
 import npu_layout as LY
-from npu_sched import Builder, beats
+from npu_sched import Builder, beats, ext_beats
 
 L = I.LANES
 
@@ -116,6 +117,7 @@ class Enc:
                    (lambda e, d, nn: (lambda **kw: I.dma(
                        I.P_MTE_IN, e * I.BEAT_B, d, 1, nn, **kw)))(
                            ext_beat, buf, n),
+                   reads=ext_beats(ext_beat, n),
                    writes=beats(buf, n), name=name)
 
     def st(self, ext_beat, buf, n, name):
@@ -123,7 +125,8 @@ class Enc:
                    (lambda e, d, nn: (lambda **kw: I.dma(
                        I.P_MTE_OUT, e * I.BEAT_B, d, 1, nn, **kw)))(
                            ext_beat, buf, n),
-                   reads=beats(buf, n), name=name)
+                   reads=beats(buf, n),
+                   writes=ext_beats(ext_beat, n), name=name)
 
     def tr(self, src, dst, name):
         """One 16x16 tile transpose."""
@@ -248,18 +251,34 @@ def build(s, d, dff, seed):
     e.st(X_seg, e.A, LY.seg_size(S, D), "st:Xseg")
 
     # ---- Q, K, V ----
-    for ext_w, out, tag in ((Wq, Q_row, "Q"), (Wk, K_row, "K"),
-                            (Wv, V_row, "V")):
-        e.matmul(e.A, ext_w, e.C, D, S, D, tag)
-        e.st(out, e.C, LY.row_size(S, D), "st:%s" % tag)
+    # These three are mathematically independent, but sharing one output
+    # region serialises them on a write-after-write that is not a real
+    # dependency. Giving each its own region costs buffer space and buys
+    # overlap; it is the register-allocation-against-parallelism trade, and
+    # on this machine the stall counters are what make the cost visible.
+    qkv_sz = LY.row_size(S, D)
+    qkv_fits = 3 * qkv_sz <= I.BUF_D
+    for i, (ext_w, out, tag) in enumerate(((Wq, Q_row, "Q"), (Wk, K_row, "K"),
+                                           (Wv, V_row, "V"))):
+        off = (i * qkv_sz) if qkv_fits else 0
+        e.matmul(e.A, ext_w, e.C + off, D, S, D, tag)
+        e.st(out, e.C + off, qkv_sz, "st:%s" % tag)
 
     # ---- scores = Q.K^T : both operands must be SEG ----
-    for src, dst, tag in ((Q_row, Q_seg, "Q"), (K_row, K_seg, "K")):
-        e.ld(src, e.C, LY.row_size(S, D), "ld:%s" % tag)
-        e.transpose(e.C, e.A, S, D, tag)
-        e.st(dst, e.A, LY.seg_size(S, D), "st:%sseg" % tag)
+    # Two independent transposes, so they get separate staging regions and
+    # separate destinations. SEG(Q) is left resident where the multiply
+    # wants it, which drops a store and a reload of the whole tensor -- the
+    # round trip was pure serialisation, not a real dependency.
+    seg_sz = LY.seg_size(S, D)
+    row_sz = LY.row_size(S, D)
+    e.ld(Q_row, e.T, row_sz, "ld:Q")
+    e.transpose(e.T, e.A, S, D, "Q")
+    e.ld(K_row, e.T + row_sz, row_sz, "ld:K")
+    e.transpose(e.T + row_sz, e.A + seg_sz, S, D, "K")
+    e.st(K_seg, e.A + seg_sz, seg_sz, "st:Kseg")
 
-    e.ld(Q_seg, e.A, LY.seg_size(S, D), "ld:Qseg")
+    if os.environ.get("NPU_CHECK_ALL"):
+        e.st(Q_seg, e.A, seg_sz, "st:Qseg.dbg")
     e.matmul(e.A, K_seg, e.C, D, S, S, "scores")
     scale = M.f_to_bf(1.0 / math.sqrt(D))
     for cj in range(nS):
@@ -311,7 +330,7 @@ def build(s, d, dff, seed):
     e.st(A_row, e.C, LY.row_size(S, D), "st:attn")
 
     # ---- residual + LayerNorm ----
-    def layernorm(src_ext, res_ext, dst_ext, cols, tag):
+    def layernorm(src_ext, res_ext, dst_ext, cols, tag, dbg_ext=None):
         """dst = LayerNorm(src + res), all ROW layout."""
         nc = cols // L
         e.ld(src_ext, e.C, LY.row_size(S, cols), "ld:%s" % tag)
@@ -352,6 +371,10 @@ def build(s, d, dff, seed):
               extra_reads=beats(LUTB + 2, 2) | beats(R, nS),
               name="%s:sqrt" % tag)
         e.vec(I.V_RECIP, R, R, nS, name="%s:rstd" % tag)
+        if os.environ.get("NPU_LN_DEBUG") and dbg_ext is not None:
+            e.st(dbg_ext,      R,  nS, "st:%s.R" % tag)
+            e.st(dbg_ext + 4,  AC, S,  "st:%s.AC" % tag)
+            e.st(dbg_ext + 64, SQ, S,  "st:%s.SQ" % tag)
         for cj in range(nc):
             e.vec(I.V_BRC_C, e.C + cj * S, e.C + cj * S, S, sb=R,
                   subop=I.SUB_MUL,
@@ -359,7 +382,8 @@ def build(s, d, dff, seed):
                   name="%s:scale" % tag)
         e.st(dst_ext, e.C, LY.row_size(S, cols), "st:%s" % tag)
 
-    layernorm(A_row, X_row, N1_row, D, "ln1")
+    DBG1 = e.alloc(128)
+    layernorm(A_row, X_row, N1_row, D, "ln1", DBG1)
 
     # ---- feed forward ----
     e.ld(N1_row, e.C, LY.row_size(S, D), "ld:N1")
@@ -377,7 +401,8 @@ def build(s, d, dff, seed):
     e.matmul(e.A, W2, e.C, F, S, D, "ffn2")
     e.st(Y_row, e.C, LY.row_size(S, D), "st:Y")
 
-    layernorm(Y_row, N1_row, N2_row, D, "ln2")
+    DBG2 = e.alloc(128)
+    layernorm(Y_row, N1_row, N2_row, D, "ln2", DBG2)
 
     # =============================== emit ===============================
     descs = e.b.build()
@@ -387,6 +412,28 @@ def build(s, d, dff, seed):
         e.prog.push(dsc, qid=_q, mcu=_m)
     for r in range(LY.row_size(S, D)):
         e.prog.check(N2_row + r, e.mach.mem_word(N2_row + r))
+    if os.environ.get("NPU_LN_DEBUG"):
+        for base, n, nm in ((DBG1, 68, "ln1.R+AC"), (DBG1 + 64, 32, "ln1.SQ"),
+                            (DBG2, 68, "ln2.R+AC"), (DBG2 + 64, 32, "ln2.SQ")):
+            e.prog.comment("lndebug %s" % nm)
+            for r in range(n):
+                e.prog.check(base + r, e.mach.mem_word(base + r))
+    if os.environ.get("NPU_CHECK_ALL"):
+        # every intermediate, for bisecting an RTL/model divergence
+        for base, rows, cols, nm in ((Q_row, S, D, "Q"), (K_row, S, D, "K"),
+                                     (V_row, S, D, "V"),
+                                     (K_seg, D, S, "Kseg"),
+                                     (Q_seg, D, S, "Qseg"),
+                                     (Sc_row, S, S, "scores"),
+                                     (P_seg, S, S, "Pseg"),
+                                     (Ctx_row, S, D, "ctx"),
+                                     (A_row, S, D, "attn"),
+                                     (N1_row, S, D, "ln1"),
+                                     (H_row, S, F, "H"),
+                                     (Y_row, S, D, "Y")):
+            e.prog.comment("intermediate %s" % nm)
+            for r in range(LY.row_size(rows, cols)):
+                e.prog.check(base + r, e.mach.mem_word(base + r))
 
     # =============================== reference ===========================
     def mat(a, b):
@@ -449,6 +496,7 @@ def build(s, d, dff, seed):
             continue
         report.append((nm, rel(got, want)))
 
+    e.prog.assume(npu_sched.window())
     e.prog.note("encoder S=%d d=%d d_ff=%d transposes=%d"
                 % (S, D, F, e.nT))
     return e.prog, e.b.stats, report, e.nT
@@ -460,8 +508,11 @@ def main():
     ap.add_argument("-d", type=int, default=32, help="model width")
     ap.add_argument("--ff", type=int, default=64, help="feed forward width")
     ap.add_argument("-s", "--seed", type=int, default=1)
+    ap.add_argument("--win", type=int, default=I.WIN,
+                    help="issue window depth to target")
     ap.add_argument("-o", "--out", default="tests/vectors/encoder.txt")
     a = ap.parse_args()
+    npu_sched.set_window(a.win)
     prog, stats, report, nT = build(a.S, a.d, a.ff, a.seed)
     prog.write(a.out)
     print("wrote %s: %d descriptors (%d sync no-ops), %d events, "

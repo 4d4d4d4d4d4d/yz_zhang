@@ -142,6 +142,7 @@ module npu_top
   logic [NPIPE-1:0] cpl_valid;
   cpl_t [NPIPE-1:0] cpl;
   logic             sched_idle, stat_win_full;
+  logic             stall_dep, stall_cred, stall_ord;
   logic             err_illegal, err_task, err_hang;
   logic [19:0]      hang_snapshot;
   logic [TAG_W+MCUW+PIPEW-1:0] err_tag;
@@ -172,12 +173,13 @@ module npu_top
     .rst_active(rst_active), .rst_done(rst_done),
     .idle(sched_idle), .stat_issued(stat_issued),
     .stat_win_full(stat_win_full),
+    .stall_dep(stall_dep), .stall_cred(stall_cred), .stall_ord(stall_ord),
     .err_illegal(err_illegal), .err_task(err_task), .err_hang(err_hang),
     .hang_snapshot(hang_snapshot), .err_tag(err_tag),
     .inflight_pipe(inflight_pipe));
 
   logic [NPIPE-1:0]      set_en;
-  logic [NPIPE-1:0][3:0] set_evt;
+  logic [NPIPE-1:0][EVTIDW-1:0] set_evt;
   logic                  err_evt_ovf;
 
   always_comb
@@ -292,6 +294,7 @@ module npu_top
     .err_evt_ovf(err_evt_ovf), .hang_snapshot(hang_snapshot),
     .err_tag(err_tag), .stat_issued(stat_issued),
     .stat_win_full(stat_win_full), .stat_mq_full(mq_full_stat),
+    .stall_dep(stall_dep), .stall_cred(stall_cred), .stall_ord(stall_ord),
     .ext_rd_busy(mte_in_outst || mte_in_bus),
     .ext_wr_busy(mte_out_outst || mte_out_bus),
     .pipe_busy(pipe_busy),
