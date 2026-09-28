@@ -188,6 +188,41 @@ export interface LedgerRow {
   created_at: string;
 }
 
+/** MOD-060 封禁影响面。**封禁前就要看见**：这个人手上有几笔在途合约、
+ *  多少托管资金会受影响、几个招募中的任务会被下架。
+ *  V58 专门算了这些，而管理后台此前直接调 `banUser`——**管理员在盲封**。 */
+export interface BanImpactView {
+  in_flight_contracts: Array<{
+    contract_id: number; task_id: number; status: string;
+    amount_cents: number; counterparty_id: number;
+  }>;
+  in_flight_count: number;
+  escrow_at_risk_cents: number;
+  open_task_ids: number[];
+  open_task_count: number;
+  wallet: { available_cents: number; escrow_cents: number; frozen_cents: number };
+}
+
+/** ADMIN-060 审计日志一行。**谁批了那笔三万块**——V96 之前这个问题
+ *  只能靠查数据库回答，那不是合规底线该有的样子。 */
+export interface AdminAuditRow {
+  id: number;
+  admin_id: number;
+  action: string;
+  target_type: string;
+  target_id: number | null;
+  detail: string;
+  created_at: string;
+}
+
+/** FIN-060 平台自己的钱：佣金收了多少、结算走了多少、账上还剩多少。 */
+export interface PlatformFinanceView {
+  balance_cents: number;
+  total_fee_cents: number;
+  settled_cents: number;
+  fee_count: number;
+}
+
 /** PAY-040 提现复核台的一行。
  *
  *  `flags` 是这笔申请命中的可疑模式，**只出现在管理端响应里**——

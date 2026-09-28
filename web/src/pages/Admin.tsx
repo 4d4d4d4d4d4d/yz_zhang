@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, fmtYuan, formatDateTime, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type BanImpactView, type PlatformFinanceView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 
@@ -22,6 +22,7 @@ export default function Admin() {
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [q, setQ] = useState('');
+  const [banning, setBanning] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setMetrics(await client.adminMetrics());
@@ -97,14 +98,196 @@ export default function Admin() {
                             onClick={async () => { await client.unbanUser(u.id); await load(); }}>解封</button>
                   ) : (
                     <button className="danger" style={{ padding: '2px 8px' }}
-                            onClick={async () => { await client.banUser(u.id); await load(); }}>封禁</button>
+                            onClick={() => setBanning(u.id)}>封禁</button>
                   )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        {banning !== null && (
+          <BanConfirm userId={banning} onClose={() => setBanning(null)}
+                      onDone={async () => { setBanning(null); await load(); }} />
+        )}
       </div>
+      <AuditLog />
+      <PlatformFinance />
+      <Announcement />
+    </div>
+  );
+}
+
+/** MOD-060 封禁前先看影响面。
+ *
+ * V58 专门算了这些数（在途合约、受影响的托管资金、会被下架的招募中任务），
+ * 而管理后台此前直接调 `banUser`——**管理员在盲封**。
+ * 封禁是不可逆的处置，代价必须在按下之前摆在眼前。
+ */
+function BanConfirm({ userId, onClose, onDone }: {
+  userId: number; onClose: () => void; onDone: () => Promise<void>;
+}) {
+  const { client } = useApp();
+  const [impact, setImpact] = useState<BanImpactView | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void client.banImpact(userId).then(setImpact).catch((e) => setError(apiErrorText(e)));
+  }, [client, userId]);
+
+  return (
+    <div className="card" style={{ marginTop: 10 }} data-testid="ban-confirm">
+      <h4>封禁用户 #{userId} 之前，先看这些</h4>
+      {error && <p className="error">{error}</p>}
+      {!impact ? <p className="muted">正在算影响面…</p> : (
+        <>
+          <p className={impact.escrow_at_risk_cents > 0 ? 'error' : 'muted'} data-testid="ban-escrow">
+            在途合约 {impact.in_flight_count} 笔，涉及托管资金 {fmtYuan(impact.escrow_at_risk_cents)}
+          </p>
+          <p className="muted" data-testid="ban-tasks">
+            招募中的任务 {impact.open_task_count} 个会被下架
+            {impact.open_task_ids.length > 0 && `（#${impact.open_task_ids.join(', #')}）`}
+          </p>
+          <p className="muted">
+            钱包：可用 {fmtYuan(impact.wallet.available_cents)} ·
+            托管 {fmtYuan(impact.wallet.escrow_cents)} ·
+            冻结 {fmtYuan(impact.wallet.frozen_cents)}
+          </p>
+          {impact.in_flight_contracts.map((c) => (
+            <p className="muted" key={c.contract_id}>
+              合约 #{c.contract_id}（任务 #{c.task_id}）{c.status} · {fmtYuan(c.amount_cents)} ·
+              对手方 #{c.counterparty_id}
+            </p>
+          ))}
+        </>
+      )}
+      <div className="row" style={{ marginTop: 8 }}>
+        <button className="danger" disabled={busy || !impact} onClick={async () => {
+          setBusy(true);
+          try { await client.banUser(userId); await onDone(); }
+          catch (e) { setError(apiErrorText(e)); }
+          finally { setBusy(false); }
+        }}>我已知晓影响，确认封禁</button>
+        <button className="ghost" onClick={onClose}>取消</button>
+      </div>
+    </div>
+  );
+}
+
+/** ADMIN-060 审计日志。**谁批了那笔三万块**——此前这个问题只能靠查数据库
+ *  回答，而那不是合规底线该有的样子。 */
+function AuditLog() {
+  const { client } = useApp();
+  const [rows, setRows] = useState<AdminAuditRow[]>([]);
+  const [action, setAction] = useState('');
+
+  const load = useCallback(async () => {
+    setRows(await client.adminAuditLog({ action: action || undefined, limit: 50 }).catch(() => []));
+  }, [client, action]);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <div className="card">
+      <div className="row">
+        <h3 className="grow">管理员审计日志</h3>
+        <input style={{ width: 180 }} placeholder="按动作过滤，如 withdraw_approve"
+               value={action} onChange={(e) => setAction(e.target.value)} />
+        <button className="ghost" onClick={() => void load()}>查询</button>
+      </div>
+      {rows.length === 0 ? <p className="muted">没有匹配的记录。</p> : (
+        <table style={{ marginTop: 8 }}>
+          <thead><tr><th>时间</th><th>管理员</th><th>动作</th><th>对象</th><th>说明</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td className="muted">{formatDateTime(r.created_at)}</td>
+                <td>#{r.admin_id}</td>
+                <td><span className="badge">{r.action}</span></td>
+                <td className="muted">{r.target_type}{r.target_id !== null ? ` #${r.target_id}` : ''}</td>
+                <td className="muted">{r.detail}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+/** FIN-060 平台自己的钱。结算是把佣金从平台账户划走的动作，
+ *  同样要留审计——所以放在后台而不是脚本里。 */
+function PlatformFinance() {
+  const { client } = useApp();
+  const [fin, setFin] = useState<PlatformFinanceView | null>(null);
+  const [amount, setAmount] = useState('');
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setFin(await client.platformFinance().catch(() => null));
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+
+  if (!fin) return null;
+  return (
+    <div className="card">
+      <h3>平台财务</h3>
+      <div className="row" style={{ gap: 28, marginTop: 10, flexWrap: 'wrap' }}>
+        <Stat label="账上余额" value={fmtYuan(fin.balance_cents)} />
+        <Stat label="累计佣金" value={fmtYuan(fin.total_fee_cents)} />
+        <Stat label="已结算" value={fmtYuan(fin.settled_cents)} />
+        <Stat label="佣金笔数" value={String(fin.fee_count)} />
+      </div>
+      <div className="row" style={{ marginTop: 8 }}>
+        <input style={{ width: 140 }} type="number" min={0.01} step={0.01} placeholder="结算金额（元）"
+               value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <button disabled={!amount} onClick={async () => {
+          setError('');
+          try {
+            await client.settlePlatform(Math.round(parseFloat(amount) * 100));
+            setAmount('');
+            await load();
+          } catch (e) { setError(apiErrorText(e)); }
+        }}>结算划出</button>
+      </div>
+      {error && <p className="error">{error}</p>}
+      <p className="muted">结算只动平台自己的收入；代扣税款在独立专户，不与佣金混同。</p>
+    </div>
+  );
+}
+
+/** NTF-060b 全站公告。发出去就收不回来，所以按下之前先说清会送给多少人。 */
+function Announcement() {
+  const { client } = useApp();
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+
+  return (
+    <div className="card">
+      <h3>发布全站公告</h3>
+      <div className="row">
+        <input style={{ width: 200 }} placeholder="标题" value={title}
+               onChange={(e) => setTitle(e.target.value)} />
+        <input className="grow" placeholder="正文" value={body}
+               onChange={(e) => setBody(e.target.value)} />
+        <label className="muted">
+          <input type="checkbox" checked={verifiedOnly}
+                 onChange={(e) => setVerifiedOnly(e.target.checked)} /> 仅已实名
+        </label>
+        <button disabled={title.trim().length < 2} onClick={async () => {
+          setNotice(''); setError('');
+          try {
+            const r = await client.broadcastAnnouncement(title.trim(), body, verifiedOnly);
+            setTitle(''); setBody('');
+            // 送达人数原样回显：公告发出去收不回来，得让人看到自己刚影响了多少人
+            setNotice(`已送达 ${r.delivered} 人`);
+          } catch (e) { setError(apiErrorText(e)); }
+        }}>发布</button>
+      </div>
+      {notice && <p className="muted" data-testid="ann-result">{notice}</p>}
+      {error && <p className="error">{error}</p>}
     </div>
   );
 }

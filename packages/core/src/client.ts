@@ -57,6 +57,9 @@ import type {
   ChangeOrderView,
   WithdrawRequestRow,
   SuspiciousActivityRow,
+  BanImpactView,
+  AdminAuditRow,
+  PlatformFinanceView,
 } from './types';
 
 export class ApiError extends Error {
@@ -361,7 +364,7 @@ export class PlatformClient {
     );
   }
   platformFinance() {
-    return this.request<{ balance_cents: number; total_fee_cents: number; settled_cents: number; fee_count: number }>(
+    return this.request<PlatformFinanceView>(
       'GET', '/admin/platform-finance',
     );
   }
@@ -855,19 +858,21 @@ export class PlatformClient {
       'GET', `/admin/reports?status=${status}`,
     );
   }
+  /** MOD-060 封禁影响面。**封禁前**调它——`banUser` 是不可逆的处置，
+   *  而这个人手上可能有几笔在途合约和一笔托管资金。
+   *
+   *  此前这里的行内类型还漏了 `open_task_ids` / `open_task_count`：
+   *  服务端一直在返回，而类型里没有，于是界面显示不出「几个招募中的任务
+   *  会被下架」——又一次「声明了却不给 / 给了却不声明」（V89 那一类）。 */
   banImpact(userId: number) {
-    return this.request<{
-      in_flight_contracts: Array<{ contract_id: number; task_id: number; status: string; amount_cents: number; counterparty_id: number }>;
-      in_flight_count: number; escrow_at_risk_cents: number;
-      wallet: { available_cents: number; escrow_cents: number; frozen_cents: number };
-    }>('GET', `/admin/users/${userId}/ban-impact`);
+    return this.request<BanImpactView>('GET', `/admin/users/${userId}/ban-impact`);
   }
   adminAuditLog(params: { action?: string; limit?: number; offset?: number } = {}) {
     const qs = Object.entries(params)
       .filter(([, v]) => v !== undefined && v !== '')
       .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
       .join('&');
-    return this.request<Array<{ id: number; admin_id: number; action: string; target_type: string; target_id: number | null; detail: string; created_at: string }>>(
+    return this.request<AdminAuditRow[]>(
       'GET', `/admin/audit-log${qs ? `?${qs}` : ''}`,
     );
   }

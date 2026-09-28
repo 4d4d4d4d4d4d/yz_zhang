@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V97 全批次完成（2026-09-28）。
-> 后端 1010 tests + 前端 125 tests（core 56 + web 51 + App 18）全绿；
+> 状态：MVP + V1~V98 全批次完成（2026-09-28）。
+> 后端 1022 tests + 前端 132 tests（core 56 + web 58 + App 18）全绿；
 > **现状一页看清：[72-status-ledger.md](72-status-ledger.md)**（这份矩阵的缺口也在那里记着）；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
@@ -10,6 +10,34 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V98 批次：盲封与查不到的那笔钱）
+
+> 模块 spec：[73-admin-oversight.md](73-admin-oversight.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **MOD-060 管理员在盲封** | V58 专门算了封禁影响面（在途合约、受影响托管资金、会被下架的招募中任务、钱包三态），而后台的按钮是 `onClick={() => client.banUser(id)}`——**直接封，影响面一次都没被调用过**。封禁不可逆，代价还会落在对手方与已报名的执行方身上。这一批不是加一个页面，是**把它接进封禁流程**：确认之前一个封禁请求都不发 | `web/src/AdminOversight.test.tsx`（4 项）、`tests/test_admin_oversight.py::test_mod060_*` |
+| **这条只能靠行为测试钉** | 源码扫描闸门只能看出「`banImpact` 被调用了、组件挂上了」，**看不出按钮是先弹确认还是直接把人封了**。红验证实：改回直接封，源码闸门照样绿，而行为测试四条全红 | 同上 |
+| **ADMIN-060 审计日志读不到** | 审计行一直在写，而**谁批了那笔三万块**只能开数据库回答。补可读 + 按动作过滤 + 显示管理员/对象/明细；并钉住「批准提现那一行必须带金额」，否则回溯还要再查一次 | `::test_admin060_audit_log_answers_who_approved_that_payout`（红验：明细去掉金额即红）、`::test_admin060_audit_log_filters_by_action`、`::test_admin060_audit_log_is_admin_only` |
+| **FIN-060 平台自己的钱** | 佣金/已结算/余额/笔数四个数可见；结算是动钱的动作，因此属于后台且留审计，不是一条脚本。界面上说明**代扣税款在独立专户不与佣金混同** | `::test_fin060_platform_finance_and_settlement_leave_an_audit_trail`（含对账不变量）、`::test_fin060_settlement_cannot_exceed_platform_balance` |
+| **公告回显送达人数** | 发出去收不回来，得让发的人看到自己刚影响了多少人 | `::test_announcement_reports_how_many_people_it_reached` |
+| **顺手掉出的漂移** | `banImpact` 的行内类型漏了 `open_task_ids` / `open_task_count`——服务端一直返回，类型里没有，于是界面显示不出「几个招募中的任务会被下架」。这几个响应在 `/admin` 下，V89 的形状闸门整体跳过了它们 | 提到 `BanImpactView` / `AdminAuditRow` / `PlatformFinanceView` 三个具名类型 |
+| **四条都进 `ADMIN_CONSOLE`** | 缺任何一条即红 | `tests/test_admin_console_reachability.py` |
+
+## 已实现（V97 批次：收口与优化）
+
+> 模块 spec：[72-status-ledger.md](72-status-ledger.md)、[GO-LIVE.md](../GO-LIVE.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **状态台账** | 26 个 spec 里 101 条「这一批没做的」，其中**20 条早就被后面的批次做掉了**——只逐批记、不收口，诚实会慢慢变成误导。去重 + 三类分（卡在外部/纯欠账/有意不做）+ 逐条索引 + 「哪些没做其实已做」并写明关掉它的批次。旧 spec **刻意不改**：那是当时的实况记录 | `tests/test_status_ledger.py`（红验：新缺口不进台账即红；已关闭行不写批次号即红） |
+| **闸门第一版收错了** | 把「见 TEAM-011 的理由」这类**引用**也当成缺口，台账被迫去交代一堆不存在的欠账；改成只认条目开头的编号 | 同上 |
+| **AGT-054 过期模型标识** | `claude-opus-4-8` 早已不在售。配上 Key 后每次分解都 404，而 `except Exception: return 模板` **静默吞掉**它——「真实 LLM 分解已接入」这句话从来没成立过。改 `claude-opus-5` + 在售型号表 + 生产启动拦截 | `startup_check` 实测拒绝启动 |
+| **降级不能是静默的** | 降级本身是对的（宁可给模板也不让发布卡住），要的是**它发生过被记下来**：按异常类型计数并暴露到 `/metrics` | `llm_decompose_fallback_total` |
+| **复核台查询数** | 上一批我自己写成逐行 `db.get` + **整表扫流水**，200 行 = 600 次查询。改三条分组查询 | `::test_pay040_queue_does_not_scale_queries_with_rows`（第一版写成 `<=12` 常数上界，**红验没红**；改成量「1 行 vs 9 行不许涨」才钉住，实测 8 → 24） |
+| **测试脚手架归一** | 五张声明表回答同一个问题，扫描实现却有两份，第二份漏了「组件得挂上」。合成 `tests/clientscan.py`；归一时发现旧文件里的重复定义正在**遮蔽**新写的那个 | 四张闸门共用一份实现 |
+| **上线流程文档** | `docs/GO-LIVE.md`：13 条启动红线（取自 `startup_check`）、手续依赖顺序、等批复期间做什么、当天步骤、第一周盯的指标 | `::test_go_live_doc_lists_every_startup_blocker`——**当场抓到我自己漏写的 `PLATFORM_CAPTCHA_PROVIDER`** |
 
 ## 已实现（V96 批次：进了人审，就再也出不来）
 
