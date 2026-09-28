@@ -154,7 +154,8 @@ def withdraw(db: Session, user_id: int, amount: int) -> dict:
             "frozen_cents": acct.frozen_cents, "payout_ref": payout_ref}
 
 
-def decide_withdraw(db: Session, req, approve: bool, admin_id: int) -> dict:
+def decide_withdraw(db: Session, req, approve: bool, admin_id: int | None,
+                    timeout: bool = False) -> dict:
     """PAY-007 人审裁决：批准=冻结划出（落 withdraw 流水），驳回=解冻退回。
 
     PAY-042 超过 `WITHDRAW_DUAL_APPROVAL_CENTS` 的出款要**两个不同管理员**
@@ -162,10 +163,18 @@ def decide_withdraw(db: Session, req, approve: bool, admin_id: int) -> dict:
     第二个人确认后才真的打出去。
 
     刻意不改既有语义：门槛以下仍然一人批准即放款，行为与改造前一致。
+
+    PAY-044 `timeout=True` 是**系统超时关闭**（75 号 spec）：走的是与人工驳回
+    完全相同的解冻路径，只有 `decided_by`（留空）和通知文案不同——
+    另写一份解冻逻辑迟早会漏掉其中一步（第二份实现必然抄漏）。
     """
     from app.core.config import settings
     from app.modules.account.models import utcnow
 
+    if timeout and approve:
+        # 超时只能往可逆方向兜。自动放款会让「等 7 天」变成绕过四眼原则的办法，
+        # 而攻击者需要做的只是等——这条在代码里也要拦住，不能只写在 spec 里。
+        raise ValueError("超时兜底不得放款，只能退回可用余额")
     if req.status not in ("pending", "awaiting_second"):
         raise bad_request("该提现申请已处理", "request_closed")
 
@@ -198,12 +207,14 @@ def decide_withdraw(db: Session, req, approve: bool, admin_id: int) -> dict:
         req.status = "approved"
     else:
         acct.available_cents += req.amount_cents
-        _log(db, req.user_id, "withdraw_refund", req.amount_cents, memo=f"大额提现驳回退回 #{req.id}")
+        why = "超时关闭退回" if timeout else "驳回退回"
+        _log(db, req.user_id, "withdraw_refund", req.amount_cents,
+             memo=f"大额提现{why} #{req.id}")
         req.status = "rejected"
     req.decided_by = admin_id
     req.decided_at = utcnow()
     db.add_all([acct, req])
-    _notify_withdraw_decision(db, req, approve)
+    _notify_withdraw_decision(db, req, approve, timeout=timeout)
     return {"status": req.status, "amount_cents": req.amount_cents,
             "first_approved_by": req.first_approved_by}
 
@@ -221,7 +232,7 @@ def _notify_withdraw_first_pass(db: Session, req) -> None:
            f"按规定需再经一位负责人确认后打款。")
 
 
-def _notify_withdraw_decision(db: Session, req, approve: bool) -> None:
+def _notify_withdraw_decision(db: Session, req, approve: bool, timeout: bool = False) -> None:
     """PAY-041 裁决要告诉用户——而**驳回不能说原因**。
 
     改造前这里一个字都不发：用户看到「通常 1 个工作日内处理完成」，
@@ -239,9 +250,85 @@ def _notify_withdraw_decision(db: Session, req, approve: bool) -> None:
     if approve:
         notify(db, req.user_id, "funds", "提现已通过复核",
                f"你的提现 {yuan} 已通过复核并发起打款，到账时间取决于银行处理。")
+    elif timeout:
+        # PAY-044 超时关闭的原因**可以说清楚**：它不涉及任何风控命中信息，
+        # 而人工驳回必须中性（AML-030/031）。含糊其辞反而会让用户
+        # 以为自己被拒了，从此不敢再提。
+        from app.core.config import settings
+
+        notify(db, req.user_id, "funds", "提现申请已超时关闭",
+               f"你的提现 {yuan} 因超过 {settings.WITHDRAW_REVIEW_TIMEOUT_DAYS} 天"
+               f"未完成复核已自动关闭，款项已退回可用余额，你可以重新发起。")
     else:
         notify(db, req.user_id, "funds", "提现未通过复核",
                f"你的提现 {yuan} 未通过复核，款项已退回可用余额，你可以重新发起。")
+
+
+def remind_withdraw_reviews(db: Session, now=None) -> dict:
+    """PAY-044 人审提现的催办与超时兜底（75 号 spec）。
+
+    探针：一审通过后把 `first_approved_at` 推到 30 天前，跑一遍全部 job——
+    状态还是 `awaiting_second`，用户的两万一**一直冻着**，没有人被提醒过。
+    V99 加了一道控制，同时加了一个新的卡点；**卡点没有兜底，
+    它就是一个新的「钱能进不能出」**。
+
+    兜底方向只有一个：退回可用余额。超时是「没有人看」的证据，
+    不是「可以放行」的授权（见 `decide_withdraw` 里的那道拦截）。
+    """
+    from datetime import timedelta
+
+    from app.core.config import settings
+    from app.modules.account.models import User, utcnow
+    from app.modules.notification.service import notify
+
+    from .models import WithdrawRequest
+
+    now = now or utcnow()
+    interval = timedelta(hours=max(settings.WITHDRAW_REVIEW_REMIND_HOURS, 1))
+    deadline = timedelta(days=max(settings.WITHDRAW_REVIEW_TIMEOUT_DAYS, 1))
+    rows = (
+        db.query(WithdrawRequest)
+        .filter(WithdrawRequest.status.in_(("pending", "awaiting_second")))
+        .all()
+    )
+    if not rows:
+        return {"reminded": 0, "closed": 0}
+    admin_ids = [u.id for u in db.query(User).filter(User.is_admin.is_(True)).all()]
+
+    reminded = closed = 0
+    for req in rows:
+        if now - req.created_at >= deadline:
+            decide_withdraw(db, req, approve=False, admin_id=None, timeout=True)
+            from app.modules.admin.router import record_audit
+
+            # admin_id=0 表示「系统」：审计表只增不改，一笔动了钱的操作
+            # 不能因为没有操作人就不留痕
+            record_audit(db, 0, "withdraw_timeout_close", "withdraw_request", req.id,
+                         f"超过 {settings.WITHDRAW_REVIEW_TIMEOUT_DAYS} 天无人完成复核，"
+                         f"自动退回 {req.amount_cents} 分")
+            closed += 1
+            continue
+        last = req.review_reminded_at or req.first_approved_at or req.created_at
+        if now - last < interval:
+            continue
+        hours = int((now - req.created_at).total_seconds() // 3600)
+        yuan = f"¥{req.amount_cents / 100:.2f}"
+        if req.status == "awaiting_second":
+            # 收到的人必须知道自己是第一个还是第二个，否则他会以为
+            # 「已经有人在处理了」而放过去——那正是它卡住的原因
+            body = (f"提现申请 #{req.id}（{yuan}）已完成初次复核，正在等待"
+                    f"**另一位**管理员二次确认，已等待 {hours} 小时。"
+                    f"超过 {settings.WITHDRAW_REVIEW_TIMEOUT_DAYS} 天将自动退回用户余额。")
+        else:
+            body = (f"提现申请 #{req.id}（{yuan}）等待人工复核已 {hours} 小时。"
+                    f"用户的这笔钱在此期间是冻结的；超过 "
+                    f"{settings.WITHDRAW_REVIEW_TIMEOUT_DAYS} 天将自动退回。")
+        for uid in admin_ids:
+            notify(db, uid, "funds", "提现复核待处理", body)
+        req.review_reminded_at = now
+        db.add(req)
+        reminded += 1
+    return {"reminded": reminded, "closed": closed}
 
 
 def escrow_hold(db: Session, user_id: int, amount: int, contract_id: int):

@@ -72,6 +72,15 @@ JOBS: tuple[ScheduledJob, ...] = (
                  "TAX-013 代扣税款缴库，与申报周期对齐"),
     ScheduledJob("/knowledge/jobs/reindex", 3600, "kb_reindex",
                  "KB-011 向量索引增量重建：只补没有向量或模型已换的行"),
+    ScheduledJob("/tasks/jobs/remind-acceptance", 3600, "remind_acceptance",
+                 "NTF-063 自动放款前的最后一次提醒——交付时那条是开始时的闹钟，"
+                 "而 N 天后钱就放出去了，放款不可逆"),
+    ScheduledJob("/teams/jobs/remind-approvals", 3600, "team_approval_reminders",
+                 "TEAM-063 支出审批催办与超时关闭——此前躺三个月也不会有人"
+                 "被提醒第二次，而发起人等的是一件不会到来的事"),
+    ScheduledJob("/wallet/jobs/remind-second-approval", 3600, "withdraw_second_reminders",
+                 "PAY-044 人审提现催办与超时退回——V99 的双人确认加了一个新卡点，"
+                 "卡点没有兜底就是新的「钱能进不能出」"),
     ScheduledJob("/admin/jobs/reconcile", 86400, "reconcile",
                  "PAY-006/008 五条资金不变量日终对账，不平即开差错工单并告警。"
                  "**此前它不在调度表里、且要求管理员登录，从未自动执行过**"),

@@ -54,6 +54,10 @@ class WithdrawRequest(Base):
     # 否则就是同一个人点两次，等于没有这条规则。
     first_approved_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     first_approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # PAY-044 上一次催办管理员的时间（75 号 spec）。
+    # 没有它，一审通过的申请会永远停在 awaiting_second——
+    # 加一道控制的同时加了一个新的卡点，而卡点没有兜底就是新的「钱能进不能出」。
+    review_reminded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

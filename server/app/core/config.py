@@ -50,6 +50,22 @@ class Settings:
     WITHDRAW_DUAL_APPROVAL_CENTS = int(
         os.environ.get("PLATFORM_WITHDRAW_DUAL_APPROVAL_CENTS", "2000000"))  # ¥2万
     LARGE_WITHDRAW_CENTS = int(os.environ.get("PLATFORM_LARGE_WITHDRAW_CENTS", "1000000"))  # ≥¥1万人审
+    # PAY-044 人审提现的催办与超时兜底（75 号 spec）。
+    # 超时**只往可逆方向兜**：退回可用余额，绝不自动放款——
+    # 自动放款会让「等 7 天」变成绕过四眼原则的办法。
+    WITHDRAW_REVIEW_REMIND_HOURS = int(
+        os.environ.get("PLATFORM_WITHDRAW_REVIEW_REMIND_HOURS", "24"))
+    WITHDRAW_REVIEW_TIMEOUT_DAYS = int(
+        os.environ.get("PLATFORM_WITHDRAW_REVIEW_TIMEOUT_DAYS", "7"))
+    # TEAM-063 支出审批的催办与超时（75 号 spec）：躺着的申请要被再提醒，
+    # 而且不能永远躺着——发起人等的是一件不会到来的事。
+    TEAM_APPROVAL_REMIND_HOURS = int(
+        os.environ.get("PLATFORM_TEAM_APPROVAL_REMIND_HOURS", "24"))
+    TEAM_APPROVAL_TIMEOUT_DAYS = int(
+        os.environ.get("PLATFORM_TEAM_APPROVAL_TIMEOUT_DAYS", "7"))
+    # TEAM-055 预算池用量预警线（万分比）：到顶那一刻所有人一起被卡住，
+    # 预警的意义是让 owner 在那之前就知道
+    TEAM_POOL_WARN_BPS = int(os.environ.get("PLATFORM_TEAM_POOL_WARN_BPS", "8000"))  # 80%
     # 到场打卡允许误差（米，GEO-020）
     CHECKIN_RADIUS_M = int(os.environ.get("PLATFORM_CHECKIN_RADIUS_M", "500"))
     # 陌生人私聊未获回复前的消息上限（IM-005）
@@ -80,7 +96,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.92.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.93.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

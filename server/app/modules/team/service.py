@@ -231,7 +231,120 @@ def execute_spend(db: Session, req: SpendRequest, actor: User) -> dict:
                     memo=f"团队支出 #{req.id}：{req.purpose}", kind="team_spend")
     req.status = "executed"
     db.add(req)
+    db.flush()                     # 让下面那句用量统计看得见这一笔
+    warn_pool(db, team)
     return {"id": req.id, "status": req.status, "amount_cents": req.amount_cents}
+
+
+def warn_pool(db: Session, team: Team | None) -> bool:
+    """TEAM-055 池子快到顶了要**提前**说（75 号 spec）。
+
+    到顶那一刻所有人一起被卡住：owner 收到的第一个信号是员工来问
+    「为什么我的申请被拒了」。预警的全部意义是让他在那之前就知道。
+
+    判断放在**支出执行时**而不是 job 里：用量只会因为执行而变化，
+    在变化的那一刻判断是精确的；用 job 轮询反而是在月初把所有团队扫一遍，
+    去发现一件早就发生的事。
+    """
+    from app.core.config import settings
+    from app.modules.notification.service import notify
+
+    if not team or team.monthly_budget_cents <= 0:
+        return False               # 不设池 = 没有「快用完」这回事
+    month = utcnow().strftime("%Y-%m")
+    if team.pool_warned_month == month:
+        return False               # 一个月一次就够；每笔都提醒会被当成噪音屏蔽掉
+    used = team_spent_this_month(db, team.user_id)
+    if used * 10000 < team.monthly_budget_cents * settings.TEAM_POOL_WARN_BPS:
+        return False
+    left = max(0, team.monthly_budget_cents - used)
+    team.pool_warned_month = month
+    db.add(team)
+    # 三个数都要给：只说「快用完了」，收到的人还得自己去查一遍
+    body = (f"团队「{team.name}」本月预算池已用 ¥{used / 100:.2f}／"
+            f"¥{team.monthly_budget_cents / 100:.2f}，剩余 ¥{left / 100:.2f}。"
+            f"池子用尽后所有支出申请都会被拒，如需继续请调整本月预算池。")
+    for uid in _pool_watchers(db, team.user_id):
+        notify(db, uid, "team", "预算池即将用尽", body)
+    return True
+
+
+def _pool_watchers(db: Session, team_id: int) -> list[int]:
+    """池子的事通知 owner 与 admin。
+
+    与 `approvers()` 的差别是**不排除任何人**：这不是「等你审批」，
+    发起人自己也该知道团队快没预算了。
+    """
+    rows = (
+        db.query(TeamMember)
+        .filter(TeamMember.team_id == team_id, TeamMember.active.is_(True),
+                TeamMember.role.in_(("owner", "admin")))
+        .all()
+    )
+    return [m.user_id for m in rows]
+
+
+def remind_pending_spends(db: Session, now=None) -> dict:
+    """TEAM-063 催办与超时关闭（75 号 spec）。
+
+    改造前：申请提交时通知一次审批人，然后**什么都不再发生**。
+    躺三个月也不会有人被提醒第二次，而发起人的活一直卡着——
+    他等的是一件不会到来的事。
+
+    先关超时、再催办：否则同一轮里会给一笔马上要过期的申请发催办，
+    紧接着又发一条「已关闭」。
+    """
+    from datetime import timedelta
+
+    from app.core.config import settings
+    from app.modules.notification.service import notify
+
+    now = now or utcnow()
+    interval = timedelta(hours=max(settings.TEAM_APPROVAL_REMIND_HOURS, 1))
+    deadline = timedelta(days=max(settings.TEAM_APPROVAL_TIMEOUT_DAYS, 1))
+    rows = db.query(SpendRequest).filter(SpendRequest.status == "pending").all()
+
+    expired = reminded = 0
+    for req in rows:
+        team = db.get(Team, req.team_id)
+        if not team:
+            continue
+        waited = now - req.created_at
+        if waited >= deadline:
+            # 往后兜：置为过期，发起人可以重新发起。
+            # **不往前兜**（超时自动批准）——超时是「没有人看」的证据，
+            # 不是「可以放行」的授权。
+            req.status = "expired"
+            req.decided_at = now
+            db.add(req)
+            days = settings.TEAM_APPROVAL_TIMEOUT_DAYS
+            notify(db, req.requester_id, "team", "支出申请已超时关闭",
+                   f"你从「{team.name}」申请的 ¥{req.amount_cents / 100:.2f}"
+                   f"（{req.purpose or '未填用途'}）等待审批已超过 {days} 天，"
+                   f"已自动关闭。资金未发生变动，你可以重新发起。")
+            for uid in approvers(db, team.user_id, exclude_user_id=req.requester_id):
+                notify(db, uid, "team", "支出申请已超时关闭",
+                       f"「{team.name}」一笔 ¥{req.amount_cents / 100:.2f} 的支出申请"
+                       f"等待审批超过 {days} 天，已自动关闭。")
+            expired += 1
+            continue
+        last = req.reminded_at or req.created_at
+        if now - last < interval:
+            continue
+        hours = int(waited.total_seconds() // 3600)
+        requester = db.get(User, req.requester_id)
+        who = requester.nickname if requester else f"用户 {req.requester_id}"
+        # 催办必须说**已经等了多久**：不说的话它只是同一条通知重发，
+        # 审批人无法判断紧迫程度
+        for uid in approvers(db, team.user_id, exclude_user_id=req.requester_id):
+            notify(db, uid, "team", "支出待审批催办",
+                   f"{who} 申请从「{team.name}」支出 ¥{req.amount_cents / 100:.2f}"
+                   f"（{req.purpose or '未填用途'}）已等待 {hours} 小时仍未处理；"
+                   f"超过 {settings.TEAM_APPROVAL_TIMEOUT_DAYS} 天将自动关闭。")
+        req.reminded_at = now
+        db.add(req)
+        reminded += 1
+    return {"reminded": reminded, "expired": expired}
 
 
 def can_invoice(team: Team) -> str:

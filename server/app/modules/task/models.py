@@ -88,6 +88,10 @@ class Task(Base):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     reject_count: Mapped[int] = mapped_column(Integer, default=0)  # 验收驳回次数(TASK-033)
+    # NTF-063 自动放款前的最后一次提醒发过没有（75 号 spec）。
+    # 交付时那条「请在 N 天内验收」是开始时的闹钟；这一位保证到期前还会响一次，
+    # 并且只响一次——跑一百遍 job 也不会给发布方发一百条。
+    acceptance_reminded: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

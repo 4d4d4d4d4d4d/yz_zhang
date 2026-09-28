@@ -4,13 +4,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, require_verified
+from app.core.deps import get_current_user, require_job_auth, require_verified
 from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.modules.account.models import User
 from app.modules.wallet import service as wallet
 
 from . import service
 from .models import ROLES, SpendRequest, Team, TeamMember
+from app.core.locks import job_slot
 from app.core.timefmt import iso
 
 router = APIRouter(prefix="/teams", tags=["team"])
@@ -266,6 +267,10 @@ def set_budget(team_id: int, body: BudgetIn, user: User = Depends(get_current_us
     team = _get(db, team_id)
     service.require_role(db, team_id, user.id, "owner")
     team.monthly_budget_cents = body.monthly_budget_cents
+    # TEAM-055 池子一改，「按当前池子快到顶了」这句话就不成立了，
+    # 所以本月的预警标记要清掉：不清的话，调高预算后再次逼近上限
+    # **不会有第二次预警**——那正是这一批要修的毛病本身。
+    team.pool_warned_month = ""
     db.add(team)
     return {"id": team.user_id, "monthly_budget_cents": team.monthly_budget_cents,
             "month_spent_cents": service.team_spent_this_month(db, team_id)}
@@ -293,3 +298,15 @@ def submit_company(team_id: int, body: CompanyIn, user: User = Depends(get_curre
     db.add(team)
     _mark_images_sensitive(db, body.license_images, user.id)
     return _dump(team)
+
+
+# --------------------------------------------------------------- 催办 job
+@router.post("/jobs/remind-approvals")
+def run_remind_approvals(db: Session = Depends(get_db), _=Depends(require_job_auth),
+                         __=Depends(job_slot("team_approval_reminders"))):
+    """TEAM-063 支出审批的催办与超时关闭（75 号 spec）。
+
+    此前提交时通知一次，然后什么都不再发生——**躺三个月也不会有人
+    被提醒第二次**，而发起人等的是一件不会到来的事。
+    """
+    return service.remind_pending_spends(db)

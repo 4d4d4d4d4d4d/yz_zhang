@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V98 全批次完成（2026-09-28）。
-> 后端 1022 tests + 前端 132 tests（core 56 + web 58 + App 18）全绿；
+> 状态：MVP + V1~V100 全批次完成（2026-09-28）。
+> 后端 1048 tests + 前端 133 tests（core 56 + web 59 + App 18）全绿；
 > **现状一页看清：[72-status-ledger.md](72-status-ledger.md)**（这份矩阵的缺口也在那里记着）；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
@@ -10,6 +10,26 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V100 批次：没有人会被提醒第二次）
+
+> 模块 spec：[75-nobody-is-reminded-twice.md](75-nobody-is-reminded-twice.md)
+>
+> ```
+> 支出申请躺 90 天:   审批人收到「支出待审批」 1 条
+> 还剩 2 小时放款:    发布方收到「待验收提醒」 1 条（没有第二句）
+> 预算池用到 96%:     预警 0 条
+> 一审通过 30 天:     awaiting_second，用户 ¥21000 一直冻着
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **TEAM-063 审批催办与超时** | 新 job `/teams/jobs/remind-approvals`：躺过 `TEAM_APPROVAL_REMIND_HOURS` 的申请**再通知一次审批人并说明已等多久**（不说等待时长就只是同一条通知重发）；催办**按间隔重复**而不是只补一次——「第二次提醒」如果也只有一次，三个月后还是同一个问题。超过 `TEAM_APPROVAL_TIMEOUT_DAYS` 置 `expired`，两端都通知 | `tests/test_reminders_and_timeouts.py::test_team063_a_request_left_lying_gets_chased`、`::test_team063_chasing_repeats_by_interval_not_once`、`::test_team063_request_expires_and_both_sides_are_told`、`::test_team063_expired_request_cannot_be_approved_afterwards`（四条都红验过） |
+| **超时只往可逆方向兜** | 超时**不自动批准**、**不自动放款**：超时是「没有人看」的证据，不是「可以放行」的授权。往前兜会把 V99 刚立的四眼原则一笔抹掉——攻击者需要做的只是**等** | `::test_pay044_timeout_refunds_the_user_and_never_pays_out`（断言不出现 `withdraw` 流水）、`::test_pay044_timeout_cannot_be_asked_to_pay_out`（代码层拦截） |
+| **NTF-063 放款前的最后一次提醒** | 新 job `/tasks/jobs/remind-acceptance`：距自动验收只剩 `AUTO_ACCEPT_DAYS / 4` 时给发布方补一条「验收即将到期」，说明**放款后不可撤回**。提前量按比例算，不写死小时数（`remind_response` 犯过一次的错误）；进 `MUST_REACH`——T0 那条在表里，最后那条更该在 | `::test_ntf063_last_call_before_money_moves`、`::test_ntf063_reminder_is_idempotent_and_not_sent_after_the_fact`、`::test_ntf063_lead_time_follows_the_configured_days`、`::test_ntf063_reminder_cannot_be_switched_off` |
+| **TEAM-055 预算池预警** | 越过 `TEAM_POOL_WARN_BPS`（默认 80%）时通知 owner 与 admin，每月一次，文案给**已用/池子/剩余三个数**。判断放在**支出执行时**而不是 job 里：用量只因执行而变化，在变化那一刻判断是精确的。owner 改池子时清掉本月标记——池子一改，「按当前池子快到顶了」这句话就不成立了 | `::test_team055_owner_is_warned_before_the_pool_runs_dry`、`::test_team055_warning_is_once_per_month_but_resets_when_the_pool_changes`、`::test_team055_no_pool_means_no_warning` |
+| **PAY-044 提现复核催办与超时退回** | 新 job `/wallet/jobs/remind-second-approval`：超过 `WITHDRAW_REVIEW_REMIND_HOURS` 催办全部管理员，`awaiting_second` 的那条明说**在等另一位**（不说的话收到的人会以为已经有人在处理）；超过 `WITHDRAW_REVIEW_TIMEOUT_DAYS` 解冻退回并通知用户可重新发起。复用 `decide_withdraw` 的解冻路径，不另写一份 | `::test_pay044_stuck_second_approval_chases_the_admins`、`::test_pay044_a_pending_request_nobody_looked_at_is_also_chased`、`::test_pay044_timeout_close_leaves_an_audit_row` |
+| **超时关闭的文案可以说清原因** | 人工驳回必须中性（AML-030/031 保密义务），而超时关闭的原因是「没有人在期限内完成复核」，不涉及任何风控命中信息。**含糊其辞反而会让用户以为自己被拒了，从此不敢再提** | `::test_pay044_timeout_refunds_the_user_and_never_pays_out` |
 
 ## 已实现（V99 批次：一个人不能把不可逆的钱决定做完）
 

@@ -3,8 +3,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, require_admin, require_verified
+from app.core.deps import (get_current_user, require_admin, require_job_auth,
+                            require_verified)
 from app.core.idempotency import replay_or_run
+from app.core.locks import job_slot
 from app.modules.account.models import User
 
 from . import service
@@ -253,6 +255,18 @@ def reject_withdraw(
     record_audit(db, admin.id, "withdraw_reject", "withdraw_request", request_id,
                  f"驳回提现 {req.amount_cents} 分")
     return result
+
+
+@router.post("/jobs/remind-second-approval")
+def run_remind_second_approval(db: Session = Depends(get_db), _=Depends(require_job_auth),
+                               __=Depends(job_slot("withdraw_second_reminders"))):
+    """PAY-044 人审提现的催办与超时兜底（75 号 spec）。
+
+    V99 的双人确认加了一个新的卡点：一审通过后没人来二次确认，
+    申请就停在那儿，而用户的钱是冻着的。**卡点没有兜底就是新的
+    「钱能进不能出」**。
+    """
+    return service.remind_withdraw_reviews(db)
 
 
 @router.get("/ledger")

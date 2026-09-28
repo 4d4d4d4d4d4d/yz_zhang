@@ -962,6 +962,45 @@ def run_auto_accept(db: Session = Depends(get_db), _=Depends(require_job_auth),
     return {"auto_accepted": len(rows)}
 
 
+@router.post("/tasks/jobs/remind-acceptance")
+def run_remind_acceptance(db: Session = Depends(get_db), _=Depends(require_job_auth),
+        __=Depends(job_slot("remind_acceptance"))):
+    """NTF-063 自动放款前的最后一次提醒（75 号 spec）。
+
+    交付时那条「请在 N 天内验收」是**开始时的闹钟**：三天里没有任何一句
+    「还有几小时」，然后钱就放给对方了，而放款不可逆。
+
+    提前量按 `AUTO_ACCEPT_DAYS / 4` 算，**不写死小时数**：天数是可配置的，
+    写死「到期前 18 小时」在把它调成 1 天的部署里几乎没有提前量。
+    这是 DSPC-012 硬编码 48 小时的同类错误，`remind_response` 已经犯过一次。
+    """
+    from app.modules.notification.service import notify
+
+    now = utcnow()
+    days = settings.AUTO_ACCEPT_DAYS
+    lead = timedelta(days=days) / 4
+    rows = (
+        db.query(Task)
+        .filter(Task.status == "pending_acceptance",
+                Task.delivered_at.isnot(None),
+                Task.acceptance_reminded.is_(False))
+        .all()
+    )
+    reminded = 0
+    for task in rows:
+        due = task.delivered_at + timedelta(days=days)
+        if now < due - lead or now >= due:
+            continue        # 还早，或者已经过线（钱都放了，再提醒只是噪音）
+        hours = max(1, int((due - now).total_seconds() // 3600))
+        notify(db, task.creator_id, "task", "验收即将到期",
+               f"任务《{task.title}》将在约 {hours} 小时后自动验收并放款给执行方。"
+               f"放款后不可撤回；如有问题请在此之前验收、驳回或发起纠纷。")
+        task.acceptance_reminded = True
+        db.add(task)
+        reminded += 1
+    return {"reminded": reminded}
+
+
 # ---------- 取消（TASK-026 / SC-006）----------
 @router.post("/tasks/{task_id}/cancel")
 def cancel_task(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):

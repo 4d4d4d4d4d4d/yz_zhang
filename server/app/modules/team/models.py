@@ -44,6 +44,12 @@ class Team(Base):
     # 预算池是总量（这个月团队总共花多少）。按人设额度解决不了
     # 「每个人都在自己额度内、加起来仍然爆表」。
     monthly_budget_cents: Mapped[int] = mapped_column(Integer, default=0)
+    # TEAM-055 本月已经预警过没有（"2026-09" 这样的月份串，75 号 spec）。
+    # 记月份而不是布尔：池子是按自然月重置的，布尔位需要另一个 job 去清，
+    # 而那个 job 一旦没跑，预警就永久沉默。
+    # owner 改动池子时这里会被清掉——预警说的是「按当前池子快到顶了」，
+    # 池子一改这句话就不成立。
+    pool_warned_month: Mapped[str] = mapped_column(String(7), default="")
 
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -88,9 +94,13 @@ class SpendRequest(Base):
     purpose: Mapped[str] = mapped_column(String(200), default="")
     task_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    # pending / approved / rejected / executed
+    # pending / approved / rejected / executed / expired（TEAM-063 超时关闭）
     status: Mapped[str] = mapped_column(String(12), default="pending", index=True)
     decided_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     decision_reason: Mapped[str] = mapped_column(Text, default="")
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # TEAM-063 上一次催办的时间（75 号 spec）。
+    # 催办**按间隔重复**，所以要记「上次什么时候提醒的」而不是一个布尔位：
+    # 「第二次提醒」如果也只有一次，三个月后还是同一个问题。
+    reminded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
