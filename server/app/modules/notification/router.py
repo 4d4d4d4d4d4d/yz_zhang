@@ -57,13 +57,32 @@ def mark_all_read(user: User = Depends(get_current_user), db: Session = Depends(
 
 @router.get("/prefs")
 def get_prefs(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """NTF-065 可关的三类，**以及哪些关不掉、为什么**（77 号 spec）。
+
+    第二半是这一批加的：界面必须说清「哪些通知不受开关影响」，
+    而那份清单不许写在界面里——`MUST_REACH` 是一张会变的表
+    （V65 立、V100 加过一行），界面里抄一份第二天就过期。
+    这与 V61/V90 那条「文案里的数字不许是字面量」是同一个形状。
+
+    `why` 直接取自 `MUST_REACH` 的值：那一列本来就是写给人看的。
+    """
     from app.modules.support.models import NotificationPref
+
+    from .service import MUST_REACH
 
     rows = db.query(NotificationPref).filter(NotificationPref.user_id == user.id).all()
     prefs = {"task": True, "system": True, "interaction": True}
     for r in rows:
         prefs[r.category] = r.enabled
-    return prefs
+    return {
+        "prefs": prefs,
+        # funds 类在 notify() 里就是无条件送达的，不经过这张表
+        "always_on_categories": ["funds"],
+        "always_on": [
+            {"category": cat, "title": title, "why": why}
+            for (cat, title), why in MUST_REACH.items()
+        ],
+    }
 
 
 @router.put("/prefs")

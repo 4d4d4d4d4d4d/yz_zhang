@@ -862,6 +862,28 @@ export interface SpendRequestView {
 /** TEAM-031 待核验的团队企业信息（76 号 spec）。
  *
  * `license_urls` 是**鉴权**端点，不是匿名能力 URL——营业执照是企业敏感材料。 */
+/** TAX-024 我的发票申请。`at`/`note` 是服务端的字段名，不是 `created_at`。 */
+export interface InvoiceRow {
+  id: number;
+  kind: string;
+  contract_id: number;
+  amount_cents: number;
+  title: string;
+  status: string;
+  note: string;
+  at: string;
+}
+
+/** NTF-065 通知开关（77 号 spec）。
+ *
+ * `always_on` 是**服务端**的必达声明表，界面原样显示 `why`——
+ * 抄一份到界面里，那张表一变它就过期了。 */
+export interface NotificationPrefsView {
+  prefs: Record<string, boolean>;
+  always_on_categories: string[];
+  always_on: Array<{ category: string; title: string; why: string }>;
+}
+
 export interface PendingTeamRow {
   team_id: number;
   name: string;

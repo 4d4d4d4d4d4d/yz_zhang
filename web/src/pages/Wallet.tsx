@@ -1,4 +1,4 @@
-import { ApiError, apiErrorText, fmtYuan, formatDate, formatDateTime, ledgerKindLabel, type LedgerRow, type PayoutAccountView, type TaxSummary, type Wallet } from '@platform/core';
+import { ApiError, apiErrorText, fmtYuan, formatDate, formatDateTime, ledgerKindLabel, type InvoiceRow, type LedgerRow, type PayoutAccountView, type TaxSummary, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 
@@ -72,6 +72,7 @@ export default function WalletPage() {
         </table>
       </div>
       <TaxDetail />
+      <Invoices />
     </div>
   );
 }
@@ -161,6 +162,73 @@ function TaxDetail() {
         </tbody>
       </table>
       <p className="muted" style={{ marginTop: 8 }}>{tax.disclaimer}</p>
+    </div>
+  );
+}
+
+/** TAX-024 平台服务费发票（77 号 spec）。
+ *
+ * V101 让团队企业信息终于核得过了，而**开票的入口不存在**：
+ * `requestInvoice` 两端都没人调。核过了依然开不出票。
+ *
+ * 文案照搬服务端口径，一个字都不加：只开平台佣金那部分。
+ * 含糊其辞地"帮你开全额发票"是虚开，不是服务。
+ */
+function Invoices() {
+  const { client } = useApp();
+  const [rows, setRows] = useState<InvoiceRow[]>([]);
+  const [contractId, setContractId] = useState('');
+  const [title, setTitle] = useState('');
+  const [taxNo, setTaxNo] = useState('');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setRows(await client.myInvoices().catch(() => []));
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+
+  async function submit() {
+    setError(''); setNote('');
+    try {
+      const r = await client.requestInvoice(Number(contractId), title, taxNo);
+      // 开票范围由服务端说，界面不另写一句（说多了就成了承诺）
+      setNote(r.scope_note);
+      setContractId(''); setTitle(''); setTaxNo('');
+      await load();
+    } catch (err) { setError(apiErrorText(err)); }
+  }
+
+  return (
+    <div className="card">
+      <h3>平台服务费发票</h3>
+      <p className="muted">
+        已放款的合约可申请平台服务费发票（即平台佣金那部分）。
+        执行方的劳务报酬平台没有开票资格，需由执行方或代开渠道开具。
+      </p>
+      <div className="form" style={{ marginTop: 8 }}>
+        <input placeholder="合约号" value={contractId}
+               onChange={(e) => setContractId(e.target.value)} />
+        <input placeholder="开票抬头" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <input placeholder="税号（可选）" value={taxNo} onChange={(e) => setTaxNo(e.target.value)} />
+        {error && <p className="error">{error}</p>}
+        {note && <p className="muted" data-testid="invoice-scope">{note}</p>}
+        <button disabled={!contractId || title.trim().length < 2}
+                onClick={() => void submit()}>申请开票</button>
+      </div>
+      {rows.length > 0 && (
+        <table style={{ marginTop: 8 }}>
+          <thead><tr><th>#</th><th>合约</th><th>金额</th><th>抬头</th><th>状态</th><th>时间</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} data-testid={`invoice-${r.id}`}>
+                <td>{r.id}</td><td>#{r.contract_id}</td><td>{fmtYuan(r.amount_cents)}</td>
+                <td>{r.title}</td><td>{r.status}</td><td className="muted">{formatDate(r.at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

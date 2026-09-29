@@ -58,6 +58,8 @@ import type {
   WithdrawRequestRow,
   SuspiciousActivityRow,
   BanImpactView,
+  InvoiceRow,
+  NotificationPrefsView,
   PendingTeamRow,
   PendingCertificationRow,
   PendingUploadRow,
@@ -1411,14 +1413,15 @@ export class PlatformClient {
       'POST', `/support/tickets/${ticketId}/escalate-to-dispute`, { task_id: taskId, reason },
     );
   }
-  /** NTF-003 可开关的通知类别与当前状态。服务端返回的是 `{类别: 是否开启}`
-   *  的字典（不是数组）——V82 把它写成数组是臆造的，**没有任何东西会红**，
-   *  因为形状闸门当时只覆盖那六条新线（这正是 CLI-070 要扩覆盖面的理由）。
+  /** NTF-003/065 可开关的通知类别，**以及哪些关不掉、为什么**。
    *
-   *  注意：**这里只有可关的类别**。资金类与 `MUST_REACH` 声明表里的通知
-   *  根本不出现在开关列表里——它们错过就无法挽回。 */
+   *  V82 把响应写成数组是臆造的，**没有任何东西会红**，因为形状闸门
+   *  当时只覆盖那六条新线（这正是 CLI-070 要扩覆盖面的理由）。
+   *
+   *  `always_on` 来自服务端的 `MUST_REACH` 表：界面**不许自己抄一份**——
+   *  那张表会变（V65 立、V100 加过一行），抄下来第二天就过期。 */
   notificationPrefs() {
-    return this.request<Record<string, boolean>>('GET', '/notifications/prefs');
+    return this.request<NotificationPrefsView>('GET', '/notifications/prefs');
   }
   setNotificationPref(category: string, enabled: boolean) {
     return this.request<{ category: string; enabled: boolean }>(
@@ -1453,15 +1456,16 @@ export class PlatformClient {
   }
   /** TAX-022 只开**平台服务费**那部分：执行者的劳务报酬平台没有开票资格，
    *  含糊其辞地「帮你开全额发票」是虚开，不是服务。 */
+  /** TAX-024 申请**平台服务费**发票。声明过的 `scope` 与 `created_at` 服务端
+   *  从来没返回过（它给的是 `scope_note` 与 `at`）——「声明了却不给」的
+   *  又一处，而这两个方法此前两端都没人调，所以一直没人撞上。 */
   requestInvoice(contractId: number, title: string, taxNo = '') {
-    return this.request<{ id: number; status: string; amount_cents: number; scope: string }>(
-      'POST', '/finance/invoices', { contract_id: contractId, title, tax_no: taxNo },
-    );
+    return this.request<{
+      id: number; kind: string; amount_cents: number; status: string; scope_note: string;
+    }>('POST', '/finance/invoices', { contract_id: contractId, title, tax_no: taxNo });
   }
   myInvoices() {
-    return this.request<Array<{ id: number; contract_id: number; title: string; amount_cents: number; status: string; created_at: string }>>(
-      'GET', '/finance/invoices',
-    );
+    return this.request<InvoiceRow[]>('GET', '/finance/invoices');
   }
 }
 

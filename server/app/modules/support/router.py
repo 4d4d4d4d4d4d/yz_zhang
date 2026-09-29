@@ -56,7 +56,9 @@ def create_ticket(body: TicketIn, user: User = Depends(get_current_user), db: Se
     ticket = Ticket(user_id=user.id, subject=body.subject, body=body.body)
     db.add(ticket)
     db.flush()
-    return {"id": ticket.id, "status": ticket.status}
+    # `reply` 一开始是空串。共享 SDK 的声明里有它，而这里以前不返回——
+    # 「声明了却不给」（V64 那一类）
+    return {"id": ticket.id, "status": ticket.status, "reply": ticket.reply}
 
 
 @router.get("/tickets")
@@ -65,7 +67,9 @@ def my_tickets(user: User = Depends(get_current_user), db: Session = Depends(get
 
     rows = db.query(Ticket).filter(Ticket.user_id == user.id).order_by(Ticket.id.desc()).all()
     return [
-        {"id": t.id, "subject": t.subject, "status": t.status, "reply": t.reply,
-         "created_at": iso(t.created_at)}
+        # 少了 `body`，用户看到的是一排标题、点进去没有内容——
+        # 那不是类型问题，是这个页面缺了东西
+        {"id": t.id, "subject": t.subject, "body": t.body, "status": t.status,
+         "reply": t.reply, "created_at": iso(t.created_at)}
         for t in rows
     ]

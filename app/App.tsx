@@ -94,26 +94,81 @@ export default function App() {
   );
 }
 
-function LoginScreen({ client, onToken }: { client: PlatformClient; onToken: (t: string) => void }) {
+/** ACC-041 登录、注册、验证码登录与忘记密码（77 号 spec）。
+ *
+ * 改造前这里是一行 `login().catch(() => register())`，两个毛病：
+ *
+ * 1. **密码打错会走到注册**，注册又因手机号已存在而失败，于是用户看到的是
+ *    「该手机号已注册」——他输错的是密码，平台告诉他的是手机号的事。
+ * 2. **手机号打错一位会静默注册出一个新账号**，而他以为自己登录成功了，
+ *    然后发现钱包是空的、任务不见了。
+ *
+ * 所以登录是登录、注册是注册；失败原样显示服务端文案，
+ * 并把「验证码登录」「忘记密码」摆在旁边——忘了密码的人此前**进不来**。
+ */
+export function LoginScreen({ client, onToken }: { client: PlatformClient; onToken: (t: string) => void }) {
+  const [mode, setMode] = useState<'login' | 'register' | 'sms' | 'reset'>('login');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [smsCode, setSmsCode] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
+
+  const titles = { login: '登录', register: '注册', sms: '验证码登录', reset: '重置密码' } as const;
+
+  async function sendCode() {
+    setError(''); setInfo('');
+    try {
+      const r = await client.sendSmsCode(phone, mode === 'reset' ? 'reset' : 'login');
+      if (r.dev_code) setSmsCode(r.dev_code);
+      setInfo(`验证码已发送，${r.expires_in} 秒内有效`);
+    } catch (e) {
+      setError(apiErrorText(e));
+    }
+  }
+
+  async function submit() {
+    setError(''); setInfo('');
+    try {
+      if (mode === 'reset') {
+        await client.resetPassword(phone, smsCode, password);
+        setMode('login');
+        setInfo('密码已重置，请用新密码登录');
+        return;
+      }
+      const res =
+        mode === 'login' ? await client.login(phone, password)
+        : mode === 'sms' ? await client.smsLogin(phone, smsCode)
+        : await client.register(phone, password, `用户${phone.slice(-4)}`);
+      onToken(res.token);
+    } catch (e) {
+      // 原样显示服务端文案：密码错就是密码错，不要替它猜成「去注册」
+      setError(apiErrorText(e));
+    }
+  }
+
   return (
     <View style={styles.center}>
       <Text style={styles.title}>协作任务平台</Text>
       <TextInput style={styles.input} placeholder="手机号" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-      <TextInput style={styles.input} placeholder="密码" value={password} onChangeText={setPassword} secureTextEntry />
+      {mode !== 'sms' && (
+        <TextInput style={styles.input} placeholder={mode === 'reset' ? '新密码' : '密码'}
+                   value={password} onChangeText={setPassword} secureTextEntry />
+      )}
+      {(mode === 'sms' || mode === 'reset') && (
+        <>
+          <TextInput style={styles.input} placeholder="短信验证码" value={smsCode}
+                     onChangeText={setSmsCode} keyboardType="number-pad" />
+          <Button title="获取验证码" onPress={() => void sendCode()} />
+        </>
+      )}
       {!!error && <Text style={styles.error}>{error}</Text>}
-      <Button title="登录 / 注册" onPress={async () => {
-        setError('');
-        try {
-          const res = await client.login(phone, password).catch(() =>
-            client.register(phone, password, `用户${phone.slice(-4)}`));
-          onToken(res.token);
-        } catch (e) {
-          setError(e instanceof Error ? e.message : '网络错误');
-        }
-      }} />
+      {!!info && <Text style={styles.muted}>{info}</Text>}
+      <Button title={titles[mode]} onPress={() => void submit()} />
+      {mode !== 'login' && <Button title="用密码登录" onPress={() => setMode('login')} />}
+      {mode !== 'sms' && <Button title="验证码登录" onPress={() => setMode('sms')} />}
+      {mode !== 'reset' && <Button title="忘记密码" onPress={() => setMode('reset')} />}
+      {mode !== 'register' && <Button title="没有账号？注册" onPress={() => setMode('register')} />}
     </View>
   );
 }

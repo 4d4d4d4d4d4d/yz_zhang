@@ -1,4 +1,5 @@
-import { ApiError, apiErrorText, fmtYuan, formatDateTime, type AgreementStatus, type InvitationItem } from '@platform/core';
+import { ApiError, apiErrorText, fmtYuan, formatDateTime, type AgreementStatus, type CertificationApplicationView, type InvitationItem } from '@platform/core';
+import { compressToBase64 } from '../PhotoPicker';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
@@ -297,6 +298,7 @@ export default function Profile() {
           </div>
         </div>
       )}
+      <MyCertifications />
       <ServicePricing />
       <MyApplications />
       <PrivacyConsents />
@@ -321,6 +323,114 @@ export default function Profile() {
         }}>注销账号</button>
         {error && <p className="error">{error}</p>}
       </div>
+    </div>
+  );
+}
+
+/** CERT-033 职业资质：提交与我的资质（77 号 spec）。
+ *
+ * V76 把「自己填就算」改成了「核过才算」，V101 给运营补了核验台——
+ * 而**两端都没有提交入口**：那个队列会一直是空的，
+ * 受限类目对所有人永久关闭。我上一批给出口装了门，而没有人进得来。
+ */
+function MyCertifications() {
+  const { client } = useApp();
+  // 用共享类型，不自己另写一份行内类型——上一批就是这么把
+  // `decision_reason` 猜成 `reason` 的（V95 那一类）
+  const [rows, setRows] = useState<CertificationApplicationView[]>([]);
+  const [active, setActive] = useState<string[]>([]);
+  const [form, setForm] = useState({ name: '', holderName: '', certNumber: '', issuer: '', expiresAt: '' });
+  const [images, setImages] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [msg, setMsg] = useState('');
+
+  const load = useCallback(async () => {
+    const r = await client.myCertifications().catch(() => null);
+    setRows(r?.applications ?? []);
+    setActive(r?.active ?? []);
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+
+  async function pick(files: FileList | null) {
+    if (!files?.length) return;
+    setBusy(true); setError('');
+    try {
+      const out: string[] = [];
+      for (const f of Array.from(files)) {
+        const { contentType, data } = await compressToBase64(f);
+        // 资质提交要的是**文件名**（服务端据此发鉴权 URL 给审核员），
+        // 不是可匿名访问的图床地址（37 号 spec）
+        out.push((await client.uploadImage(contentType, data)).ref);
+      }
+      setImages([...images, ...out]);
+    } catch (err) {
+      setError(apiErrorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submit() {
+    setError(''); setMsg('');
+    try {
+      await client.submitCertification({
+        name: form.name, holderName: form.holderName, certNumber: form.certNumber,
+        issuer: form.issuer || undefined,
+        expiresAt: form.expiresAt || null,
+        images,
+      });
+      setMsg('已提交，等待平台核验');
+      setForm({ name: '', holderName: '', certNumber: '', issuer: '', expiresAt: '' });
+      setImages([]);
+      await load();
+    } catch (err) {
+      setError(apiErrorText(err));
+    }
+  }
+
+  return (
+    <div className="card">
+      <h3>职业资质</h3>
+      <p className="muted">
+        受限类目（如电工、家政上门）需要先核过资质才能接单。
+        {active.length > 0 && ` 当前有效：${active.join('、')}`}
+      </p>
+      <div className="form" style={{ marginTop: 8 }}>
+        <input placeholder="资质名称（如 电工证）" value={form.name}
+               onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <input placeholder="持证人姓名（须与实名一致）" value={form.holderName}
+               onChange={(e) => setForm({ ...form, holderName: e.target.value })} />
+        <input placeholder="证书编号" value={form.certNumber}
+               onChange={(e) => setForm({ ...form, certNumber: e.target.value })} />
+        <input placeholder="发证机关（可选）" value={form.issuer}
+               onChange={(e) => setForm({ ...form, issuer: e.target.value })} />
+        <input type="date" value={form.expiresAt}
+               onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} />
+        <input type="file" accept="image/*" multiple onChange={(e) => void pick(e.target.files)} />
+        <p className="muted">已选证件影像 {images.length} 张（证件影像仅审核员可见）。</p>
+        {error && <p className="error">{error}</p>}
+        {msg && <p className="muted" data-testid="cert-submitted">{msg}</p>}
+        <button disabled={busy || !form.name || !form.holderName || !form.certNumber || images.length === 0}
+                onClick={() => void submit()}>提交核验</button>
+      </div>
+      {rows.length > 0 && (
+        <div className="list" style={{ marginTop: 12 }}>
+          {rows.map((r) => (
+            <div className="task-item" key={r.id} data-testid={`my-cert-${r.id}`}>
+              <div>
+                <strong>{r.name}</strong> · 提交于 {formatDateTime(r.created_at)}
+                {/* 驳回理由必须显示出来：V101 让运营必须写，写了却看不见，
+                    那条强制就只是给运营加了道手续 */}
+                <p className="muted">
+                  {r.status}{r.decision_reason && ` · ${r.decision_reason}`}
+                  {r.expires_at && ` · 有效期至 ${formatDateTime(r.expires_at)}`}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

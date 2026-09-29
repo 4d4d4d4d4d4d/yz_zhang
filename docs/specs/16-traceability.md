@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V101 全批次完成（2026-09-28）。
-> 后端 1094 tests + 前端 141 tests（core 56 + web 67 + App 18）全绿；
+> 状态：MVP + V1~V102 全批次完成（2026-09-29）。
+> 后端 1117 tests + 前端 152 tests（core 56 + web 75 + App 21）全绿；
 > **现状一页看清：[72-status-ledger.md](72-status-ledger.md)**（这份矩阵的缺口也在那里记着）；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
@@ -10,6 +10,30 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V102 批次：进不去，也交不上）
+
+> 模块 spec：[77-cannot-get-in-cannot-hand-in.md](77-cannot-get-in-cannot-hand-in.md)
+>
+> ```
+> SDK 方法 265 个，两端都没人调用 87 个
+> resetPassword / smsLogin / sendSmsCode     sdk=True web=False app=False
+> submitCertification                       sdk=True web=False app=False
+> createTicket / myTickets                  sdk=True web=False app=False
+> requestInvoice                            sdk=True web=False app=False
+> notificationPrefs / setNotificationPref   sdk=True web=False app=False
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **ACC-041 忘了密码就进不去** | 三条端到端都在，而登录页只有「密码登录」和「注册」。V68 补的是**登录之后**改密码——忘了密码的人登不进去，那个入口对他毫无意义。两端各补「忘记密码」（手机号 + 验证码 + 新密码）与「验证码登录」；`scene` 跟着用途走，沙箱回显的验证码自动填入 | `tests/test_entry_points_v102.py::test_acc041_*`（3 条，含旧会话被吊销）、`web/src/EntryPoints.test.tsx`、`app/login-recovery.test.tsx` |
+| **App 上一个更糟的做法** | App 登录是 `login().catch(() => register())`：**密码打错会走到注册**，注册又因手机号已存在而失败，于是用户看到「该手机号已注册」——他输错的是密码；而**手机号打错一位会静默注册出一个新账号**，他以为登录成功了，然后发现钱包是空的。拆成登录/注册两条，失败原样显示服务端文案 | `app/login-recovery.test.tsx::密码错就说密码错，不会转头去注册`（退回原做法即红——三分类闸门在这一层是绿的，因为 web 也调 smsLogin，**闸门选错层等于没有**） |
+| **CERT-033 资质交得上去** | V101 刚建好的核验台会一直是空的：**没有任何端能提交一份资质申请**，受限类目对所有人永久关闭。上一批给出口装了门，而没有人进得来。实名页补提交（证件影像走敏感上传）与「我的资质」（含**驳回理由**） | `::test_cert033_submitted_application_shows_up_in_the_admin_queue`、`::test_cert033_rejection_reason_comes_back_to_the_applicant`、`EntryPoints.test.tsx` |
+| **NTF-065 通知开关不存在** | 65 号 `MUST_REACH` 的全部论证建立在「用户能关掉别的通知」之上——**而那个开关两端都没有**。一条用来做减法的规矩，减的是一个不存在的东西。补三类开关；`funds` 关不掉且错误文案来自服务端 | `::test_ntf065_switch_works_and_funds_cannot_be_turned_off` |
+| **「哪些关不掉」必须来自服务端** | 那张表会变（V65 立、V100 加过一行），界面里抄一份第二天就过期——V61/V90 那条「文案里的数字不许是字面量」的同一形状。`GET /notifications/prefs` 扩展为返回 `prefs` + `always_on`（含 `why`，直接取自 `MUST_REACH` 的值） | `::test_ntf065_prefs_say_which_notices_cannot_be_switched_off`（与服务端表逐条相等）、`EntryPoints.test.tsx::「关不掉的」清单来自服务端` |
+| **CS-032 工单自助** | 此前工单**只有 FAQ 机器人升级时自动生成**：用户不能主动开单，也看不到自己的工单与回复——V101 的运营界面里认真回了，而提问的人只收到一条通知，回到平台上无处可看。顺手修两条「声明了却不给」：`createTicket` 的 `reply`、`myTickets` 的 `body`（**修服务端**，因为列表里没有正文是页面缺了东西，不是类型问题） | `::test_cs032_user_can_open_a_ticket_and_read_the_reply` |
+| **TAX-024 发票入口** | V101 让团队企业信息终于核得过了，而**开票的入口不存在**：核过了依然开不出票。钱包页补申请与列表；口径照搬服务端（只开平台佣金那部分，含糊其辞地"帮你开全额发票"是虚开）。同时修 `scope`→`scope_note`、`created_at`→`at` 两处声明漂移 | `::test_tax024_requester_can_ask_for_the_platform_fee_invoice`、`::test_tax024_unsettled_contract_cannot_be_invoiced` |
+| **CLI-082 SDK 方法三分类闸门** | V82 只问了一个方向（服务端端点端上到达得了吗）。反过来那一半没人管：87 个方法没人调。现在每个方法必须落进三类之一——**有端调用 / 有意不给端（豁免写理由）/ 台账排期（编号必须在 72 号台账里真的有行）**；豁免理由不许是「还没做」，接上了还留在表里也红。另加反向检查：SDK 里的每条路径都必须在服务端存在（V82 的 `addCertification` 打的就是一个已经改掉的契约） | `tests/test_sdk_method_triage.py`（19 项，六条红验全部走过） |
 
 ## 已实现（V101 批次：没有人能核过它）
 
