@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V104 全批次完成（2026-09-29）。
-> 后端 1153 tests + 前端 161 tests（core 56 + web 84 + App 21）全绿；
+> 状态：MVP + V1~V105 全批次完成（2026-09-29）。
+> 后端 1158 tests + 前端 161 tests（core 56 + web 84 + App 21）全绿；
 > **现状一页看清：[72-status-ledger.md](72-status-ledger.md)**（这份矩阵的缺口也在那里记着）；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
@@ -10,6 +10,27 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V105 批次：里面那一层也要对上）
+
+> 模块 spec：[80-nested-shapes-and-variable-bodies.md](80-nested-shapes-and-variable-bodies.md)
+>
+> ```
+> // 把 TeamDetail 嵌套里的两个字段同时改错
+> members: Array<{ user_id: number; role: number; spend_limit_cents: boolean }>
+> 15 passed in 14.59s          ← 两个都写错，形状闸门全绿
+>
+> 比对了 73 条请求体，跳过 11 条（body 是 patch / input / body）
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **CLI-071 嵌套字段类型** | `_matches` 此前遇到 `list` 与 `dict` 一律返回 `True`，于是 64 号从 V89 就记着这条盲区。现在数组取出元素类型逐个比（只看前 5 个：同一列表元素形状一致，全比只是更慢），内联对象与具名 interface 展开后**用与顶层同一套政策**比三个方向（少了必选键 / 多了没声明的键 / 类型对不上）——「只查一边的闸门，另一边就是自由的」 | `tests/test_client_shape_alignment.py::test_cli071_nested_types_are_compared`（探针那两个字段现在真的红） |
+| **宽容的边界逐条写明** | 空数组、`Record<>`、解析不出的具名类型、超过两层——一律放过。**一个假报警多的闸门会被人关掉**（V80）。两层足够覆盖这个仓实际出现的形状，而无限递归遇到自引用会让**闸门转不出来** | `::test_cli071_stays_permissive_where_it_cannot_know` |
+| **我自己的测试抓到我自己的假警报** | `Array<SomeAlias>` 里别名解析不出来，第一版会因此报错——正是我刚在同一段注释里写下要避免的东西。改成「解析不了的具名类型放过」 | 同上（那条断言当场红） |
+| **切分不许切进括号** | `{ a: Array<{ b; c }>; d }` 直接 `split(";")` 会把内层切开，解析出一堆残缺字段 | `::test_cli071_splitter_does_not_cut_inside_brackets` |
+| **CLI-072 变量请求体用类型标注比** | 11 条被跳过的 body 都是参数名，而参数**都有类型标注**——那就是契约。解析器认内联 `{...}` / `Partial<...>` / `Pick<Iface, 'a'>` / 具名 interface，**11 条里 9 条现在真的在比**（SDK 可能发出的键必须被服务端 schema 认，即 V82 那个 `addCertification` 的形状）；剩下 2 条进声明表并写明为什么解析不了 | `::test_cli072_variable_request_bodies_are_checked_or_declared`（加一个服务端不认的键即红；删掉声明即报未交代）、`::test_cli072_declared_table_has_no_stale_entries` |
+| **闸门顺手暴露一个真问题** | `createTask` 的参数是 `Partial<Task> & {...}`——它允许调用方传 `id` / `status` / `created_at`，而创建 schema 不该接受这些。这不是该用假警报去逼的事，是签名该收窄（行为变更，单独一批），记进台账 `SYNC-050b` | 台账行 + `DYNAMIC_BODY` 里的理由 |
 
 ## 已实现（V104 批次：视差与科技感）
 

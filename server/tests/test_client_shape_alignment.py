@@ -94,14 +94,107 @@ def _fields(name: str) -> set[str]:
     return set(_typed(name)[0])
 
 
-def _matches(decl: str, value) -> bool:
-    """CLI-068 值的类型对不对得上声明。**刻意宽容**，只抓「类型层级错了」这一类。
+# CLI-071 嵌套多深还比：再深就退回宽容。
+#
+# 两层足够覆盖这个仓里实际出现的形状（`Array<{...}>`、`{ wallet: {...} }`），
+# 而无限递归下去，遇到自引用类型会转不出来。**闸门要能停。**
+MAX_NEST_DEPTH = 2
+
+
+def _split_top_level(body: str, sep: str = ";") -> list[str]:
+    """按分隔符切，但不切进括号里。
+
+    `{ a: Array<{ b: number }>; c: string }` 直接 `split(";")` 会把
+    内层切开——第一版就是这么写的，于是解析出一堆残缺字段。
+    """
+    parts, depth, cur = [], 0, ""
+    for ch in body:
+        if ch in "{[<(":
+            depth += 1
+        elif ch in "}]>)":
+            depth -= 1
+        if ch == sep and depth == 0:
+            parts.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    if cur.strip():
+        parts.append(cur)
+    return [p.strip() for p in parts if p.strip()]
+
+
+def _inline_fields(decl: str) -> dict[str, str] | None:
+    """把内联对象字面量解析成「字段 → 类型声明」。
+
+    认三种写法：`{ a: number }`、`Array<{ a: number }>`、`{ a: number }[]`。
+    认不出来就返回 None——调用方据此退回宽容，而不是报一个假警报。
+    """
+    d = decl.strip()
+    if d.startswith("Array<") and d.endswith(">"):
+        d = d[len("Array<"):-1].strip()
+    if d.endswith("[]"):
+        d = d[:-2].strip()
+    if not (d.startswith("{") and d.endswith("}")):
+        return None
+    fields: dict[str, str] = {}
+    for item in _split_top_level(d[1:-1]):
+        fm = re.match(r"(\w+)(\??)\s*:\s*(.+)$", item)
+        if not fm:
+            return None              # 有一项看不懂就整体放弃，不猜
+        fields[fm.group(1) + ("?" if fm.group(2) else "")] = fm.group(3).strip()
+    return fields or None
+
+
+def _element_decl(decl: str) -> str | None:
+    """数组声明的元素类型；不是数组就返回 None。"""
+    d = decl.strip()
+    if d.startswith("Array<") and d.endswith(">"):
+        return d[len("Array<"):-1].strip()
+    if d.endswith("[]"):
+        return d[:-2].strip()
+    return None
+
+
+def _object_fields(part: str) -> dict[str, str] | None:
+    """一个类型声明对应的字段表：内联字面量，或者具名 interface。"""
+    inline = _inline_fields(part)
+    if inline is not None:
+        return inline
+    if part in INTERFACES:
+        types, optional = _typed(part)
+        return {k + ("?" if k in optional else ""): v for k, v in types.items()}
+    return None
+
+
+def _dict_matches(fields: dict[str, str], value: dict, depth: int) -> bool:
+    """嵌套对象：声明的必选键要在、类型要对、也不许有没声明的键。
+
+    三个方向与顶层同一套政策（`_assert_shape` 的那三条）——
+    **只查一边的闸门，另一边就是自由的。**
+    """
+    declared = {k.rstrip("?"): v for k, v in fields.items()}
+    optional = {k.rstrip("?") for k in fields if k.endswith("?")}
+    if set(declared) - set(value) - optional:
+        return False
+    if set(value) - set(declared):
+        return False
+    return all(_matches(d, value[k], depth + 1)
+               for k, d in declared.items() if k in value)
+
+
+def _matches(decl: str, value, depth: int = 0) -> bool:
+    """CLI-068/071 值的类型对不对得上声明。**刻意宽容**，只抓「类型层级错了」这一类。
 
     规则克制的理由：**一个假报警多的闸门会被人关掉**（V80 的教训）。
-    所以联合类型逐个试、字面量按值比、自定义别名（`IpAssignment`）一律当字符串
+    所以联合类型逐个试、字面量按值比、解析不了的声明一律放过
     ——**不去解析别名的定义**，那是编译器的活。
+
+    CLI-071（V105 补）：数组元素与内联对象**也比**。此前这两类一律返回 True，
+    于是 `Array<{ role: string }>` 里把 `role` 写成 `number` 没有任何东西会红
+    （探针实测：两个字段同时写错，15 条形状测试全绿）。
     """
-    for part in [p.strip() for p in decl.split("|")]:
+    parts = _split_top_level(decl, "|")
+    for part in parts:
         if value is None and part in ("null", "undefined"):
             return True
         if isinstance(value, bool) and part == "boolean":
@@ -113,11 +206,29 @@ def _matches(decl: str, value) -> bool:
                 return True
             if part[:1].isupper() or part.startswith("Record<"):
                 return True          # 自定义别名/枚举，当字符串处理
-        if isinstance(value, list) and (part.endswith("[]") or part.startswith("Array<")):
-            return True
-        if isinstance(value, dict) and (part.startswith("{") or part.startswith("Record<")
-                                        or part in INTERFACES):
-            return True
+        if isinstance(value, list):
+            elem = _element_decl(part)
+            if elem is None:
+                continue
+            if depth >= MAX_NEST_DEPTH or not value:
+                return True          # 太深、或空数组：无从比较，放过
+            # 只看前几个：同一个列表里的元素形状一致，全比一遍只是更慢
+            return all(_matches(elem, v, depth + 1) for v in value[:5])
+        if isinstance(value, dict):
+            if part.startswith("Record<"):
+                return True          # 键未知，无从比较
+            fields = _object_fields(part)
+            if fields is None:
+                # 解析不了的具名类型（别名、泛型实例化…）：**放过**。
+                # 不放过的话，`Array<SomeAlias>` 会变成一条假警报——
+                # 而那正是这套闸门最怕的东西（V80：假报警多的闸门会被人关掉）。
+                # 这一条是我自己写的测试当场抓出来的。
+                if part[:1].isupper():
+                    return True
+                continue
+            if depth >= MAX_NEST_DEPTH:
+                return True
+            return _dict_matches(fields, value, depth)
     return False
 
 
@@ -359,6 +470,185 @@ def _sdk_calls() -> list[tuple[str, str, str | None]]:
     return out
 
 
+# CLI-072（V105 补）：请求体是个**变量**时，它的类型标注就是契约。
+#
+# 探针：73 条字面量请求体被比过，另外 11 条被静默跳过——它们的 body 是
+# `patch` / `input` / `body` 这样的参数名。而这些参数都是**有类型标注的**：
+#
+#     editTask(id: number, patch: Partial<{ title: string; ... }>)
+#
+# 所以能比：SDK 可能发出去的键，必须是服务端 schema 认的。
+# 这正是 `addCertification` 那一类（SDK 发的键服务端不认，调用必 422）。
+
+
+def _method_params(src: str, call_index: int) -> str:
+    """从 `this.request<` 往回找到所在方法的参数表原文。"""
+    head = src.rfind("\n  ", 0, call_index)
+    while head > 0:
+        line_start = head + 3
+        if re.match(r"[a-zA-Z_]\w*\s*[(<]", src[line_start:line_start + 40]):
+            # 参数表可能跨多行：从第一个 ( 配对到对应的 )
+            i = src.index("(", line_start)
+            depth, j = 0, i
+            while j < len(src):
+                if src[j] in "([{<":
+                    depth += 1
+                elif src[j] in ")]}>":
+                    depth -= 1
+                    if depth == 0:
+                        return src[i + 1:j]
+                j += 1
+            return ""
+        head = src.rfind("\n  ", 0, head)
+    return ""
+
+
+def _param_type(params: str, name: str) -> str | None:
+    """参数表里某个参数的类型标注原文。"""
+    for arg in _split_top_level(params, ","):
+        m = re.match(rf"{re.escape(name)}\s*:\s*(.+)$", arg.strip(), re.S)
+        if m:
+            return m.group(1).strip().rstrip("=").strip()
+    return None
+
+
+def _resolve_body_keys(expr: str) -> tuple[set[str], bool]:
+    """类型表达式 -> (可能发出去的键, 是否完全解析)。
+
+    认得四种：内联 `{...}`、`Partial<...>`、`Pick<Iface, 'a' | 'b'>`、具名 interface。
+    **`Partial<具名 interface>` 刻意算作"没解析"**：`Partial<Task>` 比创建
+    schema 宽得多（`id`/`status`/`created_at` 都在里面），逐键比会是一堆假警报。
+    那个"宽"本身是 SDK 的设计问题，记在台账里，而不是用假警报去逼它。
+    """
+    keys: set[str] = set()
+    resolved = True
+    for part in _split_top_level(expr, "&"):
+        part = part.strip()
+        inline = _inline_fields(part)
+        if inline is not None:
+            keys |= {k.rstrip("?") for k in inline}
+            continue
+        pm = re.match(r"Partial<(.+)>$", part, re.S)
+        if pm:
+            inner = pm.group(1).strip()
+            sub_inline = _inline_fields(inner)
+            if sub_inline is not None:
+                keys |= {k.rstrip("?") for k in sub_inline}
+                continue
+            pick = re.match(r"Pick<\s*(\w+)\s*,(.+)>$", inner, re.S)
+            if pick:
+                keys |= {k.strip().strip("'\"") for k in pick.group(2).split("|")}
+                continue
+            resolved = False        # Partial<具名接口>：太宽，不比
+            continue
+        pick = re.match(r"Pick<\s*(\w+)\s*,(.+)>$", part, re.S)
+        if pick:
+            keys |= {k.strip().strip("'\"") for k in pick.group(2).split("|")}
+            continue
+        if part in INTERFACES:
+            keys |= set(_typed(part)[0])
+            continue
+        resolved = False
+    return keys, resolved
+
+
+# 解析不了的请求体 -> 为什么（值是**理由**，不是布尔）
+DYNAMIC_BODY: dict[tuple[str, str], str] = {
+    ("POST", "/tasks"): (
+        "参数类型是 `Partial<Task> & {...}`，它比创建 schema 宽得多"
+        "（`id` / `status` / `created_at` 都在里面）。逐键比会是一堆假警报；"
+        "这个宽度本身是 SDK 的设计问题，记在 72 号台账的 SYNC-050 那条线上"
+    ),
+    ("POST", "/tasks/{x}/applications"): (
+        "请求体里有条件展开（`...(bidCents ? { bid_cents } : {})`），"
+        "静态读不出稳定的键集合；两个键都很稳定，值得的话该把签名改成显式两参"
+    ),
+}
+
+
+def test_cli072_variable_request_bodies_are_checked_or_declared():
+    """请求体是变量时，用**它的类型标注**比；解析不了的必须在表里写明理由。
+
+    改造前这 11 条是**静默跳过**的——闸门报了「比对了 73 个请求体」，
+    听起来很齐全，而另外 11 条从来没人看。
+    """
+    from app.main import app
+
+    spec = app.openapi()
+    schemas = spec.get("components", {}).get("schemas", {})
+    by_route: dict[tuple[str, str], set[str]] = {}
+    for path, ops in spec["paths"].items():
+        if not path.startswith("/api/v1"):
+            continue
+        for verb, op in ops.items():
+            ref = ((op.get("requestBody") or {}).get("content", {})
+                   .get("application/json", {}).get("schema", {}).get("$ref"))
+            if ref:
+                sch = schemas.get(ref.split("/")[-1], {})
+                by_route[(verb.upper(), _norm(path[len("/api/v1"):]))] = set(
+                    sch.get("properties", {}))
+
+    src = CLIENT_TS.read_text(encoding="utf-8")
+    checked, problems, undeclared = 0, [], []
+    for m in re.finditer(r"this\.request<", src):
+        i = src.index("(", m.end())
+        args = _split_args(src[i + 1:])
+        if len(args) < 3:
+            continue
+        verb = args[0].strip().strip("'\"")
+        path = args[1].strip()
+        if not (path.startswith("`") or path.startswith("'")):
+            continue
+        literal = re.sub(r"\$\{[^{}]*(\{[^{}]*\}[^{}]*)*\}", "{x}", path[1:-1])
+        route = (verb, _norm(literal))
+        props = by_route.get(route)
+        if props is None:
+            continue
+        body = args[2].strip()
+        if _literal_body_keys(body) is not None:
+            continue                      # 字面量请求体由上一条闸门比
+        # 变量请求体：拿它的类型标注来比
+        if not re.match(r"^[a-zA-Z_]\w*$", body):
+            if route not in DYNAMIC_BODY:
+                undeclared.append(f"{verb} {route[1]} body={body[:40]}")
+            continue
+        params = _method_params(src, m.start())
+        decl = _param_type(params, body) if params else None
+        if decl is None:
+            if route not in DYNAMIC_BODY:
+                undeclared.append(f"{verb} {route[1]} 的 {body} 没有类型标注")
+            continue
+        keys, resolved = _resolve_body_keys(decl)
+        if not resolved:
+            if route not in DYNAMIC_BODY:
+                undeclared.append(f"{verb} {route[1]} 的类型 {decl[:40]} 解析不了")
+            continue
+        checked += 1
+        extra = keys - props
+        if extra:
+            problems.append(f"{verb} {route[1]} 可能发出服务端不认的键：{sorted(extra)}")
+
+    assert checked >= 6, f"只比了 {checked} 个变量请求体，解析逻辑可能坏了"
+    assert not undeclared, (
+        "这些请求体静态读不出来，也没在 DYNAMIC_BODY 里写明理由：\n  "
+        + "\n  ".join(undeclared)
+    )
+    assert not problems, "SDK 的参数类型允许发出服务端不认的键：\n  " + "\n  ".join(problems)
+
+
+def test_cli072_declared_table_has_no_stale_entries():
+    """表里留着已经能比的路由，就会掩护掉真正该被看的那些。"""
+    from app.main import app
+
+    paths = {(v.upper(), _norm(p[len("/api/v1"):]))
+             for p, ops in app.openapi()["paths"].items() if p.startswith("/api/v1")
+             for v in ops}
+    stale = sorted(r for r in DYNAMIC_BODY if r not in paths)
+    assert not stale, f"DYNAMIC_BODY 里这些路由已经不在服务端了：{stale}"
+    for route, why in DYNAMIC_BODY.items():
+        assert len(why) >= 20, f"{route} 的理由太短：{why}"
+
+
 def test_cli067_request_bodies_match_the_server_schema():
     """SDK 发的每个字面量请求体，键必须是服务端 schema 认的，且必填项不能少。
 
@@ -550,6 +840,52 @@ def test_cli070_mission_shapes(client, requester):
     detail = client.get(f"/api/v1/missions/{m['id']}", headers=auth(requester)).json()
     if detail["steps"]:
         _assert_shape(detail["steps"][0], "MissionStep")
+
+
+def test_cli071_nested_types_are_compared():
+    """CLI-071 数组元素与内联对象里的类型也要比。
+
+    这是这套闸门挂了很久的盲区：此前 `list` 与 `dict` 一律返回 True，
+    于是把 `Array<{ role: string }>` 的 `role` 改成 `number`、
+    再把 `spend_limit_cents` 改成 `boolean`，**15 条形状测试全绿**（探针实测）。
+    """
+    # 元素里的类型错了 → 红
+    assert not _matches("Array<{ a: number; b: string }>", [{"a": 1, "b": 2}])
+    assert _matches("Array<{ a: number; b: string }>", [{"a": 1, "b": "x"}])
+    # 元素里少了声明的键 / 多了没声明的键 → 都红（与顶层同一套政策）
+    assert not _matches("Array<{ a: number; b: string }>", [{"a": 1}])
+    assert not _matches("Array<{ a: number }>", [{"a": 1, "unexpected": 2}])
+    # 可选键缺失不算错
+    assert _matches("Array<{ a: number; b?: string }>", [{"a": 1}])
+    # `X[]` 写法与 `Array<X>` 等价
+    assert not _matches("{ a: number }[]", [{"a": "1"}])
+    # 内联对象（不在数组里）同样比
+    assert not _matches("{ available_cents: number }", {"available_cents": "200"})
+    assert _matches("{ available_cents: number }", {"available_cents": 200})
+    # 具名 interface 作为嵌套类型时也展开比
+    assert not _matches("Wallet", {"available_cents": "x", "escrow_cents": 0, "frozen_cents": 0})
+
+
+def test_cli071_stays_permissive_where_it_cannot_know():
+    """宽容的边界要写清楚：**一个假报警多的闸门会被人关掉。**"""
+    # 空数组：无从比较
+    assert _matches("Array<{ a: number }>", [])
+    # Record<>：键未知
+    assert _matches("Record<string, number>", {"anything": 1})
+    # 解析不出来的元素声明：放过而不是报错
+    assert _matches("Array<SomeAliasWeDoNotParse>", [{"a": 1}])
+    # 超过两层：退回宽容（自引用类型不能让闸门转不出来）
+    deep = "Array<{ a: Array<{ b: Array<{ c: number }> }> }>"
+    assert _matches(deep, [{"a": [{"b": [{"c": "wrong-but-too-deep"}]}]}])
+
+
+def test_cli071_splitter_does_not_cut_inside_brackets():
+    """`split(";")` 会把内层对象切开——第一版就是这么解析出一堆残缺字段的。"""
+    fields = _inline_fields("{ a: Array<{ b: number; c: string }>; d: string }")
+    assert fields == {"a": "Array<{ b: number; c: string }>", "d": "string"}
+    # 联合类型也不能被内层的 | 带跑
+    assert _split_top_level("Array<{ a: number | null }> | null", "|") == \
+        ["Array<{ a: number | null }>", "null"]
 
 
 def test_cli068_type_mismatch_is_caught():
