@@ -101,6 +101,7 @@
 | 76 | 没有人能核过它（运营侧人审队列的出口与覆盖闸门） | [76-nobody-can-approve-it.md](./76-nobody-can-approve-it.md) | P0 |
 | 77 | 进不去，也交不上（登录找回 / 资质提交 / 工单 / 发票 / 通知开关） | [77-cannot-get-in-cannot-hand-in.md](./77-cannot-get-in-cannot-hand-in.md) | P0 |
 | 78 | 没有人盯的队列（SLA / 积压催办 / 队列分页） | [78-a-queue-nobody-watches.md](./78-a-queue-nobody-watches.md) | P0 |
+| 79 | 视差与科技感（web 运动层 / 禁区表 / 减弱动效） | [79-parallax-and-tech-feel.md](./79-parallax-and-tech-feel.md) | P1 |
 
 ## 功能点编号与优先级约定
 

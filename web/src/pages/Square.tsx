@@ -1,6 +1,7 @@
 import { TASK_STATUS_LABEL, fmtYuan, type Task } from '@platform/core';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ParallaxHero, Reveal } from '../Motion';
 import { useApp } from '../store';
 
 const CATEGORIES = ['', '保洁', '跑腿', '维修', '软件开发', '设计', '活动策划', '二手交易'];
@@ -50,6 +51,10 @@ export default function Square() {
 
   return (
     <div className="page">
+      {/* PRLX 视差 hero 只用在「没有按钮在被按」的地方：
+          广场是浏览页，钱包/提现/签署那些页面刻意不加（79 号 spec） */}
+      <ParallaxHero title="任务广场"
+                    subtitle="发布、接单、履约、结算——一条链路跑通" />
       <div className="card row">
         <input className="grow" placeholder="搜索任务…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select value={category} onChange={(e) => setCategory(e.target.value)} style={{ width: 140 }}>
@@ -72,8 +77,9 @@ export default function Square() {
       <div className="list">
         {loading && <p className="muted">加载中…</p>}
         {!loading && tasks.length === 0 && <div className="card muted">暂无任务，去发布第一个吧</div>}
-        {tasks.map((t) => (
-          <div className="card task-item" key={t.id}>
+        {tasks.map((t, i) => (
+          <Reveal key={t.id} delayMs={Math.min(i, 6) * 40}>
+          <div className="card task-item">
             <div>
               <Link to={hasToken ? `/tasks/${t.id}` : '/login'}><strong>{t.title}</strong></Link>
               <p className="muted">
@@ -86,6 +92,7 @@ export default function Square() {
               <span className="badge">{TASK_STATUS_LABEL[t.status]}</span>
             </div>
           </div>
+          </Reveal>
         ))}
       </div>
     </div>

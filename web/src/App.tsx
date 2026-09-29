@@ -25,6 +25,7 @@ import {
   registerServiceWorker,
   watchInstallPrompt,
 } from './pwa';
+import { TechBackdrop } from './Motion';
 import { useApp } from './store';
 
 export default function App() {
@@ -39,6 +40,8 @@ export default function App() {
 
   return (
     <>
+      {/* UI-090 全站固定背景（79 号 spec）：只有一个实例，纯装饰、不吃指针事件 */}
+      <TechBackdrop />
       <nav className="nav">
         <Link className="logo" to="/">协作任务平台</Link>
         <Link to="/">任务广场</Link>

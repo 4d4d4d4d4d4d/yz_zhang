@@ -18,32 +18,21 @@
 //    scrollY 喂给 Animated.Value，不要 setState——每帧 setState 会让整棵
 //    树重渲染，比不做视差还卡。
 import {
-  AccessibilityInfo, Animated, Dimensions, Image, Platform,
+  Animated, Dimensions, Image, Platform,
   RefreshControl, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ContentItem, PlatformClient } from '@platform/core';
+import { cardMediaTranslate, heroTitleOpacity, heroTransform, useReduceMotion, useScrollDriver } from './motion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const HEADER_H = 220;          // 顶部大图高度
 const CARD_MEDIA_H = 200;      // 卡片配图高度
 const PARALLAX = 0.5;          // 背景位移 = 滚动距离 × 这个系数
 
-/** 系统「减弱动态效果」开关。取不到时按**关闭**处理（即照常做视差）——
- *  与流量提醒那条相反：那里的代价是用户的钱，这里的代价只是少一点效果，
- *  而多数设备拿得到这个值。 */
-function useReduceMotion(): boolean {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    AccessibilityInfo.isReduceMotionEnabled?.()
-      .then((v) => { if (alive) setReduce(!!v); })
-      .catch(() => { /* 取不到就按 false */ });
-    const sub = AccessibilityInfo.addEventListener?.('reduceMotionChanged', setReduce);
-    return () => { alive = false; sub?.remove?.(); };
-  }, []);
-  return reduce;
-}
+// PRLX-057 `useReduceMotion` / 滚动驱动 / hero 变换都在 `motion.tsx` 里——
+// 这一批把它们提了出去，任务详情的 hero 复用同一份。
+// 三条约束抄第二遍必然漏掉一条。
 
 function firstImage(c: ContentItem): string | null {
   return (c.media_urls ?? []).find((u) => /\.(jpe?g|png|webp)$/i.test(u)) ?? null;
@@ -57,8 +46,8 @@ export function DiscoverScreen({ client, baseUrl, onOpenAuthor }: {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const reduceMotion = useReduceMotion();
-  // ③ 只建一次，且只被 Animated.event 写
-  const scrollY = useRef(new Animated.Value(0)).current;
+  // ③ 只建一次，且只被 Animated.event 写（实现在 motion.tsx）
+  const { scrollY, onScroll } = useScrollDriver();
 
   const load = async () => {
     setRefreshing(true);
@@ -67,34 +56,9 @@ export function DiscoverScreen({ client, baseUrl, onOpenAuthor }: {
   };
   useEffect(() => { void load(); }, []);
 
-  const onScroll = useMemo(
-    () => Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }],
-      { useNativeDriver: true }),   // ① 关键：不加这个就是 JS 线程逐帧算
-    [scrollY],
-  );
-
   // 顶部大图：向下拉时放大并下移（iOS 的经典弹性头），向上滚时以 0.5 倍速上移
-  const headerTransform = reduceMotion ? [] : [
-    {
-      translateY: scrollY.interpolate({
-        inputRange: [-HEADER_H, 0, HEADER_H],
-        outputRange: [-HEADER_H / 2, 0, HEADER_H * PARALLAX],
-        extrapolate: 'clamp' as const,
-      }),
-    },
-    {
-      scale: scrollY.interpolate({
-        inputRange: [-HEADER_H, 0],
-        outputRange: [2, 1],
-        extrapolateRight: 'clamp' as const,
-      }),
-    },
-  ];
-  const titleOpacity = reduceMotion ? 1 : scrollY.interpolate({
-    inputRange: [0, HEADER_H * 0.7],
-    outputRange: [1, 0],
-    extrapolate: 'clamp' as const,
-  });
+  const headerTransform = heroTransform(scrollY, HEADER_H, reduceMotion, PARALLAX);
+  const titleOpacity = heroTitleOpacity(scrollY, HEADER_H, reduceMotion);
 
   return (
     <View style={styles.root}>
@@ -147,14 +111,8 @@ function ParallaxCard({ item, index, baseUrl, scrollY, reduceMotion, onPressAuth
   // 卡片大致的滚动区间。精确值要靠 onLayout 测，但那会引入每张卡一次
   // setState；这里用估算高度换取"零重渲染"——视差是观感，差几十像素无所谓。
   const CARD_H = img ? CARD_MEDIA_H + 120 : 120;
-  const start = index * CARD_H - 400;
-  const end = start + CARD_H + 800;
-
-  const mediaTranslate = reduceMotion ? 0 : scrollY.interpolate({
-    inputRange: [start, end],
-    outputRange: [-CARD_MEDIA_H * 0.25, CARD_MEDIA_H * 0.25],
-    extrapolate: 'clamp',
-  });
+  // 位移的算法在 motion.tsx：视差的数学只许有一份
+  const mediaTranslate = cardMediaTranslate(scrollY, index, CARD_H, CARD_MEDIA_H, reduceMotion);
 
   return (
     <View style={styles.card}>

@@ -2,6 +2,7 @@ import { ApiError, apiErrorText, formatDateTime, type ContentItem } from '@platf
 import { useCallback, useEffect, useState } from 'react';
 import { BlogEditor } from '../BlogEditor';
 import { VideoFeed } from '../VideoFeed';
+import { ParallaxHero } from '../Motion';
 import { useApp } from '../store';
 
 export default function Community() {
@@ -43,6 +44,8 @@ export default function Community() {
 
   return (
     <div className="page">
+      <ParallaxHero title="社区"
+                    subtitle="接单经验、作品与踩过的坑，都在这里沉淀" />
       <div className="card">
         <h3>发动态</h3>
         <textarea rows={2} placeholder="分享接单经验、作品展示…" value={body} onChange={(e) => setBody(e.target.value)} />

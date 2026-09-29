@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V103 全批次完成（2026-09-29）。
-> 后端 1138 tests + 前端 155 tests（core 56 + web 78 + App 21）全绿；
+> 状态：MVP + V1~V104 全批次完成（2026-09-29）。
+> 后端 1153 tests + 前端 161 tests（core 56 + web 84 + App 21）全绿；
 > **现状一页看清：[72-status-ledger.md](72-status-ledger.md)**（这份矩阵的缺口也在那里记着）；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
@@ -10,6 +10,23 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V104 批次：视差与科技感）
+
+> 模块 spec：[79-parallax-and-tech-feel.md](79-parallax-and-tech-feel.md)
+>
+> 用户的要求：**在满足基本功能的前提下，用视差滚动把 app 与 web 做出科技感。**
+> 现状是 App 的发现流已有视差（45 号），而 web 的 131 行样式里**一处运动层都没有**。
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **UI-090 科技感主要来自静态层** | 「科技感」只靠运动的话，滚动一停就什么都不剩。所以主力是静态层：深色底 + 1px 网格 + 两处径向辉光（用渐变画，**零请求**、任意分辨率清晰）、发丝级 `rgba` 描边、金额一律 `tabular-nums`（金额跳动时数字不左右抖，对账时眼睛能对齐列）、辉光只给主按钮与状态徽章（满屏发光会让要读的金额与条款变难读）。配色集中在 `:root` 的 token 里，**一处能改回去** | `tests/test_motion_layer.py::test_prlx_scanner_sees_the_motion_layer` |
+| **PRLX-050 动钱与签署的页面不做位移** | 视差的本质是元素随滚动移动，而移动的元素包括按钮——**一个在手指底下漂移的按钮不是效果，是功能缺陷**，而钱包/签署/审批页上点错一下的代价是钱。立 `MOTION_FORBIDDEN` 表（钱包、任务详情、团队、管理后台、核验台、登录），值是**理由**不是布尔 | `::test_prlx050_money_and_signing_pages_have_no_motion`（6 条参数化；在钱包页加一个 hero 即红） |
+| **PRLX-051 减弱动效是完全关闭，不是减半** | 45 号为 App 立过：开着这个开关的人里有相当一部分是**前庭功能障碍者**，大面积位移是明确的眩晕诱因，**减半仍然会让人难受**。CSS 分支里必须是 `transform: none`；组件侧 `Reveal` 直接到终态、hero 不挂滚动监听 | `::test_prlx051_reduced_motion_is_off_not_halved`（改成减半即红）、`web/src/Motion.test.tsx`（真的把 `matchMedia` 打开） |
+| **一帧的漏洞：默认值写错等于开关失效** | `useReducedMotion` 第一版默认 `false`、在 effect 里纠正——于是开着开关的设备上**仍有一帧挂上滚动监听并写入位移**，测试当场抓到 `--sy` 被写成了 `'0'`。改成同步读 `matchMedia` | `Motion.test.tsx::开着开关时：背景层不挂滚动量，位移为 0` |
+| **PRLX-052/053 只动 transform/opacity，且滚动回调不 setState** | 动 `top`/`height`/`margin` 会在滚动时触发重排（RN 那边是真机抛错而 CI 看不见）；每帧 setState 会让整棵树重渲染，**比不做视差还卡**。web 的做法：一个 scroll 监听 + rAF 节流，把滚动量写进 CSS 变量 `--sy`，位移在 CSS 里换算——**React 一次都不重渲染** | `::test_prlx052_scroll_driven_styles_only_touch_transform_and_opacity`（扫用到 `--sy` 的规则块）、`::test_prlx053_scroll_handler_does_not_setstate` |
+| **PRLX-057 App 侧只有一份实现** | 45 号的三条约束抄第二遍必然漏掉一条，所以把 `useReduceMotion` / 滚动驱动 / hero 变换 / 卡片配图视差全部提到 `app/motion.tsx`，`Discover` 复用。闸门断言 `useReduceMotion` 的定义**只有一处**，且 `Discover` 里不再自建 `Animated.event` 或 `interpolate` | `::test_prlx057_*`（3 条；在 Discover 里再写一份即红） |
+| **闸门第一版自己踩了假警报** | `useNativeDriver` 的扫描命中了一段**解释它为什么重要的注释**——扫描器把文档当成了代码。满口假警报的闸门会被人关掉（V82 立过），所以先剥注释再扫 | 同上（`_without_comments`） |
 
 ## 已实现（V103 批次：没有人盯的队列）
 
