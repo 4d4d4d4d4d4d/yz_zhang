@@ -58,6 +58,7 @@ import type {
   WithdrawRequestRow,
   SuspiciousActivityRow,
   BanImpactView,
+  ReviewQueuesView,
   InvoiceRow,
   NotificationPrefsView,
   PendingTeamRow,
@@ -905,9 +906,15 @@ export class PlatformClient {
   // 这一组以前**没有一条在 SDK 里**：服务端的队列是通的，而后台没有界面，
   // 于是「提交 → 等人看」的第二步永远不发生。团队企业核验更彻底——
   // 那两条端点此前压根不存在。
+  /** QUEUE-011 人审队列概览（78 号 spec）：几件在等、最久多久、超没超 SLA。
+   *
+   *  催办 job、后台首屏、测试共用这一份——各自去数库就会出现三份不一样的答案。 */
+  reviewQueues() {
+    return this.request<ReviewQueuesView>('GET', '/admin/queues');
+  }
   /** TEAM-031 待核验的团队企业信息（执照影像是鉴权 URL，不是能力 URL）。 */
-  pendingTeams(limit = 50) {
-    return this.request<PendingTeamRow[]>('GET', `/admin/teams/pending?limit=${limit}`);
+  pendingTeams(limit = 50, offset = 0) {
+    return this.request<PendingTeamRow[]>('GET', `/admin/teams/pending?limit=${limit}&offset=${offset}`);
   }
   /** TEAM-031 核过或驳回。驳回必须写理由——它会被送到 owner 面前。 */
   verifyTeam(teamId: number, approve: boolean, reason = '') {
@@ -916,8 +923,10 @@ export class PlatformClient {
     );
   }
   /** CERT-030 待核验的受限类目资质申请。 */
-  pendingCertifications(limit = 50) {
-    return this.request<PendingCertificationRow[]>('GET', `/admin/certifications/pending?limit=${limit}`);
+  pendingCertifications(limit = 50, offset = 0) {
+    return this.request<PendingCertificationRow[]>(
+      'GET', `/admin/certifications/pending?limit=${limit}&offset=${offset}`,
+    );
   }
   /** CERT-031 按状态列资质。撤销的对象是**已核准**的那些——
    *  一张已经核过的假证件撤不下来，持证人会继续接受限类目的单。 */
@@ -937,8 +946,10 @@ export class PlatformClient {
     );
   }
   /** UMOD-030 机审拿不准的图片队列。 */
-  pendingUploads(limit = 50) {
-    return this.request<PendingUploadRow[]>('GET', `/admin/uploads/pending?limit=${limit}`);
+  pendingUploads(limit = 50, offset = 0) {
+    return this.request<PendingUploadRow[]>(
+      'GET', `/admin/uploads/pending?limit=${limit}&offset=${offset}`,
+    );
   }
   /** UMOD-030 处置：通过，或删除并**告知上传者**（悄悄删掉是最差的处理）。 */
   resolveUpload(name: string, action: 'pass' | 'reject', reason = '') {
@@ -947,8 +958,10 @@ export class PlatformClient {
     );
   }
   /** CS-030 工单队列。用户的求助在这里，不回就是 SLA 是摆设。 */
-  adminTickets(status = 'open') {
-    return this.request<AdminTicketRow[]>('GET', `/admin/tickets?status=${status}`);
+  adminTickets(status = 'open', limit = 50, offset = 0) {
+    return this.request<AdminTicketRow[]>(
+      'GET', `/admin/tickets?status=${status}&limit=${limit}&offset=${offset}`,
+    );
   }
   resolveTicket(ticketId: number, reply: string) {
     return this.request<{ id: number; status: string }>(

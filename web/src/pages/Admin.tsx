@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminTicketRow, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinanceView, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminTicketRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinanceView, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 
@@ -52,6 +52,7 @@ export default function Admin() {
           </div>
         </div>
       )}
+      <QueueOverview />
       <WithdrawReview />
       <AmlQueue />
       <TeamVerifyQueue />
@@ -640,9 +641,15 @@ function TicketQueue() {
   const { client } = useApp();
   const [rows, setRows] = useState<AdminTicketRow[]>([]);
   const [error, setError] = useState('');
+  // PAY-045 分页：此前上限写死、offset 被忽略，队列一长后面的就在界面上不存在
+  const PAGE = 20;
+  const [more, setMore] = useState(false);
 
-  const load = useCallback(async () => {
-    setRows(await client.adminTickets().catch(() => []));
+  const load = useCallback(async (limit = PAGE) => {
+    const r = await client.adminTickets('open', limit + 1, 0).catch(() => []);
+    // 多取一条来判断「还有没有」——这样「加载更多」不会在最后一页还挂着
+    setMore(r.length > limit);
+    setRows(r.slice(0, limit));
   }, [client]);
   useEffect(() => { void load(); }, [load]);
 
@@ -672,6 +679,11 @@ function TicketQueue() {
           </div>
         ))}
       </div>
+      {/* 只在**真的还有**的时候出现：一个永远挂着的「加载更多」等于没有信息 */}
+      {more && (
+        <button className="ghost" data-testid="tickets-more"
+                onClick={() => void load(rows.length + PAGE)}>加载更多</button>
+      )}
     </div>
   );
 }
@@ -779,6 +791,49 @@ function CityAndCategory() {
               <td>
                 <button className="ghost" style={{ padding: '2px 8px' }}
                         onClick={() => void act(() => client.updateCategory(c.id, { active: false }))}>停用</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** QUEUE-011 人审队列概览（78 号 spec）。
+ *
+ * 排在首屏最前面：运营不该靠往下滚才发现有东西积压。
+ * 超过 SLA 的行标红——SLA 此前只是配置里的一个数字，没有任何地方用它。
+ */
+function QueueOverview() {
+  const { client } = useApp();
+  const [view, setView] = useState<ReviewQueuesView | null>(null);
+
+  useEffect(() => {
+    void client.reviewQueues()
+      .then((v) => setView(v && Array.isArray(v.queues) ? v : null))
+      .catch(() => setView(null));
+  }, [client]);
+
+  if (!view || view.total_pending === 0) return null;
+  return (
+    <div className="card">
+      <h3>人审队列（待处理 {view.total_pending}）</h3>
+      <table style={{ marginTop: 8 }}>
+        <thead><tr><th>队列</th><th>待处理</th><th>最久等待</th><th>SLA</th><th></th></tr></thead>
+        <tbody>
+          {view.queues.filter((q) => q.pending > 0).map((q) => (
+            <tr key={q.key} data-testid={`queue-${q.key}`}>
+              <td>{q.label}</td>
+              <td>{q.pending}</td>
+              <td>{q.oldest_wait_hours} 小时</td>
+              <td className="muted">{q.sla_hours} 小时</td>
+              <td>
+                {q.breached
+                  ? <span className="badge bad">已超 SLA</span>
+                  : <span className="badge ok">在期内</span>}
+                {/* 「这个队列有没有人盯」——答案可能是「有，在别处」 */}
+                {q.chased_elsewhere && <span className="muted"> · 催办在别处</span>}
               </td>
             </tr>
           ))}

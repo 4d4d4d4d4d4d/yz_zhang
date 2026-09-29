@@ -72,6 +72,7 @@ function openAdmin(routes: Record<string, unknown> = {}, calls: Call[] = []) {
     '/admin/uploads/pending': [],
     '/admin/tickets': [],
     '/admin/security': { ...BOARD, banned: [] },
+    '/admin/queues': { queues: [], total_pending: 0, breached: [] },
     '/cities': [],
     '/categories': [],
     ...routes,
@@ -199,5 +200,43 @@ describe('UMOD-030 / CS-030 / SECEV-030', () => {
       expect(sent).toBeTruthy();
       expect((sent!.body as { ip: string }).ip).toBe('203.0.113.7');
     });
+  });
+});
+
+describe('QUEUE-011 人审队列概览', () => {
+  it('积压与「已超 SLA」显示在首屏，不用往下滚', async () => {
+    openAdmin({
+      '/admin/queues': {
+        queues: [
+          { key: 'tickets', label: '客服工单', pending: 3, oldest_wait_hours: 50,
+            sla_hours: 24, breached: true, chased_elsewhere: '' },
+          { key: 'withdrawals', label: '提现人审', pending: 1, oldest_wait_hours: 2,
+            sla_hours: 24, breached: false, chased_elsewhere: '75 号已有专门的催办' },
+        ],
+        total_pending: 4,
+        breached: ['tickets'],
+      },
+    });
+    await waitFor(() => expect(screen.getByTestId('queue-tickets')).toBeTruthy());
+    expect(screen.getByTestId('queue-tickets').textContent).toContain('已超 SLA');
+    // SLA 的数字来自服务端，不在界面里写死
+    expect(screen.getByTestId('queue-tickets').textContent).toContain('24 小时');
+    // 「这个队列有没有人盯」的答案可能是「有，在别处」
+    expect(screen.getByTestId('queue-withdrawals').textContent).toContain('催办在别处');
+  });
+
+  it('队列空的时候整块不出现（空卡片是噪音）', async () => {
+    openAdmin();
+    await waitFor(() => expect(screen.getByText('平台指标')).toBeTruthy());
+    expect(screen.queryByTestId('queue-tickets')).toBeNull();
+  });
+
+  it('PAY-045 工单只在还有剩余时显示「加载更多」', async () => {
+    const many = Array.from({ length: 21 }, (_, i) => ({
+      id: i + 1, user_id: 9, subject: `问题${i}`, body: '正文',
+      created_at: '2026-09-01T00:00:00Z',
+    }));
+    openAdmin({ '/admin/tickets': many });
+    await waitFor(() => expect(screen.getByTestId('tickets-more')).toBeTruthy());
   });
 });

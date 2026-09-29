@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V102 全批次完成（2026-09-29）。
-> 后端 1124 tests + 前端 152 tests（core 56 + web 75 + App 21）全绿；
+> 状态：MVP + V1~V103 全批次完成（2026-09-29）。
+> 后端 1138 tests + 前端 155 tests（core 56 + web 78 + App 21）全绿；
 > **现状一页看清：[72-status-ledger.md](72-status-ledger.md)**（这份矩阵的缺口也在那里记着）；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
@@ -10,6 +10,29 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V103 批次：没有人盯的队列）
+
+> 模块 spec：[78-a-queue-nobody-watches.md](78-a-queue-nobody-watches.md)
+>
+> ```
+> PROBE SUPPORT_SLA_HOURS = 24（全仓只有定义，没有任何使用）
+> PROBE 管理员通知条数：跑 job 前 0 条，跑完 0 条
+> PROBE 提单人收到的通知：[]
+> PROBE 工单/资质/团队/图片 四个队列里 30 天前的东西全都还在
+> PROBE 五个队列都接受 offset 然后忽略它
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **QUEUE-010 队列声明表** | V101 装了出口、V102 装了入口，而**没有人盯**。六个人审队列散落在六个模块里，于是「有没有人看」这个问题没有地方可问。立 `admin/queues.py`：看什么、SLA 取哪个配置项、超了谁被催、提交方是否被告知。SLA 存的是**配置项的名字**而不是抄一个数字（配置改了跟着变） | `tests/test_review_queue_watch.py::test_queue010_*`（3 条；把配置项名字写错即 10 条红） |
+| **「不告知提交方」存理由，不存布尔** | 可疑活动复核不通知当事人是 AML-030/031 的保密义务。写成 `False` 的话，下一个人会顺手改成 `True`——所以表里存的是**原因**（V90 立下的做法：声明表的值是原因，不是开关） | `::test_queue010_not_telling_the_submitter_needs_a_reason_not_a_boolean`、`::test_queue012_aml_subject_is_never_told` |
+| **CS-031 `SUPPORT_SLA_HOURS` 终于被使用** | 这个配置项此前**全仓只有定义、没有任何使用**：一条写下来却没人核对的承诺（V96/V99/V101 同一规律的第四次）。现在工单队列真的按它判超时 | `::test_cs031_tickets_use_the_support_sla_that_was_never_used` |
+| **QUEUE-011 一条汇总，而不是四条通知** | 新 job `/admin/jobs/remind-review-queues` + `GET /admin/queues`（催办 job、后台首屏、测试共用一份，各自数库会出现三份不一样的答案）。汇总里逐行写队列名、件数、最久等待与 SLA；**四条相似的通知会让运营把整类关掉**，而那一类里还有别的东西 | `::test_queue011_backlog_reaches_the_admins_as_one_digest`（改成每队列一条即红）、`::test_queue011_queues_within_sla_do_not_appear` |
+| **提现队列的答案是「有人盯，在别处」** | 75 号已给它专门的催办与超时退回；再加一套等于每小时两条通知。表里保留这一行并写明原因——运营要能看出「这个队列有没有人盯」 | `::test_queue011_withdrawals_say_their_chasing_lives_elsewhere` |
+| **QUEUE-012 等的人也收到一句话** | 超过 SLA 时告知提交方一次（落 `queue_sla_notices` 一行，跑多少轮都只发一条）。**沉默比慢更伤人**：慢可以理解，沉默让人以为自己被忽略了。团队那一行通知的是 owner——团队本身是一行 User，而收通知的得是人 | `::test_queue012_submitter_is_told_once_when_the_sla_is_breached`、`::test_queue012_team_owner_is_the_one_told` |
+| **PAY-045 队列分页真的生效** | 五个队列**接受 `offset` 然后忽略它**——翻页的人看到第一页无限重复，而且不知道自己在原地；提现队列上限还写死 200，第 201 笔在界面上「不存在」，而那是一笔冻着的钱。**接受一个参数然后忽略它，比拒绝它更糟** | `::test_pay045_offset_actually_skips_on_every_queue`、`::test_pay045_withdraw_queue_pages_too`、`::test_pay045_other_queues_accept_offset` |
+| **后台首屏看得见积压** | 概览卡片排在最前面：运营不该靠往下滚才发现有东西积压；超 SLA 标红，SLA 数字来自服务端。「加载更多」只在**真的还有**时出现（多取一条来判断），一个永远挂着的按钮等于没有信息 | `web/src/AdminReviewQueues.test.tsx::QUEUE-011`（3 条） |
 
 ## 已实现（V102 批次：进不去，也交不上）
 

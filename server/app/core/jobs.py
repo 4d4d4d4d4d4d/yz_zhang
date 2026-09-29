@@ -81,6 +81,9 @@ JOBS: tuple[ScheduledJob, ...] = (
     ScheduledJob("/wallet/jobs/remind-second-approval", 3600, "withdraw_second_reminders",
                  "PAY-044 人审提现催办与超时退回——V99 的双人确认加了一个新卡点，"
                  "卡点没有兜底就是新的「钱能进不能出」"),
+    ScheduledJob("/admin/jobs/remind-review-queues", 3600, "review_queue_reminders",
+                 "QUEUE-011/012 人审队列积压催办——队列里躺着的东西不会主动发声，"
+                 "而运营是「想起来才去看」；超过 SLA 时提交方也会收到一次告知"),
     ScheduledJob("/admin/jobs/reconcile", 86400, "reconcile",
                  "PAY-006/008 五条资金不变量日终对账，不平即开差错工单并告警。"
                  "**此前它不在调度表里、且要求管理员登录，从未自动执行过**"),

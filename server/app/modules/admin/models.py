@@ -38,3 +38,21 @@ class AdminAudit(Base):
     target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     detail: Mapped[str] = mapped_column(String(500), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class QueueSlaNotice(Base):
+    """QUEUE-012 超时告知过谁（78 号 spec）。
+
+    「已经告知过提交方」这个状态要存在**队列之外**：六个队列分别落在六张表里，
+    给每张表加一个 `sla_notified_at` 是六次迁移、六处容易漏的地方。
+    这里一行记一件，`item_key` 用字符串——上传队列的主键是文件名，不是整数。
+
+    只增不改：每件只告知一次，否则每小时一条通知比不发更糟。
+    """
+
+    __tablename__ = "queue_sla_notices"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    queue_key: Mapped[str] = mapped_column(String(24), index=True)
+    item_key: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

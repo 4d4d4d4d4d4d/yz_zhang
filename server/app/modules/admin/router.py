@@ -191,10 +191,16 @@ class TicketResolveIn(BaseModel):
 
 
 @router.get("/admin/tickets")
-def ticket_queue(status: str = "open", admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
+                 offset: int = Query(0, ge=0),
+                 admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """PAY-045 带分页：此前它接受 `offset` 然后忽略它——
+    翻页的人会看到第一页无限重复，而且不知道自己在原地。
+    **接受一个参数然后忽略它**，比拒绝它更糟。"""
     from app.modules.support.models import Ticket
 
-    rows = db.query(Ticket).filter(Ticket.status == status).order_by(Ticket.id).limit(100).all()
+    rows = (db.query(Ticket).filter(Ticket.status == status)
+            .order_by(Ticket.id).offset(offset).limit(limit).all())
     return [
         {"id": t.id, "user_id": t.user_id, "subject": t.subject, "body": t.body,
          "created_at": iso(t.created_at)}
@@ -496,7 +502,7 @@ def metrics(admin: User = Depends(require_admin), db: Session = Depends(get_db))
 # ---------- UMOD-020/021 上传审核队列 ----------
 @router.get("/admin/uploads/pending")
 def pending_uploads(
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
     _: User = Depends(require_admin), db: Session = Depends(get_db),
 ):
     """UMOD-020 机审拿不准的图片队列。
@@ -509,7 +515,7 @@ def pending_uploads(
     rows = (
         db.query(UploadedFile)
         .filter(UploadedFile.moderation_status == "review")
-        .order_by(UploadedFile.created_at).limit(limit).all()
+        .order_by(UploadedFile.created_at).offset(offset).limit(limit).all()
     )
     return [
         {"name": r.name, "url": f"/api/v1/files/{r.name}", "owner_id": r.owner_id,
@@ -589,27 +595,28 @@ def _cert_row(db: Session, r) -> dict:
     }
 
 
-def _certifications(db: Session, status: str, limit: int) -> list[dict]:
+def _certifications(db: Session, status: str, limit: int, offset: int = 0) -> list[dict]:
     from app.modules.account.models_cert import CertificationApplication
 
     rows = (db.query(CertificationApplication)
             .filter(CertificationApplication.status == status)
-            .order_by(CertificationApplication.created_at).limit(limit).all())
+            .order_by(CertificationApplication.created_at)
+            .offset(offset).limit(limit).all())
     return [_cert_row(db, r) for r in rows]
 
 
 @router.get("/admin/certifications/pending")
 def pending_certifications(
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
     _: User = Depends(require_admin), db: Session = Depends(get_db),
 ):
-    return _certifications(db, "pending", limit)
+    return _certifications(db, "pending", limit, offset)
 
 
 @router.get("/admin/certifications")
 def list_certifications(
     status: str = Query("approved", pattern="^(pending|approved|rejected|revoked)$"),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
     _: User = Depends(require_admin), db: Session = Depends(get_db),
 ):
     """CERT-031 按状态列资质（76 号 spec）。
@@ -619,7 +626,7 @@ def list_certifications(
     于是「撤销」这个端点没有任何入口——一张已经核过的假证件撤不下来，
     持证人会继续接受限类目的单。
     """
-    return _certifications(db, status, limit)
+    return _certifications(db, status, limit, offset)
 
 
 @router.post("/admin/certifications/{application_id}/decide")
@@ -670,7 +677,7 @@ class TeamVerifyIn(BaseModel):
 
 @router.get("/admin/teams/pending")
 def pending_teams(
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
     _: User = Depends(require_admin), db: Session = Depends(get_db),
 ):
     """待核验的团队企业信息。
@@ -682,7 +689,7 @@ def pending_teams(
     from app.modules.team.models import Team
 
     rows = (db.query(Team).filter(Team.verify_status == "pending")
-            .order_by(Team.user_id).limit(limit).all())
+            .order_by(Team.user_id).offset(offset).limit(limit).all())
     out = []
     for t in rows:
         owner = db.get(User, t.owner_id)
@@ -733,3 +740,84 @@ def verify_team(
                  f"{'通过' if body.approve else '驳回'}：{body.reason}")
     return {"team_id": team.user_id, "verify_status": team.verify_status,
             "verify_reason": team.verify_reason}
+
+
+# ---------- QUEUE-010/011/012 人审队列概览与催办（78 号 spec） ----------
+@router.get("/admin/queues")
+def review_queues(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """每个人审队列：几件在等、最久等了多久、SLA 多长、超没超。
+
+    三个地方共用这一份：催办 job、管理后台首屏、测试。
+    各自去数库就会出现三份不一样的答案。
+    """
+    from .queues import snapshot
+
+    rows = snapshot(db)
+    return {
+        "queues": rows,
+        "total_pending": sum(r["pending"] for r in rows),
+        "breached": [r["key"] for r in rows if r["breached"]],
+    }
+
+
+@router.post("/admin/jobs/remind-review-queues")
+def run_remind_review_queues(_triggered_by: int = Depends(_job_or_admin),
+                             db: Session = Depends(get_db),
+                             __=Depends(job_slot("review_queue_reminders"))):
+    """QUEUE-011/012 队列积压催办。
+
+    探针：四个队列里的东西推到 30 天前、跑一遍全部 job——
+    **管理员和提交方一条通知都没有**。队列里躺着的东西不会主动发声，
+    而运营是「想起来才去看」。
+
+    发**一条汇总**而不是每个队列一条：四条相似的通知会让运营把整类关掉，
+    而那一类里还有别的东西。
+    """
+    from app.modules.account.models import utcnow
+    from app.modules.notification.service import notify
+
+    from .models import QueueSlaNotice
+    from .queues import QUEUES, snapshot
+
+    now = utcnow()
+    rows = {r["key"]: r for r in snapshot(db, now)}
+    breached = [r for r in rows.values() if r["breached"]]
+
+    digested = 0
+    if breached:
+        lines = "；".join(
+            f"{r['label']} {r['pending']} 件（最久 {r['oldest_wait_hours']} 小时，"
+            f"SLA {r['sla_hours']} 小时）"
+            for r in breached
+        )
+        admins = [u.id for u in db.query(User).filter(User.is_admin.is_(True)).all()]
+        for uid in admins:
+            notify(db, uid, "system", "人审队列积压",
+                   f"以下队列已超过 SLA：{lines}。请到管理后台处理。")
+        digested = len(admins)
+
+    # QUEUE-012 等的人也要收到一句话——沉默比慢更伤人
+    told = 0
+    for q in QUEUES:
+        if not rows[q.key]["breached"] or not q.tells_submitter:
+            continue        # 可疑活动复核不告知当事人：见 queues.py 里的理由
+        sla = q.sla_hours()
+        for item_id, at, submitter in q.pending(db):
+            if submitter is None:
+                continue
+            if (now - at).total_seconds() < sla * 3600:
+                continue
+            key = str(item_id)
+            seen = (db.query(QueueSlaNotice)
+                    .filter(QueueSlaNotice.queue_key == q.key,
+                            QueueSlaNotice.item_key == key).first())
+            if seen:
+                continue    # 每件只告知一次，否则每小时一条比不发更糟
+            waited = int((now - at).total_seconds() // 3600)
+            notify(db, submitter, "system", "你的申请仍在处理中",
+                   f"你提交的「{q.label}」已等待 {waited} 小时，超过我们承诺的 "
+                   f"{sla} 小时，我们已催办。给你带来的等待很抱歉。")
+            db.add(QueueSlaNotice(queue_key=q.key, item_key=key))
+            told += 1
+    return {"breached": [r["key"] for r in breached], "admins_notified": digested,
+            "submitters_told": told}

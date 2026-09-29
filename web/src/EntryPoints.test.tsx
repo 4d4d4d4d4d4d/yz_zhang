@@ -41,7 +41,6 @@ function mount(route: string, routes: Record<string, unknown> = {}, calls: Call[
     '/wallet/ledger': [],
     '/wallet/payout-account': { kind: '', account_no: '', holder_name: '', bound: false },
     '/finance/my-tax': { mode: 'labor', yearly: [], items: [], disclaimer: '这是代扣明细' },
-    '/finance/invoices': [],
     '/invitations': [],
     '/legal/agreements': {
       current_version: 'v1', documents: [], sensitive_scopes: [], rights: {},

@@ -149,14 +149,17 @@ def withdraw(
 # ---------- PAY-007 大额提现人审（管理端） ----------
 @router.get("/withdraw-requests")
 def list_withdraw_requests(
-    status: str = "pending",
+    status: str = "pending", limit: int = 50, offset: int = 0,
     admin: User = Depends(require_admin), db: Session = Depends(get_db),
 ):
     from .models import WithdrawRequest
 
+    # PAY-045 带分页。此前上限写死 200 且忽略 offset：
+    # 队列超过 200 之后，第 201 笔在界面上**不存在**——而那是一笔冻着的钱。
+    limit = max(1, min(limit, 200))
     rows = (
         db.query(WithdrawRequest).filter(WithdrawRequest.status == status)
-        .order_by(WithdrawRequest.id).limit(200).all()
+        .order_by(WithdrawRequest.id).offset(max(0, offset)).limit(limit).all()
     )
     # PAY-040 复核台要给够判断的依据。
     #

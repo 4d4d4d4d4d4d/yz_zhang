@@ -862,6 +862,26 @@ export interface SpendRequestView {
 /** TEAM-031 待核验的团队企业信息（76 号 spec）。
  *
  * `license_urls` 是**鉴权**端点，不是匿名能力 URL——营业执照是企业敏感材料。 */
+/** QUEUE-011 人审队列概览（78 号 spec）。
+ *
+ * `chased_elsewhere` 非空表示「这个队列有人盯，但催办在别处」——
+ * 提现人审的催办与超时退回在 75 号里。 */
+export interface ReviewQueueRow {
+  key: string;
+  label: string;
+  pending: number;
+  oldest_wait_hours: number;
+  sla_hours: number;
+  breached: boolean;
+  chased_elsewhere: string;
+}
+
+export interface ReviewQueuesView {
+  queues: ReviewQueueRow[];
+  total_pending: number;
+  breached: string[];
+}
+
 /** TAX-024 我的发票申请。`at`/`note` 是服务端的字段名，不是 `created_at`。 */
 export interface InvoiceRow {
   id: number;

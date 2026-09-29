@@ -49,6 +49,7 @@ def _admin_paths() -> set[str]:
 #
 # 判定标准（沿用 V98）：**只有运营/风控能做，而不做就有人的钱或权利卡住。**
 REACHED_BY: dict[str, str] = {
+    "/admin/queues": "reviewQueues",
     "/admin/teams/pending": "pendingTeams",
     "/admin/teams/{x}/verify": "verifyTeam",
     "/admin/certifications/pending": "pendingCertifications",
@@ -97,6 +98,7 @@ ADMIN_EXEMPT: dict[str, str] = {
     "/admin/settlements/verify": "分账自检是运维核对工具，`scripts/consistency_check.py` 也能跑",
     "/admin/vendors": "供应商在位状态是看数；真正会拦人的是生产启动自检",
     "/admin/jobs/reconcile": "日终对账由调度器执行（32 号调度表里在册），不靠人点",
+    "/admin/jobs/remind-review-queues": "队列催办由调度器按 32 号调度表执行，不该由界面触发",
     "/admin/matching-config": "匹配权重是调参，不调用默认值，不卡任何人",
     "/admin/cities/{x}": "停用城市是收缩动作；开通（createCity）才是会卡住人的那一半",
 }
