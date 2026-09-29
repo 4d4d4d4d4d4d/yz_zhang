@@ -21,6 +21,16 @@ import pytest
 ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
 APP = os.path.join(ROOT, "app")
 DISCOVER = os.path.join(APP, "Discover.tsx")
+# V104 把三条约束的实现提到了共享运动层（`app/motion.tsx`），发现流复用它。
+# 这几条闸门因此要**跟着代码走**：它们钉的是「这三条约束仍然成立」，
+# 不是「它们仍然写在 Discover.tsx 里」。
+# 当时这四条确实红了——闸门做对了事，是被看守的东西搬了家。
+MOTION = os.path.join(APP, "motion.tsx")
+
+
+def motion_code() -> str:
+    """运动层 + 发现流的代码合起来看（都去掉注释）。"""
+    return strip_comments(open(MOTION).read()) + "\n" + strip_comments(open(DISCOVER).read())
 
 
 def strip_comments(src: str) -> str:
@@ -62,7 +72,7 @@ def test_prlx001_the_parse_gate_actually_catches_a_broken_file(tmp_path):
 # ---------- PRLX-010 native driver ----------
 def test_prlx010_scroll_animation_runs_on_the_native_driver():
     """JS driver 的视差在滚动时会肉眼可见地掉帧——滚动时 JS 线程本来就忙。"""
-    code = strip_comments(open(DISCOVER).read())
+    code = motion_code()
     assert "Animated.event" in code
     assert "useNativeDriver: true" in code, "视差没走 native driver，滚动必卡"
 
@@ -74,7 +84,7 @@ def test_prlx011_only_transform_and_opacity_are_animated():
     "Style property 'x' is not supported by native animated module"——
     而那是真机上才炸，CI 看不见。
     """
-    code = strip_comments(open(DISCOVER).read())
+    code = motion_code()
     # interpolate 的结果只应喂给 translateY / scale / opacity
     for prop in ("translateY", "scale", "opacity"):
         assert prop in code
@@ -84,7 +94,7 @@ def test_prlx011_only_transform_and_opacity_are_animated():
 
 def test_prlx012_scroll_position_never_goes_through_setstate():
     """每帧 setState 会让整棵树重渲染，比不做视差还卡。"""
-    code = strip_comments(open(DISCOVER).read())
+    code = motion_code()
     assert "new Animated.Value(0)" in code
     # 滚动回调里不得出现 setState 类调用
     handler = code.split("Animated.event")[1][:400]
@@ -97,7 +107,7 @@ def test_prlx020_reduce_motion_is_respected():
 
     大面积位移是明确的眩晕诱因——这是无障碍底线，不是加分项。
     """
-    code = strip_comments(open(DISCOVER).read())
+    code = motion_code()
     assert "AccessibilityInfo" in code
     assert "isReduceMotionEnabled" in code
     assert "reduceMotionChanged" in code, "开关在使用中被打开时也要立刻生效"
@@ -105,13 +115,17 @@ def test_prlx020_reduce_motion_is_respected():
 
 def test_prlx021_reduce_motion_disables_parallax_completely_not_halfway():
     """开了开关就**完全关掉**，而不是「减半」——减半仍然会让人晕。"""
-    code = strip_comments(open(DISCOVER).read())
-    # 头部 transform 在 reduceMotion 时是空数组（没有任何位移）
-    assert "reduceMotion ? [] :" in code
-    # 卡片内配图位移在 reduceMotion 时是 0
-    assert "reduceMotion ? 0 :" in code
-    # 标题透明度在 reduceMotion 时恒为 1
-    assert "reduceMotion ? 1 :" in code
+    code = motion_code()
+    # 三个「完全关闭」的出口都在运动层里：
+    #   hero transform → 空数组（没有任何位移）
+    #   卡片配图位移   → 0
+    #   标题透明度     → 恒为 1
+    # 写法从三元表达式变成了提前 return，**意思一个字没改**。
+    assert "if (reduce) return [];" in code, "hero 在减弱动效时仍有位移"
+    assert "if (reduce) return 0;" in code, "卡片配图在减弱动效时仍有位移"
+    assert "if (reduce) return 1;" in code, "标题在减弱动效时仍会淡出"
+    # 「减半」这种折中由新加的 test_motion_layer.py 从 CSS 与组件两侧钉，
+    # 这里不再重复（写一条恒为真的断言只会让人以为有人在看）
 
 
 def test_prlx022_reduce_motion_state_is_visible_to_the_user():
