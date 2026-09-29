@@ -90,7 +90,7 @@ def create_agent(body: AgentIn, admin: User = Depends(require_admin),
         confidence_threshold_bps=body.confidence_threshold_bps,
     )
     db.add(profile)
-    record_audit(db, admin.id, "agent_create", "agent", str(agent_user.id), body.name)
+    record_audit(db, admin.id, "agent_create", "agent", agent_user.id, body.name)
     return {"user_id": agent_user.id, "name": profile.name}
 
 
@@ -123,7 +123,7 @@ def patch_agent(agent_user_id: int, body: AgentPatch, admin: User = Depends(requ
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(p, field, value)
     db.add(p)
-    record_audit(db, admin.id, "agent_update", "agent", str(agent_user_id), "")
+    record_audit(db, admin.id, "agent_update", "agent", agent_user_id, "")
     return _public(p)
 
 

@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type BanImpactView, type PlatformFinanceView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminTicketRow, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinanceView, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 
@@ -54,6 +54,10 @@ export default function Admin() {
       )}
       <WithdrawReview />
       <AmlQueue />
+      <TeamVerifyQueue />
+      <CertificationQueue />
+      <UploadQueue />
+      <TicketQueue />
       <div className="card">
         <h3>待处置举报（{reports.length}）</h3>
         <table style={{ marginTop: 8 }}>
@@ -110,6 +114,8 @@ export default function Admin() {
                       onDone={async () => { setBanning(null); await load(); }} />
         )}
       </div>
+      <SecurityBoard />
+      <CityAndCategory />
       <AuditLog />
       <PlatformFinance />
       <Announcement />
@@ -430,6 +436,354 @@ function AmlQueue() {
       </div>
       {/* 平台不自动对外报送，报送与否由合规官判断——这句提示原样来自服务端 */}
       {note && <p className="muted">{note}</p>}
+    </div>
+  );
+}
+
+/** TEAM-031 团队企业信息核验（76 号 spec）。
+ *
+ * 探针：团队提交营业执照后状态是 `pending`，而**全仓没有任何端点**
+ * 能把它改成 `verified`——唯一那么写的地方是一条直接写库的测试。
+ * 于是没有团队能开票，也没有人能核过任何一个团队。
+ */
+function TeamVerifyQueue() {
+  const { client } = useApp();
+  const [rows, setRows] = useState<PendingTeamRow[]>([]);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setRows(await client.pendingTeams().catch(() => []));
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+
+  async function decide(teamId: number, approve: boolean) {
+    setError('');
+    try {
+      // 驳回理由是强制的，而且会被送到 owner 面前：
+      // 收不到理由，他只会把同一份材料再提交一遍
+      const reason = approve ? '' : (prompt('驳回理由（会发给团队负责人）：') ?? '');
+      if (!approve && !reason.trim()) return;
+      await client.verifyTeam(teamId, approve, reason);
+      await load();
+    } catch (err) { setError(apiErrorText(err)); }
+  }
+
+  if (rows.length === 0) return null;
+  return (
+    <div className="card">
+      <h3>团队企业信息待核验（{rows.length}）</h3>
+      {error && <p className="error">{error}</p>}
+      <div className="list" style={{ marginTop: 8 }}>
+        {rows.map((t) => (
+          <div className="task-item" key={t.team_id} data-testid={`team-verify-${t.team_id}`}>
+            <div>
+              <strong>{t.company_name || t.name}</strong> · 税号 {t.tax_number || '未填'}
+              <p className="muted">
+                团队「{t.name}」 · 负责人 {t.owner_nickname}#{t.owner_id}
+                {' · '}
+                {/* 执照影像走鉴权端点，不是匿名能力 URL */}
+                {t.license_urls.map((u, i) => (
+                  <a key={u} href={u} target="_blank" rel="noreferrer">执照{i + 1} </a>
+                ))}
+              </p>
+            </div>
+            <span className="row">
+              <button onClick={() => decide(t.team_id, true)}>核验通过</button>
+              <button className="danger" onClick={() => decide(t.team_id, false)}>驳回</button>
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="muted">核验通过后该团队才能开具发票（未核验抬头的发票是税务风险，不是便利）。</p>
+    </div>
+  );
+}
+
+/** CERT-030 受限类目资质核验。V76 把「自己填」改成了「核过才算」，
+ *  而核的那个人此前没有界面——于是受限类目的单谁都接不了。 */
+function CertificationQueue() {
+  const { client } = useApp();
+  const [rows, setRows] = useState<PendingCertificationRow[]>([]);
+  const [approved, setApproved] = useState<PendingCertificationRow[]>([]);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setRows(await client.pendingCertifications().catch(() => []));
+    setApproved(await client.adminCertifications('approved').catch(() => []));
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+
+  async function decide(id: number, approve: boolean) {
+    setError('');
+    try {
+      const reason = approve ? '' : (prompt('驳回理由（会发给申请人）：') ?? '');
+      if (!approve && !reason.trim()) return;
+      await client.decideCertification(id, approve, reason);
+      await load();
+    } catch (err) { setError(apiErrorText(err)); }
+  }
+
+  async function revoke(id: number) {
+    setError('');
+    try {
+      // 撤销的理由同样会发给持证人：他要知道自己为什么不能再接这类单
+      const reason = prompt('撤销理由（会发给持证人）：') ?? '';
+      if (!reason.trim()) return;
+      await client.revokeCertification(id, reason);
+      await load();
+    } catch (err) { setError(apiErrorText(err)); }
+  }
+
+  if (rows.length === 0 && approved.length === 0) return null;
+  return (
+    <div className="card">
+      <h3>受限类目资质待核验（{rows.length}）</h3>
+      {error && <p className="error">{error}</p>}
+      <div className="list" style={{ marginTop: 8 }}>
+        {rows.map((r) => (
+          <div className="task-item" key={r.id} data-testid={`cert-${r.id}`}>
+            <div>
+              <strong>{r.name}</strong> · 证号 {r.cert_number} · 发证 {r.issuer || '未填'}
+              <p className="muted">
+                持证人 {r.holder_name} / 实名 {r.real_name}{' '}
+                {/* 姓名是否一致由服务端算好，客户端不重算 */}
+                {r.name_matches
+                  ? <span className="badge ok">姓名一致</span>
+                  : <span className="badge bad">姓名不一致</span>}
+                {r.expires_at && ` · 有效期至 ${formatDateTime(r.expires_at)}`}
+                {' · '}
+                {r.image_urls.map((u, i) => (
+                  <a key={u} href={u} target="_blank" rel="noreferrer">证件{i + 1} </a>
+                ))}
+              </p>
+            </div>
+            <span className="row">
+              <button onClick={() => decide(r.id, true)}>通过</button>
+              <button className="danger" onClick={() => decide(r.id, false)}>驳回</button>
+            </span>
+          </div>
+        ))}
+      </div>
+      {approved.length > 0 && (
+        <>
+          <h4 style={{ marginTop: 12 }}>已核准（{approved.length}）</h4>
+          <div className="list">
+            {approved.map((r) => (
+              <div className="task-item" key={r.id} data-testid={`cert-approved-${r.id}`}>
+                <div>
+                  <strong>{r.name}</strong> · {r.holder_name} · 证号 {r.cert_number}
+                  <p className="muted">
+                    {r.expires_at ? `有效期至 ${formatDateTime(r.expires_at)}` : '未填有效期'}
+                  </p>
+                </div>
+                {/* 证件过期、造假或被投诉复核不通过时撤销——
+                    撤不下来，持证人会继续接受限类目的单 */}
+                <button className="danger" onClick={() => revoke(r.id)}>撤销</button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** UMOD-030 机审拿不准的图片。V62 把「这张图是谁传的」落了库，
+ *  理由是「归属落库后处置才成为可能」——处置的界面就是这里。 */
+function UploadQueue() {
+  const { client } = useApp();
+  const [rows, setRows] = useState<PendingUploadRow[]>([]);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setRows(await client.pendingUploads().catch(() => []));
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+
+  async function resolve(name: string, action: 'pass' | 'reject') {
+    setError('');
+    try {
+      const reason = action === 'reject' ? (prompt('移除原因（会记入审计）：') ?? '') : '';
+      await client.resolveUpload(name, action, reason);
+      await load();
+    } catch (err) { setError(apiErrorText(err)); }
+  }
+
+  if (rows.length === 0) return null;
+  return (
+    <div className="card">
+      <h3>图片待人审（{rows.length}）</h3>
+      {error && <p className="error">{error}</p>}
+      <div className="list" style={{ marginTop: 8 }}>
+        {rows.map((r) => (
+          <div className="task-item" key={r.name} data-testid={`upload-${r.name}`}>
+            <div>
+              <strong>{r.name}</strong> · 上传者 #{r.owner_id}
+              <p className="muted">
+                机审标签：{r.labels.length ? r.labels.join('、') : '无'} · {r.content_type}
+              </p>
+            </div>
+            <span className="row">
+              <button className="ghost" onClick={() => resolve(r.name, 'pass')}>通过</button>
+              <button className="danger" onClick={() => resolve(r.name, 'reject')}>移除</button>
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="muted">移除会物理删除文件并通知上传者——悄悄删掉、让页面变成裂图是最差的处理。</p>
+    </div>
+  );
+}
+
+/** CS-030 工单队列。SUPPORT_SLA_HOURS 定了多久要回，而回的那个人此前没有界面。 */
+function TicketQueue() {
+  const { client } = useApp();
+  const [rows, setRows] = useState<AdminTicketRow[]>([]);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setRows(await client.adminTickets().catch(() => []));
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+
+  async function reply(id: number) {
+    setError('');
+    try {
+      const text = prompt('回复内容（会作为站内信发给提单人）：') ?? '';
+      if (!text.trim()) return;
+      await client.resolveTicket(id, text);
+      await load();
+    } catch (err) { setError(apiErrorText(err)); }
+  }
+
+  if (rows.length === 0) return null;
+  return (
+    <div className="card">
+      <h3>待处理工单（{rows.length}）</h3>
+      {error && <p className="error">{error}</p>}
+      <div className="list" style={{ marginTop: 8 }}>
+        {rows.map((t) => (
+          <div className="task-item" key={t.id} data-testid={`ticket-${t.id}`}>
+            <div>
+              <strong>{t.subject}</strong> · 用户 #{t.user_id}
+              <p className="muted">{t.body} · {formatDateTime(t.created_at)}</p>
+            </div>
+            <button onClick={() => reply(t.id)}>回复并结单</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** SECEV-030 安全看板与 IP 解封。误封一个公司的出口 IP，
+ *  整栋楼的人都进不来——那条补救路径 V56 就建好了，入口在这里。 */
+function SecurityBoard() {
+  const { client } = useApp();
+  const [board, setBoard] = useState<SecurityBoardView | null>(null);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    const b = await client.adminSecurity().catch(() => null);
+    // 一个 section 的载荷不对，不该把整个后台页面白屏掉：
+    // `.catch()` 只挡住了请求失败，挡不住「返回了别的形状」。
+    setBoard(b && Array.isArray(b.banned) && Array.isArray(b.watching) ? b : null);
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+
+  async function unban(ip: string) {
+    setError('');
+    try {
+      await client.unbanIp(ip);
+      await load();
+    } catch (err) { setError(apiErrorText(err)); }
+  }
+
+  if (!board) return null;
+  return (
+    <div className="card">
+      <h3>安全看板</h3>
+      {error && <p className="error">{error}</p>}
+      <div className="row" style={{ gap: 28, marginTop: 10, flexWrap: 'wrap' }}>
+        <Stat label="当前封禁 IP" value={String(board.banned.length)} />
+        <Stat label="观察名单" value={String(board.watching.length)} />
+        <Stat label="窗口内触发人机验证" value={String(board.captcha_required_in_window)} />
+        {/* 阈值来自服务端配置，不在界面上写死 */}
+        <Stat label="封禁阈值 / 时长" value={`${board.threshold} 次 / ${board.ban_seconds}s`} />
+      </div>
+      {board.banned.length > 0 && (
+        <table style={{ marginTop: 8 }}>
+          <thead><tr><th>IP</th><th>剩余</th><th>原因</th><th></th></tr></thead>
+          <tbody>
+            {board.banned.map((b) => (
+              <tr key={b.ip}>
+                <td>{b.ip}</td><td>{b.seconds_left}s</td><td>{b.reason}</td>
+                <td>
+                  <button className="ghost" style={{ padding: '2px 8px' }}
+                          onClick={() => unban(b.ip)}>解封</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+/** GEO-030 城市与类目开通。线下任务只能发在已开通城市——
+ *  没有这个界面，开城只能改库。 */
+function CityAndCategory() {
+  const { client } = useApp();
+  const [cities, setCities] = useState<Array<{ id: number; name: string }>>([]);
+  const [cats, setCats] = useState<Array<{ id: number; name: string; required_cert: string }>>([]);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setCities(await client.cities().catch(() => []));
+    setCats(await client.categories().catch(() => []));
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+
+  async function act(fn: () => Promise<unknown>) {
+    setError('');
+    try { await fn(); await load(); } catch (err) { setError(apiErrorText(err)); }
+  }
+
+  return (
+    <div className="card">
+      <h3>城市与类目</h3>
+      {error && <p className="error">{error}</p>}
+      <div className="row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+        <button className="ghost" onClick={() => {
+          const name = prompt('新开通城市名：') ?? '';
+          if (name.trim()) void act(() => client.createCity(name.trim()));
+        }}>开通城市</button>
+        <button className="ghost" onClick={() => {
+          const name = prompt('新类目名：') ?? '';
+          if (!name.trim()) return;
+          const cert = prompt('需要的资质（留空表示不限）：') ?? '';
+          void act(() => client.createCategory(name.trim(), cert.trim()));
+        }}>新增类目</button>
+      </div>
+      <p className="muted" style={{ marginTop: 8 }}>
+        已开通城市（{cities.length}）：{cities.map((c) => c.name).join('、') || '无'}
+      </p>
+      <table style={{ marginTop: 8 }}>
+        <thead><tr><th>类目</th><th>需要资质</th><th></th></tr></thead>
+        <tbody>
+          {cats.map((c) => (
+            <tr key={c.id}>
+              <td>{c.name}</td>
+              <td>{c.required_cert || '不限'}</td>
+              <td>
+                <button className="ghost" style={{ padding: '2px 8px' }}
+                        onClick={() => void act(() => client.updateCategory(c.id, { active: false }))}>停用</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

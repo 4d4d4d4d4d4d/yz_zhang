@@ -178,6 +178,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   not_approved: '该申请尚未批准或已执行',
   not_cancellable: '待验收阶段不可单方取消，请验收或发起纠纷',
   not_changeable: '当前状态不可变更',
+  not_pending: '该团队没有待核验的企业信息',
   not_circle_member: '需加入圈层后查看',
   not_claimable: '该核验单已被接走或已结束',
   not_claimed: '核验单不在处理中',

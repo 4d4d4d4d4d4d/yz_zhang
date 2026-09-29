@@ -859,6 +859,69 @@ export interface SpendRequestView {
   can_decide: boolean;
 }
 
+/** TEAM-031 待核验的团队企业信息（76 号 spec）。
+ *
+ * `license_urls` 是**鉴权**端点，不是匿名能力 URL——营业执照是企业敏感材料。 */
+export interface PendingTeamRow {
+  team_id: number;
+  name: string;
+  owner_id: number;
+  owner_nickname: string;
+  company_name: string;
+  tax_number: string;
+  license_urls: string[];
+  created_at: string;
+}
+
+/** CERT-030 待核验的受限类目资质申请。
+ *
+ * `name_matches` 是服务端算好的「证件姓名 vs 实名是否一致」——
+ * 客户端不重算（第二份实现必然抄漏）。 */
+export interface PendingCertificationRow {
+  id: number;
+  user_id: number;
+  name: string;
+  holder_name: string;
+  cert_number: string;
+  issuer: string;
+  expires_at: string | null;
+  image_urls: string[];
+  real_name: string;
+  name_matches: boolean;
+  status: string;
+  created_at: string;
+}
+
+/** UMOD-030 机审拿不准的图片。 */
+export interface PendingUploadRow {
+  name: string;
+  url: string;
+  owner_id: number;
+  labels: string[];
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+
+/** CS-030 工单队列里的一条。 */
+export interface AdminTicketRow {
+  id: number;
+  user_id: number;
+  subject: string;
+  body: string;
+  created_at: string;
+}
+
+/** SECEV-030 安全看板。读 DB，所以任何副本看到的都一样。 */
+export interface SecurityBoardView {
+  banned: Array<{ ip: string; seconds_left: number; reason: string }>;
+  watching: Array<{ ip: string; recent_failures: number }>;
+  captcha_required_in_window: number;
+  threshold: number;
+  captcha_after: number;
+  ban_seconds: number;
+}
+
 export interface ApiKeyView {
   id: number;
   name: string;

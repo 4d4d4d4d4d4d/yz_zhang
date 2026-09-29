@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V100 全批次完成（2026-09-28）。
-> 后端 1048 tests + 前端 133 tests（core 56 + web 59 + App 18）全绿；
+> 状态：MVP + V1~V101 全批次完成（2026-09-28）。
+> 后端 1094 tests + 前端 141 tests（core 56 + web 67 + App 18）全绿；
 > **现状一页看清：[72-status-ledger.md](72-status-ledger.md)**（这份矩阵的缺口也在那里记着）；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
@@ -10,6 +10,27 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V101 批次：没有人能核过它）
+
+> 模块 spec：[76-nobody-can-approve-it.md](76-nobody-can-approve-it.md)
+>
+> ```
+> POST /teams/2/company      → 200  verify_status = pending
+> POST /admin/teams/2/verify → 404      ← 没有人能核过一个团队
+> 服务端 /admin 端点 40 条，管理后台实际调用 15 个
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **TEAM-031 团队企业核验**（此前**端点不存在**） | 全仓唯一把 `verify_status` 写成 `verified` 的地方是一条**直接写库的测试**——它绿了很久，而生产里 `can_invoice()` 永远返回那句拦截语：没有团队能开票，也没有人能核过任何一个团队。**测试自己把状态改了，所以没有人发现没有人能改它。** 补 `GET /admin/teams/pending`（执照影像走鉴权 URL）与 `POST /admin/teams/{id}/verify`（驳回强制写理由并送到 owner、留审计） | `tests/test_admin_review_queues.py::test_team031_*`（6 条；端点改名即 8 条红）、`tests/test_team_accounts.py::test_team030_unverified_team_cannot_invoice`（改为全程走 HTTP） |
+| **CERT-030/031 资质核验与撤销** | V76 把「自己填」改成「核过才算」，而核的那个人没有界面——受限类目的单谁都接不了。接上待核验队列与通过/驳回；**撤销**的对象是已核准的资质，而后台此前只看得到待核验的，于是那个端点没有任何入口——一张已经核过的假证件撤不下来，持证人会继续接单。补 `GET /admin/certifications?status=` 并把「待核验/已核准」两张列表用**同一份行渲染实现** | `::test_cert030_*`、`::test_cert031_approved_certifications_can_be_listed_and_revoked`、`web/src/AdminReviewQueues.test.tsx` |
+| **UMOD-030 图片人审出口** | V62 把「这张图是谁传的」落了库，理由是「归属落库后处置才成为可能」——处置的界面就是这一批。移除会物理删文件**并通知上传者**（悄悄删掉、让页面变裂图是最差的处理） | `::test_umod030_flagged_upload_can_be_resolved_and_the_owner_is_told` |
+| **CS-030 工单出口** | `SUPPORT_SLA_HOURS` 定了多久要回，而回的那个人没有界面 | `::test_cs030_ticket_can_be_answered_from_the_console` |
+| **SECEV-030 IP 解封入口** | 误封一个公司的出口 IP，整栋楼的人都进不来；补救路径 V56 就建好了，入口这一批才有。看板里的阈值/时长**取自服务端配置**，界面不写死 | `::test_secev030_banned_ip_can_be_unbanned_from_the_console`（用真实机制打进封禁，不是往表里插一行） |
+| **CLI-080 运营面纳入覆盖闸门** | V82 的覆盖闸门第一行就把 `/admin` 整体排除了——那句注释回答的是「要不要放进用户 SDK」，被当成了「要不要有人接」。于是四十条运营端点退出了任何覆盖检查，V96/V98 靠人工清点捞回几条，而人工清点捞不到「端点压根不存在」。新闸门：每条 `/admin` 要么后台真的调（组件必须挂上），要么豁免表写理由；**理由不许是「还没做」**（那是欠账，归 72 号台账）；豁免与服务端双向对齐 | `tests/test_admin_surface_coverage.py`（33 项；闸门一上来就抓到我自己漏登记的 `certifications/{x}/revoke` 与两条「同上」式偷懒理由） |
+| **ADMIN-070 审计 target 必须是整数** | `record_audit(..., str(application_id), ...)` 四处：`AdminAudit.target_id` 是 `Integer`，SQLite 默默接受、**Postgres 会拒绝这条 INSERT**，而它们都在处置动作的写入点上——生产上处置会连带失败。AST 闸门（正则读不懂调用结构） | `::test_admin070_audit_target_id_is_never_a_string`、`::test_cert030_audit_target_is_the_application_id` |
+| **一个 section 的载荷不对，不该把整页白屏** | 安全看板拿到非预期形状时 `board.banned.length` 直接抛错，**整个管理后台白屏**——`.catch()` 只挡住请求失败，挡不住「返回了别的形状」。加形状校验后再渲染 | 既有 13 个 web 测试文件（未加校验时 14 条红） |
 
 ## 已实现（V100 批次：没有人会被提醒第二次）
 

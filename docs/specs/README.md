@@ -98,6 +98,7 @@
 | 73 | 盲封与查不到的那笔钱（运营侧监督四条） | [73-admin-oversight.md](./73-admin-oversight.md) | P0 |
 | 74 | 一个人不能把不可逆的钱决定做完（四眼原则） | [74-four-eyes.md](./74-four-eyes.md) | P0 |
 | 75 | 没有人会被提醒第二次（催办 / 临期 / 预警 / 超时兜底） | [75-nobody-is-reminded-twice.md](./75-nobody-is-reminded-twice.md) | P0 |
+| 76 | 没有人能核过它（运营侧人审队列的出口与覆盖闸门） | [76-nobody-can-approve-it.md](./76-nobody-can-approve-it.md) | P0 |
 
 ## 功能点编号与优先级约定
 

@@ -58,6 +58,11 @@ import type {
   WithdrawRequestRow,
   SuspiciousActivityRow,
   BanImpactView,
+  PendingTeamRow,
+  PendingCertificationRow,
+  PendingUploadRow,
+  AdminTicketRow,
+  SecurityBoardView,
   AdminAuditRow,
   PlatformFinanceView,
 } from './types';
@@ -891,6 +896,95 @@ export class PlatformClient {
   }
   unbanUser(userId: number) {
     return this.request<{ id: number; is_banned: boolean }>('POST', `/admin/users/${userId}/unban`);
+  }
+
+  // ---- 运营侧的人审队列（76 号 spec）----
+  //
+  // 这一组以前**没有一条在 SDK 里**：服务端的队列是通的，而后台没有界面，
+  // 于是「提交 → 等人看」的第二步永远不发生。团队企业核验更彻底——
+  // 那两条端点此前压根不存在。
+  /** TEAM-031 待核验的团队企业信息（执照影像是鉴权 URL，不是能力 URL）。 */
+  pendingTeams(limit = 50) {
+    return this.request<PendingTeamRow[]>('GET', `/admin/teams/pending?limit=${limit}`);
+  }
+  /** TEAM-031 核过或驳回。驳回必须写理由——它会被送到 owner 面前。 */
+  verifyTeam(teamId: number, approve: boolean, reason = '') {
+    return this.request<{ team_id: number; verify_status: string; verify_reason: string }>(
+      'POST', `/admin/teams/${teamId}/verify`, { approve, reason },
+    );
+  }
+  /** CERT-030 待核验的受限类目资质申请。 */
+  pendingCertifications(limit = 50) {
+    return this.request<PendingCertificationRow[]>('GET', `/admin/certifications/pending?limit=${limit}`);
+  }
+  /** CERT-031 按状态列资质。撤销的对象是**已核准**的那些——
+   *  一张已经核过的假证件撤不下来，持证人会继续接受限类目的单。 */
+  adminCertifications(status: 'pending' | 'approved' | 'rejected' | 'revoked' = 'approved', limit = 50) {
+    return this.request<PendingCertificationRow[]>(
+      'GET', `/admin/certifications?status=${status}&limit=${limit}`,
+    );
+  }
+  decideCertification(applicationId: number, approve: boolean, reason = '') {
+    return this.request<{ id: number; status: string }>(
+      'POST', `/admin/certifications/${applicationId}/decide`, { approve, reason },
+    );
+  }
+  revokeCertification(applicationId: number, reason: string) {
+    return this.request<{ id: number; status: string }>(
+      'POST', `/admin/certifications/${applicationId}/revoke`, { approve: false, reason },
+    );
+  }
+  /** UMOD-030 机审拿不准的图片队列。 */
+  pendingUploads(limit = 50) {
+    return this.request<PendingUploadRow[]>('GET', `/admin/uploads/pending?limit=${limit}`);
+  }
+  /** UMOD-030 处置：通过，或删除并**告知上传者**（悄悄删掉是最差的处理）。 */
+  resolveUpload(name: string, action: 'pass' | 'reject', reason = '') {
+    return this.request<{ name: string; moderation_status: string; file_removed?: boolean }>(
+      'POST', `/admin/uploads/${encodeURIComponent(name)}/resolve`, { action, reason },
+    );
+  }
+  /** CS-030 工单队列。用户的求助在这里，不回就是 SLA 是摆设。 */
+  adminTickets(status = 'open') {
+    return this.request<AdminTicketRow[]>('GET', `/admin/tickets?status=${status}`);
+  }
+  resolveTicket(ticketId: number, reply: string) {
+    return this.request<{ id: number; status: string }>(
+      'POST', `/admin/tickets/${ticketId}/resolve`, { reply },
+    );
+  }
+  /** SECEV-030 被封的 IP（误封公司出口 IP 时的补救入口）。 */
+  adminSecurity() {
+    return this.request<SecurityBoardView>('GET', '/admin/security');
+  }
+  unbanIp(ip: string) {
+    return this.request<{ ip: string; banned: boolean }>('POST', '/admin/security/unban', { ip });
+  }
+  /** GEO-030 线下任务只能发在已开通城市——没有这两条，城市开通只能改库。 */
+  createCity(name: string) {
+    // 服务端把 `active` 一起返回了——声明里漏掉它就是 V89 那一类漂移
+    return this.request<{ id: number; name: string; active: boolean }>(
+      'POST', '/admin/cities', { name },
+    );
+  }
+  updateCity(cityId: number, active: boolean) {
+    return this.request<{ id: number; name: string; active: boolean }>(
+      'PATCH', `/admin/cities/${cityId}?active=${active}`,
+    );
+  }
+  createCategory(name: string, requiredCert = '') {
+    return this.request<{ id: number; name: string }>('POST', '/admin/categories', {
+      name, required_cert: requiredCert,
+    });
+  }
+  updateCategory(categoryId: number, params: { active?: boolean; required_cert?: string } = {}) {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v !== undefined)
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+      .join('&');
+    return this.request<{ id: number; name: string; active: boolean; required_cert: string }>(
+      'PATCH', `/admin/categories/${categoryId}${qs ? `?${qs}` : ''}`,
+    );
   }
 
   // ---- ACC-003 第三方登录 ----

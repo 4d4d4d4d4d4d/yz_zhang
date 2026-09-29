@@ -320,19 +320,32 @@ def test_members_only_see_their_own_spend_history(client):
 
 # ----------------------------------------------------------- TEAM-030 发票
 def test_team030_unverified_team_cannot_invoice(client):
-    """**一张开给未核验抬头的发票，是税务风险不是便利。**"""
+    """**一张开给未核验抬头的发票，是税务风险不是便利。**
+
+    这条测试原来是**直接写库**把状态改成 `verified` 的，于是它绿了很久，
+    而生产里没有任何端点能做这件事（V101 的探针：`/admin/teams/{id}/verify`
+    返回 404）——**测试自己把状态改了，所以没有人发现没有人能改它**。
+    现在整条路都走 HTTP。
+    """
+    from tests.conftest import make_admin
+
     owner = make_user(client, "13300000050", "老板")
     team_id = make_team(client, owner)
     info = client.get(f"/api/v1/teams/{team_id}", headers=auth(owner)).json()
     assert info["invoice_block"], "未核验就允许开票"
 
-    from app.modules.team.models import Team
+    client.post(f"/api/v1/teams/{team_id}/company",
+                json={"company_name": "某某科技有限公司",
+                      "tax_number": "91310000MA1K00000X",
+                      "license_images": ["lic-50.png"]}, headers=auth(owner))
+    admin = make_admin(client, "13300000059")
+    r = client.post(f"/api/v1/admin/teams/{team_id}/verify",
+                    json={"approve": True, "reason": ""}, headers=auth(admin))
+    assert r.status_code == 200, r.text
 
     with SessionLocal() as db:
-        t = db.get(Team, team_id)
-        t.company_name, t.tax_number = "某某科技有限公司", "91310000MA1K00000X"
-        t.verify_status = "verified"
-        db.commit()
+        from app.modules.team.models import Team
+
         assert team_service.can_invoice(db.get(Team, team_id)) == ""
 
 

@@ -568,32 +568,58 @@ class CertVerdictIn(BaseModel):
     reason: str = ""
 
 
+def _cert_row(db: Session, r) -> dict:
+    """一条资质申请在运营侧长什么样。
+
+    只有这一份实现：待核验列表与已核准列表用的是同一个（第二份实现必然抄漏）。
+    """
+    applicant = db.get(User, r.user_id)
+    return {
+        "id": r.id, "user_id": r.user_id, "name": r.name,
+        "holder_name": r.holder_name, "cert_number": r.cert_number,
+        "issuer": r.issuer,
+        "expires_at": iso(r.expires_at),
+        # CERT-010 证件影像走**鉴权**端点，不是匿名能力 URL
+        "image_urls": [f"/api/v1/files/{n}/secure" for n in (r.images or [])],
+        # 审核员要能一眼看到「证件姓名 vs 实名」是否一致
+        "real_name": applicant.real_name if applicant else "",
+        "name_matches": bool(applicant and r.holder_name == applicant.real_name),
+        "status": r.status,
+        "created_at": iso(r.created_at),
+    }
+
+
+def _certifications(db: Session, status: str, limit: int) -> list[dict]:
+    from app.modules.account.models_cert import CertificationApplication
+
+    rows = (db.query(CertificationApplication)
+            .filter(CertificationApplication.status == status)
+            .order_by(CertificationApplication.created_at).limit(limit).all())
+    return [_cert_row(db, r) for r in rows]
+
+
 @router.get("/admin/certifications/pending")
 def pending_certifications(
     limit: int = Query(50, ge=1, le=200),
     _: User = Depends(require_admin), db: Session = Depends(get_db),
 ):
-    from app.modules.account.models_cert import CertificationApplication
+    return _certifications(db, "pending", limit)
 
-    rows = (db.query(CertificationApplication)
-            .filter(CertificationApplication.status == "pending")
-            .order_by(CertificationApplication.created_at).limit(limit).all())
-    out = []
-    for r in rows:
-        applicant = db.get(User, r.user_id)
-        out.append({
-            "id": r.id, "user_id": r.user_id, "name": r.name,
-            "holder_name": r.holder_name, "cert_number": r.cert_number,
-            "issuer": r.issuer,
-            "expires_at": iso(r.expires_at),
-            # CERT-010 证件影像走**鉴权**端点，不是匿名能力 URL
-            "image_urls": [f"/api/v1/files/{n}/secure" for n in (r.images or [])],
-            # 审核员要能一眼看到「证件姓名 vs 实名」是否一致
-            "real_name": applicant.real_name if applicant else "",
-            "name_matches": bool(applicant and r.holder_name == applicant.real_name),
-            "created_at": iso(r.created_at),
-        })
-    return out
+
+@router.get("/admin/certifications")
+def list_certifications(
+    status: str = Query("approved", pattern="^(pending|approved|rejected|revoked)$"),
+    limit: int = Query(50, ge=1, le=200),
+    _: User = Depends(require_admin), db: Session = Depends(get_db),
+):
+    """CERT-031 按状态列资质（76 号 spec）。
+
+    撤销（`revoke`）的对象是**已核准**的资质：证件过期、被发现造假、
+    或被投诉后复核不通过。此前后台只能看到待核验的那些，
+    于是「撤销」这个端点没有任何入口——一张已经核过的假证件撤不下来，
+    持证人会继续接受限类目的单。
+    """
+    return _certifications(db, status, limit)
 
 
 @router.post("/admin/certifications/{application_id}/decide")
@@ -609,7 +635,7 @@ def decide_certification(
         raise not_found("资质申请不存在")
     row = cert_service.decide(db, row, admin, body.approve, body.reason)
     record_audit(db, admin.id, "certification_decide", "certification",
-                 str(application_id), f"{'通过' if body.approve else '驳回'}：{body.reason}")
+                 application_id, f"{'通过' if body.approve else '驳回'}：{body.reason}")
     return {"id": row.id, "status": row.status}
 
 
@@ -626,5 +652,84 @@ def revoke_certification(
         raise not_found("资质申请不存在")
     row = cert_service.revoke(db, row, admin, body.reason or "平台撤销")
     record_audit(db, admin.id, "certification_revoke", "certification",
-                 str(application_id), body.reason)
+                 application_id, body.reason)
     return {"id": row.id, "status": row.status}
+
+
+# ---------- TEAM-031 团队企业信息核验（76 号 spec） ----------
+#
+# 探针：团队提交营业执照后 `verify_status = "pending"`，而**全仓没有任何端点**
+# 能把它改成 `verified`——唯一那么写的地方是一条直接写库的测试。
+# 于是 `can_invoice()` 在生产里永远返回那句拦截语：没有团队能开票，
+# 也没有人能核过任何一个团队。**测试自己把状态改了，所以没有人发现
+# 没有人能改它。**
+class TeamVerifyIn(BaseModel):
+    approve: bool
+    reason: str = ""
+
+
+@router.get("/admin/teams/pending")
+def pending_teams(
+    limit: int = Query(50, ge=1, le=200),
+    _: User = Depends(require_admin), db: Session = Depends(get_db),
+):
+    """待核验的团队企业信息。
+
+    执照影像走**鉴权**端点（`/files/{name}/secure`），不是匿名能力 URL——
+    营业执照是企业敏感材料，与 CERT-010 的证件影像同一条（37 号 spec：
+    上传文件的 URL 是能力，不是指纹）。
+    """
+    from app.modules.team.models import Team
+
+    rows = (db.query(Team).filter(Team.verify_status == "pending")
+            .order_by(Team.user_id).limit(limit).all())
+    out = []
+    for t in rows:
+        owner = db.get(User, t.owner_id)
+        images = [n for n in (t.license_images or "").split(",") if n]
+        out.append({
+            "team_id": t.user_id, "name": t.name, "owner_id": t.owner_id,
+            "owner_nickname": owner.nickname if owner else "",
+            "company_name": t.company_name, "tax_number": t.tax_number,
+            "license_urls": [f"/api/v1/files/{n}/secure" for n in images],
+            "created_at": iso(t.created_at),
+        })
+    return out
+
+
+@router.post("/admin/teams/{team_id}/verify")
+def verify_team(
+    team_id: int, body: TeamVerifyIn,
+    admin: User = Depends(require_admin), db: Session = Depends(get_db),
+):
+    """核过，或驳回**并写明要补什么**。
+
+    驳回理由是强制的，而且必须**送到 owner 面前**：收不到理由，他只会
+    把同一份材料再提交一遍（V92 那条「必须写」和「送到了」是两件事）。
+    """
+    from app.modules.notification.service import notify
+    from app.modules.team.models import Team
+
+    team = db.get(Team, team_id)
+    if not team:
+        raise not_found("团队不存在")
+    if team.verify_status != "pending":
+        raise bad_request("该团队没有待核验的企业信息", "not_pending")
+    if not body.approve and not body.reason.strip():
+        raise bad_request("驳回必须写明原因", "reason_required")
+
+    team.verify_status = "verified" if body.approve else "rejected"
+    team.verify_reason = body.reason
+    db.add(team)
+    if body.approve:
+        notify(db, team.owner_id, "system", "团队企业信息已核验通过",
+               f"「{team.name}」的企业信息已核验通过，现在可以开具发票。")
+    else:
+        notify(db, team.owner_id, "system", "团队企业信息未通过核验",
+               f"「{team.name}」的企业信息未通过核验：{body.reason}。"
+               f"请按说明补充材料后重新提交。")
+    # 它决定这个团队能不能开票——有后果的动作要留痕
+    record_audit(db, admin.id, "team_verify", "team", team_id,
+                 f"{'通过' if body.approve else '驳回'}：{body.reason}")
+    return {"team_id": team.user_id, "verify_status": team.verify_status,
+            "verify_reason": team.verify_reason}
