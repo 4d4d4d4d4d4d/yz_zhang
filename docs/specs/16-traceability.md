@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
 > 状态：MVP + V1~V102 全批次完成（2026-09-29）。
-> 后端 1117 tests + 前端 152 tests（core 56 + web 75 + App 21）全绿；
+> 后端 1124 tests + 前端 152 tests（core 56 + web 75 + App 21）全绿；
 > **现状一页看清：[72-status-ledger.md](72-status-ledger.md)**（这份矩阵的缺口也在那里记着）；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。

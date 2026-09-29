@@ -1,7 +1,7 @@
 # 交付总览（Final Delivery Overview）
 
 > 截至 2026-09-29：MVP + V1~V102 全批次完成。
-> 后端 **1117 tests** + 前端 **152 tests**（core 56 + web 75 + App 21）全绿。
+> 后端 **1124 tests** + 前端 **152 tests**（core 56 + web 75 + App 21）全绿。
 > 现状一页看清：[72-status-ledger.md](specs/72-status-ledger.md)；上线流程见 [GO-LIVE.md](GO-LIVE.md)。
 > 本文档是对 [docs/specs/](specs/README.md)（功能拆分）与
 > [16-traceability.md](specs/16-traceability.md)（逐条追溯）的收口汇总。
