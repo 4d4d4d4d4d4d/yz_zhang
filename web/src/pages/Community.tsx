@@ -1,4 +1,4 @@
-import { ApiError, apiErrorText, formatDateTime, type ContentItem } from '@platform/core';
+import { apiErrorText, formatDateTime, type ContentItem } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { BlogEditor } from '../BlogEditor';
 import { VideoFeed } from '../VideoFeed';

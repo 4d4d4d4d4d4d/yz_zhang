@@ -19,7 +19,7 @@
 import { Audio, ResizeMode, Video } from 'expo-av';
 import * as Network from 'expo-network';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo, ActivityIndicator, Dimensions, FlatList,
   StyleSheet, Text, TouchableOpacity, View,

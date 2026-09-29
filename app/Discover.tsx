@@ -21,7 +21,7 @@ import {
   Animated, Dimensions, Image, Platform,
   RefreshControl, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ContentItem, PlatformClient } from '@platform/core';
 import { cardMediaTranslate, heroTitleOpacity, heroTransform, useReduceMotion, useScrollDriver } from './motion';
 
@@ -49,12 +49,15 @@ export function DiscoverScreen({ client, baseUrl, onOpenAuthor }: {
   // ③ 只建一次，且只被 Animated.event 写（实现在 motion.tsx）
   const { scrollY, onScroll } = useScrollDriver();
 
-  const load = async () => {
+  // 用 useCallback 包住并进依赖，而不是写一条 eslint 豁免：
+  // 原写法的闭包捕获的是**首次渲染的 client**，换 token / 换 baseUrl 之后
+  // 这个 load 还在用旧的那个。
+  const load = useCallback(async () => {
     setRefreshing(true);
     try { setItems(await client.contentFeed('latest')); } catch { /* 列表留空 */ }
     finally { setRefreshing(false); }
-  };
-  useEffect(() => { void load(); }, []);
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
 
   // 顶部大图：向下拉时放大并下移（iOS 的经典弹性头），向上滚时以 0.5 倍速上移
   const headerTransform = heroTransform(scrollY, HEADER_H, reduceMotion, PARALLAX);

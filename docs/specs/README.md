@@ -103,6 +103,7 @@
 | 78 | 没有人盯的队列（SLA / 积压催办 / 队列分页） | [78-a-queue-nobody-watches.md](./78-a-queue-nobody-watches.md) | P0 |
 | 79 | 视差与科技感（web 运动层 / 禁区表 / 减弱动效） | [79-parallax-and-tech-feel.md](./79-parallax-and-tech-feel.md) | P1 |
 | 80 | 里面那一层也要对上（嵌套类型 / 变量请求体） | [80-nested-shapes-and-variable-bodies.md](./80-nested-shapes-and-variable-bodies.md) | P0 |
+| 81 | 有人在跑的 lint（规则选择 / 豁免必须真有规则 / CI 缓存） | [81-lint-that-someone-runs.md](./81-lint-that-someone-runs.md) | P1 |
 
 ## 功能点编号与优先级约定
 

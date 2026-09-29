@@ -1,4 +1,4 @@
-import { ApiError, apiErrorText, fmtYuan, formatDate, formatDateTime, ledgerKindLabel, type InvoiceRow, type LedgerRow, type PayoutAccountView, type TaxSummary, type Wallet } from '@platform/core';
+import { apiErrorText, fmtYuan, formatDate, formatDateTime, ledgerKindLabel, type InvoiceRow, type LedgerRow, type PayoutAccountView, type TaxSummary, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 

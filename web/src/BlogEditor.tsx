@@ -6,8 +6,8 @@
 // 预览走 `<Markdown>`，它把 Markdown 解析成 React 元素而**不是 HTML 字符串**：
 // 博客正文是别人写的、所有人都会看，转 HTML 塞进 DOM 就是一个现成的
 // 存储型 XSS。
-import { ApiError, apiErrorText, type PlatformClient } from '@platform/core';
-import { useEffect, useState } from 'react';
+import { apiErrorText, type PlatformClient } from '@platform/core';
+import { useCallback, useEffect, useState } from 'react';
 import { Markdown } from './Markdown';
 import PhotoPicker from './PhotoPicker';
 
@@ -32,10 +32,11 @@ export function BlogEditor({ client, onPublished }: {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const loadDrafts = async () => {
+  // 同 Discover：进依赖而不是写豁免，否则闭包里的 client 永远是第一次那个
+  const loadDrafts = useCallback(async () => {
     try { setDrafts(await client.myDrafts()); } catch { /* 未登录等，草稿箱留空 */ }
-  };
-  useEffect(() => { void loadDrafts(); }, []);
+  }, [client]);
+  useEffect(() => { void loadDrafts(); }, [loadDrafts]);
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true); setError('');

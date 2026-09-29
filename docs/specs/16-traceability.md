@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V105 全批次完成（2026-09-29）。
-> 后端 1158 tests + 前端 161 tests（core 56 + web 84 + App 21）全绿；
+> 状态：MVP + V1~V106 全批次完成（2026-09-29）。
+> 后端 1164 tests + 前端 161 tests（core 56 + web 84 + App 21）全绿，全仓 lint 干净；
 > **现状一页看清：[72-status-ledger.md](72-status-ledger.md)**（这份矩阵的缺口也在那里记着）；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
@@ -10,6 +10,30 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V106 批次：有人在跑的 lint）
+
+> 模块 spec：[81-lint-that-someone-runs.md](81-lint-that-someone-runs.md)
+>
+> ```
+> package.json      scripts: ['test', 'dev:web', 'build:web']
+> web/package.json  scripts: ['dev', 'build', 'preview', 'test']
+> app/package.json  scripts: ['start', 'android', 'ios', 'typecheck', 'test']
+> → 没有配置、没有依赖、没有脚本：全仓一处 lint 都没有
+>
+> web/src/pages/Square.tsx:34
+>   // eslint-disable-next-line react-hooks/exhaustive-deps
+> → 一条为**不存在的检查**写下的豁免注释
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **APPB-052b 全仓接上 lint** | 台账写的是「App 没有 lint」，查下来说轻了——**全仓一处都没有**（我自己排期时写的「web 有 eslint 而 app 没有」也是错的）。规则只开会红在真问题上的那些：hook 规则、未用变量、`eqeqeq`、空 catch。**一个满口风格警告的 lint 会被人用 `--quiet` 绕过，那比没有更糟——它让人以为有人在看** | `tests/test_lint_gate.py`（6 条） |
+| **那条为不存在的检查写的豁免** | 这一路反复出现的是「写下来的承诺没人核对」（V96/V99/V101/V103 四次）。这一条是它的**反面**：豁免了一个没有人在检查的东西，而它更隐蔽——前者让人以为「有人做了」，后者让人以为「有人看过并决定放过」 | `::test_appb052_every_disable_comment_names_a_configured_rule`（把它改成一条配置里没有的规则即红） |
+| **第一次跑出来的 21 条** | 三类：①我的配置的错（`babel.config.js` 等是 Node CommonJS，给它们单独一块而**不是把规则关掉**——关掉会连产品代码一起放过）；②7 处死导入（6 个页面与 BlogEditor 的 `ApiError`、VideoFeed 的 `useCallback`）；③**两处漏依赖**——`Discover` 的 `load` 与 `BlogEditor` 的 `loadDrafts` 闭包捕获的是首次渲染的 `client`，换 token / 换 baseUrl 之后还在用旧的那个。用 `useCallback` 进依赖修，**不是再加一条豁免** | 三个客户端测试套件 + `npm run lint` exit 0 |
+| **APPB-050 App job 开缓存** | `app-typecheck` 的 `setup-node` 此前**没开 npm 缓存**，1139 个包每次重新下载。缓存键跟着 app 自己的 lockfile（它不在根 workspaces 里）。lint **不在这个 job 里跑**：lint 是纯静态的、不需要 react-native 在位，而这个 job 每多一个依赖都要多下一次 | `::test_appb052_ci_lints_every_client_source_tree` |
+| **闸门的判据改过一次** | 第一版断言「CI 里至少两处 `npm run lint`」，照着它写就得在 App job 里再装一份 eslint——**与 APPB-050 直接冲突**。改成断言 lint 的**范围**含三个源码树：闸门要钉住目的，不是钉住某一种做法 | 同上（范围里去掉 `app` 即红） |
+| **`app/` 里刻意没有 lint 脚本** | 它没装 eslint，留一条跑不起来的脚本比没有更糟——`command not found` 会让人以为是环境坏了 | `::test_appb052_lint_scripts_exist`（反向断言） |
 
 ## 已实现（V105 批次：里面那一层也要对上）
 

@@ -32,6 +32,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm install --no-audit --no-fund
+      # APPB-052b lint 排在测试前面：它几秒钟就跑完，先失败能省掉后面几分钟。
+      # 规则只开「会红在真问题上」的那些——一个满口风格警告的 lint 会被人
+      # 用 --quiet 绕过，那比没有 lint 更糟（它让人以为有人在看）。
+      - run: npm run lint
       - run: npm test
       - run: npm run build:web
       # 解析闸门（V70 建）。真正的类型检查在下面的 app-typecheck job 里——
@@ -60,7 +64,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          # APPB-050 此前这个 job **没开缓存**：1139 个包每次重新下载。
+          # 缓存键跟着 app 自己的 lockfile 走（它不在根 workspaces 里）
+          cache: npm
+          cache-dependency-path: app/package-lock.json
       - run: npm install --no-audit --no-fund
+      # APPB-052b App 的源码由**前端 job 里那一次 lint** 覆盖（根上的
+      # `npm run lint` 扫 packages/core/src web/src app 三处）。
+      # 不在这里再装一份 eslint：lint 是纯静态的，不需要 react-native 在位，
+      # 而这个 job 每多一个依赖都要多下一次（APPB-050）。
       - run: npm run typecheck
       # APP-070 类型检查只能证明「代码说得通」。V91~V93 三批的 App 行为
       # 全靠 Python 扫描闸门 + 共享 SDK 类型覆盖——那两样挡得住「入口不存在」，

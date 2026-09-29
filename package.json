@@ -8,6 +8,12 @@
   "scripts": {
     "test": "npm run test --workspaces --if-present",
     "dev:web": "npm run dev -w web",
-    "build:web": "npm run build -w web"
+    "build:web": "npm run build -w web",
+    "lint": "eslint packages/core/src web/src app"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "typescript-eslint": "^8.71.0"
   }
 }
