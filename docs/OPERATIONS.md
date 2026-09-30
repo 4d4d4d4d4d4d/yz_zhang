@@ -352,6 +352,52 @@ docker compose -f deploy/docker-compose.prod.yml run --rm migrate
 
 **恢复演练**是这套东西唯一有意义的验证方式——没演练过的备份等于没有备份。
 
+**从零建库与可逆性**（V109 实测，32 条迁移、单一 head、88 张表 189 个索引）：
+
+```bash
+cd server && export PLATFORM_DATABASE_URL=sqlite:////tmp/check.db   # 生产换成 Postgres
+python -m alembic upgrade head && python -m alembic check    # check 必须无输出
+python -m alembic downgrade base && python -m alembic upgrade head  # 能回到底再升回来
+```
+
+`alembic check` 是**两个引擎都要跑**的（CI 的 `migration-drift` job 如此）：
+SQLite 与 Postgres 的漂移检测能力不一样，只跑一个会放行一整类
+在生产迁移当场失败的问题。回归里另有
+`test_migrations_match_column_properties` 盯列的 nullable 与类型——
+**只比名字的闸门放过了 V103 的一处 nullable 漂移，三个批次没人发现**。
+
+### 4.3b 三条闭环自检
+
+上线前、每次升级后各跑一遍。三条各证一段，缺一段就有缝：
+
+| 脚本 | 证明什么 | 前提 |
+|---|---|---|
+| `scripts/smoke.py` | 这套部署**能做生意**：真实 HTTP 走完注册→发布→双签→托管→验收→分账，佣金与到账金额对得上 | 实例已启动（连不上会一句话报错并退出码 2） |
+| `scripts/sandbox_check.py` | **存管合规态**成立：资金五不变量、代扣税款、第三方存证背书（28 项） | 无（自带进程内客户端） |
+| `scripts/e2e_web.py` | **前端连得上后端**：真 Chromium 打开 `vite build` 产物，同源反代到真服务端（10 项） | 先 `npm run build:web`；需 Chromium |
+
+```bash
+cd server && python -m scripts.smoke          # 默认 http://localhost:8000
+cd server && python -m scripts.sandbox_check
+npm run build:web && (cd server && python -m scripts.e2e_web)
+```
+
+第三条是 V107 才有的，补的正是前两条中间那条缝：**84 条 web 测试每一条都
+把 `fetch` 换掉了**（证明不了能对接），而 `smoke.py` 是 urllib 打的
+（证明后端好，不证明前端连得上后端）。
+
+### 4.3c 经验数据的一次性清洗
+
+开站前或升级后跑一次（不是定时任务——真正该拦的是写入点，那里有闸门）：
+
+```bash
+cd server && python -m scripts.scrub_experience --dry-run   # 先看会改什么
+cd server && python -m scripts.scrub_experience             # 真的改，逐条打印
+```
+
+改了经验卡 `title` 之后**向量索引与新文本不再对应**（KB-011，记在台账）。
+接语义检索之前要重跑一遍 `kb_reindex` job。
+
 ### 4.4 可观测与告警
 
 | 端点 | 用途 | 鉴权 |

@@ -31,10 +31,15 @@ def test_readyz_reports_migration_state(client):
 
 # ---------- DEP-020/022 迁移与模型不漂移 ----------
 def test_migrations_match_models():
-    """迁移脚本建出的表结构必须与 ORM 模型一致。
+    """迁移脚本建出的表**名与列名**必须与 ORM 模型一致。
 
     两条建表路径（开发 create_all / 生产 alembic）一旦漂移，
     「本地全绿、线上缺列」就会发生——这是最难查的一类线上事故。
+
+    注意这一条只比名字。列的**属性**（nullable / 类型）由下面那条
+    `test_migrations_match_column_properties` 比——分成两条是因为
+    它们失败时要做的事不一样：缺列要补迁移，属性不一致要改哪一边
+    得先判断「模型对还是迁移对」。
     """
     from alembic.config import Config
     from alembic.script import ScriptDirectory
@@ -72,6 +77,124 @@ def test_migrations_match_models():
             mig_cols = {c["name"] for c in inspect(mig_engine).get_columns(table)}
             model_cols = set(Base.metadata.tables[table].columns.keys())
             assert model_cols - mig_cols == set(), f"{table} 迁移缺列：{model_cols - mig_cols}"
+
+
+def test_migrations_match_column_properties():
+    """DEP-022 列的**属性**也要对上：nullable 与类型，不只是名字。
+
+    这一条是 V109 体检逼出来的。上面那条测试的 docstring 原本写着
+    「表结构必须与 ORM 模型一致」，而它实际只比**名字集合**——
+    V103 建 `queue_sla_notices` 时把 `created_at` 写成 `nullable=True`
+    （模型是非 Optional 的 `Mapped[datetime]`），这条测试一路全绿。
+    CI 里的 `alembic check` 当时是红的，但没人看 CI，红了三个批次。
+
+    「承诺了却没有东西在检查」这个形状，这一路已经第八次（V96 的
+    「在管理后台做」、V99 的「必须换人」、V101 的 `can_invoice`、
+    V103 的 `SUPPORT_SLA_HOURS`、V106 的 eslint 豁免、V108 的两处脱敏
+    docstring）。所以这次不是只修那一列，而是**把检查补到与承诺一样宽**。
+
+    用 alembic 自己的 `compare_metadata`（就是 `alembic check` 背后那个），
+    而不是手写属性比对——手写的第二份实现必然抄漏。
+    """
+    import os
+    import tempfile
+
+    from alembic import command
+    from alembic.autogenerate import compare_metadata
+    from alembic.config import Config
+    from alembic.migration import MigrationContext
+    from sqlalchemy import create_engine
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cfg = Config(os.path.join(root, "alembic.ini"))
+    cfg.set_main_option("script_location", os.path.join(root, "migrations"))
+
+    with tempfile.TemporaryDirectory() as tmp:
+        url = f"sqlite:///{tmp}/props.db"
+        engine = create_engine(url)
+        cfg.set_main_option("sqlalchemy.url", url)
+        os.environ["PLATFORM_DATABASE_URL"] = url
+        try:
+            with engine.connect() as conn:
+                cfg.attributes["connection"] = conn
+                command.upgrade(cfg, "head")
+                conn.commit()
+        finally:
+            os.environ.pop("PLATFORM_DATABASE_URL", None)
+
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(
+                conn,
+                opts={
+                    "compare_type": True,
+                    "target_metadata": Base.metadata,
+                    # SQLite 上的索引/约束名比对噪音很大（批处理模式会重命名），
+                    # 而闸门要钉的是**会在生产迁移当场失败的东西**：缺表、缺列、
+                    # nullable 与类型。一个假报警多的闸门会被人关掉。
+                    "include_object": lambda obj, name, type_, reflected, compare_to: (
+                        type_ in ("table", "column")
+                    ),
+                },
+            )
+            diff = compare_metadata(ctx, Base.metadata)
+
+    interesting = [d for d in diff if _drift_kind(d) in _DRIFT_MUST_BE_EMPTY]
+    assert not interesting, (
+        "迁移建出来的结构与模型不一致：\n  "
+        + "\n  ".join(repr(d) for d in interesting)
+        + "\n补一条迁移，或者改模型——先判断哪一边是对的。"
+    )
+
+
+# 必须为空的漂移种类 -> 为什么它会在生产出事。值是理由，不是布尔（V90 那条）。
+_DRIFT_MUST_BE_EMPTY: dict[str, str] = {
+    "add_table": "模型有这张表而迁移没建——生产上第一次写它就 no such table",
+    "remove_table": "迁移建了模型里没有的表——要么模型删漏了，要么迁移多建了",
+    "add_column": "模型有这一列而迁移没加——生产上读它就报缺列",
+    "remove_column": "迁移里有模型没有的列，且它可能是 NOT NULL——插入会失败",
+    "modify_nullable": "一边允许空一边不允许——迁移收紧时存量 null 会让升级当场失败",
+    "modify_type": "类型不一致——截断、精度丢失，钱的字段上是事故",
+}
+
+
+def _drift_kind(diff) -> str:
+    """compare_metadata 返回的元素形状不统一：有的是元组，有的是元组列表。"""
+    if isinstance(diff, list):
+        return _drift_kind(diff[0]) if diff else ""
+    return diff[0] if isinstance(diff, tuple) and diff else ""
+
+
+def test_dep022_drift_scanner_can_actually_see_drift():
+    """扫不到等于全绿，是最糟的一种绿。
+
+    上面那条闸门的全部价值在于「它真的能看见属性漂移」。所以这里**人造**
+    一处漂移（把一列的 nullable 翻过来）喂给同一个比对函数，它必须报出来。
+    这一条防的正是 V109 修掉的那种情况：一个名字叫「不漂移」、
+    实际上什么都比不出来的测试。
+    """
+    from alembic.autogenerate import compare_metadata
+    from alembic.migration import MigrationContext
+    from sqlalchemy import Column, DateTime, Integer, MetaData, Table, create_engine
+
+    engine = create_engine("sqlite://")  # 内存库，不碰任何真实数据
+    built = MetaData()
+    Table("drift_probe", built, Column("id", Integer, primary_key=True),
+          Column("made_at", DateTime, nullable=True))
+    built.create_all(engine)
+
+    wanted = MetaData()
+    Table("drift_probe", wanted, Column("id", Integer, primary_key=True),
+          Column("made_at", DateTime, nullable=False))  # 只差 nullable
+
+    with engine.connect() as conn:
+        ctx = MigrationContext.configure(
+            conn, opts={"compare_type": True, "target_metadata": wanted,
+                        "include_object": lambda o, n, t, r, c: t in ("table", "column")})
+        diff = compare_metadata(ctx, wanted)
+
+    kinds = {_drift_kind(d) for d in diff}
+    assert "modify_nullable" in kinds, f"比对函数看不见 nullable 漂移，闸门是空的：{diff}"
+    assert "modify_nullable" in _DRIFT_MUST_BE_EMPTY, "看得见却不判失败，等于没看"
 
 
 def test_migration_status_shape():

@@ -104,6 +104,8 @@
 | 79 | 视差与科技感（web 运动层 / 禁区表 / 减弱动效） | [79-parallax-and-tech-feel.md](./79-parallax-and-tech-feel.md) | P1 |
 | 80 | 里面那一层也要对上（嵌套类型 / 变量请求体） | [80-nested-shapes-and-variable-bodies.md](./80-nested-shapes-and-variable-bodies.md) | P0 |
 | 81 | 有人在跑的 lint（规则选择 / 豁免必须真有规则 / CI 缓存） | [81-lint-that-someone-runs.md](./81-lint-that-someone-runs.md) | P1 |
+| 82 | 前端真的连得上后端吗（真浏览器联调 / 覆盖记账 / 失败判据） | [82-does-the-front-end-reach-the-back-end.md](./82-does-the-front-end-reach-the-back-end.md) | P0 |
+| 83 | 经验数据的清洗与累积（不采集 / 整段抹掉 / 写读双防线 / 去重） | [83-experience-data-hygiene.md](./83-experience-data-hygiene.md) | P0 |
 
 ## 功能点编号与优先级约定
 

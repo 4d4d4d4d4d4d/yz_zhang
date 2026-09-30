@@ -37,6 +37,13 @@ def req(method: str, path: str, body=None, token: str = "", headers=None):
             return _parse(resp.status, resp.read().decode())
     except urllib.error.HTTPError as exc:
         return _parse(exc.code, exc.read().decode())
+    except urllib.error.URLError as exc:
+        # 连不上不是「某一步失败」，是**根本没到能冒烟的状态**。
+        # 原来这里让 URLError 直接抛出去，运维看到的是二十行 urllib 栈——
+        # 从那堆栈里分不出「服务没起来」和「这个脚本坏了」。
+        print(f"连不上 {BASE}：{exc.reason}\n"
+              f"先确认实例已启动，或用 PLATFORM_API_BASE 指向正确地址。")
+        sys.exit(2)
 
 
 def step(name: str, ok: bool, detail=""):

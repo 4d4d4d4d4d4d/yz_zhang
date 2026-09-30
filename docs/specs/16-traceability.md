@@ -1,7 +1,11 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 状态：MVP + V1~V106 全批次完成（2026-09-29）。
-> 后端 1164 tests + 前端 161 tests（core 56 + web 84 + App 21）全绿，全仓 lint 干净；
+> 状态：MVP + V1~V109 全批次完成（2026-09-30）。
+> 后端 1182 tests + 前端 161 tests（core 56 + web 84 + App 21）全绿，全仓 lint 干净；
+> **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
+> `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
+> （真 Chromium × 构建产物 × 真服务端，10 项）。
+> 全系统体检报告：[../SYSTEM-CHECK.md](../SYSTEM-CHECK.md)（数据库怎么搭、跑起来有什么问题）。
 > **现状一页看清：[72-status-ledger.md](72-status-ledger.md)**（这份矩阵的缺口也在那里记着）；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
 > 真实 LLM 分解已接入（有 Key 即用，缺省降级）。
@@ -10,6 +14,73 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V109 批次：全系统体检）
+
+> 报告：[../SYSTEM-CHECK.md](../SYSTEM-CHECK.md)
+>
+> ```
+> $ alembic check
+> FAILED: New upgrade operations detected: [[('modify_nullable', None,
+>   'queue_sla_notices', 'created_at', {...}, True, False)]]
+>
+> 而 tests/test_deployment.py::test_migrations_match_models 一路全绿
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **DEP-022 迁移漂移（真缺陷）** | V103 建 `queue_sla_notices` 时把 `created_at` 写成 `nullable=True`，模型是非 Optional 的 `Mapped[datetime]`。这张表是**只增不改**的告知记录，一行没有时间等于无法按「多久以前告知过」筛，而队列催办（QUEUE-012）正是靠它判断「这件已经告知过了」。补迁移 `c7e1f2a90b34`，**先回填再收紧**——已经发出去的告知不能因为迁移消失，否则用户会被重复催一遍 | `::test_migrations_match_column_properties`（删掉这条迁移即红） |
+| **为什么三个批次都没发现** | `test_migrations_match_models` 的 docstring 写着「**表结构**必须与模型一致」，而它只比**表名与列名的集合**——nullable 与类型看不见。CI 的 `alembic check` 当时是红的，但没人看 CI。这是「承诺了却没有东西在检查」的**第八次**（V96/V99/V101/V103/V106/V108）。所以不是只修那一列，而是**把检查补到与承诺一样宽**：用 alembic 自己的 `compare_metadata`，不手写属性比对——第二份实现必然抄漏 | 同上 + `_DRIFT_MUST_BE_EMPTY` 理由表（值是理由不是布尔） |
+| **闸门的自检** | 人造一处 nullable 漂移喂给同一个比对函数，它必须报出来。**扫不到等于全绿，是最糟的一种绿**——而这一条防的正是刚被修掉的那种测试 | `::test_dep022_drift_scanner_can_actually_see_drift`（把 diff 换成 `[]` 即红） |
+| **索引/约束名不比** | SQLite 批处理模式会重命名约束，比它噪音很大。闸门只钉**会在生产迁移当场失败的东西**：缺表、缺列、nullable、类型。一个假报警多的闸门会被人关掉 | `include_object` 只放行 table/column |
+| **DEP-051 22 个 job 逐个真跑** | 不是看它们注册了，是 POST 一遍看返回：22 个全部 200，`/jobz` 里 `never_run` 归零、无 `last_error`。job「静默不跑」或「一跑就炸」比业务 bug 更危险，因为没有人在看 | 体检实测（`platform_jobs_never_run` / `_stale` 已在 `/metrics`） |
+| **两个会让工具没人用的小问题** | ① `e2e_web.py` 把库文件写在 `server/e2e_<时间戳>.db`，跑几轮就在仓里留八个未跟踪文件——**会把垃圾留在工作区的脚本，下一个人不敢跑它**，改到临时目录并在 `finally` 删；② `smoke.py` 连不上时抛原始 `URLError`，运维看到二十行 urllib 栈——**从那堆栈里分不出「服务没起来」和「这个脚本坏了」**，改成一句话加退出码 2 | 体检复跑：工作区干净；连不上时输出一行 + `exit=2` |
+| **npm `playwright` 依赖还原** | 我自己加进 devDependencies 又从没用过（联调走 pip 那一份）——一个没人使用的依赖就是下一次审计里的噪音 | `npm run lint` / 三套客户端测试仍绿 |
+
+## 已实现（V108 批次：经验数据的清洗与累积）
+
+> 模块 spec：[83-experience-data-hygiene.md](83-experience-data-hygiene.md)
+>
+> ```
+> PROBE 落库的 title: 给王芳家搬钢琴 朝阳区幸福小区3号楼502 联系13800138000
+> PROBE   含手机号 True  含姓名 True  含门牌号 True
+> PROBE 别的用户读经验卡: 200    别人能读到含手机号的卡: True
+> PROBE 拼出来的系统提示词：含手机号 True、含姓名 True、含地址 True
+>
+> 而两处的注释都写着「脱敏」
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **KB-060a 最可靠的脱敏是不采集** | 经验卡的用途是「按类目与城市看价格与工期」，用户打的标题对这个用途没有必要——不再存它，改存派生值 `类目·城市`。**先问「这个字段为什么在这里」，再问「怎么洗干净」**，顺序反过来会洗出一堆半干净的字段 | `tests/test_experience_scrub.py`（12 条） |
+| **KB-060b 数字整段抹掉** | 日志里 `138****8000` 是对的（运维要靠头尾对上几条日志），而经验数据的去处是别的用户与第三方模型，**末四位加城市常常已经足够定位到人**。同理**行政区留着、小区与门牌抹掉**：区是经验里有用的部分，一户人家不是 | 边界断言：区/城市/金额**不被**抹掉 |
+| **KB-060c 写入点做，读出点再做一遍** | 写入点是主防线，读出点（`lessons_prompt`）再做一遍：库里还有修好之前的行，而这段文本的去处是第三方模型——**多一道防线的成本是一次正则，漏出去的成本是一条个人信息** | 真实 agent 提示词断言（不是拼字符串） |
+| **VER-060 累积去重** | 同一个核验人对同类任务写同一句结论很常见，逐条拼出来就是三条一样的经验——**模型会把它当成「这是最重要的一条」**。按内容去重（不是按 id），并不再把任务标题带进提示词 | `::重复经验只进提示词一次` |
+| **姓名：说清守得住什么** | 用平台已知的当事人姓名替换（比写「中文姓名识别」准，也不会把「王府井」当人名）。但**核验人打的字里的第三方姓名去不掉**——平台不知道「李强」是谁。这条边界写成一条测试，理由是**不能让下一个人以为这里已经完全匿名化了**：那种误解比漏本身更危险，它会让人放心地把这段文本送到更多地方 | `::test_..._third_party_names_cannot_be_caught` |
+| **写入点 AST 闸门** | 写入点这次修好了，**下一个人加一个 `note` 字段、或者再建一张经验表，就又会原样入库**。用 AST 扫构造调用的关键字参数而不是正则——正则读不懂「这个参数的值是什么表达式」 | `::test_kb060_free_text_fields_must_go_through_the_scrubber` |
+| **承诺核对闸门** | 函数里**任何地方**（docstring 或注释）写了「脱敏」，函数体内就必须有 `scrub_text`。第一版只扫 docstring，自检当场说「只找到 1 个」——因为知识库那一处的承诺原本写在**注释**里，而那正是这一批要修的原始案例 | `::test_kb060_docstrings_that_promise_scrubbing_must_call_the_scrubber` |
+| **KB-061 存量清洗** | 一次性脚本 `scripts/scrub_experience.py`，逐条打印改动（**动用户数据的脚本不留痕是最不该有的东西**）。刻意**不做成定时任务**：那会让人以为「脏数据会被自动处理」，从而放心地继续写脏数据——真正该拦的是写入点 | `--dry-run` 实测「会改 14 处」 |
+
+## 已实现（V107 批次：前端真的连得上后端吗）
+
+> 模块 spec：[82-does-the-front-end-reach-the-back-end.md](82-does-the-front-end-reach-the-back-end.md)
+>
+> ```
+> 84 条 web 测试，每一条都把 fetch 换掉了
+> → 能证明「按钮按下去会调这个方法」，证明不了「前端与后端真的能对接」
+>
+> 而 scripts/smoke.py 是 urllib 打上去的
+> → 它证明后端好，不证明前端连得上后端
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **E2E-010 第三条闭环** | 真 Chromium × `vite build` 产物 × 真服务端。**跑构建产物不跑 dev server**：dev server 有 vite 代理，它会把「基址写错」这一类问题盖住。**同源反向代理而不是放宽 CORS**：反过来做是给测试改生产配置，验出来的就不是要上线的那套 | `scripts/e2e_web.py`（10 项，CI `web-e2e` job） |
+| **走「钱与权利」不走首页** | 只 `goto('/')`、看见标题就算过的联调，和 `curl /readyz` 没有区别。主路径钉死：注册 → token → 深色底与视差层 → 钱包 → 通知偏好 → **发任务（含 V77 必填归属）** → 广场可见 → 自助开工单 | `::test_e2e011_script_checks_the_money_and_rights_paths` |
+| **失败判据（我的检查错了）** | 第一次跑报了 `404 /tasks/1/dispute`，去查是**设计如此**（DSPC-010「该任务没有纠纷」）。留着这条报警，下一个人第二次看见就会加 `|| true`。改成：5xx 与 422 算缺陷（422 正是「前端发的形状后端不认」），其他 4xx 只打印 | 同上（断言判据与非零退出都在） |
+| **E2E-011 覆盖记账** | 从 `App.tsx` 路由表自动扫页面（**不手抄**），未走到的必须在 `E2E_EXEMPT` 里写理由（值是理由不是布尔）。理由里不许有「还没做 / 待补 / TODO / 以后」——**那是欠账，归 72 号台账**，混在一起的后果是欠账被伪装成决定 | `tests/test_e2e_coverage.py`（4 条，四条红验各自走过） |
+| **闸门当场发挥作用** | 它指出 `/support` 没被走到。而 `/support` 是 V102 才补的自助入口、**没有前置条件的写路径**——正好适合真浏览器验一遍。所以**没有豁免它，而是加了一步**：闸门该带来的不是多一条豁免，是多走一步 | 第 10 项 `✓ 自助开工单并出现在我的工单里` |
+| **扫描器自检** | 扫不到等于全绿：断言 ≥10 条路由、≥4 个访问，且已知的 `/wallet`/`/notifications` 在内 | `::test_e2e011_scanner_finds_routes_and_visits` |
 
 ## 已实现（V106 批次：有人在跑的 lint）
 
