@@ -238,3 +238,40 @@ def test_ratelimit_degrades_to_memory_when_backend_fails(monkeypatch):
             rl.check("degrade-limit", limit=2, window_seconds=60)
     assert exc.value.detail["code"] == "rate_limited"
     rl.reset()
+
+
+# ---------- PAY-046 第一次读钱包不许 500 ----------
+def test_conc053_first_wallet_touch_never_raises(requester):
+    """并发第一次碰钱包账户，不许有人拿到异常，且只能建出一行。
+
+    `get_or_create` 原来是 check-then-insert：两个并发请求同时看到「没有」，
+    都插入，后一个撞上 `wallet_accounts.user_id` 唯一约束 → **500**。
+    探针实测：新用户并发 12 次 `GET /wallet`，稳定出 1 次 500。
+
+    这条不是理论竞态。真实触发路径至少两条：客户端首屏同时发两个请求
+    （web 与 App 都登着，或手抖点两下）；放款后的事件处理与用户请求并发——
+    用户刚收到到账通知就点开钱包，正是最可能撞上的那一刻。
+    而 500 的那个页面是**钱包**：**在钱的页面上报 500，比在别处报 500 更贵。**
+    """
+    from app.modules.wallet import service as wallet_service
+
+    uid = requester["id"]
+    with SessionLocal() as db:
+        db.execute(sa.text("DELETE FROM wallet_accounts WHERE user_id = :u"), {"u": uid})
+        db.commit()
+
+    def once(_i):
+        with SessionLocal() as db:
+            acct = wallet_service.get_or_create(db, uid)
+            db.commit()
+            return acct.user_id
+
+    results = _parallel(once, 8)
+    errors = [r for r in results if isinstance(r, Exception)]
+    assert not errors, f"并发建钱包抛异常了（就是用户看到的那个 500）：{errors!r}"
+    assert all(r == uid for r in results), f"返回了别人的账户：{results!r}"
+
+    with engine.begin() as conn:
+        n = conn.execute(sa.text("SELECT COUNT(*) FROM wallet_accounts WHERE user_id = :u"),
+                         {"u": uid}).scalar()
+    assert n == 1, f"并发之后 {n} 行钱包账户——唯一约束本该只允许一行"

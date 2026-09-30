@@ -1,4 +1,5 @@
 """钱包核心操作。所有资金变动必须走这里并落流水（12.A 审计要求）。"""
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.errors import bad_request
@@ -37,12 +38,41 @@ TRANSFER_KINDS: frozenset[str] = frozenset(
 
 
 def get_or_create(db: Session, user_id: int) -> WalletAccount:
+    """取钱包账户，没有就建一个。
+
+    PAY-046：这里原来是 check-then-insert，**两个并发请求会同时看到「没有」**，
+    于是都插入，后一个撞上 `wallet_accounts.user_id` 的唯一约束 → 500。
+    探针：新用户并发 12 次 `GET /wallet`，稳定出 1 次 500。
+
+    这不是理论上的竞态。真实触发路径至少两条：
+
+    - 客户端首屏**同时**发两个请求（web 与 App 都登着、或者手抖点两下）；
+    - 放款后的事件处理与用户自己的请求并发——用户刚收到到账通知就点开钱包，
+      正是最可能撞上的那一刻。
+
+    而它 500 的那个页面是**钱包**：用户看到的是「服务器错误」，
+    而他刚刚被告知有一笔钱到账。**在钱的页面上报 500，比在别处报 500 更贵。**
+
+    修法用 SAVEPOINT 而不是「先查再插」加锁：
+    `begin_nested()` 让插入失败只回滚这一步，**不把外层事务一起带走**——
+    这个函数的调用方常常正在做放款/托管这种多步写入，
+    外层事务被毒化的代价远大于这一行。
+    """
     acct = db.get(WalletAccount, user_id)
-    if not acct:
-        acct = WalletAccount(user_id=user_id)
-        db.add(acct)
-        db.flush()
-    return acct
+    if acct:
+        return acct
+    try:
+        with db.begin_nested():
+            acct = WalletAccount(user_id=user_id)
+            db.add(acct)
+            db.flush()
+        return acct
+    except IntegrityError:
+        # 别人刚建好了：重读一次。读不到才是真的坏了，那就让它抛。
+        acct = db.get(WalletAccount, user_id)
+        if acct is None:
+            raise
+        return acct
 
 
 def _log(db: Session, user_id: int, kind: str, amount: int, contract_id=None, memo=""):
