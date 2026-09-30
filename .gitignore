@@ -1,0 +1,15 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+server/data/
+server/test_platform.db
+.vite/
+# CONC-003 开启 WAL 后 SQLite 会产生的旁路文件
+*.db-wal
+*.db-shm
+server/smoke*.db
+server/sandbox_check.db
+server/mig*.db
+server/drift*.db
+server/ci.db

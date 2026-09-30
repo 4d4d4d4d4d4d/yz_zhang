@@ -1,0 +1,101 @@
+# DRILL-040 Prometheus 告警规则。
+#
+# 此前 `/metrics` 暴露了指标，但**没有任何东西在消费它**——没有告警规则，
+# 没有值班通道。一个只被人类偶尔打开看一眼的监控端点，等于没有监控。
+#
+# ⚠️ 诚实说明：这份规则**没有经过 promtool 验证**（本环境没有 Prometheus）。
+# 它的 YAML 结构与表达式语法是按 Prometheus 规则文件的格式写的，
+# 但落地前请务必先跑一次：
+#
+#     promtool check rules deploy/alerts.prom.yml
+#
+# 抓取配置示例（`/metrics` 需要 X-Job-Token，且只应从内网抓）：
+#
+#     scrape_configs:
+#       - job_name: taskplat
+#         metrics_path: /metrics
+#         authorization: {type: Bearer, credentials: ""}   # 本服务用自定义头
+#         # 实际用 relabel 或 sidecar 注入 X-Job-Token，Prometheus 原生不支持自定义头
+#
+groups:
+  - name: taskplat-funds
+    interval: 1m
+    rules:
+      # 最高优先级：钱对不上。日终对账 job 会开差错工单，但那是 T+1；
+      # 这条是实时的那一半。
+      - alert: 资金对账不平
+        expr: platform_reconcile_ok == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "五条资金不变量有一条不成立"
+          description: "立即停止放款与提现，按 docs/OPERATIONS.md 的差错流程人工核对。"
+
+      # 托管金额长期不回落，通常意味着放款链路断了（事件没投递、job 没跑）
+      - alert: 托管资金长时间不下降
+        expr: min_over_time(platform_escrow_cents[6h]) > 0
+          and deriv(platform_escrow_cents[6h]) >= 0
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "托管池 6 小时只增不减"
+          description: "先查 /jobz 有没有 job 静默不跑，再查 /events/health 的死信。"
+
+  - name: taskplat-availability
+    interval: 30s
+    rules:
+      - alert: 就绪探针失败
+        expr: up{job="taskplat"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "实例不可达"}
+
+      - alert: 五分之一请求在报错
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(http_requests_total[5m])) > 0.2
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: "5xx 占比超过 20%"}
+
+      # 基线来自 scripts/loadtest.py 的实测（见 OPERATIONS 第三节）：
+      # 本机 SQLite 单副本 read p95 ≈ 175ms。生产是 Postgres + 多副本，
+      # 这个阈值上线后必须按真实基线重设，**不要照抄**。
+      - alert: 读路径延迟劣化
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "p95 超过 1 秒"}
+
+  - name: taskplat-jobs
+    interval: 5m
+    rules:
+      # JOB-001 的 /jobz 会算出 never_run / stale；这条把它接到告警上。
+      # 「从未跑过的 job」是最危险的一种——V57 就是这么发现资金对账 job
+      # 从来没有被调度过的。
+      - alert: 定时任务静默
+        expr: platform_jobs_unhealthy > 0
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "有 job 从未运行或已陈旧"
+          description: "看 /jobz 的 never_run 与 stale 列表。"
+
+      - alert: 事件死信堆积
+        expr: platform_event_dead_letters > 0
+        for: 15m
+        labels: {severity: warning}
+        annotations: {summary: "有事件重试耗尽进入死信"}
+
+  - name: taskplat-moderation
+    interval: 5m
+    rules:
+      # UMOD-013 内容安全供应商故障时上传会 fail open 进人审队列，
+      # 所以队列暴涨的第一怀疑对象是供应商挂了，不是坏人变多了。
+      - alert: 上传人审队列积压
+        expr: platform_uploads_pending_review > 500
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "待人审图片超过 500"
+          description: "先看 /admin/vendors 的内容安全熔断状态，再考虑加人。"
