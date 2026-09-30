@@ -120,12 +120,20 @@ def _on_task_completed(db: Session, payload: dict) -> None:
     days = 0
     if task.completed_at and task.created_at:
         days = max((task.completed_at - task.created_at).days, 0)
-    # 脱敏（KB-002）：只保留类目/城市/价格/工期，不含个人信息与精确位置
+    # 脱敏（KB-002/060）：类目/城市/价格/工期是结构化的，本来就不含个人信息；
+    # 而 `title` 是**用户自己打的字**——探针实测它带着姓名、门牌号和手机号，
+    # 而这张卡通过 `/knowledge/cards` 给别的用户看。
+    # 这行注释以前就在这儿，做脱敏的东西不在。
+    from app.core.scrub import party_names, scrub_text
+
     card = KnowledgeCard(
         source_task_id=task.id,
         category=task.category,
         city=task.city,
-        title=task.title,
+        # 不存用户打的标题：这张卡的用途是「按类目/城市看价格与工期」，
+        # 标题对它没有必要，而它是这条链上唯一的自由文本——
+        # **最可靠的脱敏是不采集**（最小必要原则）。
+        title=f"{task.category}·{task.city or '不限城市'}",
         price_actual_cents=task.budget_cents,
         duration_days=days,
         outcome="completed",
@@ -133,8 +141,9 @@ def _on_task_completed(db: Session, payload: dict) -> None:
     # 母任务闭环时快照子任务分解结构，反哺模板（AI-DEC-012）
     children = db.query(Task).filter(Task.parent_id == task.id).all()
     if children:
+        names = party_names(db, task)
         card.decomposition = [
-            {"title": c.title, "skills": c.required_skills,
+            {"title": scrub_text(c.title, names), "skills": c.required_skills,
              "budget_ratio_bps": c.budget_cents * 10000 // max(task.budget_cents, 1),
              "depends_on": c.depends_on}
             for c in children

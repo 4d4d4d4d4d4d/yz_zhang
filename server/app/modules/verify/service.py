@@ -195,19 +195,26 @@ def submit_outcome(db: Session, order: VerificationOrder, task, *, outcome: str,
 def _record_lesson(db: Session, order: VerificationOrder, task) -> None:
     """VER-040 回流经验。需求里的「持续帮助迭代」靠的就是这条。
 
-    脱敏：不写 user_id、不写精确地址、不写金额。只留「这类任务、这些判据、
-    人怎么判的、为什么」——这正是下次能用上的部分。
+    脱敏（KB-060）：不写 user_id、不写精确地址、不写金额。只留「这类任务、
+    这些判据、人怎么判的、为什么」——这正是下次能用上的部分。
+
+    **这段话以前是一句承诺**：`task_title` / `reason` / `revision_summary`
+    三个都是自由文本，直接原样入库，然后被 `lessons_prompt()` 拼进**另一单**
+    的系统提示词交给模型（探针实测：姓名、地址、手机号全在里面）。
+    现在三个字段都过 `scrub_text`——写入点做，而不是指望每个调用方记得。
     """
-    summary = ""
-    if order.outcome == "revised" and order.revised_output:
-        summary = order.revised_output[:500]
+    from app.core.scrub import party_names, scrub_text
+
+    names = party_names(db, task)
+    raw_summary = (order.revised_output or "")[:500] if order.outcome == "revised" else ""
     db.add(VerificationLesson(
         category=task.category,
         outcome=order.outcome,
-        task_title=task.title[:120],
-        criteria=[c.get("text", "") for c in (task.acceptance_criteria or [])],
-        reason=order.comment[:1000],
-        revision_summary=summary,
+        task_title=scrub_text(task.title[:120], names),
+        criteria=[scrub_text(c.get("text", ""), names)
+                  for c in (task.acceptance_criteria or [])],
+        reason=scrub_text(order.comment[:1000], names),
+        revision_summary=scrub_text(raw_summary, names),
     ))
 
 
@@ -290,11 +297,29 @@ def lessons_prompt(rows: list[VerificationLesson]) -> str:
     那会让模型以为自己漏看了什么。"""
     if not rows:
         return ""
+    # KB-060 读的时候**再脱一遍**。两个理由：
+    # ① 库里已经有写入点修好之前落下的行——只在写入点做，那些旧行会一直
+    #    被喂给模型；
+    # ② 这段文本的去处是**第三方模型**，多一道防线的成本是一次正则，
+    #    而漏出去的成本是一条个人信息。
+    from app.core.scrub import scrub_text
+
     lines = ["", "【同类任务上，人工核验指出过的问题】",
              "（以下来自真实核验结论，按时间倒序；请在本次产出中避免重蹈覆辙）"]
-    for i, row in enumerate(rows, 1):
+    seen: set[str] = set()
+    for row in rows:
         verdict = "被要求修正" if row.outcome == "revised" else "被判定不通过"
-        lines.append(f"{i}. 「{row.task_title}」{verdict}：{row.reason[:LESSON_REASON_CHARS]}")
+        reason = scrub_text(row.reason[:LESSON_REASON_CHARS])
+        # 同一条结论重复出现（同一个核验人对同类任务写同一句）会把它的权重
+        # 放大成「这是最重要的一条」——去重，按内容而不是按 id
+        key = f"{row.outcome}|{reason}"
+        if key in seen:
+            continue
+        seen.add(key)
+        # **不再带任务标题**：标题是发布方打的字，对「下次别再犯」这个用途
+        # 没有必要（类目已经限定了同类），而它是这条链上最脏的一段
+        lines.append(f"{len(seen)}. 同类任务{verdict}：{reason}")
         if row.revision_summary:
-            lines.append(f"   核验人给出的修正方向：{row.revision_summary[:LESSON_REVISION_CHARS]}")
+            lines.append("   核验人给出的修正方向："
+                         + scrub_text(row.revision_summary[:LESSON_REVISION_CHARS]))
     return "\n".join(lines)
