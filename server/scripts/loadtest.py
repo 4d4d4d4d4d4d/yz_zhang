@@ -47,20 +47,38 @@ def req(method: str, path: str, body=None, token: str = "") -> tuple[int, dict |
         return 0, None, time.perf_counter() - started
 
 
+def register_body() -> dict:
+    """注册用的请求体。
+
+    手机号用**纳秒**而不是秒：原来是 `139{秒 % 1e8}`，同一秒内跑两次
+    （连着跑 read 与 write 两个场景就是这样）拿到同一个号，第二次 409。
+    """
+    return {"phone": f"139{time.time_ns() % 100000000:08d}", "password": "pass123456",
+            "nickname": "压测", "sms_code": "123456"}
+
+
+# 发任务的请求体。抽成模块常量是为了让闸门能直接拿它去打服务端：
+# 这个脚本从 V77 起就发不出任务了（那一批把 `ip_assignment` 变成必填），
+# 而它不在 CI 里、也不在回归里，于是**坏了 33 个批次没人知道**，
+# 同时 OPERATIONS 还印着它 V65 那次的数字当作当前容量基线。
+TASK_BODY: dict = {
+    "title": "压测任务：周末大扫除", "description": "两室一厅深度保洁",
+    "category": "保洁", "task_type": "service", "required_skills": ["保洁"],
+    "budget_cents": 20000, "city": "上海", "lat": 31.2304, "lng": 121.4737,
+    "address_hint": "静安寺商圈", "address_exact": "静安区南京西路 1234 号 5 栋 302",
+    # IPC-010：不选归属就发不出去。压测取默认的「转让」，与 smoke 一致
+    "ip_assignment": "assign",
+    "publish_now": True,
+}
+
+
 def setup() -> tuple[str, int]:
     """造一个账号和一条已发布任务，供压测读写。"""
-    phone = f"139{int(time.time()) % 100000000:08d}"
-    status, body, _ = req("POST", "/auth/register", {
-        "phone": phone, "password": "pass123456", "nickname": "压测", "sms_code": "123456"})
+    status, body, _ = req("POST", "/auth/register", register_body())
     assert status == 201 and body, f"注册失败：{status}"
     token = body["token"]
-    status, task, _ = req("POST", "/tasks", {
-        "title": "压测任务：周末大扫除", "description": "两室一厅深度保洁",
-        "category": "保洁", "task_type": "service", "required_skills": ["保洁"],
-        "budget_cents": 20000, "city": "上海", "lat": 31.2304, "lng": 121.4737,
-        "address_hint": "静安寺商圈", "address_exact": "静安区南京西路 1234 号 5 栋 302",
-        "publish_now": True}, token)
-    assert status == 201 and task, f"发布失败：{status}"
+    status, task, _ = req("POST", "/tasks", dict(TASK_BODY), token)
+    assert status == 201 and task, f"发布失败：{status}（{task}）"
     return token, task["id"]
 
 
@@ -77,12 +95,12 @@ def run(concurrency: int, total: int, scenario: str, token: str, task_id: int) -
                     return
                 remaining[0] -= 1
             if scenario == "write":
-                status, _, dt = req("POST", "/tasks", {
-                    "title": "压测写入：周末大扫除", "description": "两室一厅深度保洁",
-                    "category": "保洁", "task_type": "service", "required_skills": ["保洁"],
-                    "budget_cents": 20000, "city": "上海", "lat": 31.2304, "lng": 121.4737,
-                    "address_hint": "静安寺商圈",
-                    "address_exact": "静安区南京西路 1234 号 5 栋 302"}, token)
+                # 用同一份 TASK_BODY，不再抄第二遍：原来这里是一份**独立的副本**，
+                # 也漏了 `ip_assignment`。它比 setup 的那处更危险——setup 会炸，
+                # 而这里只会让每次请求都被 400 挡掉，然后把**拒绝的速率**
+                # 报成写入吞吐量。一个把 400 当吞吐量的压测，给出的数字
+                # 比没有数字更糟：它看起来很正常。
+                status, _, dt = req("POST", "/tasks", dict(TASK_BODY), token)
             else:
                 status, _, dt = req("GET", f"/tasks/{task_id}", token=token)
             with lock:
@@ -127,10 +145,22 @@ def main() -> int:
     result = run(args.concurrency, args.requests, args.scenario, token, task_id)
     for k, v in result.items():
         print(f"  {k:14} {v}")
-    # 这里**不设阈值断言**：容量取决于机器，写死一个数字只会在别人的机器上误报。
-    # 这个脚本的职责是给出数字，判断由看数字的人来做。
+    # 这里**不设阈值断言**（吞吐与延迟都不设）：容量取决于机器，写死一个数字只会在
+    # 别人的机器上误报。这个脚本的职责是给出数字，判断由看数字的人来做。
+    #
+    # 但**有两种失败必须分开**，因为它们对「这组数字能不能用」的含义相反：
+    #
+    #   契约性失败（400 / 422）：请求体与服务端对不上，压的是「被拒绝」这条
+    #     快路径，数字测的不是业务。**一次都不允许**——这正是 V77 之后
+    #     这个脚本的处境：每次请求都 400，而吞吐量看起来很正常。
+    #   容量性失败（429 / 503）：限流与过载，**这恰恰是压测想看到的东西**，
+    #     把它算成失败等于不许压测压出结果。
+    contract_bad = sum(n for c, n in result["codes"].items() if c in (400, 422))
+    if contract_bad:
+        print(f"有 {contract_bad} 次 400/422：请求体与服务端对不上，这组数字测的不是业务路径。")
+        return 1
     if result["error_rate"] > 0.5:
-        print("错误率过半——大概率是服务没起来或被限流打满，数字不可用。")
+        print("错误率过半——大概率是服务没起来，数字不可用。")
         return 1
     return 0
 

@@ -272,8 +272,14 @@ V106 的 eslint 豁免、V108 的两处脱敏 docstring）。所以这次不是�
 
 ### 4.5 没查的
 
-- **压测与并发**：没有跑负载。并发正确性有测试（`test_conc_hardening.py`
-  盯资金总额不漂移），但「1000 QPS 下什么先倒」没有数据。
+- **压测**：这一节第一版写成「没有跑负载」，**写错了**——`scripts/loadtest.py`
+  一直在仓里。去跑它才发现更糟的事实：它**从 V77 起就跑不起来了**（那一批把
+  `ip_assignment` 变成发任务必填项），坏了 33 个批次，而 `OPERATIONS.md`
+  一直印着它 V65 那次的数字当作现状。V110 修了脚本并重测，数字与出处
+  都写在 OPERATIONS 的容量段。**吞吐看起来比 V65 低约四分之一，但两次都是
+  单次运行，不足以断言回归**（台账 `DRILL-031`）。
+- **并发正确性**有测试（`test_conc_hardening.py` 盯资金总额不漂移）；
+  「多副本 + Postgres 下什么先倒」仍然没有数据。
 - **Postgres 的漂移与验收**：本地没有 Postgres，靠 CI 的
   `migration-drift` 与 `postgres-acceptance` 两个 job。
 - **真实供应商**：全部是 mock/sandbox，这正是第 5 节拦住上线的原因。

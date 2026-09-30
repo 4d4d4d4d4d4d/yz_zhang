@@ -130,6 +130,14 @@ jobs:
           done
       - name: 主闭环冒烟（真实 HTTP，跑完一笔交易并核对分账）
         run: python -m scripts.smoke
+      # 压测脚本在这里跑的是**很小的一轮**：目的不是量容量（CI runner 的数字
+      # 没有意义，而且每次都不一样），而是证明**这个脚本还能跑**。
+      # 它从 V77 起就发不出任务了（那一批把 ip_assignment 变成必填），
+      # 坏了 33 个批次没人知道——因为没有任何地方跑它，而 OPERATIONS
+      # 还印着它 V65 那次的数字当作当前容量基线。
+      # 400/422 一次都不容忍（请求体与服务端对不上），429/503 不算失败。
+      - name: 压测脚本仍可运行（DRILL-030，不做容量判断）
+        run: python -m scripts.loadtest --concurrency 4 --requests 40 --scenario write
 
   sandbox-compliance:
     name: 沙箱合规态闭环（STUB-041）

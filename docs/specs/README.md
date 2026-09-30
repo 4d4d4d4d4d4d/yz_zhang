@@ -106,6 +106,8 @@
 | 81 | 有人在跑的 lint（规则选择 / 豁免必须真有规则 / CI 缓存） | [81-lint-that-someone-runs.md](./81-lint-that-someone-runs.md) | P1 |
 | 82 | 前端真的连得上后端吗（真浏览器联调 / 覆盖记账 / 失败判据） | [82-does-the-front-end-reach-the-back-end.md](./82-does-the-front-end-reach-the-back-end.md) | P0 |
 | 83 | 经验数据的清洗与累积（不采集 / 整段抹掉 / 写读双防线 / 去重） | [83-experience-data-hygiene.md](./83-experience-data-hygiene.md) | P0 |
+| 84 | 没有人跑的脚本与它印在文档里的数字（覆盖记账 / 契约性失败判死） | [84-scripts-nobody-runs.md](./84-scripts-nobody-runs.md) | P1 |
+| 85 | 手抄的数字没有人核对（计数闸门 / 历史记录不改） | [85-numbers-nobody-checks.md](./85-numbers-nobody-checks.md) | P2 |
 
 ## 功能点编号与优先级约定
 

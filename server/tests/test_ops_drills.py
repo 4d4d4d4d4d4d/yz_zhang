@@ -145,6 +145,14 @@ def test_drill030_loadtest_reports_the_numbers_that_matter():
         assert key in src, f"压测输出缺少 {key}"
     # 不设阈值断言是有意的：容量取决于机器，写死一个数字只会在别人的机器上误报
     assert "不设阈值断言" in src
+    # V110 补：断言这条**原则**的同时也断言它的边界。原来这里只钉住一句注释，
+    # 于是 V110 正当改写那句注释时它就红了——**一个钉住散文的闸门，会在
+    # 正当改动上误报**，而误报多的闸门会被人关掉。所以同时钉住行为：
+    # 契约性失败（请求体对不上）必须判死，容量性失败（限流/过载）不许判死。
+    assert "(400, 422)" in src, "请求体对不上时不判死，等于把 400 当吞吐量"
+    for capacity_code in ("429", "503"):
+        assert f"c in ({capacity_code}" not in src, \
+            f"{capacity_code} 被当成缺陷——那是压测想看到的容量信号"
 
 
 # ---------- DRILL-050 CI 真的跑这些 ----------
