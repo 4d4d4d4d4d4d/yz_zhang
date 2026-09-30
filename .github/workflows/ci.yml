@@ -80,6 +80,30 @@ jobs:
       # 自己重写一遍服务端的判断。这一步跑的就是那些。
       - run: npm test
 
+  web-e2e:
+    name: 真浏览器联调（E2E-010：前端真的连得上后端）
+    runs-on: ubuntu-latest
+    # 84 条 web 测试**每一条都 mock 了 fetch**——它们证明不了最基本的那件事。
+    # 这个 job 起真服务端 + 真构建产物 + Chromium，走完注册→发任务→广场可见。
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+      - run: npm install --no-audit --no-fund
+      # 验的是**构建产物**，不是 dev server：生产上前端是打包后的静态文件
+      - run: npm run build:web
+      - run: pip install -r server/requirements.txt playwright
+      - run: python -m playwright install --with-deps chromium
+      - run: python -m scripts.e2e_web
+        working-directory: server
+
   boot-smoke:
     name: 服务启动 + 主闭环冒烟（DEP-060）
     runs-on: ubuntu-latest
