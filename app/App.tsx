@@ -20,7 +20,7 @@ async function getPushToken(): Promise<string | null> {
   return null;
 }
 
-const BASE_URL = 'http://localhost:8000'; // 真机调试改为局域网 IP
+const BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
 
 type Tab = 'tasks' | 'discover' | 'video' | 'publish' | 'wallet' | 'notices' | 'me';
 

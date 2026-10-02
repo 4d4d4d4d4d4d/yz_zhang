@@ -74,6 +74,8 @@ jobs:
       # 不在这里再装一份 eslint：lint 是纯静态的，不需要 react-native 在位，
       # 而这个 job 每多一个依赖都要多下一次（APPB-050）。
       - run: npm run typecheck
+      - name: iOS 与 Android 实际 JS 打包（验证 Metro 与嵌套依赖解析）
+        run: npx expo export --platform ios --platform android --output-dir dist-integration
       # APP-070 类型检查只能证明「代码说得通」。V91~V93 三批的 App 行为
       # 全靠 Python 扫描闸门 + 共享 SDK 类型覆盖——那两样挡得住「入口不存在」，
       # 挡不住「入口在、按下去做错事」：调错方法、把服务端算好的话吞掉、
@@ -267,4 +269,3 @@ jobs:
       # DRILL-061：pg_dump → DROP SCHEMA → psql 恢复，与生产脚本同参数
       - name: Postgres 备份恢复演练
         run: python -m scripts.restore_drill
-

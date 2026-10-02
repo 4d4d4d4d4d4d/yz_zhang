@@ -39,7 +39,15 @@ def create_app() -> FastAPI:
     from app.vendors.registry import startup_check
 
     startup_check()
-    init_db()
+    # Production schema is managed exclusively by the migrate container.
+    if settings.ENV == "prod":
+        from app.core.db import migration_status
+
+        state = migration_status()
+        if state["state"] != "ok":
+            raise RuntimeError("数据库迁移未就绪，请先执行 alembic upgrade head")
+    else:
+        init_db()
 
     # 领域事件订阅（14 号 spec 第 3 节）
     from app.modules.anchor import service as anchor_service

@@ -1,5 +1,13 @@
 node_modules/
+.venv/
+.env
+.env.local
+deploy/.env.*.local
+deploy/backups/
 dist/
+app/dist-integration/
+app/.expo/
+deploy/*.log
 __pycache__/
 *.pyc
 server/data/

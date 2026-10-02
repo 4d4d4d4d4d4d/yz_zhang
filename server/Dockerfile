@@ -12,7 +12,7 @@ COPY alembic.ini ./alembic.ini
 
 # 非 root：容器逃逸时的第一道减损
 RUN useradd --system --uid 10001 appuser \
- && mkdir -p /srv/data && chown -R appuser:appuser /srv/data /srv/app
+ && mkdir -p /srv/data/uploads && chown -R appuser:appuser /srv/data /srv/app
 USER appuser
 
 ENV PLATFORM_DATABASE_URL=sqlite:////srv/data/platform.db \

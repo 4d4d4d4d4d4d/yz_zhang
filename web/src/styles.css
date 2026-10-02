@@ -23,6 +23,10 @@ body {
   background: var(--bg-2); color: var(--text);
   /* 底色兜底：视觉层还没挂上时也不会白屏闪一下 */
 }
+.deployment-notice {
+  padding: 8px 16px; text-align: center; font-size: 12px;
+  color: var(--warn); background: #221e14; border-bottom: 1px solid #51452a;
+}
 /* 金额一律等宽数字：跳动时不左右抖，对账时眼睛能对齐列 */
 .price, .money, td, th, .stat-value { font-variant-numeric: tabular-nums; }
 a { color: var(--brand); text-decoration: none; }

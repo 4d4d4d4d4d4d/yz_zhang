@@ -42,6 +42,11 @@ export default function App() {
     <>
       {/* UI-090 全站固定背景（79 号 spec）：只有一个实例，纯装饰、不吃指针事件 */}
       <TechBackdrop />
+      {import.meta.env.VITE_DEPLOYMENT_LABEL && (
+        <aside className="deployment-notice" role="status">
+          {import.meta.env.VITE_DEPLOYMENT_LABEL}
+        </aside>
+      )}
       <nav className="nav">
         <Link className="logo" to="/">协作任务平台</Link>
         <Link to="/">任务广场</Link>

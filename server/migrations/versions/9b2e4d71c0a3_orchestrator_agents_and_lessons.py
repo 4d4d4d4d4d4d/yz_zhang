@@ -29,7 +29,7 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column('allow_agents', sa.Boolean(), nullable=True))
     # 历史编排一律按**没有授权**回填：把「没表态」当成「同意」，
     # 正是这个开关要防的事
-    op.execute("UPDATE missions SET allow_agents = 0 WHERE allow_agents IS NULL")
+    op.execute("UPDATE missions SET allow_agents = FALSE WHERE allow_agents IS NULL")
     with op.batch_alter_table('missions', schema=None) as batch_op:
         batch_op.alter_column('allow_agents', existing_type=sa.Boolean(), nullable=False)
 

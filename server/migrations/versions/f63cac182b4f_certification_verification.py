@@ -66,7 +66,7 @@ def upgrade() -> None:
     conn = op.get_bind()
     rows = conn.execute(sa.text(
         "SELECT id, certifications FROM users "
-        "WHERE certifications IS NOT NULL AND certifications != '[]'"
+        "WHERE certifications IS NOT NULL"
     )).fetchall()
     now = datetime.now(timezone.utc)
     for user_id, raw in rows:

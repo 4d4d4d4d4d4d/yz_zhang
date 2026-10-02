@@ -8,9 +8,7 @@
 // ② core 自己的依赖找不着 → 要让 nodeModulesPaths 同时看 app/node_modules
 //    与仓库根 node_modules（npm 会把公共依赖提到根上）。
 //
-// 注意：这个文件是本批**唯一没有被机器验证过**的改动。验证它要真的起 Metro，
-// 而 Metro 要连设备或模拟器，本环境做不到。写法照 Expo 的 monorepo 文档，
-// 但「对不对」目前只有判断背书——记在 APPB-051，不当作已验证。
+// 用 expo export 同时验证 iOS/Android 的 Metro 解析；设备行为另做真机验证。
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 
@@ -24,8 +22,19 @@ config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
 ];
-// 同一个包在两处各解析一份会让 React 出现两个实例（hooks 直接报错），
-// 所以关掉向上逐层查找，只认上面这两个目录。
-config.resolver.disableHierarchicalLookup = true;
+// npm 会把版本冲突的依赖安装到 react-native/node_modules 等嵌套目录。
+// 禁止层级查找会让 virtualized-lists 在真实打包时消失（类型检查发现不了）。
+config.resolver.disableHierarchicalLookup = false;
+// React 必须始终来自 App，避免共享源码意外解析到 Web 的 React。
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === 'react' || moduleName.startsWith('react/') || moduleName === 'react-native') {
+    return context.resolveRequest({
+      ...context,
+      disableHierarchicalLookup: true,
+      nodeModulesPaths: [path.resolve(projectRoot, 'node_modules')],
+    }, moduleName, platform);
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
 
 module.exports = config;

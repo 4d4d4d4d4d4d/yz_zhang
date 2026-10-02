@@ -1,13 +1,13 @@
 /// <reference types="vitest/config" />
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:8000',
+      '/api': loadEnv(mode, '.', '').PLATFORM_API_PROXY || 'http://localhost:8000',
     },
   },
   test: {
@@ -17,4 +17,4 @@ export default defineConfig({
     // 移动端样式约束（MOB-001/003）就无从断言
     css: true,
   },
-});
+}));

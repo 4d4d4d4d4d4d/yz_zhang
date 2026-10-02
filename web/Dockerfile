@@ -1,10 +1,10 @@
 # 多阶段构建：workspace 根构建 → nginx 静态托管 + API 反代
 FROM node:22-slim AS build
 WORKDIR /repo
-COPY package.json ./
+COPY package.json package-lock.json ./
 COPY packages/core/package.json packages/core/
 COPY web/package.json web/
-RUN npm install --no-audit --no-fund
+RUN npm ci --no-audit --no-fund
 COPY packages ./packages
 COPY web ./web
 RUN npm run build -w web

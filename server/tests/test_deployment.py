@@ -202,13 +202,26 @@ def test_migration_status_shape():
     assert status["state"] in ("ok", "mismatch", "not_applicable", "unknown")
 
 
-def test_create_all_refused_in_prod(monkeypatch):
+def test_create_all_refused_in_prod(monkeypatch, client):
     """DEP-020 生产唯一建表路径是 alembic；create_all 在多副本下会互相踩。"""
     from app.core import db as db_module
 
     monkeypatch.setattr(db_module.settings, "ENV", "prod")
     with pytest.raises(RuntimeError, match="alembic"):
         db_module.init_db()
+
+    # A migrated production app must start without attempting create_all.
+    # Provider integration is independently checked by the vendor tests.
+    from app.main import create_app
+    from app.vendors import registry
+
+    monkeypatch.setattr(registry, "startup_check", lambda: None)
+    monkeypatch.setattr(db_module, "migration_status", lambda: {"state": "ok"})
+    assert create_app().openapi_url is None
+    for state in ("not_applicable", "mismatch", "unknown"):
+        monkeypatch.setattr(db_module, "migration_status", lambda: {"state": state})
+        with pytest.raises(RuntimeError, match="alembic"):
+            create_app()
 
 
 # ---------- DEP-040 日志脱敏 ----------
