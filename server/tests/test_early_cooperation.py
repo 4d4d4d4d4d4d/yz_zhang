@@ -29,12 +29,34 @@ def make_venture(client, founder, name="早期合作体", **over):
         "name": name, "purpose": "一起做一个东西", "risk_disclosure_version": VER, **over,
     }, headers=auth(founder))
     assert r.status_code == 201, r.text
+    with SessionLocal() as db:
+        from app.modules.account.models import User
+        account = db.get(User, r.json()['id'])
+        assert len(account.phone) <= 20 and len(account.nickname) <= 50
     return r.json()["id"]
 
 
 def join(client, venture_id, user, version=VER):
+    # Most tests below exercise contribution accounting after an invited join.
+    # Establish the invitation explicitly; unauthorized access is tested separately.
+    from app.modules.coop.models import Venture
+    with SessionLocal() as db:
+        v = db.get(Venture, venture_id)
+        coop.invite_member(db, venture_id, v.founder_id, user["id"])
+        db.commit()
     return client.post(f"/api/v1/ventures/{venture_id}/members",
                        json={"risk_disclosure_version": version}, headers=auth(user))
+
+
+def approved_payout(client, vid, a, b, amount, memo):
+    p = client.post(f'/api/v1/ventures/{vid}/payout-proposals', headers=auth(a),
+                    json={'amount_cents':amount,'memo':memo})
+    assert p.status_code == 201, p.text
+    pid = p.json()['id']
+    vote = client.post(f'/api/v1/ventures/{vid}/payout-proposals/{pid}/vote', headers=auth(b), json={'approve':True})
+    assert vote.status_code == 200, vote.text
+    return client.post(f'/api/v1/ventures/{vid}/distributions', headers=auth(a),
+                       json={'amount_cents':amount,'memo':memo,'proposal_id':pid})
 
 
 def contribute(client, venture_id, user, desc="做了一版原型", kind="time"):
@@ -58,6 +80,11 @@ def test_coop030_risk_disclosure_is_required_to_join(client):
     founder = make_user(client, "13700000001", "发起人")
     vid = make_venture(client, founder)
     other = make_user(client, "13700000002", "成员甲")
+
+    unsolicited = client.post(f"/api/v1/ventures/{vid}/members",
+                              json={"risk_disclosure_version": VER}, headers=auth(other))
+    assert unsolicited.status_code == 403
+    assert unsolicited.json()["detail"]["code"] == "invitation_required"
 
     bad = join(client, vid, other, version="")
     assert bad.status_code == 400
@@ -236,8 +263,7 @@ def test_coop020_can_only_distribute_money_actually_received(client):
     cid = contribute(client, vid, a)
     confirm(client, vid, cid, b, valued_cents=10000)
 
-    r = client.post(f"/api/v1/ventures/{vid}/distributions",
-                    json={"amount_cents": 50000, "memo": "第一次分配"}, headers=auth(a))
+    r = approved_payout(client, vid, a, b, 50000, "第一次分配")
     assert r.status_code == 400
     assert r.json()["detail"]["code"] == "insufficient_venture_funds"
     assert "已经实际收到" in r.json()["detail"]["message"]
@@ -258,8 +284,7 @@ def test_coop020_distribution_follows_shares_and_conserves_money(client):
 
     a_before = client.get("/api/v1/wallet", headers=auth(a)).json()["available_cents"]
     b_before = client.get("/api/v1/wallet", headers=auth(b)).json()["available_cents"]
-    r = client.post(f"/api/v1/ventures/{vid}/distributions",
-                    json={"amount_cents": 40000, "memo": "首次分配"}, headers=auth(a))
+    r = approved_payout(client, vid, a, b, 40000, "首次分配")
     assert r.status_code == 201, r.text
     a_after = client.get("/api/v1/wallet", headers=auth(a)).json()["available_cents"]
     b_after = client.get("/api/v1/wallet", headers=auth(b)).json()["available_cents"]
@@ -282,8 +307,7 @@ def test_coop020_distribution_snapshot_is_kept(client):
     with SessionLocal() as db:
         wallet.topup(db, vid, 10000)
         db.commit()
-    client.post(f"/api/v1/ventures/{vid}/distributions",
-                json={"amount_cents": 10000, "memo": "分"}, headers=auth(a))
+    approved_payout(client, vid, a, b, 10000, "分")
 
     # 分配之后乙也有了贡献，份额变了；但那次分配的快照不该跟着变
     cid2 = contribute(client, vid, b)
@@ -414,8 +438,7 @@ def test_coop060_contribution_and_distribution_are_anchored(client):
     with SessionLocal() as db:
         wallet.topup(db, vid, 10000)
         db.commit()
-    client.post(f"/api/v1/ventures/{vid}/distributions",
-                json={"amount_cents": 10000, "memo": "分"}, headers=auth(a))
+    approved_payout(client, vid, a, b, 10000, "分")
 
     with SessionLocal() as db:
         kinds = {e.event_type for e in db.query(AnchorEntry).all()}

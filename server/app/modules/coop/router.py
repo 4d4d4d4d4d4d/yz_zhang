@@ -1,4 +1,5 @@
 """COOP 早期合作体（50 号 spec）。"""
+import secrets
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -44,6 +45,7 @@ class ConfirmIn(BaseModel):
 
 
 class DistributeIn(BaseModel):
+    proposal_id: int | None = None
     amount_cents: int = Field(gt=0)
     memo: str = Field(default="", max_length=200)
 
@@ -90,8 +92,8 @@ def create_venture(body: VentureIn, user: User = Depends(require_verified),
     # 与 V73「agent 是 User」同一条理由：钱包/托管/合约/纠纷/发任务
     # 全部以 user_id 为键，合作体要有资金池、要能发任务，不复用就得各写第二遍。
     venture_user = User(
-        phone=f"venture:{body.name}:{user.id}",
-        nickname=body.name, is_venture=True, is_verified=True, is_adult=True,
+        phone="v:" + secrets.token_urlsafe(12),
+        nickname=body.name[:50], is_venture=True, is_verified=True, is_adult=True,
         accepting_orders=False,      # 合作体是发布方，不接单
     )
     db.add(venture_user)
@@ -153,6 +155,7 @@ def invite(venture_id: int, body: InviteIn, user: User = Depends(get_current_use
     # 不能由邀请人代签——代签的知情同意不是知情同意
     if block and "风险揭示书" not in block:
         raise conflict(block, "invite_blocked")
+    service.invite_member(db, venture_id, user.id, invitee.id)
     from app.modules.notification.service import notify
 
     notify(db, invitee.id, "system", "合作邀请",
@@ -237,7 +240,9 @@ def distribute(venture_id: int, body: DistributeIn,
                user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     v = _get(db, venture_id)
     _require_member(db, venture_id, user)
-    dist = service.distribute(db, v, user, body.amount_cents, body.memo)
+    from .governance import execute
+    require_verified(user=user, db=db)
+    dist = execute(db, v, user, body.proposal_id, body.amount_cents, body.memo)
     return {"id": dist.id, "total_cents": dist.total_cents,
             "share_snapshot": dist.share_snapshot}
 

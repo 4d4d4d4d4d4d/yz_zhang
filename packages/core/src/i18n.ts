@@ -47,6 +47,14 @@ export function resolveLocale(
  * server/tests/test_i18n.py，与 SYNC-002 账本科目同一条规矩）。
  */
 export const ERROR_MESSAGE_ZH: Record<string, string> = {
+  idempotency_required: '机器写操作必须携带 1—80 字符的 Idempotency-Key',
+  invitation_consumed: '邀请已处理',
+  invitation_required: '需要当前成员发出的有效邀请',
+  mandate_budget: '超过单笔或累计任务授权额度',
+  mandate_category: '任务类目不在授权范围',
+  mandate_exists: '授权不可原地扩权；请吊销旧密钥并重新授权',
+  mandate_required: '机器授权不存在、过期或不包含此操作',
+
   account_banned: '账号已被封禁，如有异议请申诉',
   account_deleted: '账号已注销',
   active_contract: '存在未结算合约，请先完成或取消后再注销',
@@ -256,6 +264,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
  * 这件事可数、可查——一个说不清自己覆盖了多少的翻译表，等于没有覆盖率。
  */
 export const SERVER_WORDED_CODES: string[] = [
+  // Machine grants and invitation lifecycle carry specific remedial instructions.
   'agent_delivery_blocked',
   'agent_not_eligible',
   'agreement_update_required',

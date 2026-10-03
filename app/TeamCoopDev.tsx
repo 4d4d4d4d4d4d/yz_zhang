@@ -1,3 +1,6 @@
+import PayoutGovernance from './PayoutGovernance';
+import OrganizationRecords from './OrganizationRecords';
+import MachineMandate from './MachineMandate';
 // APP-069 三条线的 App 界面：团队 / 合作体 / 开发者（67 号 spec）。
 //
 // V84 把这三页做在了网页上，App 至今一个都没有。V92 给团队审批补了通知，
@@ -238,6 +241,8 @@ function VentureDetailBlock({ client, ventureId, act }: {
   const [rows, setRows] = useState<ContributionView[]>([]);
   const [desc, setDesc] = useState('');
   const [risk, setRisk] = useState('');
+  const [valuations, setValuations] = useState<Record<number, string>>({});
+  const [valuationNotes, setValuationNotes] = useState<Record<number, string>>({});
 
   const load = useCallback(async () => {
     const sh = await client.ventureShares(ventureId).catch(() => null);
@@ -252,7 +257,9 @@ function VentureDetailBlock({ client, ventureId, act }: {
 
   return (
     <View style={{ gap: 10, marginTop: 8 }}>
-      <Text style={s.cardTitle}>份额</Text>
+      <OrganizationRecords client={client} ventureId={ventureId} />
+      <PayoutGovernance client={client} ventureId={ventureId} />
+      <Text style={s.cardTitle}>项目贡献份额</Text>
       {/* COOP-021 份额口径要写出来：不说清楚按什么折算，数字没有意义 */}
       {!!basis && <Text style={s.muted}>{basis}</Text>}
       {shares.length === 0 && <Text style={s.muted}>还没有确认的贡献，份额为空。</Text>}
@@ -272,15 +279,27 @@ function VentureDetailBlock({ client, ventureId, act }: {
       })} />
       {rows.map((c) => (
         <View key={c.id} style={s.card}>
-          <Text style={s.cardTitle}>#{c.user_id} · {c.kind} · {c.status}</Text>
+          <Text style={s.cardTitle}>#{c.user_id} · {c.kind} · {c.status === 'accepted' ? `已计价 ${fmtYuan(c.valued_cents)}` : c.status === 'rejected' ? '已驳回' : '待确认'}</Text>
           <Text style={s.muted}>{c.description}</Text>
           {/* COOP-010 贡献不能自己确认——与 TEAM-021、VER-021 同一条规矩，
               准入判断在服务端，这里只是不把按钮摆给本人 */}
           {c.can_confirm && (
-            <Button title="确认并折算 ¥1000" onPress={() => act(async () => {
-              await client.confirmContribution(ventureId, c.id, 100000, '按约定折算');
-              await load();
-            })} />
+            <View style={{gap:8}}>
+              <TextInput style={s.input} accessibilityLabel={`贡献 ${c.id} 计价金额（元）`}
+                placeholder="计价金额（元）" keyboardType="decimal-pad" value={valuations[c.id] ?? ''}
+                onChangeText={value => setValuations({...valuations,[c.id]:value})}/>
+              <TextInput style={s.input} accessibilityLabel={`贡献 ${c.id} 计价说明`}
+                placeholder="计价依据或驳回说明" value={valuationNotes[c.id] ?? ''}
+                onChangeText={value => setValuationNotes({...valuationNotes,[c.id]:value})}/>
+              <Button title="确认并计价" disabled={!(Number(valuations[c.id]) > 0)} onPress={() => act(async () => {
+                await client.confirmContribution(ventureId, c.id, Math.round(Number(valuations[c.id])*100), valuationNotes[c.id] ?? '');
+                await load();
+              })}/>
+              <Button title="驳回此贡献" onPress={() => act(async () => {
+                await client.confirmContribution(ventureId, c.id, 0, valuationNotes[c.id] ?? '', false);
+                await load();
+              })}/>
+            </View>
           )}
         </View>
       ))}
@@ -319,12 +338,17 @@ function DeveloperScreen({ client }: { client: PlatformClient }) {
         setName('');
         await load();
       })} />
+      <Button title="创建机器任务 Key（需另行授权）" onPress={() => act(async () => {
+        const r = await client.createApiKey(name.trim() || '机器助理', ['tasks:read', 'tasks:write']);
+        setPlain(`${r.key}\n\n${r.warning}`); setName(''); await load();
+      })} />
       {!!plain && <Text style={s.mono}>{plain}</Text>}
       {keys.length === 0 && <Text style={s.muted}>还没有 API Key。</Text>}
       {keys.map((k) => (
         <View key={k.id} style={s.card}>
           <Text style={s.cardTitle}>{k.name} · {k.key_prefix}…</Text>
           <Text style={s.muted}>{k.scopes.join('、')} · {k.active ? '启用中' : '已吊销'}</Text>
+          {k.active && k.scopes.includes('tasks:write') && <MachineMandate client={client} keyId={k.id} />}
           {k.active && (
             <Button title="吊销" color="#dc2626"
                     onPress={() => act(async () => { await client.revokeApiKey(k.id); await load(); })} />
@@ -336,7 +360,7 @@ function DeveloperScreen({ client }: { client: PlatformClient }) {
       <TextInput style={s.input} value={url} onChangeText={setUrl}
                  placeholder="https://…（接收地址）" autoCapitalize="none" />
       <Button title="添加（任务状态变更）" onPress={() => act(async () => {
-        const r = await client.createWebhook(url.trim(), ['task.status_changed']);
+        const r = await client.createWebhook(url.trim(), ['task.completed']);
         // 签名密钥同理：只此一次
         setPlain(`${r.secret}\n\n${r.signature_howto}`);
         setUrl('');

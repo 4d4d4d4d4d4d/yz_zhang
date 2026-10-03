@@ -88,6 +88,8 @@ def get_signature_provider() -> SignatureProvider:
     global _provider
     if _provider is None:
         name = settings.SIGNATURE_PROVIDER
+        if settings.ENV == "prod" and name not in _REGISTRY:
+            raise RuntimeError("未注册的电子签名供应商")
         factory = _sandbox_ca() if name == "sandbox-ca" else \
             _REGISTRY.get(name, PlatformWitnessSignature)
         _provider = factory()

@@ -26,6 +26,8 @@ CLIENT_EXEMPT: dict[str, str] = {
     "/open/v1/tasks": "开放 API 是给第三方用 API Key 调的，我们自己的客户端走普通会话",
     "/open/v1/tasks/{x}": "开放 API 的任务详情，第三方集成入口，不是本平台客户端的入口",
     "/open/v1/wallet": "开放 API 的余额查询，同样只给持 API Key 的第三方",
+    "/open/v1/tasks/{x}/applications": "授权机器用 API Key 报名，Web/App 使用会话端点",
+    "/open/v1/tasks/{x}/deliver": "授权机器用 API Key 提交交付，Web/App 使用会话端点",
     "/wallet/pay/callback": "支付供应商回调，服务端到服务端，客户端不该也不能调",
     "/wallet/withdraw-requests/{x}/approve": "提现人审是风控岗位的动作，在管理后台做",
     "/wallet/withdraw-requests/{x}/reject": "提现驳回同样是风控岗位的动作，不是用户按钮",

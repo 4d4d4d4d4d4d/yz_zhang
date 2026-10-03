@@ -11,7 +11,7 @@
 """
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -99,3 +99,18 @@ class Distribution(Base):
     memo: Mapped[str] = mapped_column(String(200), default="")
     created_by: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class VentureInvitation(Base):
+    """An invitation is an expiring authorization, not a notification."""
+    __tablename__ = "venture_invitations"
+    __table_args__ = (UniqueConstraint("venture_id", "invitee_id", name="uq_venture_invitee"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    venture_id: Mapped[int] = mapped_column(Integer, index=True)
+    invitee_id: Mapped[int] = mapped_column(Integer, index=True)
+    inviter_id: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(12), default="pending")
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

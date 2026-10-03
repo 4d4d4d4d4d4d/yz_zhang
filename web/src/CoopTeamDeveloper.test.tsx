@@ -194,7 +194,7 @@ describe('开发者设置', () => {
     localStorage.setItem('token', 'tok');
     const client = makeClient({
       '/users/me': ME,
-      '/developer/scopes': { scopes: [{ name: 'tasks:read', description: '读任务' }], note: '没有任何一档 scope 能动钱' },
+      '/developer/scopes': { scopes: [{ key: 'tasks:read', label: '读任务' }], notice: '没有任何一档 scope 能动钱' },
       '/developer/api-keys': [],
       '/developer/webhooks': [],
     });
@@ -212,7 +212,7 @@ describe('开发者设置', () => {
     localStorage.setItem('token', 'tok');
     const client = makeClient({
       '/users/me': ME,
-      '/developer/scopes': { scopes: [], note: '' },
+      '/developer/scopes': { scopes: [], notice: '' },
       '/developer/api-keys': [],
       '/developer/webhooks': [
         { id: 3, url: 'https://x/cb', events: ['task.completed'], active: false,

@@ -1,5 +1,6 @@
 """开发者设置（会话鉴权）+ 开放 API（Key 鉴权）（54 号 spec）。"""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import or_
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -161,13 +162,16 @@ def delete_webhook(webhook_id: int, user: User = Depends(get_current_user),
 
 # ------------------------------------------------------ 开放 API（Key 鉴权）
 @router.get("/open/v1/tasks")
-def open_list_tasks(limit: int = 20, offset: int = 0,
+def open_list_tasks(limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
+                    marketplace: bool = False,
                     principal=Depends(require_scope("tasks:read")),
                     db: Session = Depends(get_db)):
     from app.modules.task.models import Task
 
     _key, user = principal
-    rows = (db.query(Task).filter(Task.creator_id == user.id)
+    visible = (Task.status == "published") & (Task.visibility == "public") if marketplace else \
+        or_(Task.creator_id == user.id, Task.executor_id == user.id)
+    rows = (db.query(Task).filter(visible)
             .order_by(Task.id.desc()).offset(offset).limit(min(limit, 100)).all())
     return [
         {"id": t.id, "title": t.title, "category": t.category, "status": t.status,
@@ -178,13 +182,14 @@ def open_list_tasks(limit: int = 20, offset: int = 0,
 
 
 @router.get("/open/v1/tasks/{task_id}")
-def open_get_task(task_id: int, principal=Depends(require_scope("tasks:read")),
+def open_get_task(task_id: int, marketplace: bool = False, principal=Depends(require_scope("tasks:read")),
                   db: Session = Depends(get_db)):
     from app.modules.task.models import Task
 
     _key, user = principal
     t = db.get(Task, task_id)
-    if not t or t.creator_id != user.id:
+    if not t or (user.id not in (t.creator_id, t.executor_id)
+                 and not (marketplace and t.visibility == "public" and t.status == "published")):
         raise not_found("任务不存在")
     return {"id": t.id, "title": t.title, "description": t.description,
             "category": t.category, "status": t.status,

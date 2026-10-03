@@ -1004,3 +1004,76 @@ export interface CertificationApplicationView {
   expires_at: string | null;
   created_at: string;
 }
+
+export interface MachineMandateInput {
+  operations: Array<'publish' | 'apply' | 'deliver'>;
+  categories: string[];
+  per_task_cents: number;
+  total_cents: number;
+  valid_days: number;
+  acknowledge_responsibility: true;
+}
+export interface MachineMandateView {
+  key_id: number;
+  principal_id: number;
+  operations: string[];
+  categories: string[];
+  per_task_cents: number;
+  total_cents: number;
+  used_cents: number;
+  expires_at: string;
+}
+export interface MachineActionView {
+  id: number;
+  key_id: number;
+  principal_id: number;
+  operation: string;
+  task_id: number;
+  fingerprint: string;
+  created_at: string;
+}
+
+export interface OrganizationRightInput {
+  holder_name: string;
+  role: 'shareholder' | 'general_partner' | 'limited_partner' | 'cooperator' | 'proprietor';
+  subscribed_cents: number;
+  paid_cents: number;
+  interest_description: string;
+  source_document: string;
+}
+export interface OrganizationRecordInput {
+  entity_type: 'project_cooperation' | 'sole_proprietor' | 'limited_company' | 'joint_stock_company' | 'general_partnership' | 'limited_partnership' | 'other';
+  jurisdiction: string;
+  registered_name: string;
+  registration_number: string;
+  representative_user_id: number;
+  governance_basis: string;
+  document_references: string[];
+  rights: OrganizationRightInput[];
+  acknowledge_record_only: true;
+  acknowledge_member_visibility: true;
+}
+export interface OrganizationRecordView {
+  id: number;
+  venture_id: number;
+  revision: number;
+  submitted_by: number;
+  entity_type: string;
+  jurisdiction: string;
+  registered_name: string;
+  registration_number: string;
+  representative_user_id: number;
+  governance_basis: string;
+  document_references: string[];
+  rights: OrganizationRightInput[];
+  record_hash: string;
+  created_at: string;
+  verification_status: string;
+  notice: string;
+}
+
+export interface PayoutProposalView {
+  id: number; venture_id: number; created_by: number; amount_cents: number; memo: string;
+  member_ids: number[]; share_snapshot: ShareRow[]; approvals: Array<{user_id:number;at:string}>;
+  status: 'pending'|'rejected'|'executed'; distribution_id: number|null; expires_at: string;
+}

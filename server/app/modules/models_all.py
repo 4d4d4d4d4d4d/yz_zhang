@@ -38,12 +38,14 @@ from app.modules.openapi.models import (  # noqa: F401
     Webhook,
     WebhookDelivery,
 )
+from app.modules.openapi.machine import MachineMandate, MachineAction  # noqa: F401
 from app.modules.team.models import SpendRequest, Team, TeamMember  # noqa: F401
 from app.modules.coop.models import (  # noqa: F401
     Contribution,
     Distribution,
     Venture,
     VentureMember,
+    VentureInvitation,
 )
 from app.modules.verify.models import (  # noqa: F401
     VerificationLesson,
@@ -69,3 +71,7 @@ from app.modules.orchestrator.models import (  # noqa: F401
     MissionStep,
     StepReview,
 )
+
+from app.modules.coop.organization import OrganizationRecord  # noqa: F401
+
+from app.modules.coop.governance import PayoutProposal  # noqa: F401

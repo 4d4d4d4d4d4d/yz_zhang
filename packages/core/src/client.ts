@@ -1,6 +1,9 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
   AgentProfileView,
+  PayoutProposalView,
+  OrganizationRecordInput, OrganizationRecordView,
+  MachineMandateInput, MachineMandateView, MachineActionView,
   AgentRunView,
   AgreementStatus,
   ApiKeyView,
@@ -1243,10 +1246,19 @@ export class PlatformClient {
       'GET', `/ventures/${ventureId}/shares`,
     );
   }
-  distributeVenture(ventureId: number, amountCents: number, memo = '') {
+  distributeVenture(ventureId: number, amountCents: number, memo = '', proposalId?: number) {
     return this.request<{ id: number; total_cents: number; share_snapshot: ShareRow[] }>(
-      'POST', `/ventures/${ventureId}/distributions`, { amount_cents: amountCents, memo },
+      'POST', `/ventures/${ventureId}/distributions`, { amount_cents: amountCents, memo, proposal_id: proposalId },
     );
+  }
+  payoutProposals(ventureId: number) {
+    return this.request<PayoutProposalView[]>('GET', `/ventures/${ventureId}/payout-proposals`);
+  }
+  proposePayout(ventureId: number, amountCents: number, memo: string) {
+    return this.request<PayoutProposalView>('POST', `/ventures/${ventureId}/payout-proposals`, {amount_cents:amountCents,memo});
+  }
+  votePayout(ventureId: number, proposalId: number, approve: boolean) {
+    return this.request<PayoutProposalView>('POST', `/ventures/${ventureId}/payout-proposals/${proposalId}/vote`, {approve});
   }
   ventureDistributions(ventureId: number) {
     return this.request<Array<{ id: number; total_cents: number; memo: string; share_snapshot: ShareRow[]; created_at: string }>>(
@@ -1319,11 +1331,28 @@ export class PlatformClient {
     );
   }
 
+  organizationRecords(ventureId: number) {
+    return this.request<OrganizationRecordView[]>('GET', `/ventures/${ventureId}/organization-records`);
+  }
+  addOrganizationRecord(ventureId: number, body: OrganizationRecordInput) {
+    return this.request<OrganizationRecordView>('POST', `/ventures/${ventureId}/organization-records`, body);
+  }
+
   // ---- OAPI 开放 API 与 Webhook ----
-  apiScopes() {
-    return this.request<{ scopes: Array<{ name: string; description: string }>; note: string }>(
+  async apiScopes() {
+    const result = await this.request<{ scopes: Array<{ key: string; label: string }>; notice: string }>(
       'GET', '/developer/scopes',
     );
+    return { scopes: result.scopes.map(s => ({ name: s.key, description: s.label })), note: result.notice };
+  }
+  grantMachineMandate(keyId: number, body: MachineMandateInput) {
+    return this.request<MachineMandateView>('POST', `/developer/api-keys/${keyId}/mandate`, body);
+  }
+  machineMandate(keyId: number) {
+    return this.request<MachineMandateView | null>('GET', `/developer/api-keys/${keyId}/mandate`);
+  }
+  machineActions(keyId: number) {
+    return this.request<MachineActionView[]>('GET', `/developer/api-keys/${keyId}/actions`);
   }
   /** API-001 明文 key **只在这个响应里出现一次**，库里只存哈希。 */
   createApiKey(name: string, scopes: string[]) {

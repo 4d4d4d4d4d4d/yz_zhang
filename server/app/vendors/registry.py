@@ -72,6 +72,8 @@ NON_PRODUCTION_NAMES = {
 def provider_grade(kind: str, name: str | None = None) -> str:
     """STUB-003 三态：production / sandbox（形态真实但仍是桩）/ mock（退化实现）。"""
     name = name or configured_name(kind)
+    if name not in _REGISTRY.get(kind, {}):
+        return "unconfigured"
     if name == "sandbox":
         return "sandbox"
     if name in (MOCK_NAMES.get(kind), "mock", "local"):
@@ -91,6 +93,8 @@ def get_provider(kind: str):
         return _instances[kind]
     name = configured_name(kind)
     impls = _REGISTRY.get(kind, {})
+    if settings.ENV == "prod" and name not in impls:
+        raise RuntimeError(f"未注册的供应商：{kind}({name})")
     factory = impls.get(name) or impls[MOCK_NAMES[kind]]
     _instances[kind] = factory()
     return _instances[kind]
@@ -106,7 +110,8 @@ def missing_production_providers() -> list[str]:
 
     包含 sandbox：沙箱桩形态虽真，仍不接任何真实机构，上线即事故。
     """
-    return [k for k in P0_KINDS if configured_name(k) in NON_PRODUCTION_NAMES[k]]
+    return [k for k in P0_KINDS if configured_name(k) in NON_PRODUCTION_NAMES[k]
+            or configured_name(k) not in _REGISTRY.get(k, {})]
 
 
 def startup_check() -> None:
@@ -118,6 +123,17 @@ def startup_check() -> None:
     if settings.ENV != "prod":
         return
     problems: list[str] = []
+    for kind in _REGISTRY:
+        name = configured_name(kind)
+        if name not in _REGISTRY[kind]:
+            problems.append(f"未注册的供应商：{kind}({name})，不能回退到模拟实现")
+    from .signature import _REGISTRY as signature_registry
+    from .notary import _REGISTRY as notary_registry
+
+    if settings.SIGNATURE_PROVIDER not in signature_registry:
+        problems.append("PLATFORM_SIGNATURE_PROVIDER 未注册正式实现")
+    if settings.NOTARY_PROVIDER not in notary_registry:
+        problems.append("PLATFORM_NOTARY_PROVIDER 未注册正式实现")
     missing = missing_production_providers()
     if missing:
         detail = ", ".join(f"{k}({configured_name(k)})" for k in missing)

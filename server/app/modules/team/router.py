@@ -1,4 +1,5 @@
 """TEAM 团队账户端点（53 号 spec）。"""
+import secrets
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -78,7 +79,7 @@ def create_team(body: TeamIn, user: User = Depends(require_verified),
     钱包/托管/合约/纠纷/发任务全部以 user_id 为键。
     """
     team_user = User(
-        phone=f"team:{body.name}:{user.id}", nickname=body.name,
+        phone="t:" + secrets.token_urlsafe(12), nickname=body.name[:50],
         is_team=True, is_verified=True, is_adult=True,
         accepting_orders=False,     # 团队是发布方，不接单
     )

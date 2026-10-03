@@ -1,4 +1,5 @@
 """COOP 份额计算、贡献确认与收益分配（50 号 spec）。"""
+from datetime import timedelta
 from sqlalchemy.orm import Session
 
 from app.core.errors import bad_request, conflict, forbidden
@@ -6,7 +7,7 @@ from app.modules.account.models import User, utcnow
 from app.modules.wallet import service as wallet
 
 from . import compliance_path as cpath
-from .models import Contribution, Distribution, Venture, VentureMember
+from .models import Contribution, Distribution, Venture, VentureMember, VentureInvitation
 
 
 def get_venture(db: Session, venture_id: int) -> Venture | None:
@@ -85,13 +86,44 @@ def join_block(db: Session, venture: Venture, user: User, risk_version: str) -> 
 
 def add_member(db: Session, venture: Venture, user: User, risk_version: str,
                role: str = "member") -> VentureMember:
+    db.query(Venture).filter_by(user_id=venture.user_id).update({'status': Venture.status})
     block = join_block(db, venture, user, risk_version)
     if block:
         raise bad_request(block, "join_blocked")
+    if role != "founder":
+        invitation = db.query(VentureInvitation).filter_by(
+            venture_id=venture.user_id, invitee_id=user.id, status="pending"
+        ).with_for_update().first()
+        if (not invitation or invitation.expires_at <= utcnow()
+                or not is_member(db, venture.user_id, invitation.inviter_id)):
+            raise forbidden("需要当前成员发出的有效邀请", "invitation_required")
+        changed = db.query(VentureInvitation).filter_by(
+            id=invitation.id, status="pending"
+        ).update({"status": "accepted", "accepted_at": utcnow()}, synchronize_session=False)
+        if changed != 1:
+            raise conflict("邀请已处理", "invitation_consumed")
     row = VentureMember(
         venture_id=venture.user_id, user_id=user.id, role=role,
         risk_disclosure_version=risk_version, risk_accepted_at=utcnow(),
     )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def invite_member(db: Session, venture_id: int, inviter_id: int, invitee_id: int):
+    if not is_member(db, venture_id, inviter_id):
+        raise forbidden("仅合作体成员可邀请")
+    row = db.query(VentureInvitation).filter_by(
+        venture_id=venture_id, invitee_id=invitee_id).with_for_update().first()
+    if row is None:
+        row = VentureInvitation(venture_id=venture_id, invitee_id=invitee_id,
+                                inviter_id=inviter_id)
+    row.inviter_id = inviter_id
+    row.status = "pending"
+    row.created_at = utcnow()
+    row.expires_at = utcnow() + timedelta(days=7)
+    row.accepted_at = None
     db.add(row)
     db.flush()
     return row
@@ -103,6 +135,8 @@ def confirm_contribution(db: Session, contribution: Contribution, confirmer: Use
 
     自报贡献等于自己发股份。这条写在代码里，不靠自觉。
     """
+    db.query(Venture).filter_by(user_id=contribution.venture_id).update({'status': Venture.status})
+    db.refresh(contribution)
     if contribution.status != "proposed":
         raise conflict("该贡献已处理", "already_decided")
     if contribution.user_id == confirmer.id:

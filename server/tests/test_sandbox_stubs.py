@@ -142,7 +142,7 @@ def test_provider_grade_three_states(monkeypatch):
     """STUB-003 三态区分：production / sandbox / mock。"""
     assert registry.provider_grade("payment", "mock") == "mock"
     assert registry.provider_grade("payment", "sandbox") == "sandbox"
-    assert registry.provider_grade("payment", "acme-pay") == "production"
+    assert registry.provider_grade("payment", "acme-pay") == "unconfigured"
     assert registry.provider_grade("moderation", "local") == "mock"
 
 

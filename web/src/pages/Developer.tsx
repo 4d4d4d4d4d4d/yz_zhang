@@ -4,6 +4,7 @@ import {
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
+import MachineMandate from '../MachineMandate';
 
 /** UI-076/077 开发者设置（54 号 spec 的界面侧）。
  *
@@ -90,6 +91,7 @@ export default function Developer() {
                   {k.active ? ' 生效中' : ' 已吊销'} ·
                   最近使用 {k.last_used_at ? formatDateTime(k.last_used_at) : '从未'}
                 </p>
+                {k.scopes.includes('tasks:write') && k.active && <MachineMandate client={client} keyId={k.id} />}
               </div>
               {k.active && (
                 <span className="row">

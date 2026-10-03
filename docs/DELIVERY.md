@@ -1,7 +1,7 @@
 # 交付总览（Final Delivery Overview）
 
 > 截至 2026-09-30：MVP + V1~V112 全批次完成。
-> 后端 **1195 tests** + 前端 **161 tests**（core 56 + web 84 + App 21）全绿，全仓 lint 干净。
+> 后端 **1206 tests** + 前端 **161 tests**（core 56 + web 84 + App 21）全绿，全仓 lint 干净。
 > 现状一页看清：[72-status-ledger.md](specs/72-status-ledger.md)；上线流程见 [GO-LIVE.md](GO-LIVE.md)；
 > **全系统体检（数据库怎么搭 / 跑起来有什么问题）见 [SYSTEM-CHECK.md](SYSTEM-CHECK.md)**。
 > 本文档是对 [docs/specs/](specs/README.md)（功能拆分）与

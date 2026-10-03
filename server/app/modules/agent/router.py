@@ -1,4 +1,5 @@
 """AGT agent 目录、报名与执行（48 号 spec）。"""
+import secrets
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -73,8 +74,8 @@ def create_agent(body: AgentIn, admin: User = Depends(require_admin),
     if not body.domains:
         raise bad_request("必须声明至少一个能力领域", "domains_required")
     agent_user = User(
-        phone=f"agent:{body.name}",
-        nickname=body.name,
+        phone="a:" + secrets.token_urlsafe(12),
+        nickname=body.name[:50],
         is_agent=True,
         is_verified=True,     # 平台自有，实名由平台承担
         is_adult=True,

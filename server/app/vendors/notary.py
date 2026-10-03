@@ -57,6 +57,8 @@ def get_notary() -> NotaryProvider:
     global _provider
     if _provider is None:
         name = settings.NOTARY_PROVIDER
+        if settings.ENV == "prod" and name not in _REGISTRY:
+            raise RuntimeError("未注册的存证供应商")
         factory = _sandbox_notary() if name == "sandbox-notary" else \
             _REGISTRY.get(name, LocalNotary)
         _provider = factory()

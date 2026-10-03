@@ -1,3 +1,5 @@
+import PayoutGovernance from '../PayoutGovernance';
+import OrganizationRecords from '../OrganizationRecords';
 import {
   apiErrorText, fmtYuan,
   type CompliancePath, type ContributionKind, type ContributionView,
@@ -135,7 +137,6 @@ function VentureDetailCard({ ventureId, onChanged }: { ventureId: number; onChan
   const [form, setForm] = useState<{ kind: ContributionKind; description: string }>({
     kind: 'time', description: '',
   });
-  const [amount, setAmount] = useState('');
 
   const load = useCallback(async () => {
     setDetail(await client.venture(ventureId).catch(() => null));
@@ -156,6 +157,7 @@ function VentureDetailCard({ ventureId, onChanged }: { ventureId: number; onChan
     <>
       <div className="card">
         <h3>{detail.name}</h3>
+        <OrganizationRecords client={client} ventureId={ventureId} />
         <p className="muted">
           成员 {detail.members.length} 人 · 已实现资金{' '}
           <span className="price">{fmtYuan(detail.realized_funds_cents)}</span>
@@ -184,17 +186,7 @@ function VentureDetailCard({ ventureId, onChanged }: { ventureId: number; onChan
           只能分配合作体<strong>已经实际收到</strong>的钱，当前可分配{' '}
           {fmtYuan(detail.realized_funds_cents)}。
         </p>
-        <div className="row">
-          <input style={{ width: 140 }} type="number" min={0.01} step={0.01} placeholder="金额（元）"
-                 value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <button disabled={!amount}
-                  onClick={() => act(async () => {
-                    await client.distributeVenture(ventureId, Math.round(parseFloat(amount) * 100));
-                    setAmount('');
-                  })}>
-            按当前份额分配
-          </button>
-        </div>
+        <PayoutGovernance client={client} ventureId={ventureId} onChanged={load} />
       </div>
 
       <div className="card">
@@ -220,7 +212,7 @@ function VentureDetailCard({ ventureId, onChanged }: { ventureId: number; onChan
               <div>
                 <strong>{KIND_LABEL[c.kind] ?? c.kind}</strong> · {c.description}
                 <p className="muted">
-                  #{c.user_id} · {c.status === 'confirmed' ? `已计价 ${fmtYuan(c.valued_cents)}` : '待确认'}
+                  #{c.user_id} · {c.status === 'accepted' ? `已计价 ${fmtYuan(c.valued_cents)}` : c.status === 'rejected' ? '已驳回' : '待确认'}
                   {c.confirm_note && ` · ${c.confirm_note}`}
                 </p>
               </div>

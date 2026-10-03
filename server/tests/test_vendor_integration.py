@@ -249,6 +249,16 @@ def test_production_startup_check_blocks_mock_providers(monkeypatch):
     message = str(exc.value)
     assert "payment" in message
     assert "PLATFORM_JWT_SECRET" in message  # 弱密钥也一并拦下
+    monkeypatch.setattr(registry.settings, "PAYMENT_PROVIDER", "typo-live-payment")
+    monkeypatch.setattr(registry.settings, "SIGNATURE_PROVIDER", "typo-live-signature")
+    monkeypatch.setattr(registry.settings, "NOTARY_PROVIDER", "typo-live-notary")
+    assert "payment" in registry.missing_production_providers()
+    assert registry.provider_grade("payment") == "unconfigured"
+    with pytest.raises(RuntimeError, match="未注册"):
+        registry.startup_check()
+    registry.reset()
+    with pytest.raises(RuntimeError, match="未注册"):
+        registry.get_provider("payment")
 
 
 def test_dev_startup_check_passes(monkeypatch):
