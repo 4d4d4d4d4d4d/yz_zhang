@@ -54,3 +54,10 @@ def contract_anchors(
          "payload_hash": r.payload_hash, "created_at": iso(r.created_at)}
         for r in rows
     ]
+
+
+@router.get("/blockchain")
+def blockchain_status(db: Session = Depends(get_db)):
+    from .blockchain import status
+
+    return status(db)

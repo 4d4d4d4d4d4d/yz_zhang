@@ -143,6 +143,10 @@ class Settings:
     SIGNATURE_PROVIDER = os.environ.get("PLATFORM_SIGNATURE_PROVIDER", "platform")
     # local = 自算哈希链，无第三方背书；接司法存证/公证处后才有采信力
     NOTARY_PROVIDER = os.environ.get("PLATFORM_NOTARY_PROVIDER", "local")
+    CHAIN_RPC_URL = os.environ.get("PLATFORM_CHAIN_RPC_URL", "")
+    CHAIN_CONTRACT = os.environ.get("PLATFORM_CHAIN_CONTRACT", "")
+    CHAIN_ID = int(os.environ.get("PLATFORM_CHAIN_ID", "0"))
+    CHAIN_CONFIRMATIONS = int(os.environ.get("PLATFORM_CHAIN_CONFIRMATIONS", "12"))
     # 当前生效的用户协议版本（LAW-030：变更需重新同意）
     AGREEMENT_VERSION = os.environ.get("PLATFORM_AGREEMENT_VERSION", "2026-08-01")
     # NTF-002 推送通道。none = 只有站内信（用户不打开 App 就收不到）。

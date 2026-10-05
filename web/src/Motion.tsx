@@ -1,3 +1,4 @@
+import CooperationVisual from './CooperationVisual';
 // PRLX-050~056 web 侧的视觉运动层（79 号 spec）。
 //
 // 45 号 spec 为 App 立过三条约束，这里逐条对应到 web：
@@ -96,9 +97,9 @@ export function ParallaxHero({ title, subtitle, children }: {
   return (
     <section ref={ref} className="hero" data-testid="parallax-hero"
              data-reduced={reduce ? 'true' : 'false'}>
-      <div className="hero-layer" aria-hidden="true" />
+      <div className="hero-layer" aria-hidden="true" /><CooperationVisual />
       <div className="hero-content">
-        <h2>{title}</h2>
+        <span className="eyebrow">THE NEXT WAY TO WORK</span><h2>{title}</h2>
         {subtitle && <p className="muted">{subtitle}</p>}
         {children}
       </div>

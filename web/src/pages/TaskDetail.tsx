@@ -1,3 +1,4 @@
+import ContractEvidence from '../ContractEvidence';
 import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, fmtYuan, formatDateTime, type ChangeOrderView, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -209,7 +210,8 @@ export default function TaskDetail() {
       {/* 合约卡片（SC-002/003） */}
       {contract && (
         <div className="card">
-          <h3>智能合约 #{contract.id}</h3>
+          <h3>协作合约 #{contract.id}</h3>
+          <ContractEvidence contractId={contract.id} />
           {/* SYNC-005 保证金此前在网页上**一个字都没有**：执行方接单时 wallet
               会把这笔钱从可用余额划到冻结，而合约页不提、钱包页只给一个
               「冻结中」的数字。钱不见了却没有解释，是这一批最该修的一条。 */}
@@ -253,7 +255,7 @@ export default function TaskDetail() {
               `milestones_locked`（改价要走变更单）。此前没有任何端能定义分期，
               于是生产环境里每一份合约都只有一期——下面那张表的渲染条件
               `length > 1` 永远不成立，是一段跑不到的代码。 */}
-          {isCreator && contract.status === 'pending_signatures' && (
+          {isCreator && contract.status === 'pending_signatures' && !contract.signed_by_requester && !contract.signed_by_executor && (
             <DefineMilestones contractId={contract.id} amountCents={contract.amount_cents}
                               onDefined={async () => setContract(await client.getContract(contract.id))} />
           )}

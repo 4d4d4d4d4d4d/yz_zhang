@@ -110,8 +110,9 @@ def define_milestones(db: Session, contract: Contract, user_id: int, items: list
     """SC-004 双签前定义分期结构（金额必须与合约总额守恒）。"""
     if user_id != contract.requester_id:
         raise bad_request("仅发布方可定义里程碑", "not_party")
-    if contract.status != "pending_signatures":
-        raise conflict("合约签署后不可重定义里程碑，请走变更单", "milestones_locked")
+    if (contract.status != "pending_signatures" or contract.signed_by_requester
+            or contract.signed_by_executor):
+        raise conflict("已有当事人签署，不可重定义里程碑，请走变更单", "milestones_locked")
     if not items:
         raise bad_request("里程碑不能为空", "empty_milestones")
     total = sum(i["amount_cents"] for i in items)
@@ -121,6 +122,9 @@ def define_milestones(db: Session, contract: Contract, user_id: int, items: list
         )
     if any(i["amount_cents"] <= 0 for i in items):
         raise bad_request("每期金额必须为正", "invalid_amount")
+    # Serialize edits against a concurrent first signature through the contract optimistic lock.
+    contract.lock_version += 1
+    db.flush()
     db.query(Milestone).filter(Milestone.contract_id == contract.id).delete()
     rows = [
         Milestone(contract_id=contract.id, idx=i + 1, title=item.get("title", f"第{i + 1}期"),
@@ -167,14 +171,31 @@ def _require_verified_signer(db: Session, user_id: int) -> None:
         raise bad_request("签署前需完成实名认证", "verification_required")
 
 
+def signing_document(db: Session, contract: Contract) -> str:
+    """Canonical, immutable agreement content; excludes execution state."""
+    import json
+
+    milestones = db.query(Milestone).filter(Milestone.contract_id == contract.id).order_by(Milestone.idx).all()
+    return json.dumps({
+        "schema": "opc-agreement-v1", "contract_id": contract.id,
+        "task_id": contract.task_id, "version": contract.version,
+        "requester_id": contract.requester_id, "executor_id": contract.executor_id,
+        "amount_cents": contract.amount_cents, "bonus_cents": contract.bonus_cents,
+        "fee_bps": contract.fee_bps, "terms": contract.terms,
+        "milestones": [{"idx": m.idx, "title": m.title, "amount_cents": m.amount_cents} for m in milestones],
+    }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
 def record_signature(db: Session, contract: Contract, signer_id: int,
                      role: str, meta: dict) -> ContractSignature:
     """LAW-002/004 落一条签署留痕（每个合同版本独立签署与独立存证）。"""
     from app.vendors.signature import document_hash, get_signature_provider
 
     provider = get_signature_provider()
-    doc_hash = document_hash(contract.terms)
+    snapshot = signing_document(db, contract)
+    doc_hash = document_hash(snapshot)
     result = provider.sign(signer_id, doc_hash, meta)
+    result.extra = {**result.extra, "document_schema": "opc-agreement-v1", "document_snapshot": snapshot}
     row = ContractSignature(
         contract_id=contract.id, signer_id=signer_id, role=role,
         contract_version=contract.version, document_hash=doc_hash,
@@ -200,10 +221,9 @@ def verify_signatures(db: Session, contract: Contract) -> dict:
     注意语义：**旧版本的签名对不上当前条款是正常的**（条款已变更），
     因此只校验与当前版本同版的签名。
     """
-    from app.vendors.signature import document_hash, get_signature_provider
+    from app.vendors.signature import document_hash, signature_provider_for
 
-    provider = get_signature_provider()
-    current_hash = document_hash(contract.terms)
+    current_hash = document_hash(signing_document(db, contract))
     rows = (
         db.query(ContractSignature)
         .filter(ContractSignature.contract_id == contract.id)
@@ -213,13 +233,17 @@ def verify_signatures(db: Session, contract: Contract) -> dict:
     tampered = False
     for row in rows:
         same_version = row.contract_version == contract.version
-        hash_ok = row.document_hash == current_hash if same_version else None
+        expected_hash = current_hash if (row.extra or {}).get("document_schema") == "opc-agreement-v1" else document_hash(contract.terms)
+        hash_ok = row.document_hash == expected_hash if same_version else None
         from app.vendors.signature import SignatureResult
 
-        sig_ok = provider.verify(
+        provider = signature_provider_for(row.provider)
+        sig_ok = bool(provider and provider.verify(
             row.signer_id, row.document_hash,
-            SignatureResult(signature=row.signature, extra=row.extra or {}),
-        )
+            SignatureResult(signature=row.signature, certificate=row.certificate,
+                            timestamp_token=row.timestamp_token, algorithm=row.algorithm,
+                            reliability=row.reliability, provider=row.provider, extra=row.extra or {}),
+        ))
         if same_version and (hash_ok is False or not sig_ok):
             tampered = True
         out.append({

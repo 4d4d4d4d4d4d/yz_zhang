@@ -86,7 +86,7 @@ describe('SC-007 变更单', () => {
 });
 
 describe('SC-004 分期', () => {
-  const PENDING = { ...CONTRACT, status: 'pending_signatures', signed_by_executor: false };
+  const PENDING = { ...CONTRACT, status: 'pending_signatures', signed_by_requester: false, signed_by_executor: false };
   const CREATOR_ME = { ...ME, id: 1 };
 
   it('把「还差多少」算给用户看，但判定仍以服务端为准', async () => {

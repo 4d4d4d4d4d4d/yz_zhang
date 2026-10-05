@@ -1,3 +1,4 @@
+import CooperationVisual from '../CooperationVisual';
 // ACC-041 登录页的三条路：密码登录 / 验证码登录 / 忘记密码（77 号 spec）。
 //
 // 探针：`resetPassword` / `smsLogin` / `sendSmsCode` 三条端到端都在，
@@ -95,9 +96,10 @@ export default function Login() {
   const needsCode = mode === 'sms' || mode === 'reset';
 
   return (
-    <div className="page">
-      <div className="card">
-        <h3>{TITLES[mode]}</h3>
+    <div className="page login-page">
+      <section className="login-story"><span className="eyebrow">INDEPENDENT, TOGETHER.</span><h1>一个人很强。<br/>一起，走得更远。</h1><p>让每个人的能力自由连接。<br/>从发布任务到成果交付，建立属于你的合作网络。</p><CooperationVisual/><div className="login-principles"><span>01 自由连接</span><span>02 透明协作</span><span>03 成果可追溯</span></div></section>
+      <div className="card login-panel"><span className="eyebrow">YOUR NEXT CHAPTER</span>
+        <h3>{TITLES[mode]}</h3><p className="login-intro">欢迎加入你的协作空间</p>
         <form className="form" onSubmit={submit}>
           <label>
             手机号

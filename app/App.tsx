@@ -1,3 +1,4 @@
+import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
@@ -246,7 +247,7 @@ function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
 
   return (
     <ScrollView contentContainerStyle={{ gap: 12 }}>
-      <TouchableOpacity onPress={onBack}><Text style={{ color: '#2f6fed' }}>← 返回</Text></TouchableOpacity>
+      <TouchableOpacity onPress={onBack}><Text style={{ color: '#275c52' }}>← 返回</Text></TouchableOpacity>
       <Text style={styles.title}>{task.title}</Text>
       <Text style={styles.mutedLeft}>
         {task.category} · {TASK_STATUS_LABEL[task.status]} · {fmtYuan(task.budget_cents)}
@@ -258,6 +259,7 @@ function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
         <View style={styles.cardRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.cardTitle}>合约 #{contract.id} · {contract.status}</Text>
+            <ContractEvidence client={client} contractId={contract.id} />
             <Text style={styles.mutedLeft}>
               金额 {fmtYuan(contract.amount_cents)} · 服务费 {(contract.fee_bps / 100).toFixed(1)}%
               {contract.deposit_cents > 0
@@ -959,23 +961,23 @@ function MeScreen({ client, me, refresh, onLogout }: {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f5f6f8' },
+  root: { flex: 1, backgroundColor: '#f4f5ef' },
   body: { flex: 1, padding: 12 },
   center: { flex: 1, justifyContent: 'center', padding: 24, gap: 12 },
-  title: { fontSize: 22, fontWeight: '700', color: '#2f6fed', textAlign: 'center' },
+  title: { fontSize: 22, fontWeight: '700', color: '#275c52', textAlign: 'center' },
   input: { backgroundColor: '#fff', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#e5e7eb' },
-  cardRow: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 10, padding: 14, marginBottom: 10 },
+  cardRow: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 18, padding: 20, marginBottom: 14, borderWidth: 1, borderColor: '#dce5de' },
   cardTitle: { fontSize: 16, fontWeight: '600' },
-  price: { color: '#dc2626', fontWeight: '700' },
-  badge: { color: '#2f6fed', fontSize: 12 },
+  price: { color: '#275c52', fontWeight: '700' },
+  badge: { color: '#275c52', fontSize: 12 },
   muted: { color: '#6b7280', fontSize: 13, textAlign: 'center', marginTop: 8 },
   mutedLeft: { color: '#6b7280', fontSize: 13 },
   error: { color: '#dc2626' },
   tabbar: { flexDirection: 'row', backgroundColor: '#fff', borderTopWidth: 1, borderColor: '#e5e7eb' },
   tab: { flex: 1, padding: 14, alignItems: 'center' },
   tabText: { color: '#6b7280' },
-  tabActive: { color: '#2f6fed', fontWeight: '700' },
+  tabActive: { color: '#275c52', fontWeight: '700' },
   option: { color: '#1a1d24', paddingVertical: 6 },
-  optionActive: { color: '#2f6fed', fontWeight: '600', paddingVertical: 6 },
-  linkRow: { color: '#2f6fed', paddingVertical: 10 },
+  optionActive: { color: '#275c52', fontWeight: '600', paddingVertical: 6 },
+  linkRow: { color: '#275c52', paddingVertical: 10 },
 });

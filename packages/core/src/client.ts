@@ -424,6 +424,12 @@ export class PlatformClient {
   }
 
   /** LAW-013 存证覆盖：哪些区间有第三方背书、哪些只是平台自算。 */
+  blockchainStatus() {
+    return this.request<{ status: string; verified: boolean; note?: string; chain_id?: number;
+      contract_address?: string; confirmations?: number; seq_from?: number; seq_to?: number;
+      digest?: string; block_number?: number; block_hash?: string }>('GET', '/anchors/blockchain');
+  }
+
   anchorCoverage() {
     return this.request<AnchorCoverage>('GET', '/anchors/coverage');
   }

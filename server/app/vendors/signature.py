@@ -64,7 +64,7 @@ class PlatformWitnessSignature:
             signature=self._mac(signer_id, document_hash, nonce),
             reliability=self.reliability,
             provider=self.name,
-            extra={"nonce": nonce, **{k: v for k, v in meta.items() if k != "ip"}},
+            extra={**{k: v for k, v in meta.items() if k not in {"ip", "nonce"}}, "nonce": nonce},
         )
 
     def verify(self, signer_id: int, document_hash: str, result: SignatureResult) -> bool:
@@ -107,3 +107,13 @@ def document_hash(text: str) -> str:
     必须是签署那一刻的全文——事后改条款则哈希对不上，篡改无法隐藏。
     """
     return hashlib.sha256(text.encode()).hexdigest()
+
+
+def signature_provider_for(name: str) -> SignatureProvider | None:
+    """Historical evidence uses its original provider; never silently substitutes."""
+    if _provider is not None and _provider.name == name:
+        return _provider
+    if name == "sandbox-ca" and settings.ENV != "prod":
+        return _sandbox_ca()()
+    factory = _REGISTRY.get(name)
+    return factory() if factory else None

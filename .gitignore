@@ -21,3 +21,5 @@ server/sandbox_check.db
 server/mig*.db
 server/drift*.db
 server/ci.db
+
+chain/artifacts/

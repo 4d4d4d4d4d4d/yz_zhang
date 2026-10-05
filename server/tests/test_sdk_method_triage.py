@@ -57,7 +57,6 @@ INTENTIONAL: dict[str, str] = {
     "verifyAnchorChain": "同上：存证链校验是取证动作，证据包里已包含结论",
     "contractAnchors": "同上：单合约的存证条目由证据包呈现",
     "contractSettlements": "分账明细在账单流水里已可见，这条是对账口径的原始数据",
-    "contractSignatures": "签名原始数据在合同详情的证明力声明里已有结论",
     "couponsForContract": "某合约可用券由下单流程内部选用，不单独成页",
     "decompositionTemplate": "模板由发布流程内部取用（taskTemplate 才是用户侧那条）",
     "dispute": "单个纠纷详情：当事人页面走 myDisputes + 详情组件，这条是同一数据的另一入口",

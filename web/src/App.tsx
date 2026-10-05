@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, Route, Routes } from 'react-router-dom';
+import { Link, NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import TabBar from './TabBar';
 import Admin from './pages/Admin';
 import Circles from './pages/Circles';
@@ -47,31 +47,21 @@ export default function App() {
           {import.meta.env.VITE_DEPLOYMENT_LABEL}
         </aside>
       )}
-      <nav className="nav">
-        <Link className="logo" to="/">协作任务平台</Link>
-        <Link to="/">任务广场</Link>
-        <Link to="/publish">发布任务</Link>
-        <Link to="/community">社区</Link>
-        <Link to="/circles">圈层</Link>
-        <Link to="/messages">消息</Link>
-        <Link to="/wallet">钱包</Link>
-        <Link to="/rewards">优惠</Link>
-        <Link to="/support">客服</Link>
-        <Link to="/verify">核验台</Link>
-        <Link to="/ventures">合作体</Link>
-        <Link to="/teams">团队</Link>
+      <nav className="nav" aria-label="工作台导航">
+        <Link className="logo" to="/"><span className="brand-mark" aria-hidden="true">o.</span><span>协作任务平台<small>OPEN COLLABORATION</small></span></Link>
+        <div className="nav-links">
+          <span className="nav-section">探索与协作</span>
+          {[['/','任务广场'],['/publish','发布任务'],['/community','社区'],['/circles','圈层'],['/ventures','合作体'],['/teams','团队']].map(([to,label]) => <NavLink key={to} end={to==='/'} to={to}>{label}<span aria-hidden="true">↗</span></NavLink>)}
+          <span className="nav-section">工作空间</span>
+          {[['/messages','消息'],['/wallet','钱包'],['/rewards','优惠'],['/verify','核验台'],['/developer','开发者'],['/support','客服']].map(([to,label]) => <NavLink key={to} to={to}>{label}</NavLink>)}
+        </div>
         <span className="spacer" />
-        {me ? (
-          <>
-            {me.is_admin && <Link to="/admin">管理</Link>}
-            <Link className="nav-mobile-keep" to="/notifications">🔔</Link>
-            <Link className="nav-mobile-keep" to="/profile">
-              {me.nickname} <span className="badge">{me.credit_score} 分</span>
-            </Link>
-          </>
-        ) : (
-          <Link className="nav-mobile-keep" to="/login">登录 / 注册</Link>
-        )}
+        {me ? <div className="nav-account">
+          {me.is_admin && <Link to="/admin">管理</Link>}
+          <Link className="nav-mobile-keep" to="/notifications" aria-label="通知">🔔</Link>
+          <Link className="nav-mobile-keep" to="/profile">{me.nickname}<small>{me.credit_score} 信用分</small></Link>
+        </div> : <Link className="nav-mobile-keep nav-signin" to="/login">登录 / 注册 <span aria-hidden="true">→</span></Link>}
+        <details className="mobile-menu"><summary>全部功能</summary><div>{[['/','任务广场'],['/community','社区'],['/circles','圈层'],['/ventures','合作体'],['/teams','团队'],['/wallet','钱包'],['/rewards','优惠'],['/verify','核验台'],['/developer','开发者'],['/support','客服']].map(([to,label])=><Link key={to} to={to}>{label}</Link>)}</div></details>
       </nav>
       <Routes>
         <Route path="/" element={<Square />} />

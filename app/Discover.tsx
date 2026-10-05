@@ -26,7 +26,7 @@ import type { ContentItem, PlatformClient } from '@platform/core';
 import { cardMediaTranslate, heroTitleOpacity, heroTransform, useReduceMotion, useScrollDriver } from './motion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const HEADER_H = 220;          // 顶部大图高度
+const HEADER_H = 280;          // 顶部大图高度
 const CARD_MEDIA_H = 200;      // 卡片配图高度
 const PARALLAX = 0.5;          // 背景位移 = 滚动距离 × 这个系数
 
@@ -66,9 +66,10 @@ export function DiscoverScreen({ client, baseUrl, onOpenAuthor }: {
   return (
     <View style={styles.root}>
       <Animated.View style={[styles.header, { transform: headerTransform }]}>
-        <View style={styles.headerBg} />
+        <View style={styles.headerBg} /><View style={styles.orbitOuter} /><View style={styles.orbitInner} />
         <Animated.View style={{ opacity: titleOpacity }}>
-          <Text style={styles.headerTitle}>发现</Text>
+          <Text style={styles.eyebrow}>INDEPENDENT, TOGETHER</Text>
+          <Text style={styles.headerTitle}>发现新的合作可能</Text>
           <Text style={styles.headerSub}>
             {reduceMotion ? '已按系统设置关闭动效' : '看看大家在做什么'}
           </Text>
@@ -148,15 +149,18 @@ function ParallaxCard({ item, index, baseUrl, scrollY, reduceMotion, onPressAuth
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f5f6f8' },
+  root: { flex: 1, backgroundColor: '#f4f5ef' },
   scroll: { flex: 1 },
   header: {
     position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_H,
     justifyContent: 'flex-end', paddingBottom: 28, paddingHorizontal: 20,
   },
-  headerBg: { ...StyleSheet.absoluteFillObject, backgroundColor: '#2f6fed' },
-  headerTitle: { color: '#fff', fontSize: 30, fontWeight: '800' },
-  headerSub: { color: '#dbeafe', marginTop: 4 },
+  headerBg: { ...StyleSheet.absoluteFillObject, backgroundColor: '#173a35' },
+  headerTitle: { color: '#f4f3e7', fontSize: 31, fontWeight: '600', marginTop: 14 },
+  eyebrow: { color: '#cda67b', fontSize: 10, letterSpacing: 2 },
+  orbitOuter: { position: 'absolute', right: -40, top: -40, width: 260, height: 260, borderRadius: 130, borderWidth: 1, borderColor: '#567c62' },
+  orbitInner: { position: 'absolute', right: 10, top: 10, width: 160, height: 160, borderRadius: 80, borderWidth: 1, borderColor: '#7b9071' },
+  headerSub: { color: '#b7cebb', marginTop: 4 },
   empty: { textAlign: 'center', color: '#6b7280', marginTop: 40 },
   card: {
     backgroundColor: '#fff', borderRadius: 14, marginHorizontal: 12, marginBottom: 14,
@@ -173,6 +177,6 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 17, fontWeight: '700' },
   cardText: { color: '#374151', lineHeight: 20 },
   cardMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  author: { color: '#2f6fed', fontWeight: '600' },
+  author: { color: '#275c52', fontWeight: '600' },
   metaMuted: { color: '#6b7280', fontSize: 12 },
 });

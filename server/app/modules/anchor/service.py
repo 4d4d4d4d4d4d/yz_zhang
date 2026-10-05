@@ -1,6 +1,7 @@
 import hashlib
 import json
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.events import subscribe
@@ -17,6 +18,9 @@ def _sha(text: str) -> str:
 
 def anchor(db: Session, event_type: str, ref_type: str, ref_id: int, payload: dict) -> AnchorEntry:
     """追加一条存证记录（append-only）。"""
+    if db.bind.dialect.name == "postgresql":
+        # One chain head per transaction across every API/worker process.
+        db.execute(text("SELECT pg_advisory_xact_lock(70493812026)"))
     last = db.query(AnchorEntry).order_by(AnchorEntry.seq.desc()).first()
     prev = last.chain_hash if last else GENESIS
     seq = (last.seq + 1) if last else 1
@@ -105,8 +109,12 @@ def notarize_pending(db: Session) -> dict:
     """
     from app.vendors.notary import get_notary
 
-    last = db.query(AnchorReceipt).order_by(AnchorReceipt.seq_to.desc()).first()
-    covered_to = last.seq_to if last else 0
+    provider = get_notary()
+    receipts = db.query(AnchorReceipt).order_by(AnchorReceipt.seq_from).all()
+    covered_to = 0
+    for receipt in receipts:
+        if (not provider.backed or receipt.backed) and receipt.seq_from <= covered_to + 1:
+            covered_to = max(covered_to, receipt.seq_to)
     head_entry = db.query(AnchorEntry).order_by(AnchorEntry.seq.desc()).first()
     if not head_entry or head_entry.seq <= covered_to:
         return {"notarized": 0, "covered_to": covered_to}
@@ -132,7 +140,10 @@ def coverage(db: Session) -> dict:
     head_entry = db.query(AnchorEntry).order_by(AnchorEntry.seq.desc()).first()
     total = head_entry.seq if head_entry else 0
     receipts = db.query(AnchorReceipt).order_by(AnchorReceipt.seq_to).all()
-    backed_to = max((r.seq_to for r in receipts if r.backed), default=0)
+    backed_to = 0
+    for receipt in sorted(receipts, key=lambda r: r.seq_from):
+        if receipt.backed and receipt.seq_from <= backed_to + 1:
+            backed_to = max(backed_to, receipt.seq_to)
     return {
         "total_entries": total,
         "third_party_backed_to_seq": backed_to,
@@ -146,6 +157,6 @@ def coverage(db: Session) -> dict:
         "note": (
             "全部存证均有第三方背书。" if backed_to >= total > 0 else
             "标注 backed=false 的区间仅为平台自算哈希链，无第三方背书，"
-            "可证明「平台记录未被事后改动」，但司法采信度低于第三方存证。"
+            "仅能检查当前记录内部一致性，不能独立证明历史未被重写。"
         ),
     }
