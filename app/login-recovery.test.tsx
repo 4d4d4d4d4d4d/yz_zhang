@@ -75,3 +75,18 @@ describe('ACC-041 登录失败不许悄悄注册', () => {
     expect(screen.getByPlaceholderText('短信验证码')).toBeTruthy();
   });
 });
+
+ it('注册必须提交 verify 场景验证码', async () => {
+    const calls: Call[] = [];
+    render(<LoginScreen client={makeClient(calls, { '/auth/send-code': { expires_in: 600, dev_code: '123456' }, '/auth/register': { token: 'test-token' } })} onToken={() => {}} />);
+    fireEvent.press(screen.getByText('没有账号？注册'));
+    fireEvent.changeText(screen.getByPlaceholderText('手机号'), '13800000991');
+    fireEvent.changeText(screen.getByPlaceholderText('密码'), 'testpass123');
+    fireEvent.press(screen.getByText('获取验证码'));
+    await waitFor(() => expect(calls.find(c => c.path === '/auth/send-code')).toBeTruthy());
+    expect((calls.find(c => c.path === '/auth/send-code')?.body as { scene: string }).scene).toBe('verify');
+    fireEvent.changeText(screen.getByPlaceholderText('短信验证码'), '829143');
+    fireEvent.press(screen.getByText('注册'));
+    await waitFor(() => expect(calls.find(c => c.path === '/auth/register')).toBeTruthy());
+    expect((calls.find(c => c.path === '/auth/register')?.body as { sms_code: string }).sms_code).toBe('829143');
+ });

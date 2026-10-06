@@ -120,7 +120,7 @@ export function LoginScreen({ client, onToken }: { client: PlatformClient; onTok
   async function sendCode() {
     setError(''); setInfo('');
     try {
-      const r = await client.sendSmsCode(phone, mode === 'reset' ? 'reset' : 'login');
+      const r = await client.sendSmsCode(phone, mode === 'reset' ? 'reset' : mode === 'register' ? 'verify' : 'login');
       if (r.dev_code) setSmsCode(r.dev_code);
       setInfo(`验证码已发送，${r.expires_in} 秒内有效`);
     } catch (e) {
@@ -140,7 +140,7 @@ export function LoginScreen({ client, onToken }: { client: PlatformClient; onTok
       const res =
         mode === 'login' ? await client.login(phone, password)
         : mode === 'sms' ? await client.smsLogin(phone, smsCode)
-        : await client.register(phone, password, `用户${phone.slice(-4)}`);
+        : await client.register(phone, password, `用户${phone.slice(-4)}`, smsCode);
       onToken(res.token);
     } catch (e) {
       // 原样显示服务端文案：密码错就是密码错，不要替它猜成「去注册」
@@ -156,7 +156,7 @@ export function LoginScreen({ client, onToken }: { client: PlatformClient; onTok
         <TextInput style={styles.input} placeholder={mode === 'reset' ? '新密码' : '密码'}
                    value={password} onChangeText={setPassword} secureTextEntry />
       )}
-      {(mode === 'sms' || mode === 'reset') && (
+      {(mode === 'sms' || mode === 'reset' || mode === 'register') && (
         <>
           <TextInput style={styles.input} placeholder="短信验证码" value={smsCode}
                      onChangeText={setSmsCode} keyboardType="number-pad" />

@@ -50,7 +50,7 @@ export default function Login() {
     try {
       // scene 要跟着用途走：找回密码与登录是两个场景，
       // 服务端据此决定验证码的用途与有效期
-      const r = await client.sendSmsCode(phone, mode === 'reset' ? 'reset' : 'login');
+      const r = await client.sendSmsCode(phone, mode === 'reset' ? 'reset' : mode === 'register' ? 'verify' : 'login');
       // 沙箱桩会回显验证码（19/27 号 spec 的既有约定）。有它就填上，
       // 省掉一次手抄；生产上不返回这个字段，提示语也就不出现
       if (r.dev_code) setSmsCode(r.dev_code);
@@ -76,7 +76,7 @@ export default function Login() {
       const res =
         mode === 'login' ? await client.login(phone, password, captchaToken)
         : mode === 'sms' ? await client.smsLogin(phone, smsCode)
-        : await client.register(phone, password, nickname);
+        : await client.register(phone, password, nickname, smsCode);
       setToken(res.token);
       nav('/');
     } catch (err) {
@@ -93,7 +93,7 @@ export default function Login() {
   }
 
   const needsPassword = mode === 'login' || mode === 'register' || mode === 'reset';
-  const needsCode = mode === 'sms' || mode === 'reset';
+  const needsCode = mode === 'sms' || mode === 'reset' || mode === 'register';
 
   return (
     <div className="page login-page">

@@ -90,6 +90,20 @@ describe('ACC-041 忘了密码还进得来', () => {
     return calls;
   }
 
+  it('注册获取 verify 场景验证码并提交用户输入，不能使用固定码', async () => {
+    const calls = openLogin();
+    fireEvent.click(screen.getByText('没有账号？去注册'));
+    fireEvent.change(screen.getByLabelText('手机号'), { target: { value: '13800000991' } });
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'testpass123' } });
+    fireEvent.click(screen.getByText('获取验证码'));
+    await waitFor(() => expect(screen.getByTestId('sms-sent')).toBeTruthy());
+    expect(calls.find(c => c.path === '/auth/send-code')?.body).toEqual({ phone: '13800000991', scene: 'verify' });
+    fireEvent.change(screen.getByTestId('sms-code'), { target: { value: '829143' } });
+    fireEvent.click(screen.getByRole('button', { name: '注册' }));
+    await waitFor(() => expect(calls.find(c => c.path === '/auth/register')).toBeTruthy());
+    expect((calls.find(c => c.path === '/auth/register')?.body as { sms_code: string }).sms_code).toBe('829143');
+  });
+
   it('登录页有「忘记密码」与「验证码登录」两条路', async () => {
     openLogin();
     await waitFor(() => expect(screen.getByText('忘记密码')).toBeTruthy());

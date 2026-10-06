@@ -116,7 +116,7 @@ export class PlatformClient {
   }
 
   // ---- auth / account ----
-  register(phone: string, password: string, nickname: string, smsCode = '123456') {
+  register(phone: string, password: string, nickname: string, smsCode = '') {
     return this.request<{ token: string; user: Me }>('POST', '/auth/register', {
       phone, password, nickname, sms_code: smsCode,
     });
