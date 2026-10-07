@@ -1,5 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
+  CommercialReadiness,
   AgentProfileView,
   PayoutProposalView,
   OrganizationRecordInput, OrganizationRecordView,
@@ -863,6 +864,13 @@ export class PlatformClient {
   }
 
   // ---- admin ----
+  adminVendors() {
+    return this.request<{
+      vendors: Array<{ kind: string; provider: string; grade: string; calls_24h: number; success_rate: number | null }>;
+      blocking_for_production: string[];
+      commercial_readiness: CommercialReadiness;
+    }>('GET', '/admin/vendors');
+  }
   adminMetrics() {
     return this.request<{
       total_users: number; verified_users: number; total_tasks: number; published_tasks: number;

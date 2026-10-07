@@ -1,13 +1,20 @@
 # 交付总览（Final Delivery Overview）
 
-> 截至 2026-09-30：MVP + V1~V112 全批次完成。
-> 后端 **1220 tests** + 前端 **161 tests**（core 56 + web 84 + App 21）全绿，全仓 lint 干净。
+> 历史 MVP + V1~V112 的功能交付不能视为商业运营获批。
+> 当前后端套件 **1224 tests**；最新测试证据与商业化边界见下方增量记录。
 > 现状一页看清：[72-status-ledger.md](specs/72-status-ledger.md)；上线流程见 [GO-LIVE.md](GO-LIVE.md)；
 > **全系统体检（数据库怎么搭 / 跑起来有什么问题）见 [SYSTEM-CHECK.md](SYSTEM-CHECK.md)**。
 > 本文档是对 [docs/specs/](specs/README.md)（功能拆分）与
 > [16-traceability.md](specs/16-traceability.md)（逐条追溯）的收口汇总。
 
-## 2026-10-07 智能合约增量
+## 2026-10-07 商业化工程增量
+
+- 新增持久化事件索引、重组恢复、备份、超时结算计划及带签名交易日志和费用上限的执行器。未启用真实网络广播。
+- 新增管理员商用检查与只读 CLI；实测服务器 17 项配置检查通过 7 项。支付、短信、实名、审核仍缺正式供应商实现，不能仅填密钥上线。
+- 验证：链上 21 项、共享 SDK 56 项、Web 104 项通过；后端全量回归发现 4 处问题，修复后相关 56 项复测通过。lint 与 Web 构建通过。
+- 剩余工程、外部资源与验收条件见 [COMMERCIAL-READINESS.md](COMMERCIAL-READINESS.md)。
+
+## 2026-10-07 智能合约增量（前次记录）
 
 - `TaskEscrow.sol`：代币托管、分期、交付验收、争议/超时、退款、协商取消、受限代理及提现。
 - `BusinessRecords.sol`：股权/协议/法律合同/财务四类记录，多版本、规则快照、多人确认与授权提交。

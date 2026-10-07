@@ -87,7 +87,9 @@ def vendor_status(db: Session = Depends(get_db), _: User = Depends(require_admin
         ok = counts.get("succeeded", 0)
         out.append({**item, "calls_24h": total,
                     "success_rate": round(ok / total, 4) if total else None})
-    return {"vendors": out, "blocking_for_production": missing_production_providers()}
+    from app.core.commercial import report
+    return {"vendors": out, "blocking_for_production": missing_production_providers(),
+            "commercial_readiness": report()}
 
 
 @router.get("/admin/audit-log")

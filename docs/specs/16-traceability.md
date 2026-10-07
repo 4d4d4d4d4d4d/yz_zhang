@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
 > 状态：MVP + V1~V112 全批次完成（2026-09-30）。
-> 后端 1220 tests + 前端 161 tests（core 56 + web 84 + App 21）全绿，全仓 lint 干净；
+> 后端 1224 tests + 前端 161 tests（core 56 + web 84 + App 21）全绿，全仓 lint 干净；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
 > （真 Chromium × 构建产物 × 真服务端，10 项）。

@@ -1,3 +1,4 @@
+import { formatDateTime, localInputToServerTime, parseServerTime } from '@platform/core';
 import { useEffect, useState } from 'react';
 import { Contract, formatUnits, parseUnits, id as hashText, ZeroAddress, isHexString, type ContractTransactionResponse } from 'ethers';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -6,7 +7,7 @@ import './Chain.css';
 
 const states = ['不存在', '待接单确认', '待托管入金', '履约中', '已关闭'];
 const stages = ['待交付', '待验收', '争议处理中', '已结算'];
-const date = (v: bigint) => v ? new Date(Number(v) * 1000).toLocaleString() : '—';
+const date = (v: bigint) => v ? formatDateTime(Number(v) * 1000) : '—';
 const errorText = (e: unknown) => e instanceof Error ? ('shortMessage' in e ? String(e.shortMessage) : e.message) : String(e);
 
 export default function Chain() {
@@ -105,7 +106,7 @@ export default function Chain() {
   }
   const hash = (value: string) => { if (!isHexString(value, 32)) throw new Error('请输入 0x 开头的 32 字节摘要'); return value; };
   const units = (value: string) => { if (!d) throw new Error('未配置代币'); return parseUnits(value, d.tokenDecimals); };
-  const seconds = (value: string) => { const n = Math.floor(new Date(value).getTime() / 1000); if (!Number.isSafeInteger(n)) throw new Error('请填写有效时间'); return n; };
+  const seconds = (value: string) => { const n = Math.floor((parseServerTime(localInputToServerTime(value))?.getTime() ?? NaN) / 1000); if (!Number.isSafeInteger(n)) throw new Error('请填写有效时间'); return n; };
   const perform = (method: string, args: unknown[] = [loadedId], party?: string) => void act(() => send(method, args, party));
   return <div className="page chain-page">
     <header className="chain-hero">

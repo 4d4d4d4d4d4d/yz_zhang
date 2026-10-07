@@ -1077,3 +1077,16 @@ export interface PayoutProposalView {
   member_ids: number[]; share_snapshot: ShareRow[]; approvals: Array<{user_id:number;at:string}>;
   status: 'pending'|'rejected'|'executed'; distribution_id: number|null; expires_at: string;
 }
+
+/** Configuration inventory, deliberately not a legal/commercial launch approval. */
+export interface CommercialReadiness {
+  environment: string;
+  checks_passed: number;
+  checks_total: number;
+  configuration_ready: boolean;
+  commercial_launch_approved: false;
+  checks: Array<{ code: string; passed: boolean; category: string; detail: string }>;
+  vendors: Array<{ kind: string; configured_grade: string; registered_non_mock_implementations: string[] }>;
+  outside_this_report: string[];
+  note: string;
+}

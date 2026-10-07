@@ -30,3 +30,5 @@ web/public/escrow-deployment.json.tmp
 chain/deployments/
 
 web/public/business-records-deployment.json
+
+chain/data/

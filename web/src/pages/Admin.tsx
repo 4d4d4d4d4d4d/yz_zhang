@@ -52,6 +52,7 @@ export default function Admin() {
           </div>
         </div>
       )}
+      <LaunchReadiness />
       <QueueOverview />
       <WithdrawReview />
       <AmlQueue />
@@ -841,4 +842,33 @@ function QueueOverview() {
       </table>
     </div>
   );
+}
+
+const READINESS_LABELS: Record<string, string> = {
+  production_environment: '生产运行模式', postgres: 'PostgreSQL 业务数据库', redis: '共享缓存与任务协调',
+  jwt_secret: '登录令牌密钥', job_secret: '后台任务密钥', cors: '跨域访问限制', api_docs: '接口文档关闭', proxy_hops: '代理信任配置',
+  provider_payment: '真实支付供应商', provider_sms: '真实短信供应商', provider_kyc: '真实实名核验',
+  provider_moderation: '真实内容审核', provider_oauth: '可信第三方登录', custody: '资金存管通道',
+  signature: '正式电子签约闭环', notary: '外部存证通道', tax_workflow: '税务与开票方案',
+};
+export function LaunchReadiness() {
+  const { client } = useApp();
+  const [data, setData] = useState<Awaited<ReturnType<typeof client.adminVendors>>>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  return <section className="card"><h3>商用准备检查</h3>
+    <p className="muted">读取服务器实际配置。通过项数量不是产品完成百分比，也不代表已获准开展真实交易。</p>
+    <button disabled={busy} onClick={async () => {
+      setBusy(true); setError('');
+      try { setData(await client.adminVendors()); } catch (e) { setError(apiErrorText(e)); } finally { setBusy(false); }
+    }}>{busy ? '检查中…' : '检查当前环境'}</button>
+    {error && <p className="error" role="alert">{error}</p>}
+    {data && <><p>当前环境：{data.commercial_readiness.environment} · 配置检查 {data.commercial_readiness.checks_passed}/{data.commercial_readiness.checks_total} 通过</p>
+      <div className="list">{data.commercial_readiness.checks.filter(c => !c.passed).map(c => <div key={c.code} className="row">
+        <span className="badge warn">待完成</span><strong>{READINESS_LABELS[c.code] || c.code}</strong>
+        <span className="muted">{c.category === 'integration' ? '需要正式对接与验收' : c.category === 'business_decision' ? '需要业务方案确认' : '需要生产配置与验证'}</span>
+      </div>)}</div>
+      <h4>供应商对接情况</h4>{data.commercial_readiness.vendors.map(v => <p key={v.kind} className="muted">{READINESS_LABELS['provider_' + v.kind]}：当前 {v.configured_grade} · {v.registered_non_mock_implementations.length ? '已有非模拟适配实现，仍需真实联调验收' : '还没有正式适配实现，并非仅缺密钥'}</p>)}
+      <p className="muted">此检查不覆盖供应商真实验收、主体与适法审核、域名 HTTPS、独立安全审计、恢复与压测演练、链上密钥运营及 App 上架。</p></>}
+  </section>;
 }

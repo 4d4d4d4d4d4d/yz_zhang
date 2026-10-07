@@ -31,6 +31,7 @@ CI = REPO / ".github" / "workflows" / "ci.yml"
 # 脚本 -> 谁在跑它。值是**方式**，不是布尔（V90 那条）。
 # 「没有人跑」不许出现在这张表里：那不是一种方式，那是这一篇要修的病。
 EXERCISED: dict[str, str] = {
+    "commercial_readiness.py": "运维在实际 API 容器中执行；回归验证分类、管理员访问与脱敏",
     "smoke.py": "CI 的 boot-smoke job（真实 HTTP 主闭环）",
     "sandbox_check.py": "CI 的 sandbox-compliance job",
     "e2e_web.py": "CI 的 web-e2e job（真 Chromium）",
