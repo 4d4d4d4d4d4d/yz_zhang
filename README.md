@@ -1,11 +1,11 @@
-# 协作任务平台（Task Platform）
+# OPC · 独立个体协作网络
 
 产品与实现核对：[IMPLEMENTATION-MATRIX.md](docs/IMPLEMENTATION-MATRIX.md)；当前设计：[Spec 87](docs/specs/87-individual-network-and-spaces.md)。
 
 商业化现状、已补工程与真实上线阻塞项：[COMMERCIAL-READINESS.md](docs/COMMERCIAL-READINESS.md)。
 
-AI 驱动的任务协作与本地服务平台 Monorepo：任务发布 → AI 分解 → 智能推荐 →
-合约托管 → 执行验收 → 结算评价 → 经验入库的完整闭环。
+以独立个体为中心的开放协作网络 Monorepo：个人空间 → 建立关系 → 形成合作 → 交付成果 → 获授权的经验积累。
+保留任务、本地服务、内容、社交与组织能力；实际完成范围与商用缺口以核对表为准。
 
 > Spec 驱动开发：先写 [docs/specs/](docs/specs/README.md)（15 个模块功能拆分），
 > 再按 spec 逐模块实现并配测试，追溯矩阵见 [16-traceability.md](docs/specs/16-traceability.md)。
