@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
 > 状态：MVP + V1~V112 全批次完成（2026-09-30）。
-> 后端 1224 tests + 前端 161 tests（core 56 + web 84 + App 21）全绿，全仓 lint 干净；
+> 后端 1230 tests + 前端 161 tests（core 56 + web 84 + App 21）全绿，全仓 lint 干净；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
 > （真 Chromium × 构建产物 × 真服务端，10 项）。
@@ -2302,3 +2302,8 @@ V61（纠纷端点无入口）、V64（`media_urls` 从没传下去）反复出�
 - 企业认证与发票（ACC-021/PAY-008）— 工商核验与税务接口
 - App 深化：地图撒点、扫码打卡、离线推送通道（后端 API 均已就绪）
 - 真实供应商接入：短信/eKYC/持牌支付托管/LLM/内容安全（抽象层已就位，接入不动业务代码）
+
+
+## 个体网络与空间增量（2026-10-07）
+
+SPACE-001~012 的实现、API、迁移与验收见 [Spec 87](87-individual-network-and-spaces.md)、`server/tests/test_personal_spaces.py`、`web/src/pages/Spaces.test.tsx`。SPACE-020~028 为明确未交付的下一阶段。前后端及原生 App 分端状态见 [实现核对表](../IMPLEMENTATION-MATRIX.md)。

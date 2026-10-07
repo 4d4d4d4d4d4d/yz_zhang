@@ -659,7 +659,11 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
     ledger = db.query(LedgerEntry).filter(LedgerEntry.user_id == user.id).all()
     contents = db.query(Content).filter(Content.author_id == user.id).all()
     reviews = db.query(Review).filter(Review.reviewer_id == user.id).all()
+    from app.modules.spaces.models import PersonalSpace
+    space = db.get(PersonalSpace, user.id)
     return {
+        "personal_space": {"headline": space.headline, "introduction": space.introduction, "theme": space.theme,
+            "items": space.items, "published": space.published, "revision": space.revision} if space else None,
         "profile": _me(user),
         "real_name": user.real_name,
         "tasks": [{"id": t.id, "title": t.title, "status": t.status, "budget_cents": t.budget_cents,
@@ -697,6 +701,8 @@ def public_profile(user_id: int, db: Session = Depends(get_db)):
         "rating_avg": user.rating_avg,
         "tasks_completed": user.tasks_completed,
     }
+    if user.is_deleted or user.is_banned:
+        return base
     # ACC-030 隐私设置：非公开档案只展示信任摘要
     if (user.privacy or {}).get("profile_public") is False:
         return base

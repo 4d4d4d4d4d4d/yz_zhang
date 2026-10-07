@@ -26,6 +26,7 @@ function clientWith(unread: number): PlatformClient {
     status: 200,
     text: async () => {
       if (String(url).includes('/conversations/unread-count')) return JSON.stringify({ unread });
+      if (String(url).includes('/spaces')) return JSON.stringify({ items: [], next_cursor: null });
       if (String(url).includes('/tasks')) return JSON.stringify([]);
       return JSON.stringify(null);
     },
@@ -97,7 +98,7 @@ describe('底部 Tab（MOB-002）', () => {
       </MemoryRouter>,
     );
     const tabbar = await screen.findByLabelText('主导航');
-    for (const label of ['广场', '发布', '消息', '我的']) {
+    for (const label of ['发现', '合作', '消息', '空间']) {
       expect(tabbar.textContent).toContain(label);
     }
   });

@@ -1,11 +1,15 @@
 # 交付总览（Final Delivery Overview）
 
 > 历史 MVP + V1~V112 的功能交付不能视为商业运营获批。
-> 当前后端套件 **1224 tests**；最新测试证据与商业化边界见下方增量记录。
+> 当前后端 **1230 tests**；最新测试证据与商业化边界见下方增量记录。
 > 现状一页看清：[72-status-ledger.md](specs/72-status-ledger.md)；上线流程见 [GO-LIVE.md](GO-LIVE.md)；
 > **全系统体检（数据库怎么搭 / 跑起来有什么问题）见 [SYSTEM-CHECK.md](SYSTEM-CHECK.md)**。
 > 本文档是对 [docs/specs/](specs/README.md)（功能拆分）与
 > [16-traceability.md](specs/16-traceability.md)（逐条追溯）的收口汇总。
+
+## 2026-10-07 个体空间与 UI 增量
+
+公开空间、主动发布/撤回、发现搜索、合作入口、登录返回和私聊已接入 Web 与 API。原生 App 新空间页尚未实现。新定位、前后端状态与本轮测试记录见 [实现核对表](IMPLEMENTATION-MATRIX.md)、[Spec 87](specs/87-individual-network-and-spaces.md) 和 [本轮变更](CHANGELOG-2026-10-07.md)。
 
 ## 2026-10-07 商业化工程增量
 

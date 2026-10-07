@@ -135,6 +135,10 @@ def erase_personal_data(db: Session, user: User) -> dict:
     """
     from app.modules.wallet.models import PayoutAccount
 
+    from app.modules.spaces.models import PersonalSpace
+    space = db.get(PersonalSpace, user.id)
+    if space:
+        db.delete(space)
     user.is_deleted = True
     user.phone = f"deleted:{user.id}"
     user.nickname = "已注销用户"

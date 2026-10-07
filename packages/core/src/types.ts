@@ -1090,3 +1090,8 @@ export interface CommercialReadiness {
   outside_this_report: string[];
   note: string;
 }
+
+export interface SpaceItem { title: string; kind: 'work' | 'article' | 'video' | 'shop' | 'live' | 'service'; summary: string; url: string }
+export interface PersonalSpace { user_id: number; nickname: string; headline: string; introduction: string; theme: 'clay' | 'moss' | 'ink'; kind: 'person' | 'agent' | 'organization'; items: SpaceItem[]; items_count: number; accepting_orders: boolean }
+export interface OwnSpace extends PersonalSpace { revision: number; published: boolean; profile_public: boolean }
+export interface SpaceSummary extends Omit<PersonalSpace, 'introduction' | 'items'> { preview: SpaceItem[] }

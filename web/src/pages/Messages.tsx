@@ -1,9 +1,12 @@
 import { apiErrorText, type Conversation, type Message } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../store';
 
 export default function Messages() {
   const { client, me } = useApp();
+  const [params] = useSearchParams();
+  const requestedConversation = Number(params.get('conversation'));
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [active, setActive] = useState<Conversation | null>(null);
   const [msgs, setMsgs] = useState<Message[]>([]);
@@ -12,8 +15,15 @@ export default function Messages() {
   const [peer, setPeer] = useState('');
 
   useEffect(() => {
-    void client.conversations().then(setConvs);
-  }, [client]);
+    let alive = true;
+    void client.conversations().then(async rows => {
+      if (!alive) return;
+      setConvs(rows);
+      const selected = rows.find(c => c.id === requestedConversation);
+      if (selected) { const messages = await client.messages(selected.id); if (alive) { setActive(selected); setMsgs(messages); } }
+    }).catch(e => { if (alive) setWarning(apiErrorText(e)); });
+    return () => { alive = false; };
+  }, [client, requestedConversation]);
 
   const openConv = useCallback(async (c: Conversation) => {
     setActive(c);

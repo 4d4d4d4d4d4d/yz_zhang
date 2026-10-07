@@ -1,4 +1,3 @@
-import CooperationVisual from '../CooperationVisual';
 // ACC-041 登录页的三条路：密码登录 / 验证码登录 / 忘记密码（77 号 spec）。
 //
 // 探针：`resetPassword` / `smsLogin` / `sendSmsCode` 三条端到端都在，
@@ -7,7 +6,7 @@ import CooperationVisual from '../CooperationVisual';
 // 这是「钱能进不能出」的账号版。
 import { ApiError, apiErrorText, type CaptchaConfig } from '@platform/core';
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import CaptchaChallenge from '../CaptchaChallenge';
 import { useApp } from '../store';
 
@@ -23,6 +22,7 @@ const TITLES: Record<Mode, string> = {
 export default function Login() {
   const { client, setToken } = useApp();
   const nav = useNavigate();
+  const [params] = useSearchParams();
   const [mode, setMode] = useState<Mode>('login');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -78,7 +78,8 @@ export default function Login() {
         : mode === 'sms' ? await client.smsLogin(phone, smsCode)
         : await client.register(phone, password, nickname, smsCode);
       setToken(res.token);
-      nav('/');
+      const next = params.get('next');
+      nav(next && /^\/(?![/\\])/.test(next) && !/[\r\n\\]/.test(next) ? next : '/');
     } catch (err) {
       if (err instanceof ApiError && err.code === 'captcha_required') {
         // 服务端要求人机验证：拉配置、渲染挑战，让用户能**自证是真人**再重试。
@@ -97,7 +98,7 @@ export default function Login() {
 
   return (
     <div className="page login-page">
-      <section className="login-story"><span className="eyebrow">INDEPENDENT, TOGETHER.</span><h1>一个人很强。<br/>一起，走得更远。</h1><p>让每个人的能力自由连接。<br/>从发布任务到成果交付，建立属于你的合作网络。</p><CooperationVisual/><div className="login-principles"><span>01 自由连接</span><span>02 透明协作</span><span>03 成果可追溯</span></div></section>
+      <section className="login-story"><span className="overline">YOUR OWN CORNER OF THE WORLD</span><h1>在这里，<br />做你自己。</h1><p>带着热爱而来，和彼此一起生长。</p><div className="login-window" aria-hidden="true"><span>o.</span></div><Link className="quiet-link" to="/">先去看看 ↗</Link></section>
       <div className="card login-panel"><span className="eyebrow">YOUR NEXT CHAPTER</span>
         <h3>{TITLES[mode]}</h3><p className="login-intro">欢迎加入你的协作空间</p>
         <form className="form" onSubmit={submit}>

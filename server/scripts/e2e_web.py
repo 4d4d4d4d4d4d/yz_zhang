@@ -135,17 +135,25 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     page.click("text=没有账号？去注册")
     page.fill("input[placeholder='13800000000']", phone)
     page.fill("input[type='password']", "pass123456")
+    page.get_by_role("button", name="获取验证码").click()
+    page.wait_for_function("document.querySelector('[data-testid=sms-code]').value.length > 0")
     page.get_by_role("button", name="注册").click()
     page.wait_for_url(f"http://127.0.0.1:{WEB_PORT}/", timeout=20000)
     token = page.evaluate("() => localStorage.getItem('token')")
     step("注册走通并拿到 token", bool(token), (token or "")[:12] + "…")
 
-    # 广场首屏：视差 hero 与深色底都在（V104 的东西在真浏览器里也得在）
-    page.wait_for_selector("[data-testid='parallax-hero']", timeout=15000)
-    bg = page.evaluate(
-        "() => getComputedStyle(document.body).backgroundColor")
-    step("科技感底色生效", bg not in ("rgba(0, 0, 0, 0)", "rgb(255, 255, 255)"), bg)
-    step("视差 hero 渲染", page.locator("[data-testid='parallax-hero']").count() == 1)
+    # Public discovery and opt-in personal space: write through the real API.
+    page.wait_for_selector('.discovery-hero', timeout=15000)
+    step("以人为中心的发现页", page.locator('.discovery-hero').count() == 1)
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/space/edit", wait_until="networkidle")
+    page.get_by_label("一句话，让人认识你").fill("E2E：一起做有趣的东西")
+    page.get_by_label("公开空间，让别人发现我").check()
+    page.get_by_role("button", name="保存空间").click()
+    page.get_by_role("link", name="看看我的门面").click()
+    page.wait_for_selector('.personal-intro')
+    step("个人空间真实发布与浏览", page.locator('text=E2E：一起做有趣的东西').count() > 0)
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/cooperate", wait_until="networkidle")
+    step("合作入口可达", page.get_by_role("link", name="我想做一件事", exact=False).count() > 0)
 
     # 钱包：真实响应的三态余额画得出来
     page.goto(f"http://127.0.0.1:{WEB_PORT}/wallet", wait_until="networkidle")
@@ -176,7 +184,7 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
          page.url.split("/")[-1])
 
     # 广场上能看见刚发的那一单：读写两端都通了才算对接上
-    page.goto(f"http://127.0.0.1:{WEB_PORT}/", wait_until="networkidle")
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/opportunities", wait_until="networkidle")
     page.wait_for_timeout(800)
     step("刚发的任务出现在广场", page.locator(f"text={title}").count() > 0, title)
 

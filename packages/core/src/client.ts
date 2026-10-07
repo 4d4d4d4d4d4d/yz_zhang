@@ -152,6 +152,14 @@ export class PlatformClient {
       real_name: realName, id_number: idNumber,
     });
   }
+  discoverSpaces(q = '', after = 0) {
+    return this.request<{ items: import('./types').SpaceSummary[]; next_cursor: number | null }>('GET', `/spaces?q=${encodeURIComponent(q)}&after=${after}`);
+  }
+  personalSpace(userId: number) { return this.request<import('./types').PersonalSpace>('GET', `/spaces/${userId}`); }
+  ownSpace() { return this.request<import('./types').OwnSpace>('GET', '/spaces/me'); }
+  saveSpace(body: Pick<import('./types').OwnSpace, 'revision' | 'published' | 'headline' | 'introduction' | 'theme' | 'items'>) {
+    return this.request<import('./types').OwnSpace>('PUT', '/spaces/me', body);
+  }
   publicProfile(userId: number) {
     return this.request<Partial<Me>>('GET', `/users/${userId}`);
   }

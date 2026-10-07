@@ -11,6 +11,7 @@ function clientWith(tasks: unknown[]): PlatformClient {
     ok: true,
     status: 200,
     text: async () => {
+      if (String(url).includes('/spaces')) return JSON.stringify({ items: [], next_cursor: null });
       if (String(url).includes('/tasks')) return JSON.stringify(tasks);
       return JSON.stringify(null);
     },
@@ -39,7 +40,7 @@ function renderAt(path: string, tasks: unknown[] = []) {
 
 describe('App', () => {
   it('广场渲染任务卡：标题/价格/状态/脱敏地址', async () => {
-    renderAt('/', [SAMPLE_TASK]);
+    renderAt('/opportunities', [SAMPLE_TASK]);
     await waitFor(() => expect(screen.getByText('周末大扫除')).toBeTruthy());
     expect(screen.getByText('¥200.00')).toBeTruthy();
     expect(screen.getByText('招募中')).toBeTruthy();
@@ -47,7 +48,7 @@ describe('App', () => {
   });
 
   it('广场为空时提示引导发布', async () => {
-    renderAt('/', []);
+    renderAt('/opportunities', []);
     await waitFor(() => expect(screen.getByText(/暂无任务/)).toBeTruthy());
   });
 
@@ -61,7 +62,7 @@ describe('App', () => {
     renderAt('/');
     // 顶栏与底部 Tab 会有同名入口（如「消息」），因此按区域取而不是全局取
     const topNav = document.querySelector('nav.nav') as HTMLElement;
-    for (const label of ['任务广场', '发布任务', '消息', '钱包', '客服']) {
+    for (const label of ['发现', '合作', '消息', '我的空间', '客服']) {
       expect(topNav.textContent).toContain(label);
     }
   });

@@ -11,6 +11,8 @@ import Profile from './pages/Profile';
 import Publish from './pages/Publish';
 import Rewards from './pages/Rewards';
 import Square from './pages/Square';
+import { Discover, PublicSpace, EditSpace } from './pages/Spaces';
+import Cooperate from './pages/Cooperate';
 import Support from './pages/Support';
 import TaskDetail from './pages/TaskDetail';
 import Developer from './pages/Developer';
@@ -50,23 +52,24 @@ export default function App() {
         </aside>
       )}
       <nav className="nav" aria-label="工作台导航">
-        <Link className="logo" to="/"><span className="brand-mark" aria-hidden="true">o.</span><span>协作任务平台<small>OPEN COLLABORATION</small></span></Link>
+        <Link className="logo" to="/"><span className="brand-mark" aria-hidden="true">o.</span><span>OPC<small>人与可能</small></span></Link>
         <div className="nav-links">
-          <span className="nav-section">探索与协作</span>
-          {[['/','任务广场'],['/publish','发布任务'],['/community','社区'],['/circles','圈层'],['/ventures','合作体'],['/teams','团队']].map(([to,label]) => <NavLink key={to} end={to==='/'} to={to}>{label}<span aria-hidden="true">↗</span></NavLink>)}
-          <span className="nav-section">工作空间</span>
-          {[['/messages','消息'],['/wallet','钱包'],['/chain','链上协作'],['/records','企业档案'],['/rewards','优惠'],['/verify','核验台'],['/developer','开发者'],['/support','客服']].map(([to,label]) => <NavLink key={to} to={to}>{label}</NavLink>)}
+          {[['/','发现'],['/cooperate','合作'],['/messages','消息'],['/space/edit','我的空间']].map(([to,label]) => <NavLink key={to} end={to==='/'} to={to}>{label}</NavLink>)}
         </div>
         <span className="spacer" />
         {me ? <div className="nav-account">
           {me.is_admin && <Link to="/admin">管理</Link>}
           <Link className="nav-mobile-keep" to="/notifications" aria-label="通知">🔔</Link>
-          <Link className="nav-mobile-keep" to="/profile">{me.nickname}<small>{me.credit_score} 信用分</small></Link>
+          <Link className="nav-mobile-keep" to="/profile">{me.nickname}<small>账户</small></Link>
         </div> : <Link className="nav-mobile-keep nav-signin" to="/login">登录 / 注册 <span aria-hidden="true">→</span></Link>}
-        <details className="mobile-menu"><summary>全部功能</summary><div>{[['/','任务广场'],['/community','社区'],['/circles','圈层'],['/ventures','合作体'],['/teams','团队'],['/wallet','钱包'],['/chain','链上协作'],['/records','企业档案'],['/rewards','优惠'],['/verify','核验台'],['/developer','开发者'],['/support','客服']].map(([to,label])=><Link key={to} to={to}>{label}</Link>)}</div></details>
+        <details className="mobile-menu"><summary>全部功能</summary><div>{[['/opportunities','合作机会'],['/community','社区'],['/circles','圈层'],['/ventures','合作体'],['/teams','团队'],['/wallet','钱包'],['/chain','链上协作'],['/records','企业档案'],['/rewards','优惠'],['/verify','核验台'],['/developer','开发者'],['/support','客服']].map(([to,label])=><Link key={to} to={to}>{label}</Link>)}</div></details>
       </nav>
       <Routes>
-        <Route path="/" element={<Square />} />
+        <Route path="/" element={<Discover />} />
+        <Route path="/opportunities" element={<Square />} />
+        <Route path="/cooperate" element={<Cooperate />} />
+        <Route path="/people/:id" element={<PublicSpace />} />
+        <Route path="/space/edit" element={hasToken ? <EditSpace /> : <Navigate to="/login?next=/space/edit" />} />
         <Route path="/login" element={<Login />} />
         <Route path="/records" element={<Suspense fallback={<div className="page">正在加载企业档案…</div>}><Records /></Suspense>} />
         <Route path="/chain" element={<Suspense fallback={<div className="page">正在加载链上协作…</div>}><Chain /></Suspense>} />

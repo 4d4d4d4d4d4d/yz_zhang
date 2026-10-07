@@ -5,10 +5,10 @@ import { Link, useLocation } from 'react-router-dom';
 import { useApp } from './store';
 
 const TABS = [
-  { to: '/', ico: '🔍', label: '广场' },
-  { to: '/publish', ico: '➕', label: '发布' },
-  { to: '/messages', ico: '💬', label: '消息', badge: true },
-  { to: '/profile', ico: '👤', label: '我的' },
+  { to: '/', ico: '◎', label: '发现' },
+  { to: '/cooperate', ico: '↗', label: '合作' },
+  { to: '/messages', ico: '◌', label: '消息', badge: true },
+  { to: '/space/edit', ico: '▣', label: '空间' },
 ] as const;
 
 export default function TabBar() {

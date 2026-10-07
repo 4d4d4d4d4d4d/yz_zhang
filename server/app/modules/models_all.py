@@ -75,3 +75,5 @@ from app.modules.orchestrator.models import (  # noqa: F401
 from app.modules.coop.organization import OrganizationRecord  # noqa: F401
 
 from app.modules.coop.governance import PayoutProposal  # noqa: F401
+
+from app.modules.spaces.models import PersonalSpace  # noqa: F401

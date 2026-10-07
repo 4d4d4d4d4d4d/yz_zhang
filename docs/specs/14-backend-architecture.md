@@ -1,5 +1,10 @@
 # 14 · 后端架构与数据模型概要
 
+## 2026-10-07 空间层增量
+
+当前实现为 FastAPI 模块化单体。新增 `spaces`，复用 account/IM/任务/合作体，持久化为 personal_spaces 表；GET 公开查询与本人编辑、PUT 所有者保存、revision 冲突、主动公开、隐私覆盖、删除/导出为边界。迁移 b0a120260004，详细契约见 [Spec 87](87-individual-network-and-spaces.md)。跨平台连接器、长期个人 Agent、知识贡献分成仍为目标架构，未作为本轮完成项。
+
+
 ## 1. 总体架构建议
 
 **MVP 阶段：模块化单体（Modular Monolith）+ 独立资金服务**，按领域划分模块、事件驱动解耦，
