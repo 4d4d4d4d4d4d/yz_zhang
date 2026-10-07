@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import TabBar from './TabBar';
 import Admin from './pages/Admin';
@@ -17,6 +17,8 @@ import Developer from './pages/Developer';
 import Teams from './pages/Teams';
 import Ventures from './pages/Ventures';
 import Verify from './pages/Verify';
+const Chain = lazy(() => import('./pages/Chain'));
+const Records = lazy(() => import('./pages/Records'));
 import WalletPage from './pages/Wallet';
 import {
   dismissInstall,
@@ -53,7 +55,7 @@ export default function App() {
           <span className="nav-section">探索与协作</span>
           {[['/','任务广场'],['/publish','发布任务'],['/community','社区'],['/circles','圈层'],['/ventures','合作体'],['/teams','团队']].map(([to,label]) => <NavLink key={to} end={to==='/'} to={to}>{label}<span aria-hidden="true">↗</span></NavLink>)}
           <span className="nav-section">工作空间</span>
-          {[['/messages','消息'],['/wallet','钱包'],['/rewards','优惠'],['/verify','核验台'],['/developer','开发者'],['/support','客服']].map(([to,label]) => <NavLink key={to} to={to}>{label}</NavLink>)}
+          {[['/messages','消息'],['/wallet','钱包'],['/chain','链上协作'],['/records','企业档案'],['/rewards','优惠'],['/verify','核验台'],['/developer','开发者'],['/support','客服']].map(([to,label]) => <NavLink key={to} to={to}>{label}</NavLink>)}
         </div>
         <span className="spacer" />
         {me ? <div className="nav-account">
@@ -61,11 +63,13 @@ export default function App() {
           <Link className="nav-mobile-keep" to="/notifications" aria-label="通知">🔔</Link>
           <Link className="nav-mobile-keep" to="/profile">{me.nickname}<small>{me.credit_score} 信用分</small></Link>
         </div> : <Link className="nav-mobile-keep nav-signin" to="/login">登录 / 注册 <span aria-hidden="true">→</span></Link>}
-        <details className="mobile-menu"><summary>全部功能</summary><div>{[['/','任务广场'],['/community','社区'],['/circles','圈层'],['/ventures','合作体'],['/teams','团队'],['/wallet','钱包'],['/rewards','优惠'],['/verify','核验台'],['/developer','开发者'],['/support','客服']].map(([to,label])=><Link key={to} to={to}>{label}</Link>)}</div></details>
+        <details className="mobile-menu"><summary>全部功能</summary><div>{[['/','任务广场'],['/community','社区'],['/circles','圈层'],['/ventures','合作体'],['/teams','团队'],['/wallet','钱包'],['/chain','链上协作'],['/records','企业档案'],['/rewards','优惠'],['/verify','核验台'],['/developer','开发者'],['/support','客服']].map(([to,label])=><Link key={to} to={to}>{label}</Link>)}</div></details>
       </nav>
       <Routes>
         <Route path="/" element={<Square />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/records" element={<Suspense fallback={<div className="page">正在加载企业档案…</div>}><Records /></Suspense>} />
+        <Route path="/chain" element={<Suspense fallback={<div className="page">正在加载链上协作…</div>}><Chain /></Suspense>} />
         <Route path="/publish" element={hasToken ? <Publish /> : <Navigate to="/login" />} />
         <Route path="/tasks/:id" element={hasToken ? <TaskDetail /> : <Navigate to="/login" />} />
         <Route path="/wallet" element={hasToken ? <WalletPage /> : <Navigate to="/login" />} />

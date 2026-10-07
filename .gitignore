@@ -23,3 +23,10 @@ server/drift*.db
 server/ci.db
 
 chain/artifacts/
+
+# Environment-specific chain deployment manifest (never share loopback config to staging)
+web/public/escrow-deployment.json
+web/public/escrow-deployment.json.tmp
+chain/deployments/
+
+web/public/business-records-deployment.json

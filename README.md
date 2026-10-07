@@ -9,6 +9,10 @@ AI 驱动的任务协作与本地服务平台 Monorepo：任务发布 → AI 分
 > 要上线看 [GO-LIVE.md](docs/GO-LIVE.md)；想知道现在真的能跑到什么程度看
 > [SYSTEM-CHECK.md](docs/SYSTEM-CHECK.md)（结论全部来自真实运行输出，附复现命令）。
 
+## 智能合约与企业档案
+
+新增链上任务托管 `/chain` 和企业可信档案 `/records`，支持股权、协议、法律合同、财务记录的版本存证与多人确认。本机演示使用无价值测试币；真实网络尚未部署。实现、运行、测试与上线边界见 [SMART-CONTRACTS.md](docs/SMART-CONTRACTS.md)。
+
 ## 目录结构
 
 ```

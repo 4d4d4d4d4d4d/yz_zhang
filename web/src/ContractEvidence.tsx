@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { apiErrorText, type SignatureReport } from '@platform/core';
 import { useApp } from './store';
@@ -22,6 +23,7 @@ export default function ContractEvidence({ contractId }: { contractId: number })
       <h4>合同版本 v{report.current_version} · {report.signatures.length ? (report.valid ? '签署记录校验通过' : '签署记录校验异常') : '尚未签署'}</h4>
       <p className="muted">{report.reliability_note}</p>
       <code className="evidence-hash">{report.current_document_hash}</code>
+      <p><Link to={`/chain?agreement=0x${report.current_document_hash}&reference=${encodeURIComponent(`opc-contract:${contractId}:v${report.current_version}`)}`}>查看链上协作与托管</Link> · 独立结算，请勿重复入金</p>
       {report.signatures.map(s => <p key={s.id} className="muted">{s.role === 'requester' ? '发布方' : '执行方'} · v{s.contract_version} · {s.provider} · {s.signature_valid ? '记录有效' : '校验失败'}</p>)}
       <h4>外部链存证 · {chain?.verified ? '检查点已确认' : chain?.status === 'unconfigured' ? '待接入' : '尚未通过核验'}</h4>
       <p className="muted">{chain?.note || '当前无法确认链上记录，请稍后重新核验。'}</p>

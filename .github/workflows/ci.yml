@@ -6,6 +6,25 @@ on:
   pull_request:
 
 jobs:
+  smart-contracts:
+    name: 智能合约真实 EVM 测试与 ABI 一致性
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: chain
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: chain/package-lock.json
+      - run: npm ci
+      - run: npm run compile
+      - run: npm run abi:check
+      - run: npm test
+      - run: npm audit --omit=dev
+
   backend:
     name: 后端测试（pytest）
     runs-on: ubuntu-latest

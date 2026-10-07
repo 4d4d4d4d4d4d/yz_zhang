@@ -10,7 +10,7 @@ import subprocess
 
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('action', choices=['start', 'stop', 'status'])
+parser.add_argument('action', choices=['start', 'stop', 'status', 'chain-start', 'chain-stop'])
 args = parser.parse_args()
 node = shutil.which('node')
 if not node:
@@ -28,20 +28,26 @@ configs = {
     'local.opc.web-preview': [node, str(root/'node_modules/vite/bin/vite.js'),
         '--host', '127.0.0.1', '--port', '5173', '--strictPort'],
 }
+chain_label = 'local.opc.chain-demo'
+if args.action in ('chain-start', 'chain-stop', 'status'):
+    if args.action != 'status':
+        configs = {}
+    configs[chain_label] = [str(root/'chain/node_modules/node/bin/node'), str(root/'chain/scripts/demo.mjs')]
+action = {'chain-start': 'start', 'chain-stop': 'stop'}.get(args.action, args.action)
 for label, command in configs.items():
     path = agents / (label + '.plist')
     loaded = subprocess.run(['/bin/launchctl', 'print', f'{domain}/{label}'], capture_output=True, text=True)
-    if args.action == 'status':
+    if action == 'status':
         print(label, 'loaded' if loaded.returncode == 0 else 'stopped')
         continue
-    if args.action == 'stop':
+    if action == 'stop':
         if loaded.returncode == 0:
             subprocess.run(['/bin/launchctl', 'bootout', f'{domain}/{label}'], check=True)
         path.unlink(missing_ok=True)
         print(label, 'stopped')
         continue
     data = {'Label': label, 'ProgramArguments': command,
-        'WorkingDirectory': str(root/'web' if label.endswith('web-preview') else root),
+        'WorkingDirectory': str(root/'chain' if label == chain_label else root/'web' if label.endswith('web-preview') else root),
         'RunAtLoad': True, 'KeepAlive': True, 'ThrottleInterval': 10,
         'StandardOutPath': str(logs/(label+'.log')), 'StandardErrorPath': str(logs/(label+'.error.log')),
         'EnvironmentVariables': {'PATH': str(Path(node).parent)+':/usr/bin:/bin:/usr/sbin:/sbin'}}

@@ -52,3 +52,5 @@ CI 的 `app-typecheck` job 跑的就是这条。`app/` 到 V71 为止只有 esbu
 已验证类型检查、21 项 Jest 测试以及 iOS/Android 的 `expo export`。
 导出的 Hermes/JS 包不是 APK/IPA；没有做真机安装、权限和通知验收。
 现有 SDK 51、示例 bundle ID、示例域名与未接入的推送令牌仍须处理。
+
+链上协作：设置 `EXPO_PUBLIC_CHAIN_WEB_URL=https://你的域名/chain`，钱包页和合同证据页会提供入口。签名在钱包内置浏览器完成；原生 WalletConnect 尚未集成。企业档案从链上协作页进入 `/records`。参见 [智能合约说明](../docs/SMART-CONTRACTS.md)。

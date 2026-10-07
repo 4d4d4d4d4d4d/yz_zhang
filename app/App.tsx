@@ -1,3 +1,4 @@
+import { ChainEntry } from './ChainEntry';
 import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
@@ -727,6 +728,7 @@ export function WalletScreen({ client }: { client: PlatformClient }) {
   return (
     <ScrollView contentContainerStyle={{ gap: 12 }}>
       <Text style={styles.title}>我的钱包</Text>
+      <ChainEntry />
       {wallet && (
         <View style={styles.cardRow}>
           <View style={{ flex: 1 }}><Text style={styles.mutedLeft}>可用</Text><Text style={styles.cardTitle}>{fmtYuan(wallet.available_cents)}</Text></View>
