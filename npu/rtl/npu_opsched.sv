@@ -1,0 +1,445 @@
+// =====================================================================
+// npu_opsched.sv -- in-order fetch, out-of-order issue.
+//
+//   msgq -> skid -> [ WIN-deep compressing window ] -> up to NPIPE issues
+//
+// Ordering granularity is (pipe, queue), NOT whole pipes. Two ops in
+// different queues heading for the same pipe may issue in either order;
+// two ops in the same queue heading for the same pipe may not. Blocking a
+// whole pipe on its oldest op is what deadlocks a multi-core workload:
+// core A's CUBE op waiting on an event that core B's CUBE op -- sitting
+// behind it in the same pipe -- is supposed to set.
+//
+// Three independent admission checks per candidate:
+//   dependency : counting semaphores (wait_mask, consumed at issue)
+//   resource   : per-pipe credits (a local counter, no combinational
+//                path into the execution unit)
+//   ordering   : (pipe,queue) predecessor scan + the two barrier scopes
+//
+// At most one op per cycle may consume any given event bit: candidates
+// whose wait_mask overlaps one already granted this cycle are held back.
+// =====================================================================
+`ifndef NPU_OPSCHED_SV
+`define NPU_OPSCHED_SV
+
+module npu_opsched
+  import npu_pkg::*;
+#(
+  parameter int HANG_LIMIT = 4096
+) (
+  input  logic                        clk,
+  input  logic                        rst_n,
+  input  logic                        clr_stat,
+
+  // ---- ingress (post skid) ----
+  input  logic                        in_valid,
+  input  logic [DESC_W-1:0]           in_desc,
+  input  logic [QIDW-1:0]             in_qid,
+  input  logic [MCUW-1:0]             in_mcu,
+  output logic                        in_ready,
+
+  // fetch path empty: nothing left in the message queues or the skid buffer
+  input  logic                        fetch_empty,
+
+  // ---- semaphores ----
+  input  logic [NEVT-1:0]             evt_nz,
+  output logic                        cons_en,
+  output logic [NEVT-1:0]             cons_mask,
+
+  // ---- issue ports ----
+  output logic [NPIPE-1:0]            iss_valid,
+  output op_t  [NPIPE-1:0]            iss_op,
+
+  // ---- completions ----
+  input  logic [NPIPE-1:0]            cpl_valid,
+  input  cpl_t [NPIPE-1:0]            cpl,
+
+  // ---- per-pipe soft reset ----
+  // rst_active[p] holds while the unit is being reset: no issue goes out
+  // and any completion it emits is ignored. rst_done[p] is a single-cycle
+  // pulse once the unit is back, and it is what returns the credits and
+  // the in-flight accounting the abandoned ops were holding.
+  input  logic [NPIPE-1:0]            rst_active,
+  input  logic [NPIPE-1:0]            rst_done,
+
+  // ---- status / statistics ----
+  output logic                        idle,
+  output logic [31:0]                 stat_issued,
+  output logic                        stat_win_full,
+  // Why did nothing issue this cycle? Attributed to the oldest un-issued
+  // op, because that is the one gating progress in program order. Exactly
+  // one of these is high in a stalled cycle.
+  output logic                        stall_dep,
+  output logic                        stall_cred,
+  output logic                        stall_ord,
+  output logic                        err_illegal,
+  output logic                        err_task,
+  output logic                        err_hang,
+  output logic [19:0]                 hang_snapshot,
+  output logic [TAG_W+MCUW+PIPEW-1:0] err_tag,
+  output logic [NPIPE-1:0][3:0]       inflight_pipe
+);
+
+  localparam int WCW = $clog2(WIN + 1);
+  localparam int WIW = $clog2(WIN);
+  localparam int IFW = 6;                    // per-queue in-flight width
+
+  op_t             win   [WIN];
+  logic [WIN-1:0]  wv;
+  logic [WCW-1:0]  wcnt;
+
+  logic [CRDW-1:0] credit [NPIPE];
+  logic [IFW-1:0]  ifq    [NQ];
+  logic [IFW+2:0]  iftot;
+  // In-flight is tracked per (pipe, queue), not just per queue. A soft
+  // reset abandons whatever one pipe was holding, and the queue-scope
+  // barrier depends on ifq being right afterwards -- without the finer
+  // breakdown there is no way to know how much to give back.
+  logic [CRDW-1:0] ifpq   [NPIPE][NQ];
+
+  // ------------------------------------------------ decode ingress
+  op_t nop;
+  always_comb begin
+    nop.hdr       = hdr_t'(in_desc[31:0]);
+    nop.wait_mask = in_desc[32 + NEVT - 1 : 32];
+    nop.pl        = in_desc[255:64];
+    nop.qid       = in_qid;
+    nop.mcu       = in_mcu;
+  end
+
+  // ------------------------------------------------ issue selection
+  logic [NPIPE-1:0]         sel_v;
+  logic [NPIPE-1:0][WIW-1:0] sel_i;
+  logic [WIN-1:0]           issued, dropped, keep;
+  logic [NEVT-1:0]          taken;
+
+  logic [WIN-1:0] legal;
+  always_comb
+    for (int i = 0; i < WIN; i++)
+      legal[i] = win[i].hdr.vld && (win[i].hdr.pipe < PIPEW'(NPIPE));
+
+  always_comb begin
+    automatic logic [NEVT-1:0]  tk;
+    automatic logic [NPIPE-1:0] pipe_taken;
+    automatic logic             older_q;
+    automatic logic             older_pq;
+    automatic logic             any_older;
+    automatic logic             fenced;
+    automatic logic             ok;
+    automatic logic [PIPEW-1:0] p;
+
+    sel_v      = '0;
+    sel_i      = '0;
+    issued     = '0;
+    dropped    = '0;
+    tk         = '0;
+    taken      = '0;
+    pipe_taken = '0;
+    older_q    = 1'b0;
+    older_pq   = 1'b0;
+    any_older  = 1'b0;
+    fenced     = 1'b0;
+    ok         = 1'b0;
+    p          = '0;
+
+    // an illegal op is discarded, never executed -- but only once it is
+    // the oldest of its queue, so queue order is still respected
+    for (int i = 0; i < WIN; i++) begin
+      older_q = 1'b0;
+      for (int j = 0; j < WIN; j++)
+        if (j < i && wv[j] && (win[j].qid == win[i].qid)) older_q = 1'b1;
+      if (wv[i] && !legal[i] && !older_q) dropped[i] = 1'b1;
+    end
+
+    // Selection walks the WINDOW oldest first, not the pipes in index
+    // order. Scanning by pipe made the pipe number the tie-breaker when two
+    // candidates wanted the same event bit in the same cycle, so a younger
+    // op on a lower-numbered pipe could take a set meant for an older one.
+    // Age is the only defensible priority here, and it is also what keeps a
+    // long-waiting op from being starved by a busier pipe.
+    for (int i = 0; i < WIN; i++) begin
+      if (wv[i] && !dropped[i] && legal[i]) begin
+        p = win[i].hdr.pipe;
+
+        // (pipe,queue) predecessor still in the window? And is there an
+        // un-retired barrier ahead that this op must not pass? A barrier
+        // that has not yet issued fences everything younger: the global
+        // one fences every queue, the queue-scope one only its own. Until
+        // it leaves the window, nothing behind it may go.
+        older_pq  = 1'b0;
+        older_q   = 1'b0;
+        any_older = 1'b0;
+        fenced    = 1'b0;
+        for (int j = 0; j < WIN; j++)
+          if (j < i && wv[j]) begin
+            any_older = 1'b1;
+            if (win[j].hdr.bar_g) fenced = 1'b1;
+            if (!dropped[j] && (win[j].qid == win[i].qid)) begin
+              older_q = 1'b1;
+              if (win[j].hdr.bar_q)                   fenced   = 1'b1;
+              if (win[j].hdr.pipe == win[i].hdr.pipe) older_pq = 1'b1;
+            end
+          end
+
+        ok = !older_pq && !fenced
+          && !pipe_taken[p]                              // one issue per pipe
+          && !rst_active[p]
+          && (credit[p] != '0)
+          && ((win[i].wait_mask & ~evt_nz) == '0)        // dependency
+          && ((win[i].wait_mask &  tk)     == '0);       // one consumer/bit
+
+        // queue-scope barrier: nothing older in this queue, anywhere
+        if (win[i].hdr.bar_q)
+          ok = ok && !older_q && (ifq[win[i].qid] == '0);
+
+        // Global barrier: oldest in the window, the machine drained, AND
+        // nothing still sitting in the fetch path. The last term is what
+        // makes it a real program-order fence. Window position alone is
+        // not program order: the message queue pops round-robin, so a
+        // descriptor pushed earlier on another queue can arrive after the
+        // barrier and would otherwise be fenced to the wrong side of it.
+        // Software must therefore let the machine drain before submitting
+        // a global barrier; the hardware simply will not let it pass
+        // otherwise. The queue-scope barrier has no such cost, which is
+        // why it is the one to use in an inner loop.
+        if (win[i].hdr.bar_g)
+          ok = ok && !any_older && (iftot == '0) && fetch_empty;
+
+        if (ok) begin
+          sel_v[p]      = 1'b1;
+          sel_i[p]      = WIW'(i);
+          pipe_taken[p] = 1'b1;
+          issued[i]     = 1'b1;
+          tk            = tk | win[i].wait_mask;
+        end
+      end
+    end
+    taken = tk;
+  end
+
+  assign cons_mask = taken;
+  assign cons_en   = |taken;
+
+  always_comb begin
+    iss_valid = sel_v;
+    for (int p = 0; p < NPIPE; p++) iss_op[p] = win[sel_i[p]];
+  end
+
+  // ------------------------------------------------ window compaction
+  op_t            nxt_win [WIN];
+  logic [WIN-1:0] nxt_wv;
+  logic [WCW-1:0] kept;
+  logic           accept;
+
+  assign keep = wv & ~issued & ~dropped;
+
+  always_comb begin
+    automatic logic [WCW-1:0] k = '0;
+    for (int i = 0; i < WIN; i++) begin
+      nxt_win[i] = win[i];
+      nxt_wv[i]  = 1'b0;
+    end
+    k = '0;
+    for (int i = 0; i < WIN; i++)
+      if (keep[i]) begin
+        nxt_win[k[WIW-1:0]] = win[i];      // k < WIN here: at most WIN keeps
+        nxt_wv[k[WIW-1:0]]  = 1'b1;
+        k = k + 1'b1;
+      end
+    kept   = k;
+    accept = in_valid && (k < WCW'(WIN));
+    if (accept) begin
+      nxt_win[k[WIW-1:0]] = nop;
+      nxt_wv[k[WIW-1:0]]  = 1'b1;
+      k = k + 1'b1;
+    end
+    wcnt = k;
+  end
+
+  assign in_ready      = (kept < WCW'(WIN));
+  assign stat_win_full = (kept == WCW'(WIN));
+
+  // ------------------------------------------------ stall attribution
+  always_comb begin
+    automatic logic        found;
+    automatic logic [WIW-1:0] i0;
+    automatic logic [PIPEW-1:0] p0;
+    stall_dep  = 1'b0;
+    stall_cred = 1'b0;
+    stall_ord  = 1'b0;
+    found      = 1'b0;
+    i0         = '0;
+    p0         = '0;
+    if ((wv != '0) && (sel_v == '0) && (dropped == '0)) begin
+      for (int i = 0; i < WIN; i++)
+        if (!found && wv[i]) begin
+          found = 1'b1;
+          i0    = WIW'(i);
+        end
+      p0 = win[i0].hdr.pipe;
+      if (!legal[i0])                                    stall_ord  = 1'b1;
+      else if ((win[i0].wait_mask & ~evt_nz) != '0)      stall_dep  = 1'b1;
+      else if (rst_active[p0] || (credit[p0] == '0))     stall_cred = 1'b1;
+      else                                               stall_ord  = 1'b1;
+    end
+  end
+
+  // ------------------------------------------------ state update
+  // A unit under reset produces nothing the scheduler should believe.
+  logic [NPIPE-1:0] cpl_ok;
+  assign cpl_ok = cpl_valid & ~rst_active;
+
+  logic [2:0] n_iss, n_cpl;
+  always_comb begin
+    n_iss = '0; n_cpl = '0;
+    for (int p = 0; p < NPIPE; p++) begin
+      if (sel_v[p])   n_iss = n_iss + 3'd1;
+      if (cpl_ok[p])  n_cpl = n_cpl + 3'd1;
+    end
+  end
+
+  logic [$clog2(HANG_LIMIT+1)-1:0] hang_ctr;
+  logic err_illegal_q, err_task_q, err_hang_q;
+  logic [19:0] snap_q;
+  logic [TAG_W+MCUW+PIPEW-1:0] errtag_q;
+  logic [31:0] issued_q;
+
+  assign err_illegal   = err_illegal_q;
+  assign err_task      = err_task_q;
+  assign err_hang      = err_hang_q;
+  assign hang_snapshot = snap_q;
+  assign err_tag       = errtag_q;
+  assign stat_issued   = issued_q;
+  // wcnt is the NEXT window occupancy. Using it here opens a one-cycle
+  // hole: in the cycle an op issues, wcnt is already 0 while iftot has not
+  // yet counted it, and the machine claims to be idle with work in flight.
+  // The registered valid vector has no such gap.
+  assign idle          = (wv == '0) && (iftot == '0);
+
+  always_comb
+    for (int p = 0; p < NPIPE; p++)
+      inflight_pipe[p] = 4'(CREDIT) - 4'(credit[p]);
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      for (int i = 0; i < WIN; i++) win[i] <= '0;
+      wv <= '0;
+      for (int p = 0; p < NPIPE; p++) credit[p] <= CRDW'(CREDIT);
+      for (int q = 0; q < NQ; q++)    ifq[q]    <= '0;
+      for (int p = 0; p < NPIPE; p++)
+        for (int q = 0; q < NQ; q++)  ifpq[p][q] <= '0;
+      iftot         <= '0;
+      hang_ctr      <= '0;
+      err_illegal_q <= 1'b0;
+      err_task_q    <= 1'b0;
+      err_hang_q    <= 1'b0;
+      snap_q        <= '0;
+      errtag_q      <= '0;
+      issued_q      <= '0;
+    end else begin
+      for (int i = 0; i < WIN; i++) win[i] <= nxt_win[i];
+      wv <= nxt_wv;
+
+      // credits: one issue and one completion per pipe per cycle. A
+      // completed reset hands back every credit the unit was holding.
+      for (int p = 0; p < NPIPE; p++)
+        if (rst_done[p]) credit[p] <= CRDW'(CREDIT);
+        else
+          case ({sel_v[p], cpl_ok[p]})
+            2'b10:   credit[p] <= credit[p] - 1'b1;
+            2'b01:   credit[p] <= credit[p] + 1'b1;
+            default: ;
+          endcase
+
+      // in-flight per (pipe, queue), and the per-queue roll-up the
+      // queue-scope barrier reads
+      for (int q = 0; q < NQ; q++) begin
+        automatic logic [IFW-1:0] up  = '0;
+        automatic logic [IFW-1:0] dn  = '0;
+        automatic logic [IFW-1:0] aba = '0;      // abandoned by a reset
+        for (int p = 0; p < NPIPE; p++) begin
+          if (sel_v[p] && (win[sel_i[p]].qid == QIDW'(q))) up = up + 1'b1;
+          if (cpl_ok[p] && (cpl[p].qid       == QIDW'(q))) dn = dn + 1'b1;
+          if (rst_done[p]) aba = aba + IFW'(ifpq[p][q]);
+        end
+        ifq[q] <= ifq[q] + up - dn - aba;
+      end
+
+      for (int p = 0; p < NPIPE; p++)
+        for (int q = 0; q < NQ; q++) begin
+          automatic logic u = sel_v[p]  && (win[sel_i[p]].qid == QIDW'(q));
+          automatic logic d = cpl_ok[p] && (cpl[p].qid        == QIDW'(q));
+          if (rst_done[p])            ifpq[p][q] <= '0;
+          else if (u && !d)           ifpq[p][q] <= ifpq[p][q] + 1'b1;
+          else if (!u && d)           ifpq[p][q] <= ifpq[p][q] - 1'b1;
+        end
+
+      begin
+        automatic logic [IFW+2:0] aba_tot = '0;
+        for (int p = 0; p < NPIPE; p++)
+          if (rst_done[p])
+            for (int q = 0; q < NQ; q++)
+              aba_tot = aba_tot + (IFW+3)'(ifpq[p][q]);
+        iftot <= iftot + (IFW+3)'(n_iss) - (IFW+3)'(n_cpl) - aba_tot;
+      end
+
+      issued_q <= clr_stat ? '0 : issued_q + 32'(n_iss);
+`ifdef NPU_TRACE
+      for (int p = 0; p < NPIPE; p++)
+        if (sel_v[p])
+          $display("[iss] t=%0t pipe=%0d tag=%0d qid=%0d wait=%04h",
+                   $time, p, win[sel_i[p]].hdr.tag, win[sel_i[p]].qid,
+                   win[sel_i[p]].wait_mask);
+      for (int i = 0; i < WIN; i++)
+        if (dropped[i])
+          $display("[drop] t=%0t tag=%0d pipe=%0d", $time, win[i].hdr.tag,
+                   win[i].hdr.pipe);
+      if (accept)
+        $display("[fetch] t=%0t tag=%0d pipe=%0d qid=%0d", $time,
+                 nop.hdr.tag, nop.hdr.pipe, nop.qid);
+`endif
+
+      // ---- error capture ----
+      if (clr_stat) begin
+        err_illegal_q <= 1'b0;
+        err_task_q    <= 1'b0;
+        err_hang_q    <= 1'b0;
+      end else begin
+        if (|dropped) err_illegal_q <= 1'b1;
+        for (int p = 0; p < NPIPE; p++)
+          if (cpl_ok[p] && cpl[p].err) begin
+            err_task_q <= 1'b1;
+            if (!err_task_q) errtag_q <= {cpl[p].tag, cpl[p].mcu, PIPEW'(p)};
+          end
+      end
+
+      // ---- hang watchdog ----
+      if ((n_iss != '0) || (n_cpl != '0) || (|rst_active) || (|rst_done)
+          || ((wcnt == '0) && (iftot == '0))) begin
+        hang_ctr <= '0;
+        if (|rst_done) err_hang_q <= 1'b0;   // recovered
+      end else if (hang_ctr != $clog2(HANG_LIMIT+1)'(HANG_LIMIT)) begin
+        hang_ctr <= hang_ctr + 1'b1;
+      end else if (!err_hang_q) begin
+        err_hang_q <= 1'b1;
+        for (int p = 0; p < NPIPE; p++)
+          snap_q[p*4 +: 4] <= 4'(CREDIT) - 4'(credit[p]);
+`ifdef NPU_DEBUG
+        $display("[hang] window (evt_nz=%04h iftot=%0d fetch_empty=%0d in_valid=%0d):",
+                 evt_nz, iftot, fetch_empty, in_valid);
+        for (int i = 0; i < WIN; i++)
+          if (wv[i])
+            $display("  [%0d] pipe=%0d qid=%0d opc=%0d tag=%0d wait=%04h set=%0d/%0d barq=%0d barg=%0d",
+                     i, win[i].hdr.pipe, win[i].qid, win[i].hdr.opc,
+                     win[i].hdr.tag, win[i].wait_mask, win[i].hdr.set_en,
+                     win[i].hdr.set_evt, win[i].hdr.bar_q, win[i].hdr.bar_g);
+        for (int p = 0; p < NPIPE; p++)
+          $display("  credit[%0d]=%0d", p, credit[p]);
+`endif
+      end
+    end
+  end
+
+endmodule
+
+`endif
