@@ -166,6 +166,7 @@ module npu_cube
     cpl.mcu     = cur.mcu;
     cpl.qid     = cur.qid;
     cpl.set_evt = cur.hdr.set_evt;
+    cpl.set_cnt = cur.hdr.set_cnt;
     cpl.set_en  = cur.hdr.set_en;
     cpl.err     = err_q;
   end

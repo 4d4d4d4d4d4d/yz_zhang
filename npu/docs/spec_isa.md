@@ -37,13 +37,15 @@ trustworthy and the `LOCK` owner field meaningful.
 `wait_mask` is a bitmap; the op issues only when every selected event has a
 non-zero count, and issuing decrements each of them by one.
 
-**A descriptor may set at most one event.** Waking N consumers therefore
-costs N−1 trailing no-ops on the producer's own pipe and queue, where
-hardware ordering guarantees they retire after it. This is a real ISA
-limit. Widening `set_evt` into a bitmap would remove it at the cost of 12
-more descriptor bits and a wider increment port on the semaphore file; it
-is the first thing to change if the sync no-op count ever becomes
-significant (it is 16 of 189 descriptors in the encoder layer, about 8%).
+A descriptor sets one event, `set_cnt + 1` times. `set_cnt` is three bits
+in the header, so a producer feeding up to eight consumers of that event
+costs one descriptor rather than seven trailing no-ops. A bitmap was the
+obvious widening and would have been the wrong one: the compiler gives each
+producer group a single event, so what it actually needed was a count, and
+a count fits in bits that were already reserved. A producer needing more
+than one event slot — fan-out above the counter's saturation width — still
+pays for one trailing no-op per extra slot, which no generated kernel now
+does.
 
 There are 32 events. Sixteen forced a global barrier roughly every twenty
 producer groups and a barrier costs a full machine drain, so the event file

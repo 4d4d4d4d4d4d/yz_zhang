@@ -24,6 +24,7 @@ module npu_sem
   // produce: up to NPIPE completions per cycle may target the same event
   input  logic [NPIPE-1:0]        set_en,
   input  logic [NPIPE-1:0][EVTIDW-1:0] set_evt,
+  input  logic [NPIPE-1:0][2:0]   set_cnt,   // extra sets beyond the first
 
   output logic [NEVT-1:0]         nonzero,
   output logic                    ovf
@@ -31,14 +32,17 @@ module npu_sem
   localparam logic [EVT_W-1:0] EVT_MAX = {EVT_W{1'b1}};
 
   logic [EVT_W-1:0] cnt [NEVT];
-  logic [2:0]       inc [NEVT];          // 0..NPIPE sets in one cycle
+  // Up to NPIPE completions per cycle, each able to set the same event up
+  // to 8 times, so the increment needs room for NPIPE*8.
+  logic [5:0]       inc [NEVT];
   logic             dec [NEVT];
 
   always_comb begin
     for (int e = 0; e < NEVT; e++) begin
       inc[e] = '0;
       for (int p = 0; p < NPIPE; p++)
-        if (set_en[p] && (set_evt[p] == EVTIDW'(e))) inc[e] = inc[e] + 3'd1;
+        if (set_en[p] && (set_evt[p] == EVTIDW'(e)))
+          inc[e] = inc[e] + 6'd1 + 6'(set_cnt[p]);
       dec[e]     = cons_en && cons_mask[e];
       nonzero[e] = (cnt[e] != '0);
     end
@@ -56,13 +60,13 @@ module npu_sem
       ovf_q <= 1'b0;
     end else begin
       for (int e = 0; e < NEVT; e++) begin
-        automatic logic signed [5:0] nxt =
-            6'(signed'({1'b0, cnt[e]})) + 6'(signed'({3'b0, inc[e]}))
-          - 6'(signed'({5'b0, dec[e]}));
-        if (nxt > 6'(signed'({1'b0, EVT_MAX}))) begin
+        automatic logic signed [8:0] nxt =
+            9'(signed'({1'b0, cnt[e]})) + 9'(signed'({3'b0, inc[e]}))
+          - 9'(signed'({8'b0, dec[e]}));
+        if (nxt > 9'(signed'({1'b0, EVT_MAX}))) begin
           cnt[e] <= EVT_MAX;
           ovf_q  <= 1'b1;                 // sticky: a set was swallowed
-        end else if (nxt < 6'sd0) begin
+        end else if (nxt < 9'sd0) begin
           cnt[e] <= '0;                   // cannot happen: guarded by wait
         end else begin
           cnt[e] <= EVT_W'(nxt);

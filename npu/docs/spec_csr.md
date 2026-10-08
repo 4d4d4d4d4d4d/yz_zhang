@@ -122,9 +122,14 @@ producer, because passing one requires the machine to be drained. It is
 expensive, which is why the event file is 32 wide rather than 16 — the
 answer to running out of events is more events.
 
-`CONFIG` (0x30 / 0x34 / 0x38) reports `WIN`, `CREDIT`, `NEVT`, `NBUF`,
-`NQ`, `NPIPE`, `BUF_D` and `LANES`, because the compiler bakes some of them
-into what it emits. A program records what it assumed and the testbench
+`CONFIG` reports what the compiler bakes into what it emits:
+
+| Offset | 31:24 | 23:16 | 15:8 | 7:0 |
+|---|---|---|---|---|
+| `0x30` | `MAX_BURST` | `NID` | `CREDIT` | `WIN` |
+| `0x34` | `NBUF` | `NQ` | `NPIPE` | `NEVT` |
+| `0x38` | `BUF_D` (31:16) | | `LANES` | `EVT_W` |
+ A program records what it assumed and the testbench
 checks it; a window deeper than the one a program targeted is a named
 failure rather than a hang.
 

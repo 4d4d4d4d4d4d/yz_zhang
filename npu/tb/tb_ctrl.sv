@@ -100,8 +100,9 @@ module tb_ctrl;
                                            input logic bar_q = 1'b0,
                                            input logic vld = 1'b1);
     hdr_t h;
-    h = '{rsvd: 5'd0, fp: 1'b0, bar_g: 1'b0, bar_q: bar_q, set_evt: set_evt,
-          set_en: set_en, tag: tag, opc: opc, pipe: pipe, vld: vld};
+    h = '{rsvd: 2'd0, set_cnt: 3'd0, fp: 1'b0, bar_g: 1'b0, bar_q: bar_q,
+          set_evt: set_evt, set_en: set_en, tag: tag, opc: opc, pipe: pipe,
+          vld: vld};
     return {pl, wm, h};
   endfunction
 
@@ -117,6 +118,46 @@ module tb_ctrl;
     m.cols        = cols;
     m.buf_rstride = cols;
     m.ext_rstride = 32'(cols);
+    return m;
+  endfunction
+
+  function automatic logic [191:0] cube_pl(input logic [15:0] k_len,
+                                           input logic [5:0]  opc_unused = 6'd0);
+    cube_t c;
+    c = '0;
+    c.src_a = 16'h0000; c.src_b = 16'h0100; c.dst = 16'h0200;
+    c.k_len = k_len;
+    c.a_stride = 16'd1; c.b_stride = 16'd1; c.c_stride = 16'd1;
+    c.rows = 4'd15; c.n_dim = 4'd15;
+    return c;
+  endfunction
+
+  function automatic logic [191:0] vec_pl(input logic [15:0] rows,
+                                          input logic [15:0] src_b = 16'd0);
+    vec_t v;
+    v = '0;
+    v.src_a = 16'h0000; v.src_b = src_b; v.dst = 16'h0040;
+    v.rows = rows; v.mask = 16'hFFFF;
+    v.a_stride = 16'd1; v.b_stride = 16'd1; v.d_stride = 16'd1;
+    return v;
+  endfunction
+
+  function automatic logic [191:0] fix_pl(input logic [15:0] tiles);
+    fix_t f;
+    f = '0;
+    f.src_a = 16'h0000; f.dst = 16'h0040; f.tiles = tiles;
+    f.s_stride = 16'd16; f.d_stride = 16'd16;
+    return f;
+  endfunction
+
+  function automatic logic [191:0] dma_bad(input logic [47:0] ext,
+                                           input logic [15:0] cols,
+                                           input logic [15:0] in_cnt);
+    mte_t m;
+    m = '0;
+    m.ext_addr = ext; m.buf_addr = 16'h0000;
+    m.rows = 16'd1; m.cols = cols; m.buf_rstride = cols;
+    m.ext_rstride = 32'(cols); m.in_cnt = in_cnt;
     return m;
   endfunction
 
@@ -155,6 +196,41 @@ module tb_ctrl;
     // ================= MAGIC =================
     csr_rd(12'h000, 2'd0, v);
     chk("MAGIC", v === 32'h4E50_5503);
+
+    // ================= every CSR address, once =================
+    // Coverage said a third of the read mux had never been selected. A
+    // register nobody reads is a register nobody has checked decodes.
+    begin
+      logic [31:0] c0, c1, c2;
+      csr_rd(12'h030, 2'd0, c0);
+      csr_rd(12'h034, 2'd0, c1);
+      csr_rd(12'h038, 2'd0, c2);
+      chk("CONFIG reports the window depth",   int'(c0[7:0])    == WIN);
+      chk("CONFIG reports the issue credit",   int'(c0[23:16])  == CREDIT);
+      chk("CONFIG reports the burst length",   int'(c0[31:24])  == MAX_BURST);
+      chk("CONFIG reports the event count",    int'(c1[7:0])    == NEVT);
+      chk("CONFIG reports the pipe count",     int'(c1[15:8])   == NPIPE);
+      chk("CONFIG reports the queue count",    int'(c1[23:16])  == NQ);
+      chk("CONFIG reports the buffer count",   int'(c1[31:24])  == NBUF);
+      chk("CONFIG reports the lane count",     int'(c2[15:8])   == LANES);
+      chk("CONFIG reports the buffer depth",   int'(c2[31:16])  == BUF_D);
+      chk("CONFIG reports the event width",    int'(c2[7:0])    == EVT_W);
+      for (int a = 0; a <= 12'h0AC; a += 4) csr_rd(LT_AW'(a), 2'd0, v);
+      for (int a = 12'h100; a <= 12'h11C; a += 4) csr_rd(LT_AW'(a), 2'd0, v);
+      for (int l = 0; l < NLOCK; l++) csr_wr(LT_AW'(12'h100 + 12'(l*4)),
+                                             2'd0, 32'd0);
+      csr_rd(12'h0F0, 2'd0, v);                 // an undecoded address
+      chk("an undecoded address reads zero", v === 32'd0);
+      csr_wr(12'h0F0, 2'd0, 32'hDEAD_BEEF);     // and a write to it is a no-op
+      csr_wr(12'h084, 2'd0, 32'h0000_00AA);
+      csr_rd(12'h084, 2'd0, v);
+      chk("QPRIO reads back", v[NQ-1:0] === 8'hAA);
+      csr_wr(12'h084, 2'd0, 32'h0);
+      csr_wr(12'h088, 2'd0, 32'h0000_0021);     // mode 01, bank 2
+      csr_rd(12'h088, 2'd0, v);
+      chk("ECCINJ reads back", v[1:0] === 2'b01 && v[5:4] === 2'd2);
+      csr_wr(12'h088, 2'd0, 32'h0);
+    end
 
     // ================= hardware semaphores =================
     // read-to-acquire: the grant is decided in the transaction that
@@ -302,6 +378,83 @@ module tb_ctrl;
     for (int i = 0; i < 16; i++)
       chk($sformatf("work resumed after quiescence, beat %0d", i),
           u_mem.mem[32'h700 + i] === u_mem.mem[i]);
+
+    // ================= every configuration-error class =================
+    // Coverage said these paths had never run. Each one must raise
+    // err_task, point ERR_TAG at the right pipe and tag, and leave the
+    // machine running -- a rejected descriptor is not a wedged machine.
+    begin
+      logic [2:0]   bad_pipe [12];
+      logic [5:0]   bad_opc  [12];
+      logic [191:0] bad_pl   [12];
+      logic         bad_fp   [12];
+      int           nbad;
+      string        why [12];
+
+      nbad = 0;
+      // CUBE: zero reduction length, and an opcode it does not define
+      bad_pipe[nbad]=3'(P_CUBE);   bad_opc[nbad]=C_MM;  bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=cube_pl(16'd0); why[nbad]="cube k_len=0";       nbad++;
+      bad_pipe[nbad]=3'(P_CUBE);   bad_opc[nbad]=6'd7;  bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=cube_pl(16'd8); why[nbad]="cube bad opcode";    nbad++;
+      // CUBE: an operand window that leaves its buffer
+      bad_pipe[nbad]=3'(P_CUBE);   bad_opc[nbad]=C_MM;  bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=cube_pl(16'd300); why[nbad]="cube k past buffer"; nbad++;
+      // VEC: zero rows, an undefined opcode, RECIP outside bf16, and a
+      // B window that leaves its buffer
+      bad_pipe[nbad]=3'(P_VEC);    bad_opc[nbad]=V_MOV; bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=vec_pl(16'd0);  why[nbad]="vec rows=0";          nbad++;
+      bad_pipe[nbad]=3'(P_VEC);    bad_opc[nbad]=6'd40; bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=vec_pl(16'd4);  why[nbad]="vec bad opcode";      nbad++;
+      bad_pipe[nbad]=3'(P_VEC);    bad_opc[nbad]=V_RECIP; bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=vec_pl(16'd4);  why[nbad]="vec recip in fixed";  nbad++;
+      bad_pipe[nbad]=3'(P_VEC);    bad_opc[nbad]=V_ADD; bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=vec_pl(16'd200, 16'h00F0);
+      why[nbad]="vec src_b past buffer"; nbad++;
+      // FIX: zero tiles, and an opcode it does not define
+      bad_pipe[nbad]=3'(P_FIX);    bad_opc[nbad]=F_TRANS; bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=fix_pl(16'd0);  why[nbad]="fix tiles=0";         nbad++;
+      bad_pipe[nbad]=3'(P_FIX);    bad_opc[nbad]=6'd5;  bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=fix_pl(16'd1);  why[nbad]="fix bad opcode";      nbad++;
+      // MTE: unaligned external address, cols not a multiple of in_cnt,
+      // and an opcode neither engine defines
+      bad_pipe[nbad]=3'(P_MTE_IN); bad_opc[nbad]=M_XFER; bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=dma_bad(48'h4, 16'd4, 16'd0);
+      why[nbad]="mte_in unaligned"; nbad++;
+      bad_pipe[nbad]=3'(P_MTE_IN); bad_opc[nbad]=M_XFER; bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=dma_bad(48'h0, 16'd7, 16'd2);
+      why[nbad]="mte_in cols%in_cnt"; nbad++;
+      bad_pipe[nbad]=3'(P_MTE_OUT); bad_opc[nbad]=6'd9; bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=dma_bad(48'h0, 16'd4, 16'd0);
+      why[nbad]="mte_out bad opcode"; nbad++;
+
+      for (int t = 0; t < nbad; t++) begin
+        logic [DESC_W-1:0] d;
+        csr_wr(12'h080, 2'd0, 32'h1);           // clear the sticky flags
+        d = mk(bad_pipe[t], bad_opc[t], 8'(8'hB0 + 8'(t)), bad_pl[t]);
+        push(t % NMCU, QIDW'(t % NQ), d);
+        wait_idle();
+        csr_rd(12'h004, 2'd0, v);
+        chk($sformatf("%s raises err_task", why[t]), v[2] === 1'b1);
+        chk($sformatf("%s does not raise err_illegal", why[t]), v[0] === 1'b0);
+        csr_rd(12'h020, 2'd0, v);
+        chk($sformatf("%s is located", why[t]),
+            v[12:5] === 8'(8'hB0 + 8'(t)) && v[2:0] === bad_pipe[t]);
+      end
+
+      // and the machine is still alive
+      csr_wr(12'h080, 2'd0, 32'h1);
+      push(0, 3'd0, mk(3'(P_MTE_IN), 6'd0, 8'hCC,
+                       dma_pl(48'h0, 16'h0090, 1, 4), '0, 1'b1, 5'd9));
+      push(0, 3'd0, mk(3'(P_MTE_OUT), 6'd0, 8'hCD,
+                       dma_pl(48'h14000, 16'h0090, 1, 4), 32'h200));
+      wait_idle();
+      csr_rd(12'h004, 2'd0, v);
+      chk("the machine still works after twelve rejections", v[3:0] === 4'd0);
+      for (int i = 0; i < 4; i++)
+        chk($sformatf("post-rejection transfer beat %0d", i),
+            u_mem.mem[32'hA00 + i] === u_mem.mem[i]);
+    end
 
     // ================= interrupts =================
     csr_wr(12'h080, 2'd0, 32'h1);              // clear counters and IRQ_STATUS

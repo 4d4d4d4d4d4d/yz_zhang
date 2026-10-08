@@ -56,9 +56,15 @@ def _pack(fields, total):
     return v
 
 
-def header(pipe, opc, tag=0, set_evt=0, set_en=0, bar_q=0, bar_g=0, fp=0):
-    return _pack([(5, 0), (1, fp), (1, bar_g), (1, bar_q), (EVTIDW, set_evt),
-                  (1, set_en), (8, tag), (6, opc), (3, pipe), (1, 1)], 32)
+def header(pipe, opc, tag=0, set_evt=0, set_en=0, set_cnt=0, bar_q=0, bar_g=0,
+           fp=0):
+    """set_cnt is EXTRA sets of set_evt beyond the first, so a producer
+    feeding N consumers costs one descriptor instead of N-1 trailing
+    no-ops. It is capped by the event counter's own width."""
+    assert 0 <= set_cnt <= 7
+    return _pack([(2, 0), (3, set_cnt), (1, fp), (1, bar_g), (1, bar_q),
+                  (EVTIDW, set_evt), (1, set_en), (8, tag), (6, opc),
+                  (3, pipe), (1, 1)], 32)
 
 
 def desc(pipe, opc, payload, wait_mask=0, **kw):
@@ -105,7 +111,8 @@ def mte_pl(ext_addr, buf_addr, rows, cols, ext_rstride=None, buf_rstride=None,
 # ---------------- convenience builders ----------------
 def mm(src_a, src_b, dst, k, **kw):
     hdr = {k_: kw.pop(k_) for k_ in
-           ("tag", "set_evt", "set_en", "bar_q", "bar_g", "fp", "wait_mask")
+           ("tag", "set_evt", "set_en", "set_cnt", "bar_q", "bar_g", "fp",
+            "wait_mask")
            if k_ in kw}
     wm = hdr.pop("wait_mask", 0)
     return desc(P_CUBE, C_MM, cube_pl(src_a, src_b, dst, k, **kw),
@@ -114,7 +121,8 @@ def mm(src_a, src_b, dst, k, **kw):
 
 def vop(opc, src_a, dst, rows, **kw):
     hdr = {k_: kw.pop(k_) for k_ in
-           ("tag", "set_evt", "set_en", "bar_q", "bar_g", "fp", "wait_mask")
+           ("tag", "set_evt", "set_en", "set_cnt", "bar_q", "bar_g", "fp",
+            "wait_mask")
            if k_ in kw}
     wm = hdr.pop("wait_mask", 0)
     return desc(P_VEC, opc, vec_pl(src_a, dst, rows, **kw),
@@ -123,7 +131,8 @@ def vop(opc, src_a, dst, rows, **kw):
 
 def trans(src_a, dst, tiles, **kw):
     hdr = {k_: kw.pop(k_) for k_ in
-           ("tag", "set_evt", "set_en", "bar_q", "bar_g", "fp", "wait_mask")
+           ("tag", "set_evt", "set_en", "set_cnt", "bar_q", "bar_g", "fp",
+            "wait_mask")
            if k_ in kw}
     wm = hdr.pop("wait_mask", 0)
     return desc(P_FIX, F_TRANS, fix_pl(src_a, dst, tiles, **kw),
@@ -132,7 +141,8 @@ def trans(src_a, dst, tiles, **kw):
 
 def dma(pipe, ext_addr, buf_addr, rows, cols, **kw):
     hdr = {k_: kw.pop(k_) for k_ in
-           ("tag", "set_evt", "set_en", "bar_q", "bar_g", "fp", "wait_mask")
+           ("tag", "set_evt", "set_en", "set_cnt", "bar_q", "bar_g", "fp",
+            "wait_mask")
            if k_ in kw}
     wm = hdr.pop("wait_mask", 0)
     return desc(pipe, M_XFER, mte_pl(ext_addr, buf_addr, rows, cols, **kw),
@@ -141,7 +151,8 @@ def dma(pipe, ext_addr, buf_addr, rows, cols, **kw):
 
 def nop(pipe, **kw):
     hdr = {k_: kw.pop(k_) for k_ in
-           ("tag", "set_evt", "set_en", "bar_q", "bar_g", "fp", "wait_mask")
+           ("tag", "set_evt", "set_en", "set_cnt", "bar_q", "bar_g", "fp",
+            "wait_mask")
            if k_ in kw}
     wm = hdr.pop("wait_mask", 0)
     return desc(pipe, OPC_NOP, 0, wait_mask=wm, **hdr)
