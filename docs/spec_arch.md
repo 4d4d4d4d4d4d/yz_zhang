@@ -134,7 +134,64 @@ different places. The write engine uses a single ID: AXI4 forbids
 interleaving W bursts and requires W to follow AW order, so more IDs would
 buy nothing and cost an ordering hazard.
 
-## 7. ECC
+## 6.1 Burst boundaries
+
+AXI4 forbids a burst from crossing a 4 KiB boundary: a real interconnect
+decodes on that boundary, so a crossing burst is not slow, it is wrong —
+half of it arrives at a different slave. The address generator therefore
+clips every burst to the next 4 KiB boundary in addition to `MAX_BURST`.
+This is not a translation feature; it was a protocol violation whenever a
+window happened to start within `MAX_BURST` beats of a page end, and no
+existing program happened to do that, which is why it took a boundary
+assertion in the memory model to surface. The same clip keeps a burst
+inside one translation region, since a region is a whole number of pages.
+
+## 7. Address translation
+
+Eight software-programmed regions, each a contiguous run of 4 KiB pages,
+shared by both memory engines: one register file, two combinational lookup
+ports. Duplicating the table per engine would double the registers and
+make every CSR write a broadcast, and the lookup has no state to arbitrate
+for. Register layout and fault reporting are in `spec_csr.md` section 1.1.
+
+**There is no hardware page-table walker, and that is a decision rather
+than a simplification.** A walker puts an unbounded-latency memory
+dependency in the middle of the DMA address path: every AR would
+potentially wait on a chain of table reads, which have to share the AXI
+port that the data traffic is already saturating — MTE_IN is busy 97.6% of
+cycles on the encoder layer. The whole point of the four-layer back
+pressure above is that the time from *address generated* to *AR accepted*
+is bounded, and a walker breaks that.
+
+It would also buy nothing here. Translation granularity on this device is
+per-tensor, not per-page: a descriptor names one contiguous window of one
+tensor, and a workload has a handful of live tensors. Eight regions
+programmed once per model is the whole requirement. If a future workload
+needs more than eight, the answer is more regions.
+
+What the region table does buy, and raw physical addresses could not:
+
+- a driver can hand the compiler a virtual layout and relocate the tensors
+  underneath it without re-emitting descriptors,
+- a descriptor that walks off the end of its tensor faults instead of
+  silently reading someone else's memory — the bug class that is otherwise
+  invisible until the numbers are wrong,
+- read-only and write-only regions, so a transposed weight tensor cannot be
+  overwritten by a mis-encoded MTE_OUT.
+
+The cost in the datapath is one comparator bank and no extra cycle: the
+lookup is combinational, in parallel with the arbitration that was already
+deciding whether AR could go out this cycle.
+
+One thing it changed that had nothing to do with translation. A transfer
+can now end *before* the address generator runs dry, because a fault stops
+it part way through. The AGU therefore needs an explicit abort: without it
+the half-finished walk stayed live for the one cycle between accepting the
+next descriptor and `start` landing, and presented the stale position
+against the new descriptor's geometry — which showed up as a 256-beat AXI
+burst to a nonsense address.
+
+## 8. ECC
 
 SECDED(22,16) per 16-bit lane: Hamming(21,16) plus an overall parity bit.
 **ECC granularity must equal write granularity.** VEC supports lane-granular
@@ -148,13 +205,14 @@ errors are flagged uncorrectable. The first error's `{buffer, beat}` is
 latched. `CSR.ECCINJ` flips one or two bits on write into a chosen bank so
 the path can be exercised from software.
 
-## 8. What is deliberately not here
+## 9. What is deliberately not here
 
 Honest list; each of these is real work in a production SoC.
 
-- **Interrupts.** Completion is observed by MCU polling of `STATUS`.
-- **MMU / address translation.** Descriptors carry physical addresses.
-  `ext_addr` is 48 bits wide with only the low 32 wired, reserved for it.
+- **Demand paging.** Translation is eight software-programmed regions and
+  nothing else: no page-table walker, no TLB fill, no faulting-and-retry.
+  Section 7 argues that is the right trade for this device, but it does
+  mean every page a descriptor touches has to be mapped before it runs.
 - **Clock gating / DVFS.** The Q-Channel reaches quiescence; there is no
   ICG hierarchy and no voltage/frequency control.
 - **Debug / trace port.** Observability is CSR polling only; there is no
@@ -164,13 +222,14 @@ Honest list; each of these is real work in a production SoC.
   recovers, but nothing triggers that recovery automatically; a supervisor
   has to decide.
 
-Interrupts (`IRQ_STATUS` / `IRQ_ENABLE`) and per-pipe soft reset
-(`SOFT_RST`) were the two gaps worth closing first and both are now
-implemented — see `spec_csr.md` sections 2.1 and 2.2. The interesting part
-turned out to be neither the interrupt controller nor the reset itself but
-what a reset does to state the bus still remembers.
+Interrupts (`IRQ_STATUS` / `IRQ_ENABLE`), per-pipe soft reset
+(`SOFT_RST`) and address translation (section 7) were the gaps worth
+closing first and all three are now implemented. In each case the
+interesting part was not the feature. For the soft reset it was what a
+reset does to state the bus still remembers; for translation it was that a
+transfer can now end before its address walk does.
 
-## 9. Observability of bank contention
+## 10. Observability of bank contention
 
 `XBAR_RCONF` / `XBAR_WCONF` count cycles in which a requester asked for a
 bank and was refused. This is the direct cost of a buffer assignment that
@@ -186,7 +245,7 @@ detects that case and reuses the A beat instead of issuing a second read,
 which took the layer to 9%. What remains is cross-pipe contention, which is
 the compiler's allocation to fix rather than the hardware's.
 
-## 10. Debug build options
+## 11. Debug build options
 
 Two guarded trace levels, both compiled out by default:
 

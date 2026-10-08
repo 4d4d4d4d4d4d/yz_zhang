@@ -146,7 +146,7 @@ code word is 16 bits wide.
 
 | Bits | Field |
 |---|---|
-| 47:0 | `ext_addr` — byte address, beat aligned. Bits 47:32 are reserved for a future MMU and must be zero |
+| 47:0 | `ext_addr` — byte address, beat aligned. Bits 39:0 are the virtual address; bits 47:40 are reserved and must be zero |
 | 63:48 | `buf_addr` |
 | 79:64 | `buf_rstride` |
 | 95:80 | `cols` — beats per row, ≥ 1 |
@@ -158,9 +158,15 @@ code word is 16 bits wide.
 For row `r`, column `c`, with `g = c / in_cnt` and `w = c mod in_cnt`:
 
 ```
-external beat = ext_addr/32 + r·ext_rstride + g·in_stride + w
+virtual beat  = ext_addr/32 + r·ext_rstride + g·in_stride + w
+external beat = translate(virtual beat)
 on-chip beat  = buf_addr    + r·buf_rstride + c
 ```
+
+`translate` is the region table in `spec_csr.md` section 1.1, identity when
+`MMU_CTRL.en` is clear. It is applied to the generated address, not to
+`ext_addr`, because a window may cross a page boundary — and when it
+crosses out of its region, the transfer faults part way through.
 
 The intra-row stride is what turns a strided gather into one descriptor
 instead of a rearrangement pass. `cols` must be a multiple of `in_cnt`.
@@ -177,6 +183,11 @@ into `ERR_TAG`. The op does not execute.
 - `V_RECIP` with `fp = 0`
 - `cols` not a multiple of `in_cnt`
 - `ext_addr` not beat aligned
+- `ext_addr` above the 40-bit virtual address space
+
+A translation fault is **not** in this list. It is reported through the same
+`err_task` / `ERR_TAG` path, but it is detected per burst rather than at
+decode, and it carries the faulting address in `MMU_FAULT`.
 
 **A single operand may not cross a buffer boundary.** The hardware checks
 it and reports rather than wrapping, which turns an allocator bug into a

@@ -13,10 +13,11 @@ mkdir -p "$B" "$V"
 RTL="rtl/npu_pkg.sv rtl/npu_prim.sv rtl/npu_ecc.sv rtl/npu_buffer.sv \
      rtl/npu_xbar.sv rtl/npu_msgq.sv rtl/npu_sem.sv rtl/npu_opsched.sv \
      rtl/npu_fp.sv rtl/npu_cube.sv rtl/npu_vec.sv rtl/npu_fix.sv \
-     rtl/npu_mte.sv rtl/npu_csr.sv rtl/npu_qch.sv rtl/npu_top.sv"
+     rtl/npu_mmu.sv rtl/npu_mte.sv rtl/npu_csr.sv rtl/npu_qch.sv \
+     rtl/npu_top.sv"
 
 echo "building instrumented testbenches"
-for tb in tb_npu_prog tb_ctrl tb_cube; do
+for tb in tb_npu_prog tb_ctrl tb_cube tb_mmu; do
   verilator --cc --exe --build -j 2 --timing -Wno-fatal --assert \
     -Irtl -Itb rtl/npu.vlt --coverage-line --coverage-toggle \
     --prefix Vtop --Mdir "$B/$tb" --top-module "$tb" \
@@ -39,10 +40,11 @@ collect() {            # collect <tb> [plusarg]
 echo "running"
 collect tb_cube
 collect tb_ctrl
+collect tb_mmu
 for g in "gen_random.py -s 1 -n 18" "gen_random.py -s 2 --fp -n 18" \
          "gen_random.py -s 3 -n 40" "gen_gemm.py -M 32 -N 32 -K 64 --kb 32" \
          "gen_gemm.py -M 32 -N 128 -K 128 --kb 64 --fp" \
-         "gen_encoder.py -S 32 -d 32 --ff 64" "gen_chain.py -n 32" "gen_dma.py" \
+         "gen_encoder.py -S 32 -d 32 --ff 64" "gen_chain.py -n 32" "gen_dma.py" "gen_mmu.py" \
          "gen_random.py -s 9 --fp -n 4 --op recip" \
          "gen_random.py -s 9 --fp -n 4 --op lut" \
          "gen_random.py -s 9 -n 4 --op cvt_i2f"; do

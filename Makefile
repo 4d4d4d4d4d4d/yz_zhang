@@ -18,6 +18,7 @@ RTL := $(RTL_DIR)/npu_pkg.sv      \
        $(RTL_DIR)/npu_cube.sv     \
        $(RTL_DIR)/npu_vec.sv      \
        $(RTL_DIR)/npu_fix.sv      \
+       $(RTL_DIR)/npu_mmu.sv      \
        $(RTL_DIR)/npu_mte.sv      \
        $(RTL_DIR)/npu_csr.sv      \
        $(RTL_DIR)/npu_qch.sv      \

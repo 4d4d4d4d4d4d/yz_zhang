@@ -6,16 +6,16 @@ builds and runs with Verilator 5.020 and nothing else.
 
 ```
 make lint     # whole design, -Wall, zero warnings
-make test     # 34 tests: lint, 4 unit testbenches, 30 generated programs
+make test     # 36 tests: lint, 5 unit testbenches, 31 generated programs
 make coverage # line / branch / toggle coverage over the RTL
 ```
 
 | | lines | contents |
 |---|---|---|
-| `rtl/` | 3708 | 20 modules |
-| `tb/` | 1426 | 5 testbenches + an AXI4 memory model |
-| `tools/` | ~1500 | ISA, bit-exact model, scheduler, three generators |
-| `docs/` | ~770 | the specification |
+| `rtl/` | 4342 | 21 modules |
+| `tb/` | 2157 | 6 testbenches + an AXI4 memory model |
+| `tools/` | 2453 | ISA, bit-exact model, scheduler, six generators |
+| `docs/` | 1195 | the specification |
 
 ## The machine
 
@@ -24,7 +24,7 @@ MCU ×4 ──push──> msgq (8 q × 16) ──skid──> OpSch ──credit�
                                      ^                          │
                                      └────── cpl / event ───────┘
         pipes ──> read/write crossbar ──> 4 buffers (256×256b, ECC)
-        MTE   <──────────────> external memory (AXI4, multi-ID, OOO)
+        MTE   ──> MMU (8 regions) ──> external memory (AXI4, multi-ID, OOO)
         CSR   <── AXI4-Lite (counters / errors / locks / ECC inject)
         Q-Channel ──── low power quiescence handshake
 ```
@@ -40,7 +40,7 @@ lanes, addresses in 32-byte beats.
 | MTE_IN / MTE_OUT | 2-D strided DMA with intra-row stride, AXI4 bursts |
 
 Ordering granularity is **(pipe, queue)**, not whole pipes. Dependencies are
-16 counting semaphores, resources are per-pipe credits, and back pressure
+32 counting semaphores, resources are per-pipe credits, and back pressure
 is layered: skid buffer, pipe input credit, read-response credit,
 outstanding credit.
 
@@ -55,8 +55,8 @@ outstanding credit.
   depends on luck
 - `npu_layout.py` — the ROW/SEG layout framework
 - `gen_gemm.py`, `gen_encoder.py`, `gen_random.py`, `gen_dma.py`,
-  `gen_chain.py` — kernels, a fuzzer, an AGU stress test and a dependency
-  turnaround microbenchmark
+  `gen_mmu.py`, `gen_chain.py` — kernels, a fuzzer, an AGU stress test, a
+  translated-address test and a dependency turnaround microbenchmark
 
 The model is what closes the loop: every generated program is run through
 it to produce the expected memory image, which becomes the check lines the
@@ -143,6 +143,26 @@ an ID too early and a late beat lands in the new transfer. Let a discarded
 beat return an outstanding credit and the counter underflows, reads as "no
 room" forever, and hangs the very pipe the reset was meant to recover.
 
+**Translation is a per-tensor problem, not a per-page one.** A hardware
+page-table walker would put an unbounded-latency memory dependency in the
+middle of the DMA address path — sharing the AXI port the data traffic
+already saturates — to solve a problem this device does not have. A
+descriptor names one contiguous window of one tensor, and a workload has a
+handful of live tensors, so eight software-programmed regions is the whole
+requirement. What the regions actually buy is not relocation but *bounds*:
+a descriptor that walks off the end of its tensor now faults instead of
+silently reading someone else's memory, which is the bug class that is
+otherwise invisible until the numbers are wrong.
+
+**A new way for an operation to end finds the places that assumed the old
+one.** Nothing before translation could abort a transfer part way through:
+a configuration error is caught before the address walk starts, and
+everything else runs the walk to completion. So the address generator had
+no abort, and a faulted walk stayed live for exactly one cycle against the
+*next* descriptor's geometry. It came out as a 256-beat AXI burst to a
+nonsense address. The feature was fifteen minutes; its interaction with
+state that had never needed to be torn down was the rest.
+
 **Saturating counters need a flag.** A 3-bit event counter that swallows an
 eighth set is a finite-resource consequence, not a bug. A *silent* one is.
 `err_evt_ovf` turns an unfindable hang into a named software error.
@@ -153,26 +173,34 @@ eighth set is a finite-resource consequence, not a bug. A *silent* one is.
 |---|---|
 | `docs/spec_arch.md` | architecture, scheduling, back pressure, what is deliberately absent |
 | `docs/spec_isa.md` | descriptor format, every opcode, configuration errors |
-| `docs/spec_csr.md` | register map, RAS, semaphores, Q-Channel |
+| `docs/spec_csr.md` | register map, address translation, RAS, semaphores, Q-Channel |
 | `docs/spec_arith.md` | numeric semantics, measured accuracy |
 | `docs/spec_layout.md` | the layout framework and why it exists |
 | `docs/verification.md` | what is checked, what is not, and the bugs it found |
 
 ## Coverage
 
-91% line, 94% branch, 73% toggle over the RTL, accumulated across the
-suite. What the first coverage run found: no program had ever used a
-multi-row DMA or a non-zero intra-row stride, most configuration-error
-paths had never run, and a third of the CSR read mux had never been
-selected. All three are covered now. What is left is debug blocks that
-compile out, unreachable `default` arms, and Verilator attributing an
-inlined function's arms to one call site.
+92% line, 96% branch, 71% toggle over the RTL, accumulated across the
+suite. The first run found: no program had ever used a multi-row DMA or a
+non-zero intra-row stride, most configuration-error paths had never run,
+and a third of the CSR read mux had never been selected. The second, after
+address translation: each memory engine validates its own descriptor and
+every rejection class had been driven into only one of the two, the control
+slave's AXI4-Lite wait states were unreachable from the suite, and no test
+had checked that a write to a reserved offset is a no-op — which in a
+region table is the difference between a harmless write and a corrupted
+live mapping. All of those are covered now; `npu_mmu.sv` and `npu_csr.sv`
+are at 100% branch. What is left is debug blocks that compile out,
+unreachable `default` arms, and two Verilator attribution artifacts, both
+written down in `docs/verification.md` rather than papered over.
 
 ## Known gaps
 
 The specification lists these; they are not oversights.
 
-- No MMU; descriptors carry physical addresses
+- No page-table walker. Translation is eight software-programmed regions,
+  which is a decision rather than a gap — but it means no demand paging and
+  no TLB coherence story
 - No clock gating hierarchy or DVFS above the Q-Channel handshake
 - No trace port; observability is CSR polling and the interrupt line
 - Nothing triggers recovery automatically: `err_hang` reports and
