@@ -1,6 +1,6 @@
 # 用户愿景与前后端实现核对
 
-更新：2026-10-07。当前设计基准：[Spec 87](specs/87-individual-network-and-spaces.md)。定位讨论：[PRODUCT-DIRECTION.md](PRODUCT-DIRECTION.md)。商业放行另见 [COMMERCIAL-READINESS.md](COMMERCIAL-READINESS.md)。
+更新：2026-10-08（保留原 10-07 空间增量并合并远端 V113/V114）。当前设计基准：[Spec 88](specs/88-individual-network-and-spaces.md)。定位讨论：[PRODUCT-DIRECTION.md](PRODUCT-DIRECTION.md)。商业放行另见 [COMMERCIAL-READINESS.md](COMMERCIAL-READINESS.md)。
 
 **状态定义**：已实现表示所列范围存在可调用代码；部分表示仅完成具体子集；未实现表示没有可交付闭环。历史功能“存在”不等于经过本轮真机、供应商或生产验收。Web、原生 App、服务器部署分别记录，不混用。
 
@@ -32,10 +32,12 @@
 | 链上运行维护 | 操作 CLI，无统一运维 UI | 无 | 已有持久索引/重组回滚/恢复执行器 | 常驻生产索引、付费 keeper、告警接收未启用 | `chain/lib`；`deploy/chain` |
 | 经验积累 | 既有 FAQ/参考/核验相关入口 | 部分 | knowledge/verify 经验采集与读取 | 授权案例资产、贡献分成、跨域效果验证不完整 | specs 06、61、83 |
 | 真实支付/分账/提现 | 界面与模拟闭环存在 | 既有界面 | 内部账本、风控/对账基础 | 正式支付与存管适配缺失，不能收真实款 | COMMERCIAL-READINESS.md |
+| 职业资质提交 | 既有提交与审核状态 | 合入远端照片选择/上传/有效期/提交入口 | 既有私密影像与审核接口 | 原生相机/相册真机验收仍缺失 | `app/certifications.tsx`；Spec 87 APP-073 |
 | 实名/短信/内容审核 | 既有界面 | 既有界面 | mock/规则实现 | 正式供应商适配缺失；新空间治理需扩展 | 同上 |
-| 个人/团队订阅收费 | 未实现 | 未实现 | 未实现完整订阅生命周期 | 定价、续订、额度、账单、退款未落地 | Spec 87 §7 |
+| 个人/团队订阅收费 | 未实现 | 未实现 | 未实现完整订阅生命周期 | 定价、续订、额度、账单、退款未落地 | Spec 88 §7 |
 | 运行基础 | Vite/PWA，移动 Web | Expo 源码及测试 | PostgreSQL/Redis/API/worker 私有联调 | 域名/HTTPS、容量与恢复目标、正式值班未放行 | OPERATIONS.md |
-| 高级极简 UI | 本轮暖白四入口、新空间、登录精简 | 尚未同步新设计 | SDK 共用，不影响鉴权与业务状态 | 全站旧表单细节统一、封面媒体和共享元素转场未完成 | `spaces.css`；Spec 87 §5 |
+| 原生依赖与发布安全 | 不适用 | 依赖审计与真机验收仍阻塞 | 不适用 | 10-08 npm 安装报告 90 项（含开发依赖），需升级与复审；不宣称可上架 | CHANGELOG-2026-10-07.md |
+| 高级极简 UI | 本轮暖白四入口、新空间、登录精简 | 尚未同步新设计 | SDK 共用，不影响鉴权与业务状态 | 全站旧表单细节统一、封面媒体和共享元素转场未完成 | `spaces.css`；Spec 88 §5 |
 
 ## 3. 前后端实现和迁移
 

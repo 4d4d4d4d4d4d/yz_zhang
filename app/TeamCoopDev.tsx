@@ -16,15 +16,18 @@ import {
   type PlatformClient,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
+import { CertificationsScreen } from './certifications';
 import { ApplicationsScreen, InvitationsScreen, MessagesScreen } from './MessagesAndInvites';
 import { Button, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-export type SubScreen = 'messages' | 'invitations' | 'applications' | 'teams' | 'ventures' | 'developer';
+export type SubScreen = 'messages' | 'invitations' | 'applications' | 'certifications'
+  | 'teams' | 'ventures' | 'developer';
 
 export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   messages: '消息',
   invitations: '收到的邀约',
   applications: '我的报名',
+  certifications: '职业资质',
   teams: '团队账户',
   ventures: '早期合作体',
   developer: '开发者（API Key / Webhook）',
@@ -40,6 +43,7 @@ export function SubScreenHost({ client, screen, onBack }: {
       {screen === 'messages' && <MessagesScreen client={client} />}
       {screen === 'invitations' && <InvitationsScreen client={client} />}
       {screen === 'applications' && <ApplicationsScreen client={client} />}
+      {screen === 'certifications' && <CertificationsScreen client={client} />}
       {screen === 'teams' && <TeamsScreen client={client} />}
       {screen === 'ventures' && <VenturesScreen client={client} />}
       {screen === 'developer' && <DeveloperScreen client={client} />}

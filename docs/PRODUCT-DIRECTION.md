@@ -1,6 +1,6 @@
 # OPC 产品定位与设计前提 · 讨论稿
 
-日期：2026-10-07。依据用户最新愿景整理；本文是设计提案，不表示功能已实现或商业模式已被验证。这是先于实现形成的定位讨论；后续已实现内容以 [实现核对表](IMPLEMENTATION-MATRIX.md) 和 [Spec 87](specs/87-individual-network-and-spaces.md) 为准。
+日期：2026-10-07。依据用户最新愿景整理；本文是设计提案，不表示功能已实现或商业模式已被验证。这是先于实现形成的定位讨论；后续已实现内容以 [实现核对表](IMPLEMENTATION-MATRIX.md) 和 [Spec 88](specs/88-individual-network-and-spaces.md) 为准。
 
 ## 定位
 

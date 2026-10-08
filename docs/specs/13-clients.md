@@ -2,7 +2,7 @@
 
 ## 2026-10-07 客户端设计更新
 
-当前 Web 主入口调整为「发现 / 合作 / 消息 / 我的空间」。新增 `/people/:id` 公开个人门面与 `/space/edit` 私人编辑；原任务广场迁至 `/opportunities`。访客可直接浏览允许公开的空间，登录后继续原路径。设计与验收见 [Spec 87](87-individual-network-and-spaces.md)。
+当前 Web 主入口调整为「发现 / 合作 / 消息 / 我的空间」。新增 `/people/:id` 公开个人门面与 `/space/edit` 私人编辑；原任务广场迁至 `/opportunities`。访客可直接浏览允许公开的空间，登录后继续原路径。设计与验收见 [Spec 88](88-individual-network-and-spaces.md)。
 
 原生 App 的新信息架构与个人空间页**尚未实现**，下文原 App 功能表保留用于现有能力追溯。Web 当前是 React/Vite CSR，不能将下文的 SSR、独立后台或双端设计 token 目标描述为已实现。
 
