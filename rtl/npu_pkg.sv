@@ -130,7 +130,12 @@ package npu_pkg;
   // =================== descriptor ===================
   // word 0 : header
   typedef struct packed {
-    logic [4:0]  rsvd;
+    logic [1:0]  rsvd;
+    // Extra sets of set_evt beyond the first, so one descriptor can wake
+    // N consumers. A bitmap would have been the obvious widening, but the
+    // compiler gives each producer group a single event -- what it actually
+    // needed was a count, and a count fits in bits that were reserved.
+    logic [2:0]  set_cnt;
     logic        fp;          // 0 = int16 fixed, 1 = bf16 float
     logic        bar_g;       // global barrier
     logic        bar_q;       // queue-scope barrier
@@ -213,6 +218,7 @@ package npu_pkg;
     logic [MCUW-1:0]   mcu;
     logic [QIDW-1:0]   qid;
     logic [EVTIDW-1:0] set_evt;
+    logic [2:0]        set_cnt;
     logic              set_en;
     logic              err;      // configuration error (addr overflow, bad shape)
   } cpl_t;

@@ -180,18 +180,20 @@ module npu_top
 
   logic [NPIPE-1:0]      set_en;
   logic [NPIPE-1:0][EVTIDW-1:0] set_evt;
+  logic [NPIPE-1:0][2:0]        set_cnt;
   logic                  err_evt_ovf;
 
   always_comb
     for (int p = 0; p < NPIPE; p++) begin
       set_en[p]  = cpl_valid[p] && !rst_active[p] && cpl[p].set_en;
       set_evt[p] = cpl[p].set_evt;
+      set_cnt[p] = cpl[p].set_cnt;
     end
 
   npu_sem u_sem (
     .clk(clk), .rst_n(rst_n), .clr(clr_stat),
     .cons_en(cons_en), .cons_mask(cons_mask),
-    .set_en(set_en), .set_evt(set_evt),
+    .set_en(set_en), .set_evt(set_evt), .set_cnt(set_cnt),
     .nonzero(evt_nz), .ovf(err_evt_ovf));
 
   // ================= crossbar =================

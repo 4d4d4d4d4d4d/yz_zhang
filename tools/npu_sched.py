@@ -12,6 +12,9 @@ machine rather than choices:
   * event counters saturate at 2^EVT_W - 1. More than that many pending
     sets are swallowed and the matching waits hang forever, so the fan-out
     of one event is capped and a wide fan-out is split across events.
+    Within that cap a descriptor carries set_cnt and wakes all of its
+    consumers itself; only a producer needing more than one event slot
+    still pays for a trailing no-op.
   * an event may not be recycled while an earlier producer's consumers
     could still be waiting on it, and a global barrier is the ONLY thing
     that establishes that. An earlier version of this file allowed reuse on
@@ -272,16 +275,18 @@ class Builder:
             first_evt, first_cnt = (sets[0] if sets else (0, 0))
             kw = dict(wait_mask=wm, tag=i & 0xFF, bar_g=1 if o.bar_g else 0)
             if sets:
-                kw.update(set_en=1, set_evt=first_evt)
+                # set_cnt covers this event's whole fan-out in one go
+                kw.update(set_en=1, set_evt=first_evt,
+                          set_cnt=max(0, first_cnt - 1))
             out.append((o.qid, o.mcu, o.build(**kw)))
 
-            # trailing no-ops: one descriptor sets one event once, so the
-            # remaining sets are separate ops on the same pipe and queue
-            extra = [(first_evt, first_cnt - 1)] + list(sets[1:])
-            for e, cnt in extra:
-                for _ in range(max(0, cnt)):
-                    out.append((o.qid, o.mcu,
-                                nop(o.pipe, set_en=1, set_evt=e, tag=i & 0xFF)))
+            # A producer owning more than one event slot still needs a
+            # trailing no-op per extra slot, on its own pipe and queue where
+            # hardware ordering guarantees it retires after the producer.
+            for e, cnt in sets[1:]:
+                out.append((o.qid, o.mcu,
+                            nop(o.pipe, set_en=1, set_evt=e,
+                                set_cnt=max(0, cnt - 1), tag=i & 0xFF)))
 
         self.stats = {
             "ops": n,

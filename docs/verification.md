@@ -15,6 +15,7 @@ every entry says why.
 | unit | `tb_cube` | CUBE against a behavioural model through the real crossbar: both numeric modes, tail tiles, ReLU, a K=256 accumulator hand-off across two descriptors, address-overflow reporting, zero-length ops |
 | integration | `tb_ctrl` | ECC inject and reporting, read-to-acquire semaphores with owner enforcement, queue priority, all four error classes, queue barrier, Q-Channel deny/accept/gate/resume, the interrupt line and mask, and a hang-and-recover cycle driven by a memory that stops answering |
 | system | `tb_npu_prog` | generated programs run on the real top level and are compared beat for beat against the bit-exact model |
+| coverage | `make coverage` | line, branch and toggle coverage over the RTL, accumulated across the whole suite |
 
 ## 2. The cross-check that matters
 
@@ -28,9 +29,52 @@ Programs are spread across queues and MCU ports on purpose. The scheduler
 may reorder anything the event graph does not pin down, so a program that
 only works in submission order fails here rather than in silicon.
 
-Current suite: 28 program tests — six random programs (three seeds × two
+Current suite: 30 program tests — six random programs (three seeds × two
 numeric modes), every VEC opcode swept individually, three GEMM shapes and
 a full encoder layer.
+
+## 2.1 Coverage
+
+`make coverage` builds the testbenches instrumented and accumulates line,
+branch and toggle coverage across twelve runs. Verilator's generated main
+does not write coverage, so `tb/cov_main.cpp` supplies one that does.
+
+| | covered | |
+|---|---|---|
+| line | 296/325 | 91% |
+| branch | 385/407 | 94% |
+| toggle | 11741/15879 | 73% |
+
+The three answer different questions. Toggle coverage is reported but not
+chased: a 256-bit bus that never sees every bit toggle is normal. Line and
+branch are the actionable ones, and the list of unexecuted points is what
+`scripts/cov_report.py` prints.
+
+What the first run of this found, which no amount of staring at the suite
+would have:
+
+- **No generated program had ever used `rows > 1` or a non-zero intra-row
+  stride.** The intra-row stride is the feature that turns a strided gather
+  into one descriptor; the RTL AGU and the model's `agu()` have to walk the
+  same window in the same order and nothing was checking it.
+  `tools/gen_dma.py` now covers eight shapes including both.
+- **Most configuration-error paths had never run.** `tb_ctrl` now drives
+  twelve of them -- one per class per pipe -- and checks each raises
+  `err_task`, points `ERR_TAG` at the right pipe and tag, and leaves the
+  machine running.
+- **A third of the CSR read mux had never been selected.** A register
+  nobody reads is a register nobody has checked decodes. `tb_ctrl` now
+  reads every address, including an undecoded one.
+
+What remains uncovered is three things, and none is a test to write:
+
+1. `ifdef NPU_DEBUG` / `NPU_TRACE` blocks, which are compiled out.
+2. Unreachable fallbacks -- a `default:` arm of a fully enumerated case, a
+   `return 0` after an exhaustive loop.
+3. Verilator attributes the `return` statements inside an inlined
+   `function automatic` to one inlining site, so a function whose every
+   arm is exercised still reports arms unexecuted. That accounts for
+   almost all of `npu_vec.sv`'s line gap.
 
 ## 3. Static verification in the compiler
 

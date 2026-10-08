@@ -200,6 +200,7 @@ def decode(d):
         "tag": bits(h, 17, 10), "set_en": bits(h, 18, 18),
         "set_evt": bits(h, 23, 19), "bar_q": bits(h, 24, 24),
         "bar_g": bits(h, 25, 25), "fp": bits(h, 26, 26),
+        "set_cnt": bits(h, 29, 27),
         "wait": bits(d, 63, 32), "pl": bits(d, 255, 64),
     }
 

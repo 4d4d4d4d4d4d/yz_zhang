@@ -56,3 +56,15 @@ test:
 
 clean:
 	@rm -rf $(BUILD)
+
+# ----------------------------------------------------------------------
+# Coverage. Line and toggle coverage over the RTL only (the testbenches
+# and the memory model are excluded), accumulated across every test.
+# ----------------------------------------------------------------------
+COVFLAGS := --binary -j 4 --timing -Wall -Wno-fatal --assert -Irtl -Itb \
+            $(RTL_DIR)/npu.vlt --coverage-line --coverage-toggle \
+            -CFLAGS "-O2"
+
+.PHONY: coverage
+coverage:
+	@bash scripts/coverage.sh

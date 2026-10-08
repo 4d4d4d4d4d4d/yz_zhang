@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 """Whole transformer encoder layer, end to end.
 
+One optimisation that measurement rejected, recorded so it is not tried
+again: merging elementwise VEC ops across contiguous column tiles. The
+tiles are contiguous on chip and the op does not care where the boundary
+falls, so one descriptor can cover several. It cut the descriptor count
+from 196 to 165 and the barrier count from 5 to 4, and made the layer
+SLOWER -- 6798 to 6863 cycles, and 7162 for a selective version that only
+merged where no cross-pipe dependency was coarsened. Per-op overhead is
+not what this layer is paying; 82-88% of its cycles are dependency stalls,
+and fewer, larger ops do not shorten the chain.
+
     Q,K,V = X.Wq, X.Wk, X.Wv
     P     = softmax(Q.K^T * scale)
     A     = (P.V).Wo

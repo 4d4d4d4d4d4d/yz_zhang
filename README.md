@@ -6,7 +6,8 @@ builds and runs with Verilator 5.020 and nothing else.
 
 ```
 make lint     # whole design, -Wall, zero warnings
-make test     # 32 tests: lint, 4 unit testbenches, 28 generated programs
+make test     # 34 tests: lint, 4 unit testbenches, 30 generated programs
+make coverage # line / branch / toggle coverage over the RTL
 ```
 
 | | lines | contents |
@@ -53,7 +54,9 @@ outstanding credit.
   happens-before verifier that refuses to emit a program whose ordering
   depends on luck
 - `npu_layout.py` — the ROW/SEG layout framework
-- `gen_gemm.py`, `gen_encoder.py`, `gen_random.py` — kernels and a fuzzer
+- `gen_gemm.py`, `gen_encoder.py`, `gen_random.py`, `gen_dma.py`,
+  `gen_chain.py` — kernels, a fuzzer, an AGU stress test and a dependency
+  turnaround microbenchmark
 
 The model is what closes the loop: every generated program is run through
 it to produce the expected memory image, which becomes the check lines the
@@ -111,6 +114,12 @@ with bank contention: adding one counter turned an unexplained cycle count
 into "12% of the encoder layer, and here is the instruction pattern
 causing it".
 
+**Coverage finds the tests you did not think to write.** The suite swept
+every VEC opcode and every GEMM shape and still had never once used a
+multi-row DMA or an intra-row stride — a headline feature with no test
+behind it. "Every opcode is swept" says nothing about whether every path
+inside each one is taken, and only a number distinguishes the two.
+
 **A schedule that only works because it is accidentally serial is not a
 working schedule.** Two of the compiler's dependency rules were wrong and
 both had been passing tests for commits: an event-recycling distance rule
@@ -148,6 +157,16 @@ eighth set is a finite-resource consequence, not a bug. A *silent* one is.
 | `docs/spec_arith.md` | numeric semantics, measured accuracy |
 | `docs/spec_layout.md` | the layout framework and why it exists |
 | `docs/verification.md` | what is checked, what is not, and the bugs it found |
+
+## Coverage
+
+91% line, 94% branch, 73% toggle over the RTL, accumulated across the
+suite. What the first coverage run found: no program had ever used a
+multi-row DMA or a non-zero intra-row stride, most configuration-error
+paths had never run, and a third of the CSR read mux had never been
+selected. All three are covered now. What is left is debug blocks that
+compile out, unreachable `default` arms, and Verilator attributing an
+inlined function's arms to one call site.
 
 ## Known gaps
 
