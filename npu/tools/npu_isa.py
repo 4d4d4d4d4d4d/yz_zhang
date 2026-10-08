@@ -13,6 +13,39 @@ NQ, NMCU, NPIPE, NEVT = 8, 4, 5, 32
 EVTIDW = 5
 WIN, CREDIT, MAX_BURST = 8, 4, 16
 
+# ---------------- address translation (mirrors npu_pkg) ----------------
+PG_SH = 12
+PG_BEATS = (1 << PG_SH) // BEAT_B          # 128
+VA_W, VPN_W, PPN_W = 40, 28, 20
+NRGN = 8
+
+# CSR apertures. Page 0 is the main block, page 1 the hardware semaphores,
+# page 2 the MMU.
+CSR_MMU = 0x200
+CSR_MMU_CTRL  = CSR_MMU + 0x80
+CSR_MMU_FAULT = CSR_MMU + 0x84
+CSR_MMU_FVA_LO = CSR_MMU + 0x88
+CSR_MMU_FVA_HI = CSR_MMU + 0x8C
+
+MF_NONE, MF_MISS, MF_PERM = 0, 1, 2
+
+
+def rgn_csr(idx, va_base, pa_base, pages, read=True, write=True):
+    """The three CSR writes that program one translation region.
+
+    va_base and pa_base are byte addresses and must be page aligned.
+    """
+    assert 0 <= idx < NRGN, idx
+    assert va_base % (1 << PG_SH) == 0, hex(va_base)
+    assert pa_base % (1 << PG_SH) == 0, hex(pa_base)
+    assert 0 < pages < (1 << 16), pages
+    assert va_base >> VA_W == 0, hex(va_base)
+    base = CSR_MMU + 16 * idx
+    attr = 1 | (int(read) << 1) | (int(write) << 2) | (pages << 3)
+    return [(base + 0, va_base >> PG_SH),
+            (base + 4, pa_base >> PG_SH),
+            (base + 8, attr)]
+
 # ---------------- pipes ----------------
 P_CUBE, P_VEC, P_FIX, P_MTE_IN, P_MTE_OUT = 0, 1, 2, 3, 4
 
@@ -193,6 +226,23 @@ class Program:
             self.lines.append(f"C {beat:x} {value256:064x}")
         else:
             self.lines.append(f"X {beat:x} {value256:064x} {mask:064x}")
+
+    def csr(self, off, value):
+        """A CSR write performed before the program is pushed. This is how a
+        program configures the MMU: the testbench replays it over the real
+        AXI4-Lite slave, so the hardware and the functional model are
+        programmed from one source."""
+        self.lines.append(f"W {off:x} {value:08x}")
+
+    def regions(self, regions):
+        """Program the region table and enable translation.
+
+        regions is a list of (idx, va_base, pa_base, pages, read, write).
+        """
+        for r in regions:
+            for off, val in rgn_csr(*r):
+                self.csr(off, val)
+        self.csr(CSR_MMU_CTRL, 1)
 
     def check_csr(self, off, value):
         self.lines.append(f"S {off:x} {value:08x}")

@@ -54,6 +54,26 @@ module tb_ctrl;
   endtask
 
   // ---------------- AXI4-Lite ----------------
+  // The ordinary csr_wr never leaves the slave waiting: W is driven half a
+  // cycle after AW is accepted and B is accepted immediately. A real MCU
+  // is not that prompt, and the slave's two wait states had never been
+  // entered until this existed.
+  task automatic csr_wr_slow(input logic [LT_AW-1:0] a,
+                             input logic [MCUW-1:0] who,
+                             input logic [31:0] d);
+    @(negedge clk); s_awvalid = 1'b1; s_awaddr = a; s_awid = who;
+    @(posedge clk); while (!s_awready) @(posedge clk);
+    @(negedge clk); s_awvalid = 1'b0;
+    repeat (3) @(posedge clk);                 // W_DATA with wvalid low
+    @(negedge clk); s_wvalid = 1'b1; s_wdata = d; s_wstrb = '1;
+    @(posedge clk); while (!s_wready) @(posedge clk);
+    @(negedge clk); s_wvalid = 1'b0;
+    repeat (3) @(posedge clk);                 // W_RESP with bready low
+    @(negedge clk); s_bready = 1'b1;
+    @(posedge clk); while (!s_bvalid) @(posedge clk);
+    @(negedge clk); s_bready = 1'b0;
+  endtask
+
   task automatic csr_rd(input logic [LT_AW-1:0] a, input logic [MCUW-1:0] who,
                         output logic [31:0] d);
     @(negedge clk); s_arvalid = 1'b1; s_araddr = a; s_arid = who;
@@ -201,10 +221,11 @@ module tb_ctrl;
     // Coverage said a third of the read mux had never been selected. A
     // register nobody reads is a register nobody has checked decodes.
     begin
-      logic [31:0] c0, c1, c2;
+      logic [31:0] c0, c1, c2, c3;
       csr_rd(12'h030, 2'd0, c0);
       csr_rd(12'h034, 2'd0, c1);
       csr_rd(12'h038, 2'd0, c2);
+      csr_rd(12'h03C, 2'd0, c3);
       chk("CONFIG reports the window depth",   int'(c0[7:0])    == WIN);
       chk("CONFIG reports the issue credit",   int'(c0[23:16])  == CREDIT);
       chk("CONFIG reports the burst length",   int'(c0[31:24])  == MAX_BURST);
@@ -215,13 +236,39 @@ module tb_ctrl;
       chk("CONFIG reports the lane count",     int'(c2[15:8])   == LANES);
       chk("CONFIG reports the buffer depth",   int'(c2[31:16])  == BUF_D);
       chk("CONFIG reports the event width",    int'(c2[7:0])    == EVT_W);
+      chk("CONFIG reports the physical width", int'(c3[7:0])    == AXI_AW);
+      chk("CONFIG reports the virtual width",  int'(c3[15:8])   == VA_W);
+      chk("CONFIG reports the page shift",     int'(c3[23:16])  == PG_SH);
+      chk("CONFIG reports the region count",   int'(c3[31:24])  == NRGN);
       for (int a = 0; a <= 12'h0AC; a += 4) csr_rd(LT_AW'(a), 2'd0, v);
       for (int a = 12'h100; a <= 12'h11C; a += 4) csr_rd(LT_AW'(a), 2'd0, v);
       for (int l = 0; l < NLOCK; l++) csr_wr(LT_AW'(12'h100 + 12'(l*4)),
                                              2'd0, 32'd0);
+      for (int a = 12'h200; a <= 12'h28C; a += 4) csr_rd(LT_AW'(a), 2'd0, v);
       csr_rd(12'h0F0, 2'd0, v);                 // an undecoded address
       chk("an undecoded address reads zero", v === 32'd0);
       csr_wr(12'h0F0, 2'd0, 32'hDEAD_BEEF);     // and a write to it is a no-op
+      // An undecoded APERTURE, which is a different decode path. Before the
+      // region table existed this aliased onto page 0 and returned QPRIO.
+      csr_wr(12'h084, 2'd0, 32'h0000_00FF);
+      csr_rd(12'h384, 2'd0, v);
+      chk("an undecoded aperture reads zero", v === 32'd0);
+      csr_wr(12'h384, 2'd0, 32'h0);             // and must not clear QPRIO
+      csr_rd(12'h084, 2'd0, v);
+      chk("a write to an undecoded aperture is a no-op", v[NQ-1:0] === 8'hFF);
+      csr_wr(12'h084, 2'd0, 32'h0);
+
+      // A slow write, so the slave's W and B wait states are entered.
+      csr_wr_slow(12'h084, 2'd0, 32'h0000_0055);
+      csr_rd(12'h084, 2'd0, v);
+      chk("a slow write still lands", v[NQ-1:0] === 8'h55);
+      csr_wr(12'h084, 2'd0, 32'h0);
+
+      // CTRL bit 0 is the clear; writing zero to it must not clear.
+      csr_rd(12'h00C, 2'd0, c0);
+      csr_wr(12'h080, 2'd0, 32'h0);
+      csr_rd(12'h00C, 2'd0, c1);
+      chk("CTRL=0 does not clear the counters", c1 > c0);
       csr_wr(12'h084, 2'd0, 32'h0000_00AA);
       csr_rd(12'h084, 2'd0, v);
       chk("QPRIO reads back", v[NQ-1:0] === 8'hAA);
@@ -384,12 +431,12 @@ module tb_ctrl;
     // err_task, point ERR_TAG at the right pipe and tag, and leave the
     // machine running -- a rejected descriptor is not a wedged machine.
     begin
-      logic [2:0]   bad_pipe [12];
-      logic [5:0]   bad_opc  [12];
-      logic [191:0] bad_pl   [12];
-      logic         bad_fp   [12];
+      logic [2:0]   bad_pipe [17];
+      logic [5:0]   bad_opc  [17];
+      logic [191:0] bad_pl   [17];
+      logic         bad_fp   [17];
       int           nbad;
-      string        why [12];
+      string        why [17];
 
       nbad = 0;
       // CUBE: zero reduction length, and an opcode it does not define
@@ -427,6 +474,27 @@ module tb_ctrl;
       bad_pipe[nbad]=3'(P_MTE_OUT); bad_opc[nbad]=6'd9; bad_fp[nbad]=1'b0;
       bad_pl[nbad]=dma_bad(48'h0, 16'd4, 16'd0);
       why[nbad]="mte_out bad opcode"; nbad++;
+      // An address above the 40-bit virtual space. This is a descriptor
+      // encoding error, not a translation fault: there is no VA to report.
+      bad_pipe[nbad]=3'(P_MTE_IN); bad_opc[nbad]=M_XFER; bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=dma_bad(48'h0100_0000_0000, 16'd4, 16'd0);
+      why[nbad]="mte_in above VA space"; nbad++;
+      bad_pipe[nbad]=3'(P_MTE_OUT); bad_opc[nbad]=M_XFER; bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=dma_bad(48'h8000_0000_0000, 16'd4, 16'd0);
+      why[nbad]="mte_out above VA space"; nbad++;
+      // Each engine validates its own descriptor, so a class checked on one
+      // of them says nothing about the other. Coverage is what noticed that
+      // every MTE rejection above had only ever been driven into one of the
+      // two engines.
+      bad_pipe[nbad]=3'(P_MTE_IN); bad_opc[nbad]=6'd11; bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=dma_bad(48'h0, 16'd4, 16'd0);
+      why[nbad]="mte_in bad opcode"; nbad++;
+      bad_pipe[nbad]=3'(P_MTE_OUT); bad_opc[nbad]=M_XFER; bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=dma_bad(48'h4, 16'd4, 16'd0);
+      why[nbad]="mte_out unaligned"; nbad++;
+      bad_pipe[nbad]=3'(P_MTE_OUT); bad_opc[nbad]=M_XFER; bad_fp[nbad]=1'b0;
+      bad_pl[nbad]=dma_bad(48'h0, 16'd7, 16'd2);
+      why[nbad]="mte_out cols%in_cnt"; nbad++;
 
       for (int t = 0; t < nbad; t++) begin
         logic [DESC_W-1:0] d;
@@ -442,6 +510,15 @@ module tb_ctrl;
             v[12:5] === 8'(8'hB0 + 8'(t)) && v[2:0] === bad_pipe[t]);
       end
 
+      // A NOP is legal on every pipe, including the one no generated
+      // program ever sends one to.
+      csr_wr(12'h080, 2'd0, 32'h1);
+      push(0, 3'd0, mk(3'(P_MTE_OUT), OPC_NOP, 8'hC0, '0));
+      push(1, 3'd4, mk(3'(P_MTE_IN),  OPC_NOP, 8'hC1, '0));
+      wait_idle();
+      csr_rd(12'h004, 2'd0, v);
+      chk("a NOP on either memory engine raises nothing", v[3:0] === 4'd0);
+
       // and the machine is still alive
       csr_wr(12'h080, 2'd0, 32'h1);
       push(0, 3'd0, mk(3'(P_MTE_IN), 6'd0, 8'hCC,
@@ -450,10 +527,104 @@ module tb_ctrl;
                        dma_pl(48'h14000, 16'h0090, 1, 4), 32'h200));
       wait_idle();
       csr_rd(12'h004, 2'd0, v);
-      chk("the machine still works after twelve rejections", v[3:0] === 4'd0);
+      chk("the machine still works after every rejection", v[3:0] === 4'd0);
       for (int i = 0; i < 4; i++)
         chk($sformatf("post-rejection transfer beat %0d", i),
             u_mem.mem[32'hA00 + i] === u_mem.mem[i]);
+    end
+
+    // ================= address translation, end to end =================
+    // tb_mmu covers the region table itself. What matters here is the path
+    // it sits in: a translated transfer has to move the right bytes, and a
+    // fault has to come out through the same err_task / ERR_TAG / recovery
+    // machinery as any other rejected descriptor -- plus the VA, which is
+    // the one thing a configuration error cannot tell you.
+    begin
+      // one 2-page read-only region and one 1-page write-only region
+      localparam logic [47:0] VSRC = 48'h40_0000_0000;
+      localparam logic [47:0] VDST = 48'h60_0000_0000;
+      csr_wr(12'h200, 2'd0, 32'(VSRC >> PG_SH));       // region 0: VA
+      csr_wr(12'h204, 2'd0, 32'h0);                    //            PA page 0
+      csr_wr(12'h208, 2'd0, {13'd0, 16'd2, 1'b0, 1'b1, 1'b1});
+      csr_wr(12'h210, 2'd0, 32'(VDST >> PG_SH));       // region 1: VA
+      csr_wr(12'h214, 2'd0, 32'h4);                    //            PA page 4
+      csr_wr(12'h218, 2'd0, {13'd0, 16'd1, 1'b1, 1'b0, 1'b1});
+      csr_rd(12'h208, 2'd0, v);
+      chk("region attributes read back", v === {13'd0, 16'd2, 1'b0, 1'b1, 1'b1});
+      csr_wr(12'h280, 2'd0, 32'h1);                    // enable
+      csr_wr(12'h080, 2'd0, 32'h1);
+
+      // page 4 is beat 0x200, which is where the store has to land
+      push(0, 3'd0, mk(3'(P_MTE_IN), M_XFER, 8'hE0,
+                       dma_pl(VSRC, 16'h0100, 1, 4), '0, 1'b1, 5'd11));
+      push(1, 3'd1, mk(3'(P_MTE_OUT), M_XFER, 8'hE1,
+                       dma_pl(VDST, 16'h0100, 1, 4), 32'h800));
+      wait_idle();
+      csr_rd(12'h004, 2'd0, v);
+      chk("a translated transfer raises nothing", v[3:0] === 4'd0);
+      for (int i = 0; i < 4; i++)
+        chk($sformatf("translated transfer beat %0d", i),
+            u_mem.mem[32'h200 + i] === u_mem.mem[i]);
+      csr_rd(12'h284, 2'd0, v);
+      chk("no fault recorded", v[0] === 1'b0);
+
+      // ---- a window that runs off the end of its region ----
+      // The first page translates, so the transfer starts and then faults
+      // part way through. That is the case a bounds check on the descriptor
+      // could not catch and the one this exists for.
+      csr_wr(12'h080, 2'd0, 32'h1);
+      push(2, 3'd2, mk(3'(P_MTE_IN), M_XFER, 8'hE2,
+                       dma_pl(VSRC + 48'h1F80, 16'h0100, 1, 8)));
+      wait_idle();
+      csr_rd(12'h004, 2'd0, v);
+      chk("running off a region raises err_task", v[2] === 1'b1);
+      csr_rd(12'h020, 2'd0, v);
+      chk("the fault is located", v[12:5] === 8'hE2 && v[2:0] === 3'(P_MTE_IN));
+      csr_rd(12'h284, 2'd0, v);
+      chk("MMU_FAULT is valid", v[0] === 1'b1);
+      chk("MMU_FAULT says miss",  v[2:1] === MF_MISS);
+      chk("MMU_FAULT says the read port", v[3] === 1'b0);
+      csr_rd(12'h288, 2'd0, v);
+      chk("MMU_FAULT holds the faulting VA low word",
+          v === 32'((VSRC + 48'h2000) & 48'hFFFF_FFFF));
+      csr_rd(12'h28C, 2'd0, v);
+      chk("MMU_FAULT holds the faulting VA high word", v === 32'(VSRC >> 32));
+      csr_wr(12'h284, 2'd0, 32'h1);
+
+      // ---- a write through a read-only region ----
+      csr_wr(12'h080, 2'd0, 32'h1);
+      push(3, 3'd3, mk(3'(P_MTE_OUT), M_XFER, 8'hE3,
+                       dma_pl(VSRC, 16'h0100, 1, 4)));
+      wait_idle();
+      csr_rd(12'h004, 2'd0, v);
+      chk("writing a read-only region raises err_task", v[2] === 1'b1);
+      csr_rd(12'h020, 2'd0, v);
+      chk("the permission fault is located",
+          v[12:5] === 8'hE3 && v[2:0] === 3'(P_MTE_OUT));
+      csr_rd(12'h284, 2'd0, v);
+      chk("MMU_FAULT says permission", v[2:1] === MF_PERM);
+      chk("MMU_FAULT says the write port", v[3] === 1'b1);
+      csr_wr(12'h284, 2'd0, 32'h1);
+
+      // ---- and the machine is still running ----
+      csr_wr(12'h080, 2'd0, 32'h1);
+      push(0, 3'd0, mk(3'(P_MTE_IN), M_XFER, 8'hE4,
+                       dma_pl(VSRC + 48'h1000, 16'h0120, 1, 4), '0, 1'b1, 5'd12));
+      push(0, 3'd0, mk(3'(P_MTE_OUT), M_XFER, 8'hE5,
+                       dma_pl(VDST + 48'h100, 16'h0120, 1, 4), 32'h1000));
+      wait_idle();
+      csr_rd(12'h004, 2'd0, v);
+      chk("translation survives a fault", v[3:0] === 4'd0);
+      for (int i = 0; i < 4; i++)
+        chk($sformatf("post-fault translated beat %0d", i),
+            u_mem.mem[32'h208 + i] === u_mem.mem[32'h80 + i]);
+
+      // ---- back to physical addressing for everything that follows ----
+      csr_wr(12'h280, 2'd0, 32'h0);
+      csr_wr(12'h208, 2'd0, 32'h0);
+      csr_wr(12'h218, 2'd0, 32'h0);
+      csr_wr(12'h284, 2'd0, 32'h1);
+      csr_wr(12'h080, 2'd0, 32'h1);
     end
 
     // ================= interrupts =================

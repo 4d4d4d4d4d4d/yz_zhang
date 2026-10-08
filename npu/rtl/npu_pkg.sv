@@ -72,6 +72,32 @@ package npu_pkg;
   parameter int MAX_BURST= 16;               // beats per AXI burst
 `endif
 
+  // ---------------- external address translation ----------------
+  // 4 KiB pages. A page is 128 beats, which is also what bounds an AXI
+  // burst: AXI4 forbids a burst from crossing a 4 KiB boundary, so the
+  // address generator clips to it whether translation is on or off.
+  parameter int PG_SH    = 12;
+  parameter int PG_BEATS = (1 << PG_SH) / BEAT_B;   // 128
+  parameter int PGOW     = 7;                       // $clog2(PG_BEATS)
+  // Descriptors carry a 48-bit ext_addr. 40 of those bits are the virtual
+  // address; the rest must be zero. 40 bits is what makes a VPN fit in one
+  // CSR word, and 1 TiB of virtual space per device is not the limit any
+  // workload here runs into.
+  parameter int VA_W     = 40;
+  parameter int VBW      = VA_W - 5;                // 35, virtual beat index
+  parameter int VPN_W    = VA_W - PG_SH;            // 28
+  parameter int PPN_W    = AXI_AW - PG_SH;          // 20
+  parameter int PAB_W    = AXI_AW - 5;              // 27, physical beat index
+  // Eight regions, not a page-table walker. See docs/spec_arch.md for why
+  // a walker is the wrong trade for a descriptor-driven DMA engine.
+  parameter int NRGN     = 8;
+  parameter int RGNW     = 3;
+
+  // MMU fault kinds, as reported in MMU_FAULT
+  parameter logic [1:0] MF_NONE = 2'd0;
+  parameter logic [1:0] MF_MISS = 2'd1;   // no region covers the address
+  parameter logic [1:0] MF_PERM = 2'd2;   // region found, access not allowed
+
   // ---------------- AXI4-Lite control ----------------
   parameter int LT_AW    = 12;
   parameter int LT_DW    = 32;

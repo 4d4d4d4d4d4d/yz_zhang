@@ -54,3 +54,10 @@ lint_off -rule UNUSEDSIGNAL -file "*/npu_csr.sv" -match "*'wdata'*"
 // the credit assertion in npu_top), which are compiled out for synthesis.
 lint_off -rule SYNCASYNCNET -file "*/npu_top.sv"  -match "*rst_n*"
 lint_off -rule SYNCASYNCNET -file "*/npu_prim.sv" -match "*rst_n*"
+
+// The MMU CSR aperture is word addressed and its registers are narrower
+// than the 32-bit data bus: the low address bits and the high data bits
+// are architecturally reserved.
+lint_off -rule UNUSEDSIGNAL -file "*/npu_mmu.sv" -match "*'cfg_waddr'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_mmu.sv" -match "*'cfg_raddr'*"
+lint_off -rule UNUSEDSIGNAL -file "*/npu_mmu.sv" -match "*'cfg_wdata'*"

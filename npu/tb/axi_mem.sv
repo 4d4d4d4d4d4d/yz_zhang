@@ -186,6 +186,19 @@ module axi_mem #(
       if (awvalid && awready && (awburst !== 2'b01 || awsize !== 3'd5)) begin
         $display("%%Error: axi_mem: unsupported AW burst/size"); $stop;
       end
+      // AXI4 A3.4.1: a burst must not cross a 4 KiB boundary. A real
+      // interconnect decodes on that boundary, so a crossing burst is not
+      // slow, it is wrong -- half of it arrives at a different slave.
+      if (arvalid && arready &&
+          (({4'd0, araddr[11:0]} + (16'(arlen) + 16'd1) * 16'(BB)) > 16'h1000)) begin
+        $display("%%Error: axi_mem: AR burst crosses a 4 KiB boundary (addr=%08h len=%0d)",
+                 araddr, arlen); $stop;
+      end
+      if (awvalid && awready &&
+          (({4'd0, awaddr[11:0]} + (16'(awlen) + 16'd1) * 16'(BB)) > 16'h1000)) begin
+        $display("%%Error: axi_mem: AW burst crosses a 4 KiB boundary (addr=%08h len=%0d)",
+                 awaddr, awlen); $stop;
+      end
     end
 `endif
 endmodule

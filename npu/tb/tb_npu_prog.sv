@@ -113,6 +113,8 @@ module tb_npu_prog;
   logic [BUS_W-1:0]  chk_m [$];
   int                csr_a [$];
   logic [31:0]       csr_e [$];
+  int                wcsr_a [$];      // W: CSR writes performed before the run
+  logic [31:0]       wcsr_d [$];
   int                as_win = 0, as_nevt = 0, as_cred = 0;
 
   int errors = 0;
@@ -189,6 +191,15 @@ module tb_npu_prog;
             chk_d.push_back(t2[BUS_W-1:0]);
             t2 = hex256(a3);
             chk_m.push_back(t2[BUS_W-1:0]);
+          end
+        end
+        "W": begin
+          code = $sscanf(line, "W %s %s", a1, a2);
+          if (code == 2) begin
+            t1 = hex256(a1);
+            t2 = hex256(a2);
+            wcsr_a.push_back(int'(t1[31:0]));
+            wcsr_d.push_back(t2[31:0]);
           end
         end
         "S": begin
@@ -330,6 +341,14 @@ module tb_npu_prog;
                  as_cred, c0[23:16]);
       end
     end
+
+    // ---- the program's own configuration, over the real control bus ----
+    // The generator emits the same writes into the functional model, so a
+    // mismatch between how the two are configured cannot hide here.
+    for (int i = 0; i < wcsr_a.size(); i++)
+      csr_write(LT_AW'(wcsr_a[i]), 2'd0, wcsr_d[i]);
+    if (wcsr_a.size() != 0)
+      $display("  configured: %0d csr writes", wcsr_a.size());
 
     csr_write(12'h080, 2'd0, 32'h1);        // clear statistics
 

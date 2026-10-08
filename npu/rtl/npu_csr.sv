@@ -69,6 +69,13 @@ module npu_csr
   input  logic                wr_conflict,
   input  logic                any_cpl,
 
+  // ---- MMU aperture (0x200): decoded here, implemented in npu_mmu ----
+  output logic                mmu_we,
+  output logic [7:0]          mmu_waddr,
+  output logic [31:0]         mmu_wdata,
+  output logic [7:0]          mmu_raddr,
+  input  logic [31:0]         mmu_rdata,
+
   // ---- control out ----
   output logic                clr_stat,
   output logic [NQ-1:0]       qprio,
@@ -146,15 +153,24 @@ module npu_csr
   assign lock_rd  = arvalid && arready && (araddr[11:8] == 4'h1);
   assign lock_idx = araddr[4:2];
 
+  assign mmu_raddr = araddr[7:0];
+  assign mmu_waddr = wa[7:0];
+  assign mmu_wdata = wdata;
+  assign mmu_we    = do_wr && (wa[11:8] == 4'h2);
+
   logic [31:0] rd_mux;
   always_comb begin
     rd_mux = 32'd0;
-    if (araddr[11:8] == 4'h1) begin
+    if (araddr[11:8] == 4'h2) begin
+      rd_mux = mmu_rdata;
+    end else if (araddr[11:8] == 4'h1) begin
       // bit0: the reader now owns it. bit16: held by someone. bits 9:8 owner.
       rd_mux = {15'd0, lock_held[lock_idx],
                 6'd0, lock_owner[lock_idx],
                 7'd0, ~lock_held[lock_idx]};
-    end else begin
+    end else if (araddr[11:8] == 4'h0) begin
+      // Only page 0. Before the MMU aperture existed every page above the
+      // locks aliased onto this one, so a read of 0x384 returned QPRIO.
       unique casez (araddr[7:0])
         8'h00:   rd_mux = MAGIC;
         8'h04:   rd_mux = {27'd0, idle, err_hang, err_task,
@@ -176,6 +192,7 @@ module npu_csr
         8'h30:   rd_mux = {8'(MAX_BURST), 8'(NID), 8'(CREDIT), 8'(WIN)};
         8'h34:   rd_mux = {8'(NBUF), 8'(NQ), 8'(NPIPE), 8'(NEVT)};
         8'h38:   rd_mux = {16'(BUF_D), 8'(LANES), 8'(EVT_W)};
+        8'h3C:   rd_mux = {8'(NRGN), 8'(PG_SH), 8'(VA_W), 8'(AXI_AW)};
         8'h40,
         8'h44,
         8'h48,
@@ -233,7 +250,7 @@ module npu_csr
           // release, but only by the recorded owner
           if (lock_held[wa[4:2]] && (lock_owner[wa[4:2]] == wid_q))
             lock_held[wa[4:2]] <= 1'b0;
-        end else begin
+        end else if (wa[11:8] == 4'h0) begin
           unique casez (wa[7:0])
             8'h28: irq_stat <= irq_stat & ~wdata[IRQ_N-1:0];   // write 1 to clear
             8'h2C: irq_en   <= wdata[IRQ_N-1:0];

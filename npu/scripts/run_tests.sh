@@ -59,6 +59,7 @@ for op in mov addi muli maxi add sub mul max min brc_r brc_c \
   gen_run "vecop.$op" tools/gen_random.py -s 4 --fp -n 4 --op "$op"
 done
 gen_run "dma.agu"         tools/gen_dma.py
+gen_run "mmu.regions"     tools/gen_mmu.py
 gen_run "chain.64"        tools/gen_chain.py -n 64
 gen_run "gemm.32x32x64"   tools/gen_gemm.py -M 32 -N 32 -K 64  --kb 32
 gen_run "gemm.32x128x128" tools/gen_gemm.py -M 32 -N 128 -K 128 --kb 64

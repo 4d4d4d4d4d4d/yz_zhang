@@ -256,11 +256,32 @@ module npu_top
   logic mte_in_outst, mte_out_outst;
   logic mte_in_bus,   mte_out_bus;
 
+  // ================= address translation =================
+  // One region table, two combinational lookup ports. Duplicating the
+  // table per engine would double the registers and make every CSR write
+  // a broadcast; the lookup is a flat compare with no state, so the two
+  // ports need no arbitration.
+  logic [1:0]                mmu_req;
+  logic [1:0][VBW-1:0]       mmu_va;
+  logic [1:0][PAB_W-1:0]     mmu_pa;
+  logic [1:0]                mmu_fault;
+  logic                      mmu_we;
+  logic [7:0]                mmu_waddr, mmu_raddr;
+  logic [31:0]               mmu_wdata, mmu_rdata;
+
+  npu_mmu u_mmu (
+    .clk(clk), .rst_n(rst_n),
+    .cfg_we(mmu_we), .cfg_waddr(mmu_waddr), .cfg_wdata(mmu_wdata),
+    .cfg_raddr(mmu_raddr), .cfg_rdata(mmu_rdata), .clr(clr_stat),
+    .lk_req(mmu_req), .lk_va(mmu_va), .lk_pa(mmu_pa), .lk_fault(mmu_fault));
+
   npu_mte_in u_mte_in (
     .clk(clk), .rst_n(prst_n[P_MTE_IN]), .grst_n(rst_n),
     .iss_valid(iss_valid[P_MTE_IN]), .iss_op(iss_op[P_MTE_IN]),
     .wr_req(wr_req[3]), .wr_addr(wr_addr[3]), .wr_data(wr_data[3]),
     .wr_mask(wr_mask[3]), .wr_gnt(wr_gnt[3]),
+    .mmu_req(mmu_req[0]), .mmu_va(mmu_va[0]),
+    .mmu_pa(mmu_pa[0]), .mmu_fault(mmu_fault[0]),
     .arvalid(m_arvalid), .arready(m_arready), .araddr(m_araddr),
     .arlen(m_arlen), .arsize(m_arsize), .arburst(m_arburst), .arid(m_arid),
     .rvalid(m_rvalid), .rready(m_rready), .rdata(m_rdata),
@@ -274,6 +295,8 @@ module npu_top
     .iss_valid(iss_valid[P_MTE_OUT]), .iss_op(iss_op[P_MTE_OUT]),
     .rd_req(rd_req[5]), .rd_addr(rd_addr[5]), .rd_gnt(rd_gnt[5]),
     .rd_rvalid(rd_rvalid[5]), .rd_rdata(rd_rdata[5]),
+    .mmu_req(mmu_req[1]), .mmu_va(mmu_va[1]),
+    .mmu_pa(mmu_pa[1]), .mmu_fault(mmu_fault[1]),
     .awvalid(m_awvalid), .awready(m_awready), .awaddr(m_awaddr),
     .awlen(m_awlen), .awsize(m_awsize), .awburst(m_awburst), .awid(m_awid),
     .wvalid(m_wvalid), .wready(m_wready), .wdata(m_wdata),
@@ -303,6 +326,8 @@ module npu_top
     .ecc_ce(ecc_ce), .ecc_ue(ecc_ue), .ecc_loc(ecc_loc),
     .rd_conflict(rd_conflict), .wr_conflict(wr_conflict),
     .any_cpl(|cpl_valid),
+    .mmu_we(mmu_we), .mmu_waddr(mmu_waddr), .mmu_wdata(mmu_wdata),
+    .mmu_raddr(mmu_raddr), .mmu_rdata(mmu_rdata),
     .clr_stat(clr_stat), .qprio(qprio),
     .ecc_inj(ecc_inj), .ecc_inj_buf(ecc_inj_buf),
     .irq(irq), .rst_active(rst_active), .rst_done(rst_done));

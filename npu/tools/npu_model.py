@@ -20,7 +20,8 @@ from npu_isa import (LANES, BUS_W, NBUF, BUF_D, BUF_AW, BEAT_B, P_CUBE, P_VEC,
                      M_XFER, V_MOV, V_ADDI, V_MULI, V_MAXI, V_ADD, V_SUB,
                      V_MUL, V_MAX, V_MIN, V_BRC_R, V_BRC_C, V_RED_SUM,
                      V_RED_MAX, V_LUT, V_RECIP, V_SEL, V_SELD, V_CVT_F2I,
-                     V_CVT_I2F, SUB_ADD, SUB_SUB, SUB_MUL, SUB_MAX)
+                     V_CVT_I2F, SUB_ADD, SUB_SUB, SUB_MUL, SUB_MAX,
+                     PG_SH, PG_BEATS, VA_W, NRGN, CSR_MMU)
 
 MIN_NORM32 = 2.0 ** -126
 
@@ -156,6 +157,53 @@ class Machine:
         self.mem = {}                             # beat index -> [uint16]*16
         self.acc = [[0] * LANES for _ in range(LANES)]   # CUBE accumulator
         self.mem_beats = mem_beats
+        # address translation, programmed exactly as the hardware is
+        self.mmu_en = 0
+        self.rgn = [dict(v=0, r=0, w=0, vpn=0, ppn=0, np=0)
+                    for _ in range(NRGN)]
+
+    # ---- CSR writes a program performs before it runs ----
+    def csr_write(self, off, val):
+        """Apply the CSR writes a program's W directives carry. Only the MMU
+        aperture changes anything the model can observe; the rest (statistics
+        clears, interrupt masks) are state the model does not keep."""
+        if not (CSR_MMU <= off < CSR_MMU + 0x100):
+            return
+        a = off - CSR_MMU
+        if a & 0x80:
+            if (a & 0x7C) == 0:
+                self.mmu_en = val & 1
+            return
+        i, word = (a >> 4) & (NRGN - 1), (a >> 2) & 3
+        if word == 0:
+            self.rgn[i]["vpn"] = val & ((1 << 28) - 1)
+        elif word == 1:
+            self.rgn[i]["ppn"] = val & ((1 << 20) - 1)
+        elif word == 2:
+            self.rgn[i].update(v=val & 1, r=(val >> 1) & 1, w=(val >> 2) & 1,
+                               np=(val >> 3) & 0xFFFF)
+
+    def xlate(self, vbeat, write):
+        """Virtual beat index -> physical beat index.
+
+        A fault is a bug in the program, not a result the model can express,
+        so it raises. The RTL reports it through cpl.err instead; tb_mmu is
+        what checks that path.
+        """
+        assert vbeat >> (VA_W - 5) == 0, f"VA out of range: {vbeat:#x}"
+        vpn, off = divmod(vbeat, PG_BEATS)
+        if not self.mmu_en:
+            assert vbeat >> 27 == 0, f"PA out of range: {vbeat:#x}"
+            return vbeat
+        for i in range(NRGN):                     # lowest matching index wins
+            g = self.rgn[i]
+            if g["v"] and g["vpn"] <= vpn < g["vpn"] + g["np"]:
+                if not (g["w"] if write else g["r"]):
+                    raise AssertionError(
+                        f"region {i} forbids {'write' if write else 'read'} "
+                        f"of {vbeat * BEAT_B:#x}")
+                return (g["ppn"] + vpn - g["vpn"]) * PG_BEATS + off
+        raise AssertionError(f"no region covers {vbeat * BEAT_B:#x}")
 
     # ---- external memory ----
     def mem_get(self, beat):
@@ -428,11 +476,11 @@ def execute(M, d_word):
 
     elif p == P_MTE_IN:
         for e, b in agu(d_mte(d["pl"])):
-            M.bput(b, M.mem_get(e))
+            M.bput(b, M.mem_get(M.xlate(e, False)))
 
     elif p == P_MTE_OUT:
         for e, b in agu(d_mte(d["pl"])):
-            M.mem_set(e, M.bget(b))
+            M.mem_set(M.xlate(e, True), M.bget(b))
 
     else:
         raise ValueError(f"illegal pipe {p}")

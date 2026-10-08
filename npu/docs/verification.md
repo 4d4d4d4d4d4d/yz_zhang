@@ -13,8 +13,17 @@ every entry says why.
 | unit | `tb_ecc` | every single-bit flip in a 352-bit line is corrected with data preserved; every in-lane double flip is flagged; a cross-lane double is two independent corrections |
 | unit | `tb_fp` | 14000 assertions against IEEE doubles: exact bf16 multiply, RNE addition, a 256-term accumulation, reciprocal within 0.35%, FTZ, canonical NaN, both conversions |
 | unit | `tb_cube` | CUBE against a behavioural model through the real crossbar: both numeric modes, tail tiles, ReLU, a K=256 accumulator hand-off across two descriptors, address-overflow reporting, zero-length ops |
+| unit | `tb_mmu` | the region table on its own: identity bypass including an address above the physical window, page-carry inside a region, lowest-index-wins overrides, a valid zero-page region, read-only and write-only violations on the right port, first-fault-wins capture, and that acknowledging a live fault does not lose it |
 | integration | `tb_ctrl` | ECC inject and reporting, read-to-acquire semaphores with owner enforcement, queue priority, all four error classes, queue barrier, Q-Channel deny/accept/gate/resume, the interrupt line and mask, and a hang-and-recover cycle driven by a memory that stops answering |
 | system | `tb_npu_prog` | generated programs run on the real top level and are compared beat for beat against the bit-exact model |
+
+`tb_ctrl` also drives translation end to end: a transfer through two
+regions, a window that runs off the end of its region, a write through a
+read-only region, and that the machine still runs afterwards. The
+program-level counterpart is `tests/vectors/mmu.txt` from `tools/gen_mmu.py`,
+which places every tensor at a virtual address above 2³² — a build that
+bypassed translation could not pass it by accident, because the address it
+would issue does not exist.
 | coverage | `make coverage` | line, branch and toggle coverage over the RTL, accumulated across the whole suite |
 
 ## 2. The cross-check that matters
@@ -29,21 +38,24 @@ Programs are spread across queues and MCU ports on purpose. The scheduler
 may reorder anything the event graph does not pin down, so a program that
 only works in submission order fails here rather than in silicon.
 
-Current suite: 30 program tests — six random programs (three seeds × two
-numeric modes), every VEC opcode swept individually, three GEMM shapes and
-a full encoder layer.
+Current suite: 31 program tests — six random programs (three seeds × two
+numeric modes), every VEC opcode swept individually, an AGU shape sweep, a
+fully translated program, three GEMM shapes and a full encoder layer.
 
 ## 2.1 Coverage
 
 `make coverage` builds the testbenches instrumented and accumulates line,
-branch and toggle coverage across twelve runs. Verilator's generated main
+branch and toggle coverage across fifteen runs. Verilator's generated main
 does not write coverage, so `tb/cov_main.cpp` supplies one that does.
 
 | | covered | |
 |---|---|---|
-| line | 296/325 | 91% |
-| branch | 385/407 | 94% |
-| toggle | 11741/15879 | 73% |
+| line | 325/353 | 92% |
+| branch | 420/435 | 96% |
+| toggle | 12276/17104 | 71% |
+
+`npu_mmu.sv` and `npu_csr.sv` are at 100% branch coverage; what is left
+elsewhere is in the four categories below.
 
 The three answer different questions. Toggle coverage is reported but not
 chased: a 256-bit bus that never sees every bit toggle is normal. Line and
@@ -66,6 +78,21 @@ would have:
   nobody reads is a register nobody has checked decodes. `tb_ctrl` now
   reads every address, including an undecoded one.
 
+The second round, after address translation, found three more of the same
+kind:
+
+- **Each memory engine validates its own descriptor**, so every MTE
+  rejection class had been driven into only one of the two. `tb_ctrl` now
+  drives each class into both, and no generated program had ever sent a NOP
+  to MTE_OUT either.
+- **The control slave's wait states had never been entered.** The ordinary
+  write task drives W half a cycle after AW is accepted and takes B
+  immediately, so `W_DATA` with `wvalid` low and `W_RESP` with `bready` low
+  were unreachable from the suite. `csr_wr_slow` enters both.
+- **A write to a reserved offset was never checked to be a no-op.** In the
+  region table that matters: a decoder falling through to a neighbouring
+  case would corrupt a live mapping, and nothing else would notice.
+
 What remains uncovered is three things, and none is a test to write:
 
 1. `ifdef NPU_DEBUG` / `NPU_TRACE` blocks, which are compiled out.
@@ -75,6 +102,14 @@ What remains uncovered is three things, and none is a test to write:
    `function automatic` to one inlining site, so a function whose every
    arm is exercised still reports arms unexecuted. That accounts for
    almost all of `npu_vec.sv`'s line gap.
+4. A related instrumentation artifact: the two burst-length clips in
+   `npu_agu` (`MAX_BURST` and the 4 KiB boundary) report their taken arm as
+   never executed, and both report *identical* not-taken counts, which
+   cannot be true if either clip ever fired. Both demonstrably fire — a
+   trace of `dma.agu` shows a 16-beat burst, and deleting either clip fails
+   `mmu.regions`. Treated as a known false negative rather than a hole;
+   worth recording because a coverage report you have to argue with is
+   exactly the kind of thing that gets taken at face value later.
 
 ## 3. Static verification in the compiler
 
@@ -149,6 +184,28 @@ The pattern in 9 and 11 is the same: a schedule that was correct only
 because it was accidentally serial. Making it faster is what proved it was
 never correct.
 
+Address translation added two more, both found by tests written for it
+rather than by the feature itself:
+
+12. **A transfer could end before its address walk did.** A translation
+    fault aborts a transfer part way through the window, which no previous
+    error could do — a configuration error is caught before the walk
+    starts, and everything else runs the walk dry. The half-finished walk
+    stayed live for the one cycle between accepting the next descriptor and
+    `agu_start` landing, and presented the stale position against the new
+    descriptor's geometry. It surfaced as an AR with `len = 255` to a
+    nonsense address, caught by the boundary assertion below. The address
+    generator now takes an explicit abort.
+13. **Bursts could cross a 4 KiB boundary.** AXI4 forbids it, because a
+    real interconnect decodes on that boundary and half of such a burst
+    arrives at a different slave. The generator clipped to `MAX_BURST` and
+    nothing else, so any window starting within `MAX_BURST` beats of a
+    page end was a protocol violation. No existing program happened to do
+    that, and `axi_mem` was not looking — which is the whole point: this
+    was not a bug the suite was failing to catch, it was a bug the suite
+    had no way to see. Both the clip and the assertion are now in place,
+    and removing either one fails `mmu.regions`.
+
 Two more were testbench defects worth recording because they look exactly
 like design bugs: a driver that cleared `push_valid` in the same delta as
 the rising edge silently dropped one descriptor per occurrence, and the
@@ -214,12 +271,14 @@ Stated plainly, because a coverage claim is worth less than a list of gaps.
 
 - **No formal properties.** The handshake checkers and the credit assertion
   are simulation-only and are not proofs.
-- **No coverage metric.** There is no functional or code coverage
-  collection, so "every VEC opcode is swept" means exactly that and not
-  that every path inside each one is taken.
 - **AXI compliance is checked only against the model's own assumptions.**
-  `axi_mem` asserts on burst type and size and nothing else; there is no
-  protocol-compliance IP in this repo.
+  `axi_mem` asserts on burst type, size and the 4 KiB boundary rule, and
+  nothing else; there is no protocol-compliance IP in this repo. The
+  boundary assertion was added with address translation and is worth its
+  own note — see bug 13 below.
+- **Translation is region based.** There is no page-table walker to verify,
+  by design (`spec_arch.md` section 7), so nothing here says anything about
+  walker ordering, TLB coherence or shootdown.
 - **MTE_OUT is exercised far less than MTE_IN** — the generated programs
   are read-heavy, and the write engine's single-ID ordering has not been
   stressed with back-to-back short bursts.

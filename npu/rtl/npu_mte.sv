@@ -31,9 +31,14 @@ module npu_agu
   input  logic        start,
   input  mte_t        cfg,
   input  logic        next,        // consume the presented burst
+  // Give up on the rest of the window. A transfer can end before the AGU
+  // runs dry -- a translation fault stops it part way -- and leaving the
+  // walk half finished would present the stale position against the NEXT
+  // descriptor's geometry for the cycle before 'start' lands.
+  input  logic        abort,
 
   output logic        v,
-  output logic [31:0] ext_beat,    // external address in beats
+  output logic [VBW-1:0] ext_beat, // external VIRTUAL address in beats
   output logic [GAW-1:0] buf_addr,
   output logic [8:0]  len          // 1 .. MAX_BURST
 );
@@ -48,17 +53,26 @@ module npu_agu
   assign run = icnt - w;                    // to the end of this group
   assign rem = cfg.cols - c;                // to the end of this row
 
+  // Beats to the next 4 KiB boundary. AXI4 forbids a burst from crossing
+  // one, which the pre-translation design quietly violated whenever a
+  // window happened to start within MAX_BURST beats of a page end. It is
+  // also exactly what keeps a burst inside a single translation region,
+  // since a region is a whole number of pages -- so one clip serves both.
+  logic [8:0] pg_left;
+  assign pg_left = 9'(PG_BEATS) - 9'(ext_beat[PGOW-1:0]);
+
   always_comb begin
     automatic logic [15:0] l;
     l = (run < rem) ? run : rem;
-    if (l > 16'(MAX_BURST)) l = 16'(MAX_BURST);
+    if (l > 16'(MAX_BURST))  l = 16'(MAX_BURST);
+    if (l > 16'(pg_left))    l = 16'(pg_left);
     len = 9'(l);
   end
 
   assign v = active;
 
-  logic [31:0] ext_base;
-  assign ext_base = cfg.ext_addr[36:5];     // byte address -> beat index (32 B)
+  logic [VBW-1:0] ext_base;
+  assign ext_base = cfg.ext_addr[VA_W-1:5]; // byte address -> beat index (32 B)
   assign buf_addr = GAW'(16'(cfg.buf_addr) + r * cfg.buf_rstride + c);
 
   always_ff @(posedge clk or negedge rst_n) begin
@@ -66,6 +80,8 @@ module npu_agu
       r <= '0; c <= '0; g <= '0; w <= '0; active <= 1'b0;
     end else if (start) begin
       r <= '0; c <= '0; g <= '0; w <= '0; active <= 1'b1;
+    end else if (abort) begin
+      active <= 1'b0;
     end else if (active && next) begin
       if (c + 16'(len) >= cfg.cols) begin   // row finished
         c <= '0; g <= '0; w <= '0;
@@ -84,8 +100,8 @@ module npu_agu
   end
 
   // external beat index of the first beat of this burst
-  assign ext_beat = ext_base + 32'(r) * cfg.ext_rstride
-                             + 32'(g) * 32'(istr) + 32'(w);
+  assign ext_beat = ext_base + VBW'(r) * VBW'(cfg.ext_rstride)
+                             + VBW'(g) * VBW'(istr) + VBW'(w);
 endmodule
 
 // ---------------------------------------------------------------------
@@ -111,6 +127,13 @@ module npu_mte_in
   output logic [BUS_W-1:0]     wr_data,
   output logic [LANES-1:0]     wr_mask,
   input  logic                 wr_gnt,
+
+
+  // ---- address translation (npu_mmu lookup port) ----
+  output logic                 mmu_req,
+  output logic [VBW-1:0]       mmu_va,
+  input  logic [PAB_W-1:0]     mmu_pa,
+  input  logic                 mmu_fault,
 
   // AXI4 read
   output logic                 arvalid,
@@ -158,13 +181,14 @@ module npu_mte_in
 
   // ---- address generation ----
   logic        agu_start, agu_v, agu_next;
-  logic [31:0] agu_ext;
+  logic [VBW-1:0] agu_ext;
   logic [GAW-1:0] agu_buf;
   logic [8:0]  agu_len;
 
   npu_agu u_agu (
     .clk(clk), .rst_n(rst_n), .start(agu_start), .cfg(cfg), .next(agu_next),
-    .v(agu_v), .ext_beat(agu_ext), .buf_addr(agu_buf), .len(agu_len));
+    .abort(err_q), .v(agu_v), .ext_beat(agu_ext), .buf_addr(agu_buf),
+    .len(agu_len));
 
   // ---- per-ID burst bookkeeping ----
   logic [NID-1:0]            id_busy;     // this transfer owns it
@@ -213,8 +237,14 @@ module npu_mte_in
   assign room = ({1'b0, fcnt} + {1'b0, reserved} + (FCW+1)'(agu_len))
                 <= (FCW+1)'(FD);
 
-  assign arvalid = (st == S_RUN) && agu_v && !err_q && id_free && room;
-  assign araddr  = AXI_AW'({agu_ext, 5'd0});        // beats -> bytes
+  // The lookup is presented whenever the address is, not only when the
+  // engine is otherwise ready to issue: a bad address should fail the
+  // transfer immediately rather than when flow control happens to clear.
+  assign mmu_req = (st == S_RUN) && agu_v && !err_q;
+  assign mmu_va  = agu_ext;
+
+  assign arvalid = mmu_req && !mmu_fault && id_free && room;
+  assign araddr  = {mmu_pa, 5'd0};                  // beats -> bytes
   assign arlen   = 8'(agu_len - 9'd1);
   assign arsize  = 3'd5;                            // 32 bytes per beat
   assign arburst = 2'b01;                           // INCR
@@ -260,6 +290,7 @@ module npu_mte_in
                    (c.rows - 16'd1) * c.buf_rstride + c.cols, 16'd1))
                                                  cfg_err = 1'b1;
       if (c.ext_addr[4:0] != 5'd0)               cfg_err = 1'b1;  // beat aligned
+      if (c.ext_addr[47:VA_W] != '0)             cfg_err = 1'b1;  // above VA space
     end
   end
 
@@ -303,6 +334,11 @@ module npu_mte_in
         S_CPL:   st <= S_IDLE;
         default: st <= S_IDLE;
       endcase
+
+      // A translation fault is reported through the same path as any other
+      // configuration error: cpl.err -> err_task -> ERR_TAG -> IRQ, with
+      // SOFT_RST as the recovery. MMU_FAULT adds the address and the kind.
+      if (mmu_req && mmu_fault) err_q <= 1'b1;
 
 `ifdef NPU_TRACE
       if (st == S_RUN && !arvalid && agu_v)
@@ -355,6 +391,13 @@ module npu_mte_out
   input  logic                 rd_rvalid,
   input  logic [BUS_W-1:0]     rd_rdata,
 
+
+  // ---- address translation (npu_mmu lookup port) ----
+  output logic                 mmu_req,
+  output logic [VBW-1:0]       mmu_va,
+  input  logic [PAB_W-1:0]     mmu_pa,
+  input  logic                 mmu_fault,
+
   // AXI4 write
   output logic                 awvalid,
   input  logic                 awready,
@@ -399,13 +442,14 @@ module npu_mte_out
   logic err_q;
 
   logic        agu_start, agu_v, agu_next;
-  logic [31:0] agu_ext;
+  logic [VBW-1:0] agu_ext;
   logic [GAW-1:0] agu_buf;
   logic [8:0]  agu_len;
 
   npu_agu u_agu (
     .clk(clk), .rst_n(rst_n), .start(agu_start), .cfg(cfg), .next(agu_next),
-    .v(agu_v), .ext_beat(agu_ext), .buf_addr(agu_buf), .len(agu_len));
+    .abort(err_q), .v(agu_v), .ext_beat(agu_ext), .buf_addr(agu_buf),
+    .len(agu_len));
 
   // ---- data FIFO fed by buffer reads, drained by the W channel ----
   logic            fpush, fpop, fempty;
@@ -447,18 +491,21 @@ module npu_mte_out
   logic room, accept;
   assign room   = ({1'b0, fcnt} + {1'b0, reserved} + (FCW+1)'(agu_len))
                   <= (FCW+1)'(FD);
-  assign accept = (st == S_RUN) && agu_v && !err_q && room && !lfull
+  assign mmu_req = (st == S_RUN) && agu_v && !err_q;
+  assign mmu_va  = agu_ext;
+
+  assign accept = mmu_req && !mmu_fault && room && !lfull
                   && !aw_pending && (rd_left == 9'd0);
 
   assign awvalid = aw_pending;
-  assign awaddr  = AXI_AW'({aw_ext, 5'd0});
+  assign awaddr  = {aw_ext, 5'd0};
   assign awlen   = 8'(aw_len - 9'd1);
   assign awsize  = 3'd5;
   assign awburst = 2'b01;
   assign awid    = '0;                        // single ID: AXI4 forbids W interleave
 
-  logic [31:0] aw_ext;
-  logic [8:0]  aw_len;
+  logic [PAB_W-1:0] aw_ext;
+  logic [8:0]       aw_len;
 
   assign rd_req  = (rd_left != 9'd0) && can_rd;
   assign rd_addr = rd_ptr;
@@ -511,6 +558,7 @@ module npu_mte_out
                    (c.rows - 16'd1) * c.buf_rstride + c.cols, 16'd1))
                                                  cfg_err = 1'b1;
       if (c.ext_addr[4:0] != 5'd0)               cfg_err = 1'b1;
+      if (c.ext_addr[47:VA_W] != '0)             cfg_err = 1'b1;  // above VA space
     end
   end
 
@@ -553,10 +601,12 @@ module npu_mte_out
         default: st <= S_IDLE;
       endcase
 
+      if (mmu_req && mmu_fault) err_q <= 1'b1;
+
       // start a burst
       if (accept) begin
         aw_pending <= 1'b1;
-        aw_ext     <= agu_ext;
+        aw_ext     <= mmu_pa;
         aw_len     <= agu_len;
         rd_left    <= agu_len;
         rd_ptr     <= agu_buf;
