@@ -5,12 +5,17 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "taskplat",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "userInterfaceStyle": "light",
     "ios": {
       "bundleIdentifier": "com.example.taskplat",
       "supportsTablet": true,
-      "associatedDomains": ["applinks:your-domain.example"],
+      "associatedDomains": [
+        "applinks:your-domain.example"
+      ],
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "用于展示附近任务与到场打卡",
         "NSCameraUsageDescription": "用于拍摄任务交付凭证与到场照片",
@@ -19,20 +24,42 @@
     },
     "android": {
       "package": "com.example.taskplat",
-      "permissions": ["ACCESS_FINE_LOCATION", "CAMERA", "READ_MEDIA_IMAGES"],
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ],
       "intentFilters": [
         {
           "action": "VIEW",
           "autoVerify": true,
-          "data": [{ "scheme": "https", "host": "your-domain.example", "pathPrefix": "/tasks" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "https",
+              "host": "your-domain.example",
+              "pathPrefix": "/tasks"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
     "plugins": [
       [
         "expo-location",
-        { "locationWhenInUsePermission": "用于展示附近任务与到场打卡" }
+        {
+          "locationWhenInUsePermission": "用于展示附近任务与到场打卡"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "用于选择证件影像与任务交付凭证",
+          "cameraPermission": "用于拍摄证件影像与任务交付凭证"
+        }
       ]
     ],
     "extra": {

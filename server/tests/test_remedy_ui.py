@@ -69,6 +69,18 @@ REMEDY_UI: dict[str, tuple[str, tuple[str, ...], str]] = {
         "协议更新后不重新同意，发布/接单/资金全部被 409 挡住。"
         "App 此前只能「看」协议状态不能同意，一次协议更新就把 App 用户卡成只读",
     ),
+    # V113：这两条是**闸门之外漏掉的**。服务端说「请提交证件影像并通过平台
+    # 核验后接单」，而 `submitCertification` 在这一批之前只有网页有——
+    # App 的主要用户正是需要那张证的线下执行方，接不了单就是赚不到钱。
+    "certification_required": (
+        "submitCertification", ("web", "app"),
+        "受限类目没有已核准的职业资质就接不了单，而服务端给的指示是「提交证件影像」。"
+        "App 上没有入口时，他被要求去做一件自己的设备上做不到的事",
+    ),
+    "certificate_expired": (
+        "submitCertification", ("web", "app"),
+        "证件过期后与没有证件等效：同样接不了单，同样只能靠重新提交解决",
+    ),
     "captcha_required": (
         "captchaConfig", ("web",),
         "连续输错密码后要过人机验证才能再登录，过不去就是被锁在账号外面。"
@@ -198,3 +210,91 @@ def test_app066_app_can_reach_the_verification_it_was_promised():
     而 requestVerification 当时只在 web 上有——**上一批自己挖的坑**：
     必达通知里指了一条路，那条路在一半的端上不存在。"""
     assert _calls("app", "requestVerification")
+
+
+# ----------------------------------------- CLI-074 这张表不许再是「手列的」
+#
+# V113 的探针：服务端有 12 个带祈使句的错误码（「请先…」「请提交…」），
+# 而 REMEDY_UI 当时只声明了 4 条。`certification_required` 从来没被问过
+# 「谁来做」——于是 App 上交不了资质这件事，**没有任何闸门会红**。
+#
+# 这和 V57 的调度表、V111 的文档计数是同一个病：**手列的清单只覆盖
+# 有人记得的部分**。所以这一条把清单改成从服务端**扫出来**的。
+
+# 祈使句：服务端在要求用户**去做一件事**。带这些词的错误码按定义就是
+# 「有补救动作」的那一类，必须回答补救在哪个端做得到。
+_IMPERATIVES = ("请先", "请提交", "请绑定", "请完成", "请前往", "请设置", "请重新", "请到")
+
+# 扫出来但**不需要专门入口**的 -> 为什么。值是理由，不是布尔（V90 那条）。
+#
+# 判定标准：补救动作走的是**已有的正常流程**，不是一个需要新界面的能力。
+# 「还没做」不属于这里——那是欠账，归 72 号台账。
+REMEDY_BY_NORMAL_FLOW: dict[str, str] = {
+    "active_contract": "补救是把在途合约走完或取消，那就是任务流程本身，不是一个单独的入口",
+    "capacity_full": "补救是把手里的单做完，同样是任务流程本身；给个按钮也没有东西可点",
+    "insufficient_balance": "补救是充值，而充值两端都有（`topup`）——它只是没用祈使句之外的名字",
+    "owner_cannot_leave": "补救是转让群主或解散团队，两个动作都在团队页里",
+    "session_revoked": "补救是重新登录，登录页两端都有且是进入 App 的唯一入口",
+    "sms_code_expired": "补救是再点一次「获取验证码」，就在同一个表单上",
+    "sms_code_locked": "同上：重新获取验证码，入口是同一个按钮",
+    "sms_code_missing": "同上：这条是「还没点获取」，按钮就在旁边",
+    "verification_required": "已在 REMEDY_UI 里（verifyIdentity），这里列出只是说明它不是漏项",
+}
+
+
+def _remediable_codes() -> dict[str, str]:
+    """从服务端扫出所有「要求用户去做一件事」的错误码 -> 那句话。"""
+    pat = re.compile(
+        r'(?:bad_request|forbidden|conflict|not_found)\(\s*\n?\s*f?"([^"]{4,160})",\s*\n?\s*"(\w+)"',
+        re.S,
+    )
+    out: dict[str, str] = {}
+    for path in (REPO / "server" / "app").rglob("*.py"):
+        for m in pat.finditer(path.read_text(encoding="utf-8")):
+            msg, code = m.group(1), m.group(2)
+            if any(k in msg for k in _IMPERATIVES):
+                out.setdefault(code, msg)
+    return out
+
+
+def test_cli074_scanner_finds_the_imperative_codes():
+    """扫不到等于全绿。这一条尤其必要：正则写歪一点，下面那条就什么都不查。"""
+    found = _remediable_codes()
+    assert len(found) >= 10, f"只扫到 {len(found)} 个祈使句错误码，正则可能写歪了：{sorted(found)}"
+    # 已知成员：这两条改造前就在，扫不到说明提取逻辑有假阴性
+    for known in ("no_payout_account", "certification_required"):
+        assert known in found, f"{known} 明明是祈使句，扫描却说没有"
+
+
+def test_cli074_every_imperative_code_is_accounted_for():
+    """服务端每一句「请去做 X」，都要回答「X 在哪个端做得到」。
+
+    要么在 REMEDY_UI 里（需要一个专门入口，且入口必须真的存在），
+    要么在 REMEDY_BY_NORMAL_FLOW 里写明「补救就是已有流程」。
+    两处都不在 → 红。
+
+    这条就是 V113 之前缺的那个闸门：`certification_required` 当时
+    两处都不在，而没有任何测试会因此红。
+    """
+    found = _remediable_codes()
+    unaccounted = sorted(c for c in found
+                         if c not in REMEDY_UI and c not in REMEDY_BY_NORMAL_FLOW)
+    assert not unaccounted, (
+        "服务端用这些错误码要求用户去做一件事，而没有人回答「在哪个端做得到」：\n  "
+        + "\n  ".join(f"{c}：{found[c][:60]}" for c in unaccounted)
+        + "\n要么进 REMEDY_UI（并保证入口存在），要么进 REMEDY_BY_NORMAL_FLOW 写明理由。"
+    )
+
+
+def test_cli074_normal_flow_table_stays_honest():
+    """「走正常流程即可」不许变成堆积欠账的地方。"""
+    found = _remediable_codes()
+    stale = sorted(c for c in REMEDY_BY_NORMAL_FLOW if c not in found)
+    assert not stale, f"这些错误码服务端已经不抛了（或不再是祈使句），表该清理：{stale}"
+    for code, why in sorted(REMEDY_BY_NORMAL_FLOW.items()):
+        assert len(why) >= 15, f"{code} 的理由太敷衍：{why}"
+        for excuse in ("还没做", "待补", "TODO", "以后", "暂时"):
+            assert excuse not in why, (
+                f"{code} 的理由是欠账不是理由：{why}\n"
+                "没做就记进 72 号台账，不要伪装成「走正常流程即可」。"
+            )

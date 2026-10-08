@@ -898,7 +898,8 @@ function MeScreen({ client, me, refresh, onLogout }: {
       {/* APP-069 团队 / 合作体 / 开发者。三条线此前**只有网页看得见**，
           而 V92 刚给团队审批加了通知——通知把人叫来、他点进去无路可走，
           比没有通知更糟（APP-066 同一条教训）。 */}
-      {(['messages', 'invitations', 'applications', 'teams', 'ventures', 'developer'] as SubScreen[]).map((key) => (
+      {(['messages', 'invitations', 'applications', 'certifications',
+         'teams', 'ventures', 'developer'] as SubScreen[]).map((key) => (
         <TouchableOpacity key={key} onPress={() => setSub(key)}>
           <Text style={styles.linkRow}>{SUB_SCREEN_LABEL[key]} ›</Text>
         </TouchableOpacity>
