@@ -135,8 +135,17 @@ def test_prlx022_reduce_motion_state_is_visible_to_the_user():
 
 
 # ---------- PRLX-030 接进了 App ----------
-def test_prlx030_discover_tab_is_wired_in():
+def test_prlx030_discover_screen_is_wired_in():
+    """视差发现流必须**真的被渲染**，不是只定义在那里。
+
+    V115 改过一次判据。原来这条断言 `'discover'` 这个字面量出现在 App.tsx 里，
+    而那一批把 Tab 从七个收到四个（发现/合作/消息/我的空间），发现流挪进
+    「发现」页的分段，字面量换成了 `'feed'`——**闸门因此红在一个正当改动上**。
+
+    这是 V110 踩过的同一个坑（`test_ops_drills` 当时断言一句注释的措辞）：
+    **钉住某一种做法的闸门，会在换做法时误报**，而误报多的闸门会被人关掉。
+    所以这里改成钉目的：这个屏幕被渲染出来了、而且有一个带标签的入口能到它。
+    """
     code = strip_comments(open(os.path.join(APP, "App.tsx")).read())
-    assert "DiscoverScreen" in code
-    assert "'discover'" in code
-    assert "'发现'" in code
+    assert "<DiscoverScreen" in code, "DiscoverScreen 没有被渲染——它只是被定义着"
+    assert "'发现'" in code, "没有任何带「发现」标签的入口"

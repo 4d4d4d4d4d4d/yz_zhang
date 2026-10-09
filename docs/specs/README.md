@@ -108,6 +108,8 @@
 | 85 | 手抄的数字没有人核对（计数闸门 / 历史记录不改） | [85-numbers-nobody-checks.md](./85-numbers-nobody-checks.md) | P2 |
 | 86 | 第一次打开钱包可能 500（懒建账户的竞态） | [86-first-wallet-read-can-500.md](./86-first-wallet-read-can-500.md) | P0 |
 | 87 | 服务端叫他交资质而 App 上交不了（祈使句错误码派生闸门） | [87-server-says-do-x-but-app-cannot.md](./87-server-says-do-x-but-app-cannot.md) | P0 |
+| 88 | 独立个体网络、公开空间与合作入口（当前产品与 UI 基准） | [88-individual-network-and-spaces.md](./88-individual-network-and-spaces.md) | P0 |
+| 89 | 个人空间进入原生 App，与只看见双引号的闸门 | [89-spaces-on-the-app-and-single-quote-blindness.md](./89-spaces-on-the-app-and-single-quote-blindness.md) | P0 |
 
 ## 功能点编号与优先级约定
 

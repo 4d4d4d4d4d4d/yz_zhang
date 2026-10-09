@@ -38,6 +38,11 @@
               "scheme": "https",
               "host": "your-domain.example",
               "pathPrefix": "/tasks"
+            },
+            {
+              "scheme": "https",
+              "host": "your-domain.example",
+              "pathPrefix": "/people"
             }
           ],
           "category": [

@@ -16,9 +16,14 @@ import { Button, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View
 
 type ConversationRow = Awaited<ReturnType<PlatformClient['conversations']>>[number];
 
-export function MessagesScreen({ client }: { client: PlatformClient }) {
+/** `initialConversationId`：从别人的空间点「发消息」时，服务端已经把会话建好，
+ *  这里要**直接打开那一条**。少了它用户会落在会话列表上自己找——
+ *  而他刚刚明确表达了想跟谁说话（SPACE-009）。 */
+export function MessagesScreen({ client, initialConversationId = null }: {
+  client: PlatformClient; initialConversationId?: number | null;
+}) {
   const [convs, setConvs] = useState<ConversationRow[]>([]);
-  const [open, setOpen] = useState<number | null>(null);
+  const [open, setOpen] = useState<number | null>(initialConversationId);
   const [unread, setUnread] = useState(0);
   const [peer, setPeer] = useState('');
   const [error, setError] = useState('');
@@ -28,6 +33,9 @@ export function MessagesScreen({ client }: { client: PlatformClient }) {
     setUnread(await client.imUnreadCount().then((r) => r.unread).catch(() => 0));
   }, [client]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (initialConversationId !== null) setOpen(initialConversationId);
+  }, [initialConversationId]);
 
   if (open !== null) {
     return <Thread client={client} convId={open} onBack={() => { setOpen(null); void load(); }} />;

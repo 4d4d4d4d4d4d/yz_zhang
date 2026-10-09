@@ -6,10 +6,12 @@ import { ContractEvidence } from './ContractEvidence';
 import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, PlatformClient, TASK_STATUS_LABEL, apiErrorText, fmtYuan, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DiscoverScreen } from './Discover';
+import { MessagesScreen } from './MessagesAndInvites';
+import { MySpaceScreen, PublicSpaceScreen, SpacesDiscoverScreen } from './spaces';
 import { SUB_SCREEN_LABEL, SubScreenHost, type SubScreen } from './TeamCoopDev';
 import { VideoFeedScreen } from './VideoFeed';
 import {
-  Button, FlatList, Platform, RefreshControl, SafeAreaView, ScrollView, StyleSheet,
+  Button, FlatList, Linking, Platform, RefreshControl, SafeAreaView, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 
@@ -24,13 +26,30 @@ async function getPushToken(): Promise<string | null> {
 
 const BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
 
-type Tab = 'tasks' | 'discover' | 'video' | 'publish' | 'wallet' | 'notices' | 'me';
+// SPACE-010 四入口：发现 / 合作 / 消息 / 我的空间。
+//
+// 与 web 的导航对齐（`web/src/App.tsx` 的 nav-links 就是这四个），而**通知与
+// 账户不进 Tab、改成常驻顶栏**——web 也是这么做的（🔔 与账户在 nav-account 里）。
+// 这一点是刻意的：V100 那一批的催办、临期、预警全靠用户看见通知，
+// **把通知折进二级页面，等于把那一批的价值折掉一半**。
+//
+// 原来的七个 Tab（任务/发现流/视频/发布/钱包/通知/我的）一个都没有删，
+// 只是换了入口：发布在「合作」页顶部，内容流与视频在「发现」页的分段里，
+// 钱包与通知在顶栏，其余在「我的」。
+type Tab = 'spaces' | 'cooperate' | 'messages' | 'myspace';
+type Overlay =
+  | { kind: 'notices' }
+  | { kind: 'account' }
+  | { kind: 'wallet' }
+  | { kind: 'space'; userId: number };
 
 export default function App() {
   const [token, setToken] = useState<string | null>(null);
   const [me, setMe] = useState<Me | null>(null);
-  const [tab, setTab] = useState<Tab>('tasks');
+  const [tab, setTab] = useState<Tab>('spaces');
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [overlay, setOverlay] = useState<Overlay | null>(null);
+  const [conversation, setConversation] = useState<number | null>(null);
 
   const client = useMemo(
     () => new PlatformClient({ baseUrl: BASE_URL, getToken: () => token }),
@@ -41,6 +60,26 @@ export default function App() {
     if (token) client.me().then(setMe).catch(() => setToken(null));
     else setMe(null);
   }, [token, client]);
+
+  // SPACE-028 进站深链：`https://.../people/9` 或 `taskplat://people/9`
+  // 直接打开那个人的空间。
+  //
+  // 为什么这件事必须做：空间的用处是**给别人看**。没有深链，分享出去的链接
+  // 在装了 App 的手机上会被系统拦进 App，然后落在首页——**分享越成功，
+  // 落空越多**。app.json 里原来只声明了 /tasks 的 intentFilter，
+  // 也就是说这个新入口在 Android 上压根不会被路由过来。
+  //
+  // 两个来源都要接：冷启动（`getInitialURL`）与运行中（`url` 事件）。
+  // 只接一个的后果很具体：App 在后台时点链接没反应，而用户会以为链接坏了。
+  useEffect(() => {
+    function open(url: string | null) {
+      const m = url && /\/people\/(\d+)/.exec(url);
+      if (m) setOverlay({ kind: 'space', userId: Number(m[1]) });
+    }
+    void Linking.getInitialURL().then(open).catch(() => {});
+    const sub = Linking.addEventListener('url', (e) => open(e.url));
+    return () => sub.remove();
+  }, []);
 
   // NTF-002 登录后注册推送令牌。站内信是「记录」，推送是「触达」——
   // 被诉方的答辩期只有 48 小时，逾期即缺席裁决；用户不主动打开 App，
@@ -64,28 +103,68 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.root}>
+      {/* 通知与钱包不进 Tab，但**一跳可达**：V100 的催办/临期/预警全靠用户
+          看见通知，钱包是钱的入口。折进二级页面等于把那两批的价值折掉。 */}
+      <View style={styles.topbar}>
+        <TouchableOpacity onPress={() => setOverlay({ kind: 'notices' })}>
+          <Text style={styles.topbarItem}>通知</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setOverlay({ kind: 'wallet' })}>
+          <Text style={styles.topbarItem}>钱包</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setOverlay({ kind: 'account' })}>
+          <Text style={styles.topbarItem}>{me?.nickname || '账户'}</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.body}>
         {activeTask ? (
           <TaskDetailScreen client={client} me={me} task={activeTask}
                             onBack={() => setActiveTask(null)}
                             onChanged={async () => setActiveTask(await client.getTask(activeTask.id))} />
+        ) : overlay ? (
+          <>
+            <TouchableOpacity onPress={() => setOverlay(null)}>
+              <Text style={styles.linkRow}>← 返回</Text>
+            </TouchableOpacity>
+            {overlay.kind === 'notices' && <NoticesScreen client={client} />}
+            {overlay.kind === 'wallet' && <WalletScreen client={client} />}
+            {overlay.kind === 'account' && (
+              <MeScreen client={client} me={me} refresh={() => client.me().then(setMe)}
+                        onLogout={() => setToken(null)} />
+            )}
+            {overlay.kind === 'space' && (
+              <PublicSpaceScreen client={client} userId={overlay.userId}
+                                 onBack={() => setOverlay(null)}
+                                 onOpenConversation={(id) => {
+                                   setConversation(id); setOverlay(null); setTab('messages');
+                                 }} />
+            )}
+          </>
         ) : (
           <>
-            {tab === 'tasks' && <TasksScreen client={client} onOpen={setActiveTask} />}
-            {/* APP-002 发现流：视差滚动，尊重系统「减弱动态效果」开关 */}
-            {tab === 'discover' && <DiscoverScreen client={client} baseUrl={BASE_URL} />}
-            {/* CNT-014 沉浸流：任何时刻有且只有一个 <Video> 在播 */}
-            {tab === 'video' && <VideoFeedScreen client={client} baseUrl={BASE_URL} />}
-            {tab === 'publish' && <PublishScreen client={client} onDone={() => setTab('tasks')} />}
-            {tab === 'wallet' && <WalletScreen client={client} />}
-            {tab === 'notices' && <NoticesScreen client={client} />}
-            {tab === 'me' && <MeScreen client={client} me={me} refresh={() => client.me().then(setMe)} onLogout={() => setToken(null)} />}
+            {/* SPACE-004 以人为中心的发现。内容流与视频流没有删，挪到这一页的
+                分段里——「发现优先展示人、作品、生活和正在发生的合作」。 */}
+            {tab === 'spaces' && (
+              <DiscoverHost client={client} baseUrl={BASE_URL}
+                            onOpenSpace={(userId) => setOverlay({ kind: 'space', userId })} />
+            )}
+            {tab === 'cooperate' && (
+              <CooperateHost client={client} onOpen={setActiveTask} />
+            )}
+            {tab === 'messages' && (
+              <MessagesScreen client={client} initialConversationId={conversation} />
+            )}
+            {tab === 'myspace' && (
+              <MySpaceScreen client={client} me={me}
+                             refreshMe={() => { void client.me().then(setMe); }}
+                             onPreview={(userId) => setOverlay({ kind: 'space', userId })} />
+            )}
           </>
         )}
       </View>
-      {!activeTask && (
+      {!activeTask && !overlay && (
         <View style={styles.tabbar}>
-          {([['tasks', '任务'], ['discover', '发现'], ['video', '视频'], ['publish', '＋发布'], ['wallet', '钱包'], ['notices', '通知'], ['me', '我的']] as [Tab, string][]).map(([key, label]) => (
+          {([['spaces', '发现'], ['cooperate', '合作'], ['messages', '消息'], ['myspace', '我的空间']] as [Tab, string][]).map(([key, label]) => (
             <TouchableOpacity key={key} style={styles.tab} onPress={() => setTab(key)}>
               <Text style={[styles.tabText, tab === key && styles.tabActive]}>{label}</Text>
             </TouchableOpacity>
@@ -93,6 +172,63 @@ export default function App() {
         </View>
       )}
     </SafeAreaView>
+  );
+}
+
+/** 「发现」页：人在前，内容与视频在后。
+ *
+ * 旧的发现流（视差内容）与视频流**一个都没删**，只是不再各占一个 Tab：
+ * 新定位里发现的主体是人与作品，而内容消费是其中一种形式。
+ * 分段切换比塞进「我的」合理——它们本来就是「发现」这件事。
+ */
+function DiscoverHost({ client, baseUrl, onOpenSpace }: {
+  client: PlatformClient; baseUrl: string; onOpenSpace: (userId: number) => void;
+}) {
+  const [seg, setSeg] = useState<'people' | 'feed' | 'video'>('people');
+  return (
+    <>
+      <View style={styles.segbar}>
+        {([['people', '人与空间'], ['feed', '内容'], ['video', '视频']] as const).map(([k, label]) => (
+          <TouchableOpacity key={k} onPress={() => setSeg(k)}>
+            <Text style={[styles.seg, seg === k && styles.segOn]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {seg === 'people' && <SpacesDiscoverScreen client={client} onOpen={onOpenSpace} />}
+      {/* APP-002 发现流：视差滚动，尊重系统「减弱动态效果」开关 */}
+      {seg === 'feed' && <DiscoverScreen client={client} baseUrl={baseUrl} />}
+      {/* CNT-014 沉浸流：任何时刻有且只有一个 <Video> 在播 */}
+      {seg === 'video' && <VideoFeedScreen client={client} baseUrl={baseUrl} />}
+    </>
+  );
+}
+
+/** 「合作」页：正在发生的合作 + 发起一个。
+ *
+ * 发布从 Tab 挪到这里顶部——它是「合作」的一个动作，而不是与合作并列的
+ * 一个地方。任务列表与发布表单都没有改。
+ */
+function CooperateHost({ client, onOpen }: {
+  client: PlatformClient; onOpen: (t: Task) => void;
+}) {
+  const [publishing, setPublishing] = useState(false);
+  if (publishing) {
+    return (
+      <>
+        <TouchableOpacity onPress={() => setPublishing(false)}>
+          <Text style={styles.linkRow}>← 返回合作</Text>
+        </TouchableOpacity>
+        <PublishScreen client={client} onDone={() => setPublishing(false)} />
+      </>
+    );
+  }
+  return (
+    <>
+      <TouchableOpacity onPress={() => setPublishing(true)}>
+        <Text style={styles.linkRow}>＋ 发起一个合作</Text>
+      </TouchableOpacity>
+      <TasksScreen client={client} onOpen={onOpen} />
+    </>
   );
 }
 
@@ -977,6 +1113,18 @@ const styles = StyleSheet.create({
   mutedLeft: { color: '#6b7280', fontSize: 13 },
   error: { color: '#dc2626' },
   tabbar: { flexDirection: 'row', backgroundColor: '#fff', borderTopWidth: 1, borderColor: '#e5e7eb' },
+  topbar: {
+    flexDirection: 'row', justifyContent: 'flex-end', gap: 16,
+    paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#fff',
+    borderBottomWidth: 1, borderColor: '#e5e7eb',
+  },
+  topbarItem: { color: '#2f6fed', fontSize: 13 },
+  segbar: { flexDirection: 'row', gap: 8, paddingBottom: 8 },
+  seg: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14,
+    backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', color: '#374151',
+  },
+  segOn: { backgroundColor: '#2f6fed', borderColor: '#2f6fed', color: '#fff' },
   tab: { flex: 1, padding: 14, alignItems: 'center' },
   tabText: { color: '#6b7280' },
   tabActive: { color: '#275c52', fontWeight: '700' },

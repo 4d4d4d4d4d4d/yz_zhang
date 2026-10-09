@@ -81,6 +81,15 @@ REMEDY_UI: dict[str, tuple[str, tuple[str, ...], str]] = {
         "submitCertification", ("web", "app"),
         "证件过期后与没有证件等效：同样接不了单，同样只能靠重新提交解决",
     ),
+    # V116：`spaces` 模块（新来的）带来的一条，而它对旧扫描器不可见（单引号）。
+    # 公开空间是这一版产品的核心入口，而账户隐私设为不公开时服务端直接拦住发布。
+    # web 的 Profile 页能改（`updateMe({privacy})`），**App 上没有任何地方能改**——
+    # App 用户因此永远发不出自己的空间，而提示让他「前往账户隐私设置」。
+    "profile_private": (
+        "updateMe", ("web", "app"),
+        "账户隐私设为不公开时发布空间被直接拦住，而公开空间是这一版产品的核心入口。"
+        "改隐私的入口不在端上，用户就只能看着那句提示无路可走",
+    ),
     "captcha_required": (
         "captchaConfig", ("web",),
         "连续输错密码后要过人机验证才能再登录，过不去就是被锁在账号外面。"
@@ -136,7 +145,11 @@ def test_cli073_declared_codes_are_really_raised_by_the_server():
         p.read_text(encoding="utf-8") for p in (REPO / "server" / "app").rglob("*.py")
     )
     for code in REMEDY_UI:
-        assert f'"{code}"' in server_src, f"{code} 服务端已经不抛了，表该清理"
+        # 单引号与双引号都算（V116：`spaces` 模块用单引号，而这条断言
+        # 原来只认双引号——于是它会把一个**确实还在抛**的码说成「已经不抛了」。
+        # 同一个假设错在两处，所以两处都改）。
+        assert f'"{code}"' in server_src or f"'{code}'" in server_src, \
+            f"{code} 服务端已经不抛了，表该清理"
 
 
 def test_cli073_declared_methods_exist_in_the_shared_sdk():
@@ -239,21 +252,38 @@ REMEDY_BY_NORMAL_FLOW: dict[str, str] = {
     "sms_code_locked": "同上：重新获取验证码，入口是同一个按钮",
     "sms_code_missing": "同上：这条是「还没点获取」，按钮就在旁边",
     "verification_required": "已在 REMEDY_UI 里（verifyIdentity），这里列出只是说明它不是漏项",
+    "space_revision_conflict": "补救是重新打开编辑器再改一次（revision 防的是另一个窗口的旧稿覆盖新稿），"
+                               "重新加载是编辑页本身的动作，不是一个要新建的能力",
 }
 
 
 def _remediable_codes() -> dict[str, str]:
     """从服务端扫出所有「要求用户去做一件事」的错误码 -> 那句话。"""
-    pat = re.compile(
-        r'(?:bad_request|forbidden|conflict|not_found)\(\s*\n?\s*f?"([^"]{4,160})",\s*\n?\s*"(\w+)"',
-        re.S,
-    )
+    # **单引号与双引号都要认。** V116 的教训：第一版只写了双引号，
+    # 而 `spaces` 模块（新来的）全用单引号——于是两条带「请…」的新错误码
+    # 对这个闸门**完全不可见**，其中一条（`profile_private`）正是
+    # 「App 上没有入口」的真缺口。
+    #
+    # 「扫不到等于全绿」这句话我写进过五个闸门的注释里，
+    # 而这一次它出现在**我自己刚建的那个闸门**上：它没报错，它只是漏看了
+    # 一种写法。所以下面那条自检不只数「扫到几个」，还单独钉住两种引号各扫到过。
+    pats = [
+        re.compile(
+            r'(?:bad_request|forbidden|conflict|not_found)\(\s*\n?\s*f?'
+            + quote + r'([^' + quote + r']{4,160})' + quote + r',\s*\n?\s*'
+            + quote + r'(\w+)' + quote,
+            re.S,
+        )
+        for quote in ('"', "'")
+    ]
     out: dict[str, str] = {}
     for path in (REPO / "server" / "app").rglob("*.py"):
-        for m in pat.finditer(path.read_text(encoding="utf-8")):
-            msg, code = m.group(1), m.group(2)
-            if any(k in msg for k in _IMPERATIVES):
-                out.setdefault(code, msg)
+        text = path.read_text(encoding="utf-8")
+        for pat in pats:
+            for m in pat.finditer(text):
+                msg, code = m.group(1), m.group(2)
+                if any(k in msg for k in _IMPERATIVES):
+                    out.setdefault(code, msg)
     return out
 
 
