@@ -113,6 +113,7 @@
 | 90 | 关注是个 toggle，而没有接口能告诉客户端当前状态 | [90-follow-was-a-toggle-nobody-could-read.md](./90-follow-was-a-toggle-nobody-could-read.md) | P0 |
 | 91 | 单聊并发会建出两条会话（规范化唯一键 / 非破坏性迁移） | [91-direct-chat-forked-under-concurrency.md](./91-direct-chat-forked-under-concurrency.md) | P0 |
 | 92 | 代扣明细与 PIPL 权利在 App 上够不到（法定权利可达性） | [92-tax-and-pipl-rights-unreachable-on-app.md](./92-tax-and-pipl-rights-unreachable-on-app.md) | P0 |
+| 93 | 分期合约在一次点击里被放光（意图钉死 / 放款前的决定点） | [93-staged-payment-released-in-one-tap.md](./93-staged-payment-released-in-one-tap.md) | P0 |
 
 ## 功能点编号与优先级约定
 

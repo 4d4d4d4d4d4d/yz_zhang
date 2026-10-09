@@ -4,8 +4,8 @@
 // 提案有没有把事由带上、`can_decide` 有没有被客户端重算、
 // 超距时服务端算出的**实际距离**有没有显示出来。
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { PlatformClient, type Contract, type Task } from '@platform/core';
-import { ChangeOrderBlock, SafetyBlock } from './App';
+import { PlatformClient, type Contract, type Me, type Task } from '@platform/core';
+import { ChangeOrderBlock, SafetyBlock, TaskDetailScreen } from './App';
 
 function makeClient(
   routes: Record<string, unknown>,
@@ -125,5 +125,51 @@ describe('SC-007 变更单', () => {
     await waitFor(() => expect(
       calls.some((c) => c.path === '/contracts/3/change-orders/1/accept'),
     ).toBe(true));
+  });
+});
+
+// SC-013 整单验收会放掉**剩余全部**期（服务端如此设计，93 号 spec）。
+//
+// RN 里没有 `confirm()`，所以做成两步：第一下只把「几期、多少钱」摊在屏幕上。
+// web 那边用的是 confirm——各自平台的惯用法。
+describe('SC-013 整单验收前要说清会放掉几期', () => {
+  const PENDING = { ...TASK, status: 'pending_acceptance' as const };
+  const REQUESTER = { id: 1, nickname: '发布者' } as unknown as Me;
+
+  function staged(milestones: Array<{ idx: number; title: string; amount_cents: number; status: string }>) {
+    return {
+      '/contracts/by-task/7': {
+        id: 3, task_id: 7, requester_id: 1, executor_id: 2, amount_cents: 20000,
+        released_cents: 0, fee_bps: 800, terms: '', status: 'funded',
+        signed_by_requester: true, signed_by_executor: true, frozen: false, version: 1,
+        deposit_cents: 0, deposit_status: 'none', milestones,
+      },
+    };
+  }
+
+  it('两期未放时先摊开期数与金额，第一下不放款', async () => {
+    const calls: Array<{ method: string; path: string; body: unknown }> = [];
+    const client = makeClient(staged([
+      { idx: 1, title: '一期', amount_cents: 6000, status: 'released' },
+      { idx: 2, title: '二期', amount_cents: 6000, status: 'pending' },
+      { idx: 3, title: '三期', amount_cents: 8000, status: 'pending' },
+    ]), calls);
+    render(<TaskDetailScreen client={client} me={REQUESTER} task={PENDING}
+                             onBack={() => {}} onChanged={() => {}} />);
+    await waitFor(() => expect(screen.getByText(/这一步会放掉剩余 2 期、共 ¥140\.00/)).toBeTruthy());
+    expect(calls.some((c) => c.path === '/tasks/7/accept-delivery')).toBe(false);
+
+    fireEvent.press(screen.getByText('确认整单放款'));
+    await waitFor(() => expect(screen.getByText('验收通过（放款）')).toBeTruthy());
+  });
+
+  it('单期合约直接给按钮——那是绝大多数合约，多问一遍就是噪音', async () => {
+    const client = makeClient(staged([
+      { idx: 1, title: '全部', amount_cents: 20000, status: 'pending' },
+    ]));
+    render(<TaskDetailScreen client={client} me={REQUESTER} task={PENDING}
+                             onBack={() => {}} onChanged={() => {}} />);
+    await waitFor(() => expect(screen.getByText('验收通过（放款）')).toBeTruthy());
+    expect(screen.queryByText(/这一步会放掉剩余/)).toBeNull();
   });
 });

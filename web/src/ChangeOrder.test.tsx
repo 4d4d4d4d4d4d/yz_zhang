@@ -117,3 +117,82 @@ describe('SC-004 分期', () => {
     expect(screen.queryByText('保存分期')).toBeNull();
   });
 });
+
+// SC-013 整单验收会放掉**剩余全部**期（服务端如此设计，93 号 spec）。
+//
+// 发布方当初定分期，正是为了不一次付完。在一个只写「验收通过（放款）」的
+// 按钮上一次放光，他失去的是自己设置的那道保护——所以还有未放期时，
+// 必须先把「几期、多少钱」说清。
+describe('SC-013 整单验收前要说清会放掉几期', () => {
+  const PENDING_TASK = { ...TASK, status: 'pending_acceptance' };
+  const REQUESTER = { ...ME, id: 1, nickname: '发布者' };
+  const STAGED = {
+    ...CONTRACT,
+    milestones: [
+      { idx: 1, title: '一期', amount_cents: 6000, status: 'released' },
+      { idx: 2, title: '二期', amount_cents: 6000, status: 'pending' },
+      { idx: 3, title: '三期', amount_cents: 8000, status: 'pending' },
+    ],
+  };
+
+  function openAsRequester(contract: unknown, calls: Array<{ method: string; path: string; body: unknown }> = []) {
+    localStorage.setItem('token', 'tok');
+    const client = makeClient({
+      '/users/me': REQUESTER, '/tasks/7': PENDING_TASK,
+      '/contracts/by-task/7': contract, '/contracts/3/change-orders': [],
+    }, calls);
+    render(
+      <MemoryRouter initialEntries={['/tasks/7']}>
+        <AppProvider client={client}><App /></AppProvider>
+      </MemoryRouter>,
+    );
+    return calls;
+  }
+
+  it('有两期未放时，确认框说出期数与金额；取消则不放款', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    try {
+      const calls = openAsRequester(STAGED);
+      fireEvent.click(await screen.findByText('验收通过（放款）'));
+      // 只剩二期与三期未放：6000 + 8000 = 14000 分
+      expect(confirmSpy.mock.calls[0][0]).toContain('剩余 2 期');
+      expect(confirmSpy.mock.calls[0][0]).toContain('¥140.00');
+      // 取消就是取消——不发请求
+      expect(calls.some((c) => c.path === '/tasks/7/accept-delivery')).toBe(false);
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
+
+  it('确认之后才真的整单放款', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    try {
+      const calls = openAsRequester(STAGED);
+      fireEvent.click(await screen.findByText('验收通过（放款）'));
+      await waitFor(() => expect(
+        calls.some((c) => c.method === 'POST' && c.path === '/tasks/7/accept-delivery'),
+      ).toBe(true));
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
+
+  it('单期合约不多问一遍——那是绝大多数合约，问了就是噪音', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    try {
+      const single = {
+        ...CONTRACT,
+        milestones: [{ idx: 1, title: '全部', amount_cents: 20000, status: 'pending' }],
+      };
+      const calls = openAsRequester(single);
+      fireEvent.click(await screen.findByText('验收通过（放款）'));
+      // 一个假报警多的确认框会被人养成无脑点「确定」的习惯
+      expect(confirmSpy).not.toHaveBeenCalled();
+      await waitFor(() => expect(
+        calls.some((c) => c.path === '/tasks/7/accept-delivery'),
+      ).toBe(true));
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
+});

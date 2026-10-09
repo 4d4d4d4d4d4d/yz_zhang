@@ -350,11 +350,12 @@ function TasksScreen({ client, onOpen }: { client: PlatformClient; onOpen: (t: T
 
 type ApplicationRow = Awaited<ReturnType<PlatformClient['listApplications']>>[number];
 
-function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
+export function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
   client: PlatformClient; me: Me | null; task: Task; onBack: () => void; onChanged: () => Promise<void>;
 }) {
   const [error, setError] = useState('');
   const [contract, setContract] = useState<Contract | null>(null);
+  const [confirmRelease, setConfirmRelease] = useState(false);
   const [apps, setApps] = useState<ApplicationRow[]>([]);
   const meId = me?.id ?? null;
 
@@ -444,9 +445,33 @@ function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
       {actions.includes('deliver') && (
         <Button title="提交验收" onPress={() => act(() => client.deliver(task.id))} />
       )}
-      {actions.includes('accept_delivery') && (
-        <Button title="验收通过（放款）" onPress={() => act(() => client.acceptDelivery(task.id))} />
-      )}
+      {actions.includes('accept_delivery') && (() => {
+        // SC-013 整单验收会放掉**剩余全部**期（服务端如此设计，93 号 spec）。
+        // 发布方当初定分期，正是为了不一次付完——在一个只写「验收通过（放款）」
+        // 的按钮上一次放光，他失去的是自己设的那道保护。
+        //
+        // RN 里没有 `confirm()`，所以做成两步：第一下只把「几期、多少钱」
+        // 摊在屏幕上。web 那边用的是 confirm —— 各自平台的惯用法。
+        const pending = (contract?.milestones ?? []).filter((m) => m.status !== 'released');
+        if (pending.length > 1 && !confirmRelease) {
+          const sum = pending.reduce((n, m) => n + m.amount_cents, 0);
+          return (
+            <View style={styles.cardRow}>
+              <View style={{ flex: 1, gap: 6 }}>
+                <Text style={styles.cardTitle}>
+                  这一步会放掉剩余 {pending.length} 期、共 {fmtYuan(sum)}
+                </Text>
+                <Text style={styles.mutedLeft}>
+                  只想付已完成的那一期，请用下面分期列表里的「验收本期」。
+                </Text>
+                <Button title="确认整单放款" onPress={() => setConfirmRelease(true)} />
+              </View>
+            </View>
+          );
+        }
+        return <Button title="验收通过（放款）"
+                       onPress={() => act(() => client.acceptDelivery(task.id))} />;
+      })()}
       {actions.includes('reject_delivery') && (
         <Button title="驳回返工" onPress={() => act(() => client.rejectDelivery(task.id, '不符合要求，请修改'))} />
       )}

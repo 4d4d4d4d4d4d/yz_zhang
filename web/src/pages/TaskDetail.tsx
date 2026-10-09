@@ -101,7 +101,21 @@ export default function TaskDetail() {
           )}
           {task.status === 'pending_acceptance' && isCreator && (
             <>
-              <button onClick={() => act(() => client.acceptDelivery(taskId))}>验收通过（放款）</button>
+              <button onClick={() => {
+                // SC-013 整单验收会放掉**剩余全部**期（服务端如此设计，93 号 spec）。
+                // 发布方当初定分期，正是为了不一次付完——在一个只写
+                // 「验收通过（放款）」的按钮上一次放光，他失去的是自己设的那道保护。
+                // 所以还有未放期时，把「几期、多少钱」说清再让他点。
+                const pending = (contract?.milestones ?? []).filter(m => m.status !== 'released');
+                if (pending.length > 1) {
+                  const sum = pending.reduce((n, m) => n + m.amount_cents, 0);
+                  if (!confirm(
+                    `这一步会放掉剩余 ${pending.length} 期、共 ${fmtYuan(sum)}。\n\n`
+                    + '如果只想付已完成的那一期，请改用下面分期列表里的「验收本期」。\n\n确认整单放款？',
+                  )) return;
+                }
+                void act(() => client.acceptDelivery(taskId));
+              }}>验收通过（放款）</button>
               <button className="danger" onClick={() => {
                 const reason = prompt('驳回理由：');
                 if (reason) void act(() => client.rejectDelivery(taskId, reason));
