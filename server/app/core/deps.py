@@ -1,4 +1,4 @@
-from fastapi import Depends, Header
+from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -31,6 +31,32 @@ def get_current_user(
     if user.is_deleted:
         raise forbidden("账号已注销", "account_deleted")
     return user
+
+
+def get_optional_user(
+    db: Session = Depends(get_db), authorization: str = Header(default="")
+) -> User | None:
+    """匿名可读的端点上，顺便认一下「是谁在看」。
+
+    用途只有一个：**公开页面上那些跟访问者自己有关的小状态**，
+    例如「我是否已关注这个人」。没有它，客户端只能猜自己的关注状态，
+    而关注接口若是 toggle，猜错就会把关注变成取消关注（CNT-022 的来由）。
+
+    **刻意复用 `get_current_user` 而不是另写一遍**：会话吊销、封禁、注销
+    那几道判断抄第二遍必然漏一条（这一路反复证明过）。
+
+    边界要说清——它把「token 无效 / 会话已吊销 / 账号被封」统一降级成
+    **匿名**，所以：
+    - 只许用在**本来就允许匿名访问**的读接口上；
+    - **绝不能**用它来授权任何写操作或私有数据读取。
+      那会把「会话已吊销」悄悄变成「当成游客放进来」。
+    """
+    if not authorization.startswith("Bearer "):
+        return None
+    try:
+        return get_current_user(db=db, authorization=authorization)
+    except HTTPException:
+        return None
 
 
 def require_verified(

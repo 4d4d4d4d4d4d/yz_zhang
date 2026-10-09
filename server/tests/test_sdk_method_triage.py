@@ -73,7 +73,7 @@ SCHEDULED: dict[str, str] = {
     "friends": "SOCIAL-050", "friendRequests": "SOCIAL-050",
     "sendFriendRequest": "SOCIAL-050", "decideFriendRequest": "SOCIAL-050",
     "removeFriend": "SOCIAL-050", "setFriendRemark": "SOCIAL-050",
-    "workedWith": "SOCIAL-050", "followStats": "SOCIAL-050",
+    "workedWith": "SOCIAL-050",  # followStats 已由 V117 接到两端的空间页
     "createGroup": "SOCIAL-050", "updateGroup": "SOCIAL-050",
     "inviteToGroup": "SOCIAL-050", "removeFromGroup": "SOCIAL-050",
     "approveCircleMember": "SOCIAL-050", "removeCircleMember": "SOCIAL-050",

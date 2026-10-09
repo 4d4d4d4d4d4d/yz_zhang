@@ -120,15 +120,43 @@ export function PublicSpaceScreen({ client, userId, onBack, onOpenConversation }
   const [space, setSpace] = useState<PersonalSpace | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // CNT-022 关注状态**从服务端读**（`viewer_following`）。没有这个读接口之前，
+  // 按钮只能猜自己的状态，而服务端那时是个 toggle——猜错就把「想关注」
+  // 变成了「取消关注」。null 表示「没登录所以不知道」，不是「没关注」。
+  const [stats, setStats] = useState<{ followers: number; viewer_following: boolean | null } | null>(null);
 
   useEffect(() => {
     let live = true;
-    setSpace(null); setError('');
+    setSpace(null); setError(''); setStats(null);
     void client.personalSpace(userId)
       .then((s) => { if (live) setSpace(s); })
       .catch((e) => { if (live) setError(apiErrorText(e)); });
+    // 关注数读不到不该让整页报错：它是页面上的一个小角落
+    void client.followStats(userId)
+      .then((r) => { if (live) setStats({ followers: r.followers, viewer_following: r.viewer_following }); })
+      .catch(() => {});
     return () => { live = false; };
   }, [client, userId]);
+
+  async function toggleFollow() {
+    if (!stats) return;
+    setBusy(true); setError('');
+    try {
+      // 关注与取消关注是两个不同的动作，各自幂等：手机上双击或弱网重试，
+      // 结果都一样。改造前重复一次就会撤销。
+      const r = stats.viewer_following
+        ? await client.unfollowUser(userId)
+        : await client.followUser(userId);
+      setStats((p) => (p && {
+        followers: p.followers + (r.following ? 1 : -1),
+        viewer_following: r.following,
+      }));
+    } catch (e) {
+      setError(apiErrorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function contact() {
     setBusy(true); setError('');
@@ -169,8 +197,11 @@ export function PublicSpaceScreen({ client, userId, onBack, onOpenConversation }
             </View>
           ))}
           {!space.items.length && <Text style={styles.muted}>这个空间还没有放上展示内容。</Text>}
+          {!!stats && <Text style={styles.muted}>{stats.followers} 人关注</Text>}
           <Button title={busy ? '正在打开会话…' : '发消息'} disabled={busy}
                   onPress={() => void contact()} />
+          <Button title={stats?.viewer_following ? '已关注（点此取消）' : '关注'}
+                  disabled={busy || !stats} onPress={() => void toggleFollow()} />
         </>
       )}
     </ScrollView>

@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_optional_user
 from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.modules.account.models import User
 from app.modules.task.service import machine_review
@@ -318,24 +318,73 @@ def list_comments(content_id: int, db: Session = Depends(get_db)):
 
 
 # ---------- 关注（CNT-021） ----------
-@router.post("/users/{user_id}/follow")
-def follow(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if user_id == user.id:
+def _follow_row(db: Session, follower_id: int, followee_id: int) -> Follow | None:
+    return (
+        db.query(Follow)
+        .filter(Follow.follower_id == follower_id, Follow.followee_id == followee_id)
+        .first()
+    )
+
+
+def _check_followee(db: Session, user_id: int, me: User) -> None:
+    if user_id == me.id:
         raise bad_request("不能关注自己", "self_follow")
     if not db.get(User, user_id):
         raise not_found("用户不存在")
-    existing = (
-        db.query(Follow).filter(Follow.follower_id == user.id, Follow.followee_id == user_id).first()
-    )
-    if existing:
-        db.delete(existing)
-        return {"following": False}
-    db.add(Follow(follower_id=user.id, followee_id=user_id))
+
+
+@router.put("/users/{user_id}/follow")
+def follow(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """CNT-022 关注。**幂等**：已关注再调一次仍然是已关注。
+
+    改造前这里是一个 `POST` **toggle**，两个毛病：
+
+    1. **重复调用会撤销**。手机上双击一下、或者弱网下客户端自动重试，
+       用户刚关注的人就被取消关注了——而他看到的是自己点了两次「关注」。
+    2. **客户端没法知道当前状态**（当时没有任何读接口回答「我是否已关注」），
+       于是按钮只能猜。猜错 + toggle = **想关注却取消了关注**。
+
+    幂等之后，「关注」与「取消关注」是两个不同的动作，重试多少次结果一样。
+    """
+    _check_followee(db, user_id, user)
+    if not _follow_row(db, user.id, user_id):
+        db.add(Follow(follower_id=user.id, followee_id=user_id))
     return {"following": True}
 
 
+@router.delete("/users/{user_id}/follow")
+def unfollow(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """CNT-022 取消关注。同样幂等：没关注过也返回「未关注」，不报错。
+
+    不存在的关注当作已经达到目标状态——对「取消」这个动作来说，
+    「本来就没有」和「刚刚删掉」对用户是同一件事。
+    """
+    _check_followee(db, user_id, user)
+    row = _follow_row(db, user.id, user_id)
+    if row:
+        db.delete(row)
+    return {"following": False}
+
+
 @router.get("/users/{user_id}/follow-stats")
-def follow_stats(user_id: int, db: Session = Depends(get_db)):
+def follow_stats(user_id: int, db: Session = Depends(get_db),
+                 viewer: User | None = Depends(get_optional_user)):
+    """CNT-022 关注计数 + **访问者自己的关注状态**。
+
+    `viewer_following` 是这一批补的那个读接口：没有它，想在页面上画
+    「关注 / 已关注」就只能猜。匿名访问时为 `None`——**不是 `False`**：
+    「没登录所以不知道」与「登录了但没关注」是两件事，
+    合成一个 `False` 会让界面对游客显示「关注」按钮，点下去才发现要先登录。
+
+    键名特意叫 `viewer_following` 而不是 `following`：这个响应里已经有一个
+    `following`，而它是**「这个人关注了多少人」的计数**。同名不同义是个陷阱——
+    客户端读成「我已关注」时，计数非零就会永远显示「已关注」。
+    """
     followers = db.query(Follow).filter(Follow.followee_id == user_id).count()
     following = db.query(Follow).filter(Follow.follower_id == user_id).count()
-    return {"followers": followers, "following": following}
+    viewer_following = (
+        None if viewer is None or viewer.id == user_id
+        else _follow_row(db, viewer.id, user_id) is not None
+    )
+    return {"followers": followers, "following": following,
+            "viewer_following": viewer_following}

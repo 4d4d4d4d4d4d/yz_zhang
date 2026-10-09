@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 2026-10-09：V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
-> 后端 1236 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
+> 2026-10-09：V117 关注幂等化并接到空间；V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
+> 后端 1242 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
 > （真 Chromium × 构建产物 × 真服务端，10 项）。
@@ -14,6 +14,29 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V117 批次：关注是个 toggle，而没人读得到状态）
+
+> 模块 spec：[90-follow-was-a-toggle-nobody-could-read.md](90-follow-was-a-toggle-nobody-could-read.md)
+>
+> ```
+> PROBE 1 关注一次:             {'following': True}
+> PROBE 2 再点一次（双击/重试）: {'following': False}   ← 撤销了
+> PROBE 3 GET /users/2/follow   405      ← 没有任何读接口回答「我是否已关注」
+>         follow-stats          keys=['followers','following']   ← 只有计数
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **上一批我说错了一句话** | 我说过「关注 web 和 App 都没有」——**错的**。服务端有 `Follow` 表与端点、SDK 有两个方法、web 的 `Community.tsx` 调了 `followUser`。真实情况是：**关系存在，但没有接到它该在的地方**（空间页 0 处），而 `followStats` 没有任何端调用过 | 本批核对 |
+| **CNT-022 它是个 toggle** | `POST` 第二次调用会取消关注。手机上双击、或弱网自动重试一次，用户刚关注的人就不见了——而他看到的是自己点了两次「关注」 | `::test_cnt022_follow_is_idempotent...`（放回 toggle 即红） |
+| **而且客户端读不到状态** | 当时没有任何接口回答「我是否已关注」，于是按钮只能猜。**两件事合起来才是真毛病：猜错 + toggle = 想关注却取消了关注**——一个按钮有一半概率做反 | `::test_cnt022_viewer_can_read_whether_they_follow` |
+| **同名不同义的陷阱** | `follow-stats` 的 `following` 是**「这个人关注了多少人」的计数**，而 `followUser` 返回的 `following` 是「我是否已关注」。客户端读错时，按钮状态**取决于一个与它无关的数字**：计数非零就永远显示「已关注」。新键特意叫 `viewer_following` | `::test_cnt022_stats_following_is_a_count_not_my_state` |
+| **幂等化** | `PUT` 关注 / `DELETE` 取消，各自幂等；`POST` 下线（405）。留着 toggle 比删掉更糟：两个动作并存时，下一个人会从两个里挑一个用。附带好处是**内容流里那个无状态的「关注」按钮变安全了**——最坏只是重复关注一次 | `::test_cnt022_the_old_toggle_is_gone` |
+| **匿名是 `null` 不是 `false`** | 「没登录所以不知道」与「登录了但没关注」是两件事。合成一个 `false` 会给游客画一个**点下去才发现要先登录**的按钮。看自己的页面也是 `null`——自己的空间上不该有关注按钮 | 同上；web `::a visitor…is sent to login` |
+| **可选鉴权只认人，不放权** | 新增 `get_optional_user`，**复用** `get_current_user`（会话吊销/封禁/注销那几道判断抄第二遍必然漏一条）。它把坏 token 统一降级成匿名，所以边界写死：只许用在本来就允许匿名的读接口，**绝不能**用来授权写操作——那会把「会话已吊销」悄悄变成「当成游客放进来」 | `::test_cnt022_optional_auth_never_grants_anything`（用它放权即红） |
+| **两端都接到空间上** | web `PublicSpace` 与 App `PublicSpaceScreen` 各加按钮，状态从服务端读，关注与取消走各自动作；关注数读不到不让整页报错——它是页面上的一个小角落，正文是人和作品 | `web/.../Spaces.test.tsx`（3 条）、`app/spaces.test.tsx`（3 条） |
+| **我自己的测试差点什么都没证明** | 第一版两端用例都用 `{following: 7, viewer_following: true}`，红验「把计数当成我的状态」时**两条都是绿的**——`!!7` 与 `true` 恰好一致，用例根本分不出两个键。改成**两个键故意取相反的真值**（他关注 0 人、而我已关注他）才真的红。**一个看起来合理的断言，可能对它声称要防的那件事完全无能** | 两端各重做一次红验 |
 
 ## 已实现（V115/V116 批次：个人空间进入原生 App）
 

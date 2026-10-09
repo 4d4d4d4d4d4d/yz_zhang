@@ -212,3 +212,50 @@ describe('SPACE-028 分享深链', () => {
     expect(prefixes).toContain('/people');
   });
 });
+
+describe('CNT-022 关注：状态从服务端读，关注与取消是两个动作', () => {
+  it('已关注的空间点一下是取消关注，不是再关注一遍', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({
+      '/spaces/9': { body: { ...PERSON, introduction: '', items: [] } },
+      // 两个键**故意取相反的真值**：他关注了 0 个人，而我已经关注了他。
+      // 读成 `following` 就会得到 false，画出「关注」——而真相是「已关注」。
+      '/users/9/follow-stats': { body: { followers: 3, following: 0, viewer_following: true } },
+      '/users/9/follow': { body: { following: false } },
+    }, calls);
+    render(<PublicSpaceScreen client={client} userId={9} onBack={() => {}}
+                              onOpenConversation={() => {}} />);
+    // `following` 是「他关注了多少人」的计数，不是我的状态
+    await waitFor(() => expect(screen.getByText('3 人关注')).toBeTruthy());
+    fireEvent.press(screen.getByText('已关注（点此取消）'));
+    await waitFor(() => expect(screen.getByText('2 人关注')).toBeTruthy());
+    const hit = calls.find((c) => c.path === '/users/9/follow');
+    // 改造前服务端是 toggle 而客户端读不到状态：猜错就把「想关注」变成「取消关注」
+    expect(hit!.method).toBe('DELETE');
+  });
+
+  it('未关注的空间点一下是 PUT（幂等，弱网重试不会撤销）', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({
+      '/spaces/9': { body: { ...PERSON, introduction: '', items: [] } },
+      '/users/9/follow-stats': { body: { followers: 0, following: 0, viewer_following: false } },
+      '/users/9/follow': { body: { following: true } },
+    }, calls);
+    render(<PublicSpaceScreen client={client} userId={9} onBack={() => {}}
+                              onOpenConversation={() => {}} />);
+    fireEvent.press(await screen.findByText('关注'));
+    await waitFor(() => expect(screen.getByText('1 人关注')).toBeTruthy());
+    expect(calls.find((c) => c.path === '/users/9/follow')!.method).toBe('PUT');
+  });
+
+  it('关注数读不到不该让整页报错——它是页面上的一个小角落', async () => {
+    const client = makeClient({
+      '/spaces/9': { body: { ...PERSON, introduction: '十年结构', items: [] } },
+      '/users/9/follow-stats': { status: 500, body: { detail: { code: 'x', message: '炸了' } } },
+    });
+    render(<PublicSpaceScreen client={client} userId={9} onBack={() => {}}
+                              onOpenConversation={() => {}} />);
+    await waitFor(() => expect(screen.getByText('十年结构')).toBeTruthy());
+    expect(screen.queryByText('炸了')).toBeNull();
+  });
+});

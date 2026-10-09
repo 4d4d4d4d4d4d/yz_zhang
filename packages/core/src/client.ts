@@ -657,11 +657,26 @@ export class PlatformClient {
       'GET', `/contents/${contentId}/comments`,
     );
   }
+  /** CNT-022 关注。**幂等**——重复调用仍然是「已关注」。
+   *
+   *  改造前这是一个 `POST` toggle：手机上双击、或弱网下自动重试，
+   *  用户刚关注的人就被取消了。旧签名没有保留，因为它兼容的是一个
+   *  服务端已经不接受的动作（405），留着只会让下一个人以为它能用。
+   */
   followUser(userId: number) {
-    return this.request<{ following: boolean }>('POST', `/users/${userId}/follow`);
+    return this.request<{ following: boolean }>('PUT', `/users/${userId}/follow`);
   }
+  unfollowUser(userId: number) {
+    return this.request<{ following: boolean }>('DELETE', `/users/${userId}/follow`);
+  }
+  /** `following` 是**这个人关注了多少人**的计数；
+   *  `viewer_following` 才是「我是否已关注他」，匿名时为 `null`
+   *  （「没登录所以不知道」与「登录了但没关注」是两件事）。
+   */
   followStats(userId: number) {
-    return this.request<{ followers: number; following: number }>('GET', `/users/${userId}/follow-stats`);
+    return this.request<{ followers: number; following: number; viewer_following: boolean | null }>(
+      'GET', `/users/${userId}/follow-stats`,
+    );
   }
 
   // ---- circles ----
