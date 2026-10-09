@@ -318,3 +318,80 @@ def test_cron_job_list_covers_every_job_endpoint(client):
         if "/jobs/" in getattr(route, "path", "") and "POST" in getattr(route, "methods", set())
     }
     assert exposed - scheduled == set(), f"以下 job 端点没有被 cron 排期：{exposed - scheduled}"
+
+
+def test_im052_migration_backfills_without_destroying_history():
+    """IM-052 的迁移要**非破坏性**地处理存量重复单聊。
+
+    存量库里可能已经有重复的单聊对（那正是这一批在修的病留下的痕迹）。
+    直接建唯一索引会被顶回来，所以迁移先回填：最早那条拿键，
+    **重复的留 NULL**，而消息一条不动、会话行一条不删。
+
+    为什么不在迁移里合并：**合并用户的聊天记录是不可逆的**，而且
+    `ConversationRead` 的已读位点会一起错位。分叉已经发生了，先止住它；
+    要不要合并是产品决定，不是一次 schema 变更该顺手做的事。
+    """
+    import json
+    import os
+    import sqlite3
+    import subprocess
+    import sys
+    import tempfile
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    with tempfile.TemporaryDirectory() as tmp:
+        url = f"sqlite:///{tmp}/im.db"
+        env = {**os.environ, "PLATFORM_DATABASE_URL": url, "PLATFORM_ENV": "sandbox"}
+        # 先建到**加这一列之前**那个版本
+        subprocess.run([sys.executable, "-m", "alembic", "upgrade", "b0a120260004"],
+                       cwd=root, env=env, check=True, capture_output=True)
+
+        db = sqlite3.connect(f"{tmp}/im.db")
+        cols = {r[1]: r for r in db.execute("pragma table_info(conversations)")}
+
+        def ins(table: str, given: dict) -> None:
+            """按表的 NOT NULL 列补零值——逐列手写会在加字段时坏掉。"""
+            row = dict(given)
+            for _cid, name, typ, notnull, dflt, pk in db.execute(f"pragma table_info({table})"):
+                if name in row or dflt is not None or pk:
+                    continue
+                if notnull:
+                    row[name] = 0 if typ.upper().startswith(("INT", "BOOL", "FLOAT", "NUM")) else ""
+            keys = list(row)
+            db.execute(
+                f"insert into {table} ({','.join(keys)},created_at) "
+                f"values ({','.join('?' * len(keys))},datetime('now'))",
+                [row[k] for k in keys],
+            )
+
+        assert "direct_key" not in cols, "这个版本上还不该有 direct_key"
+        legacy = [
+            ("direct", [1, 2], {}),          # 1 最早 → 拿键
+            ("direct", [2, 1], {}),          # 2 重复对（顺序相反）→ 留 NULL
+            ("direct", [1, 3], {}),          # 3 另一对 → 拿键
+            ("task", [1, 2], {"task_id": 9}),   # 任务会话 → 不参与
+            ("group", [1, 2, 3], {"owner_id": 1}),  # 群聊 → 不参与
+            ("direct", [7], {}),             # 坏数据：只有一个人 → 不给键
+        ]
+        for i, (kind, parts, extra) in enumerate(legacy, start=1):
+            ins("conversations", {"id": i, "kind": kind, "participants": json.dumps(parts), **extra})
+        for cid in (1, 2, 3):
+            ins("messages", {"conversation_id": cid, "sender_id": 1,
+                             "content": f"会话{cid}的消息", "kind": "text"})
+        db.commit()
+
+        subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"],
+                       cwd=root, env=env, check=True, capture_output=True)
+
+        keys = {r[0]: r[1] for r in db.execute("select id, direct_key from conversations")}
+        assert keys[1] == "1-2", "最早那条没拿到键"
+        assert keys[2] is None, "重复对应当留 NULL，而不是被塞一个冲突的键"
+        assert keys[3] == "1-3"
+        assert keys[4] is None and keys[5] is None, "任务会话与群聊不该有单聊键"
+        assert keys[6] is None, "参与者不足两人的坏数据不该被硬塞一个键"
+
+        # 非破坏性：行没删、消息没动
+        assert db.execute("select count(*) from conversations").fetchone()[0] == 6
+        assert db.execute("select count(*) from messages").fetchone()[0] == 3
+        db.close()

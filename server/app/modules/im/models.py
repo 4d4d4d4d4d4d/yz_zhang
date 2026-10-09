@@ -15,6 +15,24 @@ class Conversation(Base):
     kind: Mapped[str] = mapped_column(String(20), default="direct")
     task_id: Mapped[int | None] = mapped_column(Integer, nullable=True, unique=True)
     participants: Mapped[list] = mapped_column(JSON, default=list)  # 用户 id 列表
+    # IM-052 单聊的「参与者对」规范化键（小 id-大 id），**唯一**。
+    #
+    # 为什么要这一列：`participants` 是 JSON，数据库没法在它上面建唯一约束，
+    # 于是 `get_or_create_direct` 的 check-then-insert **没有任何东西兜底**——
+    # 并发会建出两条单聊，两人各说各话、消息分在两条线上。
+    # 探针实测：并发 10 次开同一个单聊，拿到两个会话 id。
+    #
+    # **没有约束的地方，竞态不报错，只把数据悄悄弄错**，比 500 难查得多
+    # （V112 的钱包是同一个形状，但那张表有唯一约束，所以它只是 500）。
+    #
+    # 任务会话与群聊是 NULL：两个库都允许唯一列里有多个 NULL，
+    # 所以这一列只约束它该约束的那一类。
+    # `index=True, unique=True` 而不是只写 `unique=True`：后者在模型侧渲染成
+    # UniqueConstraint，而迁移建的是**具名唯一索引**，两边对不上——
+    # `alembic check` 当场报漂移（V109 的列属性闸门刻意不比索引名，
+    # 所以那条测试看不见它，是 `alembic check` 抓到的）。
+    direct_key: Mapped[str | None] = mapped_column(
+        String(40), nullable=True, index=True, unique=True)
     # IM-003 群聊元信息。放在同一张表而不是另起一张：成员资格就是
     # `participants`，发消息的鉴权（_get_conv）因此**自动**覆盖群聊——
     # 另起一张表就要再写一遍鉴权，而那正是「同一条规则两份实现」。

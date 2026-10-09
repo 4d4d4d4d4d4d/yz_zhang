@@ -111,6 +111,7 @@
 | 88 | 独立个体网络、公开空间与合作入口（当前产品与 UI 基准） | [88-individual-network-and-spaces.md](./88-individual-network-and-spaces.md) | P0 |
 | 89 | 个人空间进入原生 App，与只看见双引号的闸门 | [89-spaces-on-the-app-and-single-quote-blindness.md](./89-spaces-on-the-app-and-single-quote-blindness.md) | P0 |
 | 90 | 关注是个 toggle，而没有接口能告诉客户端当前状态 | [90-follow-was-a-toggle-nobody-could-read.md](./90-follow-was-a-toggle-nobody-could-read.md) | P0 |
+| 91 | 单聊并发会建出两条会话（规范化唯一键 / 非破坏性迁移） | [91-direct-chat-forked-under-concurrency.md](./91-direct-chat-forked-under-concurrency.md) | P0 |
 
 ## 功能点编号与优先级约定
 

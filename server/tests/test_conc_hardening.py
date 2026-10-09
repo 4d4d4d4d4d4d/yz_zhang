@@ -275,3 +275,106 @@ def test_conc053_first_wallet_touch_never_raises(requester):
         n = conn.execute(sa.text("SELECT COUNT(*) FROM wallet_accounts WHERE user_id = :u"),
                          {"u": uid}).scalar()
     assert n == 1, f"并发之后 {n} 行钱包账户——唯一约束本该只允许一行"
+
+
+# ---------- IM-052 单聊并发不许建出两条会话 ----------
+def test_conc055_concurrent_direct_open_yields_one_conversation(client, requester, worker):
+    """两个人同时开同一个单聊，只能有一条会话。
+
+    改造前 `get_or_create_direct` 是 check-then-insert，而 `participants` 是
+    JSON——库里**建不了唯一约束**，于是并发会建出两条：两人各说各话、
+    消息分在两条线上，而**谁都不会看到错误**。
+    探针实测：并发 10 次开同一个单聊，拿到两个会话 id。
+
+    V112 的钱包是同一个形状，但那张表有唯一约束，所以它只是 500。
+    **没有约束的地方，竞态不报错，只把数据悄悄弄错**——比 500 难查得多。
+
+    这一条**两侧交替发起**：规范化键必须让 (A,B) 与 (B,A) 落到同一条，
+    否则两个人各从自己那一侧点「发消息」就又分叉了。
+
+    **边界要说清**：进程内的线程**不能稳定复现那个竞态窗口**——SQLite 把写
+    串行化了，等第二个线程查的时候第一个常常已经提交。实测把修法退回
+    check-then-insert，这一条仍然是绿的。所以真正的保证分两层：
+
+    - **唯一索引**（迁移建的）让库拒绝重复行——那是兜底，不靠代码时序；
+    - 代码接住冲突并重读，不把它变成 500——这一点由下面那条结构断言钉住。
+
+    这一条本身钉的是「并发之后库里只有一条、而且没人拿到异常」。
+    """
+    from app.modules.im import service as im
+
+    a, b = requester["id"], worker["id"]
+
+    def once(i):
+        with SessionLocal() as db:
+            conv = im.get_or_create_direct(db, *( (a, b) if i % 2 else (b, a) ))
+            db.commit()
+            return conv.id
+
+    results = _parallel(once, 8)
+    errors = [r for r in results if isinstance(r, Exception)]
+    assert not errors, f"并发开单聊抛异常了：{errors!r}"
+    assert len(set(results)) == 1, f"建出了多条会话：{sorted(set(results))}"
+
+    with engine.begin() as conn:
+        rows = conn.execute(sa.text(
+            "SELECT COUNT(*) FROM conversations WHERE direct_key = :k"
+        ), {"k": im.direct_key(a, b)}).scalar()
+    assert rows == 1, f"库里有 {rows} 条同一对的单聊——唯一索引本该只允许一条"
+
+
+def test_im052_key_is_normalised_so_either_side_finds_the_same_row(client, requester, worker):
+    """(A,B) 与 (B,A) 必须是同一个键。
+
+    不规范化的后果不是报错，是**两个人各有一条「和对方的会话」**，
+    而各自都看不到对方发的话。
+    """
+    from app.modules.im import service as im
+
+    a, b = requester["id"], worker["id"]
+    assert im.direct_key(a, b) == im.direct_key(b, a)
+    with SessionLocal() as db:
+        first = im.get_or_create_direct(db, a, b)
+        db.commit()
+        again = im.get_or_create_direct(db, b, a)
+        assert again.id == first.id
+
+
+def test_im051_opening_a_direct_does_not_scan_every_conversation(client, requester, worker):
+    """开单聊不许把全平台的单聊都取出来。
+
+    改造前这个函数 `db.query(Conversation).filter(kind=='direct').all()`
+    然后在 Python 里比参与者集合——**每开一次私聊扫一遍全表**，
+    用户量一上来就是首屏最慢的那个请求。
+
+    这一条不量时间（机器不同数字不同，而那种断言会在别人的机器上误报），
+    而是钉住**查询里带着键**：按键查走的是唯一索引，与表里有多少行无关。
+    """
+    import inspect
+
+    from app.modules.im import service as im
+
+    src = inspect.getsource(im.get_or_create_direct)
+    assert "direct_key ==" in src, "没有按 direct_key 查，可能又回到了全表扫描"
+    assert ".all()" not in src, "函数里还有 .all()——那是把整张表取出来的写法"
+
+
+def test_im052_the_unique_conflict_is_recovered_not_surfaced_as_500():
+    """撞上唯一索引时要重读，而不是把 500 抛给用户。
+
+    为什么这一条是**结构断言**而不是跑并发：进程内线程复现不了那个窗口
+    （见上面那条的边界说明），而唯一索引在生产上一定会偶尔撞到——
+    撞到时用户看到的应当是会话打开了，不是「服务器错误」。
+    V112 的钱包是同一个写法，那一批已经证明过这条路径的必要性。
+    """
+    import inspect
+
+    from app.modules.im import service as im
+
+    src = inspect.getsource(im.get_or_create_direct)
+    assert "IntegrityError" in src, "没有接住唯一约束冲突——并发撞上就是 500"
+    assert "begin_nested" in src, (
+        "没有用 SAVEPOINT：插入失败会毒化外层事务，"
+        "而调用方常常正在做发消息/建任务会话这种多步写入"
+    )
+    assert "raise" in src, "冲突后读不到仍要抛——吞掉异常会换成后面更难查的 None"
