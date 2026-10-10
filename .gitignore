@@ -12,6 +12,9 @@ __pycache__/
 *.pyc
 server/data/
 server/test_platform.db
+# 仓库根的那一份：探针脚本在根目录跑时会建出来（V123 误提交过一次）。
+# 会把垃圾留在工作区的东西，下一个人就不敢跑它——V109 已经为此修过一次脚本。
+test_platform.db
 .vite/
 # CONC-003 开启 WAL 后 SQLite 会产生的旁路文件
 *.db-wal
