@@ -1,0 +1,16 @@
+env: load .env.local
+env: export EXPO_PUBLIC_API_BASE_URL
+Starting Metro Bundler
+iOS Bundled 997ms node_modules/expo/AppEntry.js (470 modules)
+Android Bundled 1674ms node_modules/expo/AppEntry.js (575 modules)
+
+Exporting 1 bundle for ios:
+_expo/static/js/ios/AppEntry-452466bc44208af2dba181cc5ac2c75c.hbc (1.75 MB)
+
+Exporting 1 bundle for android:
+_expo/static/js/android/AppEntry-6a43755f9c5ce111e12e75b4b34a00f9.hbc (1.76 MB)
+
+Exporting 1 file:
+metadata.json (250 B)
+
+App exported to: dist-integration

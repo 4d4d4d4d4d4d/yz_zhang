@@ -1,0 +1,11 @@
+Source: d887da7306ff3037b77bb4189b91326b972a9139 + codex/server-integration changes
+Server: /opt/opc-platform; compose opc-staging; 127.0.0.1:18080
+Readiness: {"ready":true,"env":"test","checks":{"db":"ok","ratelimit":"redis","migration":"ok"}}
+HTTP smoke: all steps passed; simulated 20000 cents contract; executor received 18400 cents; escrow zero; 22 jobs present.
+Shared SDK against localhost:5173 and localhost:18080: accountId=3; taskIds=[4,3,2]; sharedData=true.
+Image upload: returned URL; 68 bytes; HTTP 200 after image/container rebuild.
+Isolated PostgreSQL restore: money.ok=true; accounts_checked=6; total_holdings_cents=550000; chain.valid=true; total=10.
+Web/core tests: 84 + 56 passed; build and lint passed.
+App tests: 21 passed; typecheck passed; Android and iOS Hermes bundles exported.
+Device installation: not tested; xcrun simctl unavailable. No APK/IPA created.
+Providers: mock/sandbox/local only. No live money, real identity verification or live AI integration verified.
