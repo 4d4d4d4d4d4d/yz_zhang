@@ -58,6 +58,10 @@ def _make_engine(url: str):
         max_overflow=settings.DB_MAX_OVERFLOW,
         pool_recycle=settings.DB_POOL_RECYCLE,
         pool_pre_ping=settings.DB_POOL_PRE_PING,
+        # CONC-060 池满时等 10 秒就放弃，而不是 SQLAlchemy 默认的 30 秒。
+        # 30 秒的等待在用户那边等于「卡死了」，他会刷新——于是又来一个请求，
+        # 池更满。**让他快点看到一句话，比让他等半分钟再看到同一句话好。**
+        pool_timeout=settings.DB_POOL_TIMEOUT,
     )
 
 

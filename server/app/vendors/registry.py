@@ -173,6 +173,27 @@ def startup_check() -> None:
             "PLATFORM_TAX_MODE=withholding 但 PLATFORM_TAX_PROVIDER=none："
             "声明了要代扣却没有配置扣缴规则，等于没扣"
         )
+    # CONC-061 连接预算的算术必须在**启动时**就对，而不是在高峰时由
+    # PostgreSQL 来告诉你。池满了不是某个接口变慢，是
+    # `FATAL: sorry, too many clients already`——**每一个接口同时 500**，
+    # 包括健康检查，于是编排器开始重启容器，而重启后它又去抢同样多的连接。
+    #
+    # 这条拦的是一类具体的改动：有人把 `--workers 2` 调成 8，或者把副本数
+    # 从 1 加到 3，期望「扛得更多」，而池参数没动——于是部署一上去就全挂。
+    # 这个算术没有任何地方在算，所以它迟早会错。
+    if settings.DATABASE_URL and not settings.DATABASE_URL.startswith("sqlite"):
+        per_process = settings.DB_POOL_SIZE + settings.DB_MAX_OVERFLOW
+        demand = settings.API_WORKERS * per_process
+        if demand > settings.DB_CONNECTION_BUDGET:
+            problems.append(
+                f"连接预算不够：PLATFORM_API_WORKERS={settings.API_WORKERS} × "
+                f"(池 {settings.DB_POOL_SIZE} + 溢出 {settings.DB_MAX_OVERFLOW}) "
+                f"= {demand} 条连接，超过 PLATFORM_DB_CONNECTION_BUDGET="
+                f"{settings.DB_CONNECTION_BUDGET}。"
+                "数据库连接耗尽时每一个接口都会同时 500（含健康检查）。"
+                "请下调 worker/池参数，或在确认数据库 max_connections 足够后"
+                "上调预算，或在应用与数据库之间放 PgBouncer（transaction 模式）"
+            )
     # CAP-020 一个客户端渲染不出来的强制验证 = 把全站用户锁在门外。
     # 这不是「配置不全」，是登录不可用，所以必须硬拦截而不是打一行日志。
     captcha = _REGISTRY["captcha"].get(settings.CAPTCHA_PROVIDER)

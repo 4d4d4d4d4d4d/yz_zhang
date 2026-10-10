@@ -84,6 +84,22 @@ class Settings:
     DB_MAX_OVERFLOW = int(os.environ.get("PLATFORM_DB_MAX_OVERFLOW", "20"))
     DB_POOL_RECYCLE = int(os.environ.get("PLATFORM_DB_POOL_RECYCLE", "1800"))
     DB_POOL_PRE_PING = os.environ.get("PLATFORM_DB_POOL_PRE_PING", "1") != "0"
+    # CONC-060 池满时等多久。SQLAlchemy 默认 30 秒，而 30 秒的等待在用户那边
+    # 等于「这页卡死了」——他会刷新，于是又来一个请求，池更满。
+    # 等 10 秒拿不到就直接失败，让他看到一句话而不是一个转圈。
+    DB_POOL_TIMEOUT = int(os.environ.get("PLATFORM_DB_POOL_TIMEOUT", "10"))
+    # CONC-061 **整个部署**允许占用的数据库连接数上限。
+    #
+    # 这个数不是给代码用的，是给算术用的：
+    #   进程数 × (DB_POOL_SIZE + DB_MAX_OVERFLOW) ≤ 预算
+    # 超了之后 PostgreSQL 直接拒连（`FATAL: sorry, too many clients already`），
+    # 而那不是某个接口变慢，是**每一个接口同时 500**。
+    # PostgreSQL 默认 max_connections=100，其中 3 个留给超级用户，
+    # 再留一些给迁移与人工排查，所以预算默认按 80 算。
+    DB_CONNECTION_BUDGET = int(os.environ.get("PLATFORM_DB_CONNECTION_BUDGET", "80"))
+    # 本部署会起多少个开池的进程（API worker 数 × 副本数）。
+    # 部署方式改了而这个数没跟着改，CONC-061 的自检就会在启动时拦住。
+    API_WORKERS = int(os.environ.get("PLATFORM_API_WORKERS", "2"))
     # CONC-003 SQLite 本地并发：WAL + busy_timeout（毫秒）
     SQLITE_BUSY_TIMEOUT_MS = int(os.environ.get("PLATFORM_SQLITE_BUSY_TIMEOUT_MS", "5000"))
     # CONC-021 分布式限流后端：配置了 Redis 就用 Redis，否则进程内内存实现
@@ -100,7 +116,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.112.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.113.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

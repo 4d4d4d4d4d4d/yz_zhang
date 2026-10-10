@@ -98,6 +98,18 @@ V88 把最关键的一条（发布必填字段）提升成了类型约束，但
 | **限流（滑动窗口）** | `core/ratelimit.py` | 注册/登录/改密/换绑的暴力尝试 |
 | **对账不变量** | `risk/service.py::reconcile` | 五条硬不变量兜底，不平自动开工单+告警 |
 
+**连接预算**（V123，98 号 spec）：`进程数 × (池 + 溢出) ≤ 预算`。
+当前 `--workers 2` × (10 + 20) = 60，预算 80（postgres 默认 100 − 超级用户 3 − 运维 10 = 87）。
+**这条不等式由启动自检拦着**（GO-LIVE 第 14 条）：改 worker 数或副本数时必须同时改
+`PLATFORM_API_WORKERS`，否则生产起不来。超出之后的表现不是变慢，是
+`FATAL: sorry, too many clients already`——每一个接口同时 500，包括健康检查。
+池满时等 `PLATFORM_DB_POOL_TIMEOUT`（默认 10 秒）即放弃，不用 SQLAlchemy 默认的 30 秒。
+
+**V123 实测**（本容器 + SQLite 单文件，`--scenario read --concurrency 32 --requests 400`）：
+69.8 rps / p50 447.6ms / p95 583.5ms / p99 703.5ms，零错误。
+**这个数字不是容量证明**：跑的是 SQLite 而生产是 PostgreSQL（写路径并发特性完全不同）、
+单次运行、且只有 read/write 两个场景。要变成容量证明缺的四件记在台账 `CONC-062`。
+
 **容量基线**（`scripts/loadtest.py`，**V110 重测**；配置：本容器 + SQLite 单文件 +
 uvicorn 单 worker + 并发 16 + 每场景一次运行）：
 
@@ -125,7 +137,7 @@ python -m scripts.loadtest --concurrency 16 --requests 600 --scenario read
 python -m scripts.loadtest --concurrency 16 --requests 400 --scenario write
 ```
 
-这套组合已被 **1259 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
+这套组合已被 **1292 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
 「重复接受报名 / 重复托管 / 重复交付 / 重复验收 / 重复里程碑放款」全部拒绝且零副作用。
 
 ### 2.2 多副本并发安全（V42 已补齐，见 [18-concurrency.md](specs/18-concurrency.md)）
@@ -624,7 +636,7 @@ Postgres 双引擎迁移检查与部署验收。
 **已经很扎实的**：交易闭环、资金安全与守恒、纠纷程序正义、账号安全、审计留痕、
 多副本并发安全、外部供应商可替换性、事件投递的失败隔离与可补做、
 个税代扣的资金隔离与可对账、反洗钱的可疑识别与保密、边界防护的跨副本一致性、
-定时任务编排的完整性、处置动作的一致性。这些有 1259 个测试钉着。
+定时任务编排的完整性、处置动作的一致性。这些有 1292 个测试钉着。
 
 **离真正上线还差的**（按紧迫度）：
 1. ~~Postgres + 行锁/乐观锁~~ —— **V42 已完成**（切库只改环境变量）

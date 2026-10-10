@@ -31,6 +31,7 @@
 | 11 | `PLATFORM_CORS_ORIGINS ≠ *` | 收紧到白名单域名 |
 | 12 | `PLATFORM_EXPOSE_DOCS` 关闭 | 生产不暴露 API 文档 |
 | 13 | `PLATFORM_TRUSTED_PROXY_HOPS` 已设 | 反代后取不到真实 IP，按 IP 的限流与封禁会全部失效 |
+| 14 | `PLATFORM_API_WORKERS` × (池 + 溢出) ≤ `PLATFORM_DB_CONNECTION_BUDGET` | 连接耗尽不是某个接口变慢，是 `FATAL: sorry, too many clients already`——**每一个接口同时 500，包括健康检查**，于是编排器开始重启容器，而重启后它又去抢同样多的连接。拦的是一类具体改动：把 worker 从 2 调到 8、或副本从 1 加到 3，而池参数没动 |
 
 自查命令（不需要真的起服务）：
 

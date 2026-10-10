@@ -1,6 +1,6 @@
 # 用户愿景与前后端实现核对
 
-更新：2026-10-10（V122：「不懂就问」接上两端——法律问答三种结局可区分、平台攒的经验读得回来；V120：分期合约整单放款的语义钉死，两端放款前先说清会放掉几期；V117~V119：关注状态可读、单聊并发分叉修复、代扣明细与 PIPL 权利进 App；V115/V116：个人空间进入原生 App，四入口重排）。当前设计基准：[Spec 88](specs/88-individual-network-and-spaces.md)。定位讨论：[PRODUCT-DIRECTION.md](PRODUCT-DIRECTION.md)。商业放行另见 [COMMERCIAL-READINESS.md](COMMERCIAL-READINESS.md)。
+更新：2026-10-10（V123：连接预算与重复付款保护，愿景对照表 [VISION.md](VISION.md) 由闸门核对；V122：「不懂就问」接上两端——法律问答三种结局可区分、平台攒的经验读得回来；V120：分期合约整单放款的语义钉死，两端放款前先说清会放掉几期；V117~V119：关注状态可读、单聊并发分叉修复、代扣明细与 PIPL 权利进 App；V115/V116：个人空间进入原生 App，四入口重排）。当前设计基准：[Spec 88](specs/88-individual-network-and-spaces.md)。定位讨论：[PRODUCT-DIRECTION.md](PRODUCT-DIRECTION.md)。商业放行另见 [COMMERCIAL-READINESS.md](COMMERCIAL-READINESS.md)。
 
 **状态定义**：已实现表示所列范围存在可调用代码；部分表示仅完成具体子集；未实现表示没有可交付闭环。历史功能“存在”不等于经过本轮真机、供应商或生产验收。Web、原生 App、服务器部署分别记录，不混用。
 
@@ -35,7 +35,8 @@
 | 职业资质提交 | 既有提交与审核状态 | 合入远端照片选择/上传/有效期/提交入口 | 既有私密影像与审核接口 | 原生相机/相册真机验收仍缺失 | `app/certifications.tsx`；Spec 87 APP-073 |
 | 实名/短信/内容审核 | 既有界面 | 既有界面 | mock/规则实现 | 正式供应商适配缺失；新空间治理需扩展 | 同上 |
 | 个人/团队订阅收费 | 未实现 | 未实现 | 未实现完整订阅生命周期 | 定价、续订、额度、账单、退款未落地 | Spec 88 §7 |
-| 运行基础 | Vite/PWA，移动 Web | Expo 源码及测试 | PostgreSQL/Redis/API/worker 私有联调 | 域名/HTTPS、容量与恢复目标、正式值班未放行 | OPERATIONS.md |
+| 运行基础 | Vite/PWA，移动 Web | Expo 源码及测试 | PostgreSQL/Redis/API/worker 私有联调；**连接预算由启动自检拦着**（V123） | 域名/HTTPS、**容量证明**（压测仍打 SQLite、单次运行，CONC-062）、正式值班未放行 | OPERATIONS.md；[98 号 spec](specs/98-concurrency-and-capacity-for-real-traffic.md) |
+| 安全与越权 | 安全响应头、写路径限流、跨副本封禁、人机验证 | 同后端策略 | 四眼原则、资金重复保护（V123）、运营审计 | **146 个带资源 id 的端点没有「换成别人的 id」的覆盖记账**（SEC-060）；授权矩阵无明文（SEC-061）；外部渗透测试未做 | [99 号 spec](specs/99-security-for-real-money.md) |
 | 原生依赖与发布安全 | 不适用 | 依赖审计与真机验收仍阻塞 | 不适用 | 10-08 npm 安装报告 90 项（含开发依赖），需升级与复审；不宣称可上架 | CHANGELOG-2026-10-07.md |
 | 高级极简 UI | 暖白四入口、新空间、登录精简 | **V115 导航已对齐四入口**（发现/合作/消息/我的空间；通知与钱包移至常驻顶栏，一跳可达）；视觉仍是旧样式 | SDK 共用，不影响鉴权与业务状态 | App 暖白视觉、封面媒体、共享元素转场未完成 | `spaces.css`；`app/App.tsx` |
 

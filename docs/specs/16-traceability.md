@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
 > 2026-10-09：V119 法定权利入口进 App；V118 单聊并发分叉修复；V117 关注幂等化并接到空间；V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
-> 后端 1259 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
+> 后端 1292 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
 > （真 Chromium × 构建产物 × 真服务端，12 项）。
@@ -14,6 +14,32 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V123 批次：连接预算、重复付款，与一页会自己对账的愿景表）
+
+> 模块 spec：[98 并发与容量](98-concurrency-and-capacity-for-real-traffic.md)、
+> [99 安全](99-security-for-real-money.md)；对照表 [../VISION.md](../VISION.md)
+>
+> ```
+> --workers 2 × (池 10 + 溢出 20) = 60 条   postgres 默认 max_connections=100
+> 动钱的函数 6 个，用了幂等键的 2 个，而 idempotency.py 写着「资金类强制」
+> 带资源 id 的端点 146 个，没有记账说哪些做过「换成别人的 id」的验证
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **CONC-061 三个数字相乘，没有人在算** | `进程数 × (池 + 溢出) ≤ 预算` 这条不等式此前无人验。今天 60 < 100 活得下去，但把 `--workers` 调成 8 或副本加到 3——**两种都是看起来只会「扛得更多」的改动**——就会超。超出之后不是某个接口变慢，是 `FATAL: sorry, too many clients already`：**每一个接口同时 500，包括健康检查**，于是编排器开始重启容器，而重启后它又去抢同样多的连接 | `test_connection_budget::test_conc061_connection_demand_fits_the_budget`；启动拦截（GO-LIVE 第 14 条）另有红验 |
+| **CONC-061a 编排文件与声明对账** | worker 数在两份文件里各写一遍，而预算是按声明算的——**改了编排没改声明，算术就在算一个不存在的部署** | `::test_conc061_deployment_worker_count_matches_the_declared_one`（把编排改成 8 即红） |
+| **CONC-061b 预算不超过库能给的** | 默认 100 − 超级用户 3 − 运维 10 = 87，预算定 80。留运维那 10 条是因为**上线当天迁移连不上库，和服务连不上库一样是事故** | `::test_conc061_budget_fits_a_default_postgres` |
+| **CONC-061c 不误伤 SQLite** | 本地与测试跑的都是 SQLite，它没有连接池。**一个假报警多的闸门会被人关掉** | `::test_conc061_sqlite_deployments_are_not_judged_by_this_arithmetic` |
+| **CONC-060 池满时等 10 秒而不是 30 秒** | SQLAlchemy 默认 30 秒。30 秒的等待在用户那边等于「卡死了」，他会刷新——于是又来一个请求，池更满。10 秒既容得下峰值的正常排队，又不让人面对转圈 | `::test_conc060_engine_really_got_the_pool_timeout`（不传给引擎即红——**设了参数不等于传进去了**） |
+| **FIN-070 「资金类强制幂等」是一句没人检查的承诺** | `idempotency.py` 的 docstring 这么写着，而动钱的六个函数里只有两个用了幂等键。**但结论不是补四个**：合约那四条走行锁 + 判状态，并发下比幂等键更强（幂等键挡不住两个不同 key 的并发托管）；而充值提现不能只靠状态机——同一个人连续充两次 100 元是完全正当的。真正的毛病是**没人说过哪条走哪种** | `test_money_duplicate_protection`（12 条）；`MONEY_WRITE_PROTECTION` 声明表，值是机制与理由 |
+| **FIN-070b 声称的机制必须真的在代码里** | 不然这张表只是一份自我声明——**而自我声明正是这一篇在修的东西** | `::test_fin070_claimed_mechanism_is_really_in_the_code`（删掉行锁即红） |
+| **FIN-070c/d 行为验，不比声明** | 同 key 充两次只到账一次；**没带 key 的两次是两笔真充值**（把同额连充误判成重试会吞掉用户的钱）；同 key 换金额必须 409——**把一笔没发生的充值显示成成功，比报错严重得多** | `::test_fin070_duplicate_topup_with_same_key_credits_once` 等 |
+| **FIN-070f 合约要自己拦住重复放款** | 红验逼出来的：第一版只打 `/accept-delivery` 两次，而第二次被**任务**状态机拦下，根本到不了 `release()`。删掉合约里的 `status != funded` 判断，那条测试**仍然是绿的**。**一个因为别处恰好也拦着而通过的断言，等于没有断言** | `::test_fin070_contract_release_guards_itself_not_just_the_task`（直接调服务层绕过任务状态机） |
+| **一页会自己对账的愿景表** | 用户问过三次「平台是否满足我的需求」，前两次我都是现场量一遍、在回答里列个表，然后随对话滚走。落成 `VISION.md`：原话（带出处与日期）+ 逐条状态。**状态不是手写的**——声称「两端已接」的，闸门去数 web 与 App 的真实 SDK 调用 | `test_vision_checklist`（13 条）。**它第一次跑就咬了我**：我凭印象写的方法名有五行是错的（`mySpace`/`recommendTasks` 之类并不存在），逼着去量真名 |
+| **对照表的过期是双向的** | 接上了而表里还写「仅 web」，同样红 | `::test_vision_claimed_web_only_is_still_web_only`（把 V-6 谎报成仅 web 即红） |
+| **第 3 节：不在愿景里但绕不过去的** | 只列愿景条目会给出危险的印象——**功能都做完了就能上线**。资金存管、个税方案、可靠电子签名不是功能，是做这门生意要有的东西 | `::test_vision_lists_the_launch_blockers_it_does_not_cover` |
 
 ## 已实现（V122 批次：平台知道，而没有人问得到）
 
