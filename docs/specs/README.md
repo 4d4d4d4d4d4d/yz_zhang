@@ -114,6 +114,9 @@
 | 91 | 单聊并发会建出两条会话（规范化唯一键 / 非破坏性迁移） | [91-direct-chat-forked-under-concurrency.md](./91-direct-chat-forked-under-concurrency.md) | P0 |
 | 92 | 代扣明细与 PIPL 权利在 App 上够不到（法定权利可达性） | [92-tax-and-pipl-rights-unreachable-on-app.md](./92-tax-and-pipl-rights-unreachable-on-app.md) | P0 |
 | 93 | 分期合约在一次点击里被放光（意图钉死 / 放款前的决定点） | [93-staged-payment-released-in-one-tap.md](./93-staged-payment-released-in-one-tap.md) | P0 |
+| 94 | 经验按子类生长，而不是按样本堆积（聚类 / 子类自生长 / 分歧不被平均） | [94-experience-grows-by-clusters-not-samples.md](./94-experience-grows-by-clusters-not-samples.md) | P1 |
+| 95 | 经验要变成能被调用的工具（检索库 / skill tool / 复用计量） | [95-experience-as-a-callable-tool.md](./95-experience-as-a-callable-tool.md) | P1 |
+| 96 | 拆到能干活为止，并说清每一步谁能闭环（树状拆解 / 执行主体判定） | [96-decompose-into-a-tree-that-can-be-worked.md](./96-decompose-into-a-tree-that-can-be-worked.md) | P1 |
 
 ## 功能点编号与优先级约定
 
