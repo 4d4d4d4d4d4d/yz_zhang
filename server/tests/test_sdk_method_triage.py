@@ -81,7 +81,6 @@ SCHEDULED: dict[str, str] = {
     "myBlocks": "SOCIAL-050",
     # 内容与检索线（06/08 号 spec）
     "search": "SEARCH-050", "searchSuggest": "SEARCH-050", "trendingTerms": "SEARCH-050",
-    "knowledgeSearch": "SEARCH-050", "knowledgeCards": "SEARCH-050",
     "bookmark": "CONTENT-050", "unbookmark": "CONTENT-050", "myBookmarks": "CONTENT-050",
     "userContents": "CONTENT-050", "userReviews": "CONTENT-050",
     "publicProfile": "CONTENT-050", "signVideoUpload": "CONTENT-050",
@@ -103,8 +102,8 @@ SCHEDULED: dict[str, str] = {
     "unregisterDevice": "ACC-042",
     # 客服升级为纠纷（49 号 spec 已建服务端）
     "escalateTicket": "CS-033",
-    # 法律工具与埋点
-    "legalAsk": "LAW-050", "legalDocument": "LAW-050",
+    # 法律工具与埋点（`legalAsk` 已由 V122 的「不懂就问」接上两端）
+    "legalDocument": "LAW-050",
     "trackEvent": "GROWTH-050",
 }
 

@@ -1,6 +1,6 @@
 # 用户愿景与前后端实现核对
 
-更新：2026-10-09（V120：分期合约整单放款的语义钉死，两端放款前先说清会放掉几期；V117~V119：关注状态可读、单聊并发分叉修复、代扣明细与 PIPL 权利进 App；V115/V116：个人空间进入原生 App，四入口重排）。当前设计基准：[Spec 88](specs/88-individual-network-and-spaces.md)。定位讨论：[PRODUCT-DIRECTION.md](PRODUCT-DIRECTION.md)。商业放行另见 [COMMERCIAL-READINESS.md](COMMERCIAL-READINESS.md)。
+更新：2026-10-10（V122：「不懂就问」接上两端——法律问答三种结局可区分、平台攒的经验读得回来；V120：分期合约整单放款的语义钉死，两端放款前先说清会放掉几期；V117~V119：关注状态可读、单聊并发分叉修复、代扣明细与 PIPL 权利进 App；V115/V116：个人空间进入原生 App，四入口重排）。当前设计基准：[Spec 88](specs/88-individual-network-and-spaces.md)。定位讨论：[PRODUCT-DIRECTION.md](PRODUCT-DIRECTION.md)。商业放行另见 [COMMERCIAL-READINESS.md](COMMERCIAL-READINESS.md)。
 
 **状态定义**：已实现表示所列范围存在可调用代码；部分表示仅完成具体子集；未实现表示没有可交付闭环。历史功能“存在”不等于经过本轮真机、供应商或生产验收。Web、原生 App、服务器部署分别记录，不混用。
 
@@ -21,7 +21,7 @@
 | AI 拆解复杂目标 | 发布页可提案/编辑/确认 | **无**（四个方法 App 零调用，台账 APP-077） | 一次提案只产出**一层** DAG；无「谁能闭环」字段 | 不是树；`needs_expert` 无就地求助动作；领域专家质量与项目成功率未验收 | specs 04、17、61；**设计 [96](specs/96-decompose-into-a-tree-that-can-be-worked.md)** |
 | 人机/机机协作 | 既有 Agent 与委托入口 | 部分 | agent/openapi、受限机器授权 | 外部 Agent 生态及设备履约未完成 | `modules/agent`、`openapi`；`MachineMandate` |
 | 个人数字助手 | 未实现完整体验 | 未实现 | 现有执行 Agent 可复用部分基础 | 个人长期记忆、公开接待、跨平台代办缺失 | SPACE-026 |
-| 法务/财务/政策赋能 | 已有资料/合规提示及专业任务 | 部分 | legal/finance/tax/verify 基础 | 专业供应商、来源时效、真实专家复核闭环未验收 | 对应 modules；商业清单 |
+| 法务/财务/政策赋能 | **V122 已接法律问答**（三种结局可区分：命中 / 转律师 / 转 110） | **V122 已接**（同上） | legal/finance/tax/verify 基础；问答有判别位与机器可读补救 | 文书生成仍无客户端（按任务的动作，应在任务/纠纷详情，LAW-050）；专业供应商、来源时效、真实专家复核闭环未验收 | [97](specs/97-the-platform-knows-but-nobody-can-ask.md)；对应 modules；商业清单 |
 | 团队/合作体 | 既有创建、成员、治理、贡献 | 既有相关入口 | team/coop、份额贡献与分配 | 统一持续合作上下文与角色体验不完整 | specs 50、59 |
 | 机器人/工业品共创 | 通用任务可承载部分 | 通用任务 | 通用 DAG/里程碑 | BOM、工程版本、接口、工厂产能、实物测试未实现专门模型 | SPACE-025 |
 | 复杂公司组织活动 | 部分组织/预算/档案入口 | 部分 | 权限、治理、财务记录基础 | 不能宣称可完整替代公司经营/重组；需领域流程与责任验收 | `OrganizationRecords`；商业清单 |
@@ -30,7 +30,7 @@
 | 股权/协议/法律/财务存证 | `/records` 版本/确认/本地加密 | 网页入口/部分记录 | BusinessRecords.sol、平台组织记录 | 记录不自动代表法定权利变更；企业共享文档库缺失 | SMART-CONTRACTS.md |
 | 可信证据链 | 证据/摘要/核验入口 | 部分 | 哈希链、EvidenceRegistry | 真实身份映射、外部存证机构验收未完成 | `modules/anchor`；chain |
 | 链上运行维护 | 操作 CLI，无统一运维 UI | 无 | 已有持久索引/重组回滚/恢复执行器 | 常驻生产索引、付费 keeper、告警接收未启用 | `chain/lib`；`deploy/chain` |
-| 经验积累 | 既有 FAQ/参考/核验相关入口 | **无**（`knowledgeCards`/`knowledgeSearch` 三端零调用） | 采集与检索已实现；**子类层缺失**，检索对全部样本算余弦 | 大类与样本之间可复用的那一层是空的；复用只靠拼提示词，不计量不可验证 | specs 06、83；**设计 [94](specs/94-experience-grows-by-clusters-not-samples.md)、[95](specs/95-experience-as-a-callable-tool.md)** |
+| 经验积累 | **V122 已接**（「不懂就问」页：经验卡与检索，带退化提示与成败列） | **V122 已接**（同上） | 采集与检索已实现；**子类层仍缺失**，检索对全部样本算余弦 | 只能回答「平台见过这些活儿」，还答不了「这一类通常怎么做、多少钱」；复用只靠拼提示词，不计量不可验证 | specs 06、83、[97](specs/97-the-platform-knows-but-nobody-can-ask.md)；**设计 [94](specs/94-experience-grows-by-clusters-not-samples.md)、[95](specs/95-experience-as-a-callable-tool.md)** |
 | 真实支付/分账/提现 | 界面与模拟闭环存在 | 既有界面 | 内部账本、风控/对账基础 | 正式支付与存管适配缺失，不能收真实款 | COMMERCIAL-READINESS.md |
 | 职业资质提交 | 既有提交与审核状态 | 合入远端照片选择/上传/有效期/提交入口 | 既有私密影像与审核接口 | 原生相机/相册真机验收仍缺失 | `app/certifications.tsx`；Spec 87 APP-073 |
 | 实名/短信/内容审核 | 既有界面 | 既有界面 | mock/规则实现 | 正式供应商适配缺失；新空间治理需扩展 | 同上 |

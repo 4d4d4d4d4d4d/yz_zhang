@@ -1,10 +1,10 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
 > 2026-10-09：V119 法定权利入口进 App；V118 单聊并发分叉修复；V117 关注幂等化并接到空间；V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
-> 后端 1252 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
+> 后端 1259 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
-> （真 Chromium × 构建产物 × 真服务端，10 项）。
+> （真 Chromium × 构建产物 × 真服务端，12 项）。
 > 全系统体检报告：[../SYSTEM-CHECK.md](../SYSTEM-CHECK.md)（数据库怎么搭、跑起来有什么问题）。
 > **现状一页看清：[72-status-ledger.md](72-status-ledger.md)**（这份矩阵的缺口也在那里记着）；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
@@ -14,6 +14,30 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V122 批次：平台知道，而没有人问得到）
+
+> 模块 spec：[97-the-platform-knows-but-nobody-can-ask.md](97-the-platform-knows-but-nobody-can-ask.md)
+>
+> ```
+> legalAsk        web=False app=False admin=False
+> knowledgeCards  web=False app=False admin=False
+> knowledgeSearch web=False app=False admin=False
+> 而跑一笔闭环之后：GET /knowledge/cards 立刻多一张卡
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **把六条愿景逐条量了一遍** | 用户复述的六条映到 266 个 SDK 方法上数真实调用：前四条两端都成立，而第 5 条的「不懂领域」与第 6 条的「累积经验」**三端零调用**。积累是真的（闭环后立刻落卡）、问答是真的（有答案有免责声明）——**两件事都没有人读得到**。用户自己写的 `PRODUCT-DIRECTION.md` 第 53 行那条循环断在最后一个箭头上 | 探针：起实例跑 `smoke.py` 后直接查两个端点 |
+| **LAW-051 三种结局只有一个布尔位** | `/legal/ask` 有三条出口（命中 / 超范围转律师 / 命中人身安全关键词转 110），而改造前只由 `refused: bool` 区分——后两种在客户端眼里**一模一样**。于是**一条安全升级通道会被显示成「机器人没答上来」**。补 `refused_reason` 判别位 | `test_legal_enforceability::test_law051_three_outcomes_are_distinguishable_without_reading_prose`（三个值两两不同） |
+| **LAW-051b 高风险不给平台内补救** | `high_risk` 的 `remedy` 刻意是 `null`：这里唯一正确的去处是外部紧急渠道，在它旁边摆「发布咨询任务」是**把紧急情况降级成一笔生意**。两端也按 `refused_reason` 判断而不是按 remedy 在不在——**服务端哪天错给了，客户端也不该画** | `::test_law051_high_risk_offers_no_in_platform_remedy`；两端测试**故意在载荷里塞一个 remedy**（否则断言会因为「服务端刚好没给」而通过，那是 V118 教过的假绿） |
+| **LAW-051c 补救要机器可读且真实存在** | 此前补救只写在散文里（「建议通过『找律师』发布法律咨询任务」）。改成 `{action, category, label}`，且 `category` **从类目表里取**（`required_cert == '律师'` 那条）——不在任何一端写死：写死的那个会在类目改名时静默把人送到一个空下拉框前面 | `::test_law051_out_of_scope_remedy_is_machine_readable_and_real`（比对 `/categories` 真实类目与资质） |
+| **发布页真的接住那个类目** | web 的 `Publish` 原来**不读 `?category=`**，App 的 `PublishScreen` 把类目**写死成「跑腿」**——也就是说那个补救入口看起来能办事，而人到了之后类目还停在默认值上。两端都改成接受预设类目 | `Ask.test.tsx::补救链接带类目`；`ask.test.tsx::onPublish 收到服务端给的类目` |
+| **KB-023a 退化的检索要说出来** | `semantic` / `degraded` 是服务端**有意暴露**的（它的 docstring：一个悄悄退化成关键词的「语义检索」比没有更糟——你不会去修它）。客户端藏起来，等于把服务端那份诚实在最后一步扔掉 | 两端各一条：退化时必须出现提示；**真语义时不得出现**（假报警多的提示会被忽略） |
+| **KB-023b 经验卡要显示成败** | KB-004 要求失败与纠纷案例同样入库，于是列表里混着 `completed` 与 `disputed`——不显示这一列的话，一笔有纠纷的高价成交会被当成行情，**参考价系统性偏高** | 两端各一条（载荷里一张 ¥900 的 disputed 卡） |
+| **顺手修掉一个错类型** | `knowledgeCards` 声明 `body: string`（服务端**从来没给过**），而真给的 `city`/`price_actual_cents`/`duration_days`/`outcome`/`has_decomposition` 一个都没声明——想按价格或成败筛卡的人在类型里看不见这些字段 | `test_client_shape_alignment::test_cli067_knowledge_and_legal_shapes` |
+| **它暴露的闸门缺口** | V85 建响应形状闸门正是为了「类型对不上却没有东西会红」，而这次还是没红：281 个 `this.request` 调用点里 **180 个用内联对象字面量**（结构上进不了只比具名 interface 的案例），101 个用具名类型而 **37 个接口从没被比过**——**覆盖 26/281，且响应侧没有任何记账**（请求侧有 `DYNAMIC_BODY` 写明理由）。本批补 `_assert_inline_shape()`；整条扫除记 `CLI-083` | `::test_cli067_inline_shape_checker_actually_catches_a_mismatch`（少键 / 多键 / 类型错 三方向红验） |
+| **解析器的一个盲点** | 内联类型里**带注释是正当写法**，而带注释后 `_inline_fields` 解析失败返回 `None`——那个声明就**悄悄退出了闸门范围**，不报错，只是不再检查。先剥注释再解析 | 同上（我的新类型带 JSDoc，第一版因此直接解析不了） |
 
 ## 已实现（V120 批次：分期合约在一次点击里被放光）
 

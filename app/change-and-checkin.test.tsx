@@ -155,7 +155,7 @@ describe('SC-013 整单验收前要说清会放掉几期', () => {
       { idx: 3, title: '三期', amount_cents: 8000, status: 'pending' },
     ]), calls);
     render(<TaskDetailScreen client={client} me={REQUESTER} task={PENDING}
-                             onBack={() => {}} onChanged={() => {}} />);
+                             onBack={() => {}} onChanged={async () => {}} />);
     await waitFor(() => expect(screen.getByText(/这一步会放掉剩余 2 期、共 ¥140\.00/)).toBeTruthy());
     expect(calls.some((c) => c.path === '/tasks/7/accept-delivery')).toBe(false);
 
@@ -168,7 +168,7 @@ describe('SC-013 整单验收前要说清会放掉几期', () => {
       { idx: 1, title: '全部', amount_cents: 20000, status: 'pending' },
     ]));
     render(<TaskDetailScreen client={client} me={REQUESTER} task={PENDING}
-                             onBack={() => {}} onChanged={() => {}} />);
+                             onBack={() => {}} onChanged={async () => {}} />);
     await waitFor(() => expect(screen.getByText('验收通过（放款）')).toBeTruthy());
     expect(screen.queryByText(/这一步会放掉剩余/)).toBeNull();
   });

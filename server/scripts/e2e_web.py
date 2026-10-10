@@ -166,6 +166,22 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     step("通知开关读到服务端的必达清单",
          page.locator("text=以下通知不受开关影响").count() > 0)
 
+    # 不懂就问（V122）：这一页的价值全在**三种结局不一样**，而那只有真浏览器
+    # 打真服务端才看得出来——mock 掉 fetch 的测试里，三条分支都是我自己喂的载荷。
+    # 这里问一个会命中知识库的问题，验免责声明真的渲染出来了。
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/ask", wait_until="networkidle")
+    page.fill("input[aria-label='法律问题']", "平台合约有没有效力")
+    page.get_by_role("button", name="提问").click()
+    page.wait_for_timeout(1500)
+    step("法律问答答得出来，且免责声明在",
+         page.locator("text=不构成法律意见").count() > 0)
+    # 经验读回：空库也要给一句说清「为什么是空的」，而不是一片白
+    page.get_by_role("button", name="看最近的").click()
+    page.wait_for_timeout(1200)
+    step("平台攒的经验读得回来（空库也说清为什么空）",
+         page.locator("table").count() > 0
+         or page.locator("text=没有闭环就没有经验").count() > 0)
+
     # ---- 写路径：真的发一个任务出去 ----
     #
     # 这一段是 mock 最测不出来的那部分。V77 把 `ip_assignment` 改成必填时，

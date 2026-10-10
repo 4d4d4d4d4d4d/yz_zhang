@@ -815,7 +815,12 @@ const DISPUTE_STATUS_LABEL: Record<string, string> = {
  * 漏一个字段在 `Partial<Task>` 面前不是类型错误。
  * 现在它是了（SDK 里改成必需参数），这段代码漏掉它就编译不过。
  */
-function PublishScreen({ client, onDone }: { client: PlatformClient; onDone: () => void }) {
+function PublishScreen({ client, onDone, category = '跑腿' }: {
+  client: PlatformClient; onDone: () => void;
+  /** LAW-051 别处把人送来时会带上类目（问答答不了 → 发一单法律咨询）。
+   *  写死类目的话那个补救入口就是假的：人到了发布页，类目还停在「跑腿」上。 */
+  category?: string;
+}) {
   const [title, setTitle] = useState('');
   const [budget, setBudget] = useState('200');
   // 没有默认值是有意的（IPC-001）：替发布方猜归属，对执行方不公平，
@@ -841,7 +846,7 @@ function PublishScreen({ client, onDone }: { client: PlatformClient; onDone: () 
         if (!ip) { setError('请选择交付成果的知识产权归属'); return; }
         try {
           await client.createTask({
-            title, category: '跑腿', task_type: 'event',
+            title, category, task_type: 'event',
             budget_cents: Math.round(parseFloat(budget || '0') * 100),
             ip_assignment: ip,
             is_remote: true, publish_now: true,
@@ -1011,6 +1016,9 @@ function MeScreen({ client, me, refresh, onLogout }: {
 }) {
   // APP-069 三条线挂在「我的」下面，不再加 Tab——七个已经够多了
   const [sub, setSub] = useState<SubScreen | null>(null);
+  // LAW-051 问答答不了时服务端给出「发一单法律咨询」，这里要真的送得到——
+  // 否则那个按钮点下去什么也不会发生，而它看起来像是能办事的。
+  const [askPublish, setAskPublish] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [agreements, setAgreements] = useState<string[]>([]);
   const [docText, setDocText] = useState('');
@@ -1026,7 +1034,21 @@ function MeScreen({ client, me, refresh, onLogout }: {
       .catch(() => {});
   }, [client]);
 
-  if (sub) return <SubScreenHost client={client} screen={sub} onBack={() => setSub(null)} />;
+  if (askPublish !== null) {
+    return (
+      <>
+        <TouchableOpacity onPress={() => setAskPublish(null)}>
+          <Text style={styles.linkRow}>← 返回「不懂就问」</Text>
+        </TouchableOpacity>
+        <PublishScreen client={client} category={askPublish}
+                       onDone={() => { setAskPublish(null); refresh(); }} />
+      </>
+    );
+  }
+  if (sub) {
+    return <SubScreenHost client={client} screen={sub} onBack={() => setSub(null)}
+                          onPublish={(c) => setAskPublish(c)} />;
+  }
   if (!me) return <Text style={styles.muted}>加载中…</Text>;
   return (
     <ScrollView contentContainerStyle={styles.center}>
@@ -1064,7 +1086,7 @@ function MeScreen({ client, me, refresh, onLogout }: {
           而 V92 刚给团队审批加了通知——通知把人叫来、他点进去无路可走，
           比没有通知更糟（APP-066 同一条教训）。 */}
       {(['messages', 'invitations', 'applications', 'certifications', 'rights',
-         'teams', 'ventures', 'developer'] as SubScreen[]).map((key) => (
+         'ask', 'teams', 'ventures', 'developer'] as SubScreen[]).map((key) => (
         <TouchableOpacity key={key} onPress={() => setSub(key)}>
           <Text style={styles.linkRow}>{SUB_SCREEN_LABEL[key]} ›</Text>
         </TouchableOpacity>

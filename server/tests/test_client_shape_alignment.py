@@ -123,13 +123,25 @@ def _split_top_level(body: str, sep: str = ";") -> list[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
+def _strip_ts_comments(src: str) -> str:
+    """去掉 TS 注释。
+
+    内联响应类型里**带注释是正当写法**（「这个字段的值可能是 disputed，
+    界面必须显示出来」这种话就该写在字段旁边）。而带了注释之后
+    `_inline_fields` 会解析失败并返回 None，于是这个声明就**悄悄退出了闸门范围**——
+    不报错，只是不再检查。这正是「扫不到等于全绿」那一类，所以先把注释剥掉再解析。
+    """
+    src = re.sub(r"/\*.*?\*/", " ", src, flags=re.S)
+    return re.sub(r"//[^\n]*", " ", src)
+
+
 def _inline_fields(decl: str) -> dict[str, str] | None:
     """把内联对象字面量解析成「字段 → 类型声明」。
 
     认三种写法：`{ a: number }`、`Array<{ a: number }>`、`{ a: number }[]`。
     认不出来就返回 None——调用方据此退回宽容，而不是报一个假警报。
     """
-    d = decl.strip()
+    d = _strip_ts_comments(decl).strip()
     if d.startswith("Array<") and d.endswith(">"):
         d = d[len("Array<"):-1].strip()
     if d.endswith("[]"):
@@ -900,3 +912,100 @@ def test_cli068_type_mismatch_is_caught():
     # 可选字段缺失不报警
     _assert_shape({"id": 1, "category": "system", "title": "t", "body": "b",
                    "is_read": False, "created_at": "2026-09-21T00:00:00Z"}, "Notice")
+
+
+# ------------------------------------- CLI-067(c) 内联响应类型也要对上（97 号 spec）
+#
+# 由来：V122 要给「不懂就问」那一页用 `knowledgeCards`，一读 SDK 发现它的声明
+# 是**错的**——写着 `body: string`（服务端从来没给过这个字段），而服务端真给的
+# `city` / `price_actual_cents` / `duration_days` / `outcome` / `has_decomposition`
+# 一个都没声明。想按价格或成败筛经验卡的人，在类型里看不见这些字段存在。
+#
+# 为什么上面那些闸门全没红：`_assert_shape` 只比**具名 interface** 的手写案例，
+# 而 281 个 `this.request<` 调用点里 180 个用的是内联对象字面量——
+# 它们结构上就进不了响应侧闸门的范围，而且**没有任何记账说这件事**
+# （请求侧有 DYNAMIC_BODY 写明理由，响应侧什么都没有）。
+#
+# 这一条先把需要的那几个端点接进来；整条线的扫除记台账 CLI-083。
+def _response_decl(method: str) -> str:
+    """从 client.ts 里取某个方法的 `this.request<...>` 响应类型原文。"""
+    src = CLIENT_TS.read_text(encoding="utf-8")
+    m = re.search(r"\n  " + re.escape(method) + r"\s*[(<]", src)
+    assert m, f"SDK 里找不到方法 {method}"
+    r = src.index("this.request<", m.end())
+    i = r + len("this.request<")
+    depth, j = 1, i
+    while j < len(src) and depth:
+        if src[j] == "<":
+            depth += 1
+        elif src[j] == ">":
+            depth -= 1
+        j += 1
+    return src[i:j - 1].strip()
+
+
+def _assert_inline_shape(payload: dict, method: str):
+    """真实响应 vs SDK 的**内联**响应声明。三个方向与 `_assert_shape` 同一套政策。"""
+    decl = _response_decl(method)
+    elem = _element_decl(decl)
+    fields = _inline_fields(elem or decl)
+    assert fields, f"{method} 的响应声明解析不了（不是内联字面量？）：{decl[:80]}"
+    declared = {k.rstrip("?"): v for k, v in fields.items()}
+    optional = {k.rstrip("?") for k in fields if k.endswith("?")}
+    actual = set(payload)
+    missing = set(declared) - actual - optional
+    extra = actual - set(declared)
+    assert not missing, f"{method} 声明了服务端没给的字段：{sorted(missing)}"
+    assert not extra, f"服务端给了 {method} 没声明的字段（客户端看不见它）：{sorted(extra)}"
+    wrong = [
+        f"{k}: 声明 {declared[k]}，实际 {type(v).__name__}={v!r}"
+        for k, v in payload.items()
+        if k in declared and not _matches(declared[k], v)
+    ]
+    assert not wrong, f"{method} 的字段类型对不上：{wrong}"
+
+
+def test_cli067_inline_shape_checker_actually_catches_a_mismatch():
+    """闸门自己的红验：这个检查器必须真的会红，否则它什么都不查。
+
+    用 `knowledgeCards` 的真实形状去比一个**故意少给一个键**的载荷，
+    以及一个**多给一个键**的载荷——两个方向都要红。
+    """
+    good = {"id": 1, "category": "跑腿", "city": "杭州", "title": "跑腿·杭州",
+            "price_actual_cents": 20000, "duration_days": 0,
+            "outcome": "completed", "has_decomposition": False}
+    _assert_inline_shape(good, "knowledgeCards")
+    with pytest.raises(AssertionError, match="声明了服务端没给的字段"):
+        _assert_inline_shape({k: v for k, v in good.items() if k != "outcome"}, "knowledgeCards")
+    with pytest.raises(AssertionError, match="没声明的字段"):
+        _assert_inline_shape({**good, "body": "服务端从来没给过这个字段"}, "knowledgeCards")
+    with pytest.raises(AssertionError, match="类型对不上"):
+        _assert_inline_shape({**good, "price_actual_cents": "200.00"}, "knowledgeCards")
+
+
+def test_cli067_knowledge_and_legal_shapes(client, requester):
+    """「不懂就问」那一页用到的三个端点，形状必须与 SDK 声明一致。"""
+    from tests.conftest import topup
+    from tests.test_task_flow import match_and_fund, publish_task
+
+    # 先造一张真经验卡：走完一笔闭环（经验只在验收后沉淀）
+    topup(client, requester, 100000)
+    worker = register(client, "13800077001", "执行方")
+    verify_user(client, worker)
+    task = publish_task(client, requester, budget_cents=30000)
+    cid = match_and_fund(client, requester, worker, task)
+    client.post(f"/api/v1/tasks/{task['id']}/deliver", headers=auth(worker))
+    client.post(f"/api/v1/tasks/{task['id']}/accept-delivery", headers=auth(requester))
+    assert cid
+
+    cards = client.get("/api/v1/knowledge/cards", headers=auth(requester)).json()
+    assert cards, "闭环之后应该有经验卡——没有卡就说明这条闸门其实什么都没比"
+    _assert_inline_shape(cards[0], "knowledgeCards")
+
+    hits = client.get("/api/v1/knowledge/search?q=保洁&kind=card",
+                      headers=auth(requester)).json()
+    _assert_inline_shape(hits, "knowledgeSearch")
+
+    ask = client.post("/api/v1/legal/ask", json={"question": "平台合约有没有效力"},
+                      headers=auth(requester)).json()
+    _assert_inline_shape(ask, "legalAsk")

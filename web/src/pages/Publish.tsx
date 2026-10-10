@@ -1,6 +1,6 @@
 import { apiErrorText, IP_ASSIGNMENT_LABEL, fmtYuan, localInputToServerTime, type Decomposition, type IpAssignment, type PriceReference, type Task } from '@platform/core';
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../store';
 
 type Feasibility = { level: string; message: string } | null;
@@ -8,8 +8,12 @@ type Feasibility = { level: string; message: string } | null;
 export default function Publish() {
   const { client } = useApp();
   const nav = useNavigate();
+  // LAW-051 别处把人送到这里时会带上类目（问答答不了 → 「发一单法律咨询」）。
+  // 不读这个参数的话，那个补救入口就是**假的**：它看起来把人送到了发布页，
+  // 而人到了之后类目仍停在默认的「保洁」上——他得自己想起来再去下拉里找一遍。
+  const [params] = useSearchParams();
   const [form, setForm] = useState({
-    title: '', description: '', category: '保洁', budget_yuan: '200',
+    title: '', description: '', category: params.get('category') || '保洁', budget_yuan: '200',
     task_type: 'service', pricing: 'fixed', recurrence: 'none',
     people_needed: '1', deposit_yuan: '0', is_remote: false, city: '上海',
     lat: '31.2304', lng: '121.4737', address_hint: '', address_exact: '',

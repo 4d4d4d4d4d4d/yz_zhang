@@ -17,12 +17,13 @@ import {
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { CertificationsScreen } from './certifications';
+import { AskScreen } from './ask';
 import { RightsScreen } from './rights';
 import { ApplicationsScreen, InvitationsScreen, MessagesScreen } from './MessagesAndInvites';
 import { Button, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export type SubScreen = 'messages' | 'invitations' | 'applications' | 'certifications'
-  | 'rights' | 'teams' | 'ventures' | 'developer';
+  | 'rights' | 'ask' | 'teams' | 'ventures' | 'developer';
 
 export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   messages: '消息',
@@ -30,13 +31,16 @@ export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   applications: '我的报名',
   certifications: '职业资质',
   rights: '我的权益（代扣明细 / 同意项 / 数据导出）',
+  ask: '不懂就问（法律问答 / 平台经验）',
   teams: '团队账户',
   ventures: '早期合作体',
   developer: '开发者（API Key / Webhook）',
 };
 
-export function SubScreenHost({ client, screen, onBack }: {
+export function SubScreenHost({ client, screen, onBack, onPublish }: {
   client: PlatformClient; screen: SubScreen; onBack: () => void;
+  /** LAW-051 问答答不了时把人送去发一单（类目由服务端给）。 */
+  onPublish?: (category: string) => void;
 }) {
   return (
     <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: 24 }}>
@@ -47,6 +51,7 @@ export function SubScreenHost({ client, screen, onBack }: {
       {screen === 'applications' && <ApplicationsScreen client={client} />}
       {screen === 'certifications' && <CertificationsScreen client={client} />}
       {screen === 'rights' && <RightsScreen client={client} />}
+      {screen === 'ask' && <AskScreen client={client} onPublish={onPublish} />}
       {screen === 'teams' && <TeamsScreen client={client} />}
       {screen === 'ventures' && <VenturesScreen client={client} />}
       {screen === 'developer' && <DeveloperScreen client={client} />}

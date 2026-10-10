@@ -341,3 +341,72 @@ def test_qualified_provider_upgrades_the_notice(client, requester, worker):
         assert "构成可靠电子签名" in body["reliability_note"]
     finally:
         set_signature_provider(None)
+
+
+# ---------- LAW-051 三种结局是三件不同的事（97 号 spec） ----------
+def test_law051_three_outcomes_are_distinguishable_without_reading_prose(client, requester):
+    """客户端必须能**不读文案**就分辨出这是哪一种结局。
+
+    改造前三种只由 `refused: bool` 区分，也就是说
+    「请立即拨打 110 报警」与「这个问题得找律师」在客户端眼里**一模一样**。
+    界面只能把两者画成同一段灰字，而它们该做的事相反：
+    一个是立刻走外部紧急渠道，一个是在平台上发一单法律咨询。
+
+    **把一条安全升级通道渲染成「机器人没答上来」，是这一条要拦的事。**
+    """
+    hit = client.post("/api/v1/legal/ask", json={"question": "平台合约有没有效力"},
+                      headers=auth(requester)).json()
+    assert hit["refused"] is False and hit["refused_reason"] == ""
+
+    high = client.post("/api/v1/legal/ask", json={"question": "对方威胁我的人身安全"},
+                       headers=auth(requester)).json()
+    assert high["refused"] is True and high["refused_reason"] == "high_risk"
+
+    out = client.post("/api/v1/legal/ask", json={"question": "外星人的宅基地怎么登记"},
+                      headers=auth(requester)).json()
+    assert out["refused"] is True and out["refused_reason"] == "out_of_scope"
+
+    # 三种两两不同——判别位真的在判别，而不是三条路返回同一个值
+    assert len({hit["refused_reason"], high["refused_reason"], out["refused_reason"]}) == 3
+
+
+def test_law051_high_risk_offers_no_in_platform_remedy(client, requester):
+    """人身安全那一支**刻意不给平台内的补救**。
+
+    这里唯一正确的去处是外部紧急渠道。在它旁边摆一个「发布咨询任务」的按钮，
+    是把紧急情况降级成一笔生意——所以 `remedy` 必须是 null，
+    让客户端没有东西可画。
+    """
+    r = client.post("/api/v1/legal/ask", json={"question": "他说要绑架我孩子"},
+                    headers=auth(requester)).json()
+    assert r["refused_reason"] == "high_risk"
+    assert r["remedy"] is None, "高风险路径不该给平台内补救入口"
+    assert "110" in r["answer"]
+
+
+def test_law051_out_of_scope_remedy_is_machine_readable_and_real(client, requester):
+    """答不了的时候，补救要是**机器可读**且**真的存在**的。
+
+    66 号 spec 那条规矩：服务端叫他做 X，客户端上就得做得到 X。
+    此前这条补救只写在散文里（「建议通过『找律师』发布法律咨询任务」）——
+    客户端要么让用户自己去找那个类目，要么在前端写死一个字符串，
+    而**写死的那个会在类目改名时静默地把人送到一个空下拉框前面**。
+    """
+    r = client.post("/api/v1/legal/ask", json={"question": "外星人的宅基地怎么登记"},
+                    headers=auth(requester)).json()
+    remedy = r["remedy"]
+    assert remedy and remedy["action"] == "publish_task"
+    assert remedy["label"]
+
+    # 类目必须是**服务端类目表里真实存在**的那一个，而且确实要律师资质
+    cats = {c["name"]: c for c in client.get("/api/v1/categories").json()}
+    assert remedy["category"] in cats, f"补救指向的类目不存在：{remedy['category']}"
+    assert cats[remedy["category"]]["required_cert"] == "律师"
+
+
+def test_law051_disclaimer_is_on_every_outcome(client, requester):
+    """免责声明三种结局都要带：平台给的是一般性法律信息，不是法律意见。"""
+    for q in ("平台合约有没有效力", "对方威胁我的人身安全", "外星人的宅基地怎么登记"):
+        r = client.post("/api/v1/legal/ask", json={"question": q},
+                        headers=auth(requester)).json()
+        assert "不构成法律意见" in r["disclaimer"], f"「{q}」这一支漏了免责声明"

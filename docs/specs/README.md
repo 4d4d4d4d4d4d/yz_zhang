@@ -117,6 +117,7 @@
 | 94 | 经验按子类生长，而不是按样本堆积（聚类 / 子类自生长 / 分歧不被平均） | [94-experience-grows-by-clusters-not-samples.md](./94-experience-grows-by-clusters-not-samples.md) | P1 |
 | 95 | 经验要变成能被调用的工具（检索库 / skill tool / 复用计量） | [95-experience-as-a-callable-tool.md](./95-experience-as-a-callable-tool.md) | P1 |
 | 96 | 拆到能干活为止，并说清每一步谁能闭环（树状拆解 / 执行主体判定） | [96-decompose-into-a-tree-that-can-be-worked.md](./96-decompose-into-a-tree-that-can-be-worked.md) | P1 |
+| 97 | 平台知道，而没有人问得到（法律问答三种结局 / 经验读回 / 内联响应形状） | [97-the-platform-knows-but-nobody-can-ask.md](./97-the-platform-knows-but-nobody-can-ask.md) | P0 |
 
 ## 功能点编号与优先级约定
 

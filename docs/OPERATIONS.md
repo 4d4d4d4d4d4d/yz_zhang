@@ -125,7 +125,7 @@ python -m scripts.loadtest --concurrency 16 --requests 600 --scenario read
 python -m scripts.loadtest --concurrency 16 --requests 400 --scenario write
 ```
 
-这套组合已被 **1252 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
+这套组合已被 **1259 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
 「重复接受报名 / 重复托管 / 重复交付 / 重复验收 / 重复里程碑放款」全部拒绝且零副作用。
 
 ### 2.2 多副本并发安全（V42 已补齐，见 [18-concurrency.md](specs/18-concurrency.md)）
@@ -395,7 +395,7 @@ SQLite 与 Postgres 的漂移检测能力不一样，只跑一个会放行一整
 |---|---|---|
 | `scripts/smoke.py` | 这套部署**能做生意**：真实 HTTP 走完注册→发布→双签→托管→验收→分账，佣金与到账金额对得上 | 实例已启动（连不上会一句话报错并退出码 2） |
 | `scripts/sandbox_check.py` | **存管合规态**成立：资金五不变量、代扣税款、第三方存证背书（28 项） | 无（自带进程内客户端） |
-| `scripts/e2e_web.py` | **前端连得上后端**：真 Chromium 打开 `vite build` 产物，同源反代到真服务端（10 项） | 先 `npm run build:web`；需 Chromium |
+| `scripts/e2e_web.py` | **前端连得上后端**：真 Chromium 打开 `vite build` 产物，同源反代到真服务端（12 项） | 先 `npm run build:web`；需 Chromium |
 
 ```bash
 cd server && python -m scripts.smoke          # 默认 http://localhost:8000
@@ -624,7 +624,7 @@ Postgres 双引擎迁移检查与部署验收。
 **已经很扎实的**：交易闭环、资金安全与守恒、纠纷程序正义、账号安全、审计留痕、
 多副本并发安全、外部供应商可替换性、事件投递的失败隔离与可补做、
 个税代扣的资金隔离与可对账、反洗钱的可疑识别与保密、边界防护的跨副本一致性、
-定时任务编排的完整性、处置动作的一致性。这些有 1252 个测试钉着。
+定时任务编排的完整性、处置动作的一致性。这些有 1259 个测试钉着。
 
 **离真正上线还差的**（按紧迫度）：
 1. ~~Postgres + 行锁/乐观锁~~ —— **V42 已完成**（切库只改环境变量）

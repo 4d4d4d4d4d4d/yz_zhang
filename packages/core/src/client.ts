@@ -830,8 +830,20 @@ export class PlatformClient {
   }
 
   // ---- legal / reports ----
+  /** LAW-001 法律常识问答。三种结局**含义完全不同**（97 号 spec）：
+   *  - `refused_reason: 'high_risk'`：涉人身安全/刑事，唯一正确去处是**外部紧急渠道**，
+   *    `remedy` 刻意为 `null`——在它旁边摆一个「发任务」按钮是把紧急情况降级成一笔生意；
+   *  - `refused_reason: 'out_of_scope'`：知识库答不了，`remedy` 给出**机器可读**的补救
+   *    （发一单法律咨询，类目由服务端从类目表取，客户端不许写死）；
+   *  - `refused_reason: ''`：知识库命中。
+   *  **不要只按 `refused` 分支**：那会把前两种渲染成同一段话。
+   *  `disclaimer` 必须原样展示——平台给的是一般性法律信息，不是法律意见。 */
   legalAsk(question: string) {
-    return this.request<{ answer: string; disclaimer: string; refused: boolean }>('POST', '/legal/ask', { question });
+    return this.request<{
+      answer: string; disclaimer: string; refused: boolean;
+      refused_reason: '' | 'high_risk' | 'out_of_scope';
+      remedy: { action: string; category: string; label: string } | null;
+    }>('POST', '/legal/ask', { question });
   }
   exportEvidence(disputeId: number) {
     return this.request<{ package: Record<string, unknown>; sha256: string }>(
@@ -1517,11 +1529,23 @@ export class PlatformClient {
   trackEvent(name: string, refType = '', refId = 0) {
     return this.request<{ ok: boolean }>('POST', '/events', { name, ref_type: refType, ref_id: refId });
   }
+  /** KB-023 脱敏经验卡。
+   *
+   *  这个声明此前是错的：写着 `body: string`（服务端**从来没给过**这个字段），
+   *  而服务端真给的 `city` / `price_actual_cents` / `duration_days` / `outcome` /
+   *  `has_decomposition` 一个都没声明——也就是说想按价格或成败筛卡的人，
+   *  在类型里**看不见这些字段存在**。V85 建的响应形状闸门只比具名接口的手写案例，
+   *  内联类型结构上进不了它的范围（281 个调用点只覆盖 26 个，记台账 CLI-083）。 */
   knowledgeCards(category?: string, limit = 20) {
     const q = category ? `?category=${encodeURIComponent(category)}&limit=${limit}` : `?limit=${limit}`;
-    return this.request<Array<{ id: number; category: string; title: string; body: string }>>(
-      'GET', `/knowledge/cards${q}`,
-    );
+    return this.request<Array<{
+      id: number; category: string; city: string; title: string;
+      price_actual_cents: number; duration_days: number;
+      /** completed / disputed / cancelled —— **失败案例同样入库**（KB-004），
+       *  所以读到的不一定是成功案例，界面必须把它显示出来。 */
+      outcome: string;
+      has_decomposition: boolean;
+    }>>('GET', `/knowledge/cards${q}`);
   }
   decompositionTemplate(category: string, q = '') {
     return this.request<{ found: boolean; items: DecompositionItem[] }>(

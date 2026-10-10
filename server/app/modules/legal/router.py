@@ -127,6 +127,23 @@ LEGAL_FAQS = [
 # 高风险问题：直接引导专业渠道（11.C AI 输出强制审查层）
 HIGH_RISK_KEYWORDS = ["杀", "自杀", "绑架", "人身安全", "威胁", "报警", "刑事"]
 
+# 需要律师资质的那个类目名——**从类目种子表里取**。
+# LAW-003 已经把「法律咨询」定成 required_cert=律师，这里再写一遍字符串
+# 就是第二份实现，而第二份实现必然抄漏（V85 的教训）。
+LAWYER_CERT = "律师"
+
+
+def _lawyer_category() -> str:
+    from app.modules.task.service import SEED_CATEGORIES
+
+    for c in SEED_CATEGORIES:
+        if c.get("required_cert") == LAWYER_CERT:
+            return c["name"]
+    # 类目表里没有需要律师的类目时，不编一个出来：
+    # 返回空串让客户端知道「这里没有可走的平台内补救」，
+    # 而不是给出一个点进去是空白的入口。
+    return ""
+
 
 class AskIn(BaseModel):
     question: str = Field(min_length=1, max_length=500)
@@ -134,11 +151,27 @@ class AskIn(BaseModel):
 
 @router.post("/ask")
 def legal_ask(body: AskIn, user: User = Depends(get_current_user)):
+    """LAW-001 法律常识问答。三种结局，**含义完全不同**（97 号 spec）。
+
+    改造前三种只由 `refused: bool` 区分，也就是说「请立即拨打 110」与
+    「这个问题得找律师」在客户端眼里**一模一样**——界面只能把两者渲染成
+    同一段话，而它们该做的事相反：一个是立即走紧急渠道，
+    一个是在平台上发一单法律咨询。
+
+    所以补 `refused_reason` 作判别位，并把补救做成**机器可读**的
+    `remedy`：服务端说「通过『找律师』发布法律咨询任务」时，
+    客户端要能真的把人送到那儿去——这是 66 号 spec 那条规矩
+    （服务端叫他做 X，客户端上就得做得到 X）在问答上的一次应用。
+    """
     if any(kw in body.question for kw in HIGH_RISK_KEYWORDS):
         return {
             "answer": "该问题涉及人身安全或刑事风险，请立即拨打 110 报警或联系专业机构，平台 AI 不提供此类解答。",
             "disclaimer": DISCLAIMER,
             "refused": True,
+            # 人身安全这条**不给平台内的补救**：这里唯一正确的去处是外部紧急渠道。
+            # 在它旁边摆一个「发布咨询任务」的按钮，是把紧急情况降级成一笔生意。
+            "refused_reason": "high_risk",
+            "remedy": None,
         }
     best, best_hits = None, 0
     for faq in LEGAL_FAQS:
@@ -150,8 +183,17 @@ def legal_ask(body: AskIn, user: User = Depends(get_current_user)):
             "answer": "该问题超出平台法律知识库范围，建议通过「找律师」发布法律咨询任务，由执业律师解答。",
             "disclaimer": DISCLAIMER,
             "refused": True,
+            "refused_reason": "out_of_scope",
+            # 类目**从类目表里取**，不在这里写死字符串：
+            # 类目一改名，写死的那个会把人送到一个不存在的类目去，
+            # 而且是静默的——发布页只会显示一个空的下拉。
+            "remedy": {"action": "publish_task", "category": _lawyer_category(),
+                       "label": "发布法律咨询任务（由执业律师接单）"},
         }
-    return {"answer": best["answer"], "disclaimer": DISCLAIMER, "refused": False}
+    return {
+        "answer": best["answer"], "disclaimer": DISCLAIMER,
+        "refused": False, "refused_reason": "", "remedy": None,
+    }
 
 
 class DocumentIn(BaseModel):
