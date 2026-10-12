@@ -12,6 +12,7 @@
 """
 import os
 import sys
+import uuid
 
 # 必须在导入 app 之前设好：配置在模块加载时求值
 os.environ.setdefault("PLATFORM_DATABASE_URL", "sqlite:///./sandbox_check.db")
@@ -101,7 +102,7 @@ def main() -> None:
         # 金额取真实量级：劳务报酬每次收入 ≤4000 元先减除 800 元，
         # 拿几百块的任务跑这套自检，代扣那几步会「通过」得莫名其妙
         r = client.post("/api/v1/wallet/topup", json={"amount_cents": 1000000},
-                        headers=auth(requester["token"]))
+                        headers={**auth(requester["token"]), "Idempotency-Key": uuid.uuid4().hex})
         step("充值（付款进存管专户）", r.status_code == 200 and r.json()["status"] == "succeeded")
 
         from app.vendors.sandbox import BOOK, ESCROW_ACCOUNT

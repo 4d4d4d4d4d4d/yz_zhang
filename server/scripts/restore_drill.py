@@ -26,6 +26,7 @@ import os
 import shutil
 import sys
 import tempfile
+import uuid
 
 DRILL_DB = os.environ.get("DRILL_DB", "./drill.db")
 
@@ -65,7 +66,8 @@ def seed() -> dict:
             c.post("/api/v1/users/me/verify",
                    json={"real_name": name, "id_number": f"11010119900101{tok[-4:]}"},
                    headers=h(tok))
-        c.post("/api/v1/wallet/topup", json={"amount_cents": 50000}, headers=h(a))
+        c.post("/api/v1/wallet/topup", json={"amount_cents": 50000},
+               headers={**h(a), "Idempotency-Key": uuid.uuid4().hex})
         r = c.post("/api/v1/tasks", json={"ip_assignment": "assign", 
             "title": "演练任务：周末大扫除", "description": "两室一厅深度保洁",
             "category": "保洁", "task_type": "service", "required_skills": ["保洁"],

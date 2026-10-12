@@ -9,7 +9,7 @@ V96 把提现复核与可疑活动接上了，管理后台仍有四条只有端�
   会被下架的招募中任务，而后台直接调 `banUser`——**管理员在盲封**。
 """
 from app.core.db import SessionLocal
-from tests.conftest import auth, make_admin, register, topup, verify_user
+from tests.conftest import money, auth, make_admin, register, topup, verify_user
 from tests.test_task_flow import match_and_fund, publish_task
 
 
@@ -23,7 +23,7 @@ def test_admin060_audit_log_answers_who_approved_that_payout(client):
                json={"kind": "bank", "account_no": "6222020000092001", "holder_name": "提现"},
                headers=auth(u))
     rid = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 3000000},
-                      headers=auth(u)).json()["request_id"]
+                      headers=money(auth(u))).json()["request_id"]
     admin = make_admin(client, "13800092009")
     # PAY-042 大额出款要两个人先后确认；这条测试验的是**审计可读**，
     # 所以把流程走完，用 approve_fully 而不是把金额调小

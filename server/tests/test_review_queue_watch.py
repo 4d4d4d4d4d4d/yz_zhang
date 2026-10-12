@@ -17,7 +17,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.modules.account.models import utcnow
 from app.modules.admin.queues import QUEUES
-from tests.conftest import JOB_HEADERS, auth, make_admin, register, topup, verify_user
+from tests.conftest import money, JOB_HEADERS, auth, make_admin, register, topup, verify_user
 
 
 def _notes(client, user, title=None):
@@ -233,7 +233,7 @@ def test_pay045_withdraw_queue_pages_too(client):
                    headers=auth(u))
         rids.append(client.post("/api/v1/wallet/withdraw",
                                 json={"amount_cents": settings.LARGE_WITHDRAW_CENTS + 1000},
-                                headers=auth(u)).json()["request_id"])
+                                headers=money(auth(u))).json()["request_id"])
 
     first = client.get("/api/v1/wallet/withdraw-requests?status=pending&limit=1&offset=0",
                        headers=auth(admin)).json()

@@ -94,9 +94,10 @@ export interface ClientOptions {
 export class PlatformClient {
   constructor(private opts: ClientOptions) {}
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: string, path: string, body?: unknown,
+                           extraHeaders?: Record<string, string>): Promise<T> {
     const doFetch = this.opts.fetchImpl ?? fetch;
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', ...extraHeaders };
     const token = this.opts.getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await doFetch(`${this.opts.baseUrl}/api/v1${path}`, {
@@ -303,14 +304,18 @@ export class PlatformClient {
     );
   }
 
-  /** VND-011 充值两阶段：模拟通道即时 succeeded；真实通道返回 pending + pay_url。 */
-  topup(amountCents: number) {
+  /** VND-011 充值两阶段：模拟通道即时 succeeded；真实通道返回 pending + pay_url。
+   *
+   *  FIN-073 `idempotencyKey` 必填：同一次操作的重试用同一个键（见 `OperationKey`），
+   *  服务端回放第一次的结果而不是再充一次。不带键服务端直接 400。 */
+  topup(amountCents: number, idempotencyKey: string) {
     return this.request<{
       order_no: string;
       status: 'succeeded' | 'pending';
       available_cents?: number;
       pay_url?: string;
-    }>('POST', '/wallet/topup', { amount_cents: amountCents });
+    }>('POST', '/wallet/topup', { amount_cents: amountCents },
+      { 'Idempotency-Key': idempotencyKey });
   }
   getPayoutAccount() {
     return this.request<PayoutAccountView>('GET', '/wallet/payout-account');
@@ -326,9 +331,10 @@ export class PlatformClient {
    *  `message` 是大额进人审时服务端给的**中性话术**（AML-030/031 tipping-off）：
    *  原样显示，**绝不能自己编一句「你的提现触发了风控」**——那等于告诉他
    *  哪条规则命中了。此前类型里没有这个字段，于是没有任何界面显示得了它。 */
-  withdraw(amountCents: number) {
+  withdraw(amountCents: number, idempotencyKey: string) {
     return this.request<{ status: 'done' | 'pending_review'; request_id?: number; message?: string; available_cents: number; frozen_cents: number }>(
       'POST', '/wallet/withdraw', { amount_cents: amountCents },
+      { 'Idempotency-Key': idempotencyKey },
     );
   }
   /** PAY-040 提现复核队列（管理端）。V82 的豁免表里写着这两个动作

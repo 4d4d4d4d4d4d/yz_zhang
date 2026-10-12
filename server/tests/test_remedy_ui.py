@@ -26,6 +26,7 @@ import pytest
 # **第二份实现必然抄漏**，这条规矩对测试代码同样成立。
 from tests.clientscan import CLIENT_SRC, REPO, calls as _client_calls, sdk_has, server_source
 from tests.clientscan import sources as _sources
+from tests.conftest import money
 
 
 def _calls(client: str, method: str) -> bool:
@@ -191,7 +192,7 @@ def test_pay030_withdraw_is_blocked_by_exactly_the_declared_code(client):
     u = register(client, "13900091001", "提现的人")
     verify_user(client, u, name="提现")
     topup(client, u, 50000)
-    r = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 10000}, headers=auth(u))
+    r = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 10000}, headers=money(auth(u)))
     assert r.status_code == 400
     assert r.json()["detail"]["code"] == "no_payout_account"
 
@@ -210,7 +211,7 @@ def test_pay030_bind_then_withdraw_completes_the_round_trip(client):
     assert "*" in b.json()["account_no"], "回显了完整卡号——服务端本来就不该给"
     assert "6222020000000000" not in b.text
 
-    w = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 10000}, headers=auth(u))
+    w = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 10000}, headers=money(auth(u)))
     assert w.status_code == 200, w.text
     assert w.json()["available_cents"] == 40000
     # 账单流水里看得到这一笔——App 钱包此前只有三个数字

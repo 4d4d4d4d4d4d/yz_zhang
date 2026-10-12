@@ -11,7 +11,7 @@
 """
 import pytest
 
-from .conftest import auth, bind_payout, register, topup, verify_user
+from .conftest import money, auth, bind_payout, register, topup, verify_user
 from .test_task_flow import publish_task
 
 
@@ -94,13 +94,13 @@ def test_law044_withdraw_blocked_until_reconsent(client, worker, bump_version):
     bump_version()
 
     r = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 1000},
-                    headers=auth(worker))
+                    headers=money(auth(worker)))
     assert r.status_code == 409
     assert r.json()["detail"]["code"] == "agreement_update_required"
 
     client.post("/api/v1/legal/agreements/accept", headers=auth(worker))
     assert client.post("/api/v1/wallet/withdraw", json={"amount_cents": 1000},
-                       headers=auth(worker)).status_code == 200
+                       headers=money(auth(worker))).status_code == 200
 
 
 # ---------- LAW-031 敏感项单独同意 ----------
@@ -142,7 +142,7 @@ def test_law031_never_consented_gets_the_actionable_error_not_a_consent_lecture(
     """
     topup(client, worker, 50000)
     r = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 1000},
-                    headers=auth(worker))
+                    headers=money(auth(worker)))
     assert r.status_code == 400, r.text
     assert r.json()["detail"]["code"] == "no_payout_account"
 
@@ -173,7 +173,7 @@ def test_law032_revoking_payment_unbinds_payout_account(client, worker):
 
     # 能力真的停了，而不是只写了条记录
     blocked = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 1000},
-                          headers=auth(worker))
+                          headers=money(auth(worker)))
     assert blocked.status_code == 400
     assert blocked.json()["detail"]["code"] == "no_payout_account"
 

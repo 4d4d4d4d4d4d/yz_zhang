@@ -19,6 +19,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import uuid
 
 BASE = os.environ.get("PLATFORM_API_BASE", "http://127.0.0.1:8000").rstrip("/")
 API = BASE + "/api/v1"
@@ -129,7 +130,10 @@ def main() -> int:
 
     # ---------- 3. 主交易闭环 ----------
     section("3 主交易闭环（发布 → 成交 → 托管 → 交付 → 放款）")
-    check("充值", req("POST", "/wallet/topup", {"amount_cents": 100000}, a_tok)[0] == 200)
+    # FIN-073 资金接口强制带幂等键（104 号 spec）；顺带验它真的被强制
+    check("不带幂等键的充值被拒", req("POST", "/wallet/topup", {"amount_cents": 100000}, a_tok)[0] == 400)
+    check("充值", req("POST", "/wallet/topup", {"amount_cents": 100000}, a_tok,
+                     headers={"Idempotency-Key": uuid.uuid4().hex})[0] == 200)
     status, task = req("POST", "/tasks", {**TASK, "publish_now": True}, a_tok)
     check("发布任务", status == 201, task.get("id") if task else task)
     tid = task["id"]
@@ -157,7 +161,8 @@ def main() -> int:
 
     # ---------- 4. 纠纷全流程 ----------
     section("4 纠纷（开案 → 被诉方答辩 → 裁决 → 分账）")
-    check("充值二单", req("POST", "/wallet/topup", {"amount_cents": 100000}, a_tok)[0] == 200)
+    check("充值二单", req("POST", "/wallet/topup", {"amount_cents": 100000}, a_tok,
+                       headers={"Idempotency-Key": uuid.uuid4().hex})[0] == 200)
     _, t2 = req("POST", "/tasks", {**TASK, "title": "验收任务：纠纷路径", "publish_now": True}, a_tok)
     _, ap2 = req("POST", f"/tasks/{t2['id']}/applications", {"message": "我来"}, b_tok)
     _, ac2 = req("POST", f"/applications/{ap2['id']}/accept", token=a_tok)
@@ -184,13 +189,15 @@ def main() -> int:
     section("5 提现与风控")
     req("PUT", "/wallet/payout-account",
         {"kind": "bank", "account_no": "6222021234567890123", "holder_name": "乙执行"}, b_tok)
-    status, wd = req("POST", "/wallet/withdraw", {"amount_cents": 1000}, b_tok)
+    status, wd = req("POST", "/wallet/withdraw", {"amount_cents": 1000}, b_tok,
+                     headers={"Idempotency-Key": uuid.uuid4().hex})
     check("提现受理", status == 200, wd.get("status") if wd else wd)
     if wd and wd.get("status") == "pending_review":
         check("大额/风控提现进人审且话术中性",
               "可疑" not in wd.get("message", "") and "风控" not in wd.get("message", ""),
               wd.get("message"))
-    status, _ = req("POST", "/wallet/withdraw", {"amount_cents": 999999999}, b_tok)
+    status, _ = req("POST", "/wallet/withdraw", {"amount_cents": 999999999}, b_tok,
+                    headers={"Idempotency-Key": uuid.uuid4().hex})
     check("超额提现被拒", status == 400)
 
     # ---------- 6. 上传与内容审核 ----------

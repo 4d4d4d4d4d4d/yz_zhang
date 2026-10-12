@@ -26,7 +26,7 @@ from app.modules.account.models import User
 from app.modules.files.models import UploadedFile
 from app.modules.wallet.models import PayoutAccount, WalletAccount
 
-from .conftest import auth, promote_admin, register, topup, verify_user
+from .conftest import money, auth, promote_admin, register, topup, verify_user
 
 
 def deactivate(client, user):
@@ -53,7 +53,7 @@ def test_accdel010_pending_withdrawal_review_blocks_deactivation(client):
     u = make_user(client, "13911100001")
     topup(client, u, 1_500_000)
     r = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 1_500_000},
-                    headers=auth(u))
+                    headers=money(auth(u)))
     assert r.json()["status"] == "pending_review"          # 触发 AML 人审
     w = client.get("/api/v1/wallet", headers=auth(u)).json()
     assert w["available_cents"] == 0 and w["frozen_cents"] == 1_500_000
@@ -69,7 +69,7 @@ def test_accdel011_message_names_every_blocking_bucket_at_once(client):
     """三个态一次说全，别让用户逐个撞墙。"""
     u = make_user(client, "13911100002")
     topup(client, u, 1_500_000)
-    client.post("/api/v1/wallet/withdraw", json={"amount_cents": 1_400_000}, headers=auth(u))
+    client.post("/api/v1/wallet/withdraw", json={"amount_cents": 1_400_000}, headers=money(auth(u)))
     msg = deactivate(client, u).json()["detail"]["message"]
     assert "可用余额 ¥1000.00" in msg and "冻结" in msg, msg
 
@@ -85,7 +85,7 @@ def test_accdel030_review_cleared_then_deactivation_leaves_all_buckets_zero(clie
 
     u = make_user(client, "13911100003")
     topup(client, u, 5000)
-    r = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 5000}, headers=auth(u))
+    r = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 5000}, headers=money(auth(u)))
     req_id = r.json()["request_id"]
     assert deactivate(client, u).status_code == 409          # 冻结中，先拦住
 

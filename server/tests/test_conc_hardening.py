@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from app.core.db import SessionLocal, engine
 from app.core.locks import acquire_job_lock, release_job_lock
 
-from .conftest import JOB_HEADERS, auth, bind_payout, register, topup, verify_user
+from .conftest import money, JOB_HEADERS, auth, bind_payout, register, topup, verify_user
 from .test_task_flow import match_and_fund, publish_task
 
 
@@ -112,7 +112,7 @@ def test_concurrent_withdraw_cannot_overdraw(client):
 
     def hit(_i):
         return client.post(
-            "/api/v1/wallet/withdraw", json={"amount_cents": 20000}, headers=auth(user)
+            "/api/v1/wallet/withdraw", json={"amount_cents": 20000}, headers=money(auth(user))
         ).status_code
 
     codes = _parallel(hit, 5)

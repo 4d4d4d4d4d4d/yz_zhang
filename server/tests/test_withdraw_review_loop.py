@@ -13,7 +13,7 @@ V91 把提现这条路接通了——在那之前没有任何端能发起提现�
 """
 from app.core.db import SessionLocal
 from app.modules.notification.models import Notification
-from tests.conftest import auth, make_admin, register, topup, verify_user
+from tests.conftest import money, auth, make_admin, register, topup, verify_user
 
 BIG = 3000000     # 触发人审的大额
 
@@ -52,7 +52,7 @@ def _pending_withdraw(client, phone: str, admin_phone: str, amount: int = BIG):
     client.put("/api/v1/wallet/payout-account",
                json={"kind": "bank", "account_no": f"6222{phone[-8:]}0000", "holder_name": "提现"},
                headers=auth(u))
-    r = client.post("/api/v1/wallet/withdraw", json={"amount_cents": amount}, headers=auth(u))
+    r = client.post("/api/v1/wallet/withdraw", json={"amount_cents": amount}, headers=money(auth(u)))
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "pending_review", r.text
     return u, make_admin(client, admin_phone), r.json()["request_id"]

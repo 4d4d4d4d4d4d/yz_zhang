@@ -11,7 +11,7 @@ from app.vendors import base as vendor_base
 from app.vendors import payment_service
 from app.vendors.models import PaymentOrder, VendorCall
 
-from .conftest import auth, register, topup, verify_user
+from .conftest import money, auth, register, topup, verify_user
 
 
 def _order_of(user_id: int) -> PaymentOrder:
@@ -27,7 +27,7 @@ def _order_of(user_id: int) -> PaymentOrder:
 # ---------- VND-011 两阶段充值 ----------
 def test_topup_creates_order_and_credits_once(client):
     user = register(client, "13800007001", "充值者")
-    r = client.post("/api/v1/wallet/topup", json={"amount_cents": 30000}, headers=auth(user))
+    r = client.post("/api/v1/wallet/topup", json={"amount_cents": 30000}, headers=money(auth(user)))
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["status"] == "succeeded"

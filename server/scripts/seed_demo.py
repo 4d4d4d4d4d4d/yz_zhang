@@ -6,6 +6,7 @@
 """
 import os
 import sys
+import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -83,7 +84,8 @@ def main():
         c.patch(f"{API}/users/me", json={"skills": ["前端开发", "后端开发"], "city": "上海"},
                 headers=coder)
 
-        _ok(c.post(f"{API}/wallet/topup", json={"amount_cents": 500000}, headers=boss), "充值")
+        _ok(c.post(f"{API}/wallet/topup", json={"amount_cents": 500000},
+                   headers={**boss, "Idempotency-Key": uuid.uuid4().hex}), "充值")
 
         # 若干公开任务
         for title, cat, budget in [

@@ -3,8 +3,8 @@ import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, PlatformClient, TASK_STATUS_LABEL, apiErrorText, fmtYuan, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, fmtYuan, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DiscoverScreen } from './Discover';
 import { MessagesScreen } from './MessagesAndInvites';
 import { MySpaceScreen, PublicSpaceScreen, SpacesDiscoverScreen } from './spaces';
@@ -888,12 +888,19 @@ export function WalletScreen({ client }: { client: PlatformClient }) {
 
   const cents = Math.round(parseFloat(amount || '0') * 100);
 
-  async function act(fn: () => Promise<unknown>) {
+  // FIN-073 每个按钮一把「这次操作」的键：弱网下再按一次是重试（同一个键，
+  // 服务端回放而不是再扣一次）；连按两下读到的也是同一个键。有确定结果后换新键。
+  const topupKey = useRef(new OperationKey());
+  const withdrawKey = useRef(new OperationKey());
+
+  async function act(fn: () => Promise<unknown>, op?: OperationKey) {
     setError(''); setHint('');
     try {
       await fn();
+      op?.settle();
       await load();
     } catch (e) {
+      op?.settle(e);
       // CLI-064 拦截理由原样显示。「请先绑定收款账户」这句话只有配上
       // 下面那个绑定表单才有意义——光显示理由，用户照样无处可去。
       setError(apiErrorText(e));
@@ -915,13 +922,14 @@ export function WalletScreen({ client }: { client: PlatformClient }) {
       )}
       <TextInput style={styles.input} keyboardType="numeric" value={amount}
                  onChangeText={setAmount} placeholder="金额（元）" />
-      <Button title={`充值 ${fmtYuan(cents)}（模拟）`} onPress={() => act(() => client.topup(cents))} />
+      <Button title={`充值 ${fmtYuan(cents)}（模拟）`} onPress={() => act(() => client.topup(cents, topupKey.current.for(`topup:${cents}`)),
+                                               topupKey.current)} />
       <Button title={`提现 ${fmtYuan(cents)}`} color="#6b7280" onPress={() => act(async () => {
-        const r = await client.withdraw(cents);
+        const r = await client.withdraw(cents, withdrawKey.current.for(`withdraw:${cents}`));
         // AML-030/031 tipping-off：大额进人审时**原样显示服务端的中性话术**，
         // 绝不能自己编一句「你的提现触发了风控」——那等于教他下次怎么规避。
         setHint(r.status === 'pending_review' ? (r.message ?? '提现申请已提交，等待处理') : '提现已受理');
-      })} />
+      }, withdrawKey.current)} />
       {!!hint && <Text style={styles.mutedLeft}>{hint}</Text>}
       {!!error && <Text style={styles.error}>{error}</Text>}
 

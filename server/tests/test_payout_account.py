@@ -1,14 +1,14 @@
 """PAY-005 收款账户绑定：提现前置 + 实名一致校验 + 账号脱敏（业界必备）。"""
-from .conftest import auth, bind_payout, register, topup, verify_user
+from .conftest import money, auth, bind_payout, register, topup, verify_user
 
 
 def test_withdraw_blocked_without_payout_account(client, requester):
     topup(client, requester, 10000)
-    r = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 1000}, headers=auth(requester))
+    r = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 1000}, headers=money(auth(requester)))
     assert r.status_code == 400 and r.json()["detail"]["code"] == "no_payout_account"
 
     bind_payout(client, requester)  # requester 实名为「张三」
-    r = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 1000}, headers=auth(requester))
+    r = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 1000}, headers=money(auth(requester)))
     assert r.status_code == 200
 
 

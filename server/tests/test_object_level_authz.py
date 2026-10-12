@@ -30,7 +30,7 @@ import sys
 
 import pytest
 
-from tests.conftest import auth, bind_payout, register, topup, verify_user
+from tests.conftest import money, auth, bind_payout, register, topup, verify_user
 from tests.test_task_flow import match_and_fund, publish_task
 
 # ---------------------------------------------------------------- 归属规则
@@ -382,7 +382,7 @@ def test_sec060_outsider_cannot_approve_withdrawals(client, outsider):
     topup(client, user, 300000)
     bind_payout(client, user)
     req = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 20000},
-                      headers=auth(user))
+                      headers=money(auth(user)))
     assert req.status_code == 200, req.text
     rid = req.json().get("request_id") or req.json().get("id")
 

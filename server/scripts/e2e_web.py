@@ -167,6 +167,13 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     page.goto(f"http://127.0.0.1:{WEB_PORT}/wallet", wait_until="networkidle")
     step("钱包页读到真实余额", page.locator("text=可用余额").count() > 0
          or page.locator("text=我的钱包").count() > 0)
+    # FIN-073（V130）：真服务端对不带 Idempotency-Key 的充值直接 400——
+    # 这一步走通，证明构建产物真的带着键去了，而不只是单测里的 mock 带了
+    page.get_by_role("button", name="充值（模拟）").click()
+    page.wait_for_timeout(1200)
+    step("钱包充值带着幂等键走通真服务端",
+         page.locator("h2:has-text('¥100.00')").count() > 0
+         and page.locator("text=Idempotency-Key").count() == 0)
 
     # 通知偏好：V102 加的那块，数据来自服务端的 MUST_REACH
     page.goto(f"http://127.0.0.1:{WEB_PORT}/notifications", wait_until="networkidle")

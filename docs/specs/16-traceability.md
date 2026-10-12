@@ -1,8 +1,8 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 2026-10-12：V129 前端测试计数与结构计数进闸门（上线手册的 job 数是错的）；V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
+> 2026-10-12：V130 幂等键真的护住钱（并发同键、过期、两端发键；Postgres 上实测）；V129 前端测试计数与结构计数进闸门（上线手册的 job 数是错的）；V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
 > 2026-10-09：V119 法定权利入口进 App；V118 单聊并发分叉修复；V117 关注幂等化并接到空间；V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
-> 后端 1357 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
+> 后端 1367 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
 > （真 Chromium × 构建产物 × 真服务端，14 项）。
@@ -15,6 +15,19 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V130 批次：幂等键从「支持」到真的护住钱）
+
+> 模块 spec：[104-idempotency-that-actually-protects.md](104-idempotency-that-actually-protects.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **FIN-072 并发同键** | 先 `ON CONFLICT DO NOTHING RETURNING` 占键再动钱；落空则回放已提交的结果。原流程让每个并发请求都动一遍钱、五个 500 | `test_idempotency_concurrency::test_fin072_concurrent_same_key_topups_all_get_the_same_200`、`::test_fin072_concurrent_same_key_withdrawals_move_money_once`、`::test_fin072_the_key_is_claimed_before_the_money_moves` |
+| **只有 Postgres 看得见** | SAVEPOINT 在 pysqlite 下提前提交空占位；`rowcount` 在 psycopg 下不是 1（每笔都 409）。CI 的 Postgres job 单独建库跑这组测试 | `::test_fin072_ci_runs_this_file_on_postgres` |
+| **FIN-071 过期** | 保留 `PLATFORM_IDEMPOTENCY_RETENTION_HOURS`（24），读时生效；`/wallet/jobs/purge-idempotency` 每天一次 | `::test_fin071_expired_keys_are_new_keys_even_before_the_purge_runs`、`::test_fin071_purge_job_deletes_only_expired_records`、`::test_fin071_purge_job_is_scheduled_and_guarded` |
+| **FIN-073 强制带键** | 不带键 400、超过 80 字符 400（不再截断）；失败不缓存 | `::test_fin073_money_endpoints_refuse_requests_without_a_key`、`::test_long_keys_are_refused_not_truncated`、`::test_fin073_failures_are_not_cached`；`test_money_duplicate_protection::test_fin070_claimed_mechanism_is_really_in_the_code`（收紧到 `require_key`） |
+| **两端一次操作一个键** | 共享 SDK `OperationKey`：不确定保留、确定或改金额换新；`topup`/`withdraw` 键必填 | `idempotency.test.ts`（6 条）、`WalletRetry.test.tsx`（3 条）、`wallet-retry.test.tsx`（2 条）；真浏览器联调「钱包充值带着幂等键走通真服务端」 |
+| **脚本** | 冒烟、全链路验收（新增「不带幂等键的充值被拒」）、沙箱自检、恢复演练、演示数据都带键 | 实跑：冒烟、验收 48 项、沙箱 28 项 |
 
 ## 已实现（V129 批次：另外那些没人核对的数字）
 

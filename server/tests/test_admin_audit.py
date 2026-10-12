@@ -3,7 +3,7 @@ import sqlalchemy as sa
 
 from app.core.db import engine
 
-from .conftest import auth, bind_payout, promote_admin, register, respond_dispute, topup, verify_user
+from .conftest import money, auth, bind_payout, promote_admin, register, respond_dispute, topup, verify_user
 from .test_task_flow import match_and_fund, publish_task
 
 
@@ -68,7 +68,7 @@ def test_withdraw_approval_audited(client):
     topup(client, rich, 20_000_000)
     req_id = client.post("/api/v1/wallet/withdraw",
                          json={"amount_cents": settings.LARGE_WITHDRAW_CENTS},
-                         headers=auth(rich)).json()["request_id"]
+                         headers=money(auth(rich))).json()["request_id"]
     client.post(f"/api/v1/wallet/withdraw-requests/{req_id}/approve", headers=auth(admin))
 
     log = client.get("/api/v1/admin/audit-log?action=withdraw_approve", headers=auth(admin)).json()

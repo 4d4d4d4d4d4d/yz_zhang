@@ -51,7 +51,10 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   profile_private: '请先在账户隐私设置中允许公开个人资料',
   headline_required: '公开前请写一句介绍',
   space_content_rejected: '空间内容需要调整后再发布',
-  idempotency_required: '机器写操作必须携带 1—80 字符的 Idempotency-Key',
+  // V130 起钱包的充值/提现也用这个码（资金类强制带键），不再只是机器写操作
+  idempotency_required: '该操作必须携带 1—80 字符的 Idempotency-Key（防止重试导致重复扣款）',
+  idempotency_key_invalid: 'Idempotency-Key 至多 80 个字符',
+  idempotency_in_progress: '同一笔操作正在处理，请稍后再试',
   invitation_consumed: '邀请已处理',
   invitation_required: '需要当前成员发出的有效邀请',
   mandate_budget: '超过单笔或累计任务授权额度',

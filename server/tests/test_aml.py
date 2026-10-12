@@ -17,7 +17,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.modules.aml.models import SuspiciousActivity
 
-from .conftest import auth, bind_payout, register, topup, verify_user
+from .conftest import money, auth, bind_payout, register, topup, verify_user
 
 
 @pytest.fixture()
@@ -43,7 +43,7 @@ def funded_user(client, phone, name="张三", amount=5000000):
 
 def withdraw(client, user, cents):
     return client.post("/api/v1/wallet/withdraw", json={"amount_cents": cents},
-                       headers=auth(user))
+                       headers=money(auth(user)))
 
 
 def flags(user_id=None, pattern=None):

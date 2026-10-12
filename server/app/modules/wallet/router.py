@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.deps import (get_current_user, require_admin, require_job_auth,
                             require_verified)
+from app.core import idempotency
 from app.core.idempotency import replay_or_run
 from app.core.locks import job_slot
 from app.modules.account.models import User
@@ -100,7 +101,8 @@ def topup(
         except VendorError as exc:
             raise exc.as_http() from exc
 
-    return replay_or_run(db, user.id, idempotency_key or None, "wallet.topup", run,
+    # FIN-073 资金类强制带键：此前空键 = 不要幂等，而两端从来没发过这个头
+    return replay_or_run(db, user.id, idempotency.require_key(idempotency_key), "wallet.topup", run,
                          params={"amount_cents": body.amount_cents})
 
 
@@ -142,7 +144,7 @@ def withdraw(
     def run():
         return service.withdraw(db, user.id, body.amount_cents)
 
-    return replay_or_run(db, user.id, idempotency_key or None, "wallet.withdraw", run,
+    return replay_or_run(db, user.id, idempotency.require_key(idempotency_key), "wallet.withdraw", run,
                          params={"amount_cents": body.amount_cents})
 
 
@@ -270,6 +272,17 @@ def run_remind_second_approval(db: Session = Depends(get_db), _=Depends(require_
     「钱能进不能出」**。
     """
     return service.remind_withdraw_reviews(db)
+
+
+@router.post("/jobs/purge-idempotency")
+def run_purge_idempotency(db: Session = Depends(get_db), _=Depends(require_job_auth),
+                          __=Depends(job_slot("idempotency_purge"))):
+    """FIN-071 清理过期的幂等记录（104 号 spec）。
+
+    过期判断在 `replay_or_run` 读的时候就已经生效——这个 job 晚跑、漏跑，
+    语义都不变，只是表大一点。它只负责让表不无限增长。
+    """
+    return idempotency.purge(db)
 
 
 @router.get("/ledger")

@@ -84,6 +84,9 @@ JOBS: tuple[ScheduledJob, ...] = (
     ScheduledJob("/admin/jobs/remind-review-queues", 3600, "review_queue_reminders",
                  "QUEUE-011/012 人审队列积压催办——队列里躺着的东西不会主动发声，"
                  "而运营是「想起来才去看」；超过 SLA 时提交方也会收到一次告知"),
+    ScheduledJob("/wallet/jobs/purge-idempotency", 86400, "idempotency_purge",
+                 "FIN-071 幂等记录过期清理——过期判断在读的时候已生效，"
+                 "这个 job 只让表不无限增长，一天一次足够"),
     ScheduledJob("/admin/jobs/reconcile", 86400, "reconcile",
                  "PAY-006/008 五条资金不变量日终对账，不平即开差错工单并告警。"
                  "**此前它不在调度表里、且要求管理员登录，从未自动执行过**"),

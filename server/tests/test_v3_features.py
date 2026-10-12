@@ -4,7 +4,7 @@ import sqlalchemy as sa
 
 from app.core.db import engine
 
-from .conftest import JOB_HEADERS, auth, promote_admin, register, respond_dispute, topup, verify_user
+from .conftest import money, JOB_HEADERS, auth, promote_admin, register, respond_dispute, topup, verify_user
 from .test_task_flow import match_and_fund, publish_task
 
 
@@ -50,7 +50,7 @@ def test_acc006_deactivate_blocked_then_succeeds(client, requester, worker):
     wallet = client.get("/api/v1/wallet", headers=auth(requester)).json()
     if wallet["available_cents"] > 0:
         client.post("/api/v1/wallet/withdraw", json={"amount_cents": wallet["available_cents"]},
-                    headers=auth(requester))
+                    headers=money(auth(requester)))
     r = client.post("/api/v1/users/me/deactivate", headers=auth(requester))
     assert r.status_code == 200 and r.json()["deleted"] is True
     # 注销后登录态与密码登录均失效

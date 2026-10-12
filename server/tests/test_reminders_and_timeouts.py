@@ -16,7 +16,7 @@ import pytest
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.modules.account.models import utcnow
-from tests.conftest import JOB_HEADERS, auth, make_admin, register, topup, verify_user
+from tests.conftest import money, JOB_HEADERS, auth, make_admin, register, topup, verify_user
 from tests.test_task_flow import match_and_fund, publish_task
 
 
@@ -309,7 +309,7 @@ def _awaiting_second(client, phone: str, admin_phone: str):
                json={"kind": "bank", "account_no": f"6222{phone[-8:]}11", "holder_name": "提现"},
                headers=auth(u))
     rid = client.post("/api/v1/wallet/withdraw", json={"amount_cents": amount},
-                      headers=auth(u)).json()["request_id"]
+                      headers=money(auth(u))).json()["request_id"]
     admin = make_admin(client, admin_phone)
     client.post(f"/api/v1/wallet/withdraw-requests/{rid}/approve", headers=auth(admin))
     return u, admin, rid, amount
@@ -409,7 +409,7 @@ def test_pay044_a_pending_request_nobody_looked_at_is_also_chased(client):
                json={"kind": "bank", "account_no": "6222020000101150", "holder_name": "提现"},
                headers=auth(u))
     rid = client.post("/api/v1/wallet/withdraw", json={"amount_cents": amount},
-                      headers=auth(u)).json()["request_id"]
+                      headers=money(auth(u))).json()["request_id"]
     admin = make_admin(client, "13800101159")
     _age_withdraw(rid, settings.WITHDRAW_REVIEW_REMIND_HOURS + 1)
 

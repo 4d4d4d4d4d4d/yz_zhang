@@ -1,5 +1,5 @@
 """工程硬化：14.6/05.B 资金幂等 / ACC-001 防刷限流 / 越权访问拒绝"""
-from .conftest import auth, register, topup, verify_user
+from .conftest import money, auth, register, topup, verify_user
 from .test_task_flow import CLEAN_TASK, match_and_fund, publish_task
 
 
@@ -7,16 +7,16 @@ from .test_task_flow import CLEAN_TASK, match_and_fund, publish_task
 def test_topup_idempotency(client, requester):
     key = "topup-abc-123"
     r1 = client.post("/api/v1/wallet/topup", json={"amount_cents": 10000},
-                     headers={**auth(requester), "Idempotency-Key": key})
+                     headers=money({**auth(requester), "Idempotency-Key": key}))
     r2 = client.post("/api/v1/wallet/topup", json={"amount_cents": 10000},
-                     headers={**auth(requester), "Idempotency-Key": key})
+                     headers=money({**auth(requester), "Idempotency-Key": key}))
     assert r1.json() == r2.json()
     # 重复提交只入账一次
     w = client.get("/api/v1/wallet", headers=auth(requester)).json()
     assert w["available_cents"] == 10000
     # 不同 key 正常累加
     client.post("/api/v1/wallet/topup", json={"amount_cents": 5000},
-                headers={**auth(requester), "Idempotency-Key": "topup-xyz"})
+                headers=money({**auth(requester), "Idempotency-Key": "topup-xyz"}))
     w = client.get("/api/v1/wallet", headers=auth(requester)).json()
     assert w["available_cents"] == 15000
 
@@ -28,9 +28,9 @@ def test_withdraw_idempotency(client, requester):
     topup(client, requester, 20000)
     key = "wd-1"
     r1 = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 8000},
-                     headers={**auth(requester), "Idempotency-Key": key})
+                     headers=money({**auth(requester), "Idempotency-Key": key}))
     r2 = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 8000},
-                     headers={**auth(requester), "Idempotency-Key": key})
+                     headers=money({**auth(requester), "Idempotency-Key": key}))
     assert r1.json() == r2.json()
     w = client.get("/api/v1/wallet", headers=auth(requester)).json()
     assert w["available_cents"] == 12000  # 只提一次
@@ -39,9 +39,9 @@ def test_withdraw_idempotency(client, requester):
 def test_idempotency_scoped_per_user(client, requester, worker):
     # 同一 key 在不同用户间互不干扰
     client.post("/api/v1/wallet/topup", json={"amount_cents": 3000},
-                headers={**auth(requester), "Idempotency-Key": "shared"})
+                headers=money({**auth(requester), "Idempotency-Key": "shared"}))
     client.post("/api/v1/wallet/topup", json={"amount_cents": 7000},
-                headers={**auth(worker), "Idempotency-Key": "shared"})
+                headers=money({**auth(worker), "Idempotency-Key": "shared"}))
     assert client.get("/api/v1/wallet", headers=auth(requester)).json()["available_cents"] == 3000
     assert client.get("/api/v1/wallet", headers=auth(worker)).json()["available_cents"] == 7000
 

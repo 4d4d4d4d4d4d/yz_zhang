@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.modules.notification.models_device import DeviceToken
 from app.vendors import registry
 
-from .conftest import JOB_HEADERS, auth, register
+from .conftest import money, JOB_HEADERS, auth, register
 
 
 @pytest.fixture()
@@ -126,7 +126,7 @@ def test_ntf002_push_failure_never_breaks_the_business_transaction(client, monke
         client.put("/api/v1/notifications/devices",
                    json={"token": "tok-doomed01", "platform": "ios"}, headers=auth(u))
         # 充值会发通知；推送炸了也不能让充值失败
-        r = client.post("/api/v1/wallet/topup", json={"amount_cents": 10000}, headers=auth(u))
+        r = client.post("/api/v1/wallet/topup", json={"amount_cents": 10000}, headers=money(auth(u)))
         assert r.status_code == 200, r.text
         assert client.get("/api/v1/wallet", headers=auth(u)).json()["available_cents"] == 10000
     finally:

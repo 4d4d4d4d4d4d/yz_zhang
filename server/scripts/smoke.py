@@ -12,6 +12,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import uuid
 
 BASE = os.environ.get("PLATFORM_API_BASE", "http://localhost:8000")
 JOB_TOKEN = os.environ.get("PLATFORM_JOB_TOKEN", "dev-job-token-change-me")
@@ -78,7 +79,9 @@ def main() -> None:
 
     r_tok, w_tok = users["requester"]["token"], users["worker"]["token"]
 
-    status, body = req("POST", "/wallet/topup", {"amount_cents": 50000}, token=r_tok)
+    # FIN-073 资金接口强制带幂等键（104 号 spec）
+    status, body = req("POST", "/wallet/topup", {"amount_cents": 50000}, token=r_tok,
+                       headers={"Idempotency-Key": uuid.uuid4().hex})
     step("充值 500 元", status == 200 and body.get("status") == "succeeded", body.get("status"))
 
     status, task = req("POST", "/tasks",

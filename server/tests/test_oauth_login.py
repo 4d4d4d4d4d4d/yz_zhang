@@ -12,7 +12,7 @@ from app.modules.account.models import User
 from app.core.db import SessionLocal
 from app.vendors import registry
 
-from .conftest import auth, register
+from .conftest import money, auth, register
 
 
 def oauth(client, provider="wechat", credential="cred-abc123"):
@@ -61,7 +61,7 @@ def test_acc003_oauth_account_is_not_verified_and_says_so(client):
 
     # 提现必须仍然被实名闸门挡住
     tok = {"token": body["token"], "id": body["user"]["id"]}
-    r = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 100}, headers=auth(tok))
+    r = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 100}, headers=money(auth(tok)))
     assert r.status_code in (400, 403), "第三方登录绕过了实名闸门"
 
 

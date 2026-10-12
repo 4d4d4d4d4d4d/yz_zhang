@@ -294,11 +294,22 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - run: alembic upgrade head
+      # FIN-072（V130，104 号 spec）：资金幂等与并发这一组**必须在 Postgres 上跑**。
+      # 第一版在 SQLite 上全绿，在 Postgres 上**每一笔充值都 409**——判断「插入是否
+      # 落空」用的 rowcount 在两个驱动上语义不同。「后到的插入等前一个提交」这个
+      # 窗口也只有 Postgres 才有。单独一个库，不和下面的全链路验收混数据。
+      - name: 资金幂等与并发（Postgres）
+        env:
+          PLATFORM_DATABASE_URL: postgresql+psycopg://postgres:ci@localhost:5432/idem
+        run: |
+          python -c "import psycopg; psycopg.connect('postgresql://postgres:ci@localhost:5432/acc', autocommit=True).execute('CREATE DATABASE idem')"
+          alembic upgrade head
+          python -m pytest -q tests/test_idempotency_concurrency.py tests/test_money_duplicate_protection.py tests/test_idempotency_fingerprint.py
       - name: 启动
         run: |
           uvicorn app.main:app --port 8000 &
           for i in $(seq 1 40); do sleep 1; curl -sf http://localhost:8000/readyz && break; done
-      # 47 项全链路：交易、纠纷答辩、提现风控、上传能力 URL、越权、对账、注销
+      # 全链路：交易、纠纷答辩、提现风控（含不带幂等键被拒）、上传能力 URL、越权、对账、注销
       - name: 全链路验收
         run: PLATFORM_API_BASE=http://localhost:8000 python -m scripts.acceptance
       # DRILL-061：pg_dump → DROP SCHEMA → psql 恢复，与生产脚本同参数

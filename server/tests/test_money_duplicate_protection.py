@@ -33,7 +33,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import auth, bind_payout, register, topup, verify_user
+from tests.conftest import money, auth, bind_payout, register, topup, verify_user
 from tests.test_task_flow import match_and_fund, publish_task
 
 REPO = Path(__file__).resolve().parents[2]
@@ -182,8 +182,12 @@ def test_fin070_claimed_mechanism_is_really_in_the_code():
         if mech != "idempotency_key":
             continue
         scope = name.split(".", 1)[1] if "." in name else name
-        assert re.search(rf'replay_or_run\([^)]*"wallet\.{scope}"', wallet, re.S), (
-            f"{name} 声称靠幂等键，而 wallet/router.py 里没有对应的 replay_or_run"
+        # V130：不只要走 replay_or_run，键还必须是**强制**的——空键直接执行
+        # 等于这条保护对不带键的调用方不存在，而两端此前从来没带过键
+        assert re.search(
+            rf'replay_or_run\(db, user\.id, idempotency\.require_key\(idempotency_key\), "wallet\.{scope}"',
+            wallet), (
+            f"{name} 声称靠幂等键，而 wallet/router.py 里没有带 require_key 的 replay_or_run"
         )
         assert "idempotency_key: str = Header" in wallet, (
             "声称靠幂等键，而路由没有从请求头里接这个 key"
@@ -195,8 +199,8 @@ def test_fin070_duplicate_topup_with_same_key_credits_once(client, requester):
     """同一个幂等键充两次，只到账一次——这是键唯一的用处。"""
     before = client.get("/api/v1/wallet", headers=auth(requester)).json()["available_cents"]
     headers = {**auth(requester), "Idempotency-Key": "dup-topup-1"}
-    a = client.post("/api/v1/wallet/topup", json={"amount_cents": 50000}, headers=headers)
-    b = client.post("/api/v1/wallet/topup", json={"amount_cents": 50000}, headers=headers)
+    a = client.post("/api/v1/wallet/topup", json={"amount_cents": 50000}, headers=money(headers))
+    b = client.post("/api/v1/wallet/topup", json={"amount_cents": 50000}, headers=money(headers))
     assert a.status_code == 200 and b.status_code == 200, (a.text, b.text)
     after = client.get("/api/v1/wallet", headers=auth(requester)).json()["available_cents"]
     assert after - before == 50000, f"同 key 充两次到账了 {after - before}，应只有 50000"
@@ -209,22 +213,23 @@ def test_fin070_same_key_different_amount_is_refused_not_swallowed(client, reque
     **把一笔没发生的充值显示成成功，比报错严重得多。**
     """
     headers = {**auth(requester), "Idempotency-Key": "dup-topup-2"}
-    client.post("/api/v1/wallet/topup", json={"amount_cents": 50000}, headers=headers)
-    r = client.post("/api/v1/wallet/topup", json={"amount_cents": 80000}, headers=headers)
+    client.post("/api/v1/wallet/topup", json={"amount_cents": 50000}, headers=money(headers))
+    r = client.post("/api/v1/wallet/topup", json={"amount_cents": 80000}, headers=money(headers))
     assert r.status_code == 409, r.text
     assert r.json()["detail"]["code"] == "idempotency_key_conflict"
 
 
-def test_fin070_topup_without_key_is_two_real_topups(client, requester):
-    """没带 key 时两次充值是**两笔真的充值**，不该被当成重复吞掉。
+def test_fin070_two_keys_are_two_real_topups(client, requester):
+    """两个不同的键是**两笔真的充值**，不该被当成重复吞掉。
 
     这条是反向的：一个把「同额连充」误判成重试的系统会吞掉用户的钱。
-    **连续充两次 100 元是完全正当的操作。**
+    **连续充两次 100 元是完全正当的操作。**（V130 前这条写的是「不带键」；
+    现在资金接口强制带键，两次独立操作就是两个键。）
     """
     before = client.get("/api/v1/wallet", headers=auth(requester)).json()["available_cents"]
     for _ in range(2):
         assert client.post("/api/v1/wallet/topup", json={"amount_cents": 10000},
-                           headers=auth(requester)).status_code == 200
+                           headers=money(auth(requester))).status_code == 200
     after = client.get("/api/v1/wallet", headers=auth(requester)).json()["available_cents"]
     assert after - before == 20000, f"两笔独立充值只到账 {after - before}"
 
@@ -312,8 +317,8 @@ def test_fin070_duplicate_withdraw_with_same_key_debits_once(client):
     bind_payout(client, user)
     before = client.get("/api/v1/wallet", headers=auth(user)).json()["available_cents"]
     headers = {**auth(user), "Idempotency-Key": "dup-withdraw-1"}
-    a = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 20000}, headers=headers)
-    b = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 20000}, headers=headers)
+    a = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 20000}, headers=money(headers))
+    b = client.post("/api/v1/wallet/withdraw", json={"amount_cents": 20000}, headers=money(headers))
     assert a.status_code == 200, a.text
     assert b.status_code == 200, b.text
     after = client.get("/api/v1/wallet", headers=auth(user)).json()["available_cents"]

@@ -64,8 +64,17 @@ def verify_user(client, user, name="张三", id_number=None):
     assert r.status_code == 200, r.text
 
 
+def money(headers: dict) -> dict:
+    """FIN-073 资金接口强制带 Idempotency-Key（104 号 spec）：每次调用一个新键，
+    等于「一次新的操作」。已经带了键的（测试幂等本身的那些）原样保留。"""
+    import uuid
+
+    return {"Idempotency-Key": uuid.uuid4().hex, **headers}
+
+
 def topup(client, user, amount):
-    r = client.post("/api/v1/wallet/topup", json={"amount_cents": amount}, headers=auth(user))
+    r = client.post("/api/v1/wallet/topup", json={"amount_cents": amount},
+                    headers=money(auth(user)))
     assert r.status_code == 200, r.text
 
 

@@ -1,5 +1,5 @@
-import { apiErrorText, fmtYuan, formatDate, formatDateTime, ledgerKindLabel, type InvoiceRow, type LedgerRow, type PayoutAccountView, type TaxSummary, type Wallet } from '@platform/core';
-import { useCallback, useEffect, useState } from 'react';
+import { apiErrorText, OperationKey, fmtYuan, formatDate, formatDateTime, ledgerKindLabel, type InvoiceRow, type LedgerRow, type PayoutAccountView, type TaxSummary, type Wallet } from '@platform/core';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../store';
 
 export default function WalletPage() {
@@ -17,12 +17,19 @@ export default function WalletPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  async function act(fn: () => Promise<unknown>) {
+  // FIN-073 每个按钮一把「这次操作」的键：网络断了再点一次是重试（同一个键，
+  // 服务端回放而不是再做一遍）；双击的两下读到的也是同一个键。有确定结果后换新键。
+  const topupKey = useRef(new OperationKey());
+  const withdrawKey = useRef(new OperationKey());
+
+  async function act(fn: () => Promise<unknown>, op?: OperationKey) {
     setError('');
     try {
       await fn();
+      op?.settle();
       await load();
     } catch (err) {
+      op?.settle(err);
       setError(apiErrorText(err));
     }
   }
@@ -42,12 +49,13 @@ export default function WalletPage() {
         )}
         <div className="row">
           <input style={{ width: 120 }} type="number" min={0.01} step={0.01} value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <button onClick={() => act(() => client.topup(cents))}>充值（模拟）</button>
+          <button onClick={() => act(() => client.topup(cents, topupKey.current.for(`topup:${cents}`)),
+                                     topupKey.current)}>充值（模拟）</button>
           <button className="ghost" onClick={() => act(async () => {
-            const r = await client.withdraw(cents);
+            const r = await client.withdraw(cents, withdrawKey.current.for(`withdraw:${cents}`));
             // AML-030/031 大额进人审时服务端给的是**中性话术**，原样显示
             setHint(r.status === 'pending_review' ? (r.message ?? '提现申请已提交，等待处理') : '');
-          })}>提现</button>
+          }, withdrawKey.current)}>提现</button>
         </div>
         {hint && <p className="muted">{hint}</p>}
         {error && <p className="error">{error}</p>}
