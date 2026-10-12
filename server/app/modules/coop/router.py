@@ -84,7 +84,7 @@ def risk_disclosure(name: str = "（待定）"):
 # ------------------------------------------------------------------------ 合作体
 @router.post("", status_code=201)
 def create_venture(body: VentureIn, user: User = Depends(require_verified),
-                   db: Session = Depends(get_db)):
+                   db: Session = Depends(get_db, scope="function")):
     """建一个合作体。发起人也要签风险揭示书——**他承担的风险不比别人少**。"""
     if body.risk_disclosure_version != cpath.RISK_DISCLOSURE_VERSION:
         raise conflict("需先签署当前版本的风险揭示书", "risk_disclosure_required")
@@ -107,7 +107,7 @@ def create_venture(body: VentureIn, user: User = Depends(require_verified),
 
 
 @router.get("/mine")
-def my_ventures(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_ventures(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     rows = db.query(VentureMember).filter(VentureMember.user_id == user.id,
                                           VentureMember.active.is_(True)).all()
     out = []
@@ -120,7 +120,7 @@ def my_ventures(user: User = Depends(get_current_user), db: Session = Depends(ge
 
 @router.get("/{venture_id}")
 def get_venture(venture_id: int, user: User = Depends(get_current_user),
-                db: Session = Depends(get_db)):
+                db: Session = Depends(get_db, scope="function")):
     v = _get(db, venture_id)
     _require_member(db, venture_id, user)
     from app.modules.wallet import service as wallet
@@ -144,7 +144,7 @@ def get_venture(venture_id: int, user: User = Depends(get_current_user),
 # （另外两条：只分已实现收益、份额不可转让）。
 @router.post("/{venture_id}/invitations", status_code=201)
 def invite(venture_id: int, body: InviteIn, user: User = Depends(get_current_user),
-           db: Session = Depends(get_db)):
+           db: Session = Depends(get_db, scope="function")):
     v = _get(db, venture_id)
     _require_member(db, venture_id, user)
     invitee = db.get(User, body.user_id)
@@ -167,7 +167,7 @@ def invite(venture_id: int, body: InviteIn, user: User = Depends(get_current_use
 
 @router.post("/{venture_id}/members", status_code=201)
 def accept_invite(venture_id: int, body: AcceptInviteIn,
-                  user: User = Depends(require_verified), db: Session = Depends(get_db)):
+                  user: User = Depends(require_verified), db: Session = Depends(get_db, scope="function")):
     v = _get(db, venture_id)
     m = service.add_member(db, v, user, body.risk_disclosure_version)
     return {"venture_id": venture_id, "user_id": m.user_id, "role": m.role}
@@ -177,7 +177,7 @@ def accept_invite(venture_id: int, body: AcceptInviteIn,
 @router.post("/{venture_id}/contributions", status_code=201)
 def submit_contribution(venture_id: int, body: ContributionIn,
                         user: User = Depends(get_current_user),
-                        db: Session = Depends(get_db)):
+                        db: Session = Depends(get_db, scope="function")):
     _get(db, venture_id)
     _require_member(db, venture_id, user)
     row = Contribution(venture_id=venture_id, user_id=user.id, kind=body.kind,
@@ -190,7 +190,7 @@ def submit_contribution(venture_id: int, body: ContributionIn,
 
 @router.get("/{venture_id}/contributions")
 def list_contributions(venture_id: int, user: User = Depends(get_current_user),
-                       db: Session = Depends(get_db)):
+                       db: Session = Depends(get_db, scope="function")):
     _get(db, venture_id)
     _require_member(db, venture_id, user)
     rows = (db.query(Contribution).filter(Contribution.venture_id == venture_id)
@@ -209,7 +209,7 @@ def list_contributions(venture_id: int, user: User = Depends(get_current_user),
 
 @router.post("/{venture_id}/contributions/{contribution_id}/confirm")
 def confirm(venture_id: int, contribution_id: int, body: ConfirmIn,
-            user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+            user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     _get(db, venture_id)
     row = db.get(Contribution, contribution_id)
     if not row or row.venture_id != venture_id:
@@ -222,7 +222,7 @@ def confirm(venture_id: int, contribution_id: int, body: ConfirmIn,
 
 @router.get("/{venture_id}/shares")
 def shares(venture_id: int, user: User = Depends(get_current_user),
-           db: Session = Depends(get_db)):
+           db: Session = Depends(get_db, scope="function")):
     _get(db, venture_id)
     _require_member(db, venture_id, user)
     rows = service.shares_bps(db, venture_id)
@@ -237,7 +237,7 @@ def shares(venture_id: int, user: User = Depends(get_current_user),
 # ------------------------------------------------------------------------ 分配
 @router.post("/{venture_id}/distributions", status_code=201)
 def distribute(venture_id: int, body: DistributeIn,
-               user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+               user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     v = _get(db, venture_id)
     _require_member(db, venture_id, user)
     from .governance import execute
@@ -249,7 +249,7 @@ def distribute(venture_id: int, body: DistributeIn,
 
 @router.get("/{venture_id}/distributions")
 def list_distributions(venture_id: int, user: User = Depends(get_current_user),
-                       db: Session = Depends(get_db)):
+                       db: Session = Depends(get_db, scope="function")):
     _get(db, venture_id)
     _require_member(db, venture_id, user)
     rows = (db.query(Distribution).filter(Distribution.venture_id == venture_id)
@@ -263,7 +263,7 @@ def list_distributions(venture_id: int, user: User = Depends(get_current_user),
 # ------------------------------------------------------------------ 合规路径
 @router.get("/{venture_id}/compliance-path")
 def compliance(venture_id: int, user: User = Depends(get_current_user),
-               db: Session = Depends(get_db)):
+               db: Session = Depends(get_db, scope="function")):
     """COOP-040 **告诉你需要什么，不拦住你。**
 
     合规是路径上的一步：需要什么文件就生成什么，需要什么资质就去办。

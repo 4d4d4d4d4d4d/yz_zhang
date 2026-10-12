@@ -93,7 +93,7 @@ V88 把最关键的一条（发布必填字段）提升成了类型约束，但
 |---|---|---|
 | **幂等键 + 请求指纹** | `core/idempotency.py` | 网络重试重复扣款；同 key 不同金额（吞单）；跨操作串味。**充值/提现强制带键**，两端按「一次操作一个键」发（V130）；**先占键再动钱**，并发同键回放第一次的结果而不是 500；记录保留 `PLATFORM_IDEMPOTENCY_RETENTION_HOURS`（默认 24），过期在读的时候生效，`/wallet/jobs/purge-idempotency` 每天清一次（104 号 spec） |
 | **状态机白名单** | `task/service.py::transition` | 并发双击导致重复放款——第二次必落在非法流转上 |
-| **事务边界整体回滚** | `core/db.py::get_db` | 任一步失败则整笔回滚，不留半截状态 |
+| **事务边界整体回滚** | `core/db.py::get_db` | 任一步失败则整笔回滚，不留半截状态。**提交在响应发出之前**（`scope="function"`，V131）：此前客户端可能先拿到「成功」、提交才发生，提交失败时用户已被告知成功（105 号 spec） |
 | **DB 唯一约束** | `contracts.task_id UNIQUE` 等 | 一任务一合约的最后一道防线 |
 | **限流（滑动窗口）** | `core/ratelimit.py` | 注册/登录/改密/换绑的暴力尝试 |
 | **对账不变量** | `risk/service.py::reconcile` | 五条硬不变量兜底，不平自动开工单+告警 |
@@ -137,7 +137,7 @@ python -m scripts.loadtest --concurrency 16 --requests 600 --scenario read
 python -m scripts.loadtest --concurrency 16 --requests 400 --scenario write
 ```
 
-这套组合已被 **1367 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
+这套组合已被 **1371 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
 「重复接受报名 / 重复托管 / 重复交付 / 重复验收 / 重复里程碑放款」全部拒绝且零副作用。
 
 ### 2.2 多副本并发安全（V42 已补齐，见 [18-concurrency.md](specs/18-concurrency.md)）
@@ -637,7 +637,7 @@ Postgres 双引擎迁移检查与部署验收。
 **已经很扎实的**：交易闭环、资金安全与守恒、纠纷程序正义、账号安全、审计留痕、
 多副本并发安全、外部供应商可替换性、事件投递的失败隔离与可补做、
 个税代扣的资金隔离与可对账、反洗钱的可疑识别与保密、边界防护的跨副本一致性、
-定时任务编排的完整性、处置动作的一致性。这些有 1367 个测试钉着。
+定时任务编排的完整性、处置动作的一致性。这些有 1371 个测试钉着。
 
 **离真正上线还差的**（按紧迫度）：
 1. ~~Postgres + 行锁/乐观锁~~ —— **V42 已完成**（切库只改环境变量）

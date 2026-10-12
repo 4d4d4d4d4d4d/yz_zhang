@@ -47,7 +47,7 @@ def _read_cursor(db: Session, conv_id: int, user_id: int) -> int:
 
 
 @router.get("/conversations")
-def my_conversations(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_conversations(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """IM-010 会话列表附未读数与最后一条消息预览（聊天列表标配）。"""
     from sqlalchemy import func
 
@@ -84,7 +84,7 @@ def my_conversations(user: User = Depends(get_current_user), db: Session = Depen
 
 
 @router.get("/conversations/unread-count")
-def im_unread_count(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def im_unread_count(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """IM-010 全局未读消息数（聊天 Tab 红点）。"""
     from sqlalchemy import func
 
@@ -104,7 +104,7 @@ def im_unread_count(user: User = Depends(get_current_user), db: Session = Depend
 
 @router.post("/conversations/{conv_id}/read")
 def mark_conversation_read(
-    conv_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    conv_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """IM-010 标记会话已读（推进已读位点到最新一条）。"""
     from app.modules.account.models import utcnow
@@ -132,7 +132,7 @@ def mark_conversation_read(
 
 
 @router.post("/conversations/direct")
-def open_direct(body: DirectIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def open_direct(body: DirectIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     if body.user_id == user.id:
         raise forbidden("不能和自己聊天")
     if not db.get(User, body.user_id):
@@ -155,7 +155,7 @@ def _get_conv(db: Session, conv_id: int, user: User) -> Conversation:
 
 @router.post("/conversations/{conv_id}/messages", status_code=201)
 def send_message(
-    conv_id: int, body: MessageIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    conv_id: int, body: MessageIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     conv = _get_conv(db, conv_id, user)
     # IM-003 禁言必须在这里生效。只把名单存进 `muted` 而不在发消息处读它，
@@ -179,7 +179,7 @@ def send_message(
 
 @router.post("/conversations/{conv_id}/quote-cards", status_code=201)
 def send_quote_card(
-    conv_id: int, body: QuoteCardIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    conv_id: int, body: QuoteCardIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """IM-009 发送报价卡（结构化 JSON 内容，前端渲染为卡片）。"""
     import json
@@ -194,7 +194,7 @@ def send_quote_card(
 
 
 @router.get("/conversations/{conv_id}/messages")
-def list_messages(conv_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_messages(conv_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     conv = _get_conv(db, conv_id, user)
     rows = db.query(Message).filter(Message.conversation_id == conv.id).order_by(Message.id).all()
     return [
@@ -208,7 +208,7 @@ def list_messages(conv_id: int, user: User = Depends(get_current_user), db: Sess
 
 
 @router.post("/messages/{message_id}/recall")
-def recall_message(message_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def recall_message(message_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """IM-004：发送者 2 分钟内可撤回；任务会话保留后台审计副本。"""
     from datetime import timedelta
 

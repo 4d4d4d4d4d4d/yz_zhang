@@ -51,7 +51,7 @@ def list_scopes():
 
 @router.post("/developer/api-keys", status_code=201)
 def create_key(body: KeyIn, user: User = Depends(get_current_user),
-               db: Session = Depends(get_db)):
+               db: Session = Depends(get_db, scope="function")):
     """API-001 明文 key **只在这个响应里出现一次**。"""
     row, raw = service.issue_key(db, user, body.name, body.scopes)
     return {
@@ -63,7 +63,7 @@ def create_key(body: KeyIn, user: User = Depends(get_current_user),
 
 
 @router.get("/developer/api-keys")
-def list_keys(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_keys(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     rows = (db.query(ApiKey).filter(ApiKey.user_id == user.id)
             .order_by(ApiKey.id.desc()).all())
     return [
@@ -77,7 +77,7 @@ def list_keys(user: User = Depends(get_current_user), db: Session = Depends(get_
 
 @router.delete("/developer/api-keys/{key_id}")
 def revoke_key(key_id: int, user: User = Depends(get_current_user),
-               db: Session = Depends(get_db)):
+               db: Session = Depends(get_db, scope="function")):
     row = db.get(ApiKey, key_id)
     if not row or row.user_id != user.id:
         raise not_found("密钥不存在")
@@ -87,7 +87,7 @@ def revoke_key(key_id: int, user: User = Depends(get_current_user),
 
 @router.post("/developer/api-keys/{key_id}/rotate", status_code=201)
 def rotate_key(key_id: int, user: User = Depends(get_current_user),
-               db: Session = Depends(get_db)):
+               db: Session = Depends(get_db, scope="function")):
     """轮换：生成新 key，**旧 key 立刻失效**。
 
     因为明文找不回来，轮换是「丢了怎么办」的唯一出路，必须提供。
@@ -103,7 +103,7 @@ def rotate_key(key_id: int, user: User = Depends(get_current_user),
 
 @router.post("/developer/webhooks", status_code=201)
 def create_webhook(body: WebhookIn, user: User = Depends(get_current_user),
-                   db: Session = Depends(get_db)):
+                   db: Session = Depends(get_db, scope="function")):
     row = service.create_webhook(db, user, body.url, body.events)
     return {
         "id": row.id, "url": row.url, "events": row.events,
@@ -117,7 +117,7 @@ def create_webhook(body: WebhookIn, user: User = Depends(get_current_user),
 
 
 @router.get("/developer/webhooks")
-def list_webhooks(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_webhooks(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     rows = db.query(Webhook).filter(Webhook.user_id == user.id).all()
     return [
         {"id": r.id, "url": r.url, "events": r.events, "active": r.active,
@@ -129,7 +129,7 @@ def list_webhooks(user: User = Depends(get_current_user), db: Session = Depends(
 
 @router.get("/developer/webhooks/{webhook_id}/deliveries")
 def list_deliveries(webhook_id: int, user: User = Depends(get_current_user),
-                    db: Session = Depends(get_db)):
+                    db: Session = Depends(get_db, scope="function")):
     """HOOK-002 投递记录。
 
     没有记录的话，集成方报「我没收到」时平台只能说「我发了」——
@@ -152,7 +152,7 @@ def list_deliveries(webhook_id: int, user: User = Depends(get_current_user),
 
 @router.delete("/developer/webhooks/{webhook_id}")
 def delete_webhook(webhook_id: int, user: User = Depends(get_current_user),
-                   db: Session = Depends(get_db)):
+                   db: Session = Depends(get_db, scope="function")):
     hook = db.get(Webhook, webhook_id)
     if not hook or hook.user_id != user.id:
         raise not_found("Webhook 不存在")
@@ -165,7 +165,7 @@ def delete_webhook(webhook_id: int, user: User = Depends(get_current_user),
 def open_list_tasks(limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
                     marketplace: bool = False,
                     principal=Depends(require_scope("tasks:read")),
-                    db: Session = Depends(get_db)):
+                    db: Session = Depends(get_db, scope="function")):
     from app.modules.task.models import Task
 
     _key, user = principal
@@ -183,7 +183,7 @@ def open_list_tasks(limit: int = Query(default=20, ge=1, le=100), offset: int = 
 
 @router.get("/open/v1/tasks/{task_id}")
 def open_get_task(task_id: int, marketplace: bool = False, principal=Depends(require_scope("tasks:read")),
-                  db: Session = Depends(get_db)):
+                  db: Session = Depends(get_db, scope="function")):
     from app.modules.task.models import Task
 
     _key, user = principal
@@ -200,7 +200,7 @@ def open_get_task(task_id: int, marketplace: bool = False, principal=Depends(req
 
 @router.get("/open/v1/wallet")
 def open_wallet(principal=Depends(require_scope("wallet:read")),
-                db: Session = Depends(get_db)):
+                db: Session = Depends(get_db, scope="function")):
     from app.modules.wallet import service as wallet
 
     _key, user = principal
@@ -211,6 +211,6 @@ def open_wallet(principal=Depends(require_scope("wallet:read")),
 
 
 @router.post("/openapi/jobs/deliver-webhooks")
-def run_deliver(db: Session = Depends(get_db), _=Depends(require_job_auth),
-                __=Depends(job_slot("deliver_webhooks"))):
+def run_deliver(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                __=Depends(job_slot("deliver_webhooks"), scope="function")):
     return service.deliver_pending(db)

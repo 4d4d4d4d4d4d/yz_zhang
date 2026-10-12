@@ -58,7 +58,7 @@ def _get_mission(db: Session, mission_id: int, user: User) -> Mission:
 
 @router.post("/missions", status_code=201)
 def create_mission(
-    body: MissionIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    body: MissionIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """ORC-001 创建编排目标（尚未分发，需 tick 推进）。"""
     m = Mission(
@@ -76,7 +76,7 @@ def my_missions(
     status: str | None = None,
     limit: int = Query(default=20, le=100),
     offset: int = Query(default=0, ge=0),
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     q = db.query(Mission).filter(Mission.owner_id == user.id)
     if status:
@@ -86,7 +86,7 @@ def my_missions(
 
 @router.get("/missions/{mission_id}")
 def get_mission(
-    mission_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    mission_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     m = _get_mission(db, mission_id, user)
     steps = (
@@ -121,7 +121,7 @@ def get_mission(
 @router.get("/missions/{mission_id}/steps/{step_id}/reviews")
 def step_reviews(
     mission_id: int, step_id: int,
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     """AIO-013 评审留痕：谁判的、用哪版提示词、依据什么、多久。
 
@@ -144,7 +144,7 @@ def step_reviews(
 
 @router.post("/missions/{mission_id}/tick")
 def tick_mission(
-    mission_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    mission_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """ORC-002 推进一轮：规划 → 观测 → 评估 → 分发/迭代 → 停机判定。"""
     m = _get_mission(db, mission_id, user)
@@ -153,7 +153,7 @@ def tick_mission(
 
 @router.post("/missions/{mission_id}/cancel")
 def cancel_mission(
-    mission_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    mission_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """ORC-004 人工停机：随时可中止 agent（未成交的挂单一并下架）。"""
     from app.modules.task.models import Task
@@ -179,8 +179,8 @@ def cancel_mission(
 
 
 @router.post("/missions/jobs/tick-all")
-def tick_all(db: Session = Depends(get_db), _=Depends(require_job_auth),
-        __=Depends(job_slot("mission_tick_all"))):
+def tick_all(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("mission_tick_all"), scope="function")):
     """ORC-006 自动驱动：定时器批量推进运行中的编排（agent loop 的心跳）。"""
     rows = db.query(Mission).filter(Mission.status.in_(("running", "planning"))).all()
     ticked = 0

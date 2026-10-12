@@ -69,7 +69,7 @@ def _dump(row):
 
 
 @router.get('/{venture_id}/payout-proposals')
-def proposals(venture_id: int, user: User = Depends(require_verified), db: Session = Depends(get_db)):
+def proposals(venture_id: int, user: User = Depends(require_verified), db: Session = Depends(get_db, scope="function")):
     if not service.is_member(db, venture_id, user.id):
         raise forbidden('仅合作体成员可读取分配提案')
     return [_dump(r) for r in db.query(PayoutProposal).filter_by(venture_id=venture_id)
@@ -77,7 +77,7 @@ def proposals(venture_id: int, user: User = Depends(require_verified), db: Sessi
 
 
 @router.post('/{venture_id}/payout-proposals', status_code=201)
-def propose(venture_id: int, body: ProposalIn, user: User = Depends(require_verified), db: Session = Depends(get_db)):
+def propose(venture_id: int, body: ProposalIn, user: User = Depends(require_verified), db: Session = Depends(get_db, scope="function")):
     from app.modules.legal.consent import require_current_agreement
     require_current_agreement(db, user.id)
     _lock(db, venture_id, user)
@@ -98,7 +98,7 @@ def propose(venture_id: int, body: ProposalIn, user: User = Depends(require_veri
 
 @router.post('/{venture_id}/payout-proposals/{proposal_id}/vote')
 def vote(venture_id: int, proposal_id: int, body: VoteIn,
-         user: User = Depends(require_verified), db: Session = Depends(get_db)):
+         user: User = Depends(require_verified), db: Session = Depends(get_db, scope="function")):
     from app.modules.legal.consent import require_current_agreement
     require_current_agreement(db, user.id)
     _lock(db, venture_id, user)

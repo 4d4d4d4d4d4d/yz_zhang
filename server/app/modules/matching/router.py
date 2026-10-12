@@ -28,7 +28,7 @@ class SubscribeIn(BaseModel):
 # ---------- MATCH-004 定向邀约 ----------
 @router.post("/tasks/{task_id}/invitations", status_code=201)
 def invite(
-    task_id: int, body: InviteIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    task_id: int, body: InviteIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     task = db.get(Task, task_id)
     if not task:
@@ -58,7 +58,7 @@ def invite(
 
 
 @router.get("/invitations")
-def my_invitations(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_invitations(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     rows = (
         db.query(Invitation)
         .filter(Invitation.invitee_id == user.id)
@@ -79,7 +79,7 @@ def my_invitations(user: User = Depends(get_current_user), db: Session = Depends
 
 @router.post("/invitations/{invitation_id}/accept")
 def accept_invitation(
-    invitation_id: int, user: User = Depends(require_verified), db: Session = Depends(get_db)
+    invitation_id: int, user: User = Depends(require_verified), db: Session = Depends(get_db, scope="function")
 ):
     """接受邀约 = 直接成交：生成报名记录 + 合约，任务 → matched（TASK-020）。"""
     inv = db.get(Invitation, invitation_id)
@@ -110,7 +110,7 @@ def accept_invitation(
 
 @router.post("/invitations/{invitation_id}/decline")
 def decline_invitation(
-    invitation_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    invitation_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     inv = db.get(Invitation, invitation_id)
     if not inv or inv.invitee_id != user.id:
@@ -125,7 +125,7 @@ def decline_invitation(
 # ---------- TASK-042 任务订阅 ----------
 @router.post("/subscriptions", status_code=201)
 def subscribe_category(
-    body: SubscribeIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    body: SubscribeIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     if db.query(Subscription).filter(
         Subscription.user_id == user.id,
@@ -140,13 +140,13 @@ def subscribe_category(
 
 
 @router.get("/subscriptions")
-def my_subscriptions(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_subscriptions(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     rows = db.query(Subscription).filter(Subscription.user_id == user.id).all()
     return [{"id": r.id, "category": r.category, "city": r.city} for r in rows]
 
 
 @router.delete("/subscriptions/{sub_id}")
-def unsubscribe(sub_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def unsubscribe(sub_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     row = db.get(Subscription, sub_id)
     if not row or row.user_id != user.id:
         raise not_found("订阅不存在")

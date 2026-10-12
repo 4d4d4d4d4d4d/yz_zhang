@@ -1,8 +1,8 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 2026-10-12：V130 幂等键真的护住钱（并发同键、过期、两端发键；Postgres 上实测）；V129 前端测试计数与结构计数进闸门（上线手册的 job 数是错的）；V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
+> 2026-10-12：V131 写操作在响应发出之前提交（FastAPI yield 依赖的作用域）；V130 幂等键真的护住钱（并发同键、过期、两端发键；Postgres 上实测）；V129 前端测试计数与结构计数进闸门（上线手册的 job 数是错的）；V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
 > 2026-10-09：V119 法定权利入口进 App；V118 单聊并发分叉修复；V117 关注幂等化并接到空间；V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
-> 后端 1367 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
+> 后端 1371 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
 > （真 Chromium × 构建产物 × 真服务端，14 项）。
@@ -15,6 +15,16 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V131 批次：写操作必须在响应发出之前提交）
+
+> 模块 spec：[105-commit-before-the-response.md](105-commit-before-the-response.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **CONC-070 提交先于响应** | 所有 `Depends(get_db)` 与 `Depends(job_slot(...))` 改成 `scope="function"`；此前 `commit()` 在响应送达之后才执行 | `test_commit_before_response::test_conc070_deactivation_is_committed_before_the_client_hears_ok`、`::test_conc070_topup_is_committed_before_the_client_hears_succeeded`（直接驱动 ASGI，响应体发出那一刻查库） |
+| **一个请求一个会话** | 作用域是依赖缓存键的一部分，混用会建出两个会话——遍历路由树钉住每一个 `yield` 依赖 | `::test_conc070_every_generator_dependency_is_function_scoped`、`::test_conc070_no_bare_get_db_in_source` |
+| **Postgres** | 这组测试进了 CI 的 Postgres job；本地 Postgres 上全链路验收六轮全绿（但证据是确定性探针） | CI `postgres-acceptance` |
 
 ## 已实现（V130 批次：幂等键从「支持」到真的护住钱）
 

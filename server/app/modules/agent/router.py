@@ -63,7 +63,7 @@ def _dump_run(r: AgentRun) -> dict:
 # ---------- 平台侧（admin）：agent 是平台自有的，只有平台能注册 ----------
 @router.post("/admin/agents", status_code=201)
 def create_agent(body: AgentIn, admin: User = Depends(require_admin),
-                 db: Session = Depends(get_db)):
+                 db: Session = Depends(get_db, scope="function")):
     """注册一个平台自有 agent：建 User 行 + profile。
 
     建 User 行不是为了让它「像个用户」，是为了让托管/纠纷/信用/账本
@@ -96,7 +96,7 @@ def create_agent(body: AgentIn, admin: User = Depends(require_admin),
 
 
 @router.get("/admin/agents")
-def list_agents_admin(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+def list_agents_admin(_: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     """带毛利。AGT-016：没有这个数字，「让 agent 接单」是赚是赔谁也说不清。"""
     out = []
     for p in db.query(AgentProfile).all():
@@ -115,7 +115,7 @@ def list_agents_admin(_: User = Depends(require_admin), db: Session = Depends(ge
 
 @router.patch("/admin/agents/{agent_user_id}")
 def patch_agent(agent_user_id: int, body: AgentPatch, admin: User = Depends(require_admin),
-                db: Session = Depends(get_db)):
+                db: Session = Depends(get_db, scope="function")):
     from app.modules.admin.router import record_audit
 
     p = db.get(AgentProfile, agent_user_id)
@@ -130,14 +130,14 @@ def patch_agent(agent_user_id: int, body: AgentPatch, admin: User = Depends(requ
 
 # ---------- 用户侧 ----------
 @router.get("/agents")
-def list_agents(_: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_agents(_: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     return [_public(p) for p in
             db.query(AgentProfile).filter(AgentProfile.is_active.is_(True)).all()]
 
 
 @router.get("/tasks/{task_id}/eligible-agents")
 def eligible_agents(task_id: int, user: User = Depends(get_current_user),
-                    db: Session = Depends(get_db)):
+                    db: Session = Depends(get_db, scope="function")):
     """这个任务哪些 agent 能接，以及不能接的**说明理由**。
 
     只说「没有可用助理」没有意义——发布方不知道是因为要到场、
@@ -157,7 +157,7 @@ def eligible_agents(task_id: int, user: User = Depends(get_current_user),
 
 @router.post("/tasks/{task_id}/agent-apply", status_code=201)
 def agent_apply(task_id: int, agent_user_id: int,
-                user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+                user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """让指定 agent 报名。**由发布方主动触发，不自动派单**——
     让 AI 接自己的活是一个需要知情的选择，静默派单等于替用户做主。
 
@@ -193,7 +193,7 @@ def agent_apply(task_id: int, agent_user_id: int,
 
 @router.post("/tasks/{task_id}/agent-run", status_code=201)
 def trigger_run(task_id: int, user: User = Depends(get_current_user),
-                db: Session = Depends(get_db)):
+                db: Session = Depends(get_db, scope="function")):
     from app.modules.contract.models import Contract
     from app.modules.task.router import _get_task
 
@@ -212,7 +212,7 @@ def trigger_run(task_id: int, user: User = Depends(get_current_user),
 
 @router.get("/tasks/{task_id}/agent-runs")
 def list_runs(task_id: int, user: User = Depends(get_current_user),
-              db: Session = Depends(get_db)):
+              db: Session = Depends(get_db, scope="function")):
     from app.modules.task.router import _get_task
 
     task = _get_task(db, task_id)

@@ -48,7 +48,7 @@ def _dump(c: Circle, db: Session, viewer: User | None = None) -> dict:
 
 
 @router.post("", status_code=201)
-def create_circle(body: CircleIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_circle(body: CircleIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     if body.kind not in CIRCLE_KINDS:
         raise bad_request("非法圈层类型", "invalid_kind")
     if body.join_policy not in JOIN_POLICIES:
@@ -78,7 +78,7 @@ def discover(
     kind: str | None = None,
     recommended: bool = False,
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     limit: int = Query(default=20, le=100),
 ):
     """CIR-002 圈层发现：按兴趣/技能/城市推荐。"""
@@ -105,7 +105,7 @@ def discover(
 
 
 @router.get("/{circle_id}")
-def get_circle(circle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_circle(circle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     c = db.get(Circle, circle_id)
     if not c:
         raise not_found("圈层不存在")
@@ -113,7 +113,7 @@ def get_circle(circle_id: int, user: User = Depends(get_current_user), db: Sessi
 
 
 @router.post("/{circle_id}/join")
-def join(circle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def join(circle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """CIR-003 加入：能力圈校验信用门槛；approval 制进入待审核。"""
     circle = db.get(Circle, circle_id)
     if not circle:
@@ -140,7 +140,7 @@ def _activate(db: Session, circle: Circle, user_id: int) -> None:
 
 @router.post("/{circle_id}/members/{user_id}/approve")
 def approve(
-    circle_id: int, user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    circle_id: int, user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """CIR-007 管理员审批加入申请。"""
     circle = db.get(Circle, circle_id)
@@ -160,7 +160,7 @@ def approve(
 
 @router.post("/{circle_id}/members/{user_id}/remove")
 def remove_member(
-    circle_id: int, user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    circle_id: int, user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """CIR-007 移出成员。"""
     circle = db.get(Circle, circle_id)
@@ -187,7 +187,7 @@ def remove_member(
 
 
 @router.get("/{circle_id}/members")
-def members(circle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def members(circle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     rows = (
         db.query(CircleMember)
         .filter(CircleMember.circle_id == circle_id, CircleMember.status == "active")
@@ -202,7 +202,7 @@ def members(circle_id: int, user: User = Depends(get_current_user), db: Session 
 
 
 @router.get("/{circle_id}/stats")
-def circle_stats(circle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def circle_stats(circle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """CIR-009 圈层数据面板（管理员）。"""
     circle = db.get(Circle, circle_id)
     if not circle:
@@ -234,7 +234,7 @@ def circle_stats(circle_id: int, user: User = Depends(get_current_user), db: Ses
 
 
 @router.get("/{circle_id}/feed")
-def circle_feed(circle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def circle_feed(circle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """CIR-004 圈层内容流（仅成员可见）。"""
     if not active_member(db, circle_id, user.id):
         raise forbidden("需加入圈层后查看", "not_circle_member")
@@ -252,7 +252,7 @@ def circle_feed(circle_id: int, user: User = Depends(get_current_user), db: Sess
 
 
 @router.get("/{circle_id}/tasks")
-def circle_tasks(circle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def circle_tasks(circle_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """CIR-005 圈层任务板（仅成员可见，圈内任务同样走合约托管）。"""
     if not active_member(db, circle_id, user.id):
         raise forbidden("需加入圈层后查看", "not_circle_member")

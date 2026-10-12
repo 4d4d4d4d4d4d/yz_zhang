@@ -63,7 +63,7 @@ def dump(space, user, full=True):
 
 @router.get('/spaces')
 def discover_spaces(response: Response, q: str = Query(default='', max_length=80), after: int = Query(default=0, ge=0),
-                    limit: int = Query(default=18, ge=1, le=48), db: Session = Depends(get_db)):
+                    limit: int = Query(default=18, ge=1, le=48), db: Session = Depends(get_db, scope="function")):
     response.headers['Cache-Control'] = 'no-store'
     query = visible(db.query(PersonalSpace, User).join(User, User.id == PersonalSpace.user_id))
     if q.strip():
@@ -75,7 +75,7 @@ def discover_spaces(response: Response, q: str = Query(default='', max_length=80
 
 
 @router.get('/spaces/me')
-def own_space(response: Response, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def own_space(response: Response, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     response.headers['Cache-Control'] = 'no-store'
     s = db.get(PersonalSpace, user.id)
     if not s:
@@ -85,7 +85,7 @@ def own_space(response: Response, user: User = Depends(get_current_user), db: Se
 
 
 @router.put('/spaces/me')
-def save_space(body: SpaceIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def save_space(body: SpaceIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     # Serialize saves for the same owner; revision prevents silent edits from stale browser tabs.
     db.query(User).filter(User.id == user.id).with_for_update().one()
     s = db.query(PersonalSpace).filter(PersonalSpace.user_id == user.id).populate_existing().first()
@@ -110,7 +110,7 @@ def save_space(body: SpaceIn, user: User = Depends(get_current_user), db: Sessio
 
 
 @router.get('/spaces/{user_id}')
-def public_space(user_id: int, response: Response, db: Session = Depends(get_db)):
+def public_space(user_id: int, response: Response, db: Session = Depends(get_db, scope="function")):
     response.headers['Cache-Control'] = 'no-store'
     row = visible(db.query(PersonalSpace, User).join(User, User.id == PersonalSpace.user_id)).filter(User.id == user_id).first()
     if not row:

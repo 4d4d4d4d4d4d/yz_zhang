@@ -18,7 +18,7 @@ from .models import ApiKey
 
 
 def api_principal(
-    db: Session = Depends(get_db), x_api_key: str = Header(default=""),
+    db: Session = Depends(get_db, scope="function"), x_api_key: str = Header(default=""),
 ) -> tuple[ApiKey, User]:
     if not x_api_key:
         raise forbidden("缺少 X-API-Key", "api_key_required")

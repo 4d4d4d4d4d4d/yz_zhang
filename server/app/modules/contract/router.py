@@ -66,8 +66,8 @@ def _dump(c: Contract, db: Session | None = None) -> dict:
 
 
 @router.post("/jobs/expire-unsigned")
-def run_expire_unsigned(db: Session = Depends(get_db), _=Depends(require_job_auth),
-        __=Depends(job_slot("expire_unsigned"))):
+def run_expire_unsigned(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("expire_unsigned"), scope="function")):
     """SC-012 签署有效期 job：成交后超期未双签的合约自动作废。
 
     业界惯例（offer 有效期）：避免一方失联导致任务永久卡在 matched、
@@ -100,7 +100,7 @@ def run_expire_unsigned(db: Session = Depends(get_db), _=Depends(require_job_aut
 
 @router.get("/by-task/{task_id}")
 def get_contract_by_task(
-    task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     contract = db.query(Contract).filter(Contract.task_id == task_id).first()
     if not contract:
@@ -112,14 +112,14 @@ def get_contract_by_task(
 
 @router.get("/{contract_id}")
 def get_contract(
-    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     return _dump(_get(db, contract_id, user), db)
 
 
 @router.get("/{contract_id}/export")
 def export_contract(
-    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """SC-010 合约文本与结算凭证导出（当事人；含全部资金流水与存证哈希）。"""
     from app.modules.anchor.models import AnchorEntry
@@ -175,7 +175,7 @@ def _milestone(db: Session, contract: Contract, idx: int) -> Milestone:
 
 @router.post("/{contract_id}/milestones")
 def define_milestones(
-    contract_id: int, body: MilestonesIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    contract_id: int, body: MilestonesIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     contract = _get(db, contract_id, user)
     service.define_milestones(db, contract, user.id, body.items)
@@ -184,7 +184,7 @@ def define_milestones(
 
 @router.post("/{contract_id}/milestones/{idx}/deliver")
 def deliver_milestone(
-    contract_id: int, idx: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    contract_id: int, idx: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     contract = _get(db, contract_id, user)
     service.deliver_milestone(db, contract, user.id, _milestone(db, contract, idx))
@@ -193,7 +193,7 @@ def deliver_milestone(
 
 @router.post("/{contract_id}/milestones/{idx}/accept")
 def accept_milestone(
-    contract_id: int, idx: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    contract_id: int, idx: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     contract = _get(db, contract_id, user)
     service.release_milestone(db, contract, user.id, _milestone(db, contract, idx))
@@ -218,7 +218,7 @@ def accept_milestone(
 # ---------- SC-007 变更单 ----------
 @router.post("/{contract_id}/change-orders", status_code=201)
 def propose_change(
-    contract_id: int, body: ChangeIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    contract_id: int, body: ChangeIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     contract = _get(db, contract_id, user)
     order = service.propose_change(db, contract, user.id, body.new_amount_cents, body.reason)
@@ -227,7 +227,7 @@ def propose_change(
 
 @router.post("/{contract_id}/change-orders/{order_id}/accept")
 def accept_change(
-    contract_id: int, order_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    contract_id: int, order_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     contract = _get(db, contract_id, user)
     order = db.get(ChangeOrder, order_id)
@@ -239,7 +239,7 @@ def accept_change(
 
 @router.post("/{contract_id}/change-orders/{order_id}/reject")
 def reject_change(
-    contract_id: int, order_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    contract_id: int, order_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     contract = _get(db, contract_id, user)
     order = db.get(ChangeOrder, order_id)
@@ -257,7 +257,7 @@ def reject_change(
 
 @router.get("/{contract_id}/change-orders")
 def list_change_orders(
-    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """SC-007 列出变更单。
 
@@ -286,7 +286,7 @@ def list_change_orders(
 
 @router.post("/{contract_id}/sign")
 def sign_contract(
-    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     contract = _get(db, contract_id, user)
     return _dump(service.sign(db, contract, user.id))
@@ -294,7 +294,7 @@ def sign_contract(
 
 @router.get("/{contract_id}/signatures")
 def contract_signatures(
-    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """LAW-002/040 签署留痕与校验：签署后改条款 → 哈希对不上，篡改自证。
 
@@ -306,7 +306,7 @@ def contract_signatures(
 
 @router.post("/{contract_id}/fund")
 def fund_contract(
-    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
     user_coupon_id: int | None = None,
 ):
     """SC-003 托管；可选带 GRW 优惠券。

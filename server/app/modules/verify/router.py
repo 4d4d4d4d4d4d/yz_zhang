@@ -42,7 +42,7 @@ def _task(db: Session, task_id: int):
 
 @router.post("/tasks/{task_id}/verification", status_code=201)
 def request_verification(task_id: int, user: User = Depends(get_current_user),
-                         db: Session = Depends(get_db)):
+                         db: Session = Depends(get_db, scope="function")):
     """下一张核验单。
 
     VER-002 **谁付费是个有立场的判断**：
@@ -74,7 +74,7 @@ def request_verification(task_id: int, user: User = Depends(get_current_user),
 
 
 @router.get("/verification-orders")
-def open_orders(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def open_orders(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """可接的核验单。不能接的**说明理由**——只显示空列表，
     核验人不知道是资格不够还是真没单。"""
     rows = (
@@ -97,7 +97,7 @@ def open_orders(user: User = Depends(get_current_user), db: Session = Depends(ge
 
 @router.post("/verification-orders/{order_id}/claim")
 def claim(order_id: int, user: User = Depends(get_current_user),
-          db: Session = Depends(get_db)):
+          db: Session = Depends(get_db, scope="function")):
     order = db.get(VerificationOrder, order_id)
     if not order:
         raise not_found("核验单不存在")
@@ -115,7 +115,7 @@ def claim(order_id: int, user: User = Depends(get_current_user),
 
 @router.get("/verification-orders/{order_id}")
 def get_order(order_id: int, user: User = Depends(get_current_user),
-              db: Session = Depends(get_db)):
+              db: Session = Depends(get_db, scope="function")):
     order = db.get(VerificationOrder, order_id)
     if not order:
         raise not_found("核验单不存在")
@@ -139,7 +139,7 @@ def get_order(order_id: int, user: User = Depends(get_current_user),
 
 @router.post("/verification-orders/{order_id}/outcome")
 def submit(order_id: int, body: OutcomeIn, user: User = Depends(get_current_user),
-           db: Session = Depends(get_db)):
+           db: Session = Depends(get_db, scope="function")):
     order = db.get(VerificationOrder, order_id)
     if not order:
         raise not_found("核验单不存在")
@@ -153,8 +153,8 @@ def submit(order_id: int, body: OutcomeIn, user: User = Depends(get_current_user
 
 
 @router.post("/verify/jobs/expire-orders")
-def expire_orders(db: Session = Depends(get_db), _=Depends(require_job_auth),
-                  __=Depends(job_slot("expire_verifications"))):
+def expire_orders(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                  __=Depends(job_slot("expire_verifications"), scope="function")):
     """VER-041 超时未接单自动退款。已接单的不自动退——那笔活可能正在做，
     钱退了人还在干是更糟的状态，那种情况走人工。"""
     return service.expire_overdue(db)
@@ -168,7 +168,7 @@ class EscalateIn(BaseModel):
 
 @router.post("/support/tickets/{ticket_id}/escalate-to-dispute", status_code=201)
 def escalate_ticket(ticket_id: int, body: EscalateIn,
-                    user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+                    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """ESCA-001 工单转纠纷，**带上下文**。
 
     不带上下文的话用户要把话重说一遍——而他刚刚已经在工单里说过一次了。

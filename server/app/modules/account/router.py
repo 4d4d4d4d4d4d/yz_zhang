@@ -123,7 +123,7 @@ class SendCodeIn(BaseModel):
 
 
 @router.post("/auth/send-code")
-def send_sms_code(request: Request, body: SendCodeIn, db: Session = Depends(get_db)):
+def send_sms_code(request: Request, body: SendCodeIn, db: Session = Depends(get_db, scope="function")):
     """VND-020 请求短信验证码。模拟通道回显 `dev_code` 便于开发；真实通道不回显。
 
     限流与注册/登录同级，防被当作短信轰炸机（费用与骚扰双重风险）。
@@ -160,7 +160,7 @@ def captcha_config():
 
 
 @router.post("/auth/register", status_code=201)
-def register(request: Request, body: RegisterIn, db: Session = Depends(get_db), user_agent: str = Header(default="")):
+def register(request: Request, body: RegisterIn, db: Session = Depends(get_db, scope="function"), user_agent: str = Header(default="")):
     # ACC-001/SEC-011 防刷：账号 + IP 双维度。只按手机号限挡不住批量注册——
     # 攻击者每次换号，账号维度的计数器永远是 1
     from app.core.guard import guard
@@ -191,7 +191,7 @@ def register(request: Request, body: RegisterIn, db: Session = Depends(get_db), 
 
 
 @router.post("/auth/login")
-def login(request: Request, body: LoginIn, db: Session = Depends(get_db), user_agent: str = Header(default="")):
+def login(request: Request, body: LoginIn, db: Session = Depends(get_db, scope="function"), user_agent: str = Header(default="")):
     # ACC-002/SEC-011/020 防撞库：双维度限流 + 失败计数自动封禁 IP
     from app.core.clientip import client_ip
     from app.core.guard import check_captcha, guard, note_auth_failure, note_auth_success
@@ -209,7 +209,7 @@ def login(request: Request, body: LoginIn, db: Session = Depends(get_db), user_a
 
 
 @router.post("/auth/login-sms")
-def login_sms(request: Request, body: SmsLoginIn, db: Session = Depends(get_db), user_agent: str = Header(default="")):
+def login_sms(request: Request, body: SmsLoginIn, db: Session = Depends(get_db, scope="function"), user_agent: str = Header(default="")):
     """验证码登录，未注册自动注册（ACC-001）。"""
     from app.core.guard import guard
 
@@ -240,7 +240,7 @@ class ResetPasswordIn(BaseModel):
 @router.post("/auth/change-password")
 def change_password(request: Request, 
     body: ChangePasswordIn, user: User = Depends(get_current_user),
-    db: Session = Depends(get_db), user_agent: str = Header(default=""),
+    db: Session = Depends(get_db, scope="function"), user_agent: str = Header(default=""),
 ):
     """ACC-004 修改密码：验证旧密码；成功后吊销全部会话并签发新 token（业界惯例）。"""
     if not user.password_hash or not verify_password(body.old_password, user.password_hash):
@@ -261,7 +261,7 @@ class ChangePhoneIn(BaseModel):
 
 @router.post("/auth/change-phone")
 def change_phone(request: Request, 
-    body: ChangePhoneIn, user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    body: ChangePhoneIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     """ACC-008 换绑手机：新号验证码 + 旧密码双重校验；新号不可已被占用。"""
     from app.core.guard import guard
@@ -285,7 +285,7 @@ def change_phone(request: Request,
 
 
 @router.post("/auth/reset-password")
-def reset_password(request: Request, body: ResetPasswordIn, db: Session = Depends(get_db)):
+def reset_password(request: Request, body: ResetPasswordIn, db: Session = Depends(get_db, scope="function")):
     """ACC-004 忘记密码：短信码重置；吊销全部会话，需重新登录（业界惯例）。"""
     from app.core.guard import guard
 
@@ -304,7 +304,7 @@ def reset_password(request: Request, body: ResetPasswordIn, db: Session = Depend
 
 # ---------- 会话/设备管理（ACC-005）----------
 @router.get("/auth/sessions")
-def my_sessions(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_sessions(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     rows = (
         db.query(LoginSession)
         .filter(LoginSession.user_id == user.id, LoginSession.revoked.is_(False))
@@ -319,7 +319,7 @@ def my_sessions(user: User = Depends(get_current_user), db: Session = Depends(ge
 
 @router.post("/auth/sessions/{session_id}/revoke")
 def revoke_session(
-    session_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    session_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     session = db.get(LoginSession, session_id)
     if not session or session.user_id != user.id:
@@ -337,7 +337,7 @@ class OAuthIn(BaseModel):
 @router.post("/auth/oauth/{provider}")
 def oauth_login(
     provider: str, body: OAuthIn, request: Request,
-    db: Session = Depends(get_db), user_agent: str = Header(default=""),
+    db: Session = Depends(get_db, scope="function"), user_agent: str = Header(default=""),
 ):
     """ACC-003 第三方登录：用凭据换 subject，再换本站会话。
 
@@ -432,7 +432,7 @@ def oauth_providers():
 
 # ---------- 账号注销（ACC-006）----------
 @router.post("/users/me/deactivate")
-def deactivate_account(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def deactivate_account(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """注销：资金未清或关系未了时阻断；通过后按处置表脱敏并吊销全部会话。
 
     注销是**不可逆**的：此后 `get_current_user` 一律 403、密码登录一律 400、
@@ -495,7 +495,7 @@ def get_me(user: User = Depends(get_current_user)):
 def update_me(
     body: ProfileUpdateIn,
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(user, field, value)
@@ -506,7 +506,7 @@ def update_me(
 # ---------- 实名认证（ACC-020，模拟 eKYC）----------
 @router.post("/users/me/verify")
 def verify_identity(
-    body: VerifyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    body: VerifyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """ACC-020 / VND-022 实名核验：走 `KycProvider` 抽象（模拟通道格式合法即通过）。
 
@@ -582,7 +582,7 @@ def _is_adult(id_number: str) -> bool:
 
 # ---------- 黑名单（ACC-033）----------
 @router.post("/users/{user_id}/block")
-def toggle_block(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def toggle_block(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     if user_id == user.id:
         raise bad_request("不能拉黑自己", "self_block")
     if not db.get(User, user_id):
@@ -598,7 +598,7 @@ def toggle_block(user_id: int, user: User = Depends(get_current_user), db: Sessi
 
 
 @router.get("/users/me/blocks")
-def my_blocks(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_blocks(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     rows = db.query(Block).filter(Block.blocker_id == user.id).all()
     out = []
     for r in rows:
@@ -614,7 +614,7 @@ def my_blocks(user: User = Depends(get_current_user), db: Session = Depends(get_
 # 靠这个字段。一个无证的人接了电工单，出事的是人身安全。
 @router.post("/users/me/certifications", status_code=201)
 def submit_certification(
-    body: CertificationIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    body: CertificationIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """CERT-001 提交**申请**，不是授予资质。管理员核过之前一个字都不加。"""
     from . import cert_service
@@ -629,7 +629,7 @@ def submit_certification(
 
 
 @router.get("/users/me/certifications")
-def my_certifications(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_certifications(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from . import cert_service
     from .models_cert import CertificationApplication
 
@@ -650,7 +650,7 @@ def my_certifications(user: User = Depends(get_current_user), db: Session = Depe
 
 # ---------- 个人数据导出（ACC-031，PIPL/GDPR）----------
 @router.get("/users/me/export")
-def export_my_data(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def export_my_data(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from app.modules.content.models import Content
     from app.modules.legal.consent import UserConsent
     from app.modules.task.models import Review, Task
@@ -691,7 +691,7 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
 
 # ---------- 公开名片与信用摘要（CRED-006）----------
 @router.get("/users/{user_id}")
-def public_profile(user_id: int, db: Session = Depends(get_db)):
+def public_profile(user_id: int, db: Session = Depends(get_db, scope="function")):
     user = db.get(User, user_id)
     if not user:
         raise not_found("用户不存在")

@@ -78,7 +78,7 @@ def _dump(row):
 
 @router.post('/developer/api-keys/{key_id}/mandate', status_code=201)
 def grant(key_id: int, body: MandateIn, user: User = Depends(require_verified),
-          db: Session = Depends(get_db)):
+          db: Session = Depends(get_db, scope="function")):
     from app.modules.legal.consent import require_current_agreement
     require_current_agreement(db, user.id)
     key = _own_key(db, key_id, user)
@@ -101,14 +101,14 @@ def grant(key_id: int, body: MandateIn, user: User = Depends(require_verified),
 
 
 @router.get('/developer/api-keys/{key_id}/mandate')
-def get_mandate(key_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_mandate(key_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     _own_key(db, key_id, user)
     row = db.get(MachineMandate, key_id)
     return _dump(row) if row else None
 
 
 @router.get('/developer/api-keys/{key_id}/actions')
-def actions(key_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def actions(key_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     _own_key(db, key_id, user)
     rows = db.query(MachineAction).filter_by(key_id=key_id).order_by(MachineAction.id.desc()).limit(100).all()
     return [{'id': x.id, 'key_id': x.key_id, 'principal_id': x.principal_id,
@@ -151,7 +151,7 @@ def _run(db, principal, operation, request_key, params, category, exposure, run)
 
 @router.post('/open/v1/tasks', status_code=201)
 def publish(body: task_api.TaskIn, principal=Depends(require_scope('tasks:write')),
-            db: Session = Depends(get_db), idempotency_key: str = Header(default='')):
+            db: Session = Depends(get_db, scope="function"), idempotency_key: str = Header(default='')):
     if body.people_needed != 1 or body.recurrence != 'none':
         raise bad_request('机器授权仅支持单次单名额任务，批量或周期任务需分别授权')
     if body.budget_cents <= 0 or body.deposit_cents < 0:
@@ -163,7 +163,7 @@ def publish(body: task_api.TaskIn, principal=Depends(require_scope('tasks:write'
 
 @router.post('/open/v1/tasks/{task_id}/applications', status_code=201)
 def apply(task_id: int, body: task_api.ApplyIn, principal=Depends(require_scope('tasks:write')),
-          db: Session = Depends(get_db), idempotency_key: str = Header(default='')):
+          db: Session = Depends(get_db, scope="function"), idempotency_key: str = Header(default='')):
     task = db.get(Task, task_id)
     if not task or task.visibility != 'public':
         raise not_found('任务不存在')
@@ -179,7 +179,7 @@ def apply(task_id: int, body: task_api.ApplyIn, principal=Depends(require_scope(
 
 @router.post('/open/v1/tasks/{task_id}/deliver')
 def deliver(task_id: int, body: task_api.DeliverIn, principal=Depends(require_scope('tasks:write')),
-            db: Session = Depends(get_db), idempotency_key: str = Header(default='')):
+            db: Session = Depends(get_db, scope="function"), idempotency_key: str = Header(default='')):
     task = db.get(Task, task_id)
     if not task or task.executor_id != principal[1].id:
         raise not_found('任务不存在')

@@ -129,6 +129,21 @@ def _script_head() -> str | None:
 
 
 def get_db():
+    """一个请求一个会话：正常结束提交，抛异常回滚。
+
+    **所有地方都必须写成 `Depends(get_db, scope="function")`**（CONC-070，105 号 spec）。
+    FastAPI 0.142 里 `yield` 依赖不写 scope 时按 "request" 处理：收尾代码——也就是
+    下面的 `commit()`——在**响应送达客户端之后**才执行。于是客户端可能在提交之前就
+    拿到 200 并发出下一个请求（V130 在 Postgres 上撞见：注销返回 200 后，紧接着的
+    请求仍通过了鉴权）；提交若失败，客户端已经被告知成功了。
+
+    上面 CONC-020 那段注释把同一个症状（「注销后登录态失效」间歇失败）归因于 SQLite
+    连接池留下的过期读快照。NullPool 留着无害，但那次的诊断至少不完整：这个窗口在
+    Postgres 上同样存在，换连接池管不到它。
+
+    作用域还是 FastAPI 依赖缓存键的一部分：同一个请求里两种写法混用会建出**两个会话**。
+    `tests/test_commit_before_response.py` 遍历路由树钉住「每个 yield 依赖都是 function」。
+    """
     db: Session = SessionLocal()
     try:
         yield db

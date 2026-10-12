@@ -17,7 +17,7 @@ class AskIn(BaseModel):
 
 
 @router.post("/ask")
-def ask(body: AskIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def ask(body: AskIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """CS-002 RAG 问答的 MVP：FAQ 关键词检索；CS-003 资金类问题带账户上下文。"""
     hit = kb.search_faq(db, body.question)
     context = None
@@ -50,7 +50,7 @@ class TicketIn(BaseModel):
 
 
 @router.post("/tickets", status_code=201)
-def create_ticket(body: TicketIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_ticket(body: TicketIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from .models import Ticket
 
     ticket = Ticket(user_id=user.id, subject=body.subject, body=body.body)
@@ -62,7 +62,7 @@ def create_ticket(body: TicketIn, user: User = Depends(get_current_user), db: Se
 
 
 @router.get("/tickets")
-def my_tickets(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_tickets(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from .models import Ticket
 
     rows = db.query(Ticket).filter(Ticket.user_id == user.id).order_by(Ticket.id.desc()).all()

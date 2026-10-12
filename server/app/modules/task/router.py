@@ -188,7 +188,7 @@ def _validate_ip_and_pricing(body: "TaskIn") -> None:
 
 
 @router.post("/tasks", status_code=201)
-def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     # LAW-030 协议更新后，关键动作前必须重新同意（只拦关键动作，不拦全站）
     from app.modules.legal import consent
 
@@ -251,7 +251,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
 
 
 @router.post("/tasks/{task_id}/publish")
-def publish_task(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def publish_task(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     task = _get_task(db, task_id)
     if task.creator_id != user.id:
         raise forbidden()
@@ -276,7 +276,7 @@ _MATERIAL_FIELDS = {"budget_cents", "required_skills"}
 
 @router.patch("/tasks/{task_id}")
 def edit_task(
-    task_id: int, body: TaskEditIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    task_id: int, body: TaskEditIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """TASK-014 任务编辑 + 防调包（bait-and-switch）保护。
 
@@ -330,7 +330,7 @@ def my_tasks(
     status: str | None = None,
     limit: int = Query(default=20, le=100),
     offset: int = Query(default=0, ge=0),
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     """TASK-016 我的任务：我发布的（posted）/ 我执行的（working）/ 全部（all），可按状态筛选。
 
@@ -357,7 +357,7 @@ def my_applications(
     status: str | None = None,
     limit: int = Query(default=20, le=100),
     offset: int = Query(default=0, ge=0),
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     """MATCH-010 我的报名：列出本人投出的报名及所报任务的当前状态。
 
@@ -384,7 +384,7 @@ def my_applications(
 
 
 @router.get("/categories")
-def list_categories(db: Session = Depends(get_db)):
+def list_categories(db: Session = Depends(get_db, scope="function")):
     """OPS-004 类目列表（公开，发布表单数据源）。"""
     from .models import Category
 
@@ -393,7 +393,7 @@ def list_categories(db: Session = Depends(get_db)):
 
 
 @router.get("/task-templates")
-def task_templates(category: str, db: Session = Depends(get_db)):
+def task_templates(category: str, db: Session = Depends(get_db, scope="function")):
     """TASK-003 任务模板库：模板 + 同类参考价一并返回。"""
     from app.modules.knowledge import service as kb
 
@@ -404,7 +404,7 @@ def task_templates(category: str, db: Session = Depends(get_db)):
 
 
 @router.get("/cities")
-def list_cities(db: Session = Depends(get_db)):
+def list_cities(db: Session = Depends(get_db, scope="function")):
     """GEO-030 已开通城市列表。"""
     from .models import City
 
@@ -415,7 +415,7 @@ def list_cities(db: Session = Depends(get_db)):
 # ---------- 广场 / 搜索 / LBS（TASK-040/041, GEO-010/011）----------
 @router.get("/tasks")
 def list_tasks(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     q: str | None = None,
     category: str | None = None,
     task_type: str | None = None,
@@ -470,7 +470,7 @@ def list_tasks(
 
 
 @router.get("/tasks/{task_id}")
-def get_task(task_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def get_task(task_id: int, db: Session = Depends(get_db, scope="function"), user: User = Depends(get_current_user)):
     """TASK-017 任务详情附「我与此任务的关系」上下文：是否已报名/收藏，
     发布者可见报名数——避免用户重复报名后才被 409 拒绝的糟糕体验。"""
     from sqlalchemy import func
@@ -503,7 +503,7 @@ def apply(
     task_id: int,
     body: ApplyIn,
     user: User = Depends(require_verified),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     from app.modules.legal import consent
 
@@ -543,7 +543,7 @@ def apply(
 
 @router.get("/tasks/{task_id}/applications")
 def list_applications(
-    task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     task = _get_task(db, task_id)
     if task.creator_id != user.id:
@@ -569,7 +569,7 @@ def list_applications(
 
 @router.get("/tasks/{task_id}/recommendations")
 def recommendations(
-    task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     task = _get_task(db, task_id)
     if task.creator_id != user.id:
@@ -579,7 +579,7 @@ def recommendations(
 
 @router.post("/applications/{application_id}/accept")
 def accept_application(
-    application_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    application_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """TASK-020 双方确认成交 → 生成合约（SC-001），任务 → matched。"""
     app_row = db.get(Application, application_id)
@@ -606,7 +606,7 @@ def accept_application(
 
 # ---------- TASK-013 收藏 ----------
 @router.post("/tasks/{task_id}/bookmark", status_code=201)
-def add_bookmark(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def add_bookmark(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from .models import Bookmark
 
     _get_task(db, task_id)  # 任务需存在
@@ -620,7 +620,7 @@ def add_bookmark(task_id: int, user: User = Depends(get_current_user), db: Sessi
 
 
 @router.delete("/tasks/{task_id}/bookmark")
-def remove_bookmark(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def remove_bookmark(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from .models import Bookmark
 
     db.query(Bookmark).filter(
@@ -630,7 +630,7 @@ def remove_bookmark(task_id: int, user: User = Depends(get_current_user), db: Se
 
 
 @router.get("/users/me/bookmarks")
-def my_bookmarks(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_bookmarks(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from .models import Bookmark
 
     rows = (
@@ -644,7 +644,7 @@ def my_bookmarks(user: User = Depends(get_current_user), db: Session = Depends(g
 
 @router.post("/applications/{application_id}/withdraw")
 def withdraw_application(
-    application_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    application_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """TASK-012 报名撤回（业界标配）：仅本人、仅 pending 可撤；撤回后可重新报名。"""
     app_row = db.get(Application, application_id)
@@ -662,7 +662,7 @@ def withdraw_application(
 # ---------- 执行留痕（TASK-022, GEO-020）----------
 @router.post("/tasks/{task_id}/progress", status_code=201)
 def add_progress(
-    task_id: int, body: ProgressIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    task_id: int, body: ProgressIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     task = _get_task(db, task_id)
     if user.id not in (task.creator_id, task.executor_id):
@@ -680,7 +680,7 @@ def add_progress(
 
 @router.post("/tasks/{task_id}/checkin", status_code=201)
 def checkin(
-    task_id: int, body: CheckinIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    task_id: int, body: CheckinIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     task = _get_task(db, task_id)
     if user.id != task.executor_id:
@@ -706,7 +706,7 @@ def checkin(
 
 
 @router.get("/tasks/{task_id}/progress")
-def list_progress(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_progress(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     task = _get_task(db, task_id)
     if user.id not in (task.creator_id, task.executor_id) and not user.is_admin:
         raise forbidden()
@@ -721,7 +721,7 @@ def list_progress(task_id: int, user: User = Depends(get_current_user), db: Sess
 # ---------- GEO 安全件（GEO-021/023/024）----------
 @router.post("/tasks/{task_id}/trip-share")
 def toggle_trip_share(
-    task_id: int, enabled: bool, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    task_id: int, enabled: bool, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """GEO-021 行程共享开关（执行者，仅执行中）。"""
     task = _get_task(db, task_id)
@@ -735,7 +735,7 @@ def toggle_trip_share(
 
 
 @router.get("/tasks/{task_id}/trip")
-def get_trip(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_trip(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """发布者查看执行者最近打卡位置（需执行者开启共享，任务结束即失效）。"""
     task = _get_task(db, task_id)
     if user.id not in (task.creator_id, task.executor_id):
@@ -755,7 +755,7 @@ def get_trip(task_id: int, user: User = Depends(get_current_user), db: Session =
 
 
 @router.post("/tasks/{task_id}/sos", status_code=201)
-def sos(task_id: int, body: CheckinIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def sos(task_id: int, body: CheckinIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """GEO-023 紧急求助：留痕 + 通知对方与平台（生产联动 110/紧急联系人）。
 
     LAW-031 这里**刻意不做**位置同意校验：PIPL 第十三条第(四)项把
@@ -777,8 +777,8 @@ def sos(task_id: int, body: CheckinIn, user: User = Depends(get_current_user), d
 
 
 @router.post("/tasks/jobs/purge-locations")
-def purge_locations(db: Session = Depends(get_db), _=Depends(require_job_auth),
-        __=Depends(job_slot("purge_locations"))):
+def purge_locations(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("purge_locations"), scope="function")):
     """GEO-024 位置保留策略：已结束任务超过 30 天，清除打卡精确坐标。"""
     from datetime import timedelta
 
@@ -802,7 +802,7 @@ def purge_locations(db: Session = Depends(get_db), _=Depends(require_job_auth),
 # ---------- 交付与验收（TASK-030/031/033）----------
 @router.post("/tasks/{task_id}/deliver")
 def deliver(task_id: int, body: DeliverIn | None = None,
-            user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+            user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     task = _get_task(db, task_id)
     if user.id != task.executor_id:
         raise forbidden("仅执行者可提交验收")
@@ -829,7 +829,7 @@ def deliver(task_id: int, body: DeliverIn | None = None,
 
 
 @router.post("/tasks/{task_id}/accept-delivery")
-def accept_delivery(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def accept_delivery(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     task = _get_task(db, task_id)
     if task.creator_id != user.id:
         raise forbidden()
@@ -839,7 +839,7 @@ def accept_delivery(task_id: int, user: User = Depends(get_current_user), db: Se
 
 @router.post("/tasks/{task_id}/reject-delivery")
 def reject_delivery(
-    task_id: int, body: RejectIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    task_id: int, body: RejectIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     task = _get_task(db, task_id)
     if task.creator_id != user.id:
@@ -887,8 +887,8 @@ def _complete_task(db: Session, task: Task) -> None:
 
 
 @router.post("/tasks/jobs/deadline-alerts")
-def run_deadline_alerts(db: Session = Depends(get_db), _=Depends(require_job_auth),
-        __=Depends(job_slot("deadline_alerts"))):
+def run_deadline_alerts(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("deadline_alerts"), scope="function")):
     """AI-DEC-022 逾期预警 job。"""
     from app.modules.decompose.resilience import deadline_alerts
 
@@ -896,8 +896,8 @@ def run_deadline_alerts(db: Session = Depends(get_db), _=Depends(require_job_aut
 
 
 @router.post("/tasks/jobs/settle-reviews")
-def run_settle_reviews(db: Session = Depends(get_db), _=Depends(require_job_auth),
-        __=Depends(job_slot("settle_reviews"))):
+def run_settle_reviews(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("settle_reviews"), scope="function")):
     """CRED-002 评价窗口结算 job：窗口到期的未入账评分统一聚合并公开，
     保证即使无人读取，评分也会在窗口到期后按时入账（真双盲的兜底结算）。"""
     cutoff = utcnow() - timedelta(days=settings.REVIEW_WINDOW_DAYS)
@@ -917,8 +917,8 @@ def run_settle_reviews(db: Session = Depends(get_db), _=Depends(require_job_auth
 
 
 @router.post("/tasks/jobs/expire-tasks")
-def run_expire_tasks(db: Session = Depends(get_db), _=Depends(require_job_auth),
-        __=Depends(job_slot("expire_tasks"))):
+def run_expire_tasks(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("expire_tasks"), scope="function")):
     """TASK-015 过期任务自动下架：已发布但过了截止时间仍无人成交的任务自动关闭。
 
     发布时校验了 deadline 必须在未来，但发布后从不执行——僵尸挂单会永远占据广场。
@@ -948,8 +948,8 @@ def run_expire_tasks(db: Session = Depends(get_db), _=Depends(require_job_auth),
 
 
 @router.post("/tasks/jobs/auto-accept")
-def run_auto_accept(db: Session = Depends(get_db), _=Depends(require_job_auth),
-        __=Depends(job_slot("auto_accept"))):
+def run_auto_accept(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("auto_accept"), scope="function")):
     """TASK-031 超时自动验收（生产为定时任务，这里同时暴露为可调用 job）。"""
     cutoff = utcnow() - timedelta(days=settings.AUTO_ACCEPT_DAYS)
     rows = (
@@ -963,8 +963,8 @@ def run_auto_accept(db: Session = Depends(get_db), _=Depends(require_job_auth),
 
 
 @router.post("/tasks/jobs/remind-acceptance")
-def run_remind_acceptance(db: Session = Depends(get_db), _=Depends(require_job_auth),
-        __=Depends(job_slot("remind_acceptance"))):
+def run_remind_acceptance(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("remind_acceptance"), scope="function")):
     """NTF-063 自动放款前的最后一次提醒（75 号 spec）。
 
     交付时那条「请在 N 天内验收」是**开始时的闹钟**：三天里没有任何一句
@@ -1003,7 +1003,7 @@ def run_remind_acceptance(db: Session = Depends(get_db), _=Depends(require_job_a
 
 # ---------- 取消（TASK-026 / SC-006）----------
 @router.post("/tasks/{task_id}/cancel")
-def cancel_task(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def cancel_task(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     task = _get_task(db, task_id)
     if user.id not in (task.creator_id, task.executor_id):
         raise forbidden()
@@ -1023,7 +1023,7 @@ def cancel_task(task_id: int, user: User = Depends(get_current_user), db: Sessio
 # ---------- 双向评价（TASK-034 / CRED-002）----------
 @router.post("/tasks/{task_id}/reviews", status_code=201)
 def create_review(
-    task_id: int, body: ReviewIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    task_id: int, body: ReviewIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     task = _get_task(db, task_id)
     if task.status != "completed":
@@ -1066,7 +1066,7 @@ def user_reviews(
     user_id: int,
     limit: int = Query(default=20, le=100),
     offset: int = Query(default=0, ge=0),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     """CRED-006 用户收到的评价（口碑消费端）。
 
@@ -1114,7 +1114,7 @@ def user_reviews(
 
 
 @router.get("/tasks/{task_id}/reviews")
-def list_reviews(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_reviews(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """双盲互评（CRED-002）：双方都评完或窗口到期前，评价只有作者本人（和管理员）
     可见——包括对第三方隐藏，否则换个账号即可偷看，盲评失效。"""
     task = _get_task(db, task_id)

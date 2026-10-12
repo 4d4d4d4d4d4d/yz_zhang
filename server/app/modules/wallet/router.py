@@ -32,7 +32,7 @@ def _mask(no: str) -> str:
 
 
 @router.get("/payout-account")
-def get_payout_account(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_payout_account(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from .models import PayoutAccount
 
     acct = db.get(PayoutAccount, user.id)
@@ -44,7 +44,7 @@ def get_payout_account(user: User = Depends(get_current_user), db: Session = Dep
 
 @router.put("/payout-account")
 def bind_payout_account(
-    body: PayoutAccountIn, user: User = Depends(require_verified), db: Session = Depends(get_db)
+    body: PayoutAccountIn, user: User = Depends(require_verified), db: Session = Depends(get_db, scope="function")
 ):
     """PAY-005 绑定收款账户：实名后可绑；收款人须与实名一致（防代提/洗钱）。"""
     from app.core.errors import bad_request
@@ -72,7 +72,7 @@ def bind_payout_account(
 
 
 @router.get("")
-def get_wallet(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_wallet(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     acct = service.get_or_create(db, user.id)
     return {
         "available_cents": acct.available_cents,
@@ -83,7 +83,7 @@ def get_wallet(user: User = Depends(get_current_user), db: Session = Depends(get
 
 @router.post("/topup")
 def topup(
-    body: AmountIn, user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    body: AmountIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
     idempotency_key: str = Header(default=""),
 ):
     """PAY-001 / VND-011 充值：两阶段（下单 → 供应商确认 → 才入账）。
@@ -116,7 +116,7 @@ class PayCallbackIn(BaseModel):
 
 
 @router.post("/pay/callback")
-def pay_callback(body: PayCallbackIn, db: Session = Depends(get_db)):
+def pay_callback(body: PayCallbackIn, db: Session = Depends(get_db, scope="function")):
     """VND-012 支付回调：验签 → 幂等确认入账。**无需登录**（供应商侧调用），
     因此验签是唯一信任来源：签名不通过一律拒绝，不看金额也不查订单。"""
     from app.vendors import payment_service
@@ -131,7 +131,7 @@ def pay_callback(body: PayCallbackIn, db: Session = Depends(get_db)):
 
 @router.post("/withdraw")
 def withdraw(
-    body: AmountIn, user: User = Depends(require_verified), db: Session = Depends(get_db),
+    body: AmountIn, user: User = Depends(require_verified), db: Session = Depends(get_db, scope="function"),
     idempotency_key: str = Header(default=""),
 ):
     """PAY-004/007 提现：小额即时（模拟 T+0），大额冻结人审，日限额硬拒。幂等防重复。"""
@@ -152,7 +152,7 @@ def withdraw(
 @router.get("/withdraw-requests")
 def list_withdraw_requests(
     status: str = "pending", limit: int = 50, offset: int = 0,
-    admin: User = Depends(require_admin), db: Session = Depends(get_db),
+    admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
 ):
     from .models import WithdrawRequest
 
@@ -221,7 +221,7 @@ def list_withdraw_requests(
 
 @router.post("/withdraw-requests/{request_id}/approve")
 def approve_withdraw(
-    request_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db),
+    request_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
 ):
     from .models import WithdrawRequest
 
@@ -245,7 +245,7 @@ def approve_withdraw(
 
 @router.post("/withdraw-requests/{request_id}/reject")
 def reject_withdraw(
-    request_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db),
+    request_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
 ):
     from .models import WithdrawRequest
 
@@ -263,8 +263,8 @@ def reject_withdraw(
 
 
 @router.post("/jobs/remind-second-approval")
-def run_remind_second_approval(db: Session = Depends(get_db), _=Depends(require_job_auth),
-                               __=Depends(job_slot("withdraw_second_reminders"))):
+def run_remind_second_approval(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                               __=Depends(job_slot("withdraw_second_reminders"), scope="function")):
     """PAY-044 人审提现的催办与超时兜底（75 号 spec）。
 
     V99 的双人确认加了一个新的卡点：一审通过后没人来二次确认，
@@ -275,8 +275,8 @@ def run_remind_second_approval(db: Session = Depends(get_db), _=Depends(require_
 
 
 @router.post("/jobs/purge-idempotency")
-def run_purge_idempotency(db: Session = Depends(get_db), _=Depends(require_job_auth),
-                          __=Depends(job_slot("idempotency_purge"))):
+def run_purge_idempotency(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                          __=Depends(job_slot("idempotency_purge"), scope="function")):
     """FIN-071 清理过期的幂等记录（104 号 spec）。
 
     过期判断在 `replay_or_run` 读的时候就已经生效——这个 job 晚跑、漏跑，
@@ -286,7 +286,7 @@ def run_purge_idempotency(db: Session = Depends(get_db), _=Depends(require_job_a
 
 
 @router.get("/ledger")
-def ledger(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def ledger(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     rows = (
         db.query(LedgerEntry)
         .filter(LedgerEntry.user_id == user.id)

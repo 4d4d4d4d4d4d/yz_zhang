@@ -90,7 +90,7 @@ def _dump(d: Dispute, task: Task | None = None, db: Session | None = None) -> di
 
 @router.post("/tasks/{task_id}/disputes", status_code=201)
 def open_dispute(
-    task_id: int, body: OpenIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    task_id: int, body: OpenIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """DSP-001/002/003：发起 → 冻结资金 → 自动归集证据链。"""
     task = db.get(Task, task_id)
@@ -165,7 +165,7 @@ class StatementIn(BaseModel):
 @router.post("/disputes/{dispute_id}/statements", status_code=201)
 def add_statement(
     dispute_id: int, body: StatementIn,
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     """DSP-005 答辩/举证：双方当事人在结案前均可陈述并附证据。"""
     from .models import DisputeStatement
@@ -192,7 +192,7 @@ def add_statement(
 
 @router.get("/disputes/{dispute_id}/statements")
 def list_statements(
-    dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     """DSP-005 陈述列表：仅当事人与管理员可见。"""
     from .models import DisputeStatement
@@ -235,7 +235,7 @@ def _respondent_had_voice(db: Session, dispute: Dispute, task: Task) -> bool:
 
 @router.post("/disputes/{dispute_id}/settlement")
 def propose_settlement(
-    dispute_id: int, body: ShareIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    dispute_id: int, body: ShareIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """DSP-004 和解提案：一方提出分割比例，另一方接受即执行。"""
     dispute, task, _ = _get_dispute(db, dispute_id)
@@ -250,7 +250,7 @@ def propose_settlement(
 
 @router.post("/disputes/{dispute_id}/settlement/accept")
 def accept_settlement(
-    dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     dispute, task, contract = _get_dispute(db, dispute_id)
     proposal = dispute.settlement_proposal
@@ -266,7 +266,7 @@ def accept_settlement(
 
 @router.post("/disputes/{dispute_id}/verdict")
 def issue_verdict(
-    dispute_id: int, body: ShareIn, arbiter: User = Depends(require_admin), db: Session = Depends(get_db)
+    dispute_id: int, body: ShareIn, arbiter: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
 ):
     """DSP-006/007 **平台处理决定**：自动执行分账 + 责任方信用惩罚（CRED-004）。
 
@@ -300,7 +300,7 @@ def issue_verdict(
 
 
 @router.post("/disputes/{dispute_id}/appeal")
-def appeal(dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def appeal(dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """DSP-008 申诉复核：仅平台处理结案可申诉一次，升级高级审核员复核。"""
     dispute, task, _ = _get_dispute(db, dispute_id)
     if user.id not in (task.creator_id, task.executor_id):
@@ -323,7 +323,7 @@ def appeal(dispute_id: int, user: User = Depends(get_current_user), db: Session 
 
 @router.post("/disputes/{dispute_id}/appeal-verdict")
 def appeal_verdict(
-    dispute_id: int, body: ShareIn, senior: User = Depends(require_admin), db: Session = Depends(get_db)
+    dispute_id: int, body: ShareIn, senior: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
 ):
     """高级审核员复核终局：与原决定的差额做纠正性划转（原分账不回滚，差额多退少补）。"""
     from app.modules.wallet import service as wallet
@@ -372,8 +372,8 @@ def appeal_verdict(
 
 
 @router.post("/disputes/jobs/escalate-overdue")
-def run_escalate_overdue(db: Session = Depends(get_db), _=Depends(require_job_auth),
-        __=Depends(job_slot("escalate_overdue"))):
+def run_escalate_overdue(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("escalate_overdue"), scope="function")):
     """DSP-009 纠纷 SLA job：开立超期未结案的纠纷自动升级。
 
     纠纷冻结着托管资金，业界（支付宝/Upwork）对处理时限有硬性 SLA——
@@ -409,8 +409,8 @@ def run_escalate_overdue(db: Session = Depends(get_db), _=Depends(require_job_au
 
 
 @router.post("/disputes/jobs/remind-response")
-def run_remind_response(db: Session = Depends(get_db), _=Depends(require_job_auth),
-        __=Depends(job_slot("remind_response"))):
+def run_remind_response(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("remind_response"), scope="function")):
     """DSPR-020 答辩期将届满而被诉方仍未陈述时提醒。
 
     V61 给了被诉方开口的手段，但开得了口不等于知道要开口：此前只有开案时
@@ -470,7 +470,7 @@ def run_remind_response(db: Session = Depends(get_db), _=Depends(require_job_aut
 
 
 @router.get("/disputes/{dispute_id}")
-def get_dispute(dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_dispute(dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     dispute, task, _ = _get_dispute(db, dispute_id)
     if user.id not in (task.creator_id, task.executor_id) and not user.is_admin:
         raise forbidden()
@@ -479,7 +479,7 @@ def get_dispute(dispute_id: int, user: User = Depends(get_current_user), db: Ses
 
 @router.get("/tasks/{task_id}/dispute")
 def get_task_dispute(
-    task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """DSPC-010 按任务取纠纷：**被诉方进入这场纠纷的唯一一条路。**
 

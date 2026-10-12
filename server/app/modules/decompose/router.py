@@ -34,7 +34,7 @@ def _get_parent(db: Session, task_id: int, user: User) -> Task:
 
 
 @router.post("/tasks/{task_id}/decompositions", status_code=201)
-def propose(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def propose(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """AI-DEC-010 生成分解提案（草稿，不直接发布）。"""
     task = _get_parent(db, task_id, user)
     items = get_gateway().decompose(db, task.title, task.description, task.category, task.budget_cents)
@@ -49,7 +49,7 @@ def propose(task_id: int, user: User = Depends(get_current_user), db: Session = 
 
 
 @router.patch("/decompositions/{dec_id}")
-def edit(dec_id: int, body: ItemsIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def edit(dec_id: int, body: ItemsIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """AI-DEC-011 用户编辑分解草稿。"""
     row = db.get(Decomposition, dec_id)
     if not row:
@@ -64,7 +64,7 @@ def edit(dec_id: int, body: ItemsIn, user: User = Depends(get_current_user), db:
 
 
 @router.post("/decompositions/{dec_id}/confirm")
-def confirm(dec_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def confirm(dec_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """确认分解 → 生成子任务树，无依赖者自动发布（AI-DEC-020）。"""
     row = db.get(Decomposition, dec_id)
     if not row:
@@ -77,7 +77,7 @@ def confirm(dec_id: int, user: User = Depends(get_current_user), db: Session = D
 
 
 @router.get("/tasks/{task_id}/tree")
-def tree(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def tree(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """AI-DEC-021 母任务驾驶舱数据。"""
     task = db.get(Task, task_id)
     if not task:
@@ -86,7 +86,7 @@ def tree(task_id: int, user: User = Depends(get_current_user), db: Session = Dep
 
 
 @router.get("/tasks/{task_id}/final-report")
-def final_report(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def final_report(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """AI-DEC-025 结项报告：成本/工期/交付清单汇总（仅发布者）。"""
     parent = _get_parent(db, task_id, user)
     children = db.query(Task).filter(Task.parent_id == parent.id).order_by(Task.id).all()
@@ -129,7 +129,7 @@ class ClarifyIn(BaseModel):
 
 
 @router.post("/ai/clarify")
-def clarify(body: ClarifyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def clarify(body: ClarifyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """AI-DEC-001 对话式需求澄清 + AI-DEC-002 可行性预判。
 
     规则驱动的澄清器（生产由 LLM 网关生成追问，结构不变）：

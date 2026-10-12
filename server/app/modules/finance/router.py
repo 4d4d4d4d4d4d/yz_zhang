@@ -19,7 +19,7 @@ router = APIRouter(tags=["finance"])
 
 @router.get("/contracts/{contract_id}/settlements")
 def contract_settlements(
-    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """一份合约上发生过的全部分账指令（当事人与管理员可见）。"""
     contract = db.get(Contract, contract_id)
@@ -34,7 +34,7 @@ def contract_settlements(
 
 
 @router.get("/admin/settlements/verify")
-def verify_settlements(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+def verify_settlements(_: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     """FIN-060 分账守恒校验（同时并入日终对账）。"""
     problems = service.verify_conservation(db)
     return {"ok": not problems, "problems": problems}

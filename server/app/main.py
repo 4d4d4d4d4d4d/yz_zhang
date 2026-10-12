@@ -196,13 +196,13 @@ def create_app() -> FastAPI:
                 "sandbox": is_sandbox(), "ledger_backend": settings.LEDGER_BACKEND}
 
     @app.get("/metrics")
-    def metrics(db: Session = Depends(get_db), _=Depends(require_job_auth)):
+    def metrics(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth)):
         """DEP-042 Prometheus 指标。与 cron 端点同一把令牌保护——
         资金口径指标（托管中金额、未结纠纷）不该对公网裸奔。"""
         return PlainTextResponse(render_metrics(db), media_type="text/plain; version=0.0.4")
 
     @app.get("/jobz")
-    def jobz(db: Session = Depends(get_db), _=Depends(require_job_auth)):
+    def jobz(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth)):
         """DEP-051 定时任务健康：上次成功时间与最近错误。
         job「静默不跑」比报错更危险，监控盯的就是这里的 seconds_since_success。"""
         from app.core.locks import job_health

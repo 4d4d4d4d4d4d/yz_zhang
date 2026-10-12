@@ -102,7 +102,7 @@ def _dump(c: Content, db: Session, viewer: User | None = None, ctx: _ListCtx | N
 # ---------- 发布（CNT-001/003/006） ----------
 @router.post("/contents", status_code=201)
 def create_content(
-    body: ContentIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    body: ContentIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     if body.kind not in CONTENT_KINDS:
         raise bad_request("非法内容类型", "invalid_kind")
@@ -147,7 +147,7 @@ class ContentPatchIn(BaseModel):
 @router.patch("/contents/{content_id}")
 def edit_content(
     content_id: int, body: ContentPatchIn,
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     """CNT-003 编辑（草稿箱靠它反复存）。"""
     row = db.get(Content, content_id)
@@ -169,7 +169,7 @@ def edit_content(
 
 @router.post("/contents/{content_id}/publish")
 def publish_content(
-    content_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    content_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """草稿 → 发布。**发布时重跑机审**：草稿是随便改的，存草稿时审过不算数。"""
     row = db.get(Content, content_id)
@@ -193,7 +193,7 @@ def publish_content(
 def my_contents(
     status: str = Query(default="draft", pattern="^(draft|published)$"),
     limit: int = Query(default=20, le=100),
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     """CNT-003 草稿箱。草稿**只有作者自己看得见**。"""
     rows = (
@@ -213,7 +213,7 @@ class ExperiencePostIn(BaseModel):
 @router.post("/tasks/{task_id}/experience-post", status_code=201)
 def create_experience_post(
     task_id: int, body: ExperiencePostIn,
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     """执行者为闭环任务写经验复盘，自动挂类目与案例来源（内容→能力→匹配打通）。"""
     from app.modules.task.models import Task
@@ -247,7 +247,7 @@ def feed(
     kind: str | None = None,
     limit: int = Query(default=20, le=100),
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     query = db.query(Content).filter(
         Content.status == "published",
@@ -273,7 +273,7 @@ def feed(
 
 
 @router.get("/users/{user_id}/contents")
-def user_contents(user_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def user_contents(user_id: int, db: Session = Depends(get_db, scope="function"), user: User = Depends(get_current_user)):
     """主页作品列表（08.E 名片页数据源）。"""
     rows = (
         db.query(Content)
@@ -288,7 +288,7 @@ def user_contents(user_id: int, db: Session = Depends(get_db), user: User = Depe
 
 
 @router.get("/contents/{content_id}")
-def get_content(content_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def get_content(content_id: int, db: Session = Depends(get_db, scope="function"), user: User = Depends(get_current_user)):
     c = db.get(Content, content_id)
     # 作者能打开自己的草稿（否则草稿箱里点进去是 404，没法编辑）；
     # 别人一律看不见——草稿不是「还没推荐」，是「还没公开」
@@ -298,7 +298,7 @@ def get_content(content_id: int, db: Session = Depends(get_db), user: User = Dep
 
 
 @router.delete("/contents/{content_id}")
-def delete_content(content_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_content(content_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     c = db.get(Content, content_id)
     if not c:
         raise not_found("内容不存在")
@@ -311,7 +311,7 @@ def delete_content(content_id: int, user: User = Depends(get_current_user), db: 
 
 # ---------- 互动（CNT-020） ----------
 @router.post("/contents/{content_id}/like")
-def like(content_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def like(content_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     c = db.get(Content, content_id)
     if not c or c.status != "published":
         raise not_found("内容不存在")
@@ -329,7 +329,7 @@ def like(content_id: int, user: User = Depends(get_current_user), db: Session = 
 
 @router.post("/contents/{content_id}/comments", status_code=201)
 def comment(
-    content_id: int, body: CommentIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    content_id: int, body: CommentIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     c = db.get(Content, content_id)
     if not c or c.status != "published":
@@ -345,7 +345,7 @@ def comment(
 
 
 @router.get("/contents/{content_id}/comments")
-def list_comments(content_id: int, db: Session = Depends(get_db)):
+def list_comments(content_id: int, db: Session = Depends(get_db, scope="function")):
     rows = db.query(Comment).filter(Comment.content_id == content_id).order_by(Comment.id).all()
     out = []
     for r in rows:
@@ -374,7 +374,7 @@ def _check_followee(db: Session, user_id: int, me: User) -> None:
 
 
 @router.put("/users/{user_id}/follow")
-def follow(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def follow(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """CNT-022 关注。**幂等**：已关注再调一次仍然是已关注。
 
     改造前这里是一个 `POST` **toggle**，两个毛病：
@@ -393,7 +393,7 @@ def follow(user_id: int, user: User = Depends(get_current_user), db: Session = D
 
 
 @router.delete("/users/{user_id}/follow")
-def unfollow(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def unfollow(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """CNT-022 取消关注。同样幂等：没关注过也返回「未关注」，不报错。
 
     不存在的关注当作已经达到目标状态——对「取消」这个动作来说，
@@ -407,7 +407,7 @@ def unfollow(user_id: int, user: User = Depends(get_current_user), db: Session =
 
 
 @router.get("/users/{user_id}/follow-stats")
-def follow_stats(user_id: int, db: Session = Depends(get_db),
+def follow_stats(user_id: int, db: Session = Depends(get_db, scope="function"),
                  viewer: User | None = Depends(get_optional_user)):
     """CNT-022 关注计数 + **访问者自己的关注状态**。
 
@@ -502,7 +502,7 @@ def _follow_list(db: Session, user_id: int, viewer: User | None, direction: str,
 @router.get("/users/{user_id}/followers")
 def followers_list(user_id: int, after: int = Query(default=0, ge=0),
                    limit: int = Query(default=20, ge=1, le=50),
-                   db: Session = Depends(get_db),
+                   db: Session = Depends(get_db, scope="function"),
                    viewer: User | None = Depends(get_optional_user)):
     """CNT-023 谁关注了他。"""
     return _follow_list(db, user_id, viewer, "followers", after, limit)
@@ -511,7 +511,7 @@ def followers_list(user_id: int, after: int = Query(default=0, ge=0),
 @router.get("/users/{user_id}/following")
 def following_list(user_id: int, after: int = Query(default=0, ge=0),
                    limit: int = Query(default=20, ge=1, le=50),
-                   db: Session = Depends(get_db),
+                   db: Session = Depends(get_db, scope="function"),
                    viewer: User | None = Depends(get_optional_user)):
     """CNT-023 他关注了谁。"""
     return _follow_list(db, user_id, viewer, "following", after, limit)

@@ -16,8 +16,8 @@ router = APIRouter(prefix="/events", tags=["events"])
 
 
 @router.post("/jobs/drain")
-def drain(db: Session = Depends(get_db), _=Depends(require_job_auth),
-          __=Depends(job_slot("event_drain"))):
+def drain(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+          __=Depends(job_slot("event_drain"), scope="function")):
     """EVT-021 补做失败且可重试的投递。
 
     受 `job_slot` 单实例锁保护：**任何副本都能补做任何副本发布的事件**，
@@ -27,15 +27,15 @@ def drain(db: Session = Depends(get_db), _=Depends(require_job_auth),
 
 
 @router.post("/jobs/purge")
-def purge(db: Session = Depends(get_db), _=Depends(require_job_auth),
-          __=Depends(job_slot("event_purge"))):
+def purge(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+          __=Depends(job_slot("event_purge"), scope="function")):
     """EVT-004 清理已完成的旧事件；失败与死信不删。"""
     return events.purge(db)
 
 
 @router.post("/jobs/purge-security")
-def purge_security(db: Session = Depends(get_db), _=Depends(require_job_auth),
-                   __=Depends(job_slot("security_purge"))):
+def purge_security(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                   __=Depends(job_slot("security_purge"), scope="function")):
     """SECEV-006 清理高频安全事件噪音；封禁与解封的处置留痕不清。"""
     from app.core import guard
 
@@ -43,13 +43,13 @@ def purge_security(db: Session = Depends(get_db), _=Depends(require_job_auth),
 
 
 @router.get("/health")
-def health(db: Session = Depends(get_db), _=Depends(require_job_auth)):
+def health(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth)):
     """EVT-031 待重试与死信统计。"""
     return events.health(db)
 
 
 @router.get("/dead-letters")
-def dead_letters(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def dead_letters(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     """EVT-022 待人工处理的投递。
 
     死信不是「可以忽略的错误列表」——每一条都代表某个用户少了一个本该发生的

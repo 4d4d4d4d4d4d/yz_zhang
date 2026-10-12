@@ -20,7 +20,7 @@ router = APIRouter(prefix="/search", tags=["search"])
 def unified_search(
     q: str = Query(min_length=1, max_length=100),
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     limit: int = Query(default=5, le=20),
 ):
     from app.modules.analytics.service import log_search

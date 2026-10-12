@@ -19,12 +19,12 @@ router = APIRouter(prefix="/admin/aml", tags=["aml"])
 
 @router.get("/activities")
 def activities(status: str = "pending", admin: User = Depends(require_admin),
-               db: Session = Depends(get_db)):
+               db: Session = Depends(get_db, scope="function")):
     return service.listing(db, status)
 
 
 @router.get("/stats")
-def stats(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def stats(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     return service.stats(db)
 
 
@@ -36,7 +36,7 @@ class ReviewIn(BaseModel):
 
 @router.post("/activities/{activity_id}/review")
 def review(activity_id: int, body: ReviewIn, admin: User = Depends(require_admin),
-           db: Session = Depends(get_db)):
+           db: Session = Depends(get_db, scope="function")):
     """AML-021 合规官复核。
 
     `reported` 只是**记录合规官已经报送**，代码不会替他向任何外部系统发送——

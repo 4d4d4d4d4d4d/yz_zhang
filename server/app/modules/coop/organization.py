@@ -98,14 +98,14 @@ def _dump(r):
 
 
 @router.get('/ventures/{venture_id}/organization-records')
-def list_records(venture_id:int,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
+def list_records(venture_id:int,user:User=Depends(get_current_user),db:Session=Depends(get_db, scope="function")):
     _access(db,venture_id,user)
     rows=db.query(OrganizationRecord).filter_by(venture_id=venture_id).order_by(OrganizationRecord.revision.desc()).all()
     return [_dump(r) for r in rows]
 
 
 @router.post('/ventures/{venture_id}/organization-records',status_code=201)
-def add_record(venture_id:int,body:OrganizationIn,user:User=Depends(require_verified),db:Session=Depends(get_db)):
+def add_record(venture_id:int,body:OrganizationIn,user:User=Depends(require_verified),db:Session=Depends(get_db, scope="function")):
     venture=_access(db,venture_id,user)
     from app.modules.legal.consent import require_current_agreement
     require_current_agreement(db,user.id)

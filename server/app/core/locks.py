@@ -115,7 +115,7 @@ def job_slot(job_name: str):
     from .db import get_db
     from .errors import conflict
 
-    def dependency(db: Session = Depends(get_db)):
+    def dependency(db: Session = Depends(get_db, scope="function")):
         if not acquire_job_lock(db, job_name, INSTANCE_ID):
             raise conflict(f"任务 {job_name} 正在其它实例执行", "job_running")
         try:

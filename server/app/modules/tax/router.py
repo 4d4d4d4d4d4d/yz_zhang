@@ -17,20 +17,20 @@ router = APIRouter(prefix="/finance", tags=["tax"])
 
 
 @router.get("/my-tax")
-def my_tax(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_tax(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """TAX-021 我的代扣明细与年度合计。"""
     return service.my_summary(db, user.id)
 
 
 @router.post("/jobs/remit-tax")
-def remit_tax(db: Session = Depends(get_db), _=Depends(require_job_auth),
-              __=Depends(job_slot("remit_tax"))):
+def remit_tax(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+              __=Depends(job_slot("remit_tax"), scope="function")):
     """TAX-013 代扣税款缴库。"""
     return service.remit(db)
 
 
 @router.get("/tax-ledger")
-def tax_ledger(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def tax_ledger(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     """TAX-024 管理端代扣与缴库台账。"""
     return service.ledger(db)
 
@@ -43,7 +43,7 @@ class InvoiceIn(BaseModel):
 
 @router.post("/invoices", status_code=201)
 def request_invoice(body: InvoiceIn, user: User = Depends(get_current_user),
-                    db: Session = Depends(get_db)):
+                    db: Session = Depends(get_db, scope="function")):
     """TAX-022 申请开具**平台服务费**发票。
 
     只开平台佣金那部分：执行者的劳务报酬平台没有开票资格，
@@ -85,7 +85,7 @@ def request_invoice(body: InvoiceIn, user: User = Depends(get_current_user),
 
 
 @router.get("/invoices")
-def my_invoices(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_invoices(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     rows = (
         db.query(InvoiceRequest)
         .filter(InvoiceRequest.requester_id == user.id)

@@ -53,7 +53,7 @@ def _dump_coupon(c: Coupon) -> dict:
 
 @router.post("/admin/coupons", status_code=201)
 def create_coupon(body: CouponIn, admin: User = Depends(require_admin),
-                  db: Session = Depends(get_db)):
+                  db: Session = Depends(get_db, scope="function")):
     """GRW-001/005 建券。比例券必须带封顶，否则大额单会失控。"""
     now = utcnow()
     fields = body.model_dump(exclude={"days_open"})
@@ -64,7 +64,7 @@ def create_coupon(body: CouponIn, admin: User = Depends(require_admin),
 
 @router.post("/admin/coupons/{coupon_id}/pause")
 def pause_coupon(coupon_id: int, admin: User = Depends(require_admin),
-                 db: Session = Depends(get_db)):
+                 db: Session = Depends(get_db, scope="function")):
     """GRW-005 暂停发放（已领取的券不受影响，不追溯作废用户已得权益）。"""
     coupon = db.get(Coupon, coupon_id)
     if not coupon:
@@ -75,7 +75,7 @@ def pause_coupon(coupon_id: int, admin: User = Depends(require_admin),
 
 
 @router.get("/admin/coupons")
-def coupon_report(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def coupon_report(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     """GRW-005 发放/核销/成本报表：运营自己就能看清一张券花了多少钱。"""
     out = []
     for c in db.query(Coupon).order_by(Coupon.id.desc()).all():
@@ -101,7 +101,7 @@ class CampaignIn(BaseModel):
 
 @router.post("/admin/campaigns", status_code=201)
 def create_campaign(body: CampaignIn, admin: User = Depends(require_admin),
-                    db: Session = Depends(get_db)):
+                    db: Session = Depends(get_db, scope="function")):
     """GRW-030 建活动：预算硬顶是必填项，超顶自动停投。"""
     now = utcnow()
     row = Campaign(name=body.name, city=body.city, category=body.category,
@@ -122,7 +122,7 @@ def _dump_campaign(c: Campaign) -> dict:
 
 
 @router.get("/admin/campaigns")
-def list_campaigns(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def list_campaigns(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     return {"campaigns": [_dump_campaign(c) for c in db.query(Campaign)
                           .order_by(Campaign.id.desc()).all()]}
 
@@ -133,7 +133,7 @@ class FundIn(BaseModel):
 
 @router.post("/admin/subsidy-pool/fund")
 def fund_subsidy_pool(body: FundIn, admin: User = Depends(require_admin),
-                      db: Session = Depends(get_db)):
+                      db: Session = Depends(get_db, scope="function")):
     """GRW-003 补贴池注资：冷启动时平台还没有佣金收入，得先注资才能发券。"""
     from app.modules.wallet import service as wallet
 
@@ -143,21 +143,21 @@ def fund_subsidy_pool(body: FundIn, admin: User = Depends(require_admin),
 # ---------- 运营：看板 ----------
 @router.get("/admin/market-health")
 def market_health(days: int = Query(default=30, ge=1, le=365),
-                  admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+                  admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     """GRW-022 供需健康度：按城市×类目标出供给缺口与需求缺口。"""
     return service.market_health(db, days)
 
 
 @router.get("/admin/north-star")
 def north_star(days: int = Query(default=30, ge=1, le=365),
-               admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+               admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     """GRW-052 北极星指标：成单数与成单 GMV。"""
     return service.north_star(db, days)
 
 
 # ---------- 用户：券 ----------
 @router.get("/coupons")
-def available_coupons(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def available_coupons(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """可领取的券（已领满或已领完的不再展示，避免点了才知道拿不到）。"""
     now = utcnow()
     out = []
@@ -176,7 +176,7 @@ def available_coupons(user: User = Depends(get_current_user), db: Session = Depe
 
 @router.post("/coupons/{coupon_id}/claim", status_code=201)
 def claim_coupon(coupon_id: int, user: User = Depends(get_current_user),
-                 db: Session = Depends(get_db)):
+                 db: Session = Depends(get_db, scope="function")):
     """GRW-002 领取（幂等由每人限领上限约束）。"""
     row = service.claim(db, coupon_id, user)
     return {"id": row.id, "coupon_id": row.coupon_id, "status": row.status,
@@ -184,7 +184,7 @@ def claim_coupon(coupon_id: int, user: User = Depends(get_current_user),
 
 
 @router.get("/me/coupons")
-def my_coupons(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_coupons(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     now = utcnow()
     out = []
     for r in db.query(UserCoupon).filter(UserCoupon.user_id == user.id) \
@@ -209,7 +209,7 @@ def my_coupons(user: User = Depends(get_current_user), db: Session = Depends(get
 
 @router.get("/contracts/{contract_id}/coupons")
 def usable_for_contract(contract_id: int, user: User = Depends(get_current_user),
-                        db: Session = Depends(get_db)):
+                        db: Session = Depends(get_db, scope="function")):
     """下单前告诉用户这一单能用哪张、能省多少——不能用的不展示。"""
     from app.modules.contract.models import Contract
     from app.modules.task.models import Task
@@ -242,19 +242,19 @@ def usable_for_contract(contract_id: int, user: User = Depends(get_current_user)
 
 # ---------- 用户：邀请与新人 ----------
 @router.get("/me/referrals")
-def my_referrals(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_referrals(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """GRW-014 邀请战绩。`levels: 1` 是合规声明：奖励**仅一级**。"""
     return service.referral_stats(db, user.id)
 
 
 @router.get("/me/newcomer")
-def my_newcomer_progress(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_newcomer_progress(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """GRW-020 新人任务清单与进度。"""
     return service.newcomer_progress(db, user)
 
 
 @router.get("/market/supply-hint")
 def supply_hint(city: str = "", category: str = "",
-                user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+                user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """GRW-023 发布页提示：该区域执行人少时提前告知，别让发布方空等。"""
     return {"hint": service.supply_hint_text(db, city, category)}

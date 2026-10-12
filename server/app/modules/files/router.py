@@ -26,7 +26,7 @@ class UploadIn(BaseModel):
 
 @router.post("/files", status_code=201)
 def upload_file(request: Request, body: UploadIn, user: User = Depends(get_current_user),
-                db: Session = Depends(get_db)):
+                db: Session = Depends(get_db, scope="function")):
     """MOB-021 上传图片（客户端压缩后的 base64）。
 
     校验三件事：类型白名单、大小上限、**魔数与声明类型一致**——
@@ -105,7 +105,7 @@ def _moderate(db: Session, name: str, url: str) -> tuple[str, list[str]]:
 
 
 @router.get("/files/{name}")
-def read_file(name: str, db: Session = Depends(get_db)):
+def read_file(name: str, db: Session = Depends(get_db, scope="function")):
     """本地实现的读取端点。接真实对象存储后，URL 直接指向 CDN，此端点不再被访问。
 
     FILE-013 **这是一个能力 URL（capability URL）：匿名可读，知道 URL 即有权读。**
@@ -146,7 +146,7 @@ def read_file(name: str, db: Session = Depends(get_db)):
 
 @router.get("/files/{name}/secure")
 def read_sensitive_file(name: str, user=Depends(get_current_user),
-                        db: Session = Depends(get_db)):
+                        db: Session = Depends(get_db, scope="function")):
     """CERT-010 敏感材料的读取：必须登录，且只有**上传者本人与管理员**能读。
 
     审核员需要看证件才能审——所以不能简单地「谁也不给看」，
@@ -185,7 +185,7 @@ class SignUploadIn(BaseModel):
 @router.post("/files/sign-upload")
 def sign_video_upload(
     request: Request, body: SignUploadIn, user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     """CNT-014 签发视频直传地址。
 

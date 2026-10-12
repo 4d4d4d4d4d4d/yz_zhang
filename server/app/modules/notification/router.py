@@ -20,7 +20,7 @@ def list_notifications(
     limit: int = Query(default=20, le=100),
     offset: int = Query(default=0, ge=0),
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ):
     query = db.query(Notification).filter(Notification.user_id == user.id)
     if unread_only:
@@ -34,7 +34,7 @@ def list_notifications(
 
 
 @router.get("/unread-count")
-def unread_count(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def unread_count(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """NTF-005 未读徽章计数（应用红点标准能力）。"""
     count = (
         db.query(func.count(Notification.id))
@@ -45,7 +45,7 @@ def unread_count(user: User = Depends(get_current_user), db: Session = Depends(g
 
 
 @router.post("/read-all")
-def mark_all_read(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def mark_all_read(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """NTF-005 一键全部已读。"""
     marked = (
         db.query(Notification)
@@ -56,7 +56,7 @@ def mark_all_read(user: User = Depends(get_current_user), db: Session = Depends(
 
 
 @router.get("/prefs")
-def get_prefs(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_prefs(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """NTF-065 可关的三类，**以及哪些关不掉、为什么**（77 号 spec）。
 
     第二半是这一批加的：界面必须说清「哪些通知不受开关影响」，
@@ -87,7 +87,7 @@ def get_prefs(user: User = Depends(get_current_user), db: Session = Depends(get_
 
 @router.put("/prefs")
 def set_pref(
-    category: str, enabled: bool, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    category: str, enabled: bool, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """NTF-003：funds 资金必达类不可关闭。"""
     from app.core.errors import bad_request
@@ -111,7 +111,7 @@ def set_pref(
 
 @router.post("/{notification_id}/read")
 def mark_read(
-    notification_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    notification_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     n = db.get(Notification, notification_id)
     if not n or n.user_id != user.id:
@@ -128,7 +128,7 @@ class DeviceIn(BaseModel):
 
 @router.put("/devices")
 def register_device(
-    body: DeviceIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    body: DeviceIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """NTF-002 注册推送令牌。
 
@@ -153,7 +153,7 @@ def register_device(
 
 @router.delete("/devices/{token}")
 def unregister_device(
-    token: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    token: str, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """退出登录/关闭推送时注销令牌。幂等：删一个不存在的也返回 ok。"""
     from .models_device import DeviceToken
@@ -166,7 +166,7 @@ def unregister_device(
 
 
 @router.get("/devices")
-def list_devices(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_devices(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from .models_device import DeviceToken
 
     rows = db.query(DeviceToken).filter(

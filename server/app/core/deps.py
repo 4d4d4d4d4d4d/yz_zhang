@@ -8,7 +8,7 @@ from app.modules.account.models import User
 
 
 def get_current_user(
-    db: Session = Depends(get_db), authorization: str = Header(default="")
+    db: Session = Depends(get_db, scope="function"), authorization: str = Header(default="")
 ) -> User:
     if not authorization.startswith("Bearer "):
         raise forbidden("未登录", "unauthenticated")
@@ -34,7 +34,7 @@ def get_current_user(
 
 
 def get_optional_user(
-    db: Session = Depends(get_db), authorization: str = Header(default="")
+    db: Session = Depends(get_db, scope="function"), authorization: str = Header(default="")
 ) -> User | None:
     """匿名可读的端点上，顺便认一下「是谁在看」。
 
@@ -60,7 +60,7 @@ def get_optional_user(
 
 
 def require_verified(
-    user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ) -> User:
     """ACC-020：接单/资金操作前强制实名。
 

@@ -304,7 +304,7 @@ jobs:
         run: |
           python -c "import psycopg; psycopg.connect('postgresql://postgres:ci@localhost:5432/acc', autocommit=True).execute('CREATE DATABASE idem')"
           alembic upgrade head
-          python -m pytest -q tests/test_idempotency_concurrency.py tests/test_money_duplicate_protection.py tests/test_idempotency_fingerprint.py
+          python -m pytest -q tests/test_idempotency_concurrency.py tests/test_money_duplicate_protection.py tests/test_idempotency_fingerprint.py tests/test_commit_before_response.py
       - name: 启动
         run: |
           uvicorn app.main:app --port 8000 &

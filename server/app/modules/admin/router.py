@@ -46,7 +46,7 @@ def security_board(_: User = Depends(require_admin)):
 
 @router.post("/admin/security/unban")
 def security_unban(body: UnbanIn, admin: User = Depends(require_admin),
-                   db: Session = Depends(get_db)):
+                   db: Session = Depends(get_db, scope="function")):
     """SECEV-021 解除封禁（误封公司出口 IP 时的补救手段）。
 
     改造前解封只作用于当前副本：被误封的公司出口 IP 之后还有 (N-1)/N 的概率
@@ -60,7 +60,7 @@ def security_unban(body: UnbanIn, admin: User = Depends(require_admin),
 
 
 @router.get("/admin/vendors")
-def vendor_status(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def vendor_status(db: Session = Depends(get_db, scope="function"), _: User = Depends(require_admin)):
     """VND-041 供应商健康面板：各能力当前实现、是否仍是模拟、熔断状态、
     近 24h 成功率。生产环境若有 P0 能力仍是模拟实现，这里显式列出（上线阻塞项）。"""
     from datetime import timedelta
@@ -97,7 +97,7 @@ def audit_log(
     action: str | None = None,
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
-    admin: User = Depends(require_admin), db: Session = Depends(get_db),
+    admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
 ):
     """OPS-012 审计日志查询（管理员）。"""
     query = db.query(AdminAudit)
@@ -124,7 +124,7 @@ class ResolveIn(BaseModel):
 
 # ---------- 举报（普通用户入口，RISK-007） ----------
 @router.post("/reports", status_code=201)
-def create_report(body: ReportIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_report(body: ReportIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     if body.target_type not in ("task", "content", "user", "message"):
         raise bad_request("非法举报对象", "invalid_target")
     row = Report(reporter_id=user.id, **body.model_dump())
@@ -136,7 +136,7 @@ def create_report(body: ReportIn, user: User = Depends(get_current_user), db: Se
 # ---------- 审核队列（RISK-002） ----------
 @router.get("/admin/reports")
 def report_queue(
-    status: str = "pending", admin: User = Depends(require_admin), db: Session = Depends(get_db)
+    status: str = "pending", admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
 ):
     rows = db.query(Report).filter(Report.status == status).order_by(Report.id).limit(100).all()
     return [
@@ -148,7 +148,7 @@ def report_queue(
 
 @router.post("/admin/reports/{report_id}/resolve")
 def resolve_report(
-    report_id: int, body: ResolveIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+    report_id: int, body: ResolveIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
 ):
     """处置留痕（RISK-002/006）：驳回 / 下架内容 / 封禁用户。"""
     report = db.get(Report, report_id)
@@ -195,7 +195,7 @@ class TicketResolveIn(BaseModel):
 @router.get("/admin/tickets")
 def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
                  offset: int = Query(0, ge=0),
-                 admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+                 admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     """PAY-045 带分页：此前它接受 `offset` 然后忽略它——
     翻页的人会看到第一页无限重复，而且不知道自己在原地。
     **接受一个参数然后忽略它**，比拒绝它更糟。"""
@@ -212,7 +212,7 @@ def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
 
 @router.post("/admin/tickets/{ticket_id}/resolve")
 def resolve_ticket(
-    ticket_id: int, body: TicketResolveIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+    ticket_id: int, body: TicketResolveIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
 ):
     from app.modules.account.models import utcnow
     from app.modules.notification.service import notify
@@ -233,7 +233,7 @@ def resolve_ticket(
 # ---------- 用户管理（OPS-002） ----------
 @router.get("/admin/users")
 def list_users(
-    q: str | None = None, admin: User = Depends(require_admin), db: Session = Depends(get_db),
+    q: str | None = None, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
     limit: int = Query(default=50, le=200),
 ):
     query = db.query(User)
@@ -248,7 +248,7 @@ def list_users(
 
 
 @router.get("/admin/users/{user_id}/ban-impact")
-def ban_impact(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def ban_impact(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     """OPS-013 封禁前预览影响面（不产生副作用）。"""
     if not db.get(User, user_id):
         raise not_found("用户不存在")
@@ -258,7 +258,7 @@ def ban_impact(user_id: int, admin: User = Depends(require_admin), db: Session =
 
 
 @router.post("/admin/users/{user_id}/ban")
-def ban_user(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def ban_user(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     """OPS-013 封禁：影响面、对手方通知、挂单下架、审计——见 admin/service。"""
     from . import service as admin_service
 
@@ -266,7 +266,7 @@ def ban_user(user_id: int, admin: User = Depends(require_admin), db: Session = D
 
 
 @router.post("/admin/users/{user_id}/unban")
-def unban_user(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def unban_user(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     user = db.get(User, user_id)
     if not user:
         raise not_found("用户不存在")
@@ -283,7 +283,7 @@ class CategoryIn(BaseModel):
 
 
 @router.post("/admin/categories", status_code=201)
-def create_category(body: CategoryIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def create_category(body: CategoryIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     from app.modules.task.models import Category
 
     if db.query(Category).filter(Category.name == body.name).first():
@@ -297,7 +297,7 @@ def create_category(body: CategoryIn, admin: User = Depends(require_admin), db: 
 @router.patch("/admin/categories/{category_id}")
 def update_category(
     category_id: int, active: bool | None = None, required_cert: str | None = None,
-    admin: User = Depends(require_admin), db: Session = Depends(get_db),
+    admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
 ):
     from app.modules.task.models import Category
 
@@ -321,7 +321,7 @@ class WeightsIn(BaseModel):
 
 
 @router.get("/admin/matching-config")
-def get_matching_config(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def get_matching_config(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     from app.modules.matching.service import get_weights
 
     return {"weights": get_weights(db)}
@@ -329,7 +329,7 @@ def get_matching_config(admin: User = Depends(require_admin), db: Session = Depe
 
 @router.put("/admin/matching-config")
 def set_matching_config(
-    body: WeightsIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+    body: WeightsIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
 ):
     total = body.skill + body.credit + body.distance + body.rating
     if abs(total - 1.0) > 0.001:
@@ -351,7 +351,7 @@ class CityIn(BaseModel):
 
 
 @router.post("/admin/cities", status_code=201)
-def open_city(body: CityIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def open_city(body: CityIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     from app.modules.task.models import City
 
     existing = db.query(City).filter(City.name == body.name).first()
@@ -367,7 +367,7 @@ def open_city(body: CityIn, admin: User = Depends(require_admin), db: Session = 
 
 @router.patch("/admin/cities/{city_id}")
 def toggle_city(
-    city_id: int, active: bool, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+    city_id: int, active: bool, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
 ):
     from app.modules.task.models import City
 
@@ -387,7 +387,7 @@ class AnnouncementIn(BaseModel):
 
 @router.post("/admin/announcements")
 def broadcast_announcement(
-    body: AnnouncementIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+    body: AnnouncementIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
 ):
     """OPS-009 平台公告：向全体（或已实名）活跃用户广播站内通知。"""
     from app.modules.notification.service import notify
@@ -409,7 +409,7 @@ class SettleIn(BaseModel):
 
 
 @router.get("/admin/platform-finance")
-def platform_finance(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def platform_finance(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     """平台收入总览：累计佣金（实收）、已结算、可结算余额。"""
     from app.modules.wallet import service as wallet
 
@@ -418,7 +418,7 @@ def platform_finance(admin: User = Depends(require_admin), db: Session = Depends
 
 @router.post("/admin/platform-finance/settle")
 def settle_platform(
-    body: SettleIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+    body: SettleIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
 ):
     """OPS-010 平台收入结算：把平台账户余额划出（模拟对公结算）。"""
     from app.modules.wallet import service as wallet
@@ -433,7 +433,7 @@ def settle_platform(
 def _job_or_admin(
     x_job_token: str = Header(default=""),
     authorization: str = Header(default=""),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ) -> int:
     """JOB-020 调度器（X-Job-Token）**或**管理员都能触发，返回触发者 id（调度器为 0）。
 
@@ -453,8 +453,8 @@ def _job_or_admin(
 
 @router.post("/admin/jobs/reconcile")
 def run_reconcile(triggered_by: int = Depends(_job_or_admin),
-                  db: Session = Depends(get_db),
-                  __=Depends(job_slot("reconcile"))):
+                  db: Session = Depends(get_db, scope="function"),
+                  __=Depends(job_slot("reconcile"), scope="function")):
     """PAY-008 告警闭环：对账不平不能只返回结果——自动开差错工单 + 通知全体管理员。"""
     from app.modules.notification.service import notify
     from app.modules.risk.service import reconcile
@@ -474,7 +474,7 @@ def run_reconcile(triggered_by: int = Depends(_job_or_admin),
 
 # ---------- 数据看板（OPS-007） ----------
 @router.get("/admin/metrics")
-def metrics(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def metrics(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     total_users = db.query(User).count()
     verified_users = db.query(User).filter(User.is_verified.is_(True)).count()
     total_tasks = db.query(Task).count()
@@ -505,7 +505,7 @@ def metrics(admin: User = Depends(require_admin), db: Session = Depends(get_db))
 @router.get("/admin/uploads/pending")
 def pending_uploads(
     limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
-    _: User = Depends(require_admin), db: Session = Depends(get_db),
+    _: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
 ):
     """UMOD-020 机审拿不准的图片队列。
 
@@ -535,7 +535,7 @@ class UploadVerdictIn(BaseModel):
 @router.post("/admin/uploads/{name}/resolve")
 def resolve_upload(
     name: str, body: UploadVerdictIn,
-    admin: User = Depends(require_admin), db: Session = Depends(get_db),
+    admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
 ):
     """UMOD-021 审核员处置：通过，或**物理删除并告知上传者**。
 
@@ -610,7 +610,7 @@ def _certifications(db: Session, status: str, limit: int, offset: int = 0) -> li
 @router.get("/admin/certifications/pending")
 def pending_certifications(
     limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
-    _: User = Depends(require_admin), db: Session = Depends(get_db),
+    _: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
 ):
     return _certifications(db, "pending", limit, offset)
 
@@ -619,7 +619,7 @@ def pending_certifications(
 def list_certifications(
     status: str = Query("approved", pattern="^(pending|approved|rejected|revoked)$"),
     limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
-    _: User = Depends(require_admin), db: Session = Depends(get_db),
+    _: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
 ):
     """CERT-031 按状态列资质（76 号 spec）。
 
@@ -634,7 +634,7 @@ def list_certifications(
 @router.post("/admin/certifications/{application_id}/decide")
 def decide_certification(
     application_id: int, body: CertVerdictIn,
-    admin: User = Depends(require_admin), db: Session = Depends(get_db),
+    admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
 ):
     from app.modules.account import cert_service
     from app.modules.account.models_cert import CertificationApplication
@@ -651,7 +651,7 @@ def decide_certification(
 @router.post("/admin/certifications/{application_id}/revoke")
 def revoke_certification(
     application_id: int, body: CertVerdictIn,
-    admin: User = Depends(require_admin), db: Session = Depends(get_db),
+    admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
 ):
     from app.modules.account import cert_service
     from app.modules.account.models_cert import CertificationApplication
@@ -680,7 +680,7 @@ class TeamVerifyIn(BaseModel):
 @router.get("/admin/teams/pending")
 def pending_teams(
     limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
-    _: User = Depends(require_admin), db: Session = Depends(get_db),
+    _: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
 ):
     """待核验的团队企业信息。
 
@@ -709,7 +709,7 @@ def pending_teams(
 @router.post("/admin/teams/{team_id}/verify")
 def verify_team(
     team_id: int, body: TeamVerifyIn,
-    admin: User = Depends(require_admin), db: Session = Depends(get_db),
+    admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
 ):
     """核过，或驳回**并写明要补什么**。
 
@@ -746,7 +746,7 @@ def verify_team(
 
 # ---------- QUEUE-010/011/012 人审队列概览与催办（78 号 spec） ----------
 @router.get("/admin/queues")
-def review_queues(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+def review_queues(_: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
     """每个人审队列：几件在等、最久等了多久、SLA 多长、超没超。
 
     三个地方共用这一份：催办 job、管理后台首屏、测试。
@@ -764,8 +764,8 @@ def review_queues(_: User = Depends(require_admin), db: Session = Depends(get_db
 
 @router.post("/admin/jobs/remind-review-queues")
 def run_remind_review_queues(_triggered_by: int = Depends(_job_or_admin),
-                             db: Session = Depends(get_db),
-                             __=Depends(job_slot("review_queue_reminders"))):
+                             db: Session = Depends(get_db, scope="function"),
+                             __=Depends(job_slot("review_queue_reminders"), scope="function")):
     """QUEUE-011/012 队列积压催办。
 
     探针：四个队列里的东西推到 30 天前、跑一遍全部 job——

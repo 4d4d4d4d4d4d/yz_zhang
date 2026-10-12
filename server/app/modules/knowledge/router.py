@@ -13,21 +13,21 @@ router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 @router.get("/price-reference")
 def price_reference(
-    category: str = Query(min_length=1), city: str | None = None, db: Session = Depends(get_db)
+    category: str = Query(min_length=1), city: str | None = None, db: Session = Depends(get_db, scope="function")
 ):
     """KB-021 估价参考（分布 + 样本量）。"""
     return service.price_reference(db, category, city)
 
 
 @router.get("/templates")
-def templates(category: str, q: str = "", db: Session = Depends(get_db)):
+def templates(category: str, q: str = "", db: Session = Depends(get_db, scope="function")):
     """KB-020 分解模板检索。"""
     tpl = service.find_template(db, category, q)
     return tpl or {"category": category, "items": [], "source": "none"}
 
 
 @router.get("/category-demand")
-def category_demand(db: Session = Depends(get_db)):
+def category_demand(db: Session = Depends(get_db, scope="function")):
     """KB-024 类目供需看板：按类目聚合在招任务数、闭环数、成交额、执行者供给数。"""
     from sqlalchemy import func
 
@@ -78,7 +78,7 @@ def category_demand(db: Session = Depends(get_db)):
 
 
 @router.get("/cards")
-def cards(category: str | None = None, limit: int = 20, db: Session = Depends(get_db)):
+def cards(category: str | None = None, limit: int = 20, db: Session = Depends(get_db, scope="function")):
     """脱敏经验卡列表（KB-023 用户侧攻略数据源）。"""
     from .models import KnowledgeCard
 
@@ -99,7 +99,7 @@ def knowledge_search(
     q: str = Query(min_length=1, max_length=200),
     kind: str = Query("card", pattern="^(card|faq)$"),
     top_k: int = Query(5, ge=1, le=20),
-    _: User = Depends(get_current_user), db: Session = Depends(get_db),
+    _: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     """KB-022 统一检索入口。
 
@@ -113,8 +113,8 @@ def knowledge_search(
 
 
 @router.post("/jobs/reindex")
-def run_reindex(db: Session = Depends(get_db), _=Depends(require_job_auth),
-                __=Depends(job_slot("kb_reindex"))):
+def run_reindex(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                __=Depends(job_slot("kb_reindex"), scope="function")):
     """KB-011 增量重建向量索引：只补没有向量或模型已换的行。"""
     from .retrieval import reindex
 

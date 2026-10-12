@@ -19,7 +19,7 @@ router = APIRouter(prefix="/legal", tags=["legal"])
 
 # ---------- LAW-030/031/032 协议版本化、单独同意与数据主体权利 ----------
 @router.get("/agreements")
-def my_agreements(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_agreements(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """我同意过什么、哪些待重新同意、哪些敏感项可撤回（撤回会失去什么）。"""
     from app.modules.legal import consent
 
@@ -27,7 +27,7 @@ def my_agreements(user: User = Depends(get_current_user), db: Session = Depends(
 
 
 @router.post("/agreements/accept")
-def accept_agreements(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def accept_agreements(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """LAW-030 协议版本更新后重新同意。"""
     from app.modules.legal import consent
 
@@ -36,7 +36,7 @@ def accept_agreements(user: User = Depends(get_current_user), db: Session = Depe
 
 @router.post("/consents/{scope}/grant")
 def grant_consent(
-    scope: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    scope: str, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """LAW-031 显式授权某个敏感项（撤回后唯一的重新开启入口）。"""
     from app.modules.legal import consent
@@ -46,7 +46,7 @@ def grant_consent(
 
 @router.post("/consents/{scope}/revoke")
 def revoke_consent(
-    scope: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    scope: str, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """LAW-032 撤回同意，并**当场执行**撤回的后果。
 
@@ -204,7 +204,7 @@ class DocumentIn(BaseModel):
 
 @router.post("/documents")
 def generate_document(
-    body: DocumentIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    body: DocumentIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """LAW-002 文书模板生成：按任务/合约数据填充草稿（仅当事人；草稿需自行核对）。"""
     task = db.get(Task, body.task_id)
@@ -288,7 +288,7 @@ def _ai_execution_trail(db, task) -> dict | None:
 
 @router.get("/disputes/{dispute_id}/evidence-export")
 def evidence_export(
-    dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    dispute_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """LAW-012/013/014 证据包导出：**一份自洽、可直接提交的材料**。
 

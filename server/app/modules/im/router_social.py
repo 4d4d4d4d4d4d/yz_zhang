@@ -33,7 +33,7 @@ class FriendRequestIn(BaseModel):
 
 @router.post("/friends/requests", status_code=201)
 def send_friend_request(
-    body: FriendRequestIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    body: FriendRequestIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     """IM-020 加好友：**双向同意**。
 
@@ -82,7 +82,7 @@ def send_friend_request(
 
 
 @router.get("/friends/requests")
-def list_friend_requests(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_friend_requests(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     rows = db.query(Friendship).filter(
         Friendship.addressee_id == user.id, Friendship.status == "pending").all()
     return [{"id": r.id, "from_user_id": r.requester_id,
@@ -92,7 +92,7 @@ def list_friend_requests(user: User = Depends(get_current_user), db: Session = D
 @router.post("/friends/requests/{req_id}/decide")
 def decide_friend_request(
     req_id: int, accept: bool = Query(...),
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     row = db.get(Friendship, req_id)
     if not row:
@@ -108,7 +108,7 @@ def decide_friend_request(
 
 
 @router.get("/friends")
-def list_friends(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_friends(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """IM-021 通讯录。备注名是**各自看各自的**，按方向取。"""
     rows = db.query(Friendship).filter(
         Friendship.status == "accepted",
@@ -130,7 +130,7 @@ class RemarkIn(BaseModel):
 @router.patch("/friends/{user_id}")
 def set_remark(
     user_id: int, body: RemarkIn,
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     row = _pair(db, user.id, user_id)
     if not row or row.status != "accepted":
@@ -145,7 +145,7 @@ def set_remark(
 
 @router.delete("/friends/{user_id}")
 def remove_friend(
-    user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     row = _pair(db, user.id, user_id)
     if row:
@@ -154,7 +154,7 @@ def remove_friend(
 
 
 @router.get("/friends/worked-with")
-def worked_with(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def worked_with(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """IM-022 合作过的人：**查出来的，不是存出来的**。
 
     存一张「合作过」表就要在每次闭环、每次取消、每次注销时同步维护它，
@@ -197,7 +197,7 @@ def _group(db: Session, conv_id: int) -> Conversation:
 
 @router.post("/conversations/groups", status_code=201)
 def create_group(
-    body: GroupIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    body: GroupIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     members = sorted({user.id, *body.member_ids})
     if len(members) > settings.GROUP_MEMBER_LIMIT:
@@ -215,7 +215,7 @@ class MembersIn(BaseModel):
 @router.post("/conversations/{conv_id}/members")
 def invite_members(
     conv_id: int, body: MembersIn,
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     conv = _group(db, conv_id)
     if user.id not in conv.participants:
@@ -231,7 +231,7 @@ def invite_members(
 @router.delete("/conversations/{conv_id}/members/{member_id}")
 def remove_member(
     conv_id: int, member_id: int,
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     """移出成员：仅群主；群主不能把自己移出（否则群主位空悬）。"""
     conv = _group(db, conv_id)
@@ -253,7 +253,7 @@ class GroupPatchIn(BaseModel):
 @router.patch("/conversations/{conv_id}")
 def update_group(
     conv_id: int, body: GroupPatchIn,
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
 ):
     conv = _group(db, conv_id)
     if conv.owner_id != user.id:

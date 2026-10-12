@@ -72,7 +72,7 @@ def _get(db: Session, team_id: int) -> Team:
 
 @router.post("", status_code=201)
 def create_team(body: TeamIn, user: User = Depends(require_verified),
-                db: Session = Depends(get_db)):
+                db: Session = Depends(get_db, scope="function")):
     """建团队 = 建一行 User + 一行 Team。
 
     与 V73「agent 是 User」、V75「合作体是 User」同一条理由：
@@ -94,7 +94,7 @@ def create_team(body: TeamIn, user: User = Depends(require_verified),
 
 
 @router.get("/mine")
-def my_teams(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_teams(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     rows = db.query(TeamMember).filter(TeamMember.user_id == user.id,
                                        TeamMember.active.is_(True)).all()
     out = []
@@ -108,7 +108,7 @@ def my_teams(user: User = Depends(get_current_user), db: Session = Depends(get_d
 
 @router.get("/{team_id}")
 def get_team(team_id: int, user: User = Depends(get_current_user),
-             db: Session = Depends(get_db)):
+             db: Session = Depends(get_db, scope="function")):
     team = _get(db, team_id)
     me = service.require_member(db, team_id, user.id)
     acct = wallet.get_or_create(db, team_id)
@@ -133,7 +133,7 @@ def get_team(team_id: int, user: User = Depends(get_current_user),
 # ------------------------------------------------------------------- 成员与权限
 @router.post("/{team_id}/members", status_code=201)
 def add_member(team_id: int, body: MemberIn, user: User = Depends(get_current_user),
-               db: Session = Depends(get_db)):
+               db: Session = Depends(get_db, scope="function")):
     team = _get(db, team_id)
     service.require_role(db, team_id, user.id, "owner")
     if service.member_of(db, team_id, body.user_id):
@@ -156,7 +156,7 @@ def add_member(team_id: int, body: MemberIn, user: User = Depends(get_current_us
 
 @router.patch("/{team_id}/members/{member_user_id}")
 def patch_member(team_id: int, member_user_id: int, body: MemberPatch,
-                 user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+                 user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """TEAM-010 **只有 owner 能改角色与额度。**
 
     admin 能批支出但不能给自己提额度——否则「审批」这道闸门自己就绕过去了。
@@ -177,7 +177,7 @@ def patch_member(team_id: int, member_user_id: int, body: MemberPatch,
 
 @router.delete("/{team_id}/members/{member_user_id}")
 def remove_member(team_id: int, member_user_id: int,
-                  user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+                  user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     _get(db, team_id)
     service.require_role(db, team_id, user.id, "owner")
     m = service.member_of(db, team_id, member_user_id)
@@ -193,7 +193,7 @@ def remove_member(team_id: int, member_user_id: int,
 # ------------------------------------------------------------------- 支出与审批
 @router.post("/{team_id}/spends", status_code=201)
 def request_spend(team_id: int, body: SpendIn, user: User = Depends(get_current_user),
-                  db: Session = Depends(get_db)):
+                  db: Session = Depends(get_db, scope="function")):
     """发起一笔团队支出。额度内直接执行，超额转审批。"""
     team = _get(db, team_id)
     me = service.require_member(db, team_id, user.id)
@@ -218,7 +218,7 @@ def request_spend(team_id: int, body: SpendIn, user: User = Depends(get_current_
 
 @router.get("/{team_id}/spends")
 def list_spends(team_id: int, user: User = Depends(get_current_user),
-                db: Session = Depends(get_db)):
+                db: Session = Depends(get_db, scope="function")):
     _get(db, team_id)
     me = service.require_member(db, team_id, user.id)
     q = db.query(SpendRequest).filter(SpendRequest.team_id == team_id)
@@ -240,7 +240,7 @@ def list_spends(team_id: int, user: User = Depends(get_current_user),
 
 @router.post("/{team_id}/spends/{request_id}/decide")
 def decide(team_id: int, request_id: int, body: DecideIn,
-           user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+           user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     _get(db, team_id)
     req = db.get(SpendRequest, request_id)
     if not req or req.team_id != team_id:
@@ -253,7 +253,7 @@ def decide(team_id: int, request_id: int, body: DecideIn,
 
 @router.post("/{team_id}/spends/{request_id}/execute")
 def execute(team_id: int, request_id: int, user: User = Depends(get_current_user),
-            db: Session = Depends(get_db)):
+            db: Session = Depends(get_db, scope="function")):
     _get(db, team_id)
     req = db.get(SpendRequest, request_id)
     if not req or req.team_id != team_id:
@@ -263,7 +263,7 @@ def execute(team_id: int, request_id: int, user: User = Depends(get_current_user
 
 @router.post("/{team_id}/budget")
 def set_budget(team_id: int, body: BudgetIn, user: User = Depends(get_current_user),
-               db: Session = Depends(get_db)):
+               db: Session = Depends(get_db, scope="function")):
     """TEAM-052 设团队月度预算池。**只有 owner 能改**：
 
     池子是「这个月团队总共花多少」的总量声明，而 admin 是被授予权限的人。
@@ -284,7 +284,7 @@ def set_budget(team_id: int, body: BudgetIn, user: User = Depends(get_current_us
 # --------------------------------------------------------------- 企业信息与发票
 @router.post("/{team_id}/company")
 def submit_company(team_id: int, body: CompanyIn, user: User = Depends(get_current_user),
-                   db: Session = Depends(get_db)):
+                   db: Session = Depends(get_db, scope="function")):
     """TEAM-030 提交企业信息与营业执照，转人工核验。
 
     沿用 V76 那套：材料标记为敏感文件，管理员审核后才 `verified`。
@@ -307,8 +307,8 @@ def submit_company(team_id: int, body: CompanyIn, user: User = Depends(get_curre
 
 # --------------------------------------------------------------- 催办 job
 @router.post("/jobs/remind-approvals")
-def run_remind_approvals(db: Session = Depends(get_db), _=Depends(require_job_auth),
-                         __=Depends(job_slot("team_approval_reminders"))):
+def run_remind_approvals(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                         __=Depends(job_slot("team_approval_reminders"), scope="function")):
     """TEAM-063 支出审批的催办与超时关闭（75 号 spec）。
 
     此前提交时通知一次，然后什么都不再发生——**躺三个月也不会有人

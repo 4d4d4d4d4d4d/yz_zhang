@@ -16,27 +16,27 @@ router = APIRouter(prefix="/anchors", tags=["anchor"])
 
 
 @router.get("/verify")
-def verify(db: Session = Depends(get_db)):
+def verify(db: Session = Depends(get_db, scope="function")):
     """SC-011 全链完整性校验（公开可验证）。"""
     return service.verify_chain(db)
 
 
 @router.get("/coverage")
-def anchor_coverage(db: Session = Depends(get_db)):
+def anchor_coverage(db: Session = Depends(get_db, scope="function")):
     """LAW-013 存证覆盖：哪些区间有第三方背书、哪些只是平台自算。"""
     return service.coverage(db)
 
 
 @router.post("/jobs/notarize")
-def run_notarize(db: Session = Depends(get_db), _=Depends(require_job_auth),
-                 __=Depends(job_slot("notarize"))):
+def run_notarize(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                 __=Depends(job_slot("notarize"), scope="function")):
     """LAW-011 定期把哈希链 head 交第三方存证并取回回执。"""
     return service.notarize_pending(db)
 
 
 @router.get("/contracts/{contract_id}")
 def contract_anchors(
-    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    contract_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     contract = db.get(Contract, contract_id)
     if not contract:
@@ -57,7 +57,7 @@ def contract_anchors(
 
 
 @router.get("/blockchain")
-def blockchain_status(db: Session = Depends(get_db)):
+def blockchain_status(db: Session = Depends(get_db, scope="function")):
     from .blockchain import status
 
     return status(db)
