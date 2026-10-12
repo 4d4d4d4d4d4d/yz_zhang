@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
 > 2026-10-09：V119 法定权利入口进 App；V118 单聊并发分叉修复；V117 关注幂等化并接到空间；V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
-> 后端 1318 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
+> 后端 1326 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
 > （真 Chromium × 构建产物 × 真服务端，12 项）。
@@ -14,6 +14,24 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V126 批次：哪些字段永远不许从请求体里收）
+
+> 模块 spec：[99 安全](99-security-for-real-money.md) 第 4 节 SEC-067
+>
+> ```
+> 所有请求体 schema ∩ {is_admin, is_verified, credit_score, status, creator_id,
+>                      executor_id, released_cents, id, ...}  = 0 处
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **一个碰巧成立的事实** | 今天一处都没有——资料更新是严格白名单，pydantic 默认把多余字段丢掉。**但那不是被钉住的约束**：哪天有人给某个 schema 加一个 `status: str \| None = None`，而 SDK 的 `createTask` 参数是 `Partial<Task>`（里面就有 status），客户端早就在发了，那一刻起它就生效了，没有任何东西会红 | — |
+| **永不接受表** | 23 个身份、权限、信用、账本、签署字段，任何请求体都不许声明；值是理由（「能写 `created_at` 就能伪造先后顺序，比如抢在截止前报名」） | `test_never_accepted_fields::test_sec067_no_request_schema_accepts_a_never_accepted_field`（给资料更新加 is_admin 即红） |
+| **受控接受表** | 金额、角色、目标用户是合法但敏感的：只许出现在登记了「这个值是谁定的、谁来约束它」的 schema 上，新 schema 要收就得来登记 | `::test_sec067_guarded_fields_only_appear_where_registered` |
+| **行为验** | 把权限位与信用分塞进资料更新、把 status/creator_id/executor_id/created_at/id 塞进发任务、把账本字段塞进变更单——200，但一个都没写进去。资料那条同时断言正当字段（改名）**确实生效了**，否则这条测试本身就没验到东西 | 三条 |
+| **SYNC-050b 收窄 createTask** | 参数从 `Partial<Task> & {...}` 改成与服务端 `TaskIn` 逐字段一致的 `TaskCreateInput`。两端所有调用点类型检查通过——**没有一处在发 schema 之外的字段**。V105 给它开的请求体豁免随之删掉，红验确认它现在真的被比 | `::test_sec067_sdk_create_task_type_matches_the_server_schema`；`test_client_shape_alignment::test_cli072_*`（往类型里塞 status 即红） |
+| **两张表自己也被我的规则咬了** | 受控表第一版的 schema 名是我猜的（`PayoutProposalIn`、`WithdrawIn`……并不存在），死条目检查当场红；还有一条理由写的是「同上」——**「同上」不是理由**，它让读的人去猜上面那条为什么也适用于这一条 | `::test_sec067_tables_have_no_dead_or_lazy_entries` |
 
 ## 已实现（V125 批次：响应形状的整条扫除）
 

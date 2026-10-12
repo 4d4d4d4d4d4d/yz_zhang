@@ -16,7 +16,7 @@ import type {
   ContributionKind,
   ContributionView,
   EligibleAgent,
-  IpAssignment,
+  TaskCreateInput,
   RiskDisclosure,
   ShareRow,
   SpendRequestView,
@@ -179,13 +179,7 @@ export class PlatformClient {
    *  放在类型里比再加一条测试好：它覆盖所有客户端（包括以后写的那个）、
    *  在写代码时就红、而且不需要有人记得去写那条测试。
    */
-  createTask(input: Partial<Task> & {
-    title: string;
-    category: string;
-    ip_assignment: IpAssignment;
-    publish_now?: boolean;
-    people_needed?: number;
-  }) {
+  createTask(input: TaskCreateInput) {
     return this.request<Task & { slots?: Task[] }>('POST', '/tasks', input);
   }
   listTasks(params: Record<string, string | number | undefined> = {}) {

@@ -93,6 +93,43 @@ export type IpAssignment =
   | 'license_nonexclusive'   // 普通许可，执行方可再许可他人
   | 'retain';                // 执行方保留，发布方按约定范围使用
 
+/** SYNC-050b / SEC-067 创建任务的请求体——**与服务端 `TaskIn` 逐字段对应**。
+ *
+ * 此前 `createTask` 的参数是 `Partial<Task> & {...}`，比创建 schema 宽得多：
+ * `id` / `status` / `creator_id` / `executor_id` / `created_at` 都在里面。
+ * 服务端会把多余的键静默丢掉（pydantic 的默认），所以今天不出事——
+ * 但「多收一个字段的代价取决于那个字段是什么」：`status` 是业务错乱，
+ * 哪天服务端 schema 不小心加上了同名字段，客户端早就在发了。
+ *
+ * `ip_assignment` 在服务端 schema 里是可选的，在这里是**必填**：
+ * 服务端会拒绝空值（IPC-001），而必填如果没有变成类型上的必填，
+ * 它只是一句口头约定（V77 的教训）。 */
+export interface TaskCreateInput {
+  title: string;
+  category: string;
+  ip_assignment: IpAssignment;
+  description?: string;
+  task_type?: string;
+  required_skills?: string[];
+  budget_cents?: number;
+  pricing?: string;
+  deposit_cents?: number;
+  is_remote?: boolean;
+  city?: string;
+  lat?: number | null;
+  lng?: number | null;
+  address_hint?: string;
+  address_exact?: string;
+  deadline?: string | null;
+  visibility?: string;
+  circle_id?: number | null;
+  recurrence?: string;
+  people_needed?: number;
+  acceptance_criteria?: string[];
+  bonus_cents?: number;
+  publish_now?: boolean;
+}
+
 /** 与服务端 contract/clauses.py 的 IP_LABELS 一致 */
 export const IP_ASSIGNMENT_LABEL: Record<IpAssignment, string> = {
   assign: '著作权转让给我（定制 logo、定制文案）',

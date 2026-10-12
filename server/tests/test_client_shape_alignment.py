@@ -570,11 +570,6 @@ def _resolve_body_keys(expr: str) -> tuple[set[str], bool]:
 
 # 解析不了的请求体 -> 为什么（值是**理由**，不是布尔）
 DYNAMIC_BODY: dict[tuple[str, str], str] = {
-    ("POST", "/tasks"): (
-        "参数类型是 `Partial<Task> & {...}`，它比创建 schema 宽得多"
-        "（`id` / `status` / `created_at` 都在里面）。逐键比会是一堆假警报；"
-        "这个宽度本身是 SDK 的设计问题，记在 72 号台账的 SYNC-050 那条线上"
-    ),
     ("POST", "/tasks/{x}/applications"): (
         "请求体里有条件展开（`...(bidCents ? { bid_cents } : {})`），"
         "静态读不出稳定的键集合；两个键都很稳定，值得的话该把签名改成显式两参"
