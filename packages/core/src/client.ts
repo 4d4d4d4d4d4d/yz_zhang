@@ -35,6 +35,7 @@ import type {
   Contract,
   Decomposition,
   DecompositionItem,
+  DecompositionNodePatch,
   Dispute,
   DisputeStatement,
   Conversation,
@@ -476,6 +477,25 @@ export class PlatformClient {
   // ---- decompose / knowledge ----
   propose(taskId: number) {
     return this.request<Decomposition>('POST', `/tasks/${taskId}/decompositions`);
+  }
+  /** 拆到一半关掉页面，回来接着拆（404 `no_decomposition_in_progress` 表示没有进行中的拆解）。 */
+  currentDecomposition(taskId: number) {
+    return this.request<Decomposition>('GET', `/tasks/${taskId}/decomposition`);
+  }
+  /** AI-DEC-041 往下长一层；给 `nodeIds` 则只拆这几步（不给时 JSON 里没有这个键 = 展开整个前沿）。 */
+  expandDecomposition(decId: number, revision: number, nodeIds?: number[]) {
+    return this.request<Decomposition>(
+      'POST', `/decompositions/${decId}/expand`,
+      { revision, node_ids: nodeIds },
+    );
+  }
+  editDecompositionNode(decId: number, nodeId: number, revision: number, patch: DecompositionNodePatch) {
+    return this.request<Decomposition>('PATCH', `/decompositions/${decId}/nodes/${nodeId}`,
+      { revision, ...patch });
+  }
+  deleteDecompositionNode(decId: number, nodeId: number, revision: number) {
+    return this.request<Decomposition>('DELETE',
+      `/decompositions/${decId}/nodes/${nodeId}?revision=${revision}`);
   }
   editDecomposition(decId: number, items: DecompositionItem[]) {
     return this.request<Decomposition>('PATCH', `/decompositions/${decId}`, { items });

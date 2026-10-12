@@ -8,25 +8,35 @@ from app.core.events import subscribe
 from .models import DecompositionTemplate, FaqEntry, KnowledgeCard
 
 # 冷启动种子（KB 冷启动策略：人工模板兜底，标注来源）
+# AI-DEC-040（V132，106 号 spec）每一步都带「交付物」与「验收标准」：
+# 没有这两样的节点不能算叶子——说不出交什么、怎么验，就无法托管也无法验收。
 SEED_TEMPLATES = [
     {
         "category": "软件开发",
         "keywords": ["网站", "小程序", "app", "系统", "开发"],
         "items": [
-            {"title": "需求梳理与原型设计", "skills": ["产品设计"], "budget_ratio_bps": 1500, "depends_on": []},
-            {"title": "UI 视觉设计", "skills": ["UI设计"], "budget_ratio_bps": 1500, "depends_on": [0]},
-            {"title": "前端开发", "skills": ["前端开发"], "budget_ratio_bps": 2500, "depends_on": [1]},
-            {"title": "后端开发", "skills": ["后端开发"], "budget_ratio_bps": 2500, "depends_on": [0]},
-            {"title": "联调测试与上线", "skills": ["测试"], "budget_ratio_bps": 2000, "depends_on": [2, 3]},
+            {"title": "需求梳理与原型设计", "skills": ["产品设计"], "budget_ratio_bps": 1500, "depends_on": [],
+             "deliverable": "需求文档与可点击原型", "acceptance": "发布方逐页确认原型覆盖了全部需求点"},
+            {"title": "UI 视觉设计", "skills": ["UI设计"], "budget_ratio_bps": 1500, "depends_on": [0],
+             "deliverable": "全部页面的视觉稿与切图", "acceptance": "视觉稿页面数与原型一致，发布方确认风格"},
+            {"title": "前端开发", "skills": ["前端开发"], "budget_ratio_bps": 2500, "depends_on": [1],
+             "deliverable": "可部署的前端代码与构建说明", "acceptance": "在测试环境按原型逐页走通，与视觉稿一致"},
+            {"title": "后端开发", "skills": ["后端开发"], "budget_ratio_bps": 2500, "depends_on": [0],
+             "deliverable": "接口服务代码、接口文档与部署说明", "acceptance": "接口文档里的每个接口在测试环境可调用并返回约定结构"},
+            {"title": "联调测试与上线", "skills": ["测试"], "budget_ratio_bps": 2000, "depends_on": [2, 3],
+             "deliverable": "测试报告与线上可访问的地址", "acceptance": "测试报告无未关闭的严重缺陷，线上地址可正常使用"},
         ],
     },
     {
         "category": "活动策划",
         "keywords": ["活动", "策划", "开业", "婚礼"],
         "items": [
-            {"title": "方案策划与预算", "skills": ["策划"], "budget_ratio_bps": 2000, "depends_on": []},
-            {"title": "物料设计制作", "skills": ["设计"], "budget_ratio_bps": 3000, "depends_on": [0]},
-            {"title": "现场执行", "skills": ["活动执行"], "budget_ratio_bps": 5000, "depends_on": [1]},
+            {"title": "方案策划与预算", "skills": ["策划"], "budget_ratio_bps": 2000, "depends_on": [],
+             "deliverable": "活动方案与分项预算表", "acceptance": "发布方确认方案与预算"},
+            {"title": "物料设计制作", "skills": ["设计"], "budget_ratio_bps": 3000, "depends_on": [0],
+             "deliverable": "方案列出的全部物料实物或印刷文件", "acceptance": "物料清单逐项点验，数量与规格相符"},
+            {"title": "现场执行", "skills": ["活动执行"], "budget_ratio_bps": 5000, "depends_on": [1],
+             "deliverable": "按方案完成的活动与现场照片", "acceptance": "活动按方案时间与流程完成，发布方现场或凭照片确认"},
         ],
     },
 ]
@@ -87,13 +97,19 @@ def find_template(db: Session, category: str, text: str) -> dict | None:
         if any(kw in text for kw in tpl.keywords):
             return {"category": tpl.category, "items": tpl.items, "source": "keyword_match"}
     # 闭环任务沉淀的分解结构（KB-001 → AI-DEC-012 反哺）
-    card = (
+    # 「decomposition 非空」在 Python 里判断，不写进 SQL：`json != json` 在 SQLite 上能跑，
+    # 在 Postgres 上**没有这个运算符**——V132 在本地 Postgres 上跑拆解测试才撞见：
+    # 没有种子模板、也没命中关键词的类目，生产上一发起分解就 500。
+    # 只看最近 20 张：要的是最新的那份成功拆法，不是全表扫描。
+    recent = (
         db.query(KnowledgeCard)
-        .filter(KnowledgeCard.category == category, KnowledgeCard.decomposition != [])
+        .filter(KnowledgeCard.category == category)
         .order_by(KnowledgeCard.id.desc())
-        .first()
+        .limit(20)
+        .all()
     )
-    if card and card.decomposition:
+    card = next((c for c in recent if c.decomposition), None)
+    if card:
         return {"category": card.category, "items": card.decomposition, "source": "closed_loop_experience"}
     return None
 

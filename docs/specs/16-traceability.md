@@ -1,11 +1,11 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 2026-10-12：V131 写操作在响应发出之前提交（FastAPI yield 依赖的作用域）；V130 幂等键真的护住钱（并发同键、过期、两端发键；Postgres 上实测）；V129 前端测试计数与结构计数进闸门（上线手册的 job 数是错的）；V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
+> 2026-10-12：V132 任务拆解变成逐层展开、说清谁能闭环的树；V131 写操作在响应发出之前提交（FastAPI yield 依赖的作用域）；V130 幂等键真的护住钱（并发同键、过期、两端发键；Postgres 上实测）；V129 前端测试计数与结构计数进闸门（上线手册的 job 数是错的）；V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
 > 2026-10-09：V119 法定权利入口进 App；V118 单聊并发分叉修复；V117 关注幂等化并接到空间；V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
-> 后端 1371 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
+> 后端 1406 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
-> （真 Chromium × 构建产物 × 真服务端，14 项）。
+> （真 Chromium × 构建产物 × 真服务端，17 项）。
 > 全系统体检报告：[../SYSTEM-CHECK.md](../SYSTEM-CHECK.md)（数据库怎么搭、跑起来有什么问题）。
 > **现状一页看清：[72-status-ledger.md](72-status-ledger.md)**（这份矩阵的缺口也在那里记着）；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
@@ -15,6 +15,24 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V132 批次：拆到能干活为止的树）
+
+> 模块 spec：[106-a-tree-you-can-work.md](106-a-tree-you-can-work.md)（设计见 96 号）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **AI-DEC-040 叶子判据** | 交付物、验收标准、单一责任主体、可托管预算；缺哪条写进 `missing` | `test_decompose_tree::test_aidec040_*`（两条） |
+| **AI-DEC-041 逐层** | `expand` 一次一层或只拆点名的步骤；每层落盘；`GET /tasks/{id}/decomposition` 读回；比较并交换 | `::test_aidec041_*`、`::test_concurrent_edits_do_not_silently_overwrite`、`::test_resume_is_owner_only_and_404_when_nothing_in_progress` |
+| **AI-DEC-042 依据** | AI 可闭环要该类目 Agent 成功且已验收 ≥ 3 次；否则 `unknown` 并写出次数 | `::test_aidec042_ai_closable_needs_real_history_otherwise_unknown` |
+| **AI-DEC-043 资质否决** | 类目资质表直接否决，不看模型与历史 | `::test_aidec043_*`（两条） |
+| **AI-DEC-044 去处** | `unknown` 确认前必须选；专家步骤确认后被资质门槛拦 | `::test_aidec044_*`（两条） |
+| **AI-DEC-045 保险** | 七种停法写原因，触发次数进 `/metrics` | `::test_aidec045_*`（七条） |
+| **AI-DEC-046 资金** | 只有叶子发布；每层预算；后继容器下的叶子在前置完成后发布；逐级结项；AI 不动钱 | `::test_aidec046_budget_is_checked_at_every_level`、`::test_confirm_a_two_level_tree_then_work_it_to_completion`、`::test_decompose_never_touches_money` |
+| **AI-DEC-047 每层审核** | 机审与金融合规，整层不落盘 | `::test_aidec047_*`（两条） |
+| **AI-DEC-048 来源可见** | `source` / `fallback`，页面明说 | `::test_aidec048_*`（两条）；`Decompose.test.tsx` |
+| **只在 Postgres 上的 500** | `json != []` 改成 Python 判断；可移植性闸门；拆解测试进 CI Postgres job | `test_postgres_portability`（两条） |
+| **web** | `/tasks/:id/decompose`；发布页与任务页的入口 | `Decompose.test.tsx`（10 条）；真浏览器「项目型任务逐层拆解并确认发布」 |
 
 ## 已实现（V131 批次：写操作必须在响应发出之前提交）
 

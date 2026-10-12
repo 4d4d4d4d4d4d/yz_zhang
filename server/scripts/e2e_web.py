@@ -228,6 +228,27 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     page.wait_for_timeout(800)
     step("刚发的任务出现在广场", page.locator(f"text={title}").count() > 0, title)
 
+    # AI-DEC-041（V132）：项目型任务落到逐层拆解页，确认后只有叶子发布出去。
+    # 真服务端上没有模型 Key，走的是通用模板——这一步验的正是那条最常见的路：
+    # 模板那一层每一步都带交付物与验收标准、直接可确认，确认后回到任务页、子步骤在。
+    ptitle = f"E2E 项目 {int(time.time()) % 100000}"
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/publish", wait_until="networkidle")
+    page.select_option("label:has-text('类型') select", "project")
+    page.fill("label:has-text('标题') input", ptitle)
+    page.fill("label:has-text('预算') input", "3000")
+    page.select_option("label:has-text('交付成果归谁') select", index=1)
+    page.get_by_role("button", name="创建并让 AI 分解").click()
+    page.wait_for_url("**/decompose", timeout=15000)
+    page.wait_for_selector("li[data-node]", timeout=15000)
+    leaves = page.locator("[data-executor]").count()
+    confirm = page.get_by_role("button", name="确认并发布可开工的步骤")
+    ok_tree = leaves >= 2 and confirm.is_enabled()
+    confirm.click()
+    page.wait_for_timeout(2000)
+    step("项目型任务逐层拆解并确认发布",
+         ok_tree and "/decompose" not in page.url and page.locator("text=子任务进度").count() > 0,
+         f"{leaves} 步")
+
     # 客服工单：V102 才补上的自助入口，而且它是**没有前置条件的写路径**——
     # 正好适合用真浏览器验一遍（服务端队列由 V101/V103 的测试盯着）
     page.goto(f"http://127.0.0.1:{WEB_PORT}/support", wait_until="networkidle")

@@ -201,6 +201,7 @@ def test_fin072_ci_runs_this_file_on_postgres():
     assert job, "CI 里找不到 postgres-acceptance job"
     body = job.group(1)
     assert "tests/test_idempotency_concurrency.py" in body, "Postgres job 不跑资金幂等与并发测试"
+    assert "tests/test_decompose_tree.py" in body, "Postgres job 不跑逐层拆解测试（V132 只在 Postgres 上才看得见的那个 500）"
     assert "postgresql+psycopg://" in body
     for bad in ("|| true", "continue-on-error"):
         assert bad not in body

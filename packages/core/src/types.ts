@@ -367,12 +367,79 @@ export interface DecompositionItem {
   source?: string;
 }
 
+/** AI-DEC-042 每一步谁能闭环（106 号 spec）。依据在 `executor_basis` 里，是可查的事实。 */
+export type ExecutorKind = 'ai_closable' | 'needs_human' | 'needs_expert' | 'needs_machine' | 'unknown';
+
+/** AI-DEC-040 叶子四条判据里缺的那几条。 */
+export type LeafCriterion = 'deliverable' | 'acceptance' | 'single_owner' | 'budget';
+
+/** 逐层拆解树上的一步（V132）。`parent` 为 null 表示挂在总任务下面。 */
+export interface DecompositionNode {
+  id: number;
+  parent: number | null;
+  depth: number;
+  title: string;
+  description: string;
+  required_skills: string[];
+  budget_cents: number;
+  /** 同一级里必须先完成的步骤 id */
+  depends_on: number[];
+  deliverable: string;
+  acceptance: string;
+  single_owner: boolean;
+  category: string;
+  executor_hint: string;
+  source: string;
+  /** AI-DEC-048 这一步是模型不可用时回落模板拆出来的 */
+  fallback: boolean;
+  leaf: boolean;
+  missing: LeafCriterion[];
+  stop_reason: string;
+  /** 停在这里的原因，服务端写好的话，原样显示 */
+  stop_note: string;
+  expanded: boolean;
+  executor_kind: ExecutorKind | '';
+  executor_basis: string;
+  required_cert: string;
+  task_id: number | null;
+}
+
 export interface Decomposition {
   id: number;
   task_id: number;
+  /** 树形提案里是第一层的只读视图 */
   items: DecompositionItem[];
   status: 'proposed' | 'confirmed' | 'discarded';
   source: string;
+  mode: 'flat' | 'tree';
+  nodes: DecompositionNode[];
+  /** 逐层展开与逐步编辑都要带上它：别的窗口改过就 409 */
+  revision: number;
+  /** 确认前必须说清的步骤 */
+  unresolved: Array<{ id: number; title: string; why: string }>;
+  can_expand: boolean;
+  fallback: boolean;
+  model_calls: number;
+  /** 只有 `expandDecomposition` 的响应带：这一次展开了哪些、停在哪、哪些被审核拦下 */
+  report?: DecompositionExpandReport;
+}
+
+export interface DecompositionExpandReport {
+  expanded: Array<number | null>;
+  stopped: Array<{ id: number; reason: string }>;
+  blocked: string[];
+}
+
+export interface DecompositionNodePatch {
+  title?: string;
+  description?: string;
+  budget_cents?: number;
+  deliverable?: string;
+  acceptance?: string;
+  single_owner?: boolean;
+  category?: string;
+  executor_hint?: '' | 'human' | 'expert' | 'ai';
+  depends_on?: number[];
 }
 
 export interface TaskTree {

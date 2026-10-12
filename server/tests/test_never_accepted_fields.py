@@ -75,6 +75,8 @@ GUARDED: dict[str, dict[str, str]] = {
         "TaskIn": "发布方定预算，本来就是他的钱",
         "TaskEditIn": "发布方改预算，托管前有效",
         "ClarifyIn": "AI 澄清时带上预算作上下文，不落库",
+        "NodePatchIn": "拆解草稿里一步的预算由母任务的发布方自己分；validate_tree 逐层约束不超过上一级，"
+                       "确认后才成为子任务预算，动钱仍走托管合约（AI-DEC-046）",
     },
     "role": {
         "MemberIn": "团队成员角色由 owner 设定（require_role owner）",

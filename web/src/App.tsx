@@ -9,6 +9,7 @@ import Messages from './pages/Messages';
 import Notifications from './pages/Notifications';
 import Profile from './pages/Profile';
 import Publish from './pages/Publish';
+import Decompose from './pages/Decompose';
 import Rewards from './pages/Rewards';
 import Square from './pages/Square';
 import { Discover, PublicSpace, EditSpace, FollowList } from './pages/Spaces';
@@ -80,6 +81,8 @@ export default function App() {
         <Route path="/chain" element={<Suspense fallback={<div className="page">正在加载链上协作…</div>}><Chain /></Suspense>} />
         <Route path="/publish" element={hasToken ? <Publish /> : <Navigate to="/login" />} />
         <Route path="/tasks/:id" element={hasToken ? <TaskDetail /> : <Navigate to="/login" />} />
+        {/* AI-DEC-041 逐层拆解：拆到一半关掉页面，回来接着拆 */}
+        <Route path="/tasks/:id/decompose" element={hasToken ? <Decompose /> : <Navigate to="/login" />} />
         <Route path="/wallet" element={hasToken ? <WalletPage /> : <Navigate to="/login" />} />
         <Route path="/community" element={hasToken ? <Community /> : <Navigate to="/login" />} />
         <Route path="/circles" element={hasToken ? <Circles /> : <Navigate to="/login" />} />

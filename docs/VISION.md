@@ -85,16 +85,16 @@
 | V-4 | 智能合约保证可信流程 | `signContract` `fundContract` `acceptDelivery` `openDispute` | 两端已接 | 证据包导出仍仅 web（`exportEvidence`）；可靠电子签名与司法存证需持牌机构（红线 4、5）；链上资产未正式部署 |
 | V-5a | AI 协助：不懂领域 | `legalAsk` | 两端已接（V122） | 文书生成仍无客户端（LAW-050）；专业供应商与专家复核闭环未验收 |
 | V-5b | AI 协助：找合作者 | `recommendations` `eligibleAgents` | 仅 web | App 上没有推荐与可用 Agent 入口；领域化能力证据与可用时间匹配未实现（SPACE-023） |
-| V-5c | AI 协助：任务拆解 | `propose` `confirmDecomposition` `taskTree` | 仅 web | App 一个入口都没有（APP-077）；且一次只产出一层 DAG，无「谁能闭环」判定（AI-DEC-040，设计见 96 号 spec） |
+| V-5c | AI 协助：任务拆解 | `propose` `confirmDecomposition` `taskTree` | 仅 web | App 一个入口都没有（APP-077）；V132 起是逐层展开的树并判定谁能闭环（106 号 spec） |
 | V-6 | 平台累积成功经验 | `knowledgeCards` `knowledgeSearch` | 两端已接（V122） | 只有样本层可读：缺子类层（KB-070，见 94 号 spec）与可复用单元/工具（KB-080，见 95 号 spec） |
 | V-7 | 经验作为检索库与 skill tool | — | 未实现 | 设计已写（95 号 spec）；复用授权与训练授权是两份同意，分成口径未定前不开启 |
 | V-8 | 经验按子类聚类生长 | — | 未实现 | 设计已写（94 号 spec）；退化态（词袋哈希）下不自动生长 |
-| V-9 | 拆解成够细够具体的树 | — | 未实现 | 设计已写（96 号 spec）；资质类目硬否决 `ai_closable` 是其中最要紧的一条 |
+| V-9 | 拆解成够细够具体的树 | `expandDecomposition` `editDecompositionNode` `currentDecomposition` | 仅 web | V132 实现（106 号 spec）：四条判据定叶子、每个叶子有执行主体与依据、要资质的类目硬否决 AI；App 没有（APP-077）；每层未查子类共识（KB-070） |
 | V-10 | 部署并发 | — | 部分 | 连接预算已有闸门与启动拦截（CONC-061，见 98 号 spec）；未做 PgBouncer、未做容量证明 |
 | V-11 | 安全性 | — | 部分 | 安全响应头、写路径限流、跨副本封禁、四眼原则、资金重复保护、**166 个带参端点的对象级授权覆盖记账**（V124）、**永不接受的请求字段**（V126）、**搜索不公开个人搜索与隐私用户**（V127）已有；内容类行为验（SEC-060f）、授权矩阵明文（SEC-061）、外部渗透测试（SEC-062）未做 |
 
 **V-1 ~ V-6 是用户复述的那六条。** 其中五条两端已接，一条（任务拆解）仅 web。
-V-7 ~ V-9 是 2026-10-10 补的三条设计，都已写成可实现 spec 而未实现。
+V-7 ~ V-9 是 2026-10-10 补的三条设计：V-9（树）V132 已实现、仅 web；V-7、V-8 已写成可实现 spec 而未实现。
 V-10 ~ V-11 是商业化要求。
 
 ## 3. 不在愿景里、但上线前绕不过去的

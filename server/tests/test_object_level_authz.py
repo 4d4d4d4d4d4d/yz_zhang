@@ -98,6 +98,9 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
     (r"^GET /tasks/.*/(reviews|progress|tree|dispute)$", "public",
      "评价、进度、子任务树、是否有纠纷：对任务可见范围内的人公开，"
      "是买方决策与平台公信的一部分；不含金额明细与联系方式"),
+    (r"^GET /tasks/.*/decomposition$", "party",
+     "进行中的拆解草稿只给母任务的发布方看：里面是还没确认的预算分配与谁来做的判断"
+     "（test_decompose_tree::test_resume_is_owner_only_and_404_when_nothing_in_progress）"),
     (r"^GET /tasks/", "public",
      "任务详情在广场上本就公开（未登录也能看，SPACE-004 同一条规矩）；"
      "精确地址等敏感字段由响应层按身份过滤"),

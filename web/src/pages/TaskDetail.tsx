@@ -154,6 +154,16 @@ export default function TaskDetail() {
           V73/V74 把服务端做完了，网页上此前一个入口都没有。 */}
       {isCreator && <AgentPanel task={task} onChanged={() => void load()} />}
 
+      {/* AI-DEC-041 项目型草稿还没拆完：回到拆解页接着拆（106 号 spec） */}
+      {isCreator && task.task_type === 'project' && task.parent_id === null && task.status === 'draft'
+        && !(tree && tree.children.length > 0) && (
+        <div className="card">
+          <h3>还没拆完</h3>
+          <p className="muted">这是一个项目型任务，拆成能开工的步骤并确认后，才会发布出去。</p>
+          <Link to={`/tasks/${task.id}/decompose`}>继续拆解 →</Link>
+        </div>
+      )}
+
       {/* 母任务驾驶舱（AI-DEC-021/TASK-036） */}
       {tree && tree.children.length > 0 && (
         <div className="card">

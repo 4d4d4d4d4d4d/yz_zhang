@@ -109,7 +109,14 @@ def _on_task_completed(db: Session, payload: dict) -> None:
         if sib.status == "draft" and sib.depends_on and all(
             status_map.get(dep) == "completed" for dep in sib.depends_on
         ):
-            task_service.transition(db, sib, "published")
+            # AI-DEC-046 树形拆解里，后继可能是一个容器步骤（中间层）：
+            # 它自己不发布、不托管，发布的是它下面没有前置的叶子
+            if db.query(Task.id).filter(Task.parent_id == sib.id).first():
+                from .tree import publish_unblocked_leaves
+
+                publish_unblocked_leaves(db, sib)
+            else:
+                task_service.transition(db, sib, "published")
     # 全部子任务闭环 → 容器母任务自动结项（TASK-036 / AI-DEC-025 / TASK-007）
     parent = db.get(Task, done.parent_id)
     if parent and parent.status in ("draft", "published") and all(

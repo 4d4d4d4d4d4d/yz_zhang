@@ -19,4 +19,11 @@ class Decomposition(Base):
     items: Mapped[list] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(String(20), default="proposed")  # proposed/confirmed/discarded
     source: Mapped[str] = mapped_column(String(40), default="")
+    # AI-DEC-040~048（V132，106 号 spec）整棵树的节点表；为空表示这是 V132 之前的
+    # 一层提案，仍按 `items` 走。节点字段见 `tree.py` 的 `new_node`。
+    tree: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
+    # 逐层展开与逐点编辑都是「读整棵树 → 改 → 写回」：比较并交换这个计数
+    revision: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # AI-DEC-045 成本上限：这棵树调了几次模型
+    model_calls: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

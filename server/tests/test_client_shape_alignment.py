@@ -570,6 +570,10 @@ def _resolve_body_keys(expr: str) -> tuple[set[str], bool]:
 
 # 解析不了的请求体 -> 为什么（值是**理由**，不是布尔）
 DYNAMIC_BODY: dict[tuple[str, str], str] = {
+    ("PATCH", "/decompositions/{x}/nodes/{x}"): (
+        "revision 加上 DecompositionNodePatch 里调用方给出的那几个字段（逐步编辑只发改了的）；"
+        "服务端 NodePatchIn 是 extra=forbid，多发一个字段就 422，类型由 DecompositionNodePatch 约束"
+    ),
     ("POST", "/tasks/{x}/applications"): (
         "请求体里有条件展开（`...(bidCents ? { bid_cents } : {})`），"
         "静态读不出稳定的键集合；两个键都很稳定，值得的话该把签名改成显式两参"

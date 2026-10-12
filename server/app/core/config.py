@@ -61,6 +61,17 @@ class Settings:
         os.environ.get("PLATFORM_WITHDRAW_REVIEW_REMIND_HOURS", "24"))
     WITHDRAW_REVIEW_TIMEOUT_DAYS = int(
         os.environ.get("PLATFORM_WITHDRAW_REVIEW_TIMEOUT_DAYS", "7"))
+    # AI-DEC-045 逐层拆解的保险（106 号 spec）。深度与节点数是**防失控的保险，
+    # 不是停止条件**——停止条件是叶子四条判据（AI-DEC-040）。
+    DECOMPOSE_MAX_DEPTH = int(os.environ.get("PLATFORM_DECOMPOSE_MAX_DEPTH", "5"))
+    DECOMPOSE_MAX_NODES = int(os.environ.get("PLATFORM_DECOMPOSE_MAX_NODES", "60"))
+    DECOMPOSE_MAX_MODEL_CALLS = int(os.environ.get("PLATFORM_DECOMPOSE_MAX_MODEL_CALLS", "20"))
+    # 一个节点预算低于它就不再拆：托管不了的节点拆出来没有意义
+    DECOMPOSE_MIN_NODE_BUDGET_CENTS = int(
+        os.environ.get("PLATFORM_DECOMPOSE_MIN_NODE_BUDGET_CENTS", "1000"))
+    # AI-DEC-042 标「AI 可闭环」要的历史依据：该类目下平台 Agent 成功且已验收的次数
+    DECOMPOSE_AI_CLOSABLE_MIN_RUNS = int(
+        os.environ.get("PLATFORM_DECOMPOSE_AI_CLOSABLE_MIN_RUNS", "3"))
     # FIN-071 幂等记录保留多久（104 号 spec）。24 小时是 Stripe 的语义：
     # 两端在「这一次操作」得到确定结果之前一直用同一个键重试，之后换新键——
     # 重试发生在几秒到几分钟内，不会跨天。过期判断在读的时候就生效。
@@ -124,7 +135,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.121.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.122.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

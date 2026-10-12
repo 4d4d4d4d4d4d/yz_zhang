@@ -44,6 +44,9 @@ def _unused(method: str) -> bool:
 # 判定标准：**这个方法本来就不该由用户侧界面调用**，
 # 不是「还没做」。后者属于第 3 类。
 INTENTIONAL: dict[str, str] = {
+    # V132 两端改用逐步编辑（editDecompositionNode）；一层整表替换的写法只在树还只有一层时
+    # 有意义，保留给 V132 之前的客户端与直接调 API 的人（服务端对多层的树返回 409）
+    "editDecomposition": "一层整表编辑，V132 起被逐步编辑取代；为旧客户端与 API 调用方保留",
     "expireTasks": "job 端点，由调度器按 32 号调度表执行，不该由界面触发",
     # 运营看数：V101 的 CLI-080 闸门已经逐条判过「不做也不卡人」
     "amlStats": "运营看数，/admin 覆盖闸门（CLI-080）里已归为不卡人的一类",

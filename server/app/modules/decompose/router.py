@@ -1,15 +1,16 @@
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.deps import get_current_user
-from app.core.errors import forbidden, not_found
+from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.modules.account.models import User
 from app.modules.task.models import Task
 from app.modules.task.router import dump_task
 
 from . import service
+from . import tree as tree_ops
 from .llm import get_gateway
 from .models import Decomposition
 
@@ -21,7 +22,61 @@ class ItemsIn(BaseModel):
 
 
 def _dump(d: Decomposition) -> dict:
-    return {"id": d.id, "task_id": d.task_id, "items": d.items, "status": d.status, "source": d.source}
+    """V132 起多了整棵树（`nodes`）；`items` 对树形提案是第一层的只读视图，
+    老客户端照样能读。"""
+    if not d.tree:
+        return {"id": d.id, "task_id": d.task_id, "items": d.items, "status": d.status,
+                "source": d.source, "mode": "flat", "nodes": [], "revision": d.revision,
+                "unresolved": [], "can_expand": False, "fallback": False, "model_calls": 0}
+    nodes = [{**n, "stop_note": tree_ops.STOP_NOTES.get(n["stop_reason"], "")} for n in d.tree]
+    return {
+        "id": d.id, "task_id": d.task_id, "items": tree_ops.items_view(d.tree),
+        "status": d.status, "source": d.source, "mode": "tree", "nodes": nodes,
+        "revision": d.revision,
+        # 确认前必须说清的步骤：服务端判断，界面照着显示
+        "unresolved": tree_ops.unresolved(d.tree),
+        "can_expand": d.status == "proposed" and bool(tree_ops.frontier(d.tree)),
+        # AI-DEC-048 回落模板必须看得见
+        "fallback": any(n.get("fallback") for n in d.tree),
+        "model_calls": d.model_calls,
+    }
+
+
+def _get_dec(db: Session, dec_id: int, user: User) -> Decomposition:
+    row = db.get(Decomposition, dec_id)
+    if not row:
+        raise not_found("提案不存在")
+    if row.creator_id != user.id:
+        raise forbidden()
+    return row
+
+
+def _save(db: Session, row: Decomposition, expected: int, nodes: list[dict],
+          model_calls: int | None = None) -> None:
+    """比较并交换：读到的 revision 还是库里的，才写回整棵树。
+
+    逐层展开与逐点编辑都是「读整棵树 → 改 → 写回」；两个窗口同时改，后写的会把
+    先写的整个覆盖掉，而用户不会知道自己刚才的修改丢了。
+    """
+    values = {"tree": nodes, "revision": expected + 1}
+    if model_calls is not None:
+        values["model_calls"] = model_calls
+    n = (db.query(Decomposition)
+         .filter(Decomposition.id == row.id, Decomposition.revision == expected)
+         .update(values, synchronize_session=False))
+    if n != 1:
+        raise conflict("这份拆解刚被另一个窗口改过，请刷新后再改", "decomposition_changed")
+    db.refresh(row)
+
+
+def _editable(row: Decomposition, revision: int | None) -> int:
+    if row.status != "proposed":
+        raise conflict("提案已处理", "not_proposed")
+    if not row.tree:
+        raise conflict("这是逐层拆解之前的提案，不能逐步编辑", "not_a_tree")
+    if revision is not None and revision != row.revision:
+        raise conflict("这份拆解刚被另一个窗口改过，请刷新后再改", "decomposition_changed")
+    return row.revision
 
 
 def _get_parent(db: Session, task_id: int, user: User) -> Task:
@@ -35,28 +90,110 @@ def _get_parent(db: Session, task_id: int, user: User) -> Task:
 
 @router.post("/tasks/{task_id}/decompositions", status_code=201)
 def propose(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
-    """AI-DEC-010 生成分解提案（草稿，不直接发布）。"""
+    """AI-DEC-010 生成分解提案（草稿，不直接发布）。
+
+    V132 起是**树的第一层**（AI-DEC-041）：之后每调一次 `/expand` 往下长一层，
+    每一层都落盘、都能改。
+    """
     task = _get_parent(db, task_id, user)
-    items = get_gateway().decompose(db, task.title, task.description, task.category, task.budget_cents)
-    service.validate_items(items, task.budget_cents)
-    row = Decomposition(
-        task_id=task.id, creator_id=user.id, items=items,
-        source=items[0].get("source", "") if items else "",
-    )
+    nodes, calls, _ = tree_ops.expand(db, task, [], None, get_gateway(), 0)
+    tree_ops.validate_tree(nodes, task.budget_cents)
+    row = Decomposition(task_id=task.id, creator_id=user.id, items=[], tree=nodes,
+                        model_calls=calls, source=nodes[0]["source"] if nodes else "")
     db.add(row)
     db.flush()
     return _dump(row)
 
 
+@router.get("/tasks/{task_id}/decomposition")
+def current_proposal(task_id: int, user: User = Depends(get_current_user),
+                     db: Session = Depends(get_db, scope="function")):
+    """拆到一半关掉页面，回来接着拆：这个任务最近一份还没确认的提案（仅发布方）。
+
+    逐层展开的意义在于能停、能改、能接着来（AI-DEC-041）；读不回来的草稿只能重来。
+    """
+    task = _get_parent(db, task_id, user)
+    row = (db.query(Decomposition)
+           .filter(Decomposition.task_id == task.id, Decomposition.status == "proposed")
+           .order_by(Decomposition.id.desc()).first())
+    if not row:
+        raise not_found("这个任务没有进行中的拆解", "no_decomposition_in_progress")
+    return _dump(row)
+
+
+class ExpandIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revision: int
+    # 不给：展开整个前沿（下一层）；给：只拆这几步（用户点了「拆这一步」）
+    node_ids: list[int] | None = None
+
+
+@router.post("/decompositions/{dec_id}/expand")
+def expand(dec_id: int, body: ExpandIn, user: User = Depends(get_current_user),
+           db: Session = Depends(get_db, scope="function")):
+    """AI-DEC-041 往下长一层（或只拆指定的几步）。可见、可打断：一次一层，每层落盘。"""
+    row = _get_dec(db, dec_id, user)
+    rev = _editable(row, body.revision)
+    task = db.get(Task, row.task_id)
+    nodes, calls, report = tree_ops.expand(db, task, row.tree, body.node_ids, get_gateway(),
+                                       row.model_calls)
+    tree_ops.validate_tree(nodes, task.budget_cents)
+    _save(db, row, rev, nodes, calls)
+    return {**_dump(row), "report": report}
+
+
+class NodePatchIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revision: int
+    title: str | None = Field(default=None, max_length=100)
+    description: str | None = Field(default=None, max_length=2000)
+    budget_cents: int | None = Field(default=None, gt=0)
+    deliverable: str | None = Field(default=None, max_length=300)
+    acceptance: str | None = Field(default=None, max_length=500)
+    single_owner: bool | None = None
+    category: str | None = Field(default=None, max_length=50)
+    executor_hint: str | None = None
+    depends_on: list[int] | None = None
+
+
+@router.patch("/decompositions/{dec_id}/nodes/{node_id}")
+def edit_node(dec_id: int, node_id: int, body: NodePatchIn, user: User = Depends(get_current_user),
+              db: Session = Depends(get_db, scope="function")):
+    """AI-DEC-011 逐步编辑：补交付物与验收标准、改预算、说清谁来做（AI-DEC-044）。"""
+    row = _get_dec(db, dec_id, user)
+    rev = _editable(row, body.revision)
+    task = db.get(Task, row.task_id)
+    patch = body.model_dump(exclude_none=True, exclude={"revision"})
+    if not patch:
+        raise bad_request("没有要改的内容", "empty_patch")
+    nodes = tree_ops.edit_node(db, task, row.tree, node_id, patch)
+    _save(db, row, rev, nodes)
+    return _dump(row)
+
+
+@router.delete("/decompositions/{dec_id}/nodes/{node_id}")
+def delete_node(dec_id: int, node_id: int, revision: int = Query(...),
+                user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """删掉一步（连同它下面的步骤）。"""
+    row = _get_dec(db, dec_id, user)
+    rev = _editable(row, revision)
+    task = db.get(Task, row.task_id)
+    nodes = tree_ops.delete_node(row.tree, node_id, db, task)
+    tree_ops.validate_tree(nodes, task.budget_cents)
+    _save(db, row, rev, nodes)
+    return _dump(row)
+
+
 @router.patch("/decompositions/{dec_id}")
 def edit(dec_id: int, body: ItemsIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
-    """AI-DEC-011 用户编辑分解草稿。"""
-    row = db.get(Decomposition, dec_id)
-    if not row:
-        raise not_found("提案不存在")
-    if row.creator_id != user.id:
-        raise forbidden()
+    """AI-DEC-011 用户编辑分解草稿（一层的写法；树只有一层时也能用）。"""
+    row = _get_dec(db, dec_id, user)
     parent = db.get(Task, row.task_id)
+    if row.tree:
+        if row.status != "proposed":
+            raise conflict("提案已处理", "not_proposed")
+        _save(db, row, row.revision, tree_ops.nodes_from_items(db, parent, row.tree, body.items))
+        return _dump(row)
     service.validate_items(body.items, parent.budget_cents)
     row.items = body.items
     db.add(row)
@@ -65,13 +202,21 @@ def edit(dec_id: int, body: ItemsIn, user: User = Depends(get_current_user), db:
 
 @router.post("/decompositions/{dec_id}/confirm")
 def confirm(dec_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
-    """确认分解 → 生成子任务树，无依赖者自动发布（AI-DEC-020）。"""
-    row = db.get(Decomposition, dec_id)
-    if not row:
-        raise not_found("提案不存在")
-    if row.creator_id != user.id:
-        raise forbidden()
+    """确认分解 → 生成子任务树，无依赖者自动发布（AI-DEC-020）。
+
+    树形提案：每个没有子步骤的节点都必须是叶子且说清了谁来做，否则 409 并列出是哪几步
+    （AI-DEC-044：每一种判定都要有去处，「判不了」的去处是让人选）。
+    """
+    row = _get_dec(db, dec_id, user)
     parent = db.get(Task, row.task_id)
+    if row.tree:
+        if row.status != "proposed":
+            raise conflict("提案已处理", "not_proposed")
+        nodes, tasks = tree_ops.confirm(db, row.tree, parent)
+        _save(db, row, row.revision, nodes)
+        row.status = "confirmed"
+        db.add(row)
+        return {"decomposition": _dump(row), "children": [dump_task(c, user) for c in tasks]}
     children = service.confirm(db, row, parent)
     return {"decomposition": _dump(row), "children": [dump_task(c, user) for c in children]}
 

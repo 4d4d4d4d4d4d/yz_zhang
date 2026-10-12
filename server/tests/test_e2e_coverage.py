@@ -18,6 +18,7 @@ APP_TSX = REPO / "web" / "src" / "App.tsx"
 # 联调**刻意不走**的页面 -> 为什么。值是理由，不是布尔（V90 那条）。
 E2E_EXEMPT: dict[str, str] = {
     "/people/:id": "动态用户 ID 由 e2e_web 发布空间后点击分享入口进入；直接 goto 不含可用的真实用户 ID",
+    "/tasks/:id/decompose": "动态任务 ID：由 e2e_web 在发布页提交项目型任务后跳转进入（步骤「项目型任务逐层拆解并确认发布」），扫描器只认字面 goto 路径",
     "/people/:id/follows": "动态用户 ID：由 e2e_web 在空间页点击「N 人关注」进入（步骤「从空间点进关注列表」），扫描器只认字面 goto 路径",
     "/chain": "使用独立 EVM 与钱包而非平台 API；chain/test 验证真实合约，浏览器交付验收提现已实测，见 SMART-CONTRACTS.md",
     "/records": "使用独立 EVM 与钱包；真实链测试覆盖版本和确认权限，浏览器双人确认与加密核验有单独验收记录",

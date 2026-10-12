@@ -1,6 +1,6 @@
-import { apiErrorText, IP_ASSIGNMENT_LABEL, fmtYuan, localInputToServerTime, type Decomposition, type IpAssignment, type PriceReference, type Task } from '@platform/core';
+import { apiErrorText, IP_ASSIGNMENT_LABEL, fmtYuan, localInputToServerTime, type IpAssignment, type PriceReference, type Task } from '@platform/core';
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../store';
 
 type Feasibility = { level: string; message: string } | null;
@@ -30,9 +30,6 @@ export default function Publish() {
   const [error, setError] = useState('');
   const [priceRef, setPriceRef] = useState<PriceReference | null>(null);
   const [feasibility, setFeasibility] = useState<Feasibility>(null);
-  // 项目型任务：先创建草稿 → AI 分解 → 编辑确认（AI-DEC-010/011）
-  const [parent, setParent] = useState<Task | null>(null);
-  const [dec, setDec] = useState<Decomposition | null>(null);
 
   const set = (k: string, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -96,70 +93,14 @@ export default function Publish() {
         publish_now: !isProject,
       });
       if (isProject) {
-        setParent(task);
-        setDec(await client.propose(task.id));
+        // 项目型任务：先存草稿，再到拆解页一层一层拆（AI-DEC-041，106 号 spec）
+        nav(`/tasks/${task.id}/decompose`);
       } else {
         nav(`/tasks/${task.id}`);
       }
     } catch (err) {
       setError(apiErrorText(err));
     }
-  }
-
-  if (parent && dec) {
-    return (
-      <div className="page">
-        <div className="card">
-          <h3>AI 任务分解草稿（可编辑后确认）</h3>
-          <p className="muted">来源：{dec.source} · 母任务预算 {fmtYuan(parent.budget_cents)} · 确认后无前置依赖的子任务将立即发布</p>
-          <table>
-            <thead>
-              <tr><th>#</th><th>子任务</th><th>技能</th><th>预算</th><th>依赖</th></tr>
-            </thead>
-            <tbody>
-              {dec.items.map((item, i) => (
-                <tr key={i}>
-                  <td>{i + 1}</td>
-                  <td>{item.title}</td>
-                  <td className="muted">{item.required_skills.join('、') || '-'}</td>
-                  <td>
-                    <input
-                      style={{ width: 100 }}
-                      type="number"
-                      value={item.budget_cents / 100}
-                      onChange={(e) => {
-                        const items = dec.items.map((it, j) =>
-                          j === i ? { ...it, budget_cents: Math.round(parseFloat(e.target.value || '0') * 100) } : it,
-                        );
-                        setDec({ ...dec, items });
-                      }}
-                    />
-                  </td>
-                  <td className="muted">{item.depends_on_idx.map((d) => `#${d + 1}`).join(',') || '无'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {error && <p className="error">{error}</p>}
-          <div className="row" style={{ marginTop: 12 }}>
-            <button
-              onClick={async () => {
-                try {
-                  setDec(await client.editDecomposition(dec.id, dec.items));
-                  await client.confirmDecomposition(dec.id);
-                  nav(`/tasks/${parent.id}`);
-                } catch (err) {
-                  setError(apiErrorText(err));
-                }
-              }}
-            >
-              确认分解并发布
-            </button>
-            <Link to="/"><button className="ghost" type="button">稍后处理</button></Link>
-          </div>
-        </div>
-      </div>
-    );
   }
 
   return (

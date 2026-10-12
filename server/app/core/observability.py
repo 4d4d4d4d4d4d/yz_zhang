@@ -137,6 +137,15 @@ def render_metrics(db=None) -> str:
     else:
         lines.append('llm_decompose_fallback_total{error_type="none"} 0')
 
+    # AI-DEC-045 逐层拆解每条保险的触发次数（106 号 spec）。全部原因都出一行，
+    # 0 也出——看板上「没有这条线」和「这条线是 0」是两回事
+    from app.modules.decompose.tree import stop_counts
+
+    lines += ["# HELP decompose_stop_total 逐层拆解在某条保险上停下的次数",
+              "# TYPE decompose_stop_total counter"]
+    for reason, n in sorted(stop_counts().items()):
+        lines.append(f'decompose_stop_total{{reason="{reason}"}} {n}')
+
     if db is not None:
         lines += _business_metrics(db)
     return "\n".join(lines) + "\n"

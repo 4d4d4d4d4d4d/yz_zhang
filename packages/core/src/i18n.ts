@@ -55,6 +55,17 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   idempotency_required: '该操作必须携带 1—80 字符的 Idempotency-Key（防止重试导致重复扣款）',
   idempotency_key_invalid: 'Idempotency-Key 至多 80 个字符',
   idempotency_in_progress: '同一笔操作正在处理，请稍后再试',
+  // AI-DEC-040~048 逐层拆解（V132）
+  decomposition_changed: '这份拆解刚被另一个窗口改过，请刷新后再改',
+  already_expanded: '这一步已经拆过了',
+  not_a_tree: '这是逐层拆解之前的提案，不能逐步编辑',
+  tree_has_depth: '这份拆解已经展开到第二层以下，请逐步编辑',
+  no_decomposition_in_progress: '这个任务没有进行中的拆解',
+  invalid_executor_hint: '谁来做只能选：交给人做 / 需要资质 / 交给 AI',
+  field_not_editable: '这些字段不能改',
+  empty_patch: '没有要改的内容',
+  category_not_found: '平台没有这个类目',
+  step_title_required: '步骤名称不能为空',
   invitation_consumed: '邀请已处理',
   invitation_required: '需要当前成员发出的有效邀请',
   mandate_budget: '超过单笔或累计任务授权额度',
@@ -272,6 +283,10 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
  * 这件事可数、可查——一个说不清自己覆盖了多少的翻译表，等于没有覆盖率。
  */
 export const SERVER_WORDED_CODES: string[] = [
+  // AI-DEC-044 消息里点名是哪几步、各差什么，客户端编不出等价文案
+  'tree_incomplete',
+  // AI-DEC-045 总任务本身拆不下去时，消息说的是停在哪条保险上
+  'decompose_stopped',
   // Machine grants and invitation lifecycle carry specific remedial instructions.
   'agent_delivery_blocked',
   'agent_not_eligible',

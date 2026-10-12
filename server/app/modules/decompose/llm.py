@@ -40,15 +40,54 @@ class LLMGateway(Protocol):
     def decompose(self, db: Session, title: str, description: str, category: str,
                   budget_cents: int) -> list[dict]: ...
 
+    def expand(self, db: Session, ctx: dict) -> dict: ...
+
+
+# AI-DEC-041 逐层展开的一步（106 号 spec）。`expand(db, ctx)` 返回：
+#   {"children": [子步骤], "source": str, "fallback": bool, "model_call": bool}
+# 子步骤字段：title / description / required_skills / budget_ratio_bps /
+#   depends_on_idx / deliverable / acceptance / single_owner / category / executor_hint
+# ctx：{"root": {title, description, category, budget_cents}, "path": [祖先标题],
+#       "node": {title, description, category, budget_cents} | None, "depth": 子步骤的深度}
+EXECUTOR_HINTS = ("ai", "human", "expert", "machine", "unknown")
+
 
 class TemplateLLM:
     """模板驱动分解：知识库模板命中 → 按预算比例拆分；未命中 → 通用三段式。"""
 
     GENERIC_ITEMS = [
-        {"title": "方案与准备", "skills": [], "budget_ratio_bps": 2000, "depends_on": []},
-        {"title": "主体执行", "skills": [], "budget_ratio_bps": 6000, "depends_on": [0]},
-        {"title": "收尾与验收材料", "skills": [], "budget_ratio_bps": 2000, "depends_on": [1]},
+        {"title": "方案与准备", "skills": [], "budget_ratio_bps": 2000, "depends_on": [],
+         "deliverable": "书面方案与准备清单", "acceptance": "发布方书面确认方案"},
+        {"title": "主体执行", "skills": [], "budget_ratio_bps": 6000, "depends_on": [0],
+         "deliverable": "按方案完成的主体工作成果", "acceptance": "发布方按方案逐项核对完成情况"},
+        {"title": "收尾与验收材料", "skills": [], "budget_ratio_bps": 2000, "depends_on": [1],
+         "deliverable": "验收材料与交接清单", "acceptance": "交接清单逐项签收"},
     ]
+
+    def expand(self, db, ctx) -> dict:
+        """模板只有一层：根下面一层来自模板，更深的模板拆不出来——如实说，不硬编。"""
+        if ctx["depth"] != 1:
+            return {"children": [], "source": "template", "fallback": False, "model_call": False}
+        root = ctx["root"]
+        tpl = kb.find_template(db, root["category"], root["title"] + " " + root["description"])
+        items = tpl["items"] if tpl else self.GENERIC_ITEMS
+        return {
+            "children": [{
+                "title": it["title"],
+                "description": it.get("description", it["title"]),
+                "required_skills": list(it.get("skills", [])),
+                "budget_ratio_bps": int(it.get("budget_ratio_bps", 0)),
+                "depends_on_idx": list(it.get("depends_on", [])),
+                "deliverable": it.get("deliverable", ""),
+                "acceptance": it.get("acceptance", ""),
+                "single_owner": True,
+                "category": "",
+                "executor_hint": it.get("executor_hint", ""),
+            } for it in items],
+            "source": tpl["source"] if tpl else "generic",
+            "fallback": False,
+            "model_call": False,
+        }
 
     def decompose(self, db, title, description, category, budget_cents) -> list[dict]:
         tpl = kb.find_template(db, category, title + " " + description)
@@ -100,6 +139,50 @@ DECOMPOSE_SCHEMA = {
     "required": ["subtasks"],
 }
 
+# AI-DEC-041 逐层展开的一步：只给**直接**子步骤，并对每一步自报四条判据的材料
+EXPAND_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "steps": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "title": {"type": "string"},
+                    "description": {"type": "string"},
+                    "required_skills": {"type": "array", "items": {"type": "string"}},
+                    "budget_ratio_bps": {"type": "integer"},
+                    "depends_on_idx": {"type": "array", "items": {"type": "integer"}},
+                    "deliverable": {"type": "string"},
+                    "acceptance": {"type": "string"},
+                    "single_owner": {"type": "boolean"},
+                    "category": {"type": "string"},
+                    "executor_hint": {"type": "string", "enum": list(EXECUTOR_HINTS)},
+                },
+                "required": ["title", "description", "required_skills", "budget_ratio_bps",
+                             "depends_on_idx", "deliverable", "acceptance", "single_owner",
+                             "category", "executor_hint"],
+            },
+        }
+    },
+    "required": ["steps"],
+}
+
+EXPAND_PROMPT = (
+    "你是任务协作平台的项目分解助手，像写待办清单那样**逐层**拆解。"
+    "只给出当前这一步的**直接**子步骤（2-6 个），不要一次给出更深的层。"
+    "每个子步骤给出：标题、简述、技能标签、占这一步预算的万分比（之和必须等于 10000）、"
+    "依赖的同级前置步骤下标（从 0 开始，不能依赖自己或成环）；"
+    "交付物（交出来的具体是什么，说不出就留空）；验收标准（不懂全局的人也能判断是否完成，"
+    "说不出就留空）；是否能由单一责任主体负责到底（single_owner）；"
+    "若这一步属于需要特定资质的服务类目（如法律咨询、电工维修、燃气维修），在 category 里写类目名，否则留空；"
+    "executor_hint：AI 能独立完成写 ai、普通人能做写 human、需要持证专业人士写 expert、"
+    "需要设备或产能写 machine、判断不了写 unknown——**判断不了就写 unknown，不要猜**。"
+    "只返回结构化数据。"
+)
+
 SYSTEM_PROMPT = (
     "你是任务协作平台的项目分解助手。把用户的大任务拆成 2-6 个可独立发布、"
     "可独立结算的子任务。每个子任务给出标题、简述、所需技能标签、占总预算的比例"
@@ -129,6 +212,8 @@ KNOWN_MODELS = frozenset({
 class AnthropicLLM:
     """生产实现：JSON Schema 强约束 + 校验，失败降级模板。"""
 
+    uses_model = True  # AI-DEC-045 成本上限只对真调模型的网关计数
+
     def __init__(self, model: str = DEFAULT_MODEL):
         self.model = model
         self._fallback = TemplateLLM()
@@ -153,6 +238,60 @@ class AnthropicLLM:
         )
         text = "".join(b.text for b in message.content if getattr(b, "type", "") == "text")
         return json.loads(text)["subtasks"]
+
+    def _call_expand(self, ctx: dict) -> list[dict]:
+        from anthropic import Anthropic
+
+        client = Anthropic()
+        root, node = ctx["root"], ctx["node"]
+        path = " → ".join(ctx["path"]) or "（根任务）"
+        prompt = (
+            f"总任务：{root['title']}\n类目：{root['category']}\n"
+            f"总描述：{root['description'] or '（无）'}\n"
+            f"所在路径：{path}\n"
+            + (f"当前要拆的这一步：{node['title']}\n这一步的说明：{node['description'] or '（无）'}\n"
+               if node else "当前要拆的是总任务本身。\n")
+            + "请给出它的直接子步骤。"
+        )
+        message = client.messages.create(
+            model=self.model,
+            max_tokens=4096,
+            system=EXPAND_PROMPT,
+            thinking={"type": "adaptive"},
+            output_config={"format": {"type": "json_schema", "schema": EXPAND_SCHEMA}},
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = "".join(b.text for b in message.content if getattr(b, "type", "") == "text")
+        return json.loads(text)["steps"]
+
+    def expand(self, db, ctx) -> dict:
+        try:
+            steps = self._call_expand(ctx)
+            out = []
+            for st in steps:
+                hint = st.get("executor_hint", "unknown")
+                out.append({
+                    "title": str(st["title"]).strip(),
+                    "description": str(st.get("description", "")),
+                    "required_skills": [str(x) for x in st.get("required_skills", [])],
+                    "budget_ratio_bps": int(st.get("budget_ratio_bps", 0)),
+                    "depends_on_idx": [int(x) for x in st.get("depends_on_idx", [])],
+                    "deliverable": str(st.get("deliverable", "")).strip(),
+                    "acceptance": str(st.get("acceptance", "")).strip(),
+                    "single_owner": bool(st.get("single_owner", False)),
+                    "category": str(st.get("category", "")).strip(),
+                    "executor_hint": hint if hint in EXECUTOR_HINTS else "unknown",
+                })
+            return {"children": out, "source": "anthropic:" + self.model,
+                    "fallback": False, "model_call": True}
+        except Exception as exc:
+            # AI-DEC-048：回落模板**必须看得见**——结果带 fallback=True，界面据此显示
+            record_fallback(type(exc).__name__)
+            logger.warning("llm_expand_fallback",
+                           extra={"model": self.model, "error_type": type(exc).__name__,
+                                  "error": str(exc)[:200]})
+            res = self._fallback.expand(db, ctx)
+            return {**res, "fallback": True, "model_call": True}
 
     def decompose(self, db, title, description, category, budget_cents) -> list[dict]:
         try:
