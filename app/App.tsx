@@ -5,6 +5,7 @@ import { ContractEvidence } from './ContractEvidence';
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
 import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, fmtYuan, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { DecomposeScreen, TaskTreeBlock } from './decompose';
 import { DiscoverScreen } from './Discover';
 import { MessagesScreen } from './MessagesAndInvites';
 import { MySpaceScreen, PublicSpaceScreen, SpacesDiscoverScreen } from './spaces';
@@ -121,6 +122,7 @@ export default function App() {
         {activeTask ? (
           <TaskDetailScreen client={client} me={me} task={activeTask}
                             onBack={() => setActiveTask(null)}
+                            onOpenTask={setActiveTask}
                             onChanged={async () => setActiveTask(await client.getTask(activeTask.id))} />
         ) : overlay ? (
           <>
@@ -227,7 +229,12 @@ function CooperateHost({ client, onOpen }: {
         <TouchableOpacity onPress={() => setPublishing(false)}>
           <Text style={styles.linkRow}>← 返回合作</Text>
         </TouchableOpacity>
-        <PublishScreen client={client} onDone={() => setPublishing(false)} />
+        <PublishScreen client={client} allowProject
+                       onDone={(created) => {
+                         setPublishing(false);
+                         // APP-077 项目型任务建好后直接到它的详情页，那里接着拆
+                         if (created && created.task_type === 'project') onOpen(created);
+                       }} />
       </>
     );
   }
@@ -359,10 +366,13 @@ function TasksScreen({ client, onOpen }: { client: PlatformClient; onOpen: (t: T
 
 type ApplicationRow = Awaited<ReturnType<PlatformClient['listApplications']>>[number];
 
-export function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
+export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTask }: {
   client: PlatformClient; me: Me | null; task: Task; onBack: () => void; onChanged: () => Promise<void>;
+  /** 子任务进度里点进某一步 */
+  onOpenTask?: (t: Task) => void;
 }) {
   const [error, setError] = useState('');
+  const [decomposing, setDecomposing] = useState(false);
   const [contract, setContract] = useState<Contract | null>(null);
   const [confirmRelease, setConfirmRelease] = useState(false);
   const [apps, setApps] = useState<ApplicationRow[]>([]);
@@ -392,10 +402,27 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged }: {
     }
   }
 
+  const isProjectRoot = task.task_type === 'project' && task.parent_id === null;
+  if (decomposing) {
+    return (
+      <ScrollView contentContainerStyle={{ gap: 12 }}>
+        <DecomposeScreen client={client} task={task} onBack={() => setDecomposing(false)}
+                         onConfirmed={() => { setDecomposing(false); void onChanged(); }} />
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView contentContainerStyle={{ gap: 12 }}>
       <TouchableOpacity onPress={onBack}><Text style={{ color: '#275c52' }}>← 返回</Text></TouchableOpacity>
       <Text style={styles.title}>{task.title}</Text>
+      {/* APP-077 项目型草稿还没拆完：在这里接着拆 */}
+      {isProjectRoot && task.status === 'draft' && meId === task.creator_id && (
+        <TouchableOpacity onPress={() => setDecomposing(true)}>
+          <Text style={styles.linkRow}>还没拆完：继续拆解 →</Text>
+        </TouchableOpacity>
+      )}
+      {isProjectRoot && onOpenTask && <TaskTreeBlock client={client} task={task} onOpenTask={onOpenTask} />}
       <Text style={styles.mutedLeft}>
         {task.category} · {TASK_STATUS_LABEL[task.status]} · {fmtYuan(task.budget_cents)}
       </Text>
@@ -824,8 +851,10 @@ const DISPUTE_STATUS_LABEL: Record<string, string> = {
  * 漏一个字段在 `Partial<Task>` 面前不是类型错误。
  * 现在它是了（SDK 里改成必需参数），这段代码漏掉它就编译不过。
  */
-function PublishScreen({ client, onDone, category = '跑腿' }: {
-  client: PlatformClient; onDone: () => void;
+export function PublishScreen({ client, onDone, category = '跑腿', allowProject = false }: {
+  client: PlatformClient; onDone: (created?: Task) => void;
+  /** APP-077 「这是一个要拆开做的项目」。只在合作入口给：从「不懂就问」带着类目来的，是一单具体的活 */
+  allowProject?: boolean;
   /** LAW-051 别处把人送来时会带上类目（问答答不了 → 发一单法律咨询）。
    *  写死类目的话那个补救入口就是假的：人到了发布页，类目还停在「跑腿」上。 */
   category?: string;
@@ -835,10 +864,19 @@ function PublishScreen({ client, onDone, category = '跑腿' }: {
   // 没有默认值是有意的（IPC-001）：替发布方猜归属，对执行方不公平，
   // 对含第三方素材的交付物直接就是错的
   const [ip, setIp] = useState<IpAssignment | ''>('');
+  const [project, setProject] = useState(false);
   const [error, setError] = useState('');
   return (
     <ScrollView contentContainerStyle={styles.center}>
       <Text style={styles.title}>发布任务</Text>
+      {allowProject && (
+        <TouchableOpacity onPress={() => setProject((v) => !v)} accessibilityRole="checkbox"
+                          accessibilityState={{ checked: project }}>
+          <Text style={project ? styles.optionActive : styles.option}>
+            {project ? '☑ ' : '☐ '}这是一个要拆开做的项目（AI 帮你一层层拆，说清每一步谁能做）
+          </Text>
+        </TouchableOpacity>
+      )}
       <TextInput style={styles.input} placeholder="标题（如：帮忙取快递）" value={title} onChangeText={setTitle} />
       <TextInput style={styles.input} placeholder="预算（元）" value={budget} onChangeText={setBudget} keyboardType="numeric" />
       <Text style={styles.mutedLeft}>交付成果归谁（必选）</Text>
@@ -850,17 +888,18 @@ function PublishScreen({ client, onDone, category = '跑腿' }: {
         </TouchableOpacity>
       ))}
       {!!error && <Text style={styles.error}>{error}</Text>}
-      <Button title="发布（线上任务）" onPress={async () => {
+      <Button title={project ? '创建并开始拆解' : '发布（线上任务）'} onPress={async () => {
         setError('');
         if (!ip) { setError('请选择交付成果的知识产权归属'); return; }
         try {
-          await client.createTask({
-            title, category, task_type: 'event',
+          const created = await client.createTask({
+            title, category, task_type: project ? 'project' : 'event',
             budget_cents: Math.round(parseFloat(budget || '0') * 100),
             ip_assignment: ip,
-            is_remote: true, publish_now: true,
+            // 项目先存草稿：拆好、说清每一步谁来做之后，只有能开工的步骤发布出去
+            is_remote: true, publish_now: !project,
           });
-          onDone();
+          onDone(created);
         } catch (e) {
           setError(apiErrorText(e));
         }
