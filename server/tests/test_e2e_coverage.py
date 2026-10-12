@@ -52,7 +52,10 @@ def _e2e_visited() -> set[str]:
     """联调脚本里 `page.goto(...)` 走过的路径。"""
     src = E2E.read_text(encoding="utf-8")
     out = {"/"}
-    for m in re.finditer(r'WEB_PORT\}(/[\w/:-]*)"', src):
+    # 路径后面允许带查询串：`/search?q=保洁` 也是走到了 /search。
+    # 第一版要求路径后面紧跟引号，于是带查询串的访问对这个闸门**不可见**——
+    # V127 给搜索页加联调那一步时撞上的，与 V116 只认双引号同一类。
+    for m in re.finditer(r'WEB_PORT\}(/[\w/:-]*)(?:\?[^"]*)?"', src):
         out.add(m.group(1) or "/")
     return out
 
@@ -60,6 +63,8 @@ def _e2e_visited() -> set[str]:
 def test_e2e011_scanner_finds_routes_and_visits():
     """扫不到等于全绿，是最糟的一种绿。"""
     routes, visited = _routes(), _e2e_visited()
+    # 带查询串的访问也要认出来（/search?q=…）
+    assert "/search" in visited, "带查询串的访问没被认出来"
     assert len(routes) >= 10, f"只扫到 {len(routes)} 条路由，提取逻辑可能坏了"
     assert len(visited) >= 4, f"只扫到 {len(visited)} 个联调访问，提取逻辑可能坏了"
     for known in ("/wallet", "/notifications"):

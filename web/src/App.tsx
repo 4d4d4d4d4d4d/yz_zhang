@@ -14,6 +14,7 @@ import Square from './pages/Square';
 import { Discover, PublicSpace, EditSpace } from './pages/Spaces';
 import Cooperate from './pages/Cooperate';
 import Ask from './pages/Ask';
+import Search from './pages/Search';
 import Support from './pages/Support';
 import TaskDetail from './pages/TaskDetail';
 import Developer from './pages/Developer';
@@ -60,6 +61,7 @@ export default function App() {
         <span className="spacer" />
         {me ? <div className="nav-account">
           {me.is_admin && <Link to="/admin">管理</Link>}
+          <Link className="nav-mobile-keep" to="/search" aria-label="搜索">⌕</Link>
           <Link className="nav-mobile-keep" to="/notifications" aria-label="通知">🔔</Link>
           <Link className="nav-mobile-keep" to="/profile">{me.nickname}<small>账户</small></Link>
         </div> : <Link className="nav-mobile-keep nav-signin" to="/login">登录 / 注册 <span aria-hidden="true">→</span></Link>}
@@ -84,6 +86,8 @@ export default function App() {
         <Route path="/profile" element={hasToken ? <Profile /> : <Navigate to="/login" />} />
         <Route path="/rewards" element={hasToken ? <Rewards /> : <Navigate to="/login" />} />
         <Route path="/ask" element={hasToken ? <Ask /> : <Navigate to="/login?next=/ask" />} />
+        {/* SRCH-001 全站搜索（V127）。结果接口要登录（搜索记录按人去重），热词与联想不要 */}
+        <Route path="/search" element={hasToken ? <Search /> : <Navigate to="/login?next=/search" />} />
         <Route path="/support" element={hasToken ? <Support /> : <Navigate to="/login" />} />
         <Route path="/verify" element={hasToken ? <Verify /> : <Navigate to="/login" />} />
         <Route path="/ventures" element={hasToken ? <Ventures /> : <Navigate to="/login" />} />

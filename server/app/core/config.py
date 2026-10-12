@@ -100,6 +100,9 @@ class Settings:
     # 本部署会起多少个开池的进程（API worker 数 × 副本数）。
     # 部署方式改了而这个数没跟着改，CONC-061 的自检就会在启动时拦住。
     API_WORKERS = int(os.environ.get("PLATFORM_API_WORKERS", "2"))
+    # PRIV-060 一个搜索词至少被多少个**不同的人**搜过，才会出现在公开的热词与联想里。
+    # 这是 k-匿名的门槛：低于它，公开的就是某一个人的搜索记录。
+    SEARCH_PUBLIC_MIN_USERS = int(os.environ.get("PLATFORM_SEARCH_PUBLIC_MIN_USERS", "3"))
     # CONC-003 SQLite 本地并发：WAL + busy_timeout（毫秒）
     SQLITE_BUSY_TIMEOUT_MS = int(os.environ.get("PLATFORM_SQLITE_BUSY_TIMEOUT_MS", "5000"))
     # CONC-021 分布式限流后端：配置了 Redis 就用 Redis，否则进程内内存实现
@@ -116,7 +119,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.116.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.117.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

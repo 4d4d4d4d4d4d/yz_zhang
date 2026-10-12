@@ -80,7 +80,7 @@ SCHEDULED: dict[str, str] = {
     "circleMembers": "SOCIAL-050", "circleStats": "SOCIAL-050",
     "myBlocks": "SOCIAL-050",
     # 内容与检索线（06/08 号 spec）
-    "search": "SEARCH-050", "searchSuggest": "SEARCH-050", "trendingTerms": "SEARCH-050",
+    # search / searchSuggest / trendingTerms 已由 V127 接上两端（101 号 spec）
     "bookmark": "CONTENT-050", "unbookmark": "CONTENT-050", "myBookmarks": "CONTENT-050",
     "userContents": "CONTENT-050", "userReviews": "CONTENT-050",
     "publicProfile": "CONTENT-050", "signVideoUpload": "CONTENT-050",

@@ -27,4 +27,7 @@ class SearchQuery(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     term: Mapped[str] = mapped_column(String(100), index=True)
+    # PRIV-060 公开的热词与联想只算**不同的人**数：一个人的搜索永远不公开。
+    # 存量行没有它，不计入任何人数（迁移 c1d220260006）。
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

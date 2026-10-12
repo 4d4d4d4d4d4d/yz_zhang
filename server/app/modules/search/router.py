@@ -3,6 +3,7 @@
 MVP 用 SQL LIKE；规模化替换为 ES/OpenSearch，接口不变（12.C）。
 """
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -24,12 +25,13 @@ def unified_search(
 ):
     from app.modules.analytics.service import log_search
 
-    log_search(db, q)  # SRCH-003 记录搜索词供热词/联想
+    log_search(db, q, user.id)  # SRCH-003 记录搜索词供热词/联想（按人去重，见 PRIV-060）
     tasks = (
         db.query(Task)
         .filter(
             Task.status == "published", Task.visibility == "public",
-            Task.title.contains(q) | Task.description.contains(q),
+            # autoescape：用户打 % 或 _ 不该变成通配符（空间搜索早就这么做了）
+            Task.title.contains(q, autoescape=True) | Task.description.contains(q, autoescape=True),
         )
         .order_by(Task.id.desc())
         .limit(limit)
@@ -37,7 +39,15 @@ def unified_search(
     )
     users = (
         db.query(User)
-        .filter(User.nickname.contains(q), User.is_banned.is_(False))
+        # PRIV-061 与空间、公开资料**同一条可见性规则**：已注销的、设了资料不公开的，
+        # 不出现在搜索里。此前这里只排除了封禁——资料不公开的人照样被搜出来，
+        # 连同技能与信用分；已注销的「已注销用户」也会出现在结果里。
+        .filter(
+            User.nickname.contains(q, autoescape=True),
+            User.is_banned.is_(False), User.is_deleted.is_(False),
+            or_(User.privacy["profile_public"].as_boolean().is_(None),
+                User.privacy["profile_public"].as_boolean().is_(True)),
+        )
         .limit(limit)
         .all()
     )
@@ -46,7 +56,7 @@ def unified_search(
         .filter(
             Content.status == "published", Content.visibility == "public",
             Content.circle_id.is_(None),
-            Content.title.contains(q) | Content.body.contains(q),
+            Content.title.contains(q, autoescape=True) | Content.body.contains(q, autoescape=True),
         )
         .order_by(Content.id.desc())
         .limit(limit)
@@ -54,7 +64,8 @@ def unified_search(
     )
     circles = (
         db.query(Circle)
-        .filter(Circle.name.contains(q) | Circle.description.contains(q))
+        .filter(Circle.name.contains(q, autoescape=True)
+                | Circle.description.contains(q, autoescape=True))
         .order_by(Circle.member_count.desc())
         .limit(limit)
         .all()

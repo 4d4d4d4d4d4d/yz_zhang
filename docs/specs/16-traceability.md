@@ -1,10 +1,10 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
 > 2026-10-09：V119 法定权利入口进 App；V118 单聊并发分叉修复；V117 关注幂等化并接到空间；V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
-> 后端 1326 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
+> 后端 1336 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
-> （真 Chromium × 构建产物 × 真服务端，12 项）。
+> （真 Chromium × 构建产物 × 真服务端，13 项）。
 > 全系统体检报告：[../SYSTEM-CHECK.md](../SYSTEM-CHECK.md)（数据库怎么搭、跑起来有什么问题）。
 > **现状一页看清：[72-status-ledger.md](72-status-ledger.md)**（这份矩阵的缺口也在那里记着）；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
@@ -14,6 +14,22 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V127 批次：搜索——接到界面上之前，先管住它会公开的东西）
+
+> 模块 spec：[101-search-before-it-goes-public.md](101-search-before-it-goes-public.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **PRIV-060 热词公开的是原始搜索串** | 改造前谁搜的不记、搜了什么原样存，热词与联想不要登录、按次数排、没有门槛不过审核——有人搜过「张三 13800001234」，任何人打「张」联想里就是它，**一次就够**；反复搜同一句广告就能推上热词榜（搜索是 GET，写路径限流管不到） | `test_search_privacy::test_priv060_one_persons_search_is_never_public` |
+| **人数门槛（k-匿名）** | 至少 3 个**不同的人**搜过才公开；返回的计数是人数——次数可以被一个人刷出来 | `::test_priv060_a_term_becomes_public_at_the_distinct_user_threshold` |
+| **身份标识根本不存** | 手机号、身份证号、邮箱在写入时就丢掉——存下来的东西迟早会从别的口子出去 | `::test_priv060_identifiers_are_never_even_stored` |
+| **审核两层各自钉住** | 红验发现去掉写入时审核，原测试仍绿（读取时那层挡住了）——而 docstring 写着「不记的两类」，那一半承诺没人检查。补「根本没存下」断言；读取时那层用「规则更新前已存下的词」单独钉 | `::test_priv060_moderated_terms_cannot_be_pushed_into_trending`、`::test_priv060_terms_stored_before_a_rule_change_are_still_filtered_on_read` |
+| **存量清理** | 迁移删掉已存的身份标识类词。**不可逆**——V118 那次拒绝合并聊天记录也是因为不可逆；区别在对象：那是用户的东西，这是本不该存在的内部日志 | `::test_priv060_migration_purges_stored_identifiers_and_keeps_the_rest`；迁移与服务的模式一致性另有一条 |
+| **PRIV-061 搜人看隐私** | 改造前只排除封禁，资料不公开的人照样被搜出来连同技能与信用分，已注销的也在。**同一个人的可见性在三个入口有两套规则**——改成与空间同一条 | `::test_priv061_private_and_deleted_people_are_not_searchable`（同时断言正当结果仍在） |
+| **`%` 不是通配符** | 四类搜索与联想都 `autoescape` | 两条 |
+| **两端接上** | web 导航常驻入口 + `/search`（查询词在 URL 里，能分享能后退）；App 发现页分段。联想防抖并丢弃过期响应 | `Search.test.tsx`（6 条）、`search.test.tsx`（3 条）；真浏览器联调新增一步 |
+| **联调闸门的盲区** | 页面覆盖扫描要求路径后面紧跟引号，`/search?q=…` 对它不可见。改扫描并加自检——与 V116 只认双引号同一类 | `test_e2e_coverage::test_e2e011_scanner_finds_routes_and_visits` |
 
 ## 已实现（V126 批次：哪些字段永远不许从请求体里收）
 

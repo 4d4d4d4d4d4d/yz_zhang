@@ -182,6 +182,15 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
          page.locator("table").count() > 0
          or page.locator("text=没有闭环就没有经验").count() > 0)
 
+    # 全站搜索（V127）：真浏览器打真服务端。mock 里四类结果都是我自己喂的；
+    # 这里验的是 `/search?q=` 这条链接打开就是一份结果（能分享、能后退回来），
+    # 以及没有结果时说清楚，而不是一片空白。
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/search?q=%E4%BF%9D%E6%B4%81", wait_until="networkidle")
+    page.wait_for_timeout(1200)
+    step("全站搜索打开即有结果或说清没有",
+         page.locator("h3:has-text('任务')").count() > 0
+         or page.locator("text=没有找到").count() > 0)
+
     # ---- 写路径：真的发一个任务出去 ----
     #
     # 这一段是 mock 最测不出来的那部分。V77 把 `ip_assignment` 改成必填时，

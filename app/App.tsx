@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DiscoverScreen } from './Discover';
 import { MessagesScreen } from './MessagesAndInvites';
 import { MySpaceScreen, PublicSpaceScreen, SpacesDiscoverScreen } from './spaces';
+import { SearchScreen } from './search';
 import { SUB_SCREEN_LABEL, SubScreenHost, type SubScreen } from './TeamCoopDev';
 import { VideoFeedScreen } from './VideoFeed';
 import {
@@ -146,7 +147,11 @@ export default function App() {
                 分段里——「发现优先展示人、作品、生活和正在发生的合作」。 */}
             {tab === 'spaces' && (
               <DiscoverHost client={client} baseUrl={BASE_URL}
-                            onOpenSpace={(userId) => setOverlay({ kind: 'space', userId })} />
+                            onOpenSpace={(userId) => setOverlay({ kind: 'space', userId })}
+                            onOpenTask={(taskId) => {
+                              // 搜索结果只带摘要，详情页要完整的 Task
+                              void client.getTask(taskId).then(setActiveTask).catch(() => {});
+                            }} />
             )}
             {tab === 'cooperate' && (
               <CooperateHost client={client} onOpen={setActiveTask} />
@@ -181,20 +186,24 @@ export default function App() {
  * 新定位里发现的主体是人与作品，而内容消费是其中一种形式。
  * 分段切换比塞进「我的」合理——它们本来就是「发现」这件事。
  */
-function DiscoverHost({ client, baseUrl, onOpenSpace }: {
+function DiscoverHost({ client, baseUrl, onOpenSpace, onOpenTask }: {
   client: PlatformClient; baseUrl: string; onOpenSpace: (userId: number) => void;
+  onOpenTask: (taskId: number) => void;
 }) {
-  const [seg, setSeg] = useState<'people' | 'feed' | 'video'>('people');
+  const [seg, setSeg] = useState<'people' | 'search' | 'feed' | 'video'>('people');
   return (
     <>
       <View style={styles.segbar}>
-        {([['people', '人与空间'], ['feed', '内容'], ['video', '视频']] as const).map(([k, label]) => (
+        {([['people', '人与空间'], ['search', '搜索'], ['feed', '内容'], ['video', '视频']] as const).map(([k, label]) => (
           <TouchableOpacity key={k} onPress={() => setSeg(k)}>
             <Text style={[styles.seg, seg === k && styles.segOn]}>{label}</Text>
           </TouchableOpacity>
         ))}
       </View>
       {seg === 'people' && <SpacesDiscoverScreen client={client} onOpen={onOpenSpace} />}
+      {/* SRCH-001 全站搜索（V127）：任务、人、内容、圈层一次查。
+          找不到东西的平台等于没有内容（72 号台账 SEARCH-050 的原话）。 */}
+      {seg === 'search' && <SearchScreen client={client} onOpenSpace={onOpenSpace} onOpenTask={onOpenTask} />}
       {/* APP-002 发现流：视差滚动，尊重系统「减弱动态效果」开关 */}
       {seg === 'feed' && <DiscoverScreen client={client} baseUrl={baseUrl} />}
       {/* CNT-014 沉浸流：任何时刻有且只有一个 <Video> 在播 */}

@@ -89,14 +89,31 @@ def test_cnt022_invalid_referral_code_ignored(client):
 
 # ---------- 搜索热词（SRCH-003） ----------
 def test_srch003_trending_and_suggest(client, requester):
-    for _ in range(3):
-        client.get("/api/v1/search", params={"q": "保洁"}, headers=auth(requester))
-    client.get("/api/v1/search", params={"q": "保姆"}, headers=auth(requester))
-    client.get("/api/v1/search", params={"q": "跑腿"}, headers=auth(requester))
+    """热词按**人数**排序、联想按前缀、空前缀回热词。
+
+    V127 改写了这条的造数方式。原来是**同一个人**搜「保洁」三次，断言它以
+    count=3 登上热词榜——那正是 PRIV-060 关掉的行为：一个人的搜索被公开，
+    而且次数可以被一个人刷出来。这条测试的**意图**（排序、前缀、空前缀）
+    仍然成立，所以留着它，只把造数换成不同的人：保洁 4 人、保姆 3 人、
+    跑腿 1 人（达不到门槛，不该出现）。
+    """
+    from tests.conftest import register
+
+    people = [requester] + [register(client, f"138000989{i:02d}", f"搜索者{i}") for i in range(3)]
+
+    def s(user, q):
+        client.get("/api/v1/search", params={"q": q}, headers=auth(user))
+
+    for u in people:                 # 4 个人搜保洁
+        s(u, "保洁")
+    for u in people[:3]:             # 3 个人搜保姆
+        s(u, "保姆")
+    s(people[0], "跑腿")             # 1 个人搜跑腿：不公开
 
     trending = client.get("/api/v1/search/trending").json()
-    assert trending[0]["term"] == "保洁" and trending[0]["count"] == 3
-    # 联想：前缀「保」→ 命中保洁与保姆，按热度排序
+    assert trending[0]["term"] == "保洁" and trending[0]["count"] == 4
+    assert all(t["term"] != "跑腿" for t in trending), "一个人的搜索上了热词榜"
+    # 联想：前缀「保」→ 命中保洁与保姆，按人数排序
     sug = client.get("/api/v1/search/suggest", params={"q": "保"}).json()
     assert sug[0] == "保洁" and "保姆" in sug
     # 空前缀 → 返回热词
