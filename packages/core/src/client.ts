@@ -34,6 +34,13 @@ import type {
   MyCoupon,
   Contract,
   Decomposition,
+  KnowledgeAdminOverview,
+  KnowledgeCalibrationPair,
+  KnowledgeCluster,
+  KnowledgeClusterDetail,
+  KnowledgeClusterList,
+  KnowledgeThresholdView,
+  KnowledgeUndecidedRow,
   DecompositionItem,
   DecompositionNodePatch,
   Dispute,
@@ -1597,6 +1604,49 @@ export class PlatformClient {
    *  `has_decomposition` 一个都没声明——也就是说想按价格或成败筛卡的人，
    *  在类型里**看不见这些字段存在**。V85 建的响应形状闸门只比具名接口的手写案例，
    *  内联类型结构上进不了它的范围（281 个调用点只覆盖 26 个，记台账 CLI-083）。 */
+  /** KB-073 子类检索：这一类活儿通常怎么做、通常多少钱（每个结论带样本量）。 */
+  knowledgeClusters(category?: string, q = '') {
+    const qs = new URLSearchParams();
+    if (category) qs.set('category', category);
+    if (q) qs.set('q', q);
+    const tail = qs.toString();
+    return this.request<KnowledgeClusterList>('GET', `/knowledge/clusters${tail ? `?${tail}` : ''}`);
+  }
+  /** KB-074 子类详情：分布、结果构成、共识与分歧。 */
+  knowledgeCluster(clusterId: number) {
+    return this.request<KnowledgeClusterDetail>('GET', `/knowledge/clusters/${clusterId}`);
+  }
+  // ---- KB-070~076 运营面 ----
+  knowledgeAdminOverview() {
+    return this.request<KnowledgeAdminOverview>('GET', '/admin/knowledge/overview');
+  }
+  knowledgeUndecided() {
+    return this.request<KnowledgeUndecidedRow[]>('GET', '/admin/knowledge/undecided');
+  }
+  /** 待定区样本：并进某个子类，或以它为第一个样本新建子类（二选一）。 */
+  assignKnowledgeCard(cardId: number, clusterId: number | null, newLabel = '') {
+    return this.request<KnowledgeCluster>('POST', `/admin/knowledge/cards/${cardId}/assign`,
+      { cluster_id: clusterId, new_label: newLabel });
+  }
+  knowledgeCalibrationPairs(category: string, n = 12) {
+    return this.request<KnowledgeCalibrationPair[]>('GET',
+      `/admin/knowledge/thresholds/${encodeURIComponent(category)}/pairs?n=${n}`);
+  }
+  calibrateKnowledge(category: string, pairs: Array<{ a: number; b: number; same: boolean }>) {
+    return this.request<KnowledgeThresholdView>('POST',
+      `/admin/knowledge/thresholds/${encodeURIComponent(category)}/calibrate`, { pairs });
+  }
+  retractKnowledgeTask(taskId: number, reason: string) {
+    return this.request<{ retracted: number; clusters_recomputed: number[] }>('POST',
+      `/admin/knowledge/tasks/${taskId}/retract`, { reason });
+  }
+  mergeKnowledgeCluster(clusterId: number, targetId: number) {
+    return this.request<KnowledgeCluster>('POST', `/admin/knowledge/clusters/${clusterId}/merge`,
+      { target_id: targetId });
+  }
+  renameKnowledgeCluster(clusterId: number, label: string) {
+    return this.request<KnowledgeCluster>('PATCH', `/admin/knowledge/clusters/${clusterId}`, { label });
+  }
   knowledgeCards(category?: string, limit = 20) {
     const q = category ? `?category=${encodeURIComponent(category)}&limit=${limit}` : `?limit=${limit}`;
     return this.request<Array<{

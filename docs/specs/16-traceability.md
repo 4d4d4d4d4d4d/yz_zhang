@@ -1,11 +1,11 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 2026-10-12：V133 任务拆解进 App；V132 任务拆解变成逐层展开、说清谁能闭环的树；V131 写操作在响应发出之前提交（FastAPI yield 依赖的作用域）；V130 幂等键真的护住钱（并发同键、过期、两端发键；Postgres 上实测）；V129 前端测试计数与结构计数进闸门（上线手册的 job 数是错的）；V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
+> 2026-10-12：V134 经验按子类生长；V133 任务拆解进 App；V132 任务拆解变成逐层展开、说清谁能闭环的树；V131 写操作在响应发出之前提交（FastAPI yield 依赖的作用域）；V130 幂等键真的护住钱（并发同键、过期、两端发键；Postgres 上实测）；V129 前端测试计数与结构计数进闸门（上线手册的 job 数是错的）；V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
 > 2026-10-09：V119 法定权利入口进 App；V118 单聊并发分叉修复；V117 关注幂等化并接到空间；V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
-> 后端 1406 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
+> 后端 1433 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
-> （真 Chromium × 构建产物 × 真服务端，17 项）。
+> （真 Chromium × 构建产物 × 真服务端，18 项）。
 > 全系统体检报告：[../SYSTEM-CHECK.md](../SYSTEM-CHECK.md)（数据库怎么搭、跑起来有什么问题）。
 > **现状一页看清：[72-status-ledger.md](72-status-ledger.md)**（这份矩阵的缺口也在那里记着）；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
@@ -15,6 +15,20 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V134 批次：经验按子类生长）
+
+> 模块 spec：[108-experience-subclasses.md](108-experience-subclasses.md)（设计见 94 号）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **KB-070 三条判定** | 串行归并 job：并入 / 待定区 / 新建；增量质心；不跨大类 | `test_knowledge_clusters::test_kb070_*`（三条） |
+| **KB-071 阈值** | 按大类标定、带模型名；缺失或不符 → held + 指标；退化模式不自动新建；候选对与标定 | `::test_kb071_*`（四条） |
+| **KB-072 分歧与结果构成** | 共识与分歧一起给，只出现一次的只数不展示；纠纷与取消建卡 | `::test_kb072a_*`、`::test_kb072b_*` |
+| **KB-073~075 对外** | 子类列表与详情带样本量与时间范围；样本少不出价；个案不展示 | `::test_kb073_*`、`::test_kb074_*`、`::test_cluster_responses_match_the_sdk_declarations` |
+| **风控与撤回（KB-076）** | 风控标记与封禁排除；撤回并精确重算 | `::test_risk_flagged_tasks_never_enter_a_cluster`、`::test_kb076_*` |
+| **运营面** | 待定区（QUEUE-010）、标定、合并、改名，动作进审计 | `::test_admin_*`、`::test_merge_*`、`::test_undecided_*`；`KnowledgeClusters.test.tsx` |
+| **两端** | 「按子类看」 | `KnowledgeClusters.test.tsx`、`knowledge-clusters.test.tsx`；真浏览器「按子类看经验」 |
 
 ## 已实现（V133 批次：手机上的逐层拆解）
 

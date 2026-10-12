@@ -131,6 +131,9 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
     (r"^\w+ /developer/", "self",
      "API Key 与 Webhook 属于创建它的开发者本人"),
     # ---- 社交与内容：公开的那部分与自己的那部分 ----
+    (r"^GET /knowledge/clusters/", "public",
+     "子类是可以公开给别人看的聚合结论（分布、共识与分歧）：个案证据被过滤掉、要双方授权才展示（KB-002），"
+     "只出现在一个任务里的步骤文字也不可见（k-匿名，test_knowledge_clusters）"),
     (r"^GET /spaces/", "public",
      "公开空间就是要给别人看的（SPACE-004）；未发布/隐私/封禁/注销统一 404"),
     (r"^GET /users/.*/(contents|reviews|follow-stats)$", "public",

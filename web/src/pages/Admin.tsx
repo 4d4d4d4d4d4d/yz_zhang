@@ -6,6 +6,7 @@
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
 import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminTicketRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinanceView, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
+import { KnowledgeAdmin } from '../AdminKnowledge';
 import { useApp } from '../store';
 
 type Metrics = {
@@ -56,6 +57,7 @@ export default function Admin() {
       <QueueOverview />
       <WithdrawReview />
       <AmlQueue />
+      <KnowledgeAdmin />
       <TeamVerifyQueue />
       <CertificationQueue />
       <UploadQueue />

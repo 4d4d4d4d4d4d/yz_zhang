@@ -1212,3 +1212,92 @@ export interface SpaceItem { title: string; kind: 'work' | 'article' | 'video' |
 export interface PersonalSpace { user_id: number; nickname: string; headline: string; introduction: string; theme: 'clay' | 'moss' | 'ink'; kind: 'person' | 'agent' | 'organization'; items: SpaceItem[]; items_count: number; accepting_orders: boolean }
 export interface OwnSpace extends PersonalSpace { revision: number; published: boolean; profile_public: boolean }
 export interface SpaceSummary extends Omit<PersonalSpace, 'introduction' | 'items'> { preview: SpaceItem[] }
+
+// ---- KB-070~076 经验子类（108 号 spec）----
+export type KnowledgeOutcome = 'completed' | 'disputed' | 'cancelled';
+
+/** 一个子类：这一类活儿通常怎么做、通常多少钱。**每个结论都带样本量与时间范围**（KB-073a）。 */
+export interface KnowledgeCluster {
+  id: number;
+  category: string;
+  label: string;
+  status: 'active' | 'merged' | 'retired';
+  /** 合并掉的子类指向合并去向：历史引用不悬空 */
+  merged_into: number | null;
+  sample_count: number;
+  price_p50_cents: number | null;
+  price_p90_cents: number | null;
+  duration_p50_days: number | null;
+  duration_p90_days: number | null;
+  /** 有价格的已完成样本数（价格只从 completed 算） */
+  priced_samples: number;
+  /** 失败率是子类的属性，不是噪音：纠纷与取消一起给 */
+  outcome_mix: Record<KnowledgeOutcome, number>;
+  first_sample_at: string | null;
+  last_sample_at: string | null;
+  /** 近 180 天样本的占比 */
+  recent_share: number;
+  /** 样本少于门槛：必须标「样本过少，仅供参考」 */
+  few_samples: boolean;
+  note: string;
+  created_by: string;
+}
+
+export interface KnowledgeClusterList {
+  items: KnowledgeCluster[];
+  /** 不是语义模型时，子类检索只是字面相近，界面要说出来 */
+  semantic: boolean;
+  model: string;
+}
+
+export interface KnowledgeClusterDetail extends KnowledgeCluster {
+  consensus_steps: Array<{ title: string; count: number }>;
+  /** KB-072 偏离共识却成功闭环的做法：**不许被平均掉** */
+  dissent: Array<{ steps: string[]; count: number }>;
+  /** 只出现过一次的不同做法：不展示文字（避免暴露个案），但数出来 */
+  dissent_hidden: number;
+  steps_basis: number;
+  evidence: { shown: unknown[]; hidden: number; note: string };
+}
+
+export interface KnowledgeAdminOverview {
+  model: string;
+  semantic: boolean;
+  states: Record<'pending' | 'assigned' | 'undecided' | 'held' | 'excluded' | 'retracted', number>;
+  active_clusters: number;
+  thresholds: KnowledgeThresholdRow[];
+  held: Record<string, number>;
+}
+
+export interface KnowledgeUndecidedRow {
+  card_id: number;
+  category: string;
+  city: string;
+  title: string;
+  outcome: KnowledgeOutcome;
+  state: 'undecided' | 'held';
+  hint: { nearest_id?: number | null; nearest_label?: string; similarity?: number | null; why?: string;
+          reason?: string; note?: string };
+  created_at: string | null;
+}
+
+export interface KnowledgeCalibrationPair {
+  a: { card_id: number; city: string; title: string; outcome: KnowledgeOutcome; price_actual_cents: number; duration_days: number };
+  b: { card_id: number; city: string; title: string; outcome: KnowledgeOutcome; price_actual_cents: number; duration_days: number };
+  similarity: number;
+}
+
+export interface KnowledgeThresholdView {
+  category: string;
+  tau_merge: number;
+  tau_near: number;
+  embedding_model: string;
+  labeled_pairs: number;
+  errors: number;
+  calibrated_at: string | null;
+}
+
+export interface KnowledgeThresholdRow extends KnowledgeThresholdView {
+  /** 阈值是用旧模型标定的：归并会被拒，须重标 */
+  stale: boolean;
+}

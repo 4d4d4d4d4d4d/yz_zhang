@@ -14,10 +14,11 @@
 // 这一页在手机上尤其要紧：问「这事我不懂，该怎么办」的那一刻，
 // 人很少坐在电脑前。
 import {
-  apiErrorText, fmtYuan, type PlatformClient,
+  apiErrorText, fmtYuan, formatDate, type KnowledgeCluster, type KnowledgeClusterDetail,
+  type KnowledgeClusterList, type KnowledgeOutcome, type PlatformClient,
 } from '@platform/core';
 import { useCallback, useState } from 'react';
-import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Button, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 type AskResult = Awaited<ReturnType<PlatformClient['legalAsk']>>;
 type Card = Awaited<ReturnType<PlatformClient['knowledgeCards']>>[number];
@@ -100,8 +101,93 @@ export function AskScreen({ client, onPublish }: {
         {res && <Text style={styles.muted}>{res.disclaimer}</Text>}
       </View>
 
+      <SubclassesBlock client={client} />
       <ExperienceBlock client={client} />
     </View>
+  );
+}
+
+/** KB-073/074 按子类看经验（108 号 spec）：这一类活儿通常怎么做、通常多少钱。
+ *  每个结论带样本量与时间范围；样本太少的不给价；少数但做成了的做法单独列出。 */
+export function SubclassesBlock({ client }: { client: PlatformClient }) {
+  const [list, setList] = useState<KnowledgeClusterList | null>(null);
+  const [detail, setDetail] = useState<KnowledgeClusterDetail | null>(null);
+  const [q, setQ] = useState('');
+  const [err, setErr] = useState('');
+
+  const load = useCallback(async () => {
+    setErr('');
+    setDetail(null);
+    try {
+      setList(await client.knowledgeClusters(undefined, q.trim()));
+    } catch (e) {
+      setErr(apiErrorText(e));
+    }
+  }, [client, q]);
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.title}>这一类活儿通常怎么做、通常多少钱</Text>
+      <TextInput style={styles.input} value={q} onChangeText={setQ} placeholder="想做什么？例如：同城代取快递"
+                 accessibilityLabel="搜子类" />
+      <Button title="按子类看" onPress={() => void load()} />
+      {!!err && <Text style={styles.error}>{err}</Text>}
+      {list && !list.semantic && list.items.length > 0 && (
+        <Text style={styles.muted}>当前不是语义检索（{list.model}）：排序只看字面相近。</Text>
+      )}
+      {list && list.items.length === 0 && (
+        <Text style={styles.muted}>还没有子类。经验要先攒够、并由运营标定归并阈值之后才会长出子类——这里是空的，不是出错了。</Text>
+      )}
+      {list && !detail && list.items.map((c) => (
+        <TouchableOpacity key={c.id} onPress={async () => {
+          try { setDetail(await client.knowledgeCluster(c.id)); } catch (e) { setErr(apiErrorText(e)); }
+        }}>
+          <Text style={styles.title}>{c.label} ›</Text>
+          <ClusterStats c={c} />
+        </TouchableOpacity>
+      ))}
+      {detail && (
+        <View style={{ gap: 6 }}>
+          <TouchableOpacity onPress={() => setDetail(null)}><Text style={styles.muted}>← 返回子类列表</Text></TouchableOpacity>
+          <Text style={styles.title}>{detail.label}</Text>
+          <ClusterStats c={detail} />
+          {detail.consensus_steps.length > 0 && (
+            <>
+              <Text>多数人的做法（{detail.steps_basis} 个有拆解的样本）：</Text>
+              {detail.consensus_steps.map((s, i) => <Text key={s.title}>{i + 1}. {s.title}（{s.count} 次）</Text>)}
+            </>
+          )}
+          {(detail.dissent.length > 0 || detail.dissent_hidden > 0) && (
+            <>
+              <Text>不一样、但同样做成了的做法：</Text>
+              {detail.dissent.map((d, i) => <Text key={i}>· {d.steps.join(' → ')}（{d.count} 次）</Text>)}
+              {detail.dissent_hidden > 0 && (
+                <Text style={styles.muted}>另有 {detail.dissent_hidden} 种只出现过一次的做法（不展示内容，以免暴露个案）。</Text>
+              )}
+            </>
+          )}
+          <Text style={styles.muted}>{detail.evidence.note}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const CLUSTER_OUTCOME: Record<KnowledgeOutcome, string> = { completed: '完成', disputed: '有纠纷', cancelled: '取消' };
+
+function ClusterStats({ c }: { c: KnowledgeCluster }) {
+  const parts = [`${c.sample_count} 个样本`];
+  if (!c.few_samples && c.price_p50_cents !== null) {
+    parts.push(`价格中位 ${fmtYuan(c.price_p50_cents)}（90% 在 ${fmtYuan(c.price_p90_cents ?? 0)} 以内）`);
+  }
+  parts.push((Object.keys(CLUSTER_OUTCOME) as KnowledgeOutcome[])
+    .map((o) => `${CLUSTER_OUTCOME[o]} ${c.outcome_mix[o] ?? 0}`).join(' / '));
+  if (c.first_sample_at) parts.push(`${formatDate(c.first_sample_at)} ~ ${formatDate(c.last_sample_at ?? c.first_sample_at)}`);
+  return (
+    <>
+      <Text style={styles.muted}>{parts.join(' · ')}</Text>
+      {c.few_samples && <Text style={styles.error}>{c.note}</Text>}
+    </>
   );
 }
 

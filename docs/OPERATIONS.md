@@ -137,7 +137,7 @@ python -m scripts.loadtest --concurrency 16 --requests 600 --scenario read
 python -m scripts.loadtest --concurrency 16 --requests 400 --scenario write
 ```
 
-这套组合已被 **1406 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
+这套组合已被 **1433 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
 「重复接受报名 / 重复托管 / 重复交付 / 重复验收 / 重复里程碑放款」全部拒绝且零副作用。
 
 ### 2.2 多副本并发安全（V42 已补齐，见 [18-concurrency.md](specs/18-concurrency.md)）
@@ -163,7 +163,7 @@ python -m scripts.loadtest --concurrency 16 --requests 400 --scenario write
   （已开 WAL + `busy_timeout`）。
 - **限流**：`RateLimiter` 协议 + 内存/Redis 双实现，配 `PLATFORM_REDIS_URL` 即切；
   Redis 故障连续达阈值自动降级为内存并在 `/readyz` 中可见——限流不该拖垮登录。
-- **定时任务单实例**：`JobLock` 表 + `job_slot()` 依赖，全部 23 个 job 端点已接入；
+- **定时任务单实例**：`JobLock` 表 + `job_slot()` 依赖，全部 24 个 job 端点已接入；
   执行完即释放，崩溃靠 TTL 抢占。调度表与端点**同源**（`app/core/jobs.py`），
   cron 直接读它，并有测试从 OpenAPI 自动发现端点双向核对——**漂了 CI 就红**
   （V57：此前手抄的表漂出三处，其中资金对账 job 从来没被架起来过）。
@@ -407,7 +407,7 @@ SQLite 与 Postgres 的漂移检测能力不一样，只跑一个会放行一整
 |---|---|---|
 | `scripts/smoke.py` | 这套部署**能做生意**：真实 HTTP 走完注册→发布→双签→托管→验收→分账，佣金与到账金额对得上 | 实例已启动（连不上会一句话报错并退出码 2） |
 | `scripts/sandbox_check.py` | **存管合规态**成立：资金五不变量、代扣税款、第三方存证背书（28 项） | 无（自带进程内客户端） |
-| `scripts/e2e_web.py` | **前端连得上后端**：真 Chromium 打开 `vite build` 产物，同源反代到真服务端（17 项） | 先 `npm run build:web`；需 Chromium |
+| `scripts/e2e_web.py` | **前端连得上后端**：真 Chromium 打开 `vite build` 产物，同源反代到真服务端（18 项） | 先 `npm run build:web`；需 Chromium |
 
 ```bash
 cd server && python -m scripts.smoke          # 默认 http://localhost:8000
@@ -557,6 +557,9 @@ Postgres 双引擎迁移检查与部署验收。
   保险阈值：`PLATFORM_DECOMPOSE_MAX_DEPTH`（5）、`_MAX_NODES`（60）、`_MAX_MODEL_CALLS`（20）、
   `_MIN_NODE_BUDGET_CENTS`（1000）；标「AI 可闭环」要的历史次数 `PLATFORM_DECOMPOSE_AI_CLOSABLE_MIN_RUNS`（3）
   ——**调低它等于放宽「没依据也敢说 AI 能做」**，慎改。
+- **经验子类（V134，108 号 spec）**：运营台「经验子类」一块红字提示「阈值是用旧模型标定的」时，
+  **换过 embedding 模型后必须逐个大类重标**，否则这些大类的新经验全部停在「等待标定」。
+  `knowledge_cluster_held_total{reason}` 涨就是这个原因。待定区进人审队列总览，按 `REVIEW_SLA_HOURS` 催办。
 
 **社群（圈层）玩法**
 - 按**技能**建圈：保洁师傅圈、设计师圈——沉淀专业交流，圈内成交有信任加成。
@@ -642,7 +645,7 @@ Postgres 双引擎迁移检查与部署验收。
 **已经很扎实的**：交易闭环、资金安全与守恒、纠纷程序正义、账号安全、审计留痕、
 多副本并发安全、外部供应商可替换性、事件投递的失败隔离与可补做、
 个税代扣的资金隔离与可对账、反洗钱的可疑识别与保密、边界防护的跨副本一致性、
-定时任务编排的完整性、处置动作的一致性。这些有 1406 个测试钉着。
+定时任务编排的完整性、处置动作的一致性。这些有 1433 个测试钉着。
 
 **离真正上线还差的**（按紧迫度）：
 1. ~~Postgres + 行锁/乐观锁~~ —— **V42 已完成**（切库只改环境变量）

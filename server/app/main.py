@@ -107,6 +107,7 @@ def create_app() -> FastAPI:
     from app.modules.growth.router import router as growth_router
     from app.modules.im.router import router as im_router
     from app.modules.im.router_social import router as social_router
+    from app.modules.knowledge.router import admin_router as knowledge_admin_router
     from app.modules.knowledge.router import router as knowledge_router
     from app.modules.notification.router import router as notification_router
     from app.modules.orchestrator.router import router as orchestrator_router
@@ -126,6 +127,7 @@ def create_app() -> FastAPI:
         contract_router,
         decompose_router,
         knowledge_router,
+        knowledge_admin_router,
         im_router,
         social_router,
         dispute_router,

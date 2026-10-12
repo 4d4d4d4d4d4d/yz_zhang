@@ -89,6 +89,14 @@ def _aml(db: Session):
             .filter(SuspiciousActivity.status == "pending").all()]
 
 
+def _knowledge(db: Session):
+    from app.modules.knowledge.models import KnowledgeCard
+
+    return [(c.id, c.created_at, None)
+            for c in db.query(KnowledgeCard)
+            .filter(KnowledgeCard.cluster_state.in_(("undecided", "held"))).all()]
+
+
 QUEUES: tuple[ReviewQueue, ...] = (
     ReviewQueue("tickets", "客服工单", "SUPPORT_SLA_HOURS", _tickets,
                 tells_submitter="提问的人等的是一个答复；沉默让他以为自己被忽略了"),
@@ -102,6 +110,10 @@ QUEUES: tuple[ReviewQueue, ...] = (
                 tells_submitter="钱冻着，这是最该说话的一类",
                 chased_elsewhere="75 号已有专门的催办与超时退回；"
                                  "再加一套等于每小时两条通知，运营会把整类关掉"),
+    ReviewQueue("knowledge", "经验待定区（像又不够像、或阈值未标定）", "REVIEW_SLA_HOURS", _knowledge,
+                tells_submitter="",
+                no_tell_why="没有提交方：待定区是平台内部整理经验，样本背后的用户没有提交过什么、"
+                            "也没有在等任何答复，告诉他「你的任务在待定区」只会让人困惑"),
     ReviewQueue("aml", "可疑活动复核", "REVIEW_SLA_HOURS", _aml,
                 tells_submitter="",
                 no_tell_why="AML-030/031：《反洗钱法》的保密义务不允许告诉当事人"

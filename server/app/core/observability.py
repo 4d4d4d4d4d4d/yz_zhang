@@ -146,6 +146,15 @@ def render_metrics(db=None) -> str:
     for reason, n in sorted(stop_counts().items()):
         lines.append(f'decompose_stop_total{{reason="{reason}"}} {n}')
 
+    # KB-071 归并被拒的次数（没标定阈值 / 阈值是旧模型标的）。宁可不归并、
+    # 不要用错的阈值归并——但被拒必须看得见，否则经验就静静地堆在待定区里
+    from app.modules.knowledge.clusters import held_counts
+
+    lines += ["# HELP knowledge_cluster_held_total 经验归并因阈值缺失或模型不符被拒的次数",
+              "# TYPE knowledge_cluster_held_total counter"]
+    for reason, n in sorted(held_counts().items()):
+        lines.append(f'knowledge_cluster_held_total{{reason="{reason}"}} {n}')
+
     if db is not None:
         lines += _business_metrics(db)
     return "\n".join(lines) + "\n"

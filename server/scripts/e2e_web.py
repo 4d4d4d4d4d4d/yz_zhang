@@ -193,6 +193,12 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     # 经验读回：空库也要给一句说清「为什么是空的」，而不是一片白
     page.get_by_role("button", name="看最近的").click()
     page.wait_for_timeout(1200)
+    # KB-073（V134）按子类看：真服务端上没有标定阈值、也就没有子类——
+    # 要验的正是那句话：空的时候说清「不是出错了」，而不是一片白或一个报错
+    page.get_by_role("button", name="按子类看").click()
+    page.wait_for_timeout(1000)
+    step("按子类看经验（没有子类时说清为什么）",
+         page.locator("text=还没有子类").count() > 0 or page.locator("[data-cluster]").count() > 0)
     step("平台攒的经验读得回来（空库也说清为什么空）",
          page.locator("table").count() > 0
          or page.locator("text=没有闭环就没有经验").count() > 0)

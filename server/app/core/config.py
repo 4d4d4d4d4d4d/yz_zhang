@@ -72,6 +72,8 @@ class Settings:
     # AI-DEC-042 标「AI 可闭环」要的历史依据：该类目下平台 Agent 成功且已验收的次数
     DECOMPOSE_AI_CLOSABLE_MIN_RUNS = int(
         os.environ.get("PLATFORM_DECOMPOSE_AI_CLOSABLE_MIN_RUNS", "3"))
+    # KB-073 子类样本少于它：标「样本过少，仅供参考」，且不出参考价（108 号 spec）
+    KB_CLUSTER_MIN_SAMPLES = int(os.environ.get("PLATFORM_KB_CLUSTER_MIN_SAMPLES", "5"))
     # FIN-071 幂等记录保留多久（104 号 spec）。24 小时是 Stripe 的语义：
     # 两端在「这一次操作」得到确定结果之前一直用同一个键重试，之后换新键——
     # 重试发生在几秒到几分钟内，不会跨天。过期判断在读的时候就生效。
@@ -135,7 +137,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.123.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.124.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

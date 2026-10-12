@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Integer, String, Text
+from sqlalchemy import JSON, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -27,7 +27,57 @@ class KnowledgeCard(Base):
     # 拿两个模型的向量做余弦（那会得到一堆毫无意义的相似度）。
     embedding: Mapped[list] = mapped_column(JSON, default=list)
     embedding_model: Mapped[str] = mapped_column(String(40), default="")
+    # KB-070（V134，108 号 spec）样本是证据，子类是结论，结论必须能回溯到证据
+    cluster_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    # pending 未处理 / assigned 已并入 / undecided 待定区（运营判）/ held 阈值缺失或模型不符
+    # / excluded 风控标记不进 / retracted 已撤回
+    cluster_state: Mapped[str] = mapped_column(String(12), default="pending", index=True)
+    # 待定区里最像的那个子类与相似度，给运营判断用
+    cluster_hint: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class KnowledgeCluster(Base):
+    """KB-070 子类：知识图谱的节点。样本只是挂在它下面的证据（94 号 spec）。
+
+    质心、样本数与结果构成**增量**维护；价格与工期分布、共识与分歧在读的时候
+    从成员样本算——成员是有界的，算出来是精确值，而增量维护分位数做不到精确。
+    """
+
+    __tablename__ = "knowledge_clusters"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    category: Mapped[str] = mapped_column(String(50), index=True)
+    label: Mapped[str] = mapped_column(String(120))
+    centroid: Mapped[list] = mapped_column(JSON, default=list)
+    embedding_model: Mapped[str] = mapped_column(String(40), default="")
+    sample_count: Mapped[int] = mapped_column(Integer, default=0)
+    # {"completed": n, "disputed": n, "cancelled": n}——失败率是子类的属性，不是噪音
+    outcome_counts: Mapped[dict] = mapped_column(JSON, default=dict)
+    # active / merged / retired
+    status: Mapped[str] = mapped_column(String(12), default="active", index=True)
+    merged_into: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 谁建的：auto（语义模型下自动新建）/ ops:<admin id>（运营从待定区建）
+    created_by: Mapped[str] = mapped_column(String(20), default="auto")
+    last_sample_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ClusterThreshold(Base):
+    """KB-071 按大类标定的归并阈值。不许是写死的数字：换 embedding 模型就得重标。"""
+
+    __tablename__ = "knowledge_cluster_thresholds"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    category: Mapped[str] = mapped_column(String(50), unique=True)
+    tau_merge: Mapped[float] = mapped_column(Float)
+    tau_near: Mapped[float] = mapped_column(Float)
+    embedding_model: Mapped[str] = mapped_column(String(40))
+    # 标定依据：几对人工标注、误判几对、谁标的、什么时候
+    labeled_pairs: Mapped[int] = mapped_column(Integer, default=0)
+    errors: Mapped[int] = mapped_column(Integer, default=0)
+    calibrated_by: Mapped[int] = mapped_column(Integer)
+    calibrated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class DecompositionTemplate(Base):

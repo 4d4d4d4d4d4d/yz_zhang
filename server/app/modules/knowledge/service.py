@@ -133,6 +133,10 @@ def _on_task_completed(db: Session, payload: dict) -> None:
     task = db.get(Task, payload["task_id"])
     if not task:
         return
+    # 只给真正有人干过活的任务建卡：容器步骤（逐层拆解的中间层）自己不干活，
+    # 它的结项是子步骤推导出来的，不是一条独立的经验
+    if task.executor_id is None and not db.query(Task.id).filter(Task.parent_id == task.id).first():
+        return
     days = 0
     if task.completed_at and task.created_at:
         days = max((task.completed_at - task.created_at).days, 0)
@@ -152,7 +156,8 @@ def _on_task_completed(db: Session, payload: dict) -> None:
         title=f"{task.category}·{task.city or '不限城市'}",
         price_actual_cents=task.budget_cents,
         duration_days=days,
-        outcome="completed",
+        # KB-072b 失败率是子类的属性：经过纠纷才结项的，单独记成 disputed
+        outcome="disputed" if _had_dispute(db, task.id) else "completed",
     )
     # 母任务闭环时快照子任务分解结构，反哺模板（AI-DEC-012）
     children = db.query(Task).filter(Task.parent_id == task.id).all()
@@ -167,5 +172,28 @@ def _on_task_completed(db: Session, payload: dict) -> None:
     db.add(card)
 
 
+def _had_dispute(db: Session, task_id: int) -> bool:
+    from app.modules.dispute.models import Dispute
+
+    return db.query(Dispute.id).filter(Dispute.task_id == task_id).first() is not None
+
+
+def _on_task_cancelled(db: Session, payload: dict) -> None:
+    """KB-072b 取消也是经验：只记**有人接过**的（成交后取消），没人接的草稿撤回不是经验。"""
+    from app.modules.task.models import Task
+
+    task = db.get(Task, payload["task_id"])
+    if not task or task.executor_id is None:
+        return
+    if db.query(KnowledgeCard.id).filter(KnowledgeCard.source_task_id == task.id).first():
+        return
+    db.add(KnowledgeCard(
+        source_task_id=task.id, category=task.category, city=task.city,
+        title=f"{task.category}·{task.city or '不限城市'}",
+        price_actual_cents=task.budget_cents, duration_days=0, outcome="cancelled",
+    ))
+
+
 def register_event_handlers() -> None:
     subscribe("task.completed", _on_task_completed, retry=True)
+    subscribe("task.cancelled", _on_task_cancelled, retry=True)

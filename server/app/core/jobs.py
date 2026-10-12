@@ -72,6 +72,9 @@ JOBS: tuple[ScheduledJob, ...] = (
                  "TAX-013 代扣税款缴库，与申报周期对齐"),
     ScheduledJob("/knowledge/jobs/reindex", 3600, "kb_reindex",
                  "KB-011 向量索引增量重建：只补没有向量或模型已换的行"),
+    ScheduledJob("/knowledge/jobs/cluster", 3600, "kb_cluster",
+                 "KB-070 新经验归进子类：串行跑（并发更新同一子类的质心是静默错误的温床），"
+                 "没标定阈值的大类原样等着，标定后下一轮重试"),
     ScheduledJob("/tasks/jobs/remind-acceptance", 3600, "remind_acceptance",
                  "NTF-063 自动放款前的最后一次提醒——交付时那条是开始时的闹钟，"
                  "而 N 天后钱就放出去了，放款不可逆"),

@@ -1,4 +1,4 @@
-import { apiErrorText } from '@platform/core';
+import { apiErrorText, formatDate, type KnowledgeCluster, type KnowledgeClusterDetail, type KnowledgeClusterList, type KnowledgeOutcome } from '@platform/core';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../store';
@@ -21,6 +21,7 @@ export default function Ask() {
   return (
     <div className="page">
       <LegalAsk />
+      <Subclasses />
       <Experience />
     </div>
   );
@@ -100,6 +101,98 @@ function LegalAsk() {
         </div>
       )}
     </div>
+  );
+}
+
+const OUTCOME_LABEL: Record<KnowledgeOutcome, string> = { completed: '完成', disputed: '有纠纷', cancelled: '取消' };
+
+/** KB-073/074 按子类看经验（108 号 spec）：这一类活儿通常怎么做、通常多少钱。
+ *  子类是结论，样本是证据——每个结论都带样本量与时间范围；样本太少的不给价。 */
+function Subclasses() {
+  const { client } = useApp();
+  const [list, setList] = useState<KnowledgeClusterList | null>(null);
+  const [detail, setDetail] = useState<KnowledgeClusterDetail | null>(null);
+  const [q, setQ] = useState('');
+  const [err, setErr] = useState('');
+
+  async function load() {
+    setErr('');
+    setDetail(null);
+    try {
+      setList(await client.knowledgeClusters(undefined, q.trim()));
+    } catch (e) {
+      setErr(apiErrorText(e));
+    }
+  }
+
+  return (
+    <div className="card">
+      <h3>这一类活儿通常怎么做、通常多少钱</h3>
+      <p className="muted">平台把相似的闭环经验归成子类：每一类给价格与工期的分布、完成与纠纷的比例、
+        多数人的做法，以及少数但同样做成了的做法。</p>
+      <div className="row" style={{ marginTop: 8 }}>
+        <input className="grow" value={q} onChange={(e) => setQ(e.target.value)}
+               onKeyDown={(e) => e.key === 'Enter' && void load()}
+               placeholder="想做什么？例如：同城代取快递" aria-label="搜子类" />
+        <button onClick={() => void load()}>按子类看</button>
+      </div>
+      {err && <p className="error" role="alert">{err}</p>}
+      {list && !list.semantic && list.items.length > 0 && (
+        <p className="muted" role="status">当前不是语义检索（{list.model}）：排序只看字面相近。</p>
+      )}
+      {list && list.items.length === 0 && (
+        <p className="muted">还没有子类。经验要先攒够、并由运营标定归并阈值之后，才会长出子类——这里是空的，不是出错了。</p>
+      )}
+      {list && list.items.length > 0 && !detail && (
+        <ul className="list" style={{ marginTop: 8 }}>
+          {list.items.map((c) => (
+            <li key={c.id} className="task-item">
+              <button className="ghost" onClick={async () => {
+                try { setDetail(await client.knowledgeCluster(c.id)); } catch (e) { setErr(apiErrorText(e)); }
+              }}>{c.label}</button>
+              <ClusterStats c={c} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {detail && (
+        <div style={{ marginTop: 8 }}>
+          <button className="ghost" onClick={() => setDetail(null)}>← 返回子类列表</button>
+          <h4>{detail.label}</h4>
+          <ClusterStats c={detail} />
+          {detail.consensus_steps.length > 0 && (
+            <>
+              <p><strong>多数人的做法</strong>（{detail.steps_basis} 个有拆解的样本）：</p>
+              <ol>{detail.consensus_steps.map((s) => <li key={s.title}>{s.title} <em className="muted">{s.count} 次</em></li>)}</ol>
+            </>
+          )}
+          {(detail.dissent.length > 0 || detail.dissent_hidden > 0) && (
+            <>
+              {/* KB-072 分歧不许被平均掉：少数但同样做成了的做法单独列出 */}
+              <p><strong>不一样、但同样做成了的做法</strong>：</p>
+              <ul>{detail.dissent.map((d, i) => <li key={i}>{d.steps.join(' → ')} <em className="muted">{d.count} 次</em></li>)}</ul>
+              {detail.dissent_hidden > 0 && (
+                <p className="muted">另有 {detail.dissent_hidden} 种只出现过一次的做法（不展示内容，以免暴露个案）。</p>
+              )}
+            </>
+          )}
+          <p className="muted">{detail.evidence.note}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClusterStats({ c }: { c: KnowledgeCluster }) {
+  return (
+    <span className="muted" data-cluster={c.id}>
+      {c.sample_count} 个样本
+      {!c.few_samples && c.price_p50_cents !== null && <> · 价格中位 {fmtYuan(c.price_p50_cents)}（90% 在 {fmtYuan(c.price_p90_cents ?? 0)} 以内）</>}
+      {!c.few_samples && c.duration_p50_days !== null && <> · 工期中位 {c.duration_p50_days ? `${c.duration_p50_days} 天` : '当日'}</>}
+      {' · '}{(Object.keys(OUTCOME_LABEL) as KnowledgeOutcome[]).map((o) => `${OUTCOME_LABEL[o]} ${c.outcome_mix[o] ?? 0}`).join(' / ')}
+      {c.first_sample_at && <> · {formatDate(c.first_sample_at)} ~ {formatDate(c.last_sample_at ?? c.first_sample_at)}</>}
+      {c.few_samples && <strong> · {c.note}</strong>}
+    </span>
   );
 }
 

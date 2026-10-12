@@ -49,6 +49,15 @@ def _admin_paths() -> set[str]:
 #
 # 判定标准（沿用 V98）：**只有运营/风控能做，而不做就有人的钱或权利卡住。**
 REACHED_BY: dict[str, str] = {
+    # KB-070~076（V134）经验子类的运营面：待定区不判，经验就永远堆在那里
+    "/admin/knowledge/overview": "knowledgeAdminOverview",
+    "/admin/knowledge/undecided": "knowledgeUndecided",
+    "/admin/knowledge/cards/{x}/assign": "assignKnowledgeCard",
+    "/admin/knowledge/thresholds/{x}/pairs": "knowledgeCalibrationPairs",
+    "/admin/knowledge/thresholds/{x}/calibrate": "calibrateKnowledge",
+    "/admin/knowledge/tasks/{x}/retract": "retractKnowledgeTask",
+    "/admin/knowledge/clusters/{x}/merge": "mergeKnowledgeCluster",
+    "/admin/knowledge/clusters/{x}": "renameKnowledgeCluster",
     "/admin/vendors": "adminVendors",
     "/admin/queues": "reviewQueues",
     "/admin/teams/pending": "pendingTeams",

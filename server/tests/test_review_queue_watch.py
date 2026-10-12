@@ -68,7 +68,14 @@ def test_queue010_not_telling_the_submitter_needs_a_reason_not_a_boolean():
     assert silent, "一条「不告知」都没有？断言写错了"
     for q in silent:
         assert len(q.no_tell_why) >= 15, f"{q.key} 不告知提交方却没写理由"
-        assert "AML" in q.no_tell_why or "保密" in q.no_tell_why
+        # 不告知只有两种正当理由，理由里必须点名是哪一种：
+        # 法定保密（说了等于教人规避），或者根本没有提交方（没有人在等答复）。
+        # 「觉得没必要」不是第三种——那正是有人在等、却没人告诉他的情形。
+        assert ("AML" in q.no_tell_why or "保密" in q.no_tell_why) or q.no_tell_why.startswith("没有提交方"), \
+            f"{q.key} 不告知的理由既不是法定保密，也不是没有提交方"
+    # 可疑活动复核那一行必须是保密义务，不许被改写成别的理由
+    aml = next(q for q in QUEUES if q.key == "aml")
+    assert "AML" in aml.no_tell_why and "保密" in aml.no_tell_why
 
 
 def test_queue010_the_sla_setting_really_exists_in_config():
