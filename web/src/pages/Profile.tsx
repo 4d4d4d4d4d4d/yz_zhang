@@ -1,4 +1,4 @@
-import { apiErrorText, fmtYuan, formatDateTime, type AgreementStatus, type CertificationApplicationView, type InvitationItem } from '@platform/core';
+import { apiErrorText, fmtYuan, formatDateTime, type AgreementStatus, type CertificationApplicationView, type InvitationItem, type SensitiveScope } from '@platform/core';
 import { compressToBase64 } from '../PhotoPicker';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -155,6 +155,27 @@ function PrivacyConsents() {
   if (!status) return null;
 
   const stale = status.documents.filter((d) => d.needs_reconsent);
+  const row = (s: SensitiveScope) => (
+    <div className="task-item" key={s.key}>
+      <div>
+        <strong>{s.purpose}</strong>
+        {' '}
+        {s.granted
+          ? <span className="badge ok">已授权</span>
+          : <span className="badge warn">未授权</span>}
+        {/* LAW-032 撤回的后果必须在点之前就看得见 */}
+        <p className="muted">{s.revocation_effect}</p>
+      </div>
+      <button className={s.granted ? 'ghost' : ''} onClick={async () => {
+        if (s.granted && !confirm(`撤回后：${s.revocation_effect}\n\n确认撤回？`)) return;
+        const res = s.granted
+          ? await client.revokeConsent(s.key)
+          : await client.grantConsent(s.key);
+        await load();
+        setMsg(s.granted ? `已撤回（${(res as { applied?: string[] }).applied?.join('、') || '已生效'}）` : '已授权');
+      }}>{s.granted ? '撤回同意' : '授权'}</button>
+    </div>
+  );
   return (
     <div className="card">
       <h3>协议与个人信息授权</h3>
@@ -171,28 +192,18 @@ function PrivacyConsents() {
         </div>
       )}
       <div className="list" style={{ marginTop: 8 }}>
-        {status.sensitive_scopes.map((s) => (
-          <div className="task-item" key={s.key}>
-            <div>
-              <strong>{s.purpose}</strong>
-              {' '}
-              {s.granted
-                ? <span className="badge ok">已授权</span>
-                : <span className="badge warn">未授权</span>}
-              {/* LAW-032 撤回的后果必须在点之前就看得见 */}
-              <p className="muted">{s.revocation_effect}</p>
-            </div>
-            <button className={s.granted ? 'ghost' : ''} onClick={async () => {
-              if (s.granted && !confirm(`撤回后：${s.revocation_effect}\n\n确认撤回？`)) return;
-              const res = s.granted
-                ? await client.revokeConsent(s.key)
-                : await client.grantConsent(s.key);
-              await load();
-              setMsg(s.granted ? `已撤回（${(res as { applied?: string[] }).applied?.join('、') || '已生效'}）` : '已授权');
-            }}>{s.granted ? '撤回同意' : '授权'}</button>
-          </div>
-        ))}
+        {status.sensitive_scopes.map(row)}
       </div>
+      {/* KB-080/089 经验的两种用途：选择加入、各自独立。它们不是敏感个人信息，所以单列 */}
+      {Array.isArray(status.data_use_scopes) && status.data_use_scopes.length > 0 && (
+        <>
+          <h4 style={{ marginTop: 12 }}>你参与的任务，能不能成为平台经验</h4>
+          <p className="muted">只有双方都同意的那一单，才会被提炼成别人可复用的经验；同意复用不等于同意训练。</p>
+          <div className="list" style={{ marginTop: 8 }}>
+            {status.data_use_scopes.map(row)}
+          </div>
+        </>
+      )}
       {msg && <p style={{ color: 'var(--ok)', marginTop: 6 }}>{msg}</p>}
       <p className="muted" style={{ marginTop: 8 }}>
         你还可以

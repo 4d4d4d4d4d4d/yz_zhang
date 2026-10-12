@@ -6,7 +6,7 @@
 // 子类合并与改名。
 import {
   apiErrorText, fmtYuan, type KnowledgeAdminOverview, type KnowledgeCalibrationPair,
-  type KnowledgeUndecidedRow,
+  type KnowledgeUndecidedRow, type ReusableUnit, type ReusableUnitKind,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from './store';
@@ -108,6 +108,8 @@ export function KnowledgeAdmin() {
           if (id && label) void act(() => client.renameKnowledgeCluster(id, label), `子类 #${id} 已改名`);
         }}>子类改名</button>
       </div>
+
+      <Units />
     </section>
   );
 }
@@ -166,6 +168,94 @@ function Calibrate({ categories, onDone }: { categories: string[]; onDone: (msg:
               setError(apiErrorText(e));
             }
           }}>用这些标注标定</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const KIND_OPTIONS: Array<[ReusableUnitKind, string]> = [
+  ['procedure', '分解流程'], ['checklist', '验收清单'], ['price_hint', '报价提示'], ['skill_tool', '可执行工具'],
+];
+
+/** KB-080~084 可复用单元：从子类蒸馏（排除条件与两个授权位必须明说），以及结果回流后的复核。 */
+function Units() {
+  const { client } = useApp();
+  const [review, setReview] = useState<ReusableUnit[]>([]);
+  const [clusterId, setClusterId] = useState('');
+  const [kind, setKind] = useState<ReusableUnitKind>('procedure');
+  const [exclusions, setExclusions] = useState('');
+  const [reuse, setReuse] = useState(true);
+  const [train, setTrain] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const load = useCallback(async () => {
+    const r = await client.adminKnowledgeUnits('needs_review').catch(() => []);
+    setReview(Array.isArray(r) ? r : []);
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+
+  async function act(fn: () => Promise<unknown>, ok: string) {
+    setError('');
+    setNotice('');
+    try {
+      await fn();
+      setNotice(ok);
+      await load();
+    } catch (e) {
+      setError(apiErrorText(e));
+    }
+  }
+
+  const excl = exclusions.split(/[\n；;]/).map((x) => x.trim()).filter(Boolean);
+  return (
+    <div style={{ marginTop: 16 }}>
+      <strong>可复用单元</strong>
+      <p className="muted">只从双方都同意经验复用的样本里提炼。排除条件必填——只说「适用于什么」的单元，会在不适用的场合被照样调用。</p>
+      {error && <p className="error">{error}</p>}
+      {notice && <p className="muted">{notice}</p>}
+      <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
+        <input value={clusterId} onChange={(e) => setClusterId(e.target.value)} placeholder="子类 ID" aria-label="从哪个子类蒸馏" />
+        <select value={kind} onChange={(e) => setKind(e.target.value as ReusableUnitKind)} aria-label="单元类型">
+          {KIND_OPTIONS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+        </select>
+        <label><input type="checkbox" checked={reuse} onChange={(e) => setReuse(e.target.checked)} /> 允许复用</label>
+        <label><input type="checkbox" checked={train} onChange={(e) => setTrain(e.target.checked)} /> 允许训练</label>
+      </div>
+      <textarea value={exclusions} onChange={(e) => setExclusions(e.target.value)} rows={2} style={{ width: '100%', marginTop: 6 }}
+                placeholder="排除条件，一行一条：什么情况下不该用这个单元" aria-label="排除条件" />
+      <button disabled={!Number(clusterId) || excl.length === 0} onClick={() => void act(
+        () => client.distillKnowledgeUnit(Number(clusterId), {
+          kind, exclusions: excl, reuse_license: reuse, train_license: train,
+          ...(kind === 'skill_tool' ? { tool: 'acceptance_report_draft' } : {}),
+        }),
+        `已从子类 #${clusterId} 蒸馏出一个单元`)}>蒸馏单元</button>
+
+      {review.length > 0 && (
+        <div className="list" style={{ marginTop: 8 }}>
+          <p><strong>待复核（{review.length}）</strong>：返工与失败过半，或有贡献者撤回了复用授权</p>
+          {review.map((u) => (
+            <div className="task-item" key={u.id} data-unit={u.id}>
+              <div>
+                <strong>{u.kind_label} · {u.title}</strong> v{u.version}
+                <p className="muted">
+                  用过 {u.validation.uses} 次：做成 {u.validation.closed}、返工 {u.validation.reworked}、失败 {u.validation.failed}
+                  · 剩余来源样本 {u.sample_count}
+                </p>
+              </div>
+              <span className="row">
+                <button className="ghost" onClick={() => {
+                  const note = prompt('改了什么？（重新启用会升版本、验证从头算）')?.trim() ?? '';
+                  if (note.length >= 4) void act(() => client.setKnowledgeUnitStatus(u.id, 'active', note), `单元 #${u.id} 已重新启用`);
+                }}>重新启用</button>
+                <button className="ghost" onClick={() => {
+                  const note = prompt('下线理由（记入审计）：')?.trim() ?? '';
+                  if (note.length >= 4) void act(() => client.setKnowledgeUnitStatus(u.id, 'retired', note), `单元 #${u.id} 已下线`);
+                }}>下线</button>
+              </span>
+            </div>
+          ))}
         </div>
       )}
     </div>

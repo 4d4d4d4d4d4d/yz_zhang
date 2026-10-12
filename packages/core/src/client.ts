@@ -37,6 +37,11 @@ import type {
   KnowledgeAdminOverview,
   KnowledgeCalibrationPair,
   KnowledgeCluster,
+  ExperienceToolDraft,
+  ReusableUnit,
+  ReusableUnitDetail,
+  ReusableUnitDistillInput,
+  ReusableUnitKind,
   KnowledgeClusterDetail,
   KnowledgeClusterList,
   KnowledgeThresholdView,
@@ -1646,6 +1651,42 @@ export class PlatformClient {
   }
   renameKnowledgeCluster(clusterId: number, label: string) {
     return this.request<KnowledgeCluster>('PATCH', `/admin/knowledge/clusters/${clusterId}`, { label });
+  }
+  // ---- KB-080~089 / AGT-080~083 可复用单元与经验工具（109 号 spec）----
+  /** KB-086 可复用单元检索：只列在用且有复用授权的。 */
+  knowledgeUnits(filter: { category?: string; kind?: ReusableUnitKind; cluster_id?: number; q?: string } = {}) {
+    const qs = new URLSearchParams();
+    if (filter.category) qs.set('category', filter.category);
+    if (filter.kind) qs.set('kind', filter.kind);
+    if (filter.cluster_id) qs.set('cluster_id', String(filter.cluster_id));
+    if (filter.q) qs.set('q', filter.q);
+    const tail = qs.toString();
+    return this.request<ReusableUnit[]>('GET', `/knowledge/units${tail ? `?${tail}` : ''}`);
+  }
+  /** 单元详情：内容、权限清单、贡献者（只列同意了复用的人）。 */
+  knowledgeUnit(unitId: number) {
+    return this.request<ReusableUnitDetail>('GET', `/knowledge/units/${unitId}`);
+  }
+  /** 运营：从子类蒸馏一个单元。排除条件与两个授权位必须明说。 */
+  distillKnowledgeUnit(clusterId: number, input: ReusableUnitDistillInput) {
+    return this.request<ReusableUnitDetail>('POST', `/admin/knowledge/clusters/${clusterId}/units`, input);
+  }
+  /** 运营：按状态列单元（默认待复核）。 */
+  adminKnowledgeUnits(status: 'active' | 'needs_review' | 'retired' = 'needs_review') {
+    return this.request<ReusableUnit[]>('GET', `/admin/knowledge/units?status=${status}`);
+  }
+  /** 运营：复核后重新启用（版本 +1、验证从头算）或下线。 */
+  setKnowledgeUnitStatus(unitId: number, status: 'active' | 'retired', note: string) {
+    return this.request<ReusableUnitDetail>('PATCH', `/admin/knowledge/units/${unitId}`, { status, note });
+  }
+  /** AGT-080 调用一个经验工具：产出只是草稿，不花钱、不签约、不发消息。 */
+  invokeExperienceTool(unitId: number, taskId: number) {
+    return this.request<ExperienceToolDraft>('POST', `/agent/tools/${unitId}/invoke`, { task_id: taskId });
+  }
+  /** AGT-083 丢弃一份工具草稿（只有调用者本人能丢）。 */
+  discardToolDraft(invocationId: number) {
+    return this.request<{ invocation_id: number; discarded: boolean }>('POST',
+      `/agent/tools/invocations/${invocationId}/discard`);
   }
   knowledgeCards(category?: string, limit = 20) {
     const q = category ? `?category=${encodeURIComponent(category)}&limit=${limit}` : `?limit=${limit}`;

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -78,6 +78,66 @@ class ClusterThreshold(Base):
     errors: Mapped[int] = mapped_column(Integer, default=0)
     calibrated_by: Mapped[int] = mapped_column(Integer)
     calibrated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ReusableUnit(Base):
+    """KB-080 可复用单元：从子类蒸馏出来、有契约的经验（109 号 spec，设计见 95 号）。
+
+    88 号对经验资产的四条要求逐条落成字段：有来源（cluster_id + sample_ids）、
+    有适用条件（applicability，**含排除条件**）、有验证结果（validation）、
+    有使用权限（scope + reuse_license / train_license 两个独立的位）。
+    """
+
+    __tablename__ = "reusable_units"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    cluster_id: Mapped[int] = mapped_column(Integer, index=True)
+    # price_hint / checklist / procedure / skill_tool —— 风险递增
+    kind: Mapped[str] = mapped_column(String(16), index=True)
+    title: Mapped[str] = mapped_column(String(120))
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    content: Mapped[dict] = mapped_column(JSON, default=dict)
+    # {category, cities, budget_min_cents, budget_max_cents, exclusions: [..]}
+    applicability: Mapped[dict] = mapped_column(JSON, default=dict)
+    sample_ids: Mapped[list] = mapped_column(JSON, default=list)
+    # {status: unvalidated/validated/needs_review, uses, closed, reworked, failed}
+    validation: Mapped[dict] = mapped_column(JSON, default=dict)
+    scope: Mapped[str] = mapped_column(String(12), default="platform")
+    reuse_license: Mapped[bool] = mapped_column(Boolean, default=False)
+    train_license: Mapped[bool] = mapped_column(Boolean, default=False)
+    # AGT-080 skill_tool 的声明：读什么、写什么、是否花钱、是否对外发消息
+    manifest: Mapped[dict] = mapped_column(JSON, default=dict)
+    est_cost_cents: Mapped[int] = mapped_column(Integer, default=0)
+    # active / needs_review / retired
+    status: Mapped[str] = mapped_column(String(14), default="active", index=True)
+    created_by: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class UnitInvocation(Base):
+    """KB-083 / AGT-082 每次调用留痕：谁、哪个单元的哪个版本、在什么场景、结果如何。"""
+
+    __tablename__ = "unit_invocations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    unit_id: Mapped[int] = mapped_column(Integer, index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    scenario: Mapped[str] = mapped_column(String(24))
+    caller_id: Mapped[int] = mapped_column(Integer, index=True)
+    task_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    input_summary: Mapped[str] = mapped_column(String(300), default="")
+    output: Mapped[dict] = mapped_column(JSON, default=dict)
+    cost_cents: Mapped[int] = mapped_column(Integer, default=0)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    # KB-084 结果回流：pending / closed / reworked / failed
+    outcome: Mapped[str] = mapped_column(String(10), default="pending", index=True)
+    # KB-085 这次调用的受益贡献者（调用当时已授权的人）
+    beneficiaries: Mapped[list] = mapped_column(JSON, default=list)
+    draft: Mapped[bool] = mapped_column(Boolean, default=False)
+    discarded: Mapped[bool] = mapped_column(Boolean, default=False)
+    # KB-089 来源被撤回：草稿不追回，但要标出来
+    source_revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class DecompositionTemplate(Base):

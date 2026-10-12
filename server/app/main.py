@@ -61,6 +61,9 @@ def create_app() -> FastAPI:
     from app.modules.task import events as task_events
 
     knowledge_service.register_event_handlers()
+    from app.modules.knowledge import units as knowledge_units
+
+    knowledge_units.register_event_handlers()
     decompose_service.register_event_handlers()
     im_service.register_event_handlers()
     notification_service.register_event_handlers()
@@ -108,6 +111,7 @@ def create_app() -> FastAPI:
     from app.modules.im.router import router as im_router
     from app.modules.im.router_social import router as social_router
     from app.modules.knowledge.router import admin_router as knowledge_admin_router
+    from app.modules.knowledge.router import tools_router as knowledge_tools_router
     from app.modules.knowledge.router import router as knowledge_router
     from app.modules.notification.router import router as notification_router
     from app.modules.orchestrator.router import router as orchestrator_router
@@ -128,6 +132,7 @@ def create_app() -> FastAPI:
         decompose_router,
         knowledge_router,
         knowledge_admin_router,
+        knowledge_tools_router,
         im_router,
         social_router,
         dispute_router,

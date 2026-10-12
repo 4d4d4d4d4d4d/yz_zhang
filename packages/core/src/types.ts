@@ -716,6 +716,9 @@ export interface AgreementStatus {
   current_version: string;
   documents: AgreementDocument[];
   sensitive_scopes: SensitiveScope[];
+  /** KB-080/089 经验的两种用途（复用 / 训练）：选择加入、各自独立、可撤回。
+   *  它们不是敏感个人信息，所以单列，不混进 sensitive_scopes。 */
+  data_use_scopes: SensitiveScope[];
   /** LAW-032 数据主体权利入口，前端据此渲染，避免「有能力但用户找不到」。 */
   rights: Record<string, string>;
 }
@@ -1295,6 +1298,86 @@ export interface KnowledgeThresholdView {
   labeled_pairs: number;
   errors: number;
   calibrated_at: string | null;
+}
+
+// ---- KB-080~089 / AGT-080~083 经验变成能被调用的单元（109 号 spec）----
+export type ReusableUnitKind = 'price_hint' | 'checklist' | 'procedure' | 'skill_tool';
+
+/** 适用条件：**排除条件必填**——只说「适用于什么」的单元，会在不适用的场合被照样调用。 */
+export interface ReusableUnitApplicability {
+  category: string;
+  cities: string[];
+  budget_min_cents: number | null;
+  budget_max_cents: number | null;
+  exclusions: string[];
+}
+
+/** 验证状态：每次使用的结果（闭环 / 返工 / 失败）回流到这里（KB-084）。 */
+export interface ReusableUnitValidation {
+  status: 'unvalidated' | 'validated' | 'needs_review';
+  uses: number;
+  closed: number;
+  reworked: number;
+  failed: number;
+}
+
+/** 一个可复用单元：从子类蒸馏出来，带来源、适用与排除条件、验证状态、两个独立授权位。 */
+export interface ReusableUnit {
+  id: number;
+  cluster_id: number;
+  kind: ReusableUnitKind;
+  kind_label: string;
+  title: string;
+  version: number;
+  status: 'active' | 'needs_review' | 'retired';
+  applicability: ReusableUnitApplicability;
+  validation: ReusableUnitValidation;
+  /** 来源样本数：只算双方都同意经验复用的那几单 */
+  sample_count: number;
+  scope: 'private' | 'project' | 'platform';
+  /** KB-086 复用授权与训练授权是两回事，各自独立 */
+  reuse_license: boolean;
+  train_license: boolean;
+  created_at: string | null;
+}
+
+export interface ReusableUnitContributor {
+  user_id: number;
+  nickname: string;
+}
+
+export interface ReusableUnitDetail extends ReusableUnit {
+  /** 随类型不同：报价提示是分布，验收清单是条目，分解流程是步骤，工具是工具名与清单 */
+  content: Record<string, unknown>;
+  /** 可执行工具的权限清单：读什么、写什么、花不花钱、发不发消息（AGT-081） */
+  manifest: Record<string, unknown>;
+  est_cost_cents: number;
+  /** KB-085 贡献者：只列同意了经验复用的人 */
+  contributors: ReusableUnitContributor[];
+}
+
+/** AGT-083 经验工具的产出：**只是草稿**，带「未经人工确认」标签，可丢弃。 */
+export interface ExperienceToolDraft {
+  invocation_id: number;
+  draft: boolean;
+  label: string;
+  text: string;
+  exclusions: string[];
+  /** 这次调用受益的贡献者人数 */
+  contributors: number;
+}
+
+export interface ReusableUnitDistillInput {
+  kind: ReusableUnitKind;
+  title?: string;
+  cities?: string[];
+  budget_min_cents?: number | null;
+  budget_max_cents?: number | null;
+  exclusions: string[];
+  scope?: 'private' | 'project' | 'platform';
+  reuse_license: boolean;
+  train_license: boolean;
+  tool?: string;
 }
 
 export interface KnowledgeThresholdRow extends KnowledgeThresholdView {

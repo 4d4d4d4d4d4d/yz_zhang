@@ -293,7 +293,8 @@ def expand(db: Session, task, nodes: list[dict], targets: list[int] | None,
     nodes = [dict(n) for n in nodes]
     facts = _Facts(db)
     root = {"title": task.title, "description": task.description,
-            "category": task.category, "budget_cents": task.budget_cents}
+            "category": task.category, "budget_cents": task.budget_cents,
+            "city": task.city or "", "task_id": task.id, "creator_id": task.creator_id}
     report = {"expanded": [], "stopped": [], "blocked": []}
     uses_model = bool(getattr(gateway, "uses_model", False))
 

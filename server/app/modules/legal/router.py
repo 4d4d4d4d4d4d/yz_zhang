@@ -68,6 +68,12 @@ def _apply_revocation(db: Session, user_id: int, scope: str) -> list[str]:
     PIPL 也把「法律法规另有规定」列为删除权的例外。
     """
     applied: list[str] = []
+    if scope == "experience_reuse":
+        # KB-089 撤回要真的改变统计与单元状态，不是只在表里改个位
+        from app.modules.knowledge import units
+
+        applied += units.on_reuse_revoked(db, user_id)
+        return applied
     if scope == "payment":
         from app.modules.wallet.models import PayoutAccount
 

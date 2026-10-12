@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
 import { DisputePanel } from '../DisputePanel';
+import { ExperienceTools } from '../ExperienceUnits';
 import PhotoPicker from '../PhotoPicker';
 import { useApp } from '../store';
 
@@ -153,6 +154,9 @@ export default function TaskDetail() {
       {/* CLI-063 AI 助理面板：邀请、执行、交付闸门与人工核验入口。
           V73/V74 把服务端做完了，网页上此前一个入口都没有。 */}
       {isCreator && <AgentPanel task={task} onChanged={() => void load()} />}
+
+      {/* AGT-080~083 经验工具：双方都能用，只出草稿（109 号 spec） */}
+      {(isCreator || isExecutor) && <ExperienceTools task={task} />}
 
       {/* AI-DEC-041 项目型草稿还没拆完：回到拆解页接着拆（106 号 spec） */}
       {isCreator && task.task_type === 'project' && task.parent_id === null && task.status === 'draft'

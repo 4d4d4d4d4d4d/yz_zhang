@@ -131,6 +131,12 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
     (r"^\w+ /developer/", "self",
      "API Key 与 Webhook 属于创建它的开发者本人"),
     # ---- 社交与内容：公开的那部分与自己的那部分 ----
+    (r"^GET /knowledge/units/", "public",
+     "可复用单元是公开给别人看的聚合结论：只列在用且有复用授权的，贡献者只列同意了复用的人（KB-085）"),
+    (r"^POST /agent/tools/[^/]+/invoke$", "party",
+     "经验工具只能对自己是发布方或执行方的任务调用：草稿读的是这一单的内容（AGT-080）"),
+    (r"^POST /agent/tools/invocations/", "self",
+     "工具草稿只有调用者本人能丢弃（AGT-083）"),
     (r"^GET /knowledge/clusters/", "public",
      "子类是可以公开给别人看的聚合结论（分布、共识与分歧）：个案证据被过滤掉、要双方授权才展示（KB-002），"
      "只出现在一个任务里的步骤文字也不可见（k-匿名，test_knowledge_clusters）"),

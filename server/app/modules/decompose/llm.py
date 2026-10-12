@@ -69,6 +69,25 @@ class TemplateLLM:
         if ctx["depth"] != 1:
             return {"children": [], "source": "template", "fallback": False, "model_call": False}
         root = ctx["root"]
+        # KB-080/083（V135）先看有没有适用的「分解流程」单元：有就用它，并记一次使用——
+        # 这一单的结果会回流到这个单元的验证状态（KB-084）
+        from app.modules.knowledge import units as kb_units
+
+        unit = kb_units.best_procedure(db, root["category"], root.get("city", ""), root["budget_cents"])
+        if unit is not None:
+            kb_units.record_use(db, unit, "decompose", root.get("creator_id") or 0, root.get("task_id"),
+                                summary=f"分解《{root['title']}》的第一层")
+            return {
+                "children": [{
+                    "title": st["title"], "description": st["title"], "required_skills": [],
+                    "budget_ratio_bps": int(st.get("budget_ratio_bps", 0)),
+                    "depends_on_idx": list(st.get("depends_on", [])),
+                    "deliverable": st.get("deliverable", ""), "acceptance": st.get("acceptance", ""),
+                    "single_owner": True, "category": "", "executor_hint": "",
+                } for st in unit.content.get("steps", [])],
+                "source": f"experience_unit:{unit.id}@v{unit.version}",
+                "fallback": False, "model_call": False,
+            }
         tpl = kb.find_template(db, root["category"], root["title"] + " " + root["description"])
         items = tpl["items"] if tpl else self.GENERIC_ITEMS
         return {

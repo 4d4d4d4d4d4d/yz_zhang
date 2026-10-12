@@ -1,6 +1,7 @@
 import { apiErrorText, formatDate, type KnowledgeCluster, type KnowledgeClusterDetail, type KnowledgeClusterList, type KnowledgeOutcome } from '@platform/core';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ClusterUnits } from '../ExperienceUnits';
 import { useApp } from '../store';
 
 type Ask = Awaited<ReturnType<ReturnType<typeof useApp>['client']['legalAsk']>>;
@@ -177,6 +178,8 @@ function Subclasses() {
             </>
           )}
           <p className="muted">{detail.evidence.note}</p>
+          {/* KB-086 从这个子类蒸馏出来、可以直接拿去用的单元（109 号 spec） */}
+          <ClusterUnits clusterId={detail.id} />
         </div>
       )}
     </div>

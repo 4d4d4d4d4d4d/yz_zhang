@@ -1,8 +1,8 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 2026-10-12：V134 经验按子类生长；V133 任务拆解进 App；V132 任务拆解变成逐层展开、说清谁能闭环的树；V131 写操作在响应发出之前提交（FastAPI yield 依赖的作用域）；V130 幂等键真的护住钱（并发同键、过期、两端发键；Postgres 上实测）；V129 前端测试计数与结构计数进闸门（上线手册的 job 数是错的）；V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
+> 2026-10-12：V135 经验变成能被调用的单元与工具；V134 经验按子类生长；V133 任务拆解进 App；V132 任务拆解变成逐层展开、说清谁能闭环的树；V131 写操作在响应发出之前提交（FastAPI yield 依赖的作用域）；V130 幂等键真的护住钱（并发同键、过期、两端发键；Postgres 上实测）；V129 前端测试计数与结构计数进闸门（上线手册的 job 数是错的）；V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
 > 2026-10-09：V119 法定权利入口进 App；V118 单聊并发分叉修复；V117 关注幂等化并接到空间；V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
-> 后端 1433 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
+> 后端 1454 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
 > （真 Chromium × 构建产物 × 真服务端，18 项）。
@@ -15,6 +15,21 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V135 批次：经验变成能被调用的单元与工具）
+
+> 模块 spec：[109-experience-units-and-tools.md](109-experience-units-and-tools.md)（设计见 95 号）
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **KB-080 蒸馏门槛** | 排除条件必填、两个授权位必须明说、来源只取双方都同意复用的样本；四种类型各自的拒绝条件 | `test_experience_units::test_kb080a_*`（两条）、`::test_price_hint_needs_enough_samples` |
+| **KB-083 分解在用、使用留痕** | 逐层拆解第一层先用适用的流程单元，`source` 带单元与版本，记一次使用 | `::test_kb083_*` |
+| **KB-084 结果回流** | 结项结算使用记录；坏结果过半转复核、不再被拿去拆解；重新启用升版本 | `::test_kb084_*`（两条）、`::test_reactivate_*` |
+| **KB-085 贡献归因** | 只列同意了复用的人；每次使用记受益贡献者 | `::test_kb080a_only_samples_where_both_parties_consented_are_sources` |
+| **KB-086/087 检索与详情** | 只列在用且有复用授权的；复用与训练授权独立 | `::test_reuse_and_train_licenses_are_independent`、`::test_only_platform_scope_until_units_have_an_owner`、`::test_unit_responses_match_the_sdk_declarations` |
+| **AGT-080~083 经验工具** | 只对双方、只出草稿、可丢弃（只有本人）、不适用 / 超预算 / 退化模式拒绝；代码不碰钱（AST） | `::test_agt083_*`、`::test_tool_guards`、`::test_tools_are_off_in_degraded_mode`、`::test_agt081_*` |
+| **KB-089 撤回穿透** | 样本退出子类并重算、单元转复核、草稿标来源已撤回；没同意过的人也能退出 | `::test_kb089_*`（两条）、`::test_consent_status_lists_the_two_data_uses_separately` |
+| **两端与运营台** | 子类下的单元、任务详情起草、授权页单列两种用途；蒸馏与复核 | `ExperienceUnits.test.tsx`、`experience.test.tsx` |
 
 ## 已实现（V134 批次：经验按子类生长）
 

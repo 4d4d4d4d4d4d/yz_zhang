@@ -7,6 +7,7 @@ import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DecomposeScreen, TaskTreeBlock } from './decompose';
 import { DiscoverScreen } from './Discover';
+import { ExperienceToolsBlock } from './experience';
 import { MessagesScreen } from './MessagesAndInvites';
 import { MySpaceScreen, PublicSpaceScreen, SpacesDiscoverScreen } from './spaces';
 import { SearchScreen } from './search';
@@ -423,6 +424,10 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
         </TouchableOpacity>
       )}
       {isProjectRoot && onOpenTask && <TaskTreeBlock client={client} task={task} onOpenTask={onOpenTask} />}
+      {/* AGT-080~083 经验工具：双方都能用，只出草稿（109 号 spec） */}
+      {meId !== null && (meId === task.creator_id || meId === task.executor_id) && (
+        <ExperienceToolsBlock client={client} task={task} />
+      )}
       <Text style={styles.mutedLeft}>
         {task.category} · {TASK_STATUS_LABEL[task.status]} · {fmtYuan(task.budget_cents)}
       </Text>

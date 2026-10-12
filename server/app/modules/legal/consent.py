@@ -34,6 +34,16 @@ SENSITIVE_SCOPES = {
 }
 
 
+# KB-080/089（V135，109 号 spec）经验的两种用途，**两份独立的同意**（95 号第 6 节：
+# 检索复用与模型训练分别授权）。它们不是 PIPL 意义上的敏感个人信息，所以单列；
+# 都是**选择加入**：不同意也照常用平台，只是你的经验不作为可复用单元的来源、你不被署名。
+DATA_USE_SCOPES = {
+    "experience_reuse": "把你参与的、已闭环任务的脱敏经验作为平台可复用单元（报价提示、验收清单、"
+                        "分解流程）的来源，并在单元上署名为贡献者",
+    "experience_train": "把你参与的、已闭环任务的脱敏经验用于训练平台的模型（与上一项是两份独立的同意）",
+}
+
+
 class UserConsent(Base):
     """一条同意记录：谁、何时、对哪份文书/哪个敏感项、基于哪个版本。
 
@@ -85,6 +95,8 @@ def grant(db, user_id: int, scope: str, notice: str = "") -> UserConsent | None:
 def _default_notice(scope: str) -> str:
     if scope in SENSITIVE_SCOPES:
         return f"处理{SENSITIVE_SCOPES[scope]}，用于上述目的，可随时撤回。"
+    if scope in DATA_USE_SCOPES:
+        return f"同意{DATA_USE_SCOPES[scope]}，可随时撤回。"
     return f"同意《{DOCUMENTS.get(scope, scope)}》（版本 {current_version()}）。"
 
 
@@ -185,8 +197,8 @@ def accept_documents(db, user_id: int) -> dict:
 
 
 def grant_sensitive(db, user_id: int, scope: str) -> dict:
-    """LAW-031/032 用户在设置页显式（重新）授权某个敏感项。"""
-    if scope not in SENSITIVE_SCOPES:
+    """LAW-031/032 用户在设置页显式（重新）授权某个敏感项（或经验用途项）。"""
+    if scope not in SENSITIVE_SCOPES and scope not in DATA_USE_SCOPES:
         raise bad_request(f"未知的敏感信息范围 {scope}", "invalid_scope")
     grant(db, user_id, scope)
     return {"scope": scope, "granted": True, "version": current_version()}
@@ -203,7 +215,7 @@ def revoke(db, user_id: int, scope: str) -> dict:
             "撤回基础协议等同于终止服务关系，请使用账号注销功能（会先校验无未结资金与纠纷）",
             "use_account_deactivation",
         )
-    if scope not in SENSITIVE_SCOPES:
+    if scope not in SENSITIVE_SCOPES and scope not in DATA_USE_SCOPES:
         raise bad_request(f"未知的同意项 {scope}", "invalid_scope")
     rows = (
         db.query(UserConsent)
@@ -211,9 +223,16 @@ def revoke(db, user_id: int, scope: str) -> dict:
                 UserConsent.revoked_at.is_(None))
         .all()
     )
+    now = utcnow()
+    if not rows and scope == "experience_reuse":
+        # KB-089 从没同意过的人也要能「退出经验统计」：留一条当场撤回的记录作凭据，
+        # 后果照常执行（他的样本退出子类统计）
+        db.add(UserConsent(user_id=user_id, scope=scope, version=current_version(),
+                           notice="退出经验统计", granted_at=now, revoked_at=now))
+        db.flush()
+        return {"scope": scope, "revoked": True, "effect": _revocation_effect(scope)}
     if not rows:
         raise conflict("尚未同意该项，无需撤回", "not_consented")
-    now = utcnow()
     for row in rows:
         row.revoked_at = now
         db.add(row)
@@ -230,6 +249,9 @@ def _revocation_effect(scope: str) -> str:
                     "可手动选择城市浏览；已结束任务的坐标会被清空，"
                     "进行中/纠纷中任务的打卡坐标依法保留至争议解决完毕。",
         "payment": "撤回后无法提现与收款；已绑定的收款账户将被解绑。",
+        "experience_reuse": "撤回后：你参与的闭环经验退出子类统计；以它们为来源的可复用单元转为待复核；"
+                            "已经生成的草稿不追回，但会标出来源已撤回。不影响你正常使用平台。",
+        "experience_train": "撤回后：你参与的闭环经验不再进入任何训练数据。不影响你正常使用平台。",
     }[scope]
 
 
@@ -256,10 +278,20 @@ def status(db, user_id: int) -> dict:
          "revocation_effect": _revocation_effect(k)}
         for k, purpose in SENSITIVE_SCOPES.items()
     ]
+    data_use = [
+        {"key": k, "purpose": purpose,
+         "granted": k in by_scope,
+         "granted_at": iso(by_scope[k].granted_at) if k in by_scope else None,
+         "revocable": True,
+         "revocation_effect": _revocation_effect(k)}
+        for k, purpose in DATA_USE_SCOPES.items()
+    ]
     return {
         "current_version": version,
         "documents": documents,
         "sensitive_scopes": sensitive,
+        # KB-080/089 经验的两种用途：选择加入，各自独立
+        "data_use_scopes": data_use,
         # LAW-032 数据主体权利入口（前端据此渲染，避免「有能力但用户找不到」）
         "rights": {
             "access": "GET /api/v1/users/me",

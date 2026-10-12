@@ -74,6 +74,12 @@ class Settings:
         os.environ.get("PLATFORM_DECOMPOSE_AI_CLOSABLE_MIN_RUNS", "3"))
     # KB-073 子类样本少于它：标「样本过少，仅供参考」，且不出参考价（108 号 spec）
     KB_CLUSTER_MIN_SAMPLES = int(os.environ.get("PLATFORM_KB_CLUSTER_MIN_SAMPLES", "5"))
+    # KB-084 单元用够这么多次才判「验证通过」或「待复核」（返工与失败过半 → 待复核）
+    KB_UNIT_REVIEW_MIN_USES = int(os.environ.get("PLATFORM_KB_UNIT_REVIEW_MIN_USES", "4"))
+    # 95 号第 6 节 成本可控：一次工具调用的预估成本上限；超了拒绝并升级给人。
+    # 内置的验收报告草稿是模板填充，成本 0；接模型的工具要在这里留出空间
+    KB_TOOL_COST_CENTS = int(os.environ.get("PLATFORM_KB_TOOL_COST_CENTS", "0"))
+    KB_TOOL_MAX_COST_CENTS = int(os.environ.get("PLATFORM_KB_TOOL_MAX_COST_CENTS", "100"))
     # FIN-071 幂等记录保留多久（104 号 spec）。24 小时是 Stripe 的语义：
     # 两端在「这一次操作」得到确定结果之前一直用同一个键重试，之后换新键——
     # 重试发生在几秒到几分钟内，不会跨天。过期判断在读的时候就生效。
@@ -137,7 +143,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.124.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.125.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

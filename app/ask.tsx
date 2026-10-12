@@ -19,6 +19,7 @@ import {
 } from '@platform/core';
 import { useCallback, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ClusterUnitsBlock } from './experience';
 
 type AskResult = Awaited<ReturnType<PlatformClient['legalAsk']>>;
 type Card = Awaited<ReturnType<PlatformClient['knowledgeCards']>>[number];
@@ -167,6 +168,8 @@ export function SubclassesBlock({ client }: { client: PlatformClient }) {
             </>
           )}
           <Text style={styles.muted}>{detail.evidence.note}</Text>
+          {/* KB-086 从这个子类蒸馏出来、可以直接拿去用的单元（109 号 spec） */}
+          <ClusterUnitsBlock client={client} clusterId={detail.id} />
         </View>
       )}
     </View>

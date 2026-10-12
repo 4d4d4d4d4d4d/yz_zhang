@@ -79,6 +79,41 @@ export function RightsScreen({ client }: { client: PlatformClient }) {
     }
   }
 
+
+  const scopeCard = (scope: SensitiveScope) => (
+    <View key={scope.key} style={s.card}>
+      <Text style={s.cardTitle}>{scope.purpose}</Text>
+      <Text style={s.muted}>
+        {scope.granted ? '已授权' : '未授权'}
+        {scope.granted_at ? ` · ${scope.granted_at.slice(0, 10)}` : ''}
+      </Text>
+      {/* 撤回后会失去什么，必须在他点撤回**之前**就在屏幕上
+          （`revocation_effect` 的类型注释写着这条）。 */}
+      {scope.granted && !!scope.revocation_effect && (
+        <Text style={s.muted}>撤回后：{scope.revocation_effect}</Text>
+      )}
+      {!scope.revocable && scope.granted && (
+        <Text style={s.muted}>这一项是履约必需，无法单独撤回。</Text>
+      )}
+      {confirming === scope.key ? (
+        <View style={s.row}>
+          {/* 两步确认：撤回会连带停掉实名与资金动作（LAW-031），
+              而手机上误触一下的代价是账号立刻不能接单、不能提现。 */}
+          <Button title={busy ? '处理中…' : '确认撤回'} disabled={busy}
+                  onPress={() => void setConsent(scope, false)} />
+          <TouchableOpacity onPress={() => setConfirming(null)}>
+            <Text style={s.link}>不撤回</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <Button
+          title={scope.granted ? '撤回同意' : '授权'}
+          disabled={busy || (scope.granted && !scope.revocable)}
+          onPress={() => (scope.granted ? setConfirming(scope.key) : void setConsent(scope, true))}
+        />
+      )}
+    </View>
+  );
   return (
     <View style={{ gap: 12 }}>
       {/* ---------- TAX-021 代扣明细 ---------- */}
@@ -106,40 +141,16 @@ export function RightsScreen({ client }: { client: PlatformClient }) {
 
       {/* ---------- LAW-031 单独同意 ---------- */}
       <Text style={s.cardTitle}>单独同意项</Text>
-      {agreements?.sensitive_scopes.map((scope) => (
-        <View key={scope.key} style={s.card}>
-          <Text style={s.cardTitle}>{scope.purpose}</Text>
-          <Text style={s.muted}>
-            {scope.granted ? '已授权' : '未授权'}
-            {scope.granted_at ? ` · ${scope.granted_at.slice(0, 10)}` : ''}
-          </Text>
-          {/* 撤回后会失去什么，必须在他点撤回**之前**就在屏幕上
-              （`revocation_effect` 的类型注释写着这条）。 */}
-          {scope.granted && !!scope.revocation_effect && (
-            <Text style={s.muted}>撤回后：{scope.revocation_effect}</Text>
-          )}
-          {!scope.revocable && scope.granted && (
-            <Text style={s.muted}>这一项是履约必需，无法单独撤回。</Text>
-          )}
-          {confirming === scope.key ? (
-            <View style={s.row}>
-              {/* 两步确认：撤回会连带停掉实名与资金动作（LAW-031），
-                  而手机上误触一下的代价是账号立刻不能接单、不能提现。 */}
-              <Button title={busy ? '处理中…' : '确认撤回'} disabled={busy}
-                      onPress={() => void setConsent(scope, false)} />
-              <TouchableOpacity onPress={() => setConfirming(null)}>
-                <Text style={s.link}>不撤回</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <Button
-              title={scope.granted ? '撤回同意' : '授权'}
-              disabled={busy || (scope.granted && !scope.revocable)}
-              onPress={() => (scope.granted ? setConfirming(scope.key) : void setConsent(scope, true))}
-            />
-          )}
-        </View>
-      ))}
+      {agreements?.sensitive_scopes.map(scopeCard)}
+
+      {/* ---------- KB-080/089 经验的两种用途：选择加入、各自独立 ---------- */}
+      {Array.isArray(agreements?.data_use_scopes) && agreements.data_use_scopes.length > 0 && (
+        <>
+          <Text style={s.cardTitle}>你参与的任务，能不能成为平台经验</Text>
+          <Text style={s.muted}>只有双方都同意的那一单，才会被提炼成别人可复用的经验；同意复用不等于同意训练。</Text>
+          {agreements.data_use_scopes.map(scopeCard)}
+        </>
+      )}
 
       {/* ---------- LAW-032 数据主体权利 ---------- */}
       <Text style={s.cardTitle}>我的数据权利</Text>

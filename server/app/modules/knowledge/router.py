@@ -13,6 +13,8 @@ from . import service
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 # KB-070~076 子类的运营面（待定区、阈值标定、撤回、合并、改名）
 admin_router = APIRouter(prefix="/admin/knowledge", tags=["knowledge-admin"])
+# KB-088 / AGT-080~083 经验工具的调用（产出草稿；Agent 侧动作，不是谁都能点的按钮）
+tools_router = APIRouter(prefix="/agent/tools", tags=["experience-tools"])
 
 
 @router.get("/price-reference")
@@ -323,3 +325,179 @@ def admin_rename(cluster_id: int, body: RenameIn, admin: User = Depends(require_
     old, row.label = row.label, body.label.strip()
     _audit(db, admin, "kb_rename", "knowledge_cluster", cluster_id, f"「{old}」→「{row.label}」")
     return clusters.view(db, row)
+
+
+# ====================================================================== KB-080~089 可复用单元
+@router.get("/units")
+def list_units(category: str | None = Query(default=None, max_length=50),
+               kind: str | None = Query(default=None, pattern="^(price_hint|checklist|procedure|skill_tool)$"),
+               cluster_id: int | None = Query(default=None, ge=1),
+               q: str = Query(default="", max_length=100),
+               db: Session = Depends(get_db, scope="function")):
+    """KB-086 可复用单元检索。只列**可用**的（在用、且有复用授权）；每个都带适用与排除条件、验证状态。"""
+    from . import units
+    from .models import ReusableUnit
+
+    query = db.query(ReusableUnit).filter(ReusableUnit.status == "active", ReusableUnit.reuse_license.is_(True))
+    if kind:
+        query = query.filter(ReusableUnit.kind == kind)
+    if cluster_id:
+        query = query.filter(ReusableUnit.cluster_id == cluster_id)
+    rows = [u for u in query.order_by(ReusableUnit.id.desc()).limit(100).all()
+            if (not category or (u.applicability or {}).get("category") == category)
+            and (not q.strip() or q.strip() in u.title)]
+    return [units.view(db, u) for u in rows[:50]]
+
+
+@router.get("/units/{unit_id}")
+def unit_detail(unit_id: int, db: Session = Depends(get_db, scope="function")):
+    """KB-087 单元详情：内容、适用与排除条件、验证结果、样本量、贡献者（只列同意了的人）。
+
+    待复核、已停用的单元也读得到（状态写在里面）：用过它的人要能回来看它现在怎样了。
+    **没有复用授权的单元不对外**：读它的内容就是在复用它，训练授权替代不了（KB-086）。
+    """
+    from . import units
+    from .models import ReusableUnit
+
+    row = db.get(ReusableUnit, unit_id)
+    if row is None or not row.reuse_license:
+        raise not_found("单元不存在")
+    return units.view(db, row, detail=True)
+
+
+class DistillIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: str = Field(pattern="^(price_hint|checklist|procedure|skill_tool)$")
+    title: str = Field(default="", max_length=120)
+    cities: list[str] = Field(default_factory=list, max_length=50)
+    budget_min_cents: int | None = Field(default=None, ge=0)
+    budget_max_cents: int | None = Field(default=None, ge=0)
+    exclusions: list[str] = Field(default_factory=list, max_length=20)
+    scope: str = Field(default="platform", pattern="^(private|project|platform)$")
+    reuse_license: bool
+    train_license: bool
+    tool: str = Field(default="", max_length=40)
+    steps: list[dict] | None = Field(default=None, max_length=30)
+
+
+@admin_router.post("/clusters/{cluster_id}/units", status_code=201)
+def admin_distill(cluster_id: int, body: DistillIn, admin: User = Depends(require_admin),
+                  db: Session = Depends(get_db, scope="function")):
+    """KB-080 从子类蒸馏一个可复用单元（第一版由运营确认生成，不做自动蒸馏——95 号第 8 节）。"""
+    from . import units
+
+    u = units.distill(
+        db, cluster_id, body.kind, body.title,
+        {"cities": body.cities, "budget_min_cents": body.budget_min_cents,
+         "budget_max_cents": body.budget_max_cents, "exclusions": body.exclusions},
+        body.scope, body.reuse_license, body.train_license, admin.id, body.tool,
+        {"steps": body.steps} if body.steps else None)
+    _audit(db, admin, "kb_unit_create", "reusable_unit", u.id,
+           f"{u.kind}「{u.title}」来自子类 {cluster_id}，{len(u.sample_ids)} 个已授权样本")
+    return units.view(db, u, detail=True)
+
+
+@admin_router.get("/units")
+def admin_units(status: str = Query(default="needs_review", pattern="^(active|needs_review|retired)$"),
+                admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+    """KB-084 待复核的单元（返工与失败过半、或贡献者撤回了授权）。"""
+    from . import units
+    from .models import ReusableUnit
+
+    rows = db.query(ReusableUnit).filter(ReusableUnit.status == status).order_by(ReusableUnit.id).limit(200).all()
+    return [units.view(db, u) for u in rows]
+
+
+class UnitStatusIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: str = Field(pattern="^(active|retired)$")
+    note: str = Field(min_length=4, max_length=300)
+
+
+@admin_router.patch("/units/{unit_id}")
+def admin_unit_status(unit_id: int, body: UnitStatusIn, admin: User = Depends(require_admin),
+                      db: Session = Depends(get_db, scope="function")):
+    """复核后重新启用（**版本号 +1、验证从头算**：复核前的结果属于上一版）或停用。"""
+    from . import units
+    from .models import ReusableUnit
+
+    u = db.get(ReusableUnit, unit_id)
+    if u is None:
+        raise not_found("单元不存在")
+    if body.status == "active":
+        if not u.sample_ids:
+            raise bad_request("来源样本已全部撤回，不能重新启用", "unit_no_consented_source")
+        u.version += 1
+        u.validation = {"status": "unvalidated", "uses": 0, "closed": 0, "reworked": 0, "failed": 0}
+    u.status = body.status
+    _audit(db, admin, "kb_unit_status", "reusable_unit", unit_id, f"{body.status}：{body.note}")
+    return units.view(db, u, detail=True)
+
+
+class InvokeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    task_id: int = Field(ge=1)
+
+
+@tools_router.post("/{unit_id}/invoke")
+def invoke_tool(unit_id: int, body: InvokeIn, user: User = Depends(get_current_user),
+                db: Session = Depends(get_db, scope="function")):
+    """KB-088 调用一个 skill_tool。产出一律是**草稿**（AGT-083），留痕（AGT-082），不碰钱（AGT-081）。"""
+    import time
+
+    from app.core.errors import conflict, forbidden
+    from app.modules.task.models import Task
+
+    from . import clusters, tools, units
+    from .models import ReusableUnit
+
+    unit = db.get(ReusableUnit, unit_id)
+    if unit is None or unit.kind != "skill_tool":
+        raise not_found("没有这个经验工具")
+    if not units.usable(unit):
+        raise conflict("这个经验工具在复核中或已停用，暂不可用", "tool_unavailable")
+    _, semantic = clusters._provider_state()
+    if not semantic:
+        # 95 号第 6 节：退化态下只读单元可用，可执行的不行
+        raise conflict("当前经验检索不是语义模型，可执行的经验工具暂停使用", "tool_degraded")
+    if unit.est_cost_cents > settings_max_cost():
+        raise conflict("这次调用的预估成本超过上限，没有执行；请改为人工处理", "tool_over_budget")
+    task = db.get(Task, body.task_id)
+    if task is None:
+        raise not_found("任务不存在")
+    if user.id not in (task.creator_id, task.executor_id):
+        raise forbidden("只有这一单的双方能用经验工具处理它")
+    if not units.applies_to(unit, task.category, task.city or "", task.budget_cents):
+        raise conflict("这个经验工具不适用于这一单（类目、城市或预算不在它的适用范围内）", "tool_not_applicable")
+    started = time.monotonic()
+    out = tools.RUNNERS[unit.content["tool"]](unit, task)
+    inv = units.record_use(db, unit, "agent_tool", user.id, task.id,
+                           summary=f"《{task.title}》", output=out, draft=True,
+                           cost_cents=unit.est_cost_cents,
+                           duration_ms=int((time.monotonic() - started) * 1000))
+    return {"invocation_id": inv.id, "draft": True, "label": out["label"], "text": out["text"],
+            "exclusions": (unit.applicability or {}).get("exclusions", []),
+            "contributors": len(inv.beneficiaries)}
+
+
+def settings_max_cost() -> int:
+    from app.core.config import settings
+
+    return settings.KB_TOOL_MAX_COST_CENTS
+
+
+@tools_router.post("/invocations/{invocation_id}/discard")
+def discard_draft(invocation_id: int, user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db, scope="function")):
+    """AGT-083 草稿一键丢弃（只有调用它的人能丢）。丢弃也是结果：留着记录，标为已丢弃。"""
+    from app.core.errors import forbidden
+
+    from .models import UnitInvocation
+
+    inv = db.get(UnitInvocation, invocation_id)
+    if inv is None:
+        raise not_found("没有这条草稿")
+    if inv.caller_id != user.id:
+        raise forbidden("只有生成它的人能丢弃")
+    inv.discarded = True
+    return {"invocation_id": inv.id, "discarded": True}
