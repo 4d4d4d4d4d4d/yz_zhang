@@ -55,7 +55,17 @@ jobs:
       # 规则只开「会红在真问题上」的那些——一个满口风格警告的 lint 会被人
       # 用 --quiet 绕过，那比没有 lint 更糟（它让人以为有人在看）。
       - run: npm run lint
-      - run: npm test
+      # DOC-011 测试框架自己把真实结果写成 JSON，下一步拿它与文档里手抄的计数比。
+      # 按工作区分开跑而不是根上的 `npm test`：两个工作区写同一个文件会互相覆盖。
+      # 新加的工作区必须加在这里——回归里有一条核对（test_doc_counts）。
+      - name: 共享 SDK 与 Web 单元测试
+        run: |
+          mkdir -p "$RUNNER_TEMP/counts"
+          npm test -w packages/core -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/counts/core.json"
+          npm test -w web -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/counts/web.json"
+      - name: 文档里的 SDK / Web 测试计数与真实结果一致（DOC-011）
+        working-directory: server
+        run: python3 -m scripts.check_frontend_counts --dir "$RUNNER_TEMP/counts" core web
       - run: npm run build:web
       # 解析闸门（V70 建）。真正的类型检查在下面的 app-typecheck job 里——
       # 这一道留着是因为它几乎零成本，且在依赖装不上时仍然能挡语法错误。
@@ -99,7 +109,13 @@ jobs:
       # 全靠 Python 扫描闸门 + 共享 SDK 类型覆盖——那两样挡得住「入口不存在」，
       # 挡不住「入口在、按下去做错事」：调错方法、把服务端算好的话吞掉、
       # 自己重写一遍服务端的判断。这一步跑的就是那些。
-      - run: npm test
+      - name: App 单元测试
+        run: |
+          mkdir -p "$RUNNER_TEMP/counts"
+          npm test -- --json --outputFile="$RUNNER_TEMP/counts/app.json"
+      - name: 文档里的 App 测试计数与真实结果一致（DOC-011）
+        working-directory: server
+        run: python3 -m scripts.check_frontend_counts --dir "$RUNNER_TEMP/counts" app
 
   web-e2e:
     name: 真浏览器联调（E2E-010：前端真的连得上后端）

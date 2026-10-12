@@ -1,8 +1,8 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 2026-10-12：V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
+> 2026-10-12：V129 前端测试计数与结构计数进闸门（上线手册的 job 数是错的）；V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
 > 2026-10-09：V119 法定权利入口进 App；V118 单聊并发分叉修复；V117 关注幂等化并接到空间；V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
-> 后端 1346 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
+> 后端 1357 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
 > （真 Chromium × 构建产物 × 真服务端，14 项）。
@@ -15,6 +15,19 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V129 批次：另外那些没人核对的数字）
+
+> 模块 spec：[103-the-other-numbers-nobody-checks.md](103-the-other-numbers-nobody-checks.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **DOC-011 前端测试计数** | CI 的前端 job 按工作区跑 vitest 并写 JSON，App job 跑 jest `--json`，各自紧跟一步 `scripts.check_frontend_counts` 与文档比；不数任何东西（两个框架同一组键）；拿不到结果、有失败、不像结果都不判一致 | `test_doc_counts::test_doc011_comparison_goes_red_on_a_wrong_count`、`::test_doc011_comparison_is_green_on_the_right_count`、`::test_doc011_missing_or_failing_results_are_not_green`；真实 vitest/jest 输出各跑一遍（一致 0、改错 1） |
+| **CI 接线** | 每一套「测试写 JSON → 之后比对」，比对行列着它，无 `\|\| true`；按工作区分开跑带来的新风险（新工作区忘了加就一条不跑）自己钉住 | `::test_doc011_ci_writes_results_and_compares_them_after_every_suite`、`::test_doc011_every_workspace_with_tests_is_run_in_ci` |
+| **「前端 N」不许出现** | 说不清是哪几套相加的数没法核对；OPERATIONS 描述 CI 的那句（前端 64）改成按套件说 | `::test_doc011_no_ambiguous_frontend_totals` |
+| **DOC-010 的第三个盲区** | 「后端」＋数字＋「测试」这种写法（没有「个」也不是 tests，OPERATIONS 里那句写的是 850）从 V111 起一直在 OPERATIONS 里，闸门看不见；补写法，自检里三种写法各一个样本 | `::test_doc010_scanner_finds_the_declared_counts` |
+| **DOC-012 结构计数** | 表数从迁移真的建一遍数、迁移数问 alembic、job 数读调度表。第一次跑：GO-LIVE 上线手册 `/jobz` 注释里的在册 job 数写着 18（真实 22）、OPERATIONS 写的已接入 job 端点数是 14 | `::test_doc012_structural_counts_match_reality`、`::test_doc012_scanner_sees_all_three_kinds` |
+| **豁免绑在证据上** | 体检报告是快照，整篇豁免的条件是「体检日期」那行还在；历史豁免每一条都要真的挡掉一处匹配 | `::test_doc012_exemptions_stay_honest`、`::test_doc011_historical_table_stays_honest` |
 
 ## 已实现（V128 批次：关注列表、内容流里的关注状态，与那一页的查询次数）
 

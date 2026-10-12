@@ -43,6 +43,8 @@ EXERCISED: dict[str, str] = {
     "consistency_check.py": "deploy/restore.sh 恢复后校验 + 回归引用",
     "seed_demo.py": "回归里真的跑一遍（本文件）",
     "scrub_experience.py": "回归里跑 --dry-run（本文件）；生产是开站前手动跑一次",
+    "check_frontend_counts.py": "CI 的 frontend 与 app-typecheck job（紧跟各自的测试之后）"
+                                "+ 回归里用伪造结果核对比对逻辑（test_doc_counts）",
 }
 
 
