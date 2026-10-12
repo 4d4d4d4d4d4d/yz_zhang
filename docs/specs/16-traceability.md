@@ -1,7 +1,7 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
 > 2026-10-09：V119 法定权利入口进 App；V118 单聊并发分叉修复；V117 关注幂等化并接到空间；V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
-> 后端 1307 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
+> 后端 1318 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
 > （真 Chromium × 构建产物 × 真服务端，12 项）。
@@ -14,6 +14,26 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V125 批次：响应形状的整条扫除）
+
+> 模块 spec：[100-response-shapes-swept-not-sampled.md](100-response-shapes-swept-not-sampled.md)
+>
+> ```
+> 改造前  _assert_shape 比过 26/281
+> 改造后  静态比对 153 + 真实响应 23 + 豁免 2 = 178/281；未验证 103（棘轮）
+> ```
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **换一个契约来源** | 手写案例要造真数据，覆盖天然很窄。**服务端 handler 里 `return {...}` 的字面量本身就是契约**——161/321 个 handler 直接返回字面量，另 37 个返回字面量的列表推导。读出键与 SDK 声明比，两边都不用造数据 | `test_response_shape_sweep::test_cli083_comparable_shapes_line_up_in_both_directions` |
+| **多分支** | 必选字段要**每个分支都给**，任一分支给的都要声明。`verifyIdentity` 就是靠这条扫出来的 | `::test_cli083_comparator_catches_both_directions` |
+| **证据包丢了证明力说明** | SDK 没声明 `evidentiary_notice`，网页下载时拼 `{...package, sha256}`，**用户交给律师的文件里没有「平台处理决定不是仲裁裁决」那一句**，链完整性也没了——而那段代码上方的注释写着「V50 特意做了诚实标注证明力边界」 | `ShapeFixes.test.tsx::下载的文件里有 evidentiary_notice 与 integrity` |
+| **HTTP 200 不等于通过** | 实名转人工时网页照样弹「实名认证成功」。服务端两个出口改成同形（都带 `status`），两端按它区分 | `::test_cli083_verify_response_has_the_same_keys_on_both_branches`；两端各一条 |
+| **App 提交写死的假身份** | 「一键实名认证（模拟）」把「测试用户」与 110101199001011234 提交给服务端：第一个人被记成「测试用户」，之后每个人收到 `id_already_bound` 而**点了什么都不会发生**（无 try/catch）。网页的 prompt 也预填了同一个号码 | `verify-identity.test.tsx`（4 条）；网页不预填断言 |
+| **其余 8 处** | `trip` 形状完全不同、`addTeamMember` 不回显额度（改服务端）、`removeCircleMember` 键名不同、`finalReport` 缺 5 个字段等 | 静态比对一并覆盖 |
+| **扫描器自己的三个盲区** | 跨行嵌套类型无 DOTALL → 悄悄退出闸门（与 V122 带注释那条同类）；嵌套模板字符串切错路径 → 假报警；`async` 方法名不认 → 错算到上一个方法 | `::test_cli083_sdk_declarations_are_readable`、`::test_cli083_nested_template_paths_are_not_misread` |
+| **未验证的不假装覆盖** | 103 个返回 `dump_task(...)` 之类的调用点静态读不出——**用棘轮钉住只许降**，新加一个这类端点而没有形状检查即红 | `::test_cli083_unverified_count_only_goes_down` |
 
 ## 已实现（V124 批次：谁能碰谁的东西）
 

@@ -150,7 +150,11 @@ def _inline_fields(decl: str) -> dict[str, str] | None:
         return None
     fields: dict[str, str] = {}
     for item in _split_top_level(d[1:-1]):
-        fm = re.match(r"(\w+)(\??)\s*:\s*(.+)$", item)
+        # re.S：嵌套对象跨行写是正当写法（`integrity: {\n chain_valid: ...}`），
+        # 而没有 DOTALL 时 `.` 不匹配换行 → 这一项匹配失败 → 整个声明返回 None
+        # → **悄悄退出闸门范围**。V125 写 `exportEvidence` 的新类型时撞上的，
+        # 与 V122 的「带注释就解析不了」是同一类：不报错，只是不再检查。
+        fm = re.match(r"(\w+)(\??)\s*:\s*(.+)$", item, re.S)
         if not fm:
             return None              # 有一项看不懂就整体放弃，不猜
         fields[fm.group(1) + ("?" if fm.group(2) else "")] = fm.group(3).strip()

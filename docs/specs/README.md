@@ -120,6 +120,7 @@
 | 97 | 平台知道，而没有人问得到（法律问答三种结局 / 经验读回 / 内联响应形状） | [97-the-platform-knows-but-nobody-can-ask.md](./97-the-platform-knows-but-nobody-can-ask.md) | P0 |
 | 98 | 部署并发：连接预算、重复付款与容量证明（CONC-060~ / FIN-070） | [98-concurrency-and-capacity-for-real-traffic.md](./98-concurrency-and-capacity-for-real-traffic.md) | P0 |
 | 99 | 安全：谁能碰谁的东西（对象级授权 / 授权矩阵 / 外部视角） | [99-security-for-real-money.md](./99-security-for-real-money.md) | P0 |
+| 100 | 响应形状：整条扫除，而不是挑几个抽查（26 → 178/281） | [100-response-shapes-swept-not-sampled.md](./100-response-shapes-swept-not-sampled.md) | P0 |
 
 ## 功能点编号与优先级约定
 

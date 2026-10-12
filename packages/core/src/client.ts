@@ -147,8 +147,11 @@ export class PlatformClient {
   }) {
     return this.request<Me>('PATCH', '/users/me', patch);
   }
+  /** ACC-020 实名核验。**HTTP 200 不等于通过**：供应商可能转人工，
+   *  此时 `is_verified: false, status: 'manual_review'`。此前这里只声明了
+   *  `is_verified`，网页于是在转人工时照样弹「实名认证成功」。 */
   verifyIdentity(realName: string, idNumber: string) {
-    return this.request<{ is_verified: boolean }>('POST', '/users/me/verify', {
+    return this.request<{ is_verified: boolean; status: 'verified' | 'manual_review' }>('POST', '/users/me/verify', {
       real_name: realName, id_number: idNumber,
     });
   }
@@ -212,7 +215,7 @@ export class PlatformClient {
     return this.request<Task>('PATCH', `/tasks/${id}`, patch);
   }
   apply(taskId: number, message = '', bidCents?: number) {
-    return this.request<{ id: number }>('POST', `/tasks/${taskId}/applications`, {
+    return this.request<{ id: number; status: string }>('POST', `/tasks/${taskId}/applications`, {
       message, ...(bidCents ? { bid_cents: bidCents } : {}),
     });
   }
@@ -243,7 +246,7 @@ export class PlatformClient {
     return this.request<{ ok: boolean; distance_m: number }>('POST', `/tasks/${taskId}/checkin`, { lat, lng });
   }
   listProgress(taskId: number) {
-    return this.request<Array<{ id: number; user_id: number; kind: string; content: string; created_at: string }>>(
+    return this.request<Array<{ id: number; user_id: number; kind: string; content: string; images: string[]; created_at: string }>>(
       'GET', `/tasks/${taskId}/progress`,
     );
   }
@@ -579,7 +582,7 @@ export class PlatformClient {
     return this.request<{ marked: number }>('POST', '/notifications/read-all');
   }
   askSupport(question: string) {
-    return this.request<{ answer: string; source: string | null; escalate_to_human: boolean; account_context: { available_cents: number } | null }>(
+    return this.request<{ answer: string; source: string | null; escalate_to_human: boolean; account_context: { available_cents: number } | null; ticket_id: number | null }>(
       'POST', '/support/ask', { question },
     );
   }
@@ -594,7 +597,7 @@ export class PlatformClient {
     return this.request<Contract>('POST', `/contracts/${contractId}/milestones/${idx}/accept`);
   }
   proposeChange(contractId: number, newAmountCents: number, reason = '') {
-    return this.request<{ id: number; status: string }>('POST', `/contracts/${contractId}/change-orders`, {
+    return this.request<{ id: number; status: string; new_amount_cents: number }>('POST', `/contracts/${contractId}/change-orders`, {
       new_amount_cents: newAmountCents, reason,
     });
   }
@@ -748,7 +751,13 @@ export class PlatformClient {
     return this.request<Array<{ id: number; name: string }>>('GET', '/cities');
   }
   finalReport(taskId: number) {
-    return this.request<{ summary: string; total_cost_cents: number; children_completed: number; children_total: number; deliverables: Array<Record<string, unknown>> }>(
+    return this.request<{
+      task_id: number; title: string; status: string;
+      summary: string; total_cost_cents: number; planned_budget_cents: number;
+      duration_days: number | null;
+      children_completed: number; children_total: number;
+      deliverables: Array<{ task_id: number; title: string; executor_id: number | null; cost_cents: number; status: string }>;
+    }>(
       'GET', `/tasks/${taskId}/final-report`,
     );
   }
@@ -846,7 +855,19 @@ export class PlatformClient {
     }>('POST', '/legal/ask', { question });
   }
   exportEvidence(disputeId: number) {
-    return this.request<{ package: Record<string, unknown>; sha256: string }>(
+    /* `evidentiary_notice` 是这份证据包**证明力边界**的说明——尤其那句
+     * 「平台处理决定**不是**法律意义上的仲裁裁决」。此前 SDK 没声明它，
+     * 网页下载时用 `{...package, sha256}` 拼文件，于是把它整个丢掉了：
+     * 用户交给律师的那份文件里，没有任何一句话说明它能证明什么、不能证明什么。 */
+    return this.request<{
+      package: Record<string, unknown>; sha256: string;
+      integrity: {
+        chain_valid: boolean | null; chain_entries: number | null;
+        third_party_backed_to_seq: number; uncovered_entries: number;
+        receipts: Array<Record<string, unknown>>;
+      };
+      evidentiary_notice: { signatures: string; chain: string; decision: string };
+    }>(
       'GET', `/legal/disputes/${disputeId}/evidence-export`,
     );
   }
@@ -937,7 +958,7 @@ export class PlatformClient {
     );
   }
   resolveReport(reportId: number, action: 'dismiss' | 'remove_content' | 'ban_user') {
-    return this.request<{ id: number; status: string; action: string }>(
+    return this.request<{ id: number; status: string; action: string; effect: string }>(
       'POST', `/admin/reports/${reportId}/resolve`, { action },
     );
   }
@@ -1389,10 +1410,13 @@ export class PlatformClient {
 
   // ---- OAPI 开放 API 与 Webhook ----
   async apiScopes() {
-    const result = await this.request<{ scopes: Array<{ key: string; label: string }>; notice: string }>(
+    const result = await this.request<{ scopes: Array<{ key: string; label: string }>; events: string[]; notice: string }>(
       'GET', '/developer/scopes',
     );
-    return { scopes: result.scopes.map(s => ({ name: s.key, description: s.label })), note: result.notice };
+    return {
+      scopes: result.scopes.map(s => ({ name: s.key, description: s.label })),
+      events: result.events, note: result.notice,
+    };
   }
   grantMachineMandate(keyId: number, body: MachineMandateInput) {
     return this.request<MachineMandateView>('POST', `/developer/api-keys/${keyId}/mandate`, body);
@@ -1460,7 +1484,10 @@ export class PlatformClient {
     );
   }
   trip(taskId: number) {
-    return this.request<{ shared: boolean; points: Array<{ lat: number; lng: number; at: string }> }>(
+    /* GEO 行程：服务端返回的是**最近一个位置点**，不是轨迹。此前声明成
+     * `{ shared, points[] }`——任何读 `trip.points` 的客户端都会拿到 undefined。
+     * 没有记录时三个字段都是 null。 */
+    return this.request<{ lat: number | null; lng: number | null; at: string | null }>(
       'GET', `/tasks/${taskId}/trip`,
     );
   }
@@ -1479,7 +1506,7 @@ export class PlatformClient {
     );
   }
   removeCircleMember(circleId: number, userId: number) {
-    return this.request<{ removed: number }>('POST', `/circles/${circleId}/members/${userId}/remove`);
+    return this.request<{ ok: boolean }>('POST', `/circles/${circleId}/members/${userId}/remove`);
   }
   rejectChangeOrder(contractId: number, orderId: number) {
     return this.request<{ id: number; status: string }>(

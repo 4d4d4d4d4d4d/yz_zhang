@@ -1011,6 +1011,60 @@ function NoticesScreen({ client }: { client: PlatformClient }) {
  * **缺任何一条会被直接打回**，而前三条在 Web 上早就有了，
  * 差的只是 App 上这几个按钮。
  */
+/** ACC-020 实名核验（V125 重写）。
+ *
+ * 原来是一个「一键实名认证（模拟）」按钮，**把写死的「测试用户」与
+ * 证件号 110101199001011234 提交给服务端**：
+ *
+ * - 第一个点它的人，账号上被记下的真实姓名是「测试用户」；
+ * - 之后每一个点它的人都收到 `id_already_bound`（同一证件号只能绑定一个账号），
+ *   而那个 `onPress` 没有 try/catch——**点了什么都不会发生**；
+ * - 接上真实供应商后，所有人都在提交同一个假身份。
+ *
+ * 这一段在模拟供应商下「能用」，所以一直没人发现。改成真实表单，
+ * 并按服务端的 `status` 区分通过与转人工（HTTP 200 不等于通过）。
+ */
+export function VerifyIdentityBlock({ client, onDone }: {
+  client: PlatformClient; onDone: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [idNo, setIdNo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  return (
+    <View style={{ gap: 8, alignSelf: 'stretch' }}>
+      <Text style={styles.mutedLeft}>
+        接单与提现需先完成实名认证。证件号只保存不可逆摘要与掩码，不存明文。
+      </Text>
+      <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="真实姓名" />
+      <TextInput style={styles.input} value={idNo} onChangeText={setIdNo}
+                 placeholder="身份证号（15 或 18 位）" autoCapitalize="characters" />
+      <Button title={busy ? '正在核验…' : '提交实名认证'} disabled={busy} onPress={async () => {
+        setError(''); setNotice('');
+        if (name.trim().length < 2 || !/^\d{15}$|^\d{17}[\dXx]$/.test(idNo.trim())) {
+          setError('请填写真实姓名与 15 或 18 位身份证号');
+          return;
+        }
+        setBusy(true);
+        try {
+          const res = await client.verifyIdentity(name.trim(), idNo.trim());
+          setNotice(res.status === 'manual_review'
+            ? '已提交，正在人工审核。审核完成前暂时不能接单与提现，结果会以通知告诉你。'
+            : '实名认证已通过');
+          onDone();
+        } catch (e) {
+          setError(apiErrorText(e));
+        } finally {
+          setBusy(false);
+        }
+      }} />
+      {!!notice && <Text style={styles.mutedLeft}>{notice}</Text>}
+      {!!error && <Text style={styles.error}>{error}</Text>}
+    </View>
+  );
+}
+
 function MeScreen({ client, me, refresh, onLogout }: {
   client: PlatformClient; me: Me | null; refresh: () => void; onLogout: () => void;
 }) {
@@ -1056,12 +1110,7 @@ function MeScreen({ client, me, refresh, onLogout }: {
       <Text style={styles.muted}>
         信用分 {me.credit_score} · 已完成 {me.tasks_completed} 单 · {me.is_verified ? '已实名' : '未实名'}
       </Text>
-      {!me.is_verified && (
-        <Button title="一键实名认证（模拟）" onPress={async () => {
-          await client.verifyIdentity('测试用户', '110101199001011234');
-          refresh();
-        }} />
-      )}
+      {!me.is_verified && <VerifyIdentityBlock client={client} onDone={refresh} />}
 
       {/* ACC-040 修改密码。服务端一直都在，**两端都没有入口**——
           用户怀疑密码泄露时，能做的只有注销账号。 */}

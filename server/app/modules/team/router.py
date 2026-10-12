@@ -147,7 +147,11 @@ def add_member(team_id: int, body: MemberIn, user: User = Depends(get_current_us
     db.add(TeamMember(team_id=team.user_id, user_id=body.user_id, role=body.role,
                       spend_limit_cents=body.spend_limit_cents))
     db.flush()
-    return {"team_id": team_id, "user_id": body.user_id, "role": body.role}
+    # 回显额度：那是 owner 刚给这个人设下的花钱上限，响应里应当确认它。
+    # 此前 SDK 声明了这个字段而服务端不给，客户端读到的是 undefined——
+    # 一个「我设的上限到底生效没有」答不出来的界面。
+    return {"team_id": team_id, "user_id": body.user_id, "role": body.role,
+            "spend_limit_cents": body.spend_limit_cents}
 
 
 @router.patch("/{team_id}/members/{member_user_id}")

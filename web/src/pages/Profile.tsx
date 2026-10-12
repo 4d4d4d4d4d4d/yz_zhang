@@ -211,6 +211,67 @@ function PrivacyConsents() {
   );
 }
 
+/** ACC-020 实名核验表单（V125 重写）。
+ *
+ * 原来是两个 `prompt()`，身份证号那一个**预填了一个假号码** `110101199001011234`，
+ * 文案写着「模拟 eKYC，任意合法格式即可通过」，并且不论服务端返回什么都弹
+ * 「实名认证成功」。三处都只在模拟供应商下成立：
+ *
+ * - 接上真实供应商后，那句文案是假的；
+ * - 预填的号码会被直接提交——同一证件号只能绑定一个账号（VND-023），
+ *   第二个照着默认值点确定的人会收到 `id_already_bound`；
+ * - **HTTP 200 不等于通过**：供应商转人工时返回 `is_verified: false,
+ *   status: 'manual_review'`，而界面告诉他「成功」，他接下来去接单时被拦住，
+ *   不知道为什么。
+ *
+ * 根因是 SDK 的类型只声明了 `is_verified`，写这段的人看不见 `status`
+ * （CLI-083 响应形状扫除第一次跑就扫出来的）。
+ */
+function VerifyIdentityForm({ onDone }: { onDone: () => Promise<void> }) {
+  const { client } = useApp();
+  const [name, setName] = useState('');
+  const [idNo, setIdNo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+
+  async function submit() {
+    setError(''); setMsg('');
+    if (name.trim().length < 2 || !/^\d{15}$|^\d{17}[\dXx]$/.test(idNo.trim())) {
+      setError('请填写真实姓名与 15 或 18 位身份证号');
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await client.verifyIdentity(name.trim(), idNo.trim());
+      if (res.status === 'manual_review') {
+        // 不是失败也不是成功：说清现在的状态和接下来会怎样
+        setMsg('已提交，正在人工审核。审核完成前暂时不能接单与提现，结果会以通知告诉你。');
+      } else {
+        setMsg('实名认证已通过');
+      }
+      await onDone();
+    } catch (e) {
+      setError(apiErrorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <p className="muted">接单与提现需先完成实名认证。证件号只保存不可逆摘要与掩码，不存明文。</p>
+      <label>真实姓名 <input value={name} onChange={(e) => setName(e.target.value)} /></label>
+      <label>身份证号 <input value={idNo} onChange={(e) => setIdNo(e.target.value)} /></label>
+      <button style={{ marginTop: 6 }} disabled={busy} onClick={() => void submit()}>
+        {busy ? '正在核验…' : '提交实名认证'}
+      </button>
+      {msg && <p role="status">{msg}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
+    </div>
+  );
+}
+
 export default function Profile() {
   const { client, me, refreshMe, setToken } = useApp();
   const nav = useNavigate();
@@ -245,16 +306,7 @@ export default function Profile() {
           <Link to="/developer">开发者设置</Link>（API 密钥与 Webhook） ·{' '}
           <Link to="/ventures">我的合作体</Link> · <Link to="/teams">我的团队</Link>
         </p>
-        {!me.is_verified && (
-          <div style={{ marginTop: 12 }}>
-            <p className="muted">接单与提现需先实名认证（模拟 eKYC，任意合法格式即可通过）</p>
-            <button style={{ marginTop: 6 }} onClick={() => {
-              const name = prompt('真实姓名：');
-              const idNo = prompt('身份证号：', '110101199001011234');
-              if (name && idNo) void act(() => client.verifyIdentity(name, idNo), '实名认证成功');
-            }}>去实名认证</button>
-          </div>
-        )}
+        {!me.is_verified && <VerifyIdentityForm onDone={refreshMe} />}
       </div>
       <div className="card">
         <h3>技能标签（用于 AI 推荐接单）</h3>

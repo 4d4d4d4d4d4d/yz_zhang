@@ -537,6 +537,9 @@ def verify_identity(
     if result.status == "failed":
         raise bad_request("实名信息核验未通过，请核对姓名与证件号", "kyc_failed")
     if result.status == "manual":
+        # CLI-083（V125）：这一支 HTTP 200 但**没有通过**。两个分支此前形状不同
+        # （通过的那支不带 status），而 SDK 只声明了 is_verified——网页因此在
+        # 转人工时照样弹出「实名认证成功」。现在两支同形，客户端按 status 分。
         return {"is_verified": False, "status": "manual_review"}
     # 同一证件号不得绑定多个账号（防批量刷号/一人多号套补贴）
     digest = id_digest(body.id_number)
@@ -555,7 +558,7 @@ def verify_identity(
     user.id_masked = id_mask(body.id_number)
     user.is_adult = True
     db.add(user)
-    return {"is_verified": True}
+    return {"is_verified": True, "status": "verified"}
 
 
 def _is_adult(id_number: str) -> bool:

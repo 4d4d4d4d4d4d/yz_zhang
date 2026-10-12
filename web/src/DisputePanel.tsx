@@ -137,10 +137,17 @@ export function DisputePanel({ client, taskId, meId }: {
           )}
           {/* LAW 证据包：当事人自己留底的唯一手段（V50 特意做了
               「诚实标注证明力边界」），而此前**没有任何入口**。
-              哈希一并存下来——**不然这份留底自己就不可自证** */}
+              哈希一并存下来——**不然这份留底自己就不可自证**。
+
+              CLI-083（V125）：这里原先写的是 `{...pack.package, sha256}`，
+              于是把服务端的 `evidentiary_notice` 与 `integrity` **整个丢掉了**——
+              用户交给律师的那份文件里，没有任何一句话说明它能证明什么、
+              不能证明什么，包括「平台处理决定不是仲裁裁决」那一句。
+              根因是 SDK 的类型没声明这两个字段，写这行代码的人看不见它们。
+              所以这里**整包原样保存**，不再挑字段。 */}
           <button className="ghost" disabled={busy} onClick={async () => {
             const pack = await client.exportEvidence(dispute.id);
-            const text = JSON.stringify({ ...pack.package, sha256: pack.sha256 }, null, 2);
+            const text = JSON.stringify(pack, null, 2);
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([text], { type: 'application/json;charset=utf-8' }));
             a.download = `dispute-${dispute.id}-evidence.json`;
