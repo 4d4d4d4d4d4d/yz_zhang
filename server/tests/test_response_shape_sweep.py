@@ -289,10 +289,14 @@ def test_cli083_unverified_count_only_goes_down():
     """静态读不出、又没有真实响应断言的调用点——只许降不许升。"""
     r = _sweep()
     n = len(r["unverified"])
+    # 消息里不说「新增的是哪几个」：这里没有上一次的名单，只能列出全部。
+    # 第一版取列表末尾 N 个冒充「新增的」——V128 撞上时它点名的是两个早就在那儿的
+    # 方法，而真正新增的那两个不在里面。**一个会说错话的闸门比沉默的更糟。**
     assert n <= MAX_UNVERIFIED, (
         f"未验证的调用点从 {MAX_UNVERIFIED} 涨到了 {n}。新加的端点要么返回字面量 dict，"
-        "要么在 test_client_shape_alignment 里补一条真实响应断言。新增的是：\n  "
-        + "\n  ".join(r["unverified"][-(n - MAX_UNVERIFIED):])
+        "要么补一条 `_assert_shape` / `_assert_inline_shape` 真实响应断言。"
+        "对照这次新加的 SDK 方法在下面找（全部未验证的，按名字排序）：\n  "
+        + "\n  ".join(sorted(r["unverified"]))
     )
 
 

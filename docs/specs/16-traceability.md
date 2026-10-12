@@ -1,10 +1,11 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
+> 2026-10-12：V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
 > 2026-10-09：V119 法定权利入口进 App；V118 单聊并发分叉修复；V117 关注幂等化并接到空间；V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
-> 后端 1336 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
+> 后端 1346 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
-> （真 Chromium × 构建产物 × 真服务端，13 项）。
+> （真 Chromium × 构建产物 × 真服务端，14 项）。
 > 全系统体检报告：[../SYSTEM-CHECK.md](../SYSTEM-CHECK.md)（数据库怎么搭、跑起来有什么问题）。
 > **现状一页看清：[72-status-ledger.md](72-status-ledger.md)**（这份矩阵的缺口也在那里记着）；`scripts/smoke.py`（mock 态）与
 > `scripts/sandbox_check.py`（存管合规态，28 项）两条闭环自检均通过。
@@ -14,6 +15,19 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V128 批次：关注列表、内容流里的关注状态，与那一页的查询次数）
+
+> 模块 spec：[102-follow-lists-and-feed-follow-state.md](102-follow-lists-and-feed-follow-state.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **CNT-024 内容流关注按钮有状态** | 内容响应带 `author_followed_by_viewer`（关注 / 没关注 / 自己的为 `null`），列表与单条形状一致；web 按钮 `aria-pressed`、能取消、同作者几条一起变不重拉整页；App 发现页补上此前没有的关注按钮 | `test_follow_lists_and_feed_state::test_cnt024_feed_tells_the_viewer_whether_they_follow_each_author`、`::test_cnt024_single_content_view_carries_the_same_field`；`Follows.test.tsx` |
+| **CONC-066 内容流 N+1** | `_dump` 每条两次查询（一页 40 多次），加关注状态会到 60 多次——改成一页三次（`_ListCtx`）。钉「不随条数增长」而不是绝对数字 | `::test_conc066_feed_query_count_does_not_grow_with_page_size` |
+| **CNT-023 关注 / 粉丝列表** | `GET /users/{id}/followers` / `following`，游标为关注关系 id（降序），每页至多 50；每个人带访问者自己的关注状态（一次查完） | `::test_cnt023_list_carries_the_viewers_own_follow_state`、`::test_cnt023_pagination_does_not_repeat_or_skip`、`::test_cnt023_anonymous_visitors_can_read_public_lists` |
+| **关注关系是个人信息** | 资料不公开或封禁的人的列表对别人 403（专用码 `follow_list_private`，说清为什么）；别人看到的列表里只有资料公开、未封禁、未注销的人——与空间、搜索同一条规则，否则隐私设置被别人的公开设置绕过 | `::test_cnt023_others_see_only_publicly_listed_followers`、`::test_cnt023_the_owner_sees_all_living_followers`、`::test_cnt023_a_private_persons_lists_are_not_visible_to_others`；`OWNERSHIP_RULES` 单独一条 |
+| **形状** | 两个接口返回函数调用，静态扫描读不到——用真实响应与 SDK 声明比 | `::test_cnt023_list_responses_match_the_sdk_declarations` |
+| **两端** | web 空间页「N 人关注」→ `/people/:id/follows`（tab 在 URL 里）；App 空间页两个入口 | `Follows.test.tsx`（5 条）、`follows.test.tsx`（3 条）；真浏览器联调新增一步（14 项） |
 
 ## 已实现（V127 批次：搜索——接到界面上之前，先管住它会公开的东西）
 

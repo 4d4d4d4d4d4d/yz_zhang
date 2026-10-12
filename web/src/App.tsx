@@ -11,7 +11,7 @@ import Profile from './pages/Profile';
 import Publish from './pages/Publish';
 import Rewards from './pages/Rewards';
 import Square from './pages/Square';
-import { Discover, PublicSpace, EditSpace } from './pages/Spaces';
+import { Discover, PublicSpace, EditSpace, FollowList } from './pages/Spaces';
 import Cooperate from './pages/Cooperate';
 import Ask from './pages/Ask';
 import Search from './pages/Search';
@@ -72,6 +72,8 @@ export default function App() {
         <Route path="/opportunities" element={<Square />} />
         <Route path="/cooperate" element={<Cooperate />} />
         <Route path="/people/:id" element={<PublicSpace />} />
+        {/* CNT-023 关注 / 粉丝列表：公开的人的列表未登录也能看，与公开空间同一口径 */}
+        <Route path="/people/:id/follows" element={<FollowList />} />
         <Route path="/space/edit" element={hasToken ? <EditSpace /> : <Navigate to="/login?next=/space/edit" />} />
         <Route path="/login" element={<Login />} />
         <Route path="/records" element={<Suspense fallback={<div className="page">正在加载企业档案…</div>}><Records /></Suspense>} />

@@ -95,6 +95,15 @@ export function DiscoverScreen({ client, baseUrl, onOpenAuthor }: {
             scrollY={scrollY}
             reduceMotion={reduceMotion}
             onPressAuthor={() => onOpenAuthor?.(c.author_id)}
+            onToggleFollow={async () => {
+              // CNT-024 App 的内容流此前**连关注按钮都没有**。两个动作（都幂等），
+              // 同一作者在这一页的所有条目一起更新，不重新拉整页
+              const r = c.author_followed_by_viewer
+                ? await client.unfollowUser(c.author_id)
+                : await client.followUser(c.author_id);
+              setItems((old) => old.map((x) => (x.author_id === c.author_id
+                ? { ...x, author_followed_by_viewer: r.following } : x)));
+            }}
           />
         ))}
       </Animated.ScrollView>
@@ -103,13 +112,14 @@ export function DiscoverScreen({ client, baseUrl, onOpenAuthor }: {
 }
 
 /** 单张卡片：配图在卡片内部反向位移，卡片滚过屏幕时图像像在"窗后平移"。 */
-function ParallaxCard({ item, index, baseUrl, scrollY, reduceMotion, onPressAuthor }: {
+function ParallaxCard({ item, index, baseUrl, scrollY, reduceMotion, onPressAuthor, onToggleFollow }: {
   item: ContentItem;
   index: number;
   baseUrl: string;
   scrollY: Animated.Value;
   reduceMotion: boolean;
   onPressAuthor: () => void;
+  onToggleFollow: () => Promise<void>;
 }) {
   const img = firstImage(item);
   // 卡片大致的滚动区间。精确值要靠 onLayout 测，但那会引入每张卡一次
@@ -139,6 +149,14 @@ function ParallaxCard({ item, index, baseUrl, scrollY, reduceMotion, onPressAuth
           <TouchableOpacity onPress={onPressAuthor}>
             <Text style={styles.author}>@{item.author_nickname}</Text>
           </TouchableOpacity>
+          {/* null = 自己的内容，不画按钮 */}
+          {item.author_followed_by_viewer !== null && (
+            <TouchableOpacity accessibilityRole="button"
+                              accessibilityState={{ selected: !!item.author_followed_by_viewer }}
+                              onPress={() => { void onToggleFollow().catch(() => {}); }}>
+              <Text style={styles.author}>{item.author_followed_by_viewer ? '已关注' : '+ 关注'}</Text>
+            </TouchableOpacity>
+          )}
           <Text style={styles.metaMuted}>
             ♥ {item.like_count} · 💬 {item.comment_count}
           </Text>

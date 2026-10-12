@@ -16,6 +16,7 @@ import type {
   ContributionKind,
   ContributionView,
   EligibleAgent,
+  FollowListItem,
   TaskCreateInput,
   RiskDisclosure,
   ShareRow,
@@ -673,6 +674,19 @@ export class PlatformClient {
   followStats(userId: number) {
     return this.request<{ followers: number; following: number; viewer_following: boolean | null }>(
       'GET', `/users/${userId}/follow-stats`,
+    );
+  }
+  /** CNT-023 谁关注了他 / 他关注了谁。游标分页（新的在前）。
+   *  资料不公开的人，别人看他的列表得到 403——他的社交圈也不公开；
+   *  别人看到的列表里也不会出现资料不公开的人。 */
+  followers(userId: number, after = 0, limit = 20) {
+    return this.request<{ items: FollowListItem[]; next_cursor: number | null }>(
+      'GET', `/users/${userId}/followers?after=${after}&limit=${limit}`,
+    );
+  }
+  following(userId: number, after = 0, limit = 20) {
+    return this.request<{ items: FollowListItem[]; next_cursor: number | null }>(
+      'GET', `/users/${userId}/following?after=${after}&limit=${limit}`,
     );
   }
 

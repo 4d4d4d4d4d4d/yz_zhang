@@ -79,7 +79,7 @@
 
 | # | 愿景条目 | 关键 SDK 方法 | 状态 | 还缺什么 |
 |---|---|---|---|---|
-| V-1 | 个人独立门户 | `ownSpace` `personalSpace` `discoverSpaces` `followUser` | 两端已接 | 封面/作品上传、独立域名、SSR 与分享预览（SPACE-021）；内容举报（SPACE-022） |
+| V-1 | 个人独立门户 | `ownSpace` `personalSpace` `discoverSpaces` `followUser` `followers` | 两端已接（V128 起关注/粉丝列表可看，按隐私过滤） | 封面/作品上传、独立域名、SSR 与分享预览（SPACE-021）；内容举报（SPACE-022） |
 | V-2 | 日常协作（遛狗、跑腿、上门） | `createTask` `apply` `deliver` `acceptDelivery` | 两端已接 | 真实支付与实名供应商未接（上线红线 1~6），**现在还收不了真钱** |
 | V-3 | 高级协作（合伙公司、商业活动） | `createTeam` `myTeams` `confirmContribution` `distributeVenture` | 两端已接 | 团队成员增删仍仅 web（TEAM-065）；持续合作空间不是统一驾驶舱（SPACE-024） |
 | V-4 | 智能合约保证可信流程 | `signContract` `fundContract` `acceptDelivery` `openDispute` | 两端已接 | 证据包导出仍仅 web（`exportEvidence`）；可靠电子签名与司法存证需持牌机构（红线 4、5）；链上资产未正式部署 |

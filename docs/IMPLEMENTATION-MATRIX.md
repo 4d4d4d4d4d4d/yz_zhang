@@ -1,6 +1,6 @@
 # 用户愿景与前后端实现核对
 
-更新：2026-10-10（V123：连接预算与重复付款保护，愿景对照表 [VISION.md](VISION.md) 由闸门核对；V122：「不懂就问」接上两端——法律问答三种结局可区分、平台攒的经验读得回来；V120：分期合约整单放款的语义钉死，两端放款前先说清会放掉几期；V117~V119：关注状态可读、单聊并发分叉修复、代扣明细与 PIPL 权利进 App；V115/V116：个人空间进入原生 App，四入口重排）。当前设计基准：[Spec 88](specs/88-individual-network-and-spaces.md)。定位讨论：[PRODUCT-DIRECTION.md](PRODUCT-DIRECTION.md)。商业放行另见 [COMMERCIAL-READINESS.md](COMMERCIAL-READINESS.md)。
+更新：2026-10-12（V128：关注列表两端可看、内容流关注按钮有状态，关注关系按隐私设置过滤；V127：全站搜索接上两端，热词按人数门槛公开、搜人看隐私；V123：连接预算与重复付款保护，愿景对照表 [VISION.md](VISION.md) 由闸门核对；V122：「不懂就问」接上两端——法律问答三种结局可区分、平台攒的经验读得回来；V120：分期合约整单放款的语义钉死，两端放款前先说清会放掉几期；V117~V119：关注状态可读、单聊并发分叉修复、代扣明细与 PIPL 权利进 App；V115/V116：个人空间进入原生 App，四入口重排）。当前设计基准：[Spec 88](specs/88-individual-network-and-spaces.md)。定位讨论：[PRODUCT-DIRECTION.md](PRODUCT-DIRECTION.md)。商业放行另见 [COMMERCIAL-READINESS.md](COMMERCIAL-READINESS.md)。
 
 **状态定义**：已实现表示所列范围存在可调用代码；部分表示仅完成具体子集；未实现表示没有可交付闭环。历史功能“存在”不等于经过本轮真机、供应商或生产验收。Web、原生 App、服务器部署分别记录，不混用。
 
@@ -16,7 +16,7 @@
 | 个人门面 | 介绍/主题/条目/公开编辑 | **V115 已实现**（浏览/编辑/发布/revision 冲突/隐私补救/24 条上限） | 保存、版本、隐私、导出/注销 | 作品上传、自由布局、SSR、独立域名缺失；App 侧真机未验 | Spec SPACE-001~012；`app/spaces.tsx` |
 | 全网内容聚合 | 本轮手动整理六类链接 | 未接入 | HTTPS 验证，不抓取外部资源 | OAuth 同步、刷新、平台删除同步缺失 | SPACE-020 |
 | 小店与直播 | 外部入口 | 外部能力未接入 | 条目分类 | 原生商品订单/售后/直播推流未实现 | SPACE-003 |
-| 从认识到交流 | 空间→私聊、原有 IM/圈层 | **V115 空间→私聊已接**（`openDirect` 后直接落到那条会话） | 既有会话/权限/拉黑 | 公开关系与新空间关注入口未接入 | `Messages.tsx`；`app/spaces.tsx` |
+| 从认识到交流 | 空间→私聊、原有 IM/圈层；**V117 关注、V128 关注/粉丝列表与内容流关注状态** | **V115 空间→私聊已接**；**V117 关注、V128 关注列表与内容流关注按钮已接** | 既有会话/权限/拉黑；关注两个幂等动作；列表游标分页，**资料不公开的人不出现在别人的列表里** | 关注通知未做（CNT-025，先定骚扰策略）；列表无头像 | `Messages.tsx`；`app/spaces.tsx`；[102](specs/102-follow-lists-and-feed-follow-state.md) |
 | 轻量合作 | 本轮合作入口，原有任务广场/发布 | 既有任务功能 | 任务、报名、邀请、状态机 | 非任务式自由共创仍不完整 | `Cooperate.tsx`；`modules/task` |
 | AI 拆解复杂目标 | 发布页可提案/编辑/确认 | **无**（四个方法 App 零调用，台账 APP-077） | 一次提案只产出**一层** DAG；无「谁能闭环」字段 | 不是树；`needs_expert` 无就地求助动作；领域专家质量与项目成功率未验收 | specs 04、17、61；**设计 [96](specs/96-decompose-into-a-tree-that-can-be-worked.md)** |
 | 人机/机机协作 | 既有 Agent 与委托入口 | 部分 | agent/openapi、受限机器授权 | 外部 Agent 生态及设备履约未完成 | `modules/agent`、`openapi`；`MachineMandate` |

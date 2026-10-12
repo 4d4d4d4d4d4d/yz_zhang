@@ -93,6 +93,15 @@ export type IpAssignment =
   | 'license_nonexclusive'   // 普通许可，执行方可再许可他人
   | 'retain';                // 执行方保留，发布方按约定范围使用
 
+/** CNT-023 关注 / 粉丝列表里的一个人。 */
+export interface FollowListItem {
+  user_id: number;
+  nickname: string;
+  followed_at: string;
+  /** 访问者自己是否关注了这个人；未登录或就是访问者本人时为 `null`。 */
+  viewer_following: boolean | null;
+}
+
 /** SYNC-050b / SEC-067 创建任务的请求体——**与服务端 `TaskIn` 逐字段对应**。
  *
  * 此前 `createTask` 的参数是 `Partial<Task> & {...}`，比创建 schema 宽得多：
@@ -179,6 +188,10 @@ export interface ContentItem {
   like_count: number;
   comment_count: number;
   liked_by_me: boolean;
+  /** CNT-024 我是否关注了作者。**自己的内容为 `null`**——「对自己」没有关注这回事
+   *  （与 follow-stats 的 `viewer_following` 同一约定）。此前流里的关注按钮永远写着
+   *  「关注」，已关注的人点了没有任何变化，也没法从流里取消关注。 */
+  author_followed_by_viewer: boolean | null;
   created_at: string;
 }
 

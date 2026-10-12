@@ -1,6 +1,6 @@
-import { apiErrorText, type PersonalSpace, type OwnSpace, type SpaceItem, type SpaceSummary } from '@platform/core';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { apiErrorText, type FollowListItem, type PersonalSpace, type OwnSpace, type SpaceItem, type SpaceSummary } from '@platform/core';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApp } from '../store';
 import { Reveal } from '../Motion';
 
@@ -71,7 +71,7 @@ export function PublicSpace() {
     catch (e) { setError(apiErrorText(e)); } finally { setBusy(false); }
   }
   return <main className={`page personal-space ${space?.theme || 'clay'}`}><Link className="quiet-link" to="/">← 发现</Link>{error && <p role="alert" className="error">{error}</p>}{!space && !error && <p role="status">正在打开空间…</p>}{space && <>
-    <header className="personal-intro"><div><span className="overline">{space.kind === 'person' ? 'INDEPENDENT / 独立个体' : space.kind === 'agent' ? 'AGENT / 智能体' : 'ORGANIZATION / 组织'}</span><h1>{space.nickname}</h1><p className="personal-headline">{space.headline}</p><div className="personal-actions">{me?.id === space.user_id ? <Link className="solid-link" to="/space/edit">编辑我的空间 ↗</Link> : <><button disabled={busy} onClick={() => void contact()}>聊聊一个想法 ↗</button><button className="ghost" disabled={busy} onClick={() => void toggleFollow()}>{stats?.viewer_following ? '已关注' : '关注'}</button></>}{stats && <span className="muted">{stats.followers} 人关注</span>}<span className="muted">{space.accepting_orders ? '愿意认识新的合作伙伴' : '先认识，慢慢聊'}</span></div></div><WindowArt theme={space.theme} /></header>
+    <header className="personal-intro"><div><span className="overline">{space.kind === 'person' ? 'INDEPENDENT / 独立个体' : space.kind === 'agent' ? 'AGENT / 智能体' : 'ORGANIZATION / 组织'}</span><h1>{space.nickname}</h1><p className="personal-headline">{space.headline}</p><div className="personal-actions">{me?.id === space.user_id ? <Link className="solid-link" to="/space/edit">编辑我的空间 ↗</Link> : <><button disabled={busy} onClick={() => void contact()}>聊聊一个想法 ↗</button><button className="ghost" disabled={busy} onClick={() => void toggleFollow()}>{stats?.viewer_following ? '已关注' : '关注'}</button></>}{stats && <Link className="muted" to={`/people/${space.user_id}/follows?tab=followers`}>{stats.followers} 人关注</Link>}<span className="muted">{space.accepting_orders ? '愿意认识新的合作伙伴' : '先认识，慢慢聊'}</span></div></div><WindowArt theme={space.theme} /></header>
     {space.introduction && <section className="personal-about"><span className="overline">ABOUT / 关于我</span><p>{space.introduction}</p></section>}
     <div className="discovery-heading"><h2>我的世界</h2><span className="muted">作品、日常与正在发生的事</span></div><div className="portfolio-grid">{space.items.map((item, index) => <Reveal key={index} delayMs={Math.min(index, 5) * 40}><article className={`portfolio-piece piece-${index % 3}`}><span className="overline">{LABELS[item.kind]} / {String(index + 1).padStart(2, '0')}</span><div className="piece-symbol" aria-hidden="true">{['↗', '◎', '✳'][index % 3]}</div><h3>{item.title}</h3><p>{item.summary}</p>{item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="quiet-link">{item.kind === 'shop' ? '去逛逛' : item.kind === 'live' ? '前往直播平台' : '打开内容'} ↗ <small>外部平台</small></a>}</article></Reveal>)}</div>{!space.items.length && <p className="space-empty">这个空间正在慢慢生长。</p>}
   </>}</main>;
@@ -88,4 +88,86 @@ export function EditSpace() {
     <div className="discovery-heading"><h2>放进你的世界</h2><button className="ghost" type="button" disabled={space.items.length >= 24} onClick={() => change({ items: [...space.items, { title: '', summary: '', kind: 'work', url: '' }] })}>＋ 添加内容</button></div>
     {space.items.map((item, i) => <div className="editor-item" key={i}><div className="row"><span className="overline">{String(i + 1).padStart(2, '0')}</span><select aria-label={`内容 ${i + 1} 类型`} value={item.kind} onChange={e => itemChange(i, { kind: e.target.value as SpaceItem['kind'] })}>{Object.entries(LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><button className="ghost" type="button" disabled={i === 0} onClick={() => { const next = [...space.items]; [next[i - 1], next[i]] = [next[i], next[i - 1]]; change({ items: next }); }}>上移</button><button className="ghost" type="button" onClick={() => change({ items: space.items.filter((_, n) => i !== n) })}>移除</button></div><label>标题<input required maxLength={100} value={item.title} onChange={e => itemChange(i, { title: e.target.value })} /></label><label>介绍<textarea maxLength={500} rows={2} value={item.summary} onChange={e => itemChange(i, { summary: e.target.value })} /></label><label>原平台链接（可选）<input type="url" pattern="https://.*" maxLength={1500} placeholder="https://" value={item.url} onChange={e => itemChange(i, { url: e.target.value })} /></label></div>)}
     {!space.items.length && <p className="muted">从一件代表作、一篇文章，或一个小店开始。</p>}<div className="editor-save"><label className="publish-check"><input type="checkbox" checked={space.published} onChange={e => change({ published: e.target.checked })} />公开空间，让别人发现我</label><p className="muted">公开后，任何人都能通过链接浏览以上内容。关闭并保存即可收起；账户隐私限制仍然生效。</p>{!space.profile_public && <p className="error">当前账户设置为不公开；请前往账户与隐私调整后再发布。</p>}<div className="row"><button type="submit" disabled={busy}>{busy ? '正在保存…' : '保存空间'}</button>{space.published && !dirty && <Link to={`/people/${space.user_id}`} className="quiet-link">看看我的门面 ↗</Link>}</div>{saved && <p role="status">{saved}</p>}</div></fieldset></form>}</main>;
+}
+
+
+/** CNT-023 关注 / 粉丝列表（V128，102 号 spec）。
+ *
+ * 此前只有计数——「这 42 个关注者是谁」答不出来。
+ * 列表的可见性与空间同一条规则：资料不公开的人，他的社交圈也不公开（403）；
+ * 别人看到的列表里，也不会出现资料不公开的人。
+ */
+export function FollowList() {
+  const { id } = useParams();
+  const { client, hasToken } = useApp();
+  const nav = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'following' ? 'following' : 'followers';
+  const [items, setItems] = useState<FollowListItem[]>([]);
+  const [cursor, setCursor] = useState<number | null>(null);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async (after: number) => {
+    setBusy(true); setError('');
+    try {
+      const r = tab === 'followers'
+        ? await client.followers(Number(id), after)
+        : await client.following(Number(id), after);
+      setItems((old) => (after ? [...old, ...r.items] : r.items));
+      setCursor(r.next_cursor);
+    } catch (e) {
+      setError(apiErrorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [client, id, tab]);
+
+  useEffect(() => { setItems([]); void load(0); }, [load]);
+
+  async function toggle(item: FollowListItem) {
+    if (!hasToken) { nav(`/login?next=${encodeURIComponent(`/people/${id}/follows?tab=${tab}`)}`); return; }
+    try {
+      const r = item.viewer_following
+        ? await client.unfollowUser(item.user_id)
+        : await client.followUser(item.user_id);
+      setItems((old) => old.map((x) => (x.user_id === item.user_id
+        ? { ...x, viewer_following: r.following } : x)));
+    } catch (e) {
+      setError(apiErrorText(e));
+    }
+  }
+
+  return (
+    <main className="page">
+      <p><Link to={`/people/${id}`}>← 回到空间</Link></p>
+      <div className="row" role="tablist">
+        <button role="tab" aria-selected={tab === 'followers'} className={tab === 'followers' ? '' : 'ghost'}
+                onClick={() => setParams({ tab: 'followers' })}>关注者</button>
+        <button role="tab" aria-selected={tab === 'following'} className={tab === 'following' ? '' : 'ghost'}
+                onClick={() => setParams({ tab: 'following' })}>正在关注</button>
+      </div>
+      {error && <p className="error" role="alert">{error}</p>}
+      {!busy && !error && items.length === 0 && (
+        <p className="muted">{tab === 'followers' ? '还没有人关注' : '还没有关注任何人'}</p>
+      )}
+      <ul className="list">
+        {items.map((it) => (
+          <li key={it.user_id} className="card row">
+            <Link className="grow" to={`/people/${it.user_id}`}>{it.nickname}</Link>
+            {it.viewer_following !== null && (
+              <button className="ghost" aria-pressed={it.viewer_following}
+                      onClick={() => void toggle(it)}>
+                {it.viewer_following ? '已关注' : '关注'}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {busy && <p className="muted" role="status">加载中…</p>}
+      {cursor !== null && !busy && (
+        <button className="ghost" onClick={() => void load(cursor)}>加载更多</button>
+      )}
+    </main>
+  );
 }

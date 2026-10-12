@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -33,14 +34,44 @@ class CommentIn(BaseModel):
     reply_to_id: int | None = None
 
 
-def _dump(c: Content, db: Session, viewer: User | None = None) -> dict:
-    author = db.get(User, c.author_id)
-    liked = False
-    if viewer:
-        liked = (
-            db.query(Like).filter(Like.user_id == viewer.id, Like.content_id == c.id).first()
-            is not None
-        )
+class _ListCtx:
+    """一页内容共用的查询结果：作者、我点过赞的、我关注的作者。
+
+    CONC-066（V128）：`_dump` 原来每条内容各查两次（作者 + 是否点赞），
+    一页 20 条就是 40 多次查询。CNT-024 要再加「我是否关注了作者」，
+    照原样逐条查就是 60 多次——所以列表接口改成**一页三次**。
+    单条接口（详情、发布后回显）仍逐条查，那里只有一条。
+    """
+
+    def __init__(self, db: Session, viewer: User | None, rows: list[Content]):
+        author_ids = {c.author_id for c in rows}
+        self.authors = {u.id: u for u in db.query(User).filter(User.id.in_(author_ids or [-1]))}
+        self.liked: set[int] = set()
+        self.followed: set[int] = set()
+        if viewer:
+            ids = [c.id for c in rows] or [-1]
+            self.liked = {r.content_id for r in db.query(Like.content_id)
+                          .filter(Like.user_id == viewer.id, Like.content_id.in_(ids))}
+            self.followed = {r.followee_id for r in db.query(Follow.followee_id)
+                             .filter(Follow.follower_id == viewer.id,
+                                     Follow.followee_id.in_(author_ids or [-1]))}
+
+
+def _dump(c: Content, db: Session, viewer: User | None = None, ctx: _ListCtx | None = None) -> dict:
+    if ctx is not None:
+        author = ctx.authors.get(c.author_id)
+        liked = c.id in ctx.liked
+        follows_author = c.author_id in ctx.followed
+    else:
+        author = db.get(User, c.author_id)
+        liked = False
+        follows_author = False
+        if viewer:
+            liked = (
+                db.query(Like).filter(Like.user_id == viewer.id, Like.content_id == c.id).first()
+                is not None
+            )
+            follows_author = _follow_row(db, viewer.id, c.author_id) is not None
     return {
         "id": c.id,
         "author_id": c.author_id,
@@ -58,6 +89,12 @@ def _dump(c: Content, db: Session, viewer: User | None = None) -> dict:
         "like_count": c.like_count,
         "comment_count": c.comment_count,
         "liked_by_me": liked,
+        # CNT-024 内容流里的关注按钮此前**没有状态**：永远写着「关注」，
+        # 已关注的人点了没有任何变化，也没法从流里取消关注。
+        # 自己的内容为 None——「对自己」这个问题没有意义（与 follow-stats 同一约定）。
+        "author_followed_by_viewer": (
+            None if viewer is None or viewer.id == c.author_id else follows_author
+        ),
         "created_at": iso(c.created_at),
     }
 
@@ -230,7 +267,9 @@ def feed(
     rows = query.order_by(Content.id.desc()).limit(500).all()
     if tag:
         rows = [c for c in rows if tag in c.tags]
-    return [_dump(c, db, user) for c in rows[:limit]]
+    page = rows[:limit]
+    ctx = _ListCtx(db, user, page)
+    return [_dump(c, db, user, ctx) for c in page]
 
 
 @router.get("/users/{user_id}/contents")
@@ -244,7 +283,8 @@ def user_contents(user_id: int, db: Session = Depends(get_db), user: User = Depe
         .all()
     )
     visible = [c for c in rows if c.visibility == "public" or user_id == user.id]
-    return [_dump(c, db, user) for c in visible]
+    ctx = _ListCtx(db, user, visible)
+    return [_dump(c, db, user, ctx) for c in visible]
 
 
 @router.get("/contents/{content_id}")
@@ -388,3 +428,90 @@ def follow_stats(user_id: int, db: Session = Depends(get_db),
     )
     return {"followers": followers, "following": following,
             "viewer_following": viewer_following}
+
+
+def _publicly_listed(query):
+    """出现在**别人**的关注列表里的人：与空间、搜索同一条可见性规则。
+
+    关注关系本身就是个人信息：「谁关注了谁」会暴露一个人的兴趣与社交圈。
+    设了资料不公开的人，不该因为他关注了某个公开的人，就出现在那个人的
+    粉丝列表里给所有人看。
+    """
+    return query.filter(
+        User.is_deleted.is_(False), User.is_banned.is_(False),
+        or_(User.privacy["profile_public"].as_boolean().is_(None),
+            User.privacy["profile_public"].as_boolean().is_(True)),
+    )
+
+
+def _follow_list(db: Session, user_id: int, viewer: User | None, direction: str,
+                 after: int, limit: int) -> dict:
+    """CNT-023 关注 / 粉丝列表。
+
+    谁能看：**本人**总能看自己的；别人只能看资料公开的人的列表。
+    列表里出现谁：本人看自己的列表时看得到所有未注销的人；
+    别人看到的只有资料公开、未封禁、未注销的人（见 `_publicly_listed`）。
+
+    游标是关注关系的 id（降序，新关注在前），不是页码——列表在翻页时
+    还在变化（有人刚关注），页码会让同一个人出现两次或被跳过。
+    """
+    owner = db.get(User, user_id)
+    if not owner or owner.is_deleted:
+        raise not_found("用户不存在")
+    is_self = viewer is not None and viewer.id == user_id
+    if not is_self and (owner.is_banned
+                        or (owner.privacy or {}).get("profile_public") is False):
+        # 与公开资料页同一判断：不公开的人，他的社交圈也不公开。
+        # 专用错误码：通用的 `forbidden` 会被客户端换成「无权执行该操作」，
+        # 看的人就不知道**为什么**看不了；也不复用 `profile_private`——
+        # 那个码的补救是「去改**你自己**的隐私设置」，对访客是错的指引。
+        raise forbidden("对方未公开资料，看不到关注列表", "follow_list_private")
+
+    if direction == "followers":
+        join_on, key = Follow.follower_id, Follow.followee_id
+    else:
+        join_on, key = Follow.followee_id, Follow.follower_id
+    query = (db.query(Follow, User).join(User, User.id == join_on)
+             .filter(key == user_id))
+    if is_self:
+        query = query.filter(User.is_deleted.is_(False))
+    else:
+        query = _publicly_listed(query)
+    if after:
+        query = query.filter(Follow.id < after)
+    rows = query.order_by(Follow.id.desc()).limit(limit + 1).all()
+    page, more = rows[:limit], len(rows) > limit
+
+    # 访问者自己关注了列表里的谁——一次查完，不逐个查
+    shown = [u.id for _, u in page]
+    mine: set[int] = set()
+    if viewer and shown:
+        mine = {r.followee_id for r in db.query(Follow.followee_id)
+                .filter(Follow.follower_id == viewer.id, Follow.followee_id.in_(shown))}
+    return {
+        "items": [{
+            "user_id": u.id, "nickname": u.nickname,
+            "followed_at": iso(f.created_at),
+            "viewer_following": (None if viewer is None or viewer.id == u.id
+                                 else u.id in mine),
+        } for f, u in page],
+        "next_cursor": page[-1][0].id if more and page else None,
+    }
+
+
+@router.get("/users/{user_id}/followers")
+def followers_list(user_id: int, after: int = Query(default=0, ge=0),
+                   limit: int = Query(default=20, ge=1, le=50),
+                   db: Session = Depends(get_db),
+                   viewer: User | None = Depends(get_optional_user)):
+    """CNT-023 谁关注了他。"""
+    return _follow_list(db, user_id, viewer, "followers", after, limit)
+
+
+@router.get("/users/{user_id}/following")
+def following_list(user_id: int, after: int = Query(default=0, ge=0),
+                   limit: int = Query(default=20, ge=1, le=50),
+                   db: Session = Depends(get_db),
+                   viewer: User | None = Depends(get_optional_user)):
+    """CNT-023 他关注了谁。"""
+    return _follow_list(db, user_id, viewer, "following", after, limit)

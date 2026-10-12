@@ -13,7 +13,7 @@
 // 需要单独的授权与运营评估。
 import {
   apiErrorText,
-  type Me, type OwnSpace, type PersonalSpace, type PlatformClient,
+  type FollowListItem, type Me, type OwnSpace, type PersonalSpace, type PlatformClient,
   type SpaceItem, type SpaceSummary,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -120,6 +120,7 @@ export function PublicSpaceScreen({ client, userId, onBack, onOpenConversation }
   const [space, setSpace] = useState<PersonalSpace | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showFollows, setShowFollows] = useState<'followers' | 'following' | null>(null);
   // CNT-022 关注状态**从服务端读**（`viewer_following`）。没有这个读接口之前，
   // 按钮只能猜自己的状态，而服务端那时是个 toggle——猜错就把「想关注」
   // 变成了「取消关注」。null 表示「没登录所以不知道」，不是「没关注」。
@@ -170,6 +171,10 @@ export function PublicSpaceScreen({ client, userId, onBack, onOpenConversation }
     }
   }
 
+  if (showFollows) {
+    return <FollowListScreen client={client} userId={userId} tab={showFollows}
+                             onBack={() => setShowFollows(null)} />;
+  }
   return (
     <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: 24 }}>
       <TouchableOpacity onPress={onBack}><Text style={styles.link}>← 返回</Text></TouchableOpacity>
@@ -197,7 +202,14 @@ export function PublicSpaceScreen({ client, userId, onBack, onOpenConversation }
             </View>
           ))}
           {!space.items.length && <Text style={styles.muted}>这个空间还没有放上展示内容。</Text>}
-          {!!stats && <Text style={styles.muted}>{stats.followers} 人关注</Text>}
+          {!!stats && (
+            <TouchableOpacity onPress={() => setShowFollows('followers')}>
+              <Text style={styles.link}>{stats.followers} 人关注 ›</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={() => setShowFollows('following')}>
+            <Text style={styles.link}>他关注的人 ›</Text>
+          </TouchableOpacity>
           <Button title={busy ? '正在打开会话…' : '发消息'} disabled={busy}
                   onPress={() => void contact()} />
           <Button title={stats?.viewer_following ? '已关注（点此取消）' : '关注'}
@@ -389,3 +401,72 @@ const styles = StyleSheet.create({
   },
   chipOn: { backgroundColor: '#2f6fed', borderColor: '#2f6fed', color: '#fff' },
 });
+
+
+/** CNT-023 关注 / 粉丝列表（V128，102 号 spec）。
+ *
+ * 此前只有计数。可见性与空间同一条：资料不公开的人，他的社交圈也不公开
+ *（服务端 403，这里把那句话显示出来）；别人看到的列表里也不会出现资料不公开的人。
+ */
+export function FollowListScreen({ client, userId, tab: initialTab, onBack }: {
+  client: PlatformClient; userId: number; tab: 'followers' | 'following'; onBack: () => void;
+}) {
+  const [tab, setTab] = useState(initialTab);
+  const [items, setItems] = useState<FollowListItem[]>([]);
+  const [cursor, setCursor] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(true);
+
+  const load = useCallback(async (after: number) => {
+    setBusy(true); setError('');
+    try {
+      const r = tab === 'followers' ? await client.followers(userId, after)
+        : await client.following(userId, after);
+      setItems((old) => (after ? [...old, ...r.items] : r.items));
+      setCursor(r.next_cursor);
+    } catch (e) {
+      setError(apiErrorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [client, userId, tab]);
+
+  useEffect(() => { setItems([]); void load(0); }, [load]);
+
+  return (
+    <ScrollView contentContainerStyle={{ gap: 10, padding: 16 }}>
+      <TouchableOpacity onPress={onBack}><Text style={styles.link}>← 返回空间</Text></TouchableOpacity>
+      <View style={{ flexDirection: 'row', gap: 12 }}>
+        <TouchableOpacity onPress={() => setTab('followers')}>
+          <Text style={tab === 'followers' ? styles.link : styles.muted}>关注者</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setTab('following')}>
+          <Text style={tab === 'following' ? styles.link : styles.muted}>正在关注</Text>
+        </TouchableOpacity>
+      </View>
+      {!!error && <Text style={styles.muted}>{error}</Text>}
+      {!busy && !error && items.length === 0 && (
+        <Text style={styles.muted}>{tab === 'followers' ? '还没有人关注' : '还没有关注任何人'}</Text>
+      )}
+      {items.map((it) => (
+        <View key={it.user_id} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Text>{it.nickname}</Text>
+          {it.viewer_following !== null && (
+            <Button title={it.viewer_following ? '已关注' : '关注'} onPress={async () => {
+              try {
+                const r = it.viewer_following ? await client.unfollowUser(it.user_id)
+                  : await client.followUser(it.user_id);
+                setItems((old) => old.map((x) => (x.user_id === it.user_id
+                  ? { ...x, viewer_following: r.following } : x)));
+              } catch (e) {
+                setError(apiErrorText(e));
+              }
+            }} />
+          )}
+        </View>
+      ))}
+      {busy && <Text style={styles.muted}>加载中…</Text>}
+      {cursor !== null && !busy && <Button title="加载更多" onPress={() => void load(cursor)} />}
+    </ScrollView>
+  );
+}

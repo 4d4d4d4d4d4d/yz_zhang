@@ -235,6 +235,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   self_block: '不能拉黑自己',
   self_confirmation: '不能确认自己提交的贡献',
   self_follow: '不能关注自己',
+  follow_list_private: '对方未公开资料，看不到关注列表',
   self_friend: '不能加自己为好友',
   self_invite: '不能邀请自己',
   sensitive_file: '该文件为敏感材料，请通过 /files/{name}/secure 读取',

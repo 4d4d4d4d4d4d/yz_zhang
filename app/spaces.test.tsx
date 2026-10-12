@@ -225,10 +225,11 @@ describe('CNT-022 关注：状态从服务端读，关注与取消是两个动�
     }, calls);
     render(<PublicSpaceScreen client={client} userId={9} onBack={() => {}}
                               onOpenConversation={() => {}} />);
-    // `following` 是「他关注了多少人」的计数，不是我的状态
-    await waitFor(() => expect(screen.getByText('3 人关注')).toBeTruthy());
+    // `following` 是「他关注了多少人」的计数，不是我的状态。
+    // 按前缀匹配：V128 起这个计数是进关注列表的入口，后面跟着「›」
+    await waitFor(() => expect(screen.getByText(/^3 人关注/)).toBeTruthy());
     fireEvent.press(screen.getByText('已关注（点此取消）'));
-    await waitFor(() => expect(screen.getByText('2 人关注')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/^2 人关注/)).toBeTruthy());
     const hit = calls.find((c) => c.path === '/users/9/follow');
     // 改造前服务端是 toggle 而客户端读不到状态：猜错就把「想关注」变成「取消关注」
     expect(hit!.method).toBe('DELETE');
@@ -244,7 +245,7 @@ describe('CNT-022 关注：状态从服务端读，关注与取消是两个动�
     render(<PublicSpaceScreen client={client} userId={9} onBack={() => {}}
                               onOpenConversation={() => {}} />);
     fireEvent.press(await screen.findByText('关注'));
-    await waitFor(() => expect(screen.getByText('1 人关注')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/^1 人关注/)).toBeTruthy());
     expect(calls.find((c) => c.path === '/users/9/follow')!.method).toBe('PUT');
   });
 

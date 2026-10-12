@@ -132,6 +132,9 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
      "公开空间就是要给别人看的（SPACE-004）；未发布/隐私/封禁/注销统一 404"),
     (r"^GET /users/.*/(contents|reviews|follow-stats)$", "public",
      "作品、口碑、关注计数是公开画像的一部分——「让别人了解你」是产品定位本身"),
+    (r"^GET /users/.*/(followers|following)$", "public",
+     "关注关系本身是个人信息：资料不公开或封禁的人，他的列表对别人 403；"
+     "公开的人的列表里，也只列出资料公开、未封禁、未注销的人（test_follow_lists_and_feed_state）"),
     (r"^GET /users/", "public",
      "公开资料按隐私设置过滤后开放；手机号等敏感字段不在公开字段白名单里"),
     (r"^(PUT|DELETE) /users/.*/follow$", "self",

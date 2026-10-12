@@ -6,7 +6,7 @@ import { ParallaxHero } from '../Motion';
 import { useApp } from '../store';
 
 export default function Community() {
-  const { client, me } = useApp();
+  const { client } = useApp();
   const [scope, setScope] = useState<'latest' | 'following' | 'video'>('latest');
   const [items, setItems] = useState<ContentItem[]>([]);
   const [body, setBody] = useState('');
@@ -81,10 +81,24 @@ export default function Community() {
             <div className="row">
               <strong>{c.author_nickname}</strong>
               {c.kind === 'blog' && <span className="badge">博客</span>}
-              {c.author_id !== me?.id && (
+              {/* CNT-024 按钮有状态：此前永远写着「关注」，已关注的人点了没有任何变化，
+                  也没法从流里取消关注。null = 自己的内容，不画按钮。 */}
+              {c.author_followed_by_viewer !== null && (
                 <button className="ghost" style={{ padding: '2px 10px' }}
-                        onClick={async () => { await client.followUser(c.author_id); await load(); }}>
-                  关注
+                        aria-pressed={c.author_followed_by_viewer}
+                        onClick={async () => {
+                          try {
+                            const r = c.author_followed_by_viewer
+                              ? await client.unfollowUser(c.author_id)
+                              : await client.followUser(c.author_id);
+                            // 同一个作者在这一页可能有好几条——一起改，不重新拉整页
+                            setItems((old) => old.map((x) => (x.author_id === c.author_id
+                              ? { ...x, author_followed_by_viewer: r.following } : x)));
+                          } catch (e) {
+                            setError(apiErrorText(e));
+                          }
+                        }}>
+                  {c.author_followed_by_viewer ? '已关注' : '关注'}
                 </button>
               )}
               <span className="spacer muted" style={{ flex: 1, textAlign: 'right' }}>

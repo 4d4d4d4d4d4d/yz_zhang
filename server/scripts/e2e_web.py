@@ -152,6 +152,14 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     page.get_by_role("link", name="看看我的门面").click()
     page.wait_for_selector('.personal-intro')
     step("个人空间真实发布与浏览", page.locator('text=E2E：一起做有趣的东西').count() > 0)
+    # CNT-023（V128）：从空间页的「N 人关注」点进关注列表——真浏览器验的是
+    # 链接能点、列表页能渲染、本人看自己的空列表时说清「还没有人关注」
+    page.locator("a:has-text('人关注')").first.click()
+    page.wait_for_url("**/follows?tab=followers", timeout=10000)
+    page.wait_for_timeout(800)
+    step("从空间点进关注列表",
+         page.get_by_role("tab", name="关注者").count() == 1
+         and (page.locator("text=还没有人关注").count() > 0 or page.locator("li.card").count() > 0))
     page.goto(f"http://127.0.0.1:{WEB_PORT}/cooperate", wait_until="networkidle")
     step("合作入口可达", page.get_by_role("link", name="我想做一件事", exact=False).count() > 0)
 
