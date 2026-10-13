@@ -5,7 +5,7 @@ import { ContractEvidence } from './ContractEvidence';
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
 import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, describeChangeOrder, fmtYuan, formatDateTime, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DecomposeScreen, TaskTreeBlock } from './decompose';
+import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
 import { DiscoverScreen } from './Discover';
 import { AgentBlock, RecommendationsBlock } from './collaborators';
 import { ExperienceToolsBlock } from './experience';
@@ -425,6 +425,8 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
         </TouchableOpacity>
       )}
       {isProjectRoot && onOpenTask && <TaskTreeBlock client={client} task={task} onOpenTask={onOpenTask} />}
+      {/* SPACE-024 合作驾驶舱（移动简化版：进度、钱、预警、关键路径；APP-007）——只给发布方 */}
+      {isProjectRoot && meId === task.creator_id && <CockpitBlock client={client} taskId={task.id} />}
       {/* AGT-080~083 经验工具：双方都能用，只出草稿（109 号 spec） */}
       {meId !== null && (meId === task.creator_id || meId === task.executor_id) && (
         <ExperienceToolsBlock client={client} task={task} />

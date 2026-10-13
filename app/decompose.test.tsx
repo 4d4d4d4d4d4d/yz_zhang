@@ -2,7 +2,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { PlatformClient, type Task } from '@platform/core';
 import { PublishScreen, TaskDetailScreen } from './App';
-import { DecomposeScreen } from './decompose';
+import { CockpitBlock, DecomposeScreen } from './decompose';
 
 type Call = { method: string; path: string; body: unknown };
 
@@ -176,5 +176,24 @@ describe('APP-077 入口', () => {
   it('从「不懂就问」来的发布页没有项目选项（那是一单具体的活）', () => {
     render(<PublishScreen client={makeClient({})} onDone={() => {}} category="法律咨询" />);
     expect(screen.queryByText(/要拆开做的项目/)).toBeNull();
+  });
+});
+
+
+describe('SPACE-024 App 上的合作驾驶舱（移动简化版）', () => {
+  it('进度、四个钱数、预警与关键路径', async () => {
+    const node = (id: number, title: string) => ({ id, parent_id: 20, title, status: 'published', status_name: '招募中',
+      budget_cents: 200000, is_container: false, depends_on: [], blocked_by: [], executor_id: null, executor_nickname: null,
+      deadline: null, overdue: false, on_critical_path: true, in_dispute: false });
+    const client = makeClient({ '/tasks/20/cockpit': {
+      task_id: 20, title: '公司官网', status: 'draft', progress_pct: 25, steps_total: 4, steps_done: 1,
+      budget: { planned_cents: 800000, allocated_cents: 800000, committed_cents: 200000, paid_cents: 200000, remaining_cents: 400000 },
+      critical_path: [21, 22], alerts: [{ task_id: 22, kind: 'dispute', text: '「页面开发」在纠纷中，相关款项已冻结' }],
+      nodes: [node(21, '需求梳理'), node(22, '页面开发')] } });
+    render(<CockpitBlock client={client} taskId={20} />);
+    expect(await screen.findByText('合作驾驶舱 · 1/4 步完成')).toBeTruthy();
+    expect(screen.getByText('计划 ¥8000.00 · 已托管 ¥2000.00 · 已付 ¥2000.00 · 还剩 ¥4000.00')).toBeTruthy();
+    expect(screen.getByText('• 「页面开发」在纠纷中，相关款项已冻结')).toBeTruthy();
+    expect(screen.getByText('关键路径：需求梳理 → 页面开发')).toBeTruthy();
   });
 });

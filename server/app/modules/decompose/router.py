@@ -233,6 +233,18 @@ def tree(task_id: int, user: User = Depends(get_current_user), db: Session = Dep
     return service.tree_progress(db, task)
 
 
+@router.get("/tasks/{task_id}/cockpit")
+def cockpit(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """SPACE-024 / AI-DEC-021 合作驾驶舱：树、关键路径、预算账、预警（120 号 spec）。
+
+    只给发布方：里面有每一步托管了多少、付了多少——那是发布方自己的账，不是公开信息。
+    公开的进度仍然是 `/tasks/{id}/tree`（不变）。
+    """
+    from .cockpit import cockpit as build
+
+    return build(db, _get_parent(db, task_id, user))
+
+
 @router.get("/tasks/{task_id}/final-report")
 def final_report(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """AI-DEC-025 结项报告：成本/工期/交付清单汇总（仅发布者）。"""

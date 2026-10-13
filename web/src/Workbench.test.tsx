@@ -237,3 +237,40 @@ describe('IM-009 消息里的报价卡', () => {
       .toEqual({ task_id: 9, price_cents: 21000, note: '' }));
   });
 });
+
+describe('SPACE-024 合作驾驶舱', () => {
+  const PARENT = { id: 20, title: '公司官网', description: '', category: '软件开发', status: 'draft', budget_cents: 800000,
+    creator_id: 2, executor_id: null, is_remote: true, city: '', address_hint: '', address_exact: '', parent_id: null,
+    task_type: 'project', pricing: 'fixed', bonus_cents: 0, ip_assignment: 'assign', deposit_status: 'none' };
+  const node = (id: number, title: string, extra: Record<string, unknown> = {}) => ({ id, parent_id: 20, title, status: 'published',
+    status_name: '招募中', budget_cents: 200000, is_container: false, depends_on: [], blocked_by: [], executor_id: null,
+    executor_nickname: null, deadline: null, overdue: false, on_critical_path: false, in_dispute: false, ...extra });
+  const COCKPIT = { task_id: 20, title: '公司官网', status: 'draft', progress_pct: 0, steps_total: 2, steps_done: 0,
+    budget: { planned_cents: 800000, allocated_cents: 400000, committed_cents: 200000, paid_cents: 0, remaining_cents: 600000 },
+    critical_path: [21, 22],
+    alerts: [{ task_id: 21, kind: 'overdue', text: '「需求梳理」已过截止时间（进行中）：催办、改期或发起纠纷' }],
+    nodes: [node(21, '需求梳理', { status: 'in_progress', status_name: '进行中', executor_id: 5, executor_nickname: '陈设计', overdue: true,
+      deadline: '2026-10-12T00:00:00Z', on_critical_path: true }),
+      node(22, '页面开发', { depends_on: [21], blocked_by: [21], on_critical_path: true })] };
+
+  it('发布方看到钱、预警、关键路径和每一步卡在哪', async () => {
+    open('/tasks/20', { '/users/me': ME, '/tasks/20': PARENT, '/tasks/20/cockpit': COCKPIT,
+      '/tasks/20/tree': { parent_id: 20, parent_status: 'draft', progress_pct: 0, children: [{ id: 21, title: '需求梳理', status: 'in_progress', budget_cents: 200000, depends_on: [], executor_id: 5 }], all_children_completed: false } });
+    const panel = await screen.findByLabelText('合作驾驶舱');
+    expect(panel.textContent).toContain('已托管 ¥2000.00');
+    expect(panel.textContent).toContain('还剩 ¥6000.00');
+    expect(panel.textContent).toContain('已过截止时间');
+    expect(panel.textContent).toContain('需求梳理 → 页面开发');
+    const row = screen.getByText('★ 页面开发').closest('tr')!;
+    expect(row.textContent).toContain('需求梳理');            // 卡在「需求梳理」
+    expect(screen.getByText('陈设计')).toBeTruthy();
+  });
+
+  it('不是发布方：不请求驾驶舱', async () => {
+    const calls: Array<{ method: string; path: string }> = [];
+    open('/tasks/20', { '/users/me': { ...ME, id: 9 }, '/tasks/20': PARENT,
+      '/tasks/20/tree': { parent_id: 20, parent_status: 'draft', progress_pct: 0, children: [{ id: 21, title: '需求梳理', status: 'in_progress', budget_cents: 200000, depends_on: [], executor_id: 5 }], all_children_completed: false } }, calls);
+    await screen.findByText(/子任务进度/);
+    expect(calls.some((c) => c.path === '/tasks/20/cockpit')).toBe(false);
+  });
+});

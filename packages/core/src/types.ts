@@ -1572,3 +1572,48 @@ export interface WbRoutinePatch {
   note?: string;
   enabled?: boolean;
 }
+
+// ---- SPACE-024 / AI-DEC-021 合作驾驶舱（120 号 spec）----
+export interface CockpitBudget {
+  planned_cents: number;
+  allocated_cents: number;
+  committed_cents: number;
+  paid_cents: number;
+  remaining_cents: number;
+}
+export interface CockpitAlert {
+  task_id: number;
+  kind: 'dispute' | 'overdue' | 'no_applicants' | 'to_accept' | 'over_budget';
+  text: string;
+}
+export interface CockpitNode {
+  id: number;
+  parent_id: number | null;
+  title: string;
+  status: string;
+  status_name: string;
+  budget_cents: number;
+  is_container: boolean;
+  depends_on: number[];
+  /** 还没完成的前置步骤：这一步卡在它们身上 */
+  blocked_by: number[];
+  executor_id: number | null;
+  executor_nickname: string | null;
+  deadline: string | null;
+  overdue: boolean;
+  on_critical_path: boolean;
+  in_dispute: boolean;
+}
+export interface Cockpit {
+  task_id: number;
+  title: string;
+  status: string;
+  progress_pct: number;
+  steps_total: number;
+  steps_done: number;
+  budget: CockpitBudget;
+  /** 剩余步骤最多的那条依赖链（叶子 id，按先后） */
+  critical_path: number[];
+  alerts: CockpitAlert[];
+  nodes: CockpitNode[];
+}

@@ -1,6 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
-  WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
+  Cockpit, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
   CommercialReadiness,
   AgentProfileView,
   PayoutProposalView,
@@ -184,6 +184,9 @@ export class PlatformClient {
   publicProfile(userId: number) {
     return this.request<Partial<Me>>('GET', `/users/${userId}`);
   }
+
+  /** SPACE-024 合作驾驶舱：树、关键路径、预算账、预警（只给母任务发布方） */
+  cockpit(taskId: number) { return this.request<Cockpit>('GET', `/tasks/${taskId}/cockpit`); }
 
   // ---- PWB 个人工作台（116 号 spec）：我的任务、进度与助手 ----
   workbenchOverview() { return this.request<WbOverview>('GET', '/workbench/overview'); }

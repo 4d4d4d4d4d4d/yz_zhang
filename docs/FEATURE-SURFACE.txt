@@ -131,6 +131,7 @@ api GET /api/v1/tasks/mine
 api GET /api/v1/tasks/{task_id}
 api GET /api/v1/tasks/{task_id}/agent-runs
 api GET /api/v1/tasks/{task_id}/applications
+api GET /api/v1/tasks/{task_id}/cockpit
 api GET /api/v1/tasks/{task_id}/decomposition
 api GET /api/v1/tasks/{task_id}/dispute
 api GET /api/v1/tasks/{task_id}/eligible-agents
@@ -472,6 +473,7 @@ sdk cities
 sdk claimCoupon
 sdk claimVerificationOrder
 sdk clarify
+sdk cockpit
 sdk commentContent
 sdk confirmContribution
 sdk confirmDecomposition

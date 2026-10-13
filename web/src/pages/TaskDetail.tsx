@@ -1,5 +1,5 @@
 import ContractEvidence from '../ContractEvidence';
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, describeChangeOrder, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, describeChangeOrder, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -187,6 +187,9 @@ export default function TaskDetail() {
           </div>
         </div>
       )}
+
+      {/* SPACE-024 合作驾驶舱：只给发布方（公开的进度仍是上面那块） */}
+      {isCreator && tree && tree.children.length > 0 && <CockpitPanel taskId={taskId} />}
 
       {/* 发布者视图：AI 推荐 + 报名列表（MATCH-001/002） */}
       {isCreator && task.status === 'published' && (
@@ -571,5 +574,54 @@ function QuoteToCreator({ taskId, creatorId }: { taskId: number; creatorId: numb
       }}>发给发布方</button>
       {error && <span className="error">{error}</span>}
     </span>
+  );
+}
+
+
+/** SPACE-024 / AI-DEC-021 合作驾驶舱：现在做到哪、卡在谁那里、钱花了多少、哪里要我出手。 */
+function CockpitPanel({ taskId }: { taskId: number }) {
+  const { client } = useApp();
+  const [data, setData] = useState<Cockpit | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => { client.cockpit(taskId).then(setData).catch((e) => setError(apiErrorText(e))); }, [client, taskId]);
+  if (error) return <div className="card"><p className="error">{error}</p></div>;
+  if (!data) return null;
+  const title = (id: number) => data.nodes.find((n) => n.id === id)?.title ?? `#${id}`;
+  const b = data.budget;
+  return (
+    <div className="card" aria-label="合作驾驶舱">
+      <h3>合作驾驶舱 · {data.steps_done}/{data.steps_total} 步完成</h3>
+      <div className="row">
+        <span>计划 <strong>{fmtYuan(b.planned_cents)}</strong></span>
+        <span>已托管 <strong>{fmtYuan(b.committed_cents)}</strong></span>
+        <span>已付 <strong>{fmtYuan(b.paid_cents)}</strong></span>
+        <span>还剩 <strong>{fmtYuan(b.remaining_cents)}</strong></span>
+      </div>
+      {data.alerts.length > 0 && (
+        <ul className="list" aria-label="需要你出手">
+          {data.alerts.map((a, i) => <li key={i} className={a.kind === 'dispute' || a.kind === 'overdue' ? 'error' : ''}>
+            <Link to={`/tasks/${a.task_id}`}>{a.text}</Link></li>)}
+        </ul>
+      )}
+      {data.critical_path.length > 0 && (
+        <p><span className="muted">关键路径（剩余步骤最多的一条，任何一步拖一天，整件事就晚一天）：</span>
+          {data.critical_path.map(title).join(' → ')}</p>
+      )}
+      <table aria-label="每一步">
+        <thead><tr><th>步骤</th><th>谁在做</th><th>状态</th><th>预算</th><th>截止</th><th>卡在</th></tr></thead>
+        <tbody>
+          {data.nodes.filter((n) => !n.is_container).map((n) => (
+            <tr key={n.id} data-critical={n.on_critical_path || undefined}>
+              <td><Link to={`/tasks/${n.id}`}>{n.on_critical_path ? '★ ' : ''}{n.title}</Link></td>
+              <td>{n.executor_nickname ?? <span className="muted">还没人</span>}</td>
+              <td>{n.in_dispute ? '纠纷中' : n.status_name}</td>
+              <td>{fmtYuan(n.budget_cents)}</td>
+              <td className={n.overdue ? 'error' : ''}>{n.deadline ? formatDateTime(n.deadline) : '—'}{n.overdue ? '（已逾期）' : ''}</td>
+              <td>{n.blocked_by.length ? n.blocked_by.map(title).join('、') : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

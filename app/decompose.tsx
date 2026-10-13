@@ -7,7 +7,7 @@
 import {
   LEAF_CRITERION_LABEL, TASK_STATUS_LABEL, apiErrorText, childrenOf, decompositionSourceLabel,
   executorLabel, fmtYuan, isOpenEnd, type Decomposition, type DecompositionNode,
-  type DecompositionNodePatch, type PlatformClient, type Task, type TaskTree,
+  type Cockpit, type DecompositionNodePatch, type PlatformClient, type Task, type TaskTree,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -218,6 +218,27 @@ export function TaskTreeBlock({ client, task, onOpenTask }: {
           <Text style={styles.row}>{c.title}  <Text style={styles.muted}>{fmtYuan(c.budget_cents)} · {TASK_STATUS_LABEL[c.status]}</Text></Text>
         </TouchableOpacity>
       ))}
+    </View>
+  );
+}
+
+/** SPACE-024 合作驾驶舱（APP-007 移动简化版）：进度、钱、要我出手的事、关键路径。 */
+export function CockpitBlock({ client, taskId }: { client: PlatformClient; taskId: number }) {
+  const [data, setData] = useState<Cockpit | null>(null);
+  useEffect(() => { void client.cockpit(taskId).then(setData).catch(() => setData(null)); }, [client, taskId]);
+  if (!data || !Array.isArray(data.nodes) || data.nodes.length === 0) return null;
+  const title = (id: number) => data.nodes.find((n) => n.id === id)?.title ?? `#${id}`;
+  const b = data.budget;
+  return (
+    <View style={styles.card} accessibilityLabel="合作驾驶舱">
+      <Text style={styles.title}>合作驾驶舱 · {data.steps_done}/{data.steps_total} 步完成</Text>
+      <Text style={styles.muted}>计划 {fmtYuan(b.planned_cents)} · 已托管 {fmtYuan(b.committed_cents)} · 已付 {fmtYuan(b.paid_cents)} · 还剩 {fmtYuan(b.remaining_cents)}</Text>
+      {data.alerts.map((a, i) => (
+        <Text key={i} style={a.kind === 'dispute' || a.kind === 'overdue' ? styles.warn : styles.row}>• {a.text}</Text>
+      ))}
+      {data.critical_path.length > 0 && (
+        <Text style={styles.small}>关键路径：{data.critical_path.map(title).join(' → ')}</Text>
+      )}
     </View>
   );
 }

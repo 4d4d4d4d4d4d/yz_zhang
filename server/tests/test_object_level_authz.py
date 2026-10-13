@@ -95,6 +95,8 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
      "报名与评价要满足身份条件（评价限当事人、报名限非发布方）"),
     (r"^DELETE /tasks/.*/bookmark$", "self", "取消的是自己的收藏：task_id 是收藏对象，收藏记录按调用者自己的 id 存"),
     (r"^PATCH /tasks/", "party", "改任务限发布方：标题、预算、验收标准都在这个接口里"),
+    (r"^GET /tasks/.*/cockpit$", "party",
+     "合作驾驶舱有每一步托管与付款的明细：只给母任务发布方（120 号 spec；test_cockpit 行为验）"),
     (r"^GET /tasks/.*/(reviews|progress|tree|dispute)$", "public",
      "评价、进度、子任务树、是否有纠纷：对任务可见范围内的人公开，"
      "是买方决策与平台公信的一部分；不含金额明细与联系方式"),
