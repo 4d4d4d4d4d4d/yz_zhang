@@ -3,7 +3,7 @@ import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, fmtYuan, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, describeChangeOrder, fmtYuan, formatDateTime, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DecomposeScreen, TaskTreeBlock } from './decompose';
 import { DiscoverScreen } from './Discover';
@@ -578,6 +578,8 @@ export function ChangeOrderBlock({ client, contract, onChanged }: {
   const [rows, setRows] = useState<ChangeOrderView[]>([]);
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [scope, setScope] = useState('');
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -602,7 +604,7 @@ export function ChangeOrderBlock({ client, contract, onChanged }: {
       {rows.map((r) => (
         <View key={r.id} style={styles.cardRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>改为 {fmtYuan(r.new_amount_cents)}</Text>
+            <Text style={styles.cardTitle}>{describeChangeOrder(r, contract.amount_cents, (t) => formatDateTime(t))}</Text>
             <Text style={styles.mutedLeft}>{r.status}{r.reason ? ` · ${r.reason}` : ''}</Text>
           </View>
           {/* 读服务端的 can_decide：提案人自己不能接受，客户端不重判 */}
@@ -619,12 +621,24 @@ export function ChangeOrderBlock({ client, contract, onChanged }: {
         <>
           <TextInput style={styles.input} keyboardType="numeric" value={amount}
                      onChangeText={setAmount} placeholder="新金额（元）" />
+          {/* SC-007b 改期（日期，当天 23:59 截止）、改范围 */}
+          <TextInput style={styles.input} value={deadline} onChangeText={setDeadline}
+                     placeholder="新的截止日期（如 2026-11-02，可不改）" accessibilityLabel="新的截止日期" />
+          <TextInput style={styles.input} value={scope} onChangeText={setScope}
+                     placeholder="范围调整（如：增加两个卧室，可不改）" accessibilityLabel="范围调整" />
           <TextInput style={styles.input} value={reason} onChangeText={setReason}
                      placeholder="事由（对方会看到）" />
-          <Button title="提出变更" onPress={() => act(async () => {
-            await client.proposeChange(contract.id, Math.round(parseFloat(amount || '0') * 100), reason);
-            setAmount(''); setReason('');
-          })} />
+          <Button title="提出变更" onPress={() => {
+            if (deadline && !/^\d{4}-\d{2}-\d{2}$/.test(deadline)) { setError('截止日期请写成 2026-11-02 这样'); return; }
+            void act(async () => {
+            await client.proposeChangeOrder(contract.id, {
+              new_amount_cents: amount ? Math.round(parseFloat(amount) * 100) : undefined,
+              new_deadline: deadline ? localInputToServerTime(`${deadline}T23:59`) : undefined,
+              scope_change: scope.trim() || undefined, reason,
+            });
+            setAmount(''); setReason(''); setDeadline(''); setScope('');
+            });
+          }} />
         </>
       )}
       <Text style={styles.mutedLeft}>

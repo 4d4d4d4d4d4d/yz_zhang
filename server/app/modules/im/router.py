@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.deps import get_current_user
-from app.core.errors import forbidden, not_found
+from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.modules.account.models import User
 
 from . import service
@@ -232,12 +232,30 @@ def send_message(
 def send_quote_card(
     conv_id: int, body: QuoteCardIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
-    """IM-009 发送报价卡（结构化 JSON 内容，前端渲染为卡片）。"""
+    """IM-009 发送报价卡（结构化 JSON 内容，前端渲染为卡片）。
+
+    V144 两端接上之前补的校验：报价对应的任务必须真实存在、且与这次对话有关——
+    发布方报自己的单（「我出这个价请你做」），或者对方是这单的发布方（「这单我报这个价」）；
+    后一种要求任务还在招募。卡片里存一份任务标题与发起方角色的快照，两端不用再查一次就能画出来。
+    """
     import json
 
+    from app.modules.task.models import Task
+
     conv = _get_conv(db, conv_id, user)
+    task = db.get(Task, body.task_id)
+    if task is None:
+        raise not_found("任务不存在")
+    from_creator = task.creator_id == user.id
+    if not from_creator:
+        if task.creator_id not in conv.participants:
+            raise bad_request("报价要发给这单的发布方", "quote_wrong_party")
+        # 这单自己的任务会话里不限状态（成交后为追加的活报价是原有用法，保留）；在别处报价要求还在招募
+        if conv.task_id != task.id and task.status != "published":
+            raise conflict("这单已经不在招募中", "task_closed")
     payload = json.dumps(
-        {"task_id": body.task_id, "price_cents": body.price_cents, "note": body.note},
+        {"task_id": body.task_id, "price_cents": body.price_cents, "note": body.note,
+         "title": task.title, "from_creator": from_creator},
         ensure_ascii=False,
     )
     msg = service.send(db, conv, user.id, payload, kind="quote")

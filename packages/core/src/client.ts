@@ -693,8 +693,17 @@ export class PlatformClient {
   acceptMilestone(contractId: number, idx: number) {
     return this.request<Contract>('POST', `/contracts/${contractId}/milestones/${idx}/accept`);
   }
+  /** SC-007b 变更单：金额、截止时间、范围三样可以单独改也可以一起改；只传要改的 */
+  proposeChangeOrder(contractId: number, input: { new_amount_cents?: number; new_deadline?: string; scope_change?: string; reason?: string }) {
+    // 不改的那几样传 undefined：JSON 序列化时整个键都不出现，服务端就当「这一样不改」
+    return this.request<{ id: number; status: string; new_amount_cents: number; new_deadline: string | null; scope_change: string }>(
+      'POST', `/contracts/${contractId}/change-orders`, {
+        new_amount_cents: input.new_amount_cents, new_deadline: input.new_deadline || undefined,
+        scope_change: input.scope_change || undefined, reason: input.reason ?? '',
+      });
+  }
   proposeChange(contractId: number, newAmountCents: number, reason = '') {
-    return this.request<{ id: number; status: string; new_amount_cents: number }>('POST', `/contracts/${contractId}/change-orders`, {
+    return this.request<{ id: number; status: string; new_amount_cents: number; new_deadline: string | null; scope_change: string }>('POST', `/contracts/${contractId}/change-orders`, {
       new_amount_cents: newAmountCents, reason,
     });
   }

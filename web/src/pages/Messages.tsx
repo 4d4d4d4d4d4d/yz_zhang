@@ -1,6 +1,6 @@
-import { apiErrorText, type Conversation, type Message } from '@platform/core';
+import { apiErrorText, fmtYuan, parseQuoteCard, type Conversation, type Message, type Task } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../store';
 
 export default function Messages() {
@@ -81,7 +81,14 @@ export default function Messages() {
             <div className="chat">
               {msgs.map((m) => (
                 <div key={m.id} className={`bubble ${m.sender_id === me?.id ? 'mine' : ''}`}>
-                  {m.content}
+                  {m.kind === 'quote' && parseQuoteCard(m.content)
+                    ? <QuoteCardView card={parseQuoteCard(m.content)!} mine={m.sender_id === me?.id}
+                                     onApply={async (c) => {
+                                       setWarning(null);
+                                       try { await client.apply(c.task_id, c.note || '按私信里的报价报名', c.price_cents); setWarning('已按这个价报名，等发布方确认'); }
+                                       catch (err) { setWarning(apiErrorText(err)); }
+                                     }} />
+                    : m.content}
                   {m.risk_flagged && <span title="疑似站外引导"> ⚠️</span>}
                   {/* IM-004 服务端给了 2 分钟撤回窗口，此前**没有任何端能点**。
                       过期与否由服务端判并给理由，客户端不重算那 2 分钟。 */}
@@ -106,9 +113,61 @@ export default function Messages() {
                      onKeyDown={(e) => e.key === 'Enter' && void send()} placeholder="输入消息…" />
               <button onClick={() => void send()}>发送</button>
             </div>
+            <QuoteComposer convTaskId={active.task_id} onSend={async (taskId, cents, note) => {
+              setWarning(null);
+              try { await client.sendQuoteCard(active.id, taskId, cents, note); setMsgs(await client.messages(active.id)); }
+              catch (err) { setWarning(apiErrorText(err)); }
+            }} />
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+
+/** IM-009 报价卡。发布方报自己的单（「我出这个价请你做」）→ 对方可以按这个价报名；
+ *  执行方对发布方的单报价 → 发布方去任务页的报名列表里选 TA。 */
+function QuoteCardView({ card, mine, onApply }: {
+  card: NonNullable<ReturnType<typeof parseQuoteCard>>; mine: boolean; onApply: (c: NonNullable<ReturnType<typeof parseQuoteCard>>) => void;
+}) {
+  return (
+    <div className="quote-card" data-testid="quote-card">
+      <strong>报价 {fmtYuan(card.price_cents)}</strong>
+      <div><Link to={`/tasks/${card.task_id}`}>{card.title ? `《${card.title}》` : `任务 #${card.task_id}`}</Link></div>
+      {card.note && <div className="muted">{card.note}</div>}
+      {!mine && card.from_creator && <button onClick={() => onApply(card)}>按这个价报名</button>}
+      {!mine && card.from_creator === false && <span className="muted">对方按这个价想接你的单：去任务页的报名列表里选 TA</span>}
+    </div>
+  );
+}
+
+function QuoteComposer({ convTaskId, onSend }: { convTaskId: number | null; onSend: (taskId: number, cents: number, note: string) => void }) {
+  const { client } = useApp();
+  const [open, setOpen] = useState(false);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskId, setTaskId] = useState('');
+  const [price, setPrice] = useState('');
+  const [note, setNote] = useState('');
+  useEffect(() => {
+    if (!open) return;
+    void client.myTasks({ role: 'posted', status: 'published' }).then(setTasks).catch(() => setTasks([]));
+  }, [client, open]);
+  if (!open) return <button className="ghost" onClick={() => setOpen(true)}>发报价</button>;
+  const chosen = convTaskId ?? (taskId ? Number(taskId) : null);
+  return (
+    <div className="row" aria-label="发报价" style={{ marginTop: 8 }}>
+      {convTaskId === null && (
+        <select aria-label="报哪一单" value={taskId} onChange={(e) => setTaskId(e.target.value)}>
+          <option value="">选我发布的招募中任务</option>
+          {tasks.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+        </select>
+      )}
+      <input type="number" min={1} aria-label="报价（元）" placeholder="报价（元）" value={price} onChange={(e) => setPrice(e.target.value)} style={{ width: 120 }} />
+      <input className="grow" aria-label="说明" placeholder="说明（含哪些、多久完成）" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} />
+      <button disabled={!chosen || !(parseFloat(price) > 0)}
+              onClick={() => { onSend(chosen!, Math.round(parseFloat(price) * 100), note); setOpen(false); setPrice(''); setNote(''); }}>发出报价卡</button>
+      <button className="ghost" onClick={() => setOpen(false)}>取消</button>
     </div>
   );
 }

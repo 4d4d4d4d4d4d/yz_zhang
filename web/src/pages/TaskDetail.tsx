@@ -1,7 +1,7 @@
 import ContractEvidence from '../ContractEvidence';
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, fmtYuan, formatDateTime, type ChangeOrderView, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, describeChangeOrder, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
 import { DisputePanel } from '../DisputePanel';
 import { ExperienceTools } from '../ExperienceUnits';
@@ -97,6 +97,7 @@ export default function TaskDetail() {
           {task.status === 'published' && !isCreator && (
             <button onClick={() => act(() => client.apply(taskId, '我可以做'))}>报名接单</button>
           )}
+          {task.status === 'published' && !isCreator && me && <QuoteToCreator taskId={taskId} creatorId={task.creator_id} />}
           {task.status === 'in_progress' && isExecutor && (
             <button onClick={() => act(() => client.deliver(taskId))}>提交验收</button>
           )}
@@ -433,6 +434,8 @@ function ChangeOrders({ contractId, amountCents, onChanged }: {
   const [rows, setRows] = useState<ChangeOrderView[]>([]);
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [scope, setScope] = useState('');
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -454,7 +457,7 @@ function ChangeOrders({ contractId, amountCents, onChanged }: {
       {rows.length === 0 && <p className="muted">没有变更单。范围或价格有调整时，从这里提出。</p>}
       {rows.map((r) => (
         <p key={r.id} className="muted">
-          #{r.id} 改为 <strong>{fmtYuan(r.new_amount_cents)}</strong> · {r.status}
+          #{r.id} <strong>{describeChangeOrder(r, amountCents, (t) => formatDateTime(t))}</strong> · {r.status}
           {r.reason && ` · ${r.reason}`}
           {/* 读服务端的 can_decide：提案人自己不能接受，客户端不重判 */}
           {r.can_decide && (
@@ -470,16 +473,24 @@ function ChangeOrders({ contractId, amountCents, onChanged }: {
       {!pending && (
         <div className="row">
           <input style={{ width: 130 }} type="number" min={0.01} step={0.01} placeholder="新金额（元）"
-                 value={amount} onChange={(e) => setAmount(e.target.value)} />
+                 aria-label="新金额" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          {/* SC-007b 改期、改范围：真实的「加了两个房间」通常同时要改期 */}
+          <input type="datetime-local" aria-label="新的截止时间" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+          <input className="grow" aria-label="范围调整" placeholder="范围调整（如：增加两个卧室）" maxLength={1000}
+                 value={scope} onChange={(e) => setScope(e.target.value)} />
           <input className="grow" placeholder="事由（对方会看到）" value={reason}
                  onChange={(e) => setReason(e.target.value)} />
-          <button disabled={!amount} onClick={() => act(async () => {
-            await client.proposeChange(contractId, Math.round(parseFloat(amount) * 100), reason);
-            setAmount(''); setReason('');
+          <button disabled={!amount && !deadline && !scope.trim()} onClick={() => act(async () => {
+            await client.proposeChangeOrder(contractId, {
+              new_amount_cents: amount ? Math.round(parseFloat(amount) * 100) : undefined,
+              new_deadline: deadline ? localInputToServerTime(deadline) : undefined,
+              scope_change: scope.trim() || undefined, reason,
+            });
+            setAmount(''); setReason(''); setDeadline(''); setScope('');
           })}>提出变更</button>
         </div>
       )}
-      <p className="muted">当前金额 {fmtYuan(amountCents)}；对方接受后差额自动补托管或退回。</p>
+      <p className="muted">当前金额 {fmtYuan(amountCents)}；金额、截止时间、范围可以一起改，对方接受后差额自动补托管或退回、任务截止与说明同步更新。</p>
       {error && <p className="error">{error}</p>}
     </div>
   );
@@ -533,5 +544,32 @@ function DefineMilestones({ contractId, amountCents, onDefined }: {
       </div>
       {error && <p className="error">{error}</p>}
     </div>
+  );
+}
+
+
+/** IM-009 私信报价：不急着报名，先把价格和说明发给发布方，在私聊里谈。 */
+function QuoteToCreator({ taskId, creatorId }: { taskId: number; creatorId: number }) {
+  const { client } = useApp();
+  const nav = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [price, setPrice] = useState('');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  if (!open) return <button className="ghost" onClick={() => setOpen(true)}>私信报价</button>;
+  return (
+    <span className="row" aria-label="私信报价">
+      <input type="number" min={1} aria-label="报价（元）" placeholder="报价（元）" value={price} onChange={(e) => setPrice(e.target.value)} style={{ width: 120 }} />
+      <input aria-label="报价说明" placeholder="含哪些、多久完成" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} />
+      <button disabled={!(parseFloat(price) > 0)} onClick={async () => {
+        setError('');
+        try {
+          const conv = await client.openDirect(creatorId);
+          await client.sendQuoteCard(conv.id, taskId, Math.round(parseFloat(price) * 100), note);
+          nav(`/messages?conversation=${conv.id}`);
+        } catch (e) { setError(apiErrorText(e)); }
+      }}>发给发布方</button>
+      {error && <span className="error">{error}</span>}
+    </span>
   );
 }

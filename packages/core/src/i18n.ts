@@ -48,6 +48,8 @@ export function resolveLocale(
  */
 export const ERROR_MESSAGE_ZH: Record<string, string> = {
   space_revision_conflict: '空间已在其他窗口更新，请重新打开后编辑',
+  change_empty: '变更单至少要改一样：金额、截止时间或范围',
+  quote_wrong_party: '报价要发给这单的发布方',
   wb_limit_reached: '数量已达上限，请先归档或删除不用的',
   wb_revision_conflict: '这个任务已在其他窗口或设备上改过，请刷新后再改',
   progress_from_children: '这个任务的进度按清单子项自动计算，不能手填',

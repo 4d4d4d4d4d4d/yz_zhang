@@ -332,3 +332,5 @@ input[type=checkbox] { width:auto; accent-color:var(--brand); }
 .workbench .list label { display: flex; flex-direction: row; align-items: center; gap: 8px; font-size: 15px; color: var(--text); }
 .workbench input[type="checkbox"] { width: 18px; height: 18px; flex: 0 0 auto; margin: 0; }
 .workbench [role="dialog"] h4 { margin: 16px 0 6px; }
+/* IM-009 报价卡 */
+.quote-card { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card, #fff); min-width: 200px; }

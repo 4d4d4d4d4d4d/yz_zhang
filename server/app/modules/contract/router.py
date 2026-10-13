@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from . import service
 from .models import ChangeOrder, Contract, Milestone
-from app.core.timefmt import iso
+from app.core.timefmt import UtcDatetime, iso
 
 router = APIRouter(prefix="/contracts", tags=["contract"])
 
@@ -23,8 +23,11 @@ class MilestonesIn(BaseModel):
 
 
 class ChangeIn(BaseModel):
-    new_amount_cents: int = Field(gt=0)
-    reason: str = ""
+    # SC-007b 三样可以单独改、也可以一起改；只传 new_amount_cents 的老调用方式不变
+    new_amount_cents: int | None = Field(default=None, gt=0)
+    reason: str = Field(default="", max_length=500)
+    new_deadline: UtcDatetime | None = None
+    scope_change: str = Field(default="", max_length=1000)
 
 
 def _get(db: Session, contract_id: int, user: User) -> Contract:
@@ -221,8 +224,10 @@ def propose_change(
     contract_id: int, body: ChangeIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
     contract = _get(db, contract_id, user)
-    order = service.propose_change(db, contract, user.id, body.new_amount_cents, body.reason)
-    return {"id": order.id, "status": order.status, "new_amount_cents": order.new_amount_cents}
+    order = service.propose_change(db, contract, user.id, body.new_amount_cents, body.reason,
+                                   new_deadline=body.new_deadline, scope_change=body.scope_change.strip())
+    return {"id": order.id, "status": order.status, "new_amount_cents": order.new_amount_cents,
+            "new_deadline": iso(order.new_deadline), "scope_change": order.scope_change}
 
 
 @router.post("/{contract_id}/change-orders/{order_id}/accept")
@@ -278,6 +283,7 @@ def list_change_orders(
     return [
         {"id": r.id, "contract_id": r.contract_id, "proposed_by": r.proposed_by,
          "new_amount_cents": r.new_amount_cents, "reason": r.reason, "status": r.status,
+         "new_deadline": iso(r.new_deadline), "scope_change": r.scope_change,
          "created_at": iso(r.created_at),
          "can_decide": r.status == "pending" and r.proposed_by != user.id}
         for r in rows

@@ -337,6 +337,10 @@ export interface ChangeOrderView {
   status: string;
   created_at: string;
   can_decide: boolean;
+  /** SC-007b 改期：null 表示这张不改截止时间 */
+  new_deadline: string | null;
+  /** SC-007b 改范围：空串表示这张不改范围 */
+  scope_change: string;
 }
 
 /** GEO-023 一键求助的回执。

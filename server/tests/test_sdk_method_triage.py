@@ -44,6 +44,7 @@ def _unused(method: str) -> bool:
 # 判定标准：**这个方法本来就不该由用户侧界面调用**，
 # 不是「还没做」。后者属于第 3 类。
 INTENTIONAL: dict[str, str] = {
+    "proposeChange": "兼容保留（只增不减，FEAT-001）：只改价的老调用方式；两端自 V144 起改用 proposeChangeOrder（可同时改期、改范围），第三方集成仍可用它",
     # V132 两端改用逐步编辑（editDecompositionNode）；一层整表替换的写法只在树还只有一层时
     # 有意义，保留给 V132 之前的客户端与直接调 API 的人（服务端对多层的树返回 409）
     "editDecomposition": "一层整表编辑，V132 起被逐步编辑取代；为旧客户端与 API 调用方保留",
@@ -87,10 +88,9 @@ SCHEDULED: dict[str, str] = {
     "bookmark": "CONTENT-050", "unbookmark": "CONTENT-050", "myBookmarks": "CONTENT-050",
     "userContents": "CONTENT-050", "userReviews": "CONTENT-050",
     "publicProfile": "CONTENT-050", "signVideoUpload": "CONTENT-050",
-    "sendQuoteCard": "CONTENT-050",
     "mySubscriptions": "CONTENT-050", "unsubscribe": "CONTENT-050",
     # 任务侧的三条（03 号 spec）：我的任务、草稿发布、编辑
-    "myTasks": "TASK-060", "publishTask": "TASK-060", "editTask": "TASK-060",
+    "publishTask": "TASK-060", "editTask": "TASK-060",
     "trip": "TASK-060",
     # 编排循环（17 号 spec）：mission 的用户侧界面
     "createMission": "ORC-066", "getMission": "ORC-066", "myMissions": "ORC-066",

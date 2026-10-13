@@ -200,3 +200,40 @@ describe('SPACE-023 资料页设置可用时段与少量接单', () => {
     expect(screen.getByText('服务设置与隐私')).toBeTruthy();
   });
 });
+
+describe('IM-009 消息里的报价卡', () => {
+  it('发布方报的价：对方看到卡片并能按这个价报名；执行方报的价：发布方看到去选 TA', async () => {
+    const calls: Array<{ method: string; path: string; body?: unknown }> = [];
+    const q = (id: number, sender: number, fromCreator: boolean) => ({ id, sender_id: sender, kind: 'quote', risk_flagged: false, recalled: false,
+      created_at: '2026-10-13T00:00:00Z', content: JSON.stringify({ task_id: 9, price_cents: 21000, note: '周六上午', title: '三居室保洁', from_creator: fromCreator }) });
+    open('/messages?conversation=2', {
+      '/users/me': ME,
+      '/conversations': [{ id: 2, kind: 'direct', task_id: null, participants: [2, 5], title: '陈设计', unread_count: 0, last_message: null }],
+      '/conversations/2/messages': [q(1, 5, true), q(2, 5, false)],
+      'POST /tasks/9/applications': { id: 1, status: 'pending' },
+    }, calls);
+    const cards = await screen.findAllByTestId('quote-card');
+    expect(cards[0].textContent).toContain('¥210.00');
+    expect(cards[0].textContent).toContain('《三居室保洁》');
+    expect(cards[1].textContent).toContain('去任务页的报名列表里选 TA');
+    fireEvent.click(screen.getByRole('button', { name: '按这个价报名' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks/9/applications')?.body)
+      .toEqual({ message: '周六上午', bid_cents: 21000 }));
+  });
+
+  it('在私聊里从我发布的招募中任务里选一单发报价', async () => {
+    const calls: Array<{ method: string; path: string; body?: unknown }> = [];
+    open('/messages?conversation=2', {
+      '/users/me': ME,
+      '/conversations': [{ id: 2, kind: 'direct', task_id: null, participants: [2, 5], title: '陈设计', unread_count: 0, last_message: null }],
+      '/conversations/2/messages': [], '/tasks/mine': [{ id: 9, title: '三居室保洁' }],
+      'POST /conversations/2/quote-cards': { id: 3, kind: 'quote' },
+    }, calls);
+    fireEvent.click(await screen.findByRole('button', { name: '发报价' }));
+    fireEvent.change(await screen.findByLabelText('报哪一单'), { target: { value: '9' } });
+    fireEvent.change(screen.getByLabelText('报价（元）'), { target: { value: '210' } });
+    fireEvent.click(screen.getByRole('button', { name: '发出报价卡' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/conversations/2/quote-cards')?.body)
+      .toEqual({ task_id: 9, price_cents: 21000, note: '' }));
+  });
+});

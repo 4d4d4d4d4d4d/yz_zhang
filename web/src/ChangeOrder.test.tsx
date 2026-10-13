@@ -85,6 +85,25 @@ describe('SC-007 变更单', () => {
   });
 });
 
+describe('SC-007b 变更单改期 / 改范围', () => {
+  it('不改价也能提：只发截止时间与范围；列表里一句话说清改了什么', async () => {
+    const calls = open({ '/contracts/3/change-orders': [{
+      id: 1, contract_id: 3, proposed_by: 2, new_amount_cents: CONTRACT.amount_cents, reason: '', status: 'rejected',
+      created_at: '2026-09-24T00:00:00Z', can_decide: false, new_deadline: null, scope_change: '增加阳台' }] });
+    await waitFor(() => expect(screen.getByText(/范围：增加阳台/)).toBeTruthy());
+    expect(screen.queryByText(/改为 ¥/)).toBeNull();          // 没改价就不说改价
+    fireEvent.change(screen.getByLabelText('新的截止时间'), { target: { value: '2030-01-02T18:00' } });
+    fireEvent.change(screen.getByLabelText('范围调整'), { target: { value: '增加两个卧室' } });
+    fireEvent.click(screen.getByText('提出变更'));
+    await waitFor(() => {
+      const c = calls.find((x) => x.method === 'POST' && x.path === '/contracts/3/change-orders');
+      expect(c?.body).toMatchObject({ scope_change: '增加两个卧室', reason: '' });
+      expect((c?.body as { new_deadline: string }).new_deadline.endsWith('Z')).toBe(true);
+      expect(c?.body).not.toHaveProperty('new_amount_cents');
+    });
+  });
+});
+
 describe('SC-004 分期', () => {
   const PENDING = { ...CONTRACT, status: 'pending_signatures', signed_by_requester: false, signed_by_executor: false };
   const CREATOR_ME = { ...ME, id: 1 };

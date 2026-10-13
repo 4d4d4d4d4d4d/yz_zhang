@@ -9,7 +9,7 @@
 //   在 App 上不存在——又一条「通知把人叫来了，他点进去无路可走」。
 import {
   apiErrorText, fmtYuan,
-  type InvitationItem, type Message, type PlatformClient,
+  parseQuoteCard, type InvitationItem, type Message, type PlatformClient,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -100,7 +100,25 @@ function Thread({ client, convId, onBack }: {
       {rows.map((m) => (
         <View key={m.id} style={s.card}>
           <Text style={s.muted}>#{m.sender_id}</Text>
-          <Text>{m.content}</Text>
+          {/* IM-009 报价卡：发布方报自己的单 → 对方按这个价报名；执行方报价 → 发布方去报名列表选 TA */}
+          {m.kind === 'quote' && parseQuoteCard(m.content) ? (() => {
+            const c = parseQuoteCard(m.content)!;
+            return (
+              <View accessibilityLabel="报价卡">
+                <Text style={s.cardTitle}>报价 {fmtYuan(c.price_cents)}</Text>
+                <Text>{c.title ? `《${c.title}》` : `任务 #${c.task_id}`}</Text>
+                {!!c.note && <Text style={s.muted}>{c.note}</Text>}
+                {c.from_creator && (
+                  <Button title="按这个价报名" onPress={async () => {
+                    setError(''); setWarning(null);
+                    try { await client.apply(c.task_id, c.note || '按私信里的报价报名', c.price_cents); setWarning('已按这个价报名，等发布方确认'); }
+                    catch (e) { setError(apiErrorText(e)); }
+                  }} />
+                )}
+                {c.from_creator === false && <Text style={s.muted}>对方按这个价想接你的单：去任务的报名列表里选 TA</Text>}
+              </View>
+            );
+          })() : <Text>{m.content}</Text>}
           {/* IM-006 命中风控的消息带标记：教育型提示，不拦截 */}
           {m.risk_flagged && <Text style={s.error}>⚠️ 疑似站外引导</Text>}
           {/* IM-004 服务端给了 2 分钟撤回窗口，此前**没有任何端能点**。

@@ -173,3 +173,25 @@ describe('SC-013 整单验收前要说清会放掉几期', () => {
     expect(screen.queryByText(/这一步会放掉剩余/)).toBeNull();
   });
 });
+
+describe('SC-007b App 上的变更单改期 / 改范围', () => {
+  it('只改截止日期与范围：不发金额；日期写错先拦下', async () => {
+    const calls: Array<{ method: string; path: string; body: unknown }> = [];
+    const client = makeClient({ '/contracts/3/change-orders': [] }, calls);
+    render(<ChangeOrderBlock client={client} contract={CONTRACT} onChanged={async () => undefined} />);
+    await waitFor(() => expect(screen.getByText(/没有变更单/)).toBeTruthy());
+    fireEvent.changeText(screen.getByLabelText('新的截止日期'), '11月2号');
+    fireEvent.press(screen.getByText('提出变更'));
+    await waitFor(() => expect(screen.getByText('截止日期请写成 2026-11-02 这样')).toBeTruthy());
+    expect(calls.some((c) => c.method === 'POST')).toBe(false);
+    fireEvent.changeText(screen.getByLabelText('新的截止日期'), '2030-11-02');
+    fireEvent.changeText(screen.getByLabelText('范围调整'), '增加两个卧室');
+    fireEvent.press(screen.getByText('提出变更'));
+    await waitFor(() => {
+      const c = calls.find((x) => x.method === 'POST' && x.path === '/contracts/3/change-orders');
+      expect(c?.body).toMatchObject({ scope_change: '增加两个卧室' });
+      expect(c?.body).not.toHaveProperty('new_amount_cents');
+      expect(String((c?.body as { new_deadline: string }).new_deadline)).toMatch(/^2030-11-0[12]T/);
+    });
+  });
+});

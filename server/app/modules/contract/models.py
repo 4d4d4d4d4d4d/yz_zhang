@@ -79,6 +79,9 @@ class ChangeOrder(Base):
     proposed_by: Mapped[int] = mapped_column(Integer)
     new_amount_cents: Mapped[int] = mapped_column(Integer)
     reason: Mapped[str] = mapped_column(String(500), default="")
+    # SC-007b 真实的「加了两个房间」通常同时要改期、改范围。不改价时 new_amount_cents 记原金额
+    new_deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    scope_change: Mapped[str] = mapped_column(String(1000), default="")
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending/accepted/rejected
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 

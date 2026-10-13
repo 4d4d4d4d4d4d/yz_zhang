@@ -71,3 +71,40 @@ export function taskActions(
   }
   return out;
 }
+
+
+/** IM-009 报价卡：消息内容是服务端写的 JSON；解析不了（旧消息、被撤回）就返回 null，界面照普通消息显示。 */
+export interface QuoteCard {
+  task_id: number;
+  price_cents: number;
+  note: string;
+  /** V144 起服务端写入的快照；更早的卡片没有，界面退回显示任务编号 */
+  title?: string;
+  /** 发起方是不是这单的发布方：是 → 对方可以「按这个价报名」；否 → 发布方去任务页选 TA */
+  from_creator?: boolean;
+}
+
+export function parseQuoteCard(content: string): QuoteCard | null {
+  try {
+    const v = JSON.parse(content) as Partial<QuoteCard>;
+    return typeof v.task_id === 'number' && typeof v.price_cents === 'number'
+      ? { note: '', ...v } as QuoteCard : null;
+  } catch {
+    return null;
+  }
+}
+
+
+/** SC-007b 一张变更单改了什么，一句话（两端共用，说法一致）。 */
+export function describeChangeOrder(
+  r: { new_amount_cents: number; new_deadline?: string | null; scope_change?: string },
+  currentAmountCents: number, formatTime: (iso: string) => string,
+): string {
+  const parts: string[] = [];
+  if (r.new_amount_cents !== currentAmountCents || (!r.new_deadline && !r.scope_change)) {
+    parts.push(`改为 ¥${(r.new_amount_cents / 100).toFixed(2)}`);   // 沿用原来的文案「改为 ¥X」
+  }
+  if (r.new_deadline) parts.push(`截止改为 ${formatTime(r.new_deadline)}`);
+  if (r.scope_change) parts.push(`范围：${r.scope_change}`);
+  return parts.join('；');
+}

@@ -624,6 +624,7 @@ sdk platformFinance
 sdk priceReference
 sdk propose
 sdk proposeChange
+sdk proposeChangeOrder
 sdk proposePayout
 sdk proposeSettlement
 sdk publicProfile

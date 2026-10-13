@@ -479,16 +479,26 @@ def release_milestone(db: Session, contract: Contract, user_id: int, milestone: 
     return milestone
 
 
-def propose_change(db: Session, contract: Contract, user_id: int, new_amount: int, reason: str) -> ChangeOrder:
-    """SC-007 变更单：改价提案（放款开始后不可改）。"""
+def propose_change(db: Session, contract: Contract, user_id: int, new_amount: int | None, reason: str,
+                   new_deadline=None, scope_change: str = "") -> ChangeOrder:
+    """SC-007 变更单：改价 / 改期 / 改范围（SC-007b），三样可以单独改也可以一起改。
+
+    改价的约束不变（放款开始后不可改价）；只改期或改范围不动钱，分期放款开始后也可以提。
+    """
     if user_id not in (contract.requester_id, contract.executor_id):
         raise bad_request("非合约当事人", "not_party")
     if contract.status not in ("signed", "funded") or contract.frozen:
         raise conflict("当前状态不可变更", "not_changeable")
-    if contract.released_cents > 0:
+    price_change = new_amount is not None and new_amount != contract.amount_cents
+    if new_amount is not None and not price_change and not (new_deadline or scope_change):
+        raise bad_request("变更金额无效", "invalid_amount")      # 老调用：传了和原来一样的金额
+    if not (price_change or new_deadline or scope_change):
+        raise bad_request("变更单至少要改一样：金额、截止时间或范围", "change_empty")
+    if price_change and contract.released_cents > 0:
         raise conflict("已开始分期放款，不可整体改价", "already_releasing")
-    if new_amount <= 0 or new_amount == contract.amount_cents:
-        raise bad_request("变更金额无效", "invalid_amount")
+    if new_deadline is not None and new_deadline <= utcnow():
+        raise bad_request("新的截止时间要在现在之后", "deadline_in_past")
+    new_amount = new_amount if price_change else contract.amount_cents
     pending = (
         db.query(ChangeOrder)
         .filter(ChangeOrder.contract_id == contract.id, ChangeOrder.status == "pending")
@@ -497,7 +507,8 @@ def propose_change(db: Session, contract: Contract, user_id: int, new_amount: in
     if pending:
         raise conflict("已有待处理的变更单", "change_pending")
     order = ChangeOrder(
-        contract_id=contract.id, proposed_by=user_id, new_amount_cents=new_amount, reason=reason
+        contract_id=contract.id, proposed_by=user_id, new_amount_cents=new_amount, reason=reason,
+        new_deadline=new_deadline, scope_change=scope_change,
     )
     db.add(order)
     db.flush()
@@ -526,14 +537,28 @@ def _notify_change(db: Session, contract: Contract, order: ChangeOrder, *, propo
                  else contract.requester_id)
         if other:
             notify(db, other, "contract", "收到合约变更单",
-                   f"任务《{title}》的对方提出把金额改为 "
-                   f"¥{order.new_amount_cents / 100:.2f}"
+                   f"任务《{title}》的对方提出变更：{_change_summary(contract, order)}"
                    f"（事由：{order.reason or '未填写'}），请在合约里确认或拒绝。")
         return
     # 裁决结果回给提案人——他是等着这个答复才能决定下一步的人
-    done = "已被接受，合约金额与托管已同步调整" if order.status == "accepted" else "被拒绝"
+    done = "已被接受，合约已同步调整" if order.status == "accepted" else "被拒绝"
     notify(db, order.proposed_by, "contract", "变更单处理结果",
-           f"任务《{title}》的变更单（改为 ¥{order.new_amount_cents / 100:.2f}）{done}。")
+           f"任务《{title}》的变更单（{_change_summary(contract, order)}）{done}。")
+
+
+def _change_summary(contract: Contract, order: ChangeOrder, old_amount: int | None = None) -> str:
+    """一句话说清这张变更单改了什么（通知与合约附录共用，两处不会说法不一）。"""
+    from app.core.timefmt import iso
+
+    parts = []
+    base = contract.amount_cents if old_amount is None else old_amount
+    if order.new_amount_cents != base:
+        parts.append(f"金额由 ¥{base / 100:.2f} 改为 ¥{order.new_amount_cents / 100:.2f}")
+    if order.new_deadline:
+        parts.append(f"截止时间改为 {iso(order.new_deadline)}")
+    if order.scope_change:
+        parts.append(f"范围调整：{order.scope_change}")
+    return "；".join(parts) or f"金额 ¥{order.new_amount_cents / 100:.2f}"
 
 
 def accept_change(db: Session, contract: Contract, user_id: int, order: ChangeOrder) -> Contract:
@@ -544,9 +569,9 @@ def accept_change(db: Session, contract: Contract, user_id: int, order: ChangeOr
         raise bad_request("需由合约对方接受变更", "not_counterparty")
     lock_contract_funds(db, contract)  # CONC-012 变更单会补/退托管，同属资金路径
     milestones = db.query(Milestone).filter(Milestone.contract_id == contract.id).all()
-    if len(milestones) > 1:
-        raise conflict("多里程碑合约请拆期变更（暂不支持整体改价）", "multi_milestone")
     diff = order.new_amount_cents - contract.amount_cents
+    if diff and len(milestones) > 1:      # SC-007b 只改期 / 改范围不动钱，多里程碑也可以
+        raise conflict("多里程碑合约请拆期变更（暂不支持整体改价）", "multi_milestone")
     if contract.status == "funded":
         if diff > 0:
             wallet.escrow_hold(db, contract.requester_id, diff, contract.id)
@@ -556,12 +581,17 @@ def accept_change(db: Session, contract: Contract, user_id: int, order: ChangeOr
     contract.amount_cents = order.new_amount_cents
     contract.version += 1
     # SC-007 变更以附录形式追加到条款，保证导出文书与实际金额一致（不篡改原始条款）
+    change_text = (f"金额由 {old_amount / 100:.2f} 元变更为 {order.new_amount_cents / 100:.2f} 元"
+                   if diff else "")
+    extra = _change_summary(contract, order, old_amount=order.new_amount_cents)   # 只取改期 / 改范围
+    if order.new_deadline or order.scope_change:
+        change_text = "；".join(x for x in (change_text, extra) if x)
     contract.terms = (
         f"{contract.terms}\n\n── 变更附录 v{contract.version}（{utcnow().date().isoformat()}）──\n"
-        f"金额由 {old_amount / 100:.2f} 元变更为 {order.new_amount_cents / 100:.2f} 元"
-        f"（提案人 用户{order.proposed_by}）。事由：{order.reason or '（未填写）'}"
+        f"{change_text}"
+        f"（提案人 {_party(db, order.proposed_by)}）。事由：{order.reason or '（未填写）'}"
     )
-    if milestones:
+    if milestones and diff:
         milestones[0].amount_cents = order.new_amount_cents
         db.add(milestones[0])
     order.status = "accepted"
@@ -579,6 +609,10 @@ def accept_change(db: Session, contract: Contract, user_id: int, order: ChangeOr
     task = db.get(Task, contract.task_id)
     if task:
         task.budget_cents = order.new_amount_cents
+        if order.new_deadline:                  # SC-007b 改期：任务截止时间跟着变（临期提醒按新的算）
+            task.deadline = order.new_deadline
+        if order.scope_change:                  # SC-007b 改范围：任务说明后面追加，原文不删
+            task.description = f"{task.description}\n【变更 v{contract.version}】{order.scope_change}".strip()
         db.add(task)
     _notify_change(db, contract, order, proposed=False)
     return contract
