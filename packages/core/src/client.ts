@@ -160,6 +160,8 @@ export class PlatformClient {
     privacy?: { profile_public?: boolean };
     service_rate_cents?: number;
     available_times?: string;
+    weekly_slots?: import('./types').WeeklySlot[];
+    limited_capacity?: boolean;
   }) {
     return this.request<Me>('PATCH', '/users/me', patch);
   }

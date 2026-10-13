@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -62,6 +62,20 @@ class SmsLoginIn(BaseModel):
     sms_code: str
 
 
+class WeeklySlot(BaseModel):
+    """SPACE-023 每周一个可用时段（北京时间）。"""
+    model_config = ConfigDict(populate_by_name=True)
+    d: int = Field(ge=0, le=6)
+    start: str = Field(alias="from", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    end: str = Field(alias="to", pattern=r"^([01]\d|2[0-3]):[0-5]\d$|^24:00$")
+
+    @model_validator(mode="after")
+    def _order(self):
+        if self.end <= self.start:
+            raise ValueError("结束时间要晚于开始时间")
+        return self
+
+
 class ProfileUpdateIn(BaseModel):
     nickname: str | None = None
     bio: str | None = None
@@ -74,6 +88,10 @@ class ProfileUpdateIn(BaseModel):
     service_rate_cents: int | None = None
     available_times: str | None = None
     accepting_orders: bool | None = None  # ACC-014 接单开关（下线不进推荐/不可被邀约）
+    weekly_slots: list[WeeklySlot] | None = Field(default=None, max_length=14)   # SPACE-023
+    limited_capacity: bool | None = None  # SPACE-023 少量接单
+
+
 
 
 class VerifyIn(BaseModel):
@@ -113,6 +131,8 @@ def _me(user: User) -> dict:
         "rating_avg": user.rating_avg,
         "tasks_completed": user.tasks_completed,
         "referral_code": user.referral_code,
+        "weekly_slots": user.weekly_slots or [],
+        "limited_capacity": bool(user.limited_capacity),
     }
 
 
@@ -497,7 +517,10 @@ def update_me(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db, scope="function"),
 ):
-    for field, value in body.model_dump(exclude_none=True).items():
+    data = body.model_dump(exclude_none=True)
+    if body.weekly_slots is not None:
+        data["weekly_slots"] = [s.model_dump(by_alias=True) for s in body.weekly_slots]
+    for field, value in data.items():
         setattr(user, field, value)
     db.add(user)
     return _me(user)

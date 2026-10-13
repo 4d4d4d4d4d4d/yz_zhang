@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.deps import get_current_user, require_verified
 from app.core.errors import bad_request, conflict, forbidden, not_found
-from app.modules.account.models import User
+from app.modules.account.models import User, utcnow
 from app.modules.contract import service as contract_service
 from app.modules.task.models import Application, Task
 from app.modules.task.service import transition
@@ -97,6 +97,7 @@ def accept_invitation(
     check_category_qualification(db, task, user)  # ACC-022 受限类目准入
     check_executor_capacity(db, user.id)  # TASK-011 并发接单上限
     inv.status = "accepted"
+    inv.responded_at = utcnow()
     app_row = Application(
         task_id=task.id, applicant_id=user.id, bid_cents=task.budget_cents,
         message=f"[邀约] {inv.message}", status="accepted",
@@ -118,6 +119,7 @@ def decline_invitation(
     if inv.status != "pending":
         raise conflict("邀约已处理", "invitation_closed")
     inv.status = "declined"
+    inv.responded_at = utcnow()
     db.add(inv)
     return {"status": "declined"}
 

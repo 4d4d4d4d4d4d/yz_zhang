@@ -19,12 +19,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { CertificationsScreen } from './certifications';
 import { AskScreen } from './ask';
 import { WorkbenchScreen } from './workbench';
+import { AvailabilityScreen } from './availability';
 import { RightsScreen } from './rights';
 import { ApplicationsScreen, InvitationsScreen, MessagesScreen } from './MessagesAndInvites';
 import { Button, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export type SubScreen = 'messages' | 'invitations' | 'applications' | 'certifications'
-  | 'rights' | 'ask' | 'teams' | 'ventures' | 'developer' | 'workbench';
+  | 'rights' | 'ask' | 'teams' | 'ventures' | 'developer' | 'workbench' | 'availability';
 
 export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   messages: '消息',
@@ -37,6 +38,7 @@ export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   ventures: '早期合作体',
   developer: '开发者（API Key / Webhook）',
   workbench: '我的工作台（任务 / 进度 / 助手）',
+  availability: '我的可用时间（时段 / 少量接单）',
 };
 
 export function SubScreenHost({ client, screen, onBack, onPublish }: {
@@ -58,6 +60,7 @@ export function SubScreenHost({ client, screen, onBack, onPublish }: {
       {screen === 'ventures' && <VenturesScreen client={client} />}
       {screen === 'developer' && <DeveloperScreen client={client} />}
       {screen === 'workbench' && <WorkbenchScreen client={client} />}
+      {screen === 'availability' && <AvailabilityScreen client={client} />}
     </ScrollView>
   );
 }

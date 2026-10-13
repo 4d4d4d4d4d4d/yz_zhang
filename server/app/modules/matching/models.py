@@ -20,6 +20,8 @@ class Invitation(Base):
     message: Mapped[str] = mapped_column(String(500), default="")
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending/accepted/declined
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # SPACE-023 回复邀约的时刻：接受或婉拒都算回复，用来算「通常多久回复」
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class MatchingConfig(Base):

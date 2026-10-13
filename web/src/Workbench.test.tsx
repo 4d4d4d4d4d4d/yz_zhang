@@ -181,3 +181,22 @@ describe('SPACE-029 个人空间显示履约记录', () => {
     expect(section.textContent).toContain('厨房很干净');
   });
 });
+
+describe('SPACE-023 资料页设置可用时段与少量接单', () => {
+  it('勾周六、改结束时间、勾少量接单，保存时发出时段（原有的服务设置不受影响）', async () => {
+    const calls: Array<{ method: string; path: string; body?: unknown }> = [];
+    open('/profile', { '/users/me': { ...ME, weekly_slots: [], limited_capacity: false }, 'PATCH /users/me': ME,
+      '/users/me/certifications': { active: [], applications: [] }, '/finance/my-tax': { mode: 'labor', yearly: [], items: [], disclaimer: '' },
+      '/legal/agreements': { current_version: 'v1', documents: [], sensitive_scopes: [], rights: {} },
+      '/wallet/payout-account': { kind: '', account_no: '', holder_name: '', bound: false } }, calls);
+    const sat = await screen.findByLabelText('周六有空');
+    fireEvent.click(sat);
+    fireEvent.change(screen.getByLabelText('周六结束'), { target: { value: '12:00' } });
+    fireEvent.click(screen.getByLabelText(/这阵子少量接单/));
+    fireEvent.click(screen.getByRole('button', { name: '保存可用时间' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH' && c.path === '/users/me')).toBe(true));
+    expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({
+      weekly_slots: [{ d: 5, from: '09:00', to: '12:00' }], limited_capacity: true });
+    expect(screen.getByText('服务设置与隐私')).toBeTruthy();
+  });
+});

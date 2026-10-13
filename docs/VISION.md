@@ -94,7 +94,7 @@
 | V-3 | 高级协作（合伙公司、商业活动） | `createTeam` `myTeams` `confirmContribution` `distributeVenture` | 两端已接 | 团队成员增删仍仅 web（TEAM-065）；持续合作空间不是统一驾驶舱（SPACE-024） |
 | V-4 | 智能合约保证可信流程 | `signContract` `fundContract` `acceptDelivery` `openDispute` | 两端已接 | 证据包导出仍仅 web（`exportEvidence`）；可靠电子签名与司法存证需持牌机构（红线 4、5）；链上资产未正式部署 |
 | V-5a | AI 协助：不懂领域 | `legalAsk` | 两端已接（V122） | 文书生成仍无客户端（LAW-050）；专业供应商与专家复核闭环未验收 |
-| V-5b | AI 协助：找合作者 | `recommendations` `eligibleAgents` | 两端已接（V136） | 110 号 spec：推荐带理由、不可用的助理原样说理由；领域化能力证据与可用时间匹配未实现（SPACE-023） |
+| V-5b | AI 协助：找合作者 | `recommendations` `eligibleAgents` | 两端已接（V136） | 110 号 spec：推荐带理由、不可用的助理原样说理由；V142 / V143 推荐看报名、做成过的类目、空间自述、可用时段、少量接单与回复时长（117、118 号）；作品语义匹配未做（SPACE-023b） |
 | V-5c | AI 协助：任务拆解 | `propose` `confirmDecomposition` `taskTree` | 两端已接（V133） | V132 起是逐层展开的树并判定谁能闭环（106 号）；V135 起第一层先用经验流程单元（109 号），更深的层不查 |
 | V-6 | 平台累积成功经验 | `knowledgeCards` `knowledgeSearch` `knowledgeClusters` `knowledgeUnits` | 两端已接（V122 样本、V134 子类、V135 单元） | 个案引用授权未开放（KB-077）；分成口径未定（SPACE-027） |
 | V-7 | 经验作为检索库与 skill tool | `knowledgeUnits` `knowledgeUnit` `invokeExperienceTool` | 两端已接（V135） | 109 号 spec：只出草稿、不碰钱、结果回流、撤回穿透；编排器 / 个人 Agent 尚不调用（AGT-084），训练授权没有消费者（KB-091） |

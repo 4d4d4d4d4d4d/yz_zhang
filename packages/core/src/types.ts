@@ -21,6 +21,17 @@ export interface Me {
   certifications: string[];
   credit_level: string;
   referral_code: string;
+  /** SPACE-023 每周可用时段（北京时间）。只用来回答「截止前有没有空」，不公开给别人 */
+  weekly_slots: WeeklySlot[];
+  /** SPACE-023 少量接单：还接，但这阵子忙 */
+  limited_capacity: boolean;
+}
+
+/** SPACE-023 每周一个可用时段：d 为 0（周一）~ 6（周日），时间为北京时间 HH:MM */
+export interface WeeklySlot {
+  d: number;
+  from: string;
+  to: string;
 }
 
 export type TaskStatus =

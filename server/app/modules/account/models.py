@@ -33,6 +33,11 @@ class User(Base):
     available_times: Mapped[str] = mapped_column(String(200), default="")
     # ACC-014 接单开关（业界「上线/下线」）：关闭后不进推荐、不可被邀约；主动报名不受限
     accepting_orders: Mapped[bool] = mapped_column(Boolean, default=True)
+    # SPACE-023 每周可用时段（北京时间）：[{"d": 0-6（0=周一）, "from": "HH:MM", "to": "HH:MM"}]。
+    # 只用来回答「截止前有没有空」，不把完整日程给别人看
+    weekly_slots: Mapped[list] = mapped_column(JSON, default=list)
+    # SPACE-023 少量接单：还接，但这阵子忙——推荐里轻微降权并写明，不像下线那样完全不出现
+    limited_capacity: Mapped[bool] = mapped_column(Boolean, default=False)
     # ACC-020 实名认证（模拟 eKYC 通过后置位；接单/提现前强制）
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     real_name: Mapped[str] = mapped_column(String(50), default="")

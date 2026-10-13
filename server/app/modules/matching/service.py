@@ -87,6 +87,84 @@ def _category_fit(db: Session, task, users: list[User]) -> dict[int, tuple[float
     return out
 
 
+# SPACE-023 可用性：时段只回答「有没有空」，回复时长样本够了才说
+FIT_FREE_BEFORE_DEADLINE = 0.04
+FIT_NO_SLOT_BEFORE_DEADLINE = -0.06
+FIT_FAST_REPLY = 0.03
+FIT_LIMITED = -0.03
+REPLY_MIN_SAMPLES = 5          # 与 Upwork 同一做法：样本不够不给标签
+REPLY_FAST_HOURS = 12
+
+
+def has_slot_between(slots: list[dict], start, end) -> bool:
+    """[start, end) 之间（UTC 朴素值）是否落着本人设的任何一个每周时段（北京时间）。"""
+    from datetime import timedelta, timezone
+    from zoneinfo import ZoneInfo
+
+    if not slots or end <= start:
+        return False
+    tz = ZoneInfo("Asia/Shanghai")
+    s_loc = start.replace(tzinfo=timezone.utc).astimezone(tz)
+    e_loc = end.replace(tzinfo=timezone.utc).astimezone(tz)
+    day = s_loc.replace(hour=0, minute=0, second=0, microsecond=0)
+    for _ in range(15):       # 最多看两周：每周时段两周内一定会出现一次
+        if day > e_loc:
+            break
+        for sl in slots:
+            if sl.get("d") != day.weekday():
+                continue
+            fh, fm = (int(x) for x in sl["from"].split(":"))
+            th, tm = (int(x) for x in sl["to"].split(":"))
+            a = day.replace(hour=fh, minute=fm)
+            b = day + timedelta(hours=th, minutes=tm)
+            if a < e_loc and b > s_loc:
+                return True
+        day += timedelta(days=1)
+    return False
+
+
+def _reply_hours(db: Session, user_ids: list[int]) -> dict[int, float]:
+    """回复邀约的中位时长（小时），样本 ≥ REPLY_MIN_SAMPLES 才给。一次查询。"""
+    from statistics import median
+
+    from .models import Invitation
+
+    by: dict[int, list[float]] = {}
+    for uid, created, responded in db.query(Invitation.invitee_id, Invitation.created_at, Invitation.responded_at).filter(
+            Invitation.invitee_id.in_(user_ids or [-1]), Invitation.responded_at.isnot(None)):
+        by.setdefault(uid, []).append((responded - created).total_seconds() / 3600)
+    return {uid: median(xs) for uid, xs in by.items() if len(xs) >= REPLY_MIN_SAMPLES}
+
+
+def _availability(db: Session, task, users: list[User]) -> dict[int, tuple[float, list[str]]]:
+    from app.modules.account.models import utcnow
+
+    now = utcnow()
+    replies = _reply_hours(db, [u.id for u in users])
+    out: dict[int, tuple[float, list[str]]] = {}
+    for u in users:
+        bonus, why = 0.0, []
+        if u.weekly_slots and not task.is_remote:
+            end = task.deadline if task.deadline and task.deadline > now else None
+            if end is not None:
+                if has_slot_between(u.weekly_slots, now, end):
+                    bonus += FIT_FREE_BEFORE_DEADLINE
+                    why.append("截止前有空（按本人设的时段）")
+                else:
+                    bonus += FIT_NO_SLOT_BEFORE_DEADLINE     # 只降权、不写进理由：不替他公开日程
+        h = replies.get(u.id)
+        if h is not None:
+            why.append(f"通常 {max(1, round(h))} 小时内回复邀约")
+            if h <= REPLY_FAST_HOURS:
+                bonus += FIT_FAST_REPLY
+        if u.limited_capacity:
+            bonus += FIT_LIMITED
+            why.append("这阵子少量接单")
+        if bonus or why:
+            out[u.id] = (bonus, why)
+    return out
+
+
 def recommend(db: Session, task, limit: int = 10) -> list[dict]:
     from app.modules.account.models import Block
 
@@ -132,6 +210,7 @@ def recommend(db: Session, task, limit: int = 10) -> list[dict]:
             )
         }
     fit = _category_fit(db, task, candidates)
+    avail = _availability(db, task, candidates)
     scored = []
     for user in candidates:
         skill = _skill_score(task.required_skills, user.skills)
@@ -153,6 +232,9 @@ def recommend(db: Session, task, limit: int = 10) -> list[dict]:
         bonus, why = fit.get(user.id, (0.0, []))
         total += bonus
         reasons.extend(why)
+        bonus, why = avail.get(user.id, (0.0, []))
+        total += bonus
+        reasons.extend(why)
         # 任务没写技能要求时 skill 是中性的 0.5——那不是「部分匹配」，不能这样写给人看
         if task.required_skills and skill >= 0.99:
             reasons.append("技能完全匹配")
@@ -170,7 +252,7 @@ def recommend(db: Session, task, limit: int = 10) -> list[dict]:
             {
                 "user_id": user.id,
                 "nickname": user.nickname,
-                "score": round(min(total, 1.0), 4),
+                "score": round(max(0.0, min(total, 1.0)), 4),
                 "credit_score": user.credit_score,
                 "rating_avg": user.rating_avg,
                 "skills": user.skills,

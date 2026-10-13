@@ -401,6 +401,7 @@ app PayoutGovernance
 app TeamCoopDev
 app VideoFeed
 app ask
+app availability
 app certifications
 app collaborators
 app decompose

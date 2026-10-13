@@ -1,8 +1,58 @@
-import { apiErrorText, fmtYuan, formatDateTime, type AgreementStatus, type CertificationApplicationView, type InvitationItem, type SensitiveScope } from '@platform/core';
+import { apiErrorText, fmtYuan, formatDateTime, type AgreementStatus, type CertificationApplicationView, type InvitationItem, type SensitiveScope, type WeeklySlot } from '@platform/core';
 import { compressToBase64 } from '../PhotoPicker';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../store';
+
+const WEEK = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+/** SPACE-023 可用时段与「少量接单」。推荐里只说「截止前有空」，不把你的日程给别人看。 */
+function Availability() {
+  const { client, me, refreshMe } = useApp();
+  const [slots, setSlots] = useState<WeeklySlot[] | null>(null);
+  const [limited, setLimited] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => { if (me && slots === null) { setSlots(me.weekly_slots ?? []); setLimited(!!me.limited_capacity); } }, [me, slots]);
+  if (!me || slots === null) return null;
+  const slotOf = (d: number) => slots.find((s) => s.d === d);
+  const put = (d: number, next: WeeklySlot | null) => setSlots([...slots.filter((s) => s.d !== d), ...(next ? [next] : [])].sort((a, b) => a.d - b.d));
+  return (
+    <div className="card" aria-label="可用时间">
+      <h3>什么时候有空</h3>
+      <p className="muted">附近的服务按时段撮合：推荐里会写「截止前有空」，不会公开你的完整日程。时间按北京时间。</p>
+      <div className="list">
+        {WEEK.map((w, d) => {
+          const s = slotOf(d);
+          return (
+            <div className="row" key={d}>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center', width: 90 }}>
+                <input type="checkbox" style={{ width: 'auto' }} aria-label={`${w}有空`} checked={!!s}
+                       onChange={(e) => put(d, e.target.checked ? { d, from: '09:00', to: '18:00' } : null)} />{w}
+              </label>
+              {s && <>
+                <input type="time" aria-label={`${w}开始`} value={s.from} style={{ width: 'auto' }} onChange={(e) => put(d, { ...s, from: e.target.value })} />
+                <span>—</span>
+                <input type="time" aria-label={`${w}结束`} value={s.to} style={{ width: 'auto' }} onChange={(e) => put(d, { ...s, to: e.target.value })} />
+              </>}
+            </div>
+          );
+        })}
+      </div>
+      <label className="row" style={{ display: 'flex', marginTop: 8 }}>
+        <input type="checkbox" style={{ width: 'auto' }} checked={limited} onChange={(e) => setLimited(e.target.checked)} />
+        这阵子少量接单（还接，但推荐里会靠后一点并写明；要完全不接单请关掉接单开关）
+      </label>
+      <button style={{ marginTop: 8 }} onClick={async () => {
+        setError(''); setMsg('');
+        try { await client.updateMe({ weekly_slots: slots, limited_capacity: limited }); await refreshMe(); setMsg('已保存'); }
+        catch (e) { setError(apiErrorText(e)); }
+      }}>保存可用时间</button>
+      {msg && <span style={{ color: 'var(--ok)', marginLeft: 8 }}>{msg}</span>}
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
 
 function ServicePricing() {
   const { client, me, refreshMe } = useApp();
@@ -363,6 +413,7 @@ export default function Profile() {
       )}
       <MyCertifications />
       <ServicePricing />
+      <Availability />
       <MyApplications />
       <PrivacyConsents />
       <ChangePassword />
