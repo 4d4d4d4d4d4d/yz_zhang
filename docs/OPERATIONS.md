@@ -163,7 +163,7 @@ python -m scripts.loadtest --concurrency 16 --requests 400 --scenario write
   （已开 WAL + `busy_timeout`）。
 - **限流**：`RateLimiter` 协议 + 内存/Redis 双实现，配 `PLATFORM_REDIS_URL` 即切；
   Redis 故障连续达阈值自动降级为内存并在 `/readyz` 中可见——限流不该拖垮登录。
-- **定时任务单实例**：`JobLock` 表 + `job_slot()` 依赖，全部 26 个 job 端点已接入；
+- **定时任务单实例**：`JobLock` 表 + `job_slot()` 依赖，全部 27 个 job 端点已接入；
   执行完即释放，崩溃靠 TTL 抢占。调度表与端点**同源**（`app/core/jobs.py`），
   cron 直接读它，并有测试从 OpenAPI 自动发现端点双向核对——**漂了 CI 就红**
   （V57：此前手抄的表漂出三处，其中资金对账 job 从来没被架起来过）。
