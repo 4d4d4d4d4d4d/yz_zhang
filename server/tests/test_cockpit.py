@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from app.core.db import SessionLocal
 from app.modules.account.models import utcnow
-from app.modules.decompose.cockpit import critical_path
+from app.modules.task.cockpit import critical_path
 from app.modules.task.models import Task
 from tests.conftest import auth, topup
 from tests.test_decompose_tree import _propose

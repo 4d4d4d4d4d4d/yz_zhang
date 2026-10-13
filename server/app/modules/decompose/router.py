@@ -240,7 +240,8 @@ def cockpit(task_id: int, user: User = Depends(get_current_user), db: Session = 
     只给发布方：里面有每一步托管了多少、付了多少——那是发布方自己的账，不是公开信息。
     公开的进度仍然是 `/tasks/{id}/tree`（不变）。
     """
-    from .cockpit import cockpit as build
+    # 驾驶舱读合约与托管金额（只读），放在 task 模块：拆解模块不 import 任何动钱的代码（96 号第 7 节）
+    from app.modules.task.cockpit import cockpit as build
 
     return build(db, _get_parent(db, task_id, user))
 
