@@ -26,8 +26,25 @@ violations: Counter[str] = Counter()
 _log = logging.getLogger("txguard")
 
 
+# 状态记在**连接**上，再按「哪个线程开的事务」归到那个线程名下。
+#
+# 第一版按线程记深度：begin 加一、commit / rollback 减一。真服务端上跑出一个偶发的误报——
+# FastAPI 带 yield 的依赖，进入与收尾**可能落在线程池里不同的线程上**：事务在线程 X 上开、
+# 在线程 Y 上提交，X 的计数永远减不回去，之后落到 X 上的任何请求一调供应商就被判成「挂着事务」
+# （开发 / 沙箱直接 500，生产是一串假告警）。测试客户端碰巧很少换线程，所以整套测试一直是绿的。
+# 现在：begin 时把连接登记进开它的那个线程的集合，并在连接上记下这个集合；
+# commit / rollback 无论在哪个线程触发，都从**登记它的那个集合**里删掉。
+# 连接上的 info 跟着池里的物理连接走（跨多次借出都在）：登记用一次性的令牌，
+# 万一某次归还没有触发 commit / rollback 事件，下一次 begin 先把那个旧令牌从旧集合里清掉。
+def _open() -> dict:
+    s = getattr(_state, "open", None)
+    if s is None:
+        s = _state.open = {}
+    return s
+
+
 def _depth() -> int:
-    return getattr(_state, "depth", 0)
+    return len(_open())
 
 
 _READS = ("SELECT", "PRAGMA", "SAVEPOINT", "RELEASE", "SHOW", "WITH")
@@ -40,35 +57,47 @@ def install(engine) -> None:
 
     @event.listens_for(engine, "begin")
     def _begin(conn):  # noqa: ANN001
-        _state.depth = _depth() + 1
+        _end(conn)
+        token = object()
+        owner = _open()
+        owner[token] = conn.info
+        conn.info["txguard_owner"] = (owner, token)
+        conn.info["txguard_wrote"] = ""
 
     @event.listens_for(engine, "commit")
     def _commit(conn):  # noqa: ANN001
-        _end()
+        _end(conn)
 
     @event.listens_for(engine, "rollback")
     def _rollback(conn):  # noqa: ANN001
-        _end()
+        _end(conn)
 
     @event.listens_for(engine, "before_cursor_execute")
     def _execute(conn, cursor, statement, params, context, executemany):  # noqa: ANN001
         head = statement.lstrip().upper()
         # 行锁（SELECT … FOR UPDATE）和写一样：替调用方提交会悄悄放掉它想要的串行化
         if not head.startswith(_READS) or " FOR UPDATE" in head:
-            _state.wrote = True
+            # 报错时要能说出「是哪一条写让这个事务放不掉」：只记语句开头，不记参数
+            conn.info["txguard_wrote"] = " ".join(statement.split())[:80]
 
     engine._txguard_installed = True
 
 
-def _end() -> None:
-    _state.depth = max(0, _depth() - 1)
-    if _state.depth == 0:
-        _state.wrote = False
+def _end(conn) -> None:  # noqa: ANN001
+    owned = conn.info.pop("txguard_owner", None)
+    conn.info.pop("txguard_wrote", None)
+    if owned is not None:
+        owner, token = owned
+        owner.pop(token, None)
+
+
+def _last_write() -> str:
+    return next((w for info in list(_open().values()) if (w := info.get("txguard_wrote"))), "")
 
 
 def wrote_in_transaction() -> bool:
     """这个线程打开着的事务里有没有写过（INSERT / UPDATE / DELETE …）。"""
-    return in_transaction() and getattr(_state, "wrote", False)
+    return bool(_last_write())
 
 
 def in_transaction() -> bool:
@@ -98,7 +127,9 @@ def check(kind: str, method: str) -> None:
     violations[key] += 1
     from app.core.config import settings
 
-    msg = (f"调用供应商 {key}（{_call_site()}）时还挂着一个数据库事务："
+    last = _last_write()
+    why = f"；事务里写过：{last}" if last else f"；未写过，打开着的事务 {_depth()} 个"
+    msg = (f"调用供应商 {key}（{_call_site()}）时还挂着一个数据库事务{why}："
            "先提交（或用 vendor_base.release）再调用，回来另开事务回写（CONC-067）")
     if settings.ENV in ("prod", "staging"):
         _log.error(msg)
@@ -138,5 +169,4 @@ class Guarded:
 def reset() -> None:
     """测试辅助。"""
     violations.clear()
-    _state.depth = 0
-    _state.wrote = False
+    _open().clear()

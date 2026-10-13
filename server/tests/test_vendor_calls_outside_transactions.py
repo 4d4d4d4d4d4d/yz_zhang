@@ -199,3 +199,31 @@ def test_in_process_providers_really_make_no_network_calls():
                     assert not any(m.split(".")[0] in network or m.startswith(network) for m in mods), \
                         f"{impl.__name__} 标了 in_process 却引了 {mods}"
     assert marked, "一个 in_process 实现都没有？扫描器写错了"
+
+
+def test_a_transaction_committed_on_another_thread_does_not_haunt_the_thread_that_opened_it(client, guarded):
+    """真服务端上跑出来的误报：带 yield 的依赖，进入与收尾可能在线程池的不同线程上。
+    事务在线程 A 开、在线程 B 提交——第一版按线程计数，A 的计数永远减不回去，
+    之后落到 A 上的请求一调供应商就 500（测试客户端很少换线程，整套测试因此一直绿）。"""
+    import threading
+
+    db = SessionLocal()
+    db.execute(sa.text("SELECT 1"))          # 本线程开事务
+    assert txguard.in_transaction()
+    t = threading.Thread(target=lambda: (db.commit(), db.close()))   # 别的线程收尾
+    t.start()
+    t.join()
+    assert not txguard.in_transaction()
+    assert guarded.ping() == "pong"
+    assert not txguard.violations
+
+
+def test_the_report_names_the_write_that_keeps_the_transaction_open(client, guarded):
+    from app.modules.account.models import User
+
+    with SessionLocal() as db:
+        db.add(User(phone="13800167002", nickname="x", password_hash="x"))
+        db.flush()
+        with pytest.raises(txguard.TransactionHeldAcrossVendorCall, match="INSERT INTO users"):
+            guarded.ping()
+        db.rollback()
