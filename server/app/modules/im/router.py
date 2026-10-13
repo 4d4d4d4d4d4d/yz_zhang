@@ -49,7 +49,7 @@ def _read_cursor(db: Session, conv_id: int, user_id: int) -> int:
 @router.get("/conversations")
 def my_conversations(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """IM-010 会话列表附未读数与最后一条消息预览（聊天列表标配）。"""
-    from sqlalchemy import func
+    from sqlalchemy import func, select
 
     # CONC-066 改造前：读出全平台所有会话、在 Python 里挑自己的，再对每个会话各查两次（未读、最后一条）。
     # 现在：成员表按 user_id 走索引；未读与最后一条各一次分组查询。条数与会话数无关
@@ -67,8 +67,8 @@ def my_conversations(user: User = Depends(get_current_user), db: Session = Depen
         .filter(Message.conversation_id.in_(ids), Message.sender_id != user.id,  # 自己发的不算未读
                 Message.id > func.coalesce(ConversationRead.last_read_message_id, 0))
         .group_by(Message.conversation_id).all())
-    last_ids = (db.query(func.max(Message.id)).filter(Message.conversation_id.in_(ids))
-                .group_by(Message.conversation_id).subquery())
+    last_ids = (select(func.max(Message.id)).where(Message.conversation_id.in_(ids))
+                .group_by(Message.conversation_id))
     lasts = {m.conversation_id: m for m in db.query(Message).filter(Message.id.in_(last_ids))}
     out = []
     for c in rows:

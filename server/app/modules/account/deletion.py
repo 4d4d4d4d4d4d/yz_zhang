@@ -139,6 +139,10 @@ def erase_personal_data(db: Session, user: User) -> dict:
     space = db.get(PersonalSpace, user.id)
     if space:
         db.delete(space)
+    # PWB-011 个人工作台（任务、进展、助手记忆、例行任务）全是本人私有数据：注销即物理删除
+    from app.modules.workbench.models import WbItem, WbLog, WbMemory, WbProject, WbRoutine, WbRoutineRun
+    for model in (WbRoutineRun, WbRoutine, WbMemory, WbLog, WbItem, WbProject):
+        db.query(model).filter(model.owner_id == user.id).delete(synchronize_session=False)
     user.is_deleted = True
     user.phone = f"deleted:{user.id}"
     user.nickname = "已注销用户"

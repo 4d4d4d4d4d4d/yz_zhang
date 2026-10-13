@@ -1384,3 +1384,162 @@ export interface KnowledgeThresholdRow extends KnowledgeThresholdView {
   /** 阈值是用旧模型标定的：归并会被拒，须重标 */
   stale: boolean;
 }
+
+// ---- PWB 个人工作台（116 号 spec）----
+export type WbStatus = 'todo' | 'doing' | 'blocked' | 'done' | 'dropped';
+export type WbProgressSource = 'manual' | 'children' | 'platform';
+export interface WbProject {
+  id: number;
+  name: string;
+  color: 'clay' | 'moss' | 'ink' | 'sky' | 'sun';
+  archived: boolean;
+  sort: number;
+  created_at: string;
+}
+export interface WbLinkedTask {
+  id: number;
+  title: string;
+  status: string;
+  status_name: string;
+}
+export interface WbItem {
+  id: number;
+  project_id: number | null;
+  parent_id: number | null;
+  title: string;
+  notes: string;
+  status: WbStatus;
+  status_name: string;
+  /** 0 低 / 1 普通 / 2 高 / 3 紧急 */
+  priority: number;
+  category: string;
+  due_at: string | null;
+  remind_at: string | null;
+  /** 有清单子项时按子项算、关联平台任务时跟平台走，都不能手填——看 `progress_source` */
+  progress: number;
+  progress_source: WbProgressSource;
+  children_total: number;
+  children_done: number;
+  tags: string[];
+  linked_task: WbLinkedTask | null;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+export interface WbItemDetail extends WbItem {
+  children: WbItem[];
+}
+export interface WbItemInput {
+  title: string;
+  notes?: string;
+  project_id?: number | null;
+  parent_id?: number | null;
+  status?: WbStatus;
+  priority?: number;
+  category?: string;
+  due_at?: string | null;
+  remind_at?: string | null;
+  progress?: number;
+  tags?: string[];
+  linked_task_id?: number | null;
+}
+/** 改任务：只传要改的字段；带上 `revision` 可以防止两台设备互相覆盖 */
+export interface WbItemPatch {
+  revision?: number;
+  title?: string;
+  notes?: string;
+  project_id?: number | null;
+  status?: WbStatus;
+  priority?: number;
+  category?: string;
+  due_at?: string | null;
+  remind_at?: string | null;
+  progress?: number;
+  tags?: string[];
+  linked_task_id?: number | null;
+  sort?: number;
+}
+export interface WbLog {
+  id: number;
+  kind: 'note' | 'status' | 'progress' | 'assistant';
+  body: string;
+  created_at: string;
+}
+export interface WbStep {
+  title: string;
+  note: string;
+}
+export interface WbBreakdown {
+  source: string;
+  steps: WbStep[];
+}
+export interface WbPlatformSection {
+  to_choose: { task_id: number; title: string; applicants: number }[];
+  to_accept: { task_id: number; title: string }[];
+  executing: { task_id: number; title: string; status: string; status_name: string }[];
+}
+export interface WbOverview {
+  counts: { overdue: number; today: number; doing: number; blocked: number; stale: number; done_this_week: number; open: number };
+  overdue: WbItem[];
+  today: WbItem[];
+  doing: WbItem[];
+  blocked: WbItem[];
+  stale: WbItem[];
+  done_this_week: WbItem[];
+  projects: { id: number; name: string; color: string; total: number; done: number; progress: number }[];
+  platform: WbPlatformSection;
+  summary: string;
+}
+export interface WbMemory {
+  id: number;
+  content: string;
+  created_at: string;
+}
+export type WbRoutineKind = 'digest' | 'review' | 'reminder';
+export type WbFreq = 'once' | 'daily' | 'weekly' | 'monthly';
+export interface WbRoutine {
+  id: number;
+  name: string;
+  kind: WbRoutineKind;
+  freq: WbFreq;
+  time_of_day: string;
+  weekday: number;
+  monthday: number;
+  run_at: string | null;
+  note: string;
+  item_id: number | null;
+  enabled: boolean;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  last_status: '' | 'ok' | 'failed';
+  failures: number;
+}
+export interface WbRoutineInput {
+  name: string;
+  kind: WbRoutineKind;
+  freq: WbFreq;
+  time_of_day?: string;
+  weekday?: number;
+  monthday?: number;
+  run_at?: string | null;
+  note?: string;
+  item_id?: number | null;
+  enabled?: boolean;
+}
+export interface WbRoutineRun {
+  id: number;
+  status: 'ok' | 'failed';
+  output: string;
+  started_at: string;
+}
+export interface WbRoutinePatch {
+  name?: string;
+  freq?: WbFreq;
+  time_of_day?: string;
+  weekday?: number;
+  monthday?: number;
+  run_at?: string | null;
+  note?: string;
+  enabled?: boolean;
+}

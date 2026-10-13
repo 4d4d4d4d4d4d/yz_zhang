@@ -73,3 +73,11 @@ export function localInputToServerTime(localValue: string): string {
   const d = new Date(localValue);           // 无偏移字符串 → 按本地时间解析，这里正是想要的
   return Number.isNaN(d.getTime()) ? '' : d.toISOString();
 }
+
+/** 服务端时间 → `<input type="datetime-local">` 的值（浏览器所在时区）。`localInputToServerTime` 的反方向。 */
+export function serverTimeToLocalInput(value: string | number | Date | null | undefined): string {
+  const d = parseServerTime(value);
+  if (!d) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}

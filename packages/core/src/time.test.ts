@@ -1,7 +1,7 @@
 // TZ-063 服务端时间的解析入口。这条测试存在的理由是一个具体的错：
 // 服务端给 UTC 值却不带 `Z`，`new Date()` 把它当本地时间，全站显示偏一个时区。
 import { describe, expect, it } from 'vitest';
-import { formatDate, formatDateTime, localInputToServerTime, millisUntil, parseServerTime } from './time';
+import { formatDate, formatDateTime, localInputToServerTime, millisUntil, parseServerTime, serverTimeToLocalInput } from './time';
 
 describe('parseServerTime', () => {
   it('不带偏移的按 UTC 解析——这正是那个错的反面', () => {
@@ -51,5 +51,12 @@ describe('展示与提交', () => {
     expect(out.endsWith('Z')).toBe(true);
     expect(new Date(out).getTime()).toBe(new Date('2030-01-01T10:00').getTime());
     expect(localInputToServerTime('')).toBe('');
+  });
+
+  it('serverTimeToLocalInput 与 localInputToServerTime 互为反方向（无偏移的服务端时间按 UTC）', () => {
+    const local = serverTimeToLocalInput('2030-01-01T02:00:00');
+    expect(local).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+    expect(localInputToServerTime(local)).toBe('2030-01-01T02:00:00.000Z');
+    expect(serverTimeToLocalInput(null)).toBe('');
   });
 });

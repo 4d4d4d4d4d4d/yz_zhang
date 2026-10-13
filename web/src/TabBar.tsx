@@ -7,6 +7,7 @@ import { useApp } from './store';
 const TABS = [
   { to: '/', ico: '◎', label: '发现' },
   { to: '/cooperate', ico: '↗', label: '合作' },
+  { to: '/workbench', ico: '☑', label: '工作台' },
   { to: '/messages', ico: '◌', label: '消息', badge: true },
   { to: '/space/edit', ico: '▣', label: '空间' },
 ] as const;

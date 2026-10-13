@@ -652,6 +652,27 @@ def my_certifications(user: User = Depends(get_current_user), db: Session = Depe
 
 
 # ---------- 个人数据导出（ACC-031，PIPL/GDPR）----------
+def _export_workbench(db: Session, user_id: int) -> dict:
+    """PWB-011 个人工作台也是个人信息：导出里少了它，「我的数据」就不完整。"""
+    from app.modules.workbench.models import WbItem, WbLog, WbMemory, WbProject, WbRoutine
+
+    def rows(model):
+        return db.query(model).filter(model.owner_id == user_id).order_by(model.id).all()
+
+    return {
+        "projects": [{"id": p.id, "name": p.name, "archived": p.archived} for p in rows(WbProject)],
+        "items": [{"id": i.id, "project_id": i.project_id, "parent_id": i.parent_id, "title": i.title,
+                   "notes": i.notes, "status": i.status, "priority": i.priority, "progress": i.progress,
+                   "due_at": iso(i.due_at), "tags": i.tags, "linked_task_id": i.linked_task_id,
+                   "created_at": iso(i.created_at), "completed_at": iso(i.completed_at)} for i in rows(WbItem)],
+        "logs": [{"item_id": g.item_id, "kind": g.kind, "body": g.body, "created_at": iso(g.created_at)}
+                 for g in rows(WbLog)],
+        "memories": [{"content": m.content, "created_at": iso(m.created_at)} for m in rows(WbMemory)],
+        "routines": [{"name": r.name, "kind": r.kind, "freq": r.freq, "time_of_day": r.time_of_day,
+                      "note": r.note, "enabled": r.enabled} for r in rows(WbRoutine)],
+    }
+
+
 @router.get("/users/me/export")
 def export_my_data(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from app.modules.content.models import Content
@@ -671,6 +692,7 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
         "personal_space": {"headline": space.headline, "introduction": space.introduction, "theme": space.theme,
             "items": space.items, "published": space.published, "revision": space.revision} if space else None,
         "profile": _me(user),
+        "workbench": _export_workbench(db, user.id),
         "real_name": user.real_name,
         "tasks": [{"id": t.id, "title": t.title, "status": t.status, "budget_cents": t.budget_cents,
                    "role": "creator" if t.creator_id == user.id else "executor"} for t in tasks],

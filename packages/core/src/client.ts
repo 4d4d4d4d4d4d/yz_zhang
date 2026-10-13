@@ -1,5 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
+  WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
   CommercialReadiness,
   AgentProfileView,
   PayoutProposalView,
@@ -180,6 +181,64 @@ export class PlatformClient {
   }
   publicProfile(userId: number) {
     return this.request<Partial<Me>>('GET', `/users/${userId}`);
+  }
+
+  // ---- PWB 个人工作台（116 号 spec）：我的任务、进度与助手 ----
+  workbenchOverview() { return this.request<WbOverview>('GET', '/workbench/overview'); }
+  workbenchProjects(includeArchived = false) {
+    return this.request<WbProject[]>('GET', `/workbench/projects${includeArchived ? '?include_archived=true' : ''}`);
+  }
+  createWorkbenchProject(name: string, color: WbProject['color'] = 'clay') {
+    return this.request<WbProject>('POST', '/workbench/projects', { name, color });
+  }
+  updateWorkbenchProject(id: number, patch: Partial<Pick<WbProject, 'name' | 'color' | 'archived' | 'sort'>>) {
+    return this.request<WbProject>('PATCH', `/workbench/projects/${id}`, patch);
+  }
+  deleteWorkbenchProject(id: number) { return this.request<{ deleted: boolean }>('DELETE', `/workbench/projects/${id}`); }
+  workbenchItems(filter: { project_id?: number; status?: WbStatus; view?: 'all' | 'today' | 'overdue' | 'week' | 'open'; q?: string } = {}) {
+    const qs = Object.entries(filter).filter(([, v]) => v !== undefined && v !== '')
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
+    return this.request<WbItem[]>('GET', `/workbench/items${qs ? `?${qs}` : ''}`);
+  }
+  createWorkbenchItem(input: WbItemInput) {
+    return this.request<WbItem>('POST', '/workbench/items', input);
+  }
+  workbenchItem(id: number) { return this.request<WbItemDetail>('GET', `/workbench/items/${id}`); }
+  updateWorkbenchItem(id: number, patch: WbItemPatch) {
+    return this.request<WbItem>('PATCH', `/workbench/items/${id}`, patch);
+  }
+  deleteWorkbenchItem(id: number) { return this.request<{ deleted: boolean }>('DELETE', `/workbench/items/${id}`); }
+  workbenchLogs(id: number) { return this.request<WbLog[]>('GET', `/workbench/items/${id}/logs`); }
+  addWorkbenchLog(id: number, body: string) {
+    return this.request<WbLog>('POST', `/workbench/items/${id}/logs`, { body });
+  }
+  /** 助手拆清单：只返回草稿，确认后调 `addWorkbenchChildren` */
+  workbenchBreakdown(id: number) {
+    return this.request<WbBreakdown>('POST', `/workbench/items/${id}/breakdown`);
+  }
+  addWorkbenchChildren(id: number, steps: WbStep[]) {
+    return this.request<WbItemDetail>('POST', `/workbench/items/${id}/children`, { steps });
+  }
+  workbenchMemories() {
+    return this.request<{ limit: number; items: WbMemory[] }>('GET', '/workbench/memories');
+  }
+  addWorkbenchMemory(content: string) {
+    return this.request<WbMemory>('POST', '/workbench/memories', { content });
+  }
+  deleteWorkbenchMemory(id: number) { return this.request<{ deleted: boolean }>('DELETE', `/workbench/memories/${id}`); }
+  workbenchRoutines() { return this.request<WbRoutine[]>('GET', '/workbench/routines'); }
+  createWorkbenchRoutine(input: WbRoutineInput) {
+    return this.request<WbRoutine>('POST', '/workbench/routines', input);
+  }
+  updateWorkbenchRoutine(id: number, patch: WbRoutinePatch) {
+    return this.request<WbRoutine>('PATCH', `/workbench/routines/${id}`, patch);
+  }
+  deleteWorkbenchRoutine(id: number) { return this.request<{ deleted: boolean }>('DELETE', `/workbench/routines/${id}`); }
+  runWorkbenchRoutine(id: number) {
+    return this.request<{ status: 'ok' | 'failed'; output: string; routine: WbRoutine }>('POST', `/workbench/routines/${id}/run`);
+  }
+  workbenchRoutineRuns(id: number) {
+    return this.request<WbRoutineRun[]>('GET', `/workbench/routines/${id}/runs`);
   }
 
   // ---- tasks ----

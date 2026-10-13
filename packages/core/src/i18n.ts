@@ -48,6 +48,14 @@ export function resolveLocale(
  */
 export const ERROR_MESSAGE_ZH: Record<string, string> = {
   space_revision_conflict: '空间已在其他窗口更新，请重新打开后编辑',
+  wb_limit_reached: '数量已达上限，请先归档或删除不用的',
+  wb_revision_conflict: '这个任务已在其他窗口或设备上改过，请刷新后再改',
+  progress_from_children: '这个任务的进度按清单子项自动计算，不能手填',
+  progress_from_platform: '关联了平台任务，进度跟着平台任务走，不能手填',
+  only_one_level: '清单只有一层：子项下面不能再加子项',
+  project_not_empty: '项目里还有任务：可以先归档项目，或把任务移走后再删',
+  routine_needs_time: '一次性的例行任务要给出运行时间',
+  routine_time_passed: '运行时间已经过去了',
   profile_private: '请先在账户隐私设置中允许公开个人资料',
   headline_required: '公开前请写一句介绍',
   space_content_rejected: '空间内容需要调整后再发布',

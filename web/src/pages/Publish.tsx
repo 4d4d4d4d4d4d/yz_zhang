@@ -13,7 +13,8 @@ export default function Publish() {
   // 而人到了之后类目仍停在默认的「保洁」上——他得自己想起来再去下拉里找一遍。
   const [params] = useSearchParams();
   const [form, setForm] = useState({
-    title: '', description: '', category: params.get('category') || '保洁', budget_yuan: '200',
+    // PWB-008 从个人工作台「找人一起做」过来时带着标题和说明
+    title: params.get('title') || '', description: params.get('description') || '', category: params.get('category') || '保洁', budget_yuan: '200',
     task_type: 'service', pricing: 'fixed', recurrence: 'none',
     people_needed: '1', deposit_yuan: '0', is_remote: false, city: '上海',
     lat: '31.2304', lng: '121.4737', address_hint: '', address_exact: '',
