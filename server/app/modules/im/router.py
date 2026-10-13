@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -144,12 +144,31 @@ def open_direct(body: DirectIn, user: User = Depends(get_current_user), db: Sess
     return _dump_conv(service.get_or_create_direct(db, user.id, body.user_id))
 
 
-def _get_conv(db: Session, conv_id: int, user: User) -> Conversation:
+ADMIN_REASON_MIN = 8
+
+
+def _get_conv(db: Session, conv_id: int, user: User, admin_reason: str | None = None) -> Conversation:
+    """会话鉴权。**参与者**能读能写；管理员**只能读**，而且必须写明理由、进审计（SEC-061）。
+
+    改造前这里是「参与者或管理员」一句话放行：任何管理员都能读任何人的私聊（连撤回的内容一起），
+    还能**往别人的私聊里发消息**，而且不留任何痕迹。授权总表（docs/AUTHZ-MATRIX.md）对这一项的明文是：
+    默认不可；仅在纠纷举证、举报核查、法定调取时由管理员写明理由读取，每一次都进审计。
+    `admin_reason=None` 表示这是一个写操作：非参与者一律拒绝，管理员也不例外。
+    """
     conv = db.get(Conversation, conv_id)
     if not conv:
         raise not_found("会话不存在")
-    if user.id not in conv.participants and not user.is_admin:
+    if user.id in conv.participants:
+        return conv
+    if not user.is_admin or admin_reason is None:
         raise forbidden()
+    reason = admin_reason.strip()
+    if len(reason) < ADMIN_REASON_MIN:
+        raise forbidden("管理员查看他人私聊必须写明理由（纠纷举证 / 举报核查 / 法定调取），并会记入审计",
+                        "admin_access_reason_required")
+    from app.modules.admin.router import record_audit
+
+    record_audit(db, user.id, "read_private_conversation", "conversation", conv.id, reason)
     return conv
 
 
@@ -194,13 +213,16 @@ def send_quote_card(
 
 
 @router.get("/conversations/{conv_id}/messages")
-def list_messages(conv_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
-    conv = _get_conv(db, conv_id, user)
+def list_messages(conv_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
+                  reason: str = Query(default="", max_length=300)):
+    conv = _get_conv(db, conv_id, user, admin_reason=reason)
+    # IM-004 撤回消息展示层隐藏；只有**走审计的管理员读取**（不是参与者）能看到原文——
+    # 此前按 is_admin 判断：一个管理员在**自己的**私聊里能看到对方撤回的内容
+    audited = user.id not in conv.participants
     rows = db.query(Message).filter(Message.conversation_id == conv.id).order_by(Message.id).all()
     return [
         {"id": m.id, "sender_id": m.sender_id, "kind": m.kind,
-         # IM-004 撤回消息展示层隐藏（管理员仲裁时可见审计副本）
-         "content": "[消息已撤回]" if m.recalled and not user.is_admin else m.content,
+         "content": "[消息已撤回]" if m.recalled and not audited else m.content,
          "recalled": m.recalled,
          "risk_flagged": m.risk_flagged, "created_at": iso(m.created_at)}
         for m in rows

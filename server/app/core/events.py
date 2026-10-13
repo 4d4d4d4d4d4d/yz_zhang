@@ -82,12 +82,14 @@ class Subscription:
     name: str
     retry: bool
     critical: bool
+    after_commit: bool = False
 
 
 _handlers: dict[str, list[Subscription]] = defaultdict(list)
 
 
-def subscribe(event: str, handler: Callable, *, retry: bool, critical: bool = False) -> None:
+def subscribe(event: str, handler: Callable, *, retry: bool, critical: bool = False,
+              after_commit: bool = False) -> None:
     """注册订阅者。
 
     `retry` 是**必填关键字参数**，问的不是「幂等吗」而是
@@ -98,12 +100,19 @@ def subscribe(event: str, handler: Callable, *, retry: bool, critical: bool = Fa
 
     `critical=True` 表示这个副作用缺失会让已提交的业务事实无法自圆其说
     （如存证入链），失败必须让整笔业务事务失败。
+
+    `after_commit=True`（CONC-067）：handler 要调外部服务（推送、短信……）。它**不在业务事务里跑**——
+    业务提交之后另开会话投递；业务回滚了就根本不投递（此前回滚的那笔放款也会照样推一条「已到账」）；
+    提交之后、投递之前进程挂了，投递记录停在 `deferred`，drain job 过一会儿补做。
     """
+    if after_commit and (critical or not retry):
+        raise ValueError("after_commit 的 handler 必须 retry=True 且不能是 critical：它在业务提交之后才跑")
     name = f"{handler.__module__}.{handler.__qualname__}"
     if any(s.name == name for s in _handlers[event]):
         return
     _handlers[event].append(
-        Subscription(handler=handler, name=name, retry=retry, critical=critical)
+        Subscription(handler=handler, name=name, retry=retry, critical=critical,
+                     after_commit=after_commit)
     )
 
 
@@ -122,6 +131,10 @@ def publish(db, event: str, payload: dict) -> None:
 
 
 def _dispatch(db, event_id: int, event: str, payload: dict, sub: Subscription) -> None:
+    if sub.after_commit:
+        _record(db, event_id, event, sub.name, "deferred", error="")
+        db.info.setdefault("deferred_events", []).append((event_id, sub.name))
+        return
     if sub.critical:
         # EVT-012 不隔离：它不是「副作用」，是业务本身，失败就该整笔失败
         sub.handler(db, payload)
@@ -163,6 +176,85 @@ def _record(db, event_id: int, event: str, handler: str, status: str, error: str
     db.flush()
 
 
+# ---------- CONC-067 业务提交之后再投递 ----------
+DEFERRED_GRACE_SECONDS = 60
+
+
+def _deliver_deferred(event_id: int, handler_name: str) -> None:
+    """另开会话投递一条 after_commit 的事件。失败留给 drain，**绝不抛回业务**（业务已经提交了）。"""
+    import json
+
+    from .db import SessionLocal
+
+    with SessionLocal() as db:
+        try:
+            row = (db.query(EventDelivery)
+                   .filter(EventDelivery.event_id == event_id, EventDelivery.handler == handler_name,
+                           EventDelivery.status == "deferred").first())
+            event_row = db.get(OutboxEvent, event_id) if row is not None else None
+            sub = _subscription(row.event, handler_name) if row is not None else None
+            if row is None or event_row is None or sub is None:
+                return
+            payload = json.loads(event_row.payload or "{}")
+            try:
+                sub.handler(db, payload)
+            except Exception as exc:  # noqa: BLE001
+                db.rollback()
+                row = db.get(EventDelivery, row.id)
+                row.status, row.last_error = "failed", f"{type(exc).__name__}: {exc}"[:900]
+                logger.warning("event_handler_failed",
+                               extra={"event": row.event, "handler": handler_name, "error": type(exc).__name__})
+            else:
+                row.status, row.last_error = "done", ""
+            row.updated_at = _utcnow()
+            db.add(row)
+            db.commit()
+        except Exception:  # noqa: BLE001
+            db.rollback()
+            logger.exception("deferred_event_delivery_crashed")
+
+
+def install_after_commit(session_factory) -> None:
+    """在会话工厂上挂「提交之后投递」与「回滚就作废」。重复调用无害。"""
+    from sqlalchemy import event as sa_event
+
+    if getattr(session_factory, "_deferred_events_installed", False):
+        return
+    session_factory._deferred_events_installed = True
+
+    @sa_event.listens_for(session_factory, "after_commit")
+    def _after_commit(session):  # noqa: ANN001
+        # 保存点释放时这个事件也会触发（实测：handler 的 SAVEPOINT 一提交就到这里，外层事务还开着，
+        # 新会话根本看不见刚写的投递记录）。只有外层也结束了才是真的「业务已提交」
+        if session.get_nested_transaction() is not None:
+            return
+        pending = session.info.pop("deferred_events", [])
+        for event_id, handler_name in pending:
+            _deliver_deferred(event_id, handler_name)
+        for label, fn in session.info.pop("on_commit", []):
+            try:
+                fn()
+            except Exception:  # noqa: BLE001 - 业务已经提交，副作用失败只记日志
+                logger.exception("on_commit_failed", extra={"handler": label})
+
+    @sa_event.listens_for(session_factory, "after_soft_rollback")
+    def _after_rollback(session, previous_transaction):  # noqa: ANN001
+        # 只有**最外层**回滚才作废：某个 handler 的保存点回滚，不能把别的 handler 排好的推送一起丢掉
+        # （保存点里排的那几条，它们的投递记录已随保存点回滚，投递时找不到记录会自动跳过）
+        if previous_transaction.parent is None and not previous_transaction.nested:
+            session.info.pop("deferred_events", None)
+            session.info.pop("on_commit", None)
+
+
+def on_commit(db, label: str, fn) -> None:
+    """CONC-067 业务提交之后再做的外部副作用（删存储里的文件……）。业务回滚了就不做。
+
+    与 after_commit 订阅者的区别：这里**不重试、不留痕**——只用于「做不成也只是多留一个
+    孤儿文件」这一类；要可靠送达的走事件（`subscribe(..., after_commit=True)`）。
+    """
+    db.info.setdefault("on_commit", []).append((label, fn))
+
+
 # ---------- EVT-021 跨副本补做 ----------
 def _subscription(event: str, name: str) -> Subscription | None:
     return next((s for s in _handlers[event] if s.name == name), None)
@@ -175,9 +267,14 @@ def drain(db, limit: int = 50) -> dict:
     """
     import json
 
+    from sqlalchemy import and_, or_
+
+    stale = _utcnow() - timedelta(seconds=DEFERRED_GRACE_SECONDS)
     rows = (
         db.query(EventDelivery)
-        .filter(EventDelivery.status == "failed")
+        # deferred 且放了一阵子：业务提交之后、投递之前进程挂了
+        .filter(or_(EventDelivery.status == "failed",
+                    and_(EventDelivery.status == "deferred", EventDelivery.updated_at < stale)))
         .order_by(EventDelivery.id)
         .limit(limit)
         .all()
@@ -206,6 +303,30 @@ def drain(db, limit: int = 50) -> dict:
             continue
         retried += 1
         payload = json.loads(event_row.payload or "{}")
+        if sub.after_commit:
+            # 这类 handler 调外部服务：先把前面各条的状态提交，不挂着事务、也不开保存点（CONC-067）
+            from app.vendors.base import checkpoint
+
+            checkpoint(db, "事件补做：每条投递是自己的事务，前面各条的状态已经一致")
+            row_id = row.id
+            try:
+                sub.handler(db, payload)
+            except Exception as exc:  # noqa: BLE001
+                db.rollback()
+                row = db.get(EventDelivery, row_id)
+                row.attempts += 1
+                row.last_error = f"{type(exc).__name__}: {exc}"[:900]
+                row.status = "dead" if row.attempts >= MAX_ATTEMPTS else "failed"
+                dead += 1 if row.status == "dead" else 0
+            else:
+                row = db.get(EventDelivery, row_id)
+                row.status, row.last_error = "done", ""
+                row.attempts += 1
+                recovered += 1
+            row.updated_at = _utcnow()
+            db.add(row)
+            db.commit()
+            continue
         savepoint = db.begin_nested()
         try:
             sub.handler(db, payload)
@@ -263,6 +384,8 @@ def health(db) -> dict:
         slot["last_error"] = row.last_error or slot["last_error"]
     return {
         "pending_retry": sum(1 for r in rows if r.status == "failed"),
+        # 业务已提交、等着提交后投递的（CONC-067）；长时间不降说明投递挂了，drain 会补
+        "deferred": sum(1 for r in rows if r.status == "deferred"),
         "dead_letters": sum(1 for r in rows if r.status == "dead"),
         "by_handler": by_handler,
     }
@@ -282,3 +405,12 @@ def dead_letters(db, limit: int = 100) -> list[dict]:
          "at": iso(r.updated_at)}
         for r in rows
     ]
+
+
+def _install_default() -> None:
+    from .db import SessionLocal
+
+    install_after_commit(SessionLocal)
+
+
+_install_default()

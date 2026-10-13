@@ -2,6 +2,7 @@
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+import logging
 from app.core.errors import bad_request
 from app.core.locks import lock_wallets
 
@@ -118,23 +119,147 @@ def _today_withdrawn(db: Session, user_id: int) -> int:
     )
     pending = (
         db.query(func.coalesce(func.sum(WithdrawRequest.amount_cents), 0))
-        .filter(WithdrawRequest.user_id == user_id, WithdrawRequest.status == "pending",
+        # 冻结着的都算：待审、等第二人确认、正在出款（CONC-067）——漏掉任何一种，日限额就能被绕过
+        .filter(WithdrawRequest.user_id == user_id, WithdrawRequest.status.in_(FROZEN_WITHDRAW_STATUSES),
                 WithdrawRequest.created_at >= day_start)
         .scalar()
     )
     return int(done) + int(pending)
 
 
-def _send_payout(db: Session, user_id: int, amount: int, ref: str) -> str:
-    """VND-013 打款出账：供应商失败直接抛出，由 get_db 整体回滚——
-    宁可提现失败重来，也不能出现「账扣了钱没打出去」。"""
+# ── CONC-067 出款两阶段（113 号 spec）───────────────────────────────
+#
+# 改造前：在**钱包行锁里**调银行出款，失败靠 get_db 整体回滚——「宁可提现失败重来，
+# 也不能账扣了钱没打出去」。那只护住了一个方向：银行那边打出去了、而我们的提交失败
+# （或者超时、根本不知道打没打），就是**钱出去了账没扣**；而银行慢的那几秒里，
+# 这个人的钱包锁与一条池连接一直陪着银行等。
+#
+# 现在：冻结并记下出款单（`sending`）→ 提交 → 事务外调银行（按出款单号幂等）→
+#   成功：另开事务划出冻结、记 withdraw 流水；
+#   明确失败：另开事务解冻（即时提现）或退回待审（人审提现），提交后再报错；
+#   结果不明（超时 / 网络）：留在 `sending`，由 `/wallet/jobs/resolve-payouts` 按同一个单号重试——
+#   银行侧与 VendorCall 都按单号去重，重试不会打两次。
+FROZEN_WITHDRAW_STATUSES = ("pending", "awaiting_second", "sending")
+
+
+def _payout_ref(req) -> str:
+    return f"wdreq-{req.id}"
+
+
+def settle_payout(db: Session, req, on_failure: str) -> dict:
+    """调银行并落结果。调用前 `req` 已是 `sending`、钱已在冻结里、事务已提交。
+
+    `on_failure`：明确失败时怎么办——`refund`（即时提现：解冻退回可用）或
+    `back_to_review`（人审提现：回到待审，管理员可以再批）。
+    """
     from app.vendors import payment_service
-    from app.vendors.base import VendorError
+    from app.vendors.base import VendorError, checkpoint
 
     try:
-        return payment_service.send_payout(db, user_id, amount, ref)
+        payout_ref = payment_service.send_payout(db, req.user_id, req.amount_cents, _payout_ref(req))
     except VendorError as exc:
+        if exc.retryable:
+            # 结果不明：钱还在冻结里，出款单留在 sending，交给补偿 job。不能当失败退回——
+            # 银行那边可能已经打出去了，这时再退回可用就是让他能再提一次
+            return {"status": "processing", "request_id": req.id,
+                    "message": "提现已提交银行处理，结果确认后会通知你"}
+        lock_wallets(db, req.user_id)
+        acct = get_or_create(db, req.user_id)
+        db.refresh(acct)  # 提交点之前读到的版本号已经过时：重新加锁之后按库里的读
+        db.refresh(req)
+        if req.status == "sending":
+            if on_failure == "refund":
+                acct.frozen_cents -= req.amount_cents
+                acct.available_cents += req.amount_cents
+                req.status = "failed"
+            else:
+                req.status = "pending"
+            db.add_all([acct, req])
+        checkpoint(db, "出款明确失败：解冻 / 退回待审先落库，再把错误还给调用方")
         raise exc.as_http() from exc
+    return _finish_payout(db, req, payout_ref)
+
+
+def _settle_or_processing(db: Session, req) -> dict:
+    """提交点之后：钱已冻结、出款单已落库。从这一刻起，**除了银行明确拒绝**之外的任何意外
+    都只能是「处理中」，不能是一个报错——
+
+    报错会让客户端用同一个幂等键重试，而幂等占键在失败时会被放掉（失败不缓存），
+    于是重试变成**第二笔**提现；与此同时第一笔的出款单还停在 sending，补偿 job 会把它打出去。
+    一次提现意图，打了两次款。V138 的并发测试就是这样撞出来的（一笔在结账时撞上并发修改 409）。
+    """
+    from fastapi import HTTPException
+
+    from app.vendors.base import checkpoint
+
+    req_id, user_id = req.id, req.user_id  # 失败分支里会话可能处于「待回滚」，不能再碰 ORM 属性
+    try:
+        res = settle_payout(db, req, on_failure="refund")
+        # 结账也在这里提交：留到请求结束时再提交的话，那一刻撞上并发修改（SQLite 没有行锁，靠版本号）
+        # 会变成一个报错——而银行那边钱已经打出去了
+        checkpoint(db, "出款结账：银行已确认，划出冻结与流水当场落库，失败也只能是「处理中」")
+        return res
+    except HTTPException:
+        raise  # 银行明确拒绝：settle_payout 已经解冻并落库，这个错是真的
+    except Exception:  # noqa: BLE001
+        db.rollback()  # 先回滚：会话可能因为 flush 失败处于「待回滚」，之后任何读都会再抛一次
+        logging.getLogger("app.wallet").exception("payout_settlement_interrupted",
+                                                  extra={"user_id": user_id})
+        return {"status": "processing", "request_id": req_id,
+                "message": "提现已提交银行处理，结果确认后会通知你"}
+
+
+def _finish_payout(db: Session, req, payout_ref: str) -> dict:
+    from app.modules.account.models import utcnow
+
+    lock_wallets(db, req.user_id)
+    acct = get_or_create(db, req.user_id)
+    db.refresh(acct)  # 提交点之前读到的版本号已经过时：重新加锁之后按库里的读
+    db.refresh(req)
+    if req.status != "sending":  # 补偿 job 与请求并发时，先到的那个已经落过了
+        return {"status": "done", "request_id": req.id, "payout_ref": payout_ref,
+                "available_cents": acct.available_cents, "frozen_cents": acct.frozen_cents}
+    acct.frozen_cents -= req.amount_cents
+    memo = (f"提现打款 {payout_ref}" if req.decided_by is None and req.first_approved_by is None
+            else f"大额提现批准 #{req.id} 打款 {payout_ref}")
+    _log(db, req.user_id, "withdraw", -req.amount_cents, memo=memo)
+    req.status = "paid" if req.decided_by is None and req.first_approved_by is None else "approved"
+    req.decided_at = req.decided_at or utcnow()
+    db.add_all([acct, req])
+    return {"status": "done", "request_id": req.id, "payout_ref": payout_ref,
+            "available_cents": acct.available_cents, "frozen_cents": acct.frozen_cents}
+
+
+def resolve_stuck_payouts(db: Session, older_than_seconds: int = 120, limit: int = 50) -> dict:
+    """补偿：结果不明的出款单按同一个单号重试（银行与 VendorCall 都按单号去重）。"""
+    from datetime import timedelta
+
+    from app.modules.account.models import utcnow
+    from app.vendors.base import release
+
+    from .models import WithdrawRequest
+
+    cutoff = utcnow() - timedelta(seconds=older_than_seconds)
+    ids = [r.id for r in db.query(WithdrawRequest)
+           .filter(WithdrawRequest.status == "sending", WithdrawRequest.created_at < cutoff)
+           .order_by(WithdrawRequest.id).limit(limit)]
+    release(db)
+    out = {"checked": len(ids), "paid": 0, "still_unknown": 0, "failed": 0}
+    for rid in ids:
+        req = db.get(WithdrawRequest, rid)
+        release(db)
+        try:
+            res = settle_payout(db, req, on_failure="refund" if req.first_approved_by is None
+                                and req.decided_by is None else "back_to_review")
+        except Exception:  # noqa: BLE001 - 明确失败已在 settle_payout 里落库
+            out["failed"] += 1
+            continue
+        if res["status"] == "done":
+            out["paid"] += 1
+            db.commit()
+        else:
+            out["still_unknown"] += 1
+    return out
 
 
 def withdraw(db: Session, user_id: int, amount: int) -> dict:
@@ -176,12 +301,16 @@ def withdraw(db: Session, user_id: int, amount: int) -> dict:
         return {"status": "pending_review", "request_id": req.id,
                 "message": aml.NEUTRAL_REVIEW_MESSAGE,
                 "available_cents": acct.available_cents, "frozen_cents": acct.frozen_cents}
+    # CONC-067 两阶段：先冻结并记下出款单，提交后再调银行（见 settle_payout）
+    from app.vendors.base import checkpoint
+
     acct.available_cents -= amount
-    entry_ref = f"wd-{user_id}-{int(utcnow().timestamp() * 1000)}"
-    payout_ref = _send_payout(db, user_id, amount, entry_ref)
-    _log(db, user_id, "withdraw", -amount, memo=f"提现打款 {payout_ref}")
-    return {"status": "done", "available_cents": acct.available_cents,
-            "frozen_cents": acct.frozen_cents, "payout_ref": payout_ref}
+    acct.frozen_cents += amount
+    req = WithdrawRequest(user_id=user_id, amount_cents=amount, status="sending")
+    db.add_all([acct, req])
+    db.flush()
+    checkpoint(db, "提现两阶段：冻结并记下出款单之后再调银行，钱包锁与连接不陪银行等")
+    return _settle_or_processing(db, req)
 
 
 def decide_withdraw(db: Session, req, approve: bool, admin_id: int | None,
@@ -229,13 +358,22 @@ def decide_withdraw(db: Session, req, approve: bool, admin_id: int | None,
             )
     lock_wallets(db, req.user_id)  # CONC-012
     acct = get_or_create(db, req.user_id)
-    acct.frozen_cents -= req.amount_cents
     if approve:
-        payout_ref = _send_payout(db, req.user_id, req.amount_cents, f"wdreq-{req.id}")
-        _log(db, req.user_id, "withdraw", -req.amount_cents,
-             memo=f"大额提现批准 #{req.id} 打款 {payout_ref}")
-        req.status = "approved"
+        # CONC-067 两阶段：批准记下来、出款单置 sending 并提交，再调银行
+        from app.vendors.base import checkpoint
+
+        req.decided_by = admin_id
+        req.decided_at = utcnow()
+        req.status = "sending"
+        db.add(req)
+        checkpoint(db, "人审提现批准：批准与出款单先落库，再调银行")
+        res = settle_payout(db, req, on_failure="back_to_review")
+        if res["status"] == "done":
+            _notify_withdraw_decision(db, req, True, timeout=timeout)
+        return {"status": req.status if res["status"] == "done" else "sending",
+                "amount_cents": req.amount_cents, "first_approved_by": req.first_approved_by}
     else:
+        acct.frozen_cents -= req.amount_cents
         acct.available_cents += req.amount_cents
         why = "超时关闭退回" if timeout else "驳回退回"
         _log(db, req.user_id, "withdraw_refund", req.amount_cents,

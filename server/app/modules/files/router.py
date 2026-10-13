@@ -3,7 +3,7 @@
 上传前置：必须登录 + 限流。图片是交付凭证与打卡证据的载体，
 匿名可传等于给平台开了一个免费图床，也给内容风险开了后门。
 """
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Query, Depends, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -52,6 +52,7 @@ def upload_file(request: Request, body: UploadIn, user: User = Depends(get_curre
     if status == "reject":
         # UMOD-011/040 被拒的上传不留任何痕迹：删掉命名条目、不落库。
         # 只删名字不动 blobs/<sha256>——别人上传过的同一份内容仍然有效。
+        vendor_base.release(db)  # CONC-067 到这里只读过：放掉连接再删
         getattr(provider, "delete", lambda _n: False)(name)
         raise bad_request(
             f"图片未通过内容安全审核（{'、'.join(labels) or '违规内容'}），请更换后重试",
@@ -127,6 +128,7 @@ def read_file(name: str, db: Session = Depends(get_db, scope="function")):
         raise forbidden("该文件为敏感材料，请通过 /files/{name}/secure 读取",
                         "sensitive_file")
     provider = get_provider("storage")
+    vendor_base.release(db)  # CONC-067 读存储前放掉连接（这里只读过上传记录）
     got = getattr(provider, "read", lambda _n: None)(name)
     if not got:
         raise not_found("文件不存在")
@@ -146,7 +148,8 @@ def read_file(name: str, db: Session = Depends(get_db, scope="function")):
 
 @router.get("/files/{name}/secure")
 def read_sensitive_file(name: str, user=Depends(get_current_user),
-                        db: Session = Depends(get_db, scope="function")):
+                        db: Session = Depends(get_db, scope="function"),
+                        reason: str = Query(default="", max_length=300)):
     """CERT-010 敏感材料的读取：必须登录，且只有**上传者本人与管理员**能读。
 
     审核员需要看证件才能审——所以不能简单地「谁也不给看」，
@@ -159,7 +162,23 @@ def read_sensitive_file(name: str, user=Depends(get_current_user),
         raise not_found("文件不存在")
     if row.owner_id != user.id and not user.is_admin:
         raise forbidden("无权查看该材料")
+    if row.owner_id != user.id:
+        # SEC-061 管理员读证件影像：**每一次都进审计**。审资质申请时读申请里的那几张是审核本身，
+        # 不用另写理由；读别的敏感材料必须写明理由（纠纷举证 / 法定调取），否则拒绝
+        from app.modules.account.models_cert import CertificationApplication
+        from app.modules.admin.router import record_audit
+
+        in_review = any(name in (a.images or []) for a in db.query(CertificationApplication)
+                        .filter(CertificationApplication.user_id == row.owner_id).all())
+        why = reason.strip() or ("资质审核" if in_review else "")
+        if len(why) < 4:
+            raise forbidden("管理员查看与资质审核无关的敏感材料必须写明理由，并会记入审计",
+                            "admin_access_reason_required")
+        record_audit(db, user.id, "read_sensitive_file", "file", None, f"{name}：{why}")
+        # 访问尝试先留痕、再给数据：读取失败也要知道有人试过读
+        vendor_base.checkpoint(db, "敏感材料访问审计先于读取落库，读取失败也留痕")
     provider = get_provider("storage")
+    vendor_base.release(db)  # CONC-067 读存储前放掉连接（这里只读过上传记录）
     got = getattr(provider, "read", lambda _n: None)(name)
     if not got:
         raise not_found("文件不存在")
@@ -210,6 +229,7 @@ def sign_video_upload(
     signer = getattr(provider, "sign_upload", None)
     if signer is None:
         raise bad_request("当前存储实现不支持视频直传", "direct_upload_unsupported")
+    vendor_base.release(db)  # CONC-067 签发直传地址前放掉连接
     result = signer(body.content_type)
     if not result.data.get("direct_upload"):
         raise bad_request(

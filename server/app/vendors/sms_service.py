@@ -49,6 +49,9 @@ def send_code(db: Session, phone: str, scene: str = "verify") -> dict:
     )
     db.add(row)
     db.flush()
+    # CONC-067 码先落库再发：用户收到短信马上就会来校验，码必须已经在库里；
+    # 发送失败时这条码作废与否都无害（没人收到它），重新请求即可
+    base.checkpoint(db, "短信验证码：码先落库再发短信，收到就能校验")
 
     base.call(
         db, "sms", provider.name, "send_code", {"phone": phone, "code": code, "scene": scene},

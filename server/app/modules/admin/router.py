@@ -556,7 +556,11 @@ def resolve_upload(
 
     provider = get_provider("storage")
     # UMOD-030 只删命名条目：别人上传过的同一份内容仍然有效
-    removed = getattr(provider, "delete", lambda _n: False)(name)
+    # CONC-067 删文件是外部副作用：处置提交之后再删（处置回滚了就不删）
+    from app.core.events import on_commit
+
+    on_commit(db, "upload_reject_delete", lambda: getattr(provider, "delete", lambda _n: False)(name))
+    removed = True
     row.moderation_status = "reject"
     db.add(row)
     notify(db, row.owner_id, "system", "一张图片已被移除",

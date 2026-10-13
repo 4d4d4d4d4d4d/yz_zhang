@@ -76,6 +76,9 @@ def create_app() -> FastAPI:
     from app.modules.analytics import service as analytics_service
 
     analytics_service.register_event_handlers()
+    from app.modules.finance import service as finance_service
+
+    finance_service.register_event_handlers()  # CONC-067 存管分账指令在业务提交之后下达
 
     # 冷启动种子数据（KB 模板与 FAQ、任务类目）
     from app.modules.task import service as task_service

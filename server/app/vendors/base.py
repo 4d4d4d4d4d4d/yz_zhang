@@ -94,6 +94,38 @@ def _digest(params: dict) -> str:
     return str(safe)[:400]
 
 
+def release(db: Session) -> bool:
+    """CONC-067 调外部服务之前把连接还回去。
+
+    只读过的事务直接提交（便宜，`expire_on_commit=False` 不会让已读对象失效）；
+    **已经写过**的事务不能替调用方提交——那会把一半的业务改动提前落库。
+    那种调用点要改顺序：先调供应商、再写；或者把「意图」写成一行先提交（outbox）。
+    """
+    from app.core import txguard
+
+    # 保存点里不能提交外层事务（会把保存点连同外层一起关掉）；交给守卫去报
+    if db.in_nested_transaction() or db.new or db.dirty or db.deleted or txguard.wrote_in_transaction():
+        # 交给 txguard.check 去报：开发 / 测试直接红，生产记日志照常执行
+        return False
+    if db.in_transaction():
+        db.commit()
+    return True
+
+
+def checkpoint(db: Session, reason: str) -> None:
+    """CONC-067 **显式**的事务边界：把到这一刻为止的改动提交，然后再调外部服务。
+
+    只用在「本来就是一步一步可续跑」的流程里（编排的每一步、批处理的每一条），
+    在那里「到这一步为止」本身就是一个一致的状态。每个调用点都登记在
+    `test_vendor_calls_outside_transactions.CHECKPOINTS` 里并写明为什么这里可以提前提交——
+    一个没登记的 checkpoint 会让闸门红：提前提交是一种语义变化，不能悄悄发生。
+    """
+    if not reason.strip():
+        raise ValueError("checkpoint 必须写明理由")
+    if db.in_transaction():
+        db.commit()
+
+
 def call(db: Session, kind: str, provider: str, operation: str, params: dict, fn,
          idem_key: str = "") -> VendorResult:
     """统一执行入口：幂等 → 熔断 → 调用 → 留痕 → 错误收敛。
@@ -115,37 +147,49 @@ def call(db: Session, kind: str, provider: str, operation: str, params: dict, fn
                                 data={"replayed": True})
 
     circuit_check(name)
+    clean = release(db)
     started = time.time()
     record = VendorCall(
         kind=kind, provider=provider, operation=operation,
         idem_key=idem_key or None, request_digest=_digest(params),
     )
+    from app.core.txguard import TransactionHeldAcrossVendorCall
+
     try:
         result: VendorResult = fn()
+    except TransactionHeldAcrossVendorCall:
+        raise  # 代码顺序错了，不是供应商故障：不记失败、不触发熔断
     except VendorError as exc:
         circuit_record(name, ok=False)
         record.status = "failed"
         record.error_code = exc.code
         record.duration_ms = int((time.time() - started) * 1000)
-        db.add(record)
-        db.flush()
+        _keep_record(db, record, clean)
         raise
     except Exception as exc:  # 供应商 SDK 的意外异常也收敛，不让原始栈冒到 API
         circuit_record(name, ok=False)
         record.status = "failed"
         record.error_code = type(exc).__name__
         record.duration_ms = int((time.time() - started) * 1000)
-        db.add(record)
-        db.flush()
+        _keep_record(db, record, clean)
         raise VendorError("unavailable", "外部服务调用失败", retryable=True) from exc
 
     circuit_record(name, ok=result.ok)
     record.status = result.status if result.ok else "failed"
     record.external_ref = result.external_ref
     record.duration_ms = int((time.time() - started) * 1000)
+    _keep_record(db, record, clean)
+    return result
+
+
+def _keep_record(db: Session, record, clean: bool) -> None:
+    """调用留痕。调用前事务是干净的（已经放掉了），这条记录就单独提交——
+    它是一个独立的事实（这一刻调过、结果如何），不该让下一次外部调用看到「事务里已经写过」而被拒；
+    失败的调用此前随请求回滚一起消失，现在留下来，排障与熔断复盘都用得上。"""
     db.add(record)
     db.flush()
-    return result
+    if clean:
+        db.commit()
 
 
 def require_amount(amount_cents: int) -> None:

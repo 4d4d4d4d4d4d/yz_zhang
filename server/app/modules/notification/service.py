@@ -197,4 +197,5 @@ def register_event_handlers() -> None:
     subscribe("dispute.opened", _on_dispute_opened, retry=True)
     # NTF-002 推送：retry=True——第三方网关抖动是常态，重试是必须的；
     # 而它绝不能拖垮业务事务，所以走发件箱而不是同步调用
-    subscribe("notification.created", _on_notification_created, retry=True)
+    # CONC-067 推送是一次网络调用：业务提交之后再投递（业务回滚了就不推）
+    subscribe("notification.created", _on_notification_created, retry=True, after_commit=True)

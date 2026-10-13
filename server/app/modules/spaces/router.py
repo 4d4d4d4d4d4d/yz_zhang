@@ -86,6 +86,10 @@ def own_space(response: Response, user: User = Depends(get_current_user), db: Se
 
 @router.put('/spaces/me')
 def save_space(body: SpaceIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    # CONC-067 机审是外部调用：在拿行锁之前审（审的只是请求体），锁拿到之后不再等外部服务
+    text = ' '.join([body.headline, body.introduction] + [i.title + ' ' + i.summary + ' ' + i.url for i in body.items])
+    if machine_review(text, db):
+        raise bad_request('空间内容需要调整后再发布', 'space_content_rejected')
     # Serialize saves for the same owner; revision prevents silent edits from stale browser tabs.
     db.query(User).filter(User.id == user.id).with_for_update().one()
     s = db.query(PersonalSpace).filter(PersonalSpace.user_id == user.id).populate_existing().first()
@@ -95,9 +99,6 @@ def save_space(body: SpaceIn, user: User = Depends(get_current_user), db: Sessio
         raise bad_request('请先在账户隐私设置中允许公开个人资料', 'profile_private')
     if body.published and not body.headline.strip():
         raise bad_request('公开前请写一句介绍', 'headline_required')
-    text = ' '.join([body.headline, body.introduction] + [i.title + ' ' + i.summary + ' ' + i.url for i in body.items])
-    if machine_review(text):
-        raise bad_request('空间内容需要调整后再发布', 'space_content_rejected')
     if s is None:
         s = PersonalSpace(user_id=user.id)
         db.add(s)

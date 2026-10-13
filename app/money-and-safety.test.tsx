@@ -58,6 +58,21 @@ describe('APP-065 钱包：钱能进，也要能出', () => {
     expect(calls.some((c) => c.method === 'POST' && c.path === '/wallet/withdraw')).toBe(true);
   });
 
+  it('CONC-067 银行结果不明：说「已提交银行处理」，不说成功', async () => {
+    const msg = '提现已提交银行处理，结果确认后会通知你';
+    const client = makeClient({
+      '/wallet': WALLET,
+      '/wallet/ledger': [],
+      '/wallet/payout-account': { bound: true, kind: 'bank', account_no: '6222****0000', holder_name: '张三' },
+      '/wallet/withdraw': { status: 'processing', request_id: 4, message: msg, available_cents: 40000, frozen_cents: 10000 },
+    });
+    render(<WalletScreen client={client} />);
+    await waitFor(() => expect(screen.getByText('提现 ¥100.00')).toBeTruthy());
+    fireEvent.press(screen.getByText('提现 ¥100.00'));
+    await waitFor(() => expect(screen.getByText(msg)).toBeTruthy());
+    expect(screen.queryByText('提现已受理')).toBeNull();
+  });
+
   it('PAY-030 绑定收款账户带上金额之外的两个字段，并显示脱敏卡号', async () => {
     const calls: Array<{ method: string; path: string; body: unknown }> = [];
     const client = makeClient({

@@ -46,7 +46,8 @@ class WithdrawRequest(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, index=True)
     amount_cents: Mapped[int] = mapped_column(Integer)
-    # pending / awaiting_second（大额已一审、等第二人确认）/ approved / rejected
+    # pending / awaiting_second（大额已一审、等第二人确认）/ sending（已提交银行、等结果，CONC-067）/
+    # approved（人审放款）/ paid（即时提现到账）/ failed（即时提现银行明确拒绝，已解冻）/ rejected
     status: Mapped[str] = mapped_column(String(16), default="pending")
     decided_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # PAY-042 四眼原则：大额出款的第一次批准记在这里，**钱不动**；

@@ -91,11 +91,15 @@ def test_custody_ledger_rejects_provider_without_split(client, custody, monkeypa
 
 
 # ---------- STUB-052 失败注入 ----------
-def test_settlement_failure_rolls_back(client, requester, worker, custody, monkeypatch):
-    """STUB-013/052 分账失败 → 整体回滚，不留半途状态。
+def test_settlement_failure_is_retried_not_lost(client, requester, worker, custody, monkeypatch):
+    """STUB-013/052 存管分账指令下达失败（V138 起的契约）。
 
-    失败路径比成功路径更需要提前跑过——真出问题时没有第二次机会。
+    改造前：指令在放款事务里同步下达，失败就整笔回滚、验收报错。代价是放款事务一直挂着
+    钱包锁等存管行（CONC-067）。现在：指令（结算单）与内部账本变动同生共死地落库，
+    **业务提交之后**另开会话下达——失败不回滚验收，而是：结算单停在 pending、投递记录 failed
+    等 drain 重试；存管恢复后重试成功、带回流水号；超时没下达的进日终对账。
     """
+    from app.core import events
     from app.modules.finance.models import SettlementOrder
 
     topup(client, requester, 100000)
@@ -103,16 +107,21 @@ def test_settlement_failure_rolls_back(client, requester, worker, custody, monke
     match_and_fund(client, requester, worker, task)
     client.post(f"/api/v1/tasks/{task['id']}/deliver", headers=auth(worker))
 
-    before = client.get("/api/v1/wallet", headers=auth(worker)).json()["available_cents"]
     monkeypatch.setenv(sandbox.FAIL_MODE_ENV, "split_settle")
     r = client.post(f"/api/v1/tasks/{task['id']}/accept-delivery", headers=auth(requester))
-    assert r.status_code >= 400, "分账失败却返回成功"
-
-    after = client.get("/api/v1/wallet", headers=auth(worker)).json()["available_cents"]
-    assert after == before, "分账失败但钱已经动了 —— 没有回滚"
+    assert r.status_code == 200, r.text
     with SessionLocal() as db:
-        assert db.query(SettlementOrder).count() == 0, "失败的指令不该留在库里"
+        order = db.query(SettlementOrder).one()
+        assert order.status == "pending" and not order.custody_ref, "下达失败：指令留在库里等重试，不是丢了"
+        failed = db.query(events.EventDelivery).filter_by(event="settlement.created").one()
+        assert failed.status == "failed", "下达失败要留痕并可重试"
 
+    monkeypatch.delenv(sandbox.FAIL_MODE_ENV)
+    with SessionLocal() as db:
+        events.drain(db)
+    with SessionLocal() as db:
+        order = db.query(SettlementOrder).one()
+        assert order.status == "executed" and order.custody_ref, "存管恢复后重试成功、带回流水号"
 
 # ---------- STUB-051 补桩不削弱拦截（最容易做错的地方）----------
 def test_sandbox_providers_still_rejected_in_production(monkeypatch):

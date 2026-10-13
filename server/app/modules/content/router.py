@@ -100,6 +100,36 @@ def _dump(c: Content, db: Session, viewer: User | None = None, ctx: _ListCtx | N
 
 
 # ---------- 发布（CNT-001/003/006） ----------
+def can_view(db: Session, viewer: User, c: Content | None) -> bool:
+    """SEC-060f 谁看得见一件作品：**只有这一个判据**，按 id 读、按作者列、评论、点赞都用它。
+
+    此前按 id 读只看「已发布」，不看可见性——设成仅自己可见的作品，任何登录用户按 id 就能读。
+    """
+    if c is None or c.status == "removed":
+        return False
+    if c.author_id == viewer.id:
+        return True
+    if c.status != "published":
+        return False
+    if c.visibility == "public":
+        return True
+    if c.visibility == "followers":
+        return _follow_row(db, viewer.id, c.author_id) is not None
+    if c.visibility == "circle" and c.circle_id is not None:
+        from app.modules.circle.router import active_member
+
+        return active_member(db, c.circle_id, viewer.id) is not None
+    return False
+
+
+def _visible_or_404(db: Session, viewer: User, content_id: int) -> Content:
+    """看不见就是不存在：403 会告诉别人这个 id 上确实有东西。"""
+    c = db.get(Content, content_id)
+    if not can_view(db, viewer, c):
+        raise not_found("内容不存在")
+    return c
+
+
 @router.post("/contents", status_code=201)
 def create_content(
     body: ContentIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
@@ -111,7 +141,7 @@ def create_content(
     if body.kind == "blog" and not body.title:
         raise bad_request("博客必须有标题", "title_required")
     # CNT-006 发布机审（复用任务违禁词，RISK-001 全场景覆盖）
-    hit = machine_review(body.title + " " + body.body)
+    hit = machine_review(body.title + " " + body.body, db)
     if hit:
         raise bad_request(f"内容含违禁信息（{hit}）", "content_rejected")
     if body.circle_id is not None:
@@ -158,7 +188,7 @@ def edit_content(
     patch = {k: v for k, v in body.model_dump().items() if v is not None}
     # 改了文字就要重审：否则「先发一段干净的，再编辑成违规的」是条现成的绕过
     if "title" in patch or "body" in patch:
-        hit = machine_review(f"{patch.get('title', row.title)} {patch.get('body', row.body)}")
+        hit = machine_review(f"{patch.get('title', row.title)} {patch.get('body', row.body)}", db)
         if hit:
             raise bad_request(f"内容含违禁信息（{hit}）", "content_rejected")
     for k, v in patch.items():
@@ -181,7 +211,7 @@ def publish_content(
         raise conflict("已经是发布状态", "already_published")
     if row.kind == "blog" and not row.title:
         raise bad_request("博客必须有标题", "title_required")
-    hit = machine_review(f"{row.title} {row.body}")
+    hit = machine_review(f"{row.title} {row.body}", db)
     if hit:
         raise bad_request(f"内容含违禁信息（{hit}）", "content_rejected")
     row.status = "published"
@@ -225,7 +255,7 @@ def create_experience_post(
         raise forbidden("仅任务执行者可发布经验帖")
     if task.status != "completed":
         raise conflict("任务闭环后才能发经验帖", "not_completed")
-    hit = machine_review(body.title + " " + body.body)
+    hit = machine_review(body.title + " " + body.body, db)
     if hit:
         raise bad_request(f"内容含违禁信息（{hit}）", "content_rejected")
     row = Content(
@@ -282,18 +312,16 @@ def user_contents(user_id: int, db: Session = Depends(get_db, scope="function"),
         .limit(50)
         .all()
     )
-    visible = [c for c in rows if c.visibility == "public" or user_id == user.id]
+    visible = [c for c in rows if can_view(db, user, c)]
     ctx = _ListCtx(db, user, visible)
     return [_dump(c, db, user, ctx) for c in visible]
 
 
 @router.get("/contents/{content_id}")
 def get_content(content_id: int, db: Session = Depends(get_db, scope="function"), user: User = Depends(get_current_user)):
-    c = db.get(Content, content_id)
     # 作者能打开自己的草稿（否则草稿箱里点进去是 404，没法编辑）；
     # 别人一律看不见——草稿不是「还没推荐」，是「还没公开」
-    if not c or (c.status != "published" and c.author_id != user.id):
-        raise not_found("内容不存在")
+    c = _visible_or_404(db, user, content_id)
     return _dump(c, db, user)
 
 
@@ -312,8 +340,8 @@ def delete_content(content_id: int, user: User = Depends(get_current_user), db: 
 # ---------- 互动（CNT-020） ----------
 @router.post("/contents/{content_id}/like")
 def like(content_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
-    c = db.get(Content, content_id)
-    if not c or c.status != "published":
+    c = _visible_or_404(db, user, content_id)
+    if c.status != "published":
         raise not_found("内容不存在")
     existing = db.query(Like).filter(Like.user_id == user.id, Like.content_id == content_id).first()
     if existing:
@@ -331,10 +359,10 @@ def like(content_id: int, user: User = Depends(get_current_user), db: Session = 
 def comment(
     content_id: int, body: CommentIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
-    c = db.get(Content, content_id)
-    if not c or c.status != "published":
+    c = _visible_or_404(db, user, content_id)
+    if c.status != "published":
         raise not_found("内容不存在")
-    hit = machine_review(body.body)
+    hit = machine_review(body.body, db)
     if hit:
         raise bad_request(f"评论含违禁信息（{hit}）", "content_rejected")
     row = Comment(content_id=content_id, author_id=user.id, body=body.body, reply_to_id=body.reply_to_id)
@@ -345,11 +373,18 @@ def comment(
 
 
 @router.get("/contents/{content_id}/comments")
-def list_comments(content_id: int, db: Session = Depends(get_db, scope="function")):
-    rows = db.query(Comment).filter(Comment.content_id == content_id).order_by(Comment.id).all()
+def list_comments(content_id: int, user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db, scope="function")):
+    """评论不是独立的公开资源：作品看不见，它下面的评论也看不见（SEC-060f）。
+
+    此前这个接口不要登录、不看状态、不看可见性——草稿、已删除、仅自己可见的作品下面的评论，未登录也能读。
+    """
+    _visible_or_404(db, user, content_id)
+    rows = db.query(Comment).filter(Comment.content_id == content_id).order_by(Comment.id).limit(500).all()
+    authors = {u.id: u for u in db.query(User).filter(User.id.in_({r.author_id for r in rows} or {-1}))}
     out = []
     for r in rows:
-        author = db.get(User, r.author_id)
+        author = authors.get(r.author_id)
         out.append(
             {"id": r.id, "author_id": r.author_id, "author_nickname": author.nickname if author else "",
              "body": r.body, "reply_to_id": r.reply_to_id, "created_at": iso(r.created_at)}

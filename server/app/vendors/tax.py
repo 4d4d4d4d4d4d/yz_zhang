@@ -42,6 +42,9 @@ class NoWithholdingTax:
 
     name = "none"
 
+    # CONC-067 进程内的规则计算，不发网络请求：调用时挂着事务无妨（test_vendor_calls_outside_transactions 核对本模块不引网络库）
+    in_process = True
+
     def assess(self, income_cents: int, context: dict) -> TaxAssessment:
         return TaxAssessment(
             taxable_cents=income_cents, withheld_cents=0, rule="none",
@@ -69,6 +72,9 @@ class LaborIncomeTax:
         (5000000, 3000, 200000),
         (None, 4000, 700000),
     )
+
+    # CONC-067 进程内的规则计算，不发网络请求：调用时挂着事务无妨（test_vendor_calls_outside_transactions 核对本模块不引网络库）
+    in_process = True
 
     def assess(self, income_cents: int, context: dict) -> TaxAssessment:
         if income_cents <= 0:
@@ -100,6 +106,9 @@ class CommissionedCollectionTax:
     """
 
     name = "commissioned_collection"
+
+    # CONC-067 进程内的规则计算，不发网络请求：调用时挂着事务无妨（test_vendor_calls_outside_transactions 核对本模块不引网络库）
+    in_process = True
 
     def __init__(self, rate_bps: int | None = None):
         from app.core.config import settings

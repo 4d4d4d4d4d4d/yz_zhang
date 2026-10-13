@@ -1,8 +1,8 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 2026-10-13：V137 日志不是第二份个人信息库；V136 手机上找合作者；V135 经验变成能被调用的单元与工具；V134 经验按子类生长；V133 任务拆解进 App；V132 任务拆解变成逐层展开、说清谁能闭环的树；V131 写操作在响应发出之前提交（FastAPI yield 依赖的作用域）；V130 幂等键真的护住钱（并发同键、过期、两端发键；Postgres 上实测）；V129 前端测试计数与结构计数进闸门（上线手册的 job 数是错的）；V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
+> 2026-10-13：V139 谁能碰作品、私聊与证件；V138 调外部服务不挂事务；V137 日志不是第二份个人信息库；V136 手机上找合作者；V135 经验变成能被调用的单元与工具；V134 经验按子类生长；V133 任务拆解进 App；V132 任务拆解变成逐层展开、说清谁能闭环的树；V131 写操作在响应发出之前提交（FastAPI yield 依赖的作用域）；V130 幂等键真的护住钱（并发同键、过期、两端发键；Postgres 上实测）；V129 前端测试计数与结构计数进闸门（上线手册的 job 数是错的）；V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
 > 2026-10-09：V119 法定权利入口进 App；V118 单聊并发分叉修复；V117 关注幂等化并接到空间；V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
-> 后端 1470 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
+> 后端 1516 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
 > （真 Chromium × 构建产物 × 真服务端，18 项）。
@@ -15,6 +15,29 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V139 批次：谁能碰作品、私聊与证件）
+
+> 模块 spec：[114-who-can-touch-content-and-private-data.md](114-who-can-touch-content-and-private-data.md)；总表 [AUTHZ-MATRIX.md](../AUTHZ-MATRIX.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **SEC-060f 作品可见性** | 单一判据 `can_view`；看不见 404；评论跟着作品走 | `test_content_authz.py`（14 条） |
+| **SEC-061 管理员受限访问** | 私聊只读且写理由 + 审计；证件影像审计先于读取 | `test_authz_matrix::test_an_admin_*`、`::test_no_admin_can_write_*`、`::test_reading_an_identity_image_*` |
+| **SEC-061 总表与代码对齐** | 每一处管理员绕过都在总表里，受限的真的审计 | `test_authz_matrix::test_every_admin_bypass_*`、`::test_restricted_admin_access_is_audited_in_code` |
+
+## 已实现（V138 批次：调外部服务不挂事务）
+
+> 模块 spec：[113-no-vendor-call-inside-a-transaction.md](113-no-vendor-call-inside-a-transaction.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **守卫** | 按线程记事务与写；供应商实现全部包 `Guarded`；测试抛错、生产记指标 | `test_vendor_calls_outside_transactions.py`；整套后端测试 |
+| **显式提交点登记** | 每个 `checkpoint` 写明理由 | `::test_every_early_commit_is_registered_with_a_reason` |
+| **出款两阶段** | 明确失败解冻、不明留冻结、补偿 job、人审被拒回待审 | `test_two_phase_side_effects::test_*payout*`、`::test_an_unknown_bank_outcome_*` |
+| **对账冻结口径** | 数 pending / awaiting_second / sending | `::test_reconcile_counts_money_frozen_while_waiting_for_the_second_approver` |
+| **充值失败放键** | 占键失败即放；拒绝的订单 failed | `::test_a_failed_charge_does_not_lock_the_idempotency_key` |
+| **提交后投递** | 推送与存管指令 after_commit；删文件 on_commit；drain 补做 | `::test_push_*`、`::test_custody_*`、`::test_a_rolled_back_rejection_*` |
 
 ## 已实现（V137 批次：日志不是第二份个人信息库）
 

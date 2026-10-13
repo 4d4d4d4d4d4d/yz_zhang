@@ -183,9 +183,12 @@ def _erase_certification_images(db, user_id: int) -> None:
     delete = getattr(provider, "delete", None)
     rows = (db.query(CertificationApplication)
             .filter(CertificationApplication.user_id == user_id).all())
+    from app.core.events import on_commit
+
     for row in rows:
         for name in row.images or []:
             if delete:
-                delete(name)
+                # CONC-067 注销提交之后再删影像：注销回滚了，影像也不该没了
+                on_commit(db, "erase_cert_image", lambda n=name: delete(n))
         row.images = []
         db.add(row)

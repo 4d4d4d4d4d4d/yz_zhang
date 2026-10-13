@@ -524,6 +524,9 @@ def verify_identity(
     from app.modules.legal import consent
 
     consent.ensure(db, user.id, "identity")
+    # CONC-067 同意在调核验之前就已成立（提交表单即同意），而且核验失败也不撤销它——
+    # 先把它单独提交，再去等实名供应商，不挂着这条写等外部服务
+    vendor_base.checkpoint(db, "实名：单独同意先于处理且独立成立，核验失败也要留痕")
     provider = get_provider("kyc")
     try:
         result = vendor_base.call(

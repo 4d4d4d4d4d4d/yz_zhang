@@ -146,7 +146,7 @@ cp deploy/.env.example deploy/.env && vi deploy/.env
 # 3. 验活
 curl -fsS https://<域名>/healthz            # 存活
 curl -fsS https://<域名>/readyz             # 就绪（含 DB/Redis）
-curl -fsS -H "X-Job-Token: $PLATFORM_JOB_TOKEN" https://<域名>/api/v1/jobz   # 24 个 job 在册
+curl -fsS -H "X-Job-Token: $PLATFORM_JOB_TOKEN" https://<域名>/api/v1/jobz   # 25 个 job 在册
 
 # 4. 真实环境闭环（用真实供应商跑一笔小额）
 cd server && python -m scripts.smoke

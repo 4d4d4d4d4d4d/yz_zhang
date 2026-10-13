@@ -69,6 +69,10 @@ def _make_engine(url: str):
 
 
 engine = _make_engine(settings.DATABASE_URL)
+# CONC-067 记下每个线程有没有打开着的事务：调供应商时不许挂着它（见 core/txguard.py）
+from app.core import txguard as _txguard  # noqa: E402
+
+_txguard.install(engine)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 

@@ -137,7 +137,7 @@ python -m scripts.loadtest --concurrency 16 --requests 600 --scenario read
 python -m scripts.loadtest --concurrency 16 --requests 400 --scenario write
 ```
 
-这套组合已被 **1470 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
+这套组合已被 **1516 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
 「重复接受报名 / 重复托管 / 重复交付 / 重复验收 / 重复里程碑放款」全部拒绝且零副作用。
 
 ### 2.2 多副本并发安全（V42 已补齐，见 [18-concurrency.md](specs/18-concurrency.md)）
@@ -163,7 +163,7 @@ python -m scripts.loadtest --concurrency 16 --requests 400 --scenario write
   （已开 WAL + `busy_timeout`）。
 - **限流**：`RateLimiter` 协议 + 内存/Redis 双实现，配 `PLATFORM_REDIS_URL` 即切；
   Redis 故障连续达阈值自动降级为内存并在 `/readyz` 中可见——限流不该拖垮登录。
-- **定时任务单实例**：`JobLock` 表 + `job_slot()` 依赖，全部 24 个 job 端点已接入；
+- **定时任务单实例**：`JobLock` 表 + `job_slot()` 依赖，全部 25 个 job 端点已接入；
   执行完即释放，崩溃靠 TTL 抢占。调度表与端点**同源**（`app/core/jobs.py`），
   cron 直接读它，并有测试从 OpenAPI 自动发现端点双向核对——**漂了 CI 就红**
   （V57：此前手抄的表漂出三处，其中资金对账 job 从来没被架起来过）。
@@ -445,6 +445,13 @@ cd server && python -m scripts.scrub_experience             # 真的改，逐条
 
 指标带令牌的理由：资金口径数字不该对公网裸奔。
 
+**调外部服务不挂事务（V138，113 号 spec）**：`vendor_call_in_transaction_total` 应当恒为 0；
+不为 0 说明有代码在事务里调供应商（日志里有 `txguard` 那一行，指到具体文件与行号）——那是要改代码，不是要调参数。
+提现出款是两阶段的：银行超时的那一笔停在「正在出款」（钱在冻结里，用户看到「已提交银行处理」），
+`/wallet/jobs/resolve-payouts` 十分钟一次按同一个单号重试；**不要手工把它退回可用余额**——
+银行那边可能已经打出去了。长时间停在 `sending` 的，去银行侧按单号查。
+`/events/health` 里的 `deferred` 是「业务已提交、推送 / 存管指令待投递」，正常情况下几秒内归零。
+
 **日志（V137，112 号 spec）**：进程只有一个出口——stdout 上一行一个 JSON，全部过脱敏
 （手机号、证件号、卡号、邮箱、token、`Bearer`、`password=` 等）；SQL 异常不带参数；未处理异常带堆栈与 `request_id`。
 uvicorn 自己的访问日志是**关掉的**（它带查询串，原始搜索词是个人信息），访问日志看 `logger=access` 那几行，
@@ -655,7 +662,7 @@ Postgres 双引擎迁移检查与部署验收。
 **已经很扎实的**：交易闭环、资金安全与守恒、纠纷程序正义、账号安全、审计留痕、
 多副本并发安全、外部供应商可替换性、事件投递的失败隔离与可补做、
 个税代扣的资金隔离与可对账、反洗钱的可疑识别与保密、边界防护的跨副本一致性、
-定时任务编排的完整性、处置动作的一致性。这些有 1470 个测试钉着。
+定时任务编排的完整性、处置动作的一致性。这些有 1516 个测试钉着。
 
 **离真正上线还差的**（按紧迫度）：
 1. ~~Postgres + 行锁/乐观锁~~ —— **V42 已完成**（切库只改环境变量）

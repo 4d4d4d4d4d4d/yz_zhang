@@ -212,12 +212,19 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
 
         if not body.circle_id or not active_member(db, body.circle_id, user.id):
             raise forbidden("需先加入该圈层", "not_circle_member")
+    publishing = body.publish_now or body.people_needed > 1
+    if publishing:
+        # CONC-067 先审后写：机审是一次外部调用，不能挂着刚写进去的任务行等它
+        from app.modules.finance.compliance import assert_no_finance_offer
+
+        assert_no_finance_offer(f"{body.title} {body.description}")
+        service.review_or_reject(db, body.title + " " + body.description)
     task = Task(creator_id=user.id, **body.model_dump(exclude={"publish_now"}))
     db.add(task)
     db.flush()
     # TASK-007 多人任务：母任务为容器（不进广场），生成 N 个名额子任务分别招募
     if body.people_needed > 1:
-        service.validate_publishable(task, db)
+        service.validate_publishable(task, db, reviewed=True)
         per_slot = body.budget_cents // body.people_needed
         if per_slot <= 0:
             raise bad_request("预算不足以拆分名额", "budget_too_small")
@@ -245,7 +252,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
         out["slots"] = [dump_task(s, user) for s in slots]
         return out
     if body.publish_now:
-        service.validate_publishable(task, db)
+        service.validate_publishable(task, db, reviewed=True)
         service.transition(db, task, "published")
     return dump_task(task, user)
 

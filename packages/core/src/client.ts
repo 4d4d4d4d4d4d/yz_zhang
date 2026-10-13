@@ -345,7 +345,8 @@ export class PlatformClient {
    *  原样显示，**绝不能自己编一句「你的提现触发了风控」**——那等于告诉他
    *  哪条规则命中了。此前类型里没有这个字段，于是没有任何界面显示得了它。 */
   withdraw(amountCents: number, idempotencyKey: string) {
-    return this.request<{ status: 'done' | 'pending_review'; request_id?: number; message?: string; available_cents: number; frozen_cents: number }>(
+    // CONC-067（V138）出款两阶段：银行结果不明时是 processing——钱在冻结里，补偿 job 按同一个单号结
+    return this.request<{ status: 'done' | 'pending_review' | 'processing'; request_id?: number; message?: string; available_cents: number; frozen_cents: number }>(
       'POST', '/wallet/withdraw', { amount_cents: amountCents },
       { 'Idempotency-Key': idempotencyKey },
     );

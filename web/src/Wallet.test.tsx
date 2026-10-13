@@ -100,4 +100,25 @@ describe('钱包：钱能进，也要能出', () => {
     fireEvent.click(screen.getByText('提现'));
     await waitFor(() => expect(screen.getByText(neutral)).toBeTruthy());
   });
+
+  it('CONC-067 银行结果不明：说「已提交银行处理」，不说成功也不说失败', async () => {
+    localStorage.setItem('token', 'tok');
+    const msg = '提现已提交银行处理，结果确认后会通知你';
+    const client = makeClient({
+      '/users/me': ME,
+      '/wallet': WALLET,
+      '/wallet/ledger': [],
+      '/finance/my-tax': TAX,
+      '/wallet/payout-account': { bound: true, kind: 'bank', account_no: '6222****0000', holder_name: '提现的人' },
+      '/wallet/withdraw': { status: 'processing', request_id: 4, message: msg, available_cents: 40000, frozen_cents: 10000 },
+    });
+    render(
+      <MemoryRouter initialEntries={['/wallet']}>
+        <AppProvider client={client}><App /></AppProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText('提现')).toBeTruthy());
+    fireEvent.click(screen.getByText('提现'));
+    await waitFor(() => expect(screen.getByText(msg)).toBeTruthy());
+  });
 });

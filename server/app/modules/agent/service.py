@@ -217,6 +217,13 @@ def run_agent(db: Session, task, contract_id: int | None = None) -> AgentRun:
     lessons = verify_service.lessons_for(db, task.category)
     run.lessons_used = [row.id for row in lessons]
     system_prompt = profile.system_prompt + verify_service.lessons_prompt(lessons)
+    # CONC-067 运行记录（running）先落库：它本身就是 AGT-014 的并发闸——提交之后，并发的第二次触发
+    # 在别的连接上也看得见它；然后才去等模型（秒级），不挂着事务与连接
+    from app.core import txguard
+    from app.vendors.base import checkpoint
+
+    checkpoint(db, "AI 助理运行：running 记录先落库，它就是并发闸，也是可追溯的意图")
+    txguard.check("agent", "run")
 
     try:
         result = get_runner().run(
@@ -237,6 +244,10 @@ def run_agent(db: Session, task, contract_id: int | None = None) -> AgentRun:
         profile.runs_failed += 1
         return run
 
+    # AGT-051/065 **审核先于判据**：一份违规的产出，判据过没过不重要。
+    # CONC-067 审核是外部调用：在改这次运行的任何字段之前审（改了字段事务就「写过」，连接放不掉）
+    mod_status, mod_labels = moderate_output(db, result.output)
+
     run.output = result.output
     # AGT-016 成本必须落库：没有它，agent 接单是赚是赔谁也说不清
     run.cost_cents = result.cost_cents or profile.cost_per_run_cents
@@ -244,8 +255,6 @@ def run_agent(db: Session, task, contract_id: int | None = None) -> AgentRun:
     # 代价落在别人身上时往保守一侧倒
     run.confidence_bps = max(0, min(10000, int(result.confidence_bps or 0)))
 
-    # AGT-051/065 **审核先于判据**：一份违规的产出，判据过没过不重要。
-    mod_status, mod_labels = moderate_output(db, result.output)
     run.moderation_status = mod_status
     run.moderation_labels = mod_labels
     if mod_status == "reject":

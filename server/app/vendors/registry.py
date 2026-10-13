@@ -96,7 +96,10 @@ def get_provider(kind: str):
     if settings.ENV == "prod" and name not in impls:
         raise RuntimeError(f"未注册的供应商：{kind}({name})")
     factory = impls.get(name) or impls[MOCK_NAMES[kind]]
-    _instances[kind] = factory()
+    # CONC-067 每个供应商方法被调用前检查：这个线程不许挂着数据库事务
+    from app.core.txguard import Guarded
+
+    _instances[kind] = Guarded(kind, factory())
     return _instances[kind]
 
 

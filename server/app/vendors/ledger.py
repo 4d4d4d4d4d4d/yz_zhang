@@ -55,6 +55,9 @@ class CustodyLedger:
         from .base import VendorError
         from .registry import get_provider
 
+        from .base import release
+
+        release(db)  # CONC-067 下达指令前不挂事务（调用方在提交之后的独立会话里调用这里）
         provider = get_provider("payment")
         split_fn = getattr(provider, "split_settle", None)
         if split_fn is None:

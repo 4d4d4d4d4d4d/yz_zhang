@@ -118,12 +118,17 @@ def job_slot(job_name: str):
     def dependency(db: Session = Depends(get_db, scope="function")):
         if not acquire_job_lock(db, job_name, INSTANCE_ID):
             raise conflict(f"任务 {job_name} 正在其它实例执行", "job_running")
+        # CONC-067 抢到锁立刻提交：别的副本马上就能看见「有人在跑」（409 跳过），
+        # job 本身也从一个干净的会话开始——此前抢锁的那条写一直挂到 job 结束，
+        # 整个 job（包括里面调的供应商）都跑在同一个打开着的事务里
+        db.commit()
         try:
             yield
         except Exception as exc:
-            # DEP-051 失败也要留痕：先回滚丢弃 job 的部分改动（同时释放写锁），
-            # 再单独提交这条失败记录——否则它会跟着 get_db 的回滚一起消失。
+            # DEP-051 失败也要留痕：先回滚丢弃 job 的部分改动，再**显式放锁**并单独提交失败记录——
+            # 锁已经提交过了，回滚不会再顺带把它放掉；不放的话要等 TTL 过期才能重跑
             db.rollback()
+            release_job_lock(db, job_name, INSTANCE_ID)
             _note_job_result(db, job_name, ok=False, error=type(exc).__name__)
             db.commit()
             raise

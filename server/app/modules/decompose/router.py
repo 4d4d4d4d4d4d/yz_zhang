@@ -96,12 +96,13 @@ def propose(task_id: int, user: User = Depends(get_current_user), db: Session = 
     每一层都落盘、都能改。
     """
     task = _get_parent(db, task_id, user)
-    nodes, calls, _ = tree_ops.expand(db, task, [], None, get_gateway(), 0)
+    nodes, calls, report = tree_ops.expand(db, task, [], None, get_gateway(), 0)
     tree_ops.validate_tree(nodes, task.budget_cents)
     row = Decomposition(task_id=task.id, creator_id=user.id, items=[], tree=nodes,
                         model_calls=calls, source=nodes[0]["source"] if nodes else "")
     db.add(row)
     db.flush()
+    tree_ops.record_unit_uses(db, task, report)
     return _dump(row)
 
 
@@ -139,6 +140,8 @@ def expand(dec_id: int, body: ExpandIn, user: User = Depends(get_current_user),
                                        row.model_calls)
     tree_ops.validate_tree(nodes, task.budget_cents)
     _save(db, row, rev, nodes, calls)
+    tree_ops.record_unit_uses(db, task, report)
+    report.pop("unit_uses", None)  # 内部记账用，不是响应的一部分
     return {**_dump(row), "report": report}
 
 

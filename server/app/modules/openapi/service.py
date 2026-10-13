@@ -67,6 +67,11 @@ def resolve_key(db: Session, raw: str) -> tuple[ApiKey, User]:
         raise forbidden("账号已注销", "account_deleted")
     row.last_used_at = utcnow()
     db.add(row)
+    # CONC-067「最近一次使用」是独立的记账事实：当场提交，别让每个 API Key 请求从鉴权开始就是一个
+    # 「写过的」事务——那样后面任何一次外部调用（内容审核……）都放不掉连接
+    from app.vendors.base import checkpoint
+
+    checkpoint(db, "API Key 最近使用时间是独立记账，鉴权时当场提交")
     return row, user
 
 

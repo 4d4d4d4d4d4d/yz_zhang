@@ -36,13 +36,23 @@ def create_topup_order(db: Session, user_id: int, amount_cents: int) -> dict:
     )
     db.add(order)
     db.flush()
-
-    result = base.call(
-        db, "payment", provider.name, "create_charge",
-        {"order_no": order.order_no, "amount_cents": amount_cents},
-        lambda: provider.create_charge(order.order_no, amount_cents, "账户充值"),
-        idem_key=f"charge:{order.order_no}",
-    )
+    # CONC-067 订单（与幂等占键）先落库，再调支付渠道：渠道按订单号幂等，
+    # 我们这边有一张「下过单」的记录可以对账，等渠道的那几秒也不再占着连接
+    base.checkpoint(db, "充值下单：订单与幂等占键先落库，再调支付渠道（按订单号幂等）")
+    try:
+        result = base.call(
+            db, "payment", provider.name, "create_charge",
+            {"order_no": order.order_no, "amount_cents": amount_cents},
+            lambda: provider.create_charge(order.order_no, amount_cents, "账户充值"),
+            idem_key=f"charge:{order.order_no}",
+        )
+    except base.VendorError as exc:
+        if not exc.retryable:
+            # 渠道明确拒绝：订单置失败。结果不明（超时）的留在 pending——渠道那边可能已经建了单，回调会来
+            order.status = "failed"
+            db.add(order)
+            base.checkpoint(db, "充值下单明确失败：订单置失败落库，再把错误还给调用方")
+        raise
     order.external_ref = result.external_ref
     db.add(order)
     db.flush()

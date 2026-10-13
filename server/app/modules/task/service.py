@@ -99,13 +99,21 @@ def validate_category(db: Session, name: str) -> None:
         raise bad_request(f"类目「{name}」不存在或已停用", "invalid_category")
 
 
-def machine_review(text: str) -> str | None:
+def machine_review(text: str, db: Session | None = None) -> str | None:
     """TASK-004 / VND-030 内容机审：走 `ModerationProvider` 抽象。
 
     返回命中的标签（拒绝）或 None（放行）。本地实现即原违禁词表，
     换第三方内容安全只需改 `PLATFORM_MODERATION_PROVIDER`。
+
+    CONC-067：第三方内容安全是一次网络调用。传入 `db` 时先把只读事务提交、连接还回池里；
+    **调用方必须在写库之前机审**（先审后写），否则守卫会报——那是要改调用顺序，不是要绕过。
     """
     from app.vendors.registry import get_provider
+
+    if db is not None:
+        from app.vendors.base import release
+
+        release(db)
 
     result = get_provider("moderation").check("text", text)
     if result.status == "reject":
@@ -126,7 +134,25 @@ def transition(db: Session, task: Task, new_status: str, event_payload: dict | N
     publish(db, f"task.{new_status}", {"task_id": task.id, "from": old, **(event_payload or {})})
 
 
-def validate_publishable(task: Task, db: Session | None = None) -> None:
+def review_or_reject(db: Session, text: str) -> None:
+    """先审后写：发布类请求在写任何一行之前调用。
+
+    同一个会话里审过的同一段文字不再审第二次：外层（如机器发布在拿额度锁之前）已经先审过，
+    里层的建单就不该在锁里再调一次外部服务。
+    """
+    import hashlib
+
+    digest = hashlib.sha256(text.encode()).hexdigest()
+    passed = db.info.setdefault("moderation_passed", set())
+    if digest in passed:
+        return
+    hit = machine_review(text, db)
+    if hit:
+        raise bad_request(f"内容含违禁信息（{hit}），发布被拒绝", "content_rejected")
+    passed.add(digest)
+
+
+def validate_publishable(task: Task, db: Session | None = None, reviewed: bool = False) -> None:
     if db is not None:
         validate_city(db, task)  # GEO-030
     if task.budget_cents <= 0:
@@ -137,9 +163,10 @@ def validate_publishable(task: Task, db: Session | None = None) -> None:
 
     check_pricing(task.pricing)
     assert_no_finance_offer(f"{task.title} {task.description}")
-    hit = machine_review(task.title + " " + task.description)
-    if hit:
-        raise bad_request(f"内容含违禁信息（{hit}），发布被拒绝", "content_rejected")
+    if not reviewed:
+        hit = machine_review(task.title + " " + task.description, db)
+        if hit:
+            raise bad_request(f"内容含违禁信息（{hit}），发布被拒绝", "content_rejected")
     if not task.is_remote and (task.lat is None or task.lng is None):
         raise bad_request("线下任务必须提供位置", "location_required")
     if task.deadline is not None:

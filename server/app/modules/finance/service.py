@@ -56,11 +56,45 @@ def record(db: Session, contract, kind: str, splits: list[Split],
     db.add_all(rows)
     db.flush()
 
+    if ledger.is_custody:
+        # CONC-067 给存管行下分账指令是一次网络调用，而这里还在放款的事务里、拿着钱包锁。
+        # 指令本身（这张单）与内部账本的变动同生共死地落库；业务提交之后另开会话下达，
+        # 按单号幂等，失败由 drain 重试，超时没下达的进日终对账（verify_conservation）。
+        from app.core.events import publish
+
+        order.status = "pending"
+        db.add(order)
+        db.flush()
+        publish(db, "settlement.created", {"order_id": order.id})
+        return order
     order.custody_ref = ledger.execute(db, order, rows)
     order.status = "executed"
     db.add(order)
     db.flush()
     return order
+
+
+CUSTODY_OVERDUE_MINUTES = 30
+
+
+def execute_pending_settlement(db: Session, payload: dict) -> None:
+    """业务提交之后下达存管分账指令（after_commit 订阅者）。已下达的直接跳过（幂等）。"""
+    from app.vendors.ledger import get_ledger
+
+    order = db.get(SettlementOrder, int(payload["order_id"]))
+    if order is None or order.status == "executed":
+        return
+    rows = db.query(SettlementSplit).filter(SettlementSplit.order_id == order.id).all()
+    order.custody_ref = get_ledger().execute(db, order, rows)
+    order.status = "executed"
+    db.add(order)
+    db.flush()
+
+
+def register_event_handlers() -> None:
+    from app.core.events import subscribe
+
+    subscribe("settlement.created", execute_pending_settlement, retry=True, after_commit=True)
 
 
 def verify_conservation(db: Session) -> list[dict]:
@@ -82,10 +116,18 @@ def verify_conservation(db: Session) -> list[dict]:
         if actual != order.total_cents:
             bad.append({"order_id": order.id, "contract_id": order.contract_id,
                         "total_cents": order.total_cents, "splits_sum": actual})
-        # FIN-004 存管模式下无流水号的账目视为异常
+        # FIN-004 存管模式下无流水号的账目视为异常——**还在下达途中的**（提交后几秒内）不算，
+        # 超过 CUSTODY_OVERDUE_MINUTES 还没下达的算（CONC-067：指令在业务提交之后才下达）
         if order.backend == "custody" and not order.custody_ref:
-            bad.append({"order_id": order.id, "contract_id": order.contract_id,
-                        "issue": "missing_custody_ref"})
+            from datetime import timedelta
+
+            from app.modules.account.models import utcnow
+
+            overdue = order.created_at < utcnow() - timedelta(minutes=CUSTODY_OVERDUE_MINUTES)
+            if order.status != "pending" or overdue:
+                bad.append({"order_id": order.id, "contract_id": order.contract_id,
+                            "issue": "missing_custody_ref" if order.status != "pending"
+                            else "custody_instruction_overdue"})
     return bad
 
 

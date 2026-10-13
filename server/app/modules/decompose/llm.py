@@ -75,9 +75,10 @@ class TemplateLLM:
 
         unit = kb_units.best_procedure(db, root["category"], root.get("city", ""), root["budget_cents"])
         if unit is not None:
-            kb_units.record_use(db, unit, "decompose", root.get("creator_id") or 0, root.get("task_id"),
-                                summary=f"分解《{root['title']}》的第一层")
+            # 「用了」由调用方在这一层**真的被采用之后**再记（过了审核、落了盘）：
+            # 在这里记，审核拦下的那一层也会算一次使用；而且这里还在只读阶段，写了就没法在调外部服务前放掉连接
             return {
+                "unit_use": unit.id,
                 "children": [{
                     "title": st["title"], "description": st["title"], "required_skills": [],
                     "budget_ratio_bps": int(st.get("budget_ratio_bps", 0)),
@@ -228,6 +229,19 @@ KNOWN_MODELS = frozenset({
 })
 
 
+def _before_model_call(db, operation: str) -> None:
+    """CONC-067 模型调用是这条请求里最慢的一次外部调用（秒级）：先还连接，再过守卫。
+
+    模型客户端不经供应商注册表，`Guarded` 包不到它，所以在这里显式检查。
+    """
+    from app.core import txguard
+    from app.vendors.base import release
+
+    if db is not None:
+        release(db)
+    txguard.check("llm", operation)
+
+
 class AnthropicLLM:
     """生产实现：JSON Schema 强约束 + 校验，失败降级模板。"""
 
@@ -285,6 +299,7 @@ class AnthropicLLM:
 
     def expand(self, db, ctx) -> dict:
         try:
+            _before_model_call(db, "expand")
             steps = self._call_expand(ctx)
             out = []
             for st in steps:
@@ -314,6 +329,7 @@ class AnthropicLLM:
 
     def decompose(self, db, title, description, category, budget_cents) -> list[dict]:
         try:
+            _before_model_call(db, "decompose")
             raw = self._call_model(title, description, category)
             if not raw:
                 raise ValueError("模型返回空分解")

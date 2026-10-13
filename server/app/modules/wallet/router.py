@@ -285,6 +285,17 @@ def run_purge_idempotency(db: Session = Depends(get_db, scope="function"), _=Dep
     return idempotency.purge(db)
 
 
+@router.post("/jobs/resolve-payouts")
+def run_resolve_payouts(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                        __=Depends(job_slot("payout_resolve"), scope="function")):
+    """CONC-067 结果不明的出款单按同一个单号重试（113 号 spec）。
+
+    出款改成两阶段之后，银行超时的那一笔留在 `sending`：钱在冻结里、出款单在库里。
+    这个 job 按同一个单号再问一次——银行侧与 VendorCall 都按单号去重，不会打两次。
+    """
+    return service.resolve_stuck_payouts(db)
+
+
 @router.get("/ledger")
 def ledger(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     rows = (

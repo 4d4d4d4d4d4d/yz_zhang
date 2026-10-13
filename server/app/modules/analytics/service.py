@@ -41,7 +41,7 @@ def log_search(db: Session, term: str, user_id: int | None = None) -> None:
     from app.modules.task.service import machine_review
 
     term = term.strip()[:100]
-    if not term or looks_like_pii(term) or machine_review(term):
+    if not term or looks_like_pii(term) or machine_review(term, db):
         return
     db.add(SearchQuery(term=term, user_id=user_id))
 
@@ -66,7 +66,8 @@ def _public_terms(db: Session, prefix: str, limit: int) -> list[tuple[str, int]]
         .limit(limit * 3)
         .all()
     )
-    out = [(t, u) for t, u in rows if not looks_like_pii(t) and not machine_review(t)]
+    # CONC-067 读完就把连接还回去：下面每个词各一次内容安全调用，不能挂着事务挨个等
+    out = [(t, u) for t, u in rows if not looks_like_pii(t) and not machine_review(t, db)]
     return out[:limit]
 
 

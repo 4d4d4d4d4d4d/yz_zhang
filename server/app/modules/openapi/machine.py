@@ -156,6 +156,11 @@ def publish(body: task_api.TaskIn, principal=Depends(require_scope('tasks:write'
         raise bad_request('机器授权仅支持单次单名额任务，批量或周期任务需分别授权')
     if body.budget_cents <= 0 or body.deposit_cents < 0:
         raise bad_request('预算必须为正且保证金不能为负')
+    if body.publish_now:
+        # CONC-067 机审是外部调用：在 `_run` 拿额度锁（API Key 行写锁）之前审，锁里不再等内容安全
+        from app.modules.task import service as task_service
+
+        task_service.review_or_reject(db, body.title + " " + body.description)
     return _run(db, principal, 'publish', idempotency_key, body.model_dump(mode='json'),
         body.category, body.budget_cents+body.bonus_cents,
         lambda: task_api.create_task(body, principal[1], db))

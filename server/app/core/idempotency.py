@@ -23,6 +23,7 @@ V130（104 号 spec）补的三件：
   超过 80 个字符的键**永远查不到自己的记录**，每次重试都重跑一遍再撞约束。
 """
 import hashlib
+import time
 import json
 from datetime import timedelta
 
@@ -112,24 +113,49 @@ def replay_or_run(db: Session, user_id: int, key: str | None, scope: str, run,
         db.delete(existing)
         db.flush()
         existing = None
-    if existing is not None:
+    if existing is not None and existing.response:
         return _replay(existing, fp)
+    # 有占键、还没结果（CONC-067 之后占键会先于结果提交）：走下面同一个「等它出结果」的分支
 
-    if not _claim(db, user_id, key, scope, fp):
-        # 同一个键的另一个请求先占了，并且已经提交（Postgres 上这次插入会一直
-        # 等到它提交或回滚；它回滚的话这里插入就成功了，走不到这儿）。
+    deadline = time.monotonic() + settings.IDEMPOTENCY_WAIT_SECONDS
+    while not _claim(db, user_id, key, scope, fp):
+        # 同一个键的另一个请求先占了，并且已经提交。CONC-067 之后它在调外部服务之前就提交了占键，
+        # 所以这里常常看到「有占键、还没结果」——**等它一会儿**，拿到结果就回放（FIN-072：并发同键
+        # 都拿到同一个 200）；它失败放掉了占键，下一轮 `_claim` 就由这个请求接着做。
         other = _find(db, user_id, key)
         if other is not None and other.response:
             return _replay(other, fp)
-        # 读到了却没有结果，或者刚好被清理掉：不猜，让客户端用同一个键再试
-        raise conflict("同一个 Idempotency-Key 的请求正在处理，请稍后用同一个键重试",
-                       "idempotency_in_progress")
+        if time.monotonic() >= deadline:
+            # 等不到：不猜，让客户端用同一个键再试（与业界同键并发返回 409 的做法一致）
+            raise conflict("同一个 Idempotency-Key 的请求正在处理，请稍后用同一个键重试",
+                           "idempotency_in_progress")
+        db.rollback()  # 结束这次读，下一轮才看得见对方的提交
+        time.sleep(0.05)
 
-    result = run()
+    try:
+        result = run()
+    except Exception:
+        _abandon(db, user_id, key)
+        raise
     (db.query(IdempotencyRecord)
      .filter(IdempotencyRecord.user_id == user_id, IdempotencyRecord.key == key)
      .update({"response": json.dumps(result, ensure_ascii=False)}, synchronize_session=False))
     return result
+
+
+def _abandon(db: Session, user_id: int, key: str) -> None:
+    """失败不缓存：占的键要放掉，客户端用同一个键重试会真的再试一次。
+
+    改造前占键与业务在同一个事务里，失败一回滚占键就没了。CONC-067 之后，调外部服务前
+    会有显式的提交点（`vendor_base.checkpoint`），占键可能已经落库——这里把它删掉。
+    只删还没有结果的那条：已经有结果的是别的请求成功写下的，不能动。
+    """
+    db.rollback()
+    (db.query(IdempotencyRecord)
+     .filter(IdempotencyRecord.user_id == user_id, IdempotencyRecord.key == key,
+             IdempotencyRecord.response == "")
+     .delete(synchronize_session=False))
+    db.commit()
 
 
 def _claim(db: Session, user_id: int, key: str, scope: str, fp: str) -> bool:

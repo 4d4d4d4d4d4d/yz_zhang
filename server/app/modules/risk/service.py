@@ -105,9 +105,13 @@ def reconcile(db: Session) -> dict:
     # PAY-007：待审大额提现也占用冻结（批准划出/驳回解冻）
     from app.modules.wallet.models import WithdrawRequest
 
+    # 冻结着的提现：待审、等第二位管理员确认（PAY-042）、正在出款（CONC-067 两阶段）。
+    # 此前只数 pending——大额提现一审通过、等第二人确认的那段时间里，日终对账会误报冻结不符
+    from app.modules.wallet.service import FROZEN_WITHDRAW_STATUSES
+
     withdraw_frozen = (
         db.query(func.coalesce(func.sum(WithdrawRequest.amount_cents), 0))
-        .filter(WithdrawRequest.status == "pending")
+        .filter(WithdrawRequest.status.in_(FROZEN_WITHDRAW_STATUSES))
         .scalar()
     )
     frozen_expected = int(deposit_frozen) + int(withdraw_frozen)

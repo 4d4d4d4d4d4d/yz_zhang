@@ -68,7 +68,8 @@ def test_aml040_structuring_no_longer_slips_through(client):
     with SessionLocal() as db:
         from app.modules.wallet.models import WithdrawRequest
 
-        assert db.query(WithdrawRequest).count() == 4
+        # V138 起即时提现也有一张出款单（status=paid），被扣下的是待审的那几张
+        assert db.query(WithdrawRequest).filter(WithdrawRequest.status == "pending").count() == 4
 
 
 def test_aml010_structuring_pattern_is_identified_with_numbers(client):
@@ -99,7 +100,8 @@ def test_every_held_withdrawal_carries_a_reviewable_reason(client):
     withdraw(client, user, 999900)      # 这一笔仅因累计达线被扣
 
     with SessionLocal() as db:
-        held = db.query(WithdrawRequest).all()
+        # V138 起即时提现也有一张出款单（status=paid）；被扣下的是待审的
+        held = db.query(WithdrawRequest).filter(WithdrawRequest.status == "pending").all()
         assert held
         flagged_refs = {
             (r.ref_type, r.ref_id) for r in db.query(SuspiciousActivity).all()

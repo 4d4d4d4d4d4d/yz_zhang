@@ -28,7 +28,8 @@ def test_cnt020_like_toggle_and_comments(client, requester, worker):
     r = client.post(f"/api/v1/contents/{c['id']}/like", headers=auth(worker))
     assert r.json()["liked"] is False  # 再点取消
     client.post(f"/api/v1/contents/{c['id']}/comments", json={"body": "写得好"}, headers=auth(worker))
-    comments = client.get(f"/api/v1/contents/{c['id']}/comments").json()
+    # SEC-060f（V139）评论跟着作品走、要登录：此前不带登录也能读
+    comments = client.get(f"/api/v1/contents/{c['id']}/comments", headers=auth(worker)).json()
     assert comments[0]["body"] == "写得好"
     # 评论同样过机审
     r = client.post(f"/api/v1/contents/{c['id']}/comments", json={"body": "来赌博"}, headers=auth(worker))

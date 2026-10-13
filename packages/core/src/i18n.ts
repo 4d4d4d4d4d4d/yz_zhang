@@ -76,6 +76,8 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   cluster_merge_self: '不能合并到自己',
   cluster_model_mismatch: '子类的质心不是用当前模型算的，先重算',
   invitation_consumed: '邀请已处理',
+  // SEC-061（V139）管理员受限访问：读他人私聊 / 证件影像必须写理由并进审计
+  admin_access_reason_required: '查看他人私聊或敏感材料必须写明理由（会记入审计）',
   // KB-080~089 / AGT-080~083 可复用单元与经验工具（V135）
   unit_kind_invalid: '单元类型只能是：报价提示 / 验收清单 / 分解流程 / 可执行工具',
   unit_exclusions_required: '必须写明排除条件：什么情况下不该用这个单元',

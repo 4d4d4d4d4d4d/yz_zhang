@@ -83,6 +83,8 @@ class Settings:
     # FIN-071 幂等记录保留多久（104 号 spec）。24 小时是 Stripe 的语义：
     # 两端在「这一次操作」得到确定结果之前一直用同一个键重试，之后换新键——
     # 重试发生在几秒到几分钟内，不会跨天。过期判断在读的时候就生效。
+    # CONC-067 同键并发时，后到的请求等先到的那个出结果的上限（秒）；等不到返回 409 idempotency_in_progress
+    IDEMPOTENCY_WAIT_SECONDS = float(os.environ.get("PLATFORM_IDEMPOTENCY_WAIT_SECONDS", "15"))
     IDEMPOTENCY_RETENTION_HOURS = int(
         os.environ.get("PLATFORM_IDEMPOTENCY_RETENTION_HOURS", "24"))
     # TEAM-063 支出审批的催办与超时（75 号 spec）：躺着的申请要被再提醒，
@@ -143,7 +145,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.127.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.129.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

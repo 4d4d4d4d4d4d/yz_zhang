@@ -250,13 +250,13 @@ def unresolved(nodes: list[dict]) -> list[dict]:
 
 
 # ------------------------------------------------------------------ 审核
-def _moderation_hit(spec: dict) -> str | None:
+def _moderation_hit(spec: dict, db=None) -> str | None:
     """AI-DEC-047 每一层都过内容安全与金融合规，不只根节点。"""
     from app.modules.finance.compliance import scan_finance_terms
     from app.modules.task.service import machine_review
 
     text = " ".join(str(spec.get(k, "")) for k in ("title", "description", "deliverable", "acceptance"))
-    return machine_review(text) or scan_finance_terms(text) or None
+    return machine_review(text, db) or scan_finance_terms(text) or None
 
 
 # ------------------------------------------------------------------ 展开
@@ -295,7 +295,7 @@ def expand(db: Session, task, nodes: list[dict], targets: list[int] | None,
     root = {"title": task.title, "description": task.description,
             "category": task.category, "budget_cents": task.budget_cents,
             "city": task.city or "", "task_id": task.id, "creator_id": task.creator_id}
-    report = {"expanded": [], "stopped": [], "blocked": []}
+    report = {"expanded": [], "stopped": [], "blocked": [], "unit_uses": []}
     uses_model = bool(getattr(gateway, "uses_model", False))
 
     if not nodes:
@@ -359,7 +359,7 @@ def expand(db: Session, task, nodes: list[dict], targets: list[int] | None,
         if not _dag_ok(len(specs), [list(s.get("depends_on_idx", [])) for s in specs]):
             stop("invalid_output")
             continue
-        hits = [(s["title"], _moderation_hit(s)) for s in specs]
+        hits = [(s["title"], _moderation_hit(s, db)) for s in specs]
         if any(h for _, h in hits):
             report["blocked"].extend(t for t, h in hits if h)
             stop("moderation")
@@ -388,12 +388,27 @@ def expand(db: Session, task, nodes: list[dict], targets: list[int] | None,
         if target is not None:
             target.update(expanded=True, stop_reason="")
         report["expanded"].append(target["id"] if target else None)
+        if res.get("unit_use"):
+            # 这一层真的被采用了：调用方落盘之后再记一次单元使用（KB-083）
+            report.setdefault("unit_uses", []).append(res["unit_use"])
 
     _reevaluate_all(facts, nodes, task.category)
     return nodes, model_calls, report
 
 
 # ------------------------------------------------------------------ 编辑
+def record_unit_uses(db: Session, task, report: dict) -> None:
+    """KB-083 采用了经验单元的那几层，落盘之后记使用（结果会回流到单元的验证状态）。"""
+    from app.modules.knowledge import units as kb_units
+    from app.modules.knowledge.models import ReusableUnit
+
+    for uid in report.get("unit_uses") or []:
+        unit = db.get(ReusableUnit, uid)
+        if unit is not None:
+            kb_units.record_use(db, unit, "decompose", task.creator_id, task.id,
+                                summary=f"分解《{task.title}》的第一层")
+
+
 def edit_node(db: Session, task, nodes: list[dict], nid: int, patch: dict) -> list[dict]:
     nodes = [dict(n) for n in nodes]
     node = _by_id(nodes, nid)

@@ -102,6 +102,13 @@ def _dispatch_step(db: Session, mission: Mission, step: MissionStep) -> None:
             f"超出编排预算上限（{mission.budget_cap_cents} 分），本步需 {budget} 分",
             "budget_cap_exceeded",
         )
+    # CONC-067 机审是一次外部调用：先把到这一步为止的编排状态提交（编排本来就是一步一步可续跑的），
+    # 审过之后再建任务。不在这里提交，就得挂着整个 tick 的事务等内容安全接口返回
+    from app.modules.task.service import review_or_reject
+    from app.vendors.base import checkpoint
+
+    checkpoint(db, "编排逐步分发：每一步是自己的事务，前面各步的状态已经一致")
+    review_or_reject(db, f'{step.args["title"]} {step.args.get("description", "")}')
     task = Task(
         creator_id=mission.owner_id,
         title=step.args["title"],
@@ -113,7 +120,7 @@ def _dispatch_step(db: Session, mission: Mission, step: MissionStep) -> None:
     )
     db.add(task)
     db.flush()
-    validate_publishable(task, db)
+    validate_publishable(task, db, reviewed=True)
     task_transition(db, task, "published")
     step.task_id = task.id
     step.status = "dispatched"

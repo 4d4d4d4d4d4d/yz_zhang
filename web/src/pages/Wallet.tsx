@@ -54,7 +54,8 @@ export default function WalletPage() {
           <button className="ghost" onClick={() => act(async () => {
             const r = await client.withdraw(cents, withdrawKey.current.for(`withdraw:${cents}`));
             // AML-030/031 大额进人审时服务端给的是**中性话术**，原样显示
-            setHint(r.status === 'pending_review' ? (r.message ?? '提现申请已提交，等待处理') : '');
+            setHint(r.status === 'pending_review' ? (r.message ?? '提现申请已提交，等待处理')
+              : r.status === 'processing' ? (r.message ?? '提现已提交银行处理，结果确认后会通知你') : '');
           }, withdrawKey.current)}>提现</button>
         </div>
         {hint && <p className="muted">{hint}</p>}

@@ -187,6 +187,14 @@ def render_metrics(db=None) -> str:
     for (route, status), count in sorted(_req_total.items()):
         lines.append(f'http_requests_total{{route="{_escape(route)}",status="{status}"}} {count}')
 
+    # CONC-067 生产上「调供应商时还挂着事务」不打挂请求，只在这里被看见
+    from app.core import txguard
+
+    lines += ["# HELP vendor_call_in_transaction_total 调供应商时还挂着数据库事务的次数（应为 0）",
+              "# TYPE vendor_call_in_transaction_total counter"]
+    for call, count in sorted(txguard.violations.items()):
+        lines.append(f'vendor_call_in_transaction_total{{call="{_escape(call)}"}} {count}')
+
     lines += ["# HELP http_request_duration_seconds 请求耗时", "# TYPE http_request_duration_seconds histogram"]
     total_count = sum(_req_duration_count.values())
     total_sum = sum(_req_duration_sum.values())
