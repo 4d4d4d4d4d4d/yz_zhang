@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 110 | 手机上找合作者（AI 推荐人选与 AI 助理进 App；六条愿景全部两端已接） | [110-find-collaborators-on-the-phone.md](./110-find-collaborators-on-the-phone.md) | P1 |
 | 109 | 经验变成能被调用的单元与工具：实现（蒸馏门槛、分解在用、结果回流、只出草稿的工具、撤回穿透、两端与运营台） | [109-experience-units-and-tools.md](./109-experience-units-and-tools.md) | P0 |
 | 108 | 经验按子类生长：实现（归并 job、标定阈值、待定区、共识与分歧、两端与运营台） | [108-experience-subclasses.md](./108-experience-subclasses.md) | P0 |
 | 107 | 手机上的逐层拆解（App 入口、详情页继续拆与子任务进度） | [107-decompose-on-the-phone.md](./107-decompose-on-the-phone.md) | P1 |

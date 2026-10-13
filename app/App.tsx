@@ -7,6 +7,7 @@ import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DecomposeScreen, TaskTreeBlock } from './decompose';
 import { DiscoverScreen } from './Discover';
+import { AgentBlock, RecommendationsBlock } from './collaborators';
 import { ExperienceToolsBlock } from './experience';
 import { MessagesScreen } from './MessagesAndInvites';
 import { MySpaceScreen, PublicSpaceScreen, SpacesDiscoverScreen } from './spaces';
@@ -428,6 +429,11 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       {meId !== null && (meId === task.creator_id || meId === task.executor_id) && (
         <ExperienceToolsBlock client={client} task={task} />
       )}
+      {/* APP-079 找合作者：AI 推荐人选与 AI 助理，只对发布方（110 号 spec） */}
+      {meId === task.creator_id && task.status === 'published' && (
+        <RecommendationsBlock client={client} task={task} />
+      )}
+      {meId === task.creator_id && <AgentBlock client={client} task={task} onChanged={() => void onChanged()} />}
       <Text style={styles.mutedLeft}>
         {task.category} · {TASK_STATUS_LABEL[task.status]} · {fmtYuan(task.budget_cents)}
       </Text>
