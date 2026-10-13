@@ -1960,3 +1960,67 @@ export interface ContractReview {
   dates: string[];
   disclaimer: string;
 }
+
+// ---- GIG-100 接单者：现在有空、常用地点、附近、顺路、报价参考（125 号 spec）。位置只存约 1 公里精度 ----
+export interface GigAvailabilityView {
+  available: boolean;
+  until: string | null;
+  radius_km: number | null;
+  categories: string[];
+  /** 这一段「有空」里已经推了几条（上限 6） */
+  pushed: number;
+}
+export interface GigAvailabilityInput {
+  lat: number;
+  lng: number;
+  radius_km?: number;
+  hours?: number;
+  categories?: string[];
+}
+export interface GigPlaceRow {
+  id: number;
+  name: string;
+  lat: number;
+  lng: number;
+}
+export interface GigTaskCard {
+  task_id: number;
+  title: string;
+  category: string;
+  budget_cents: number;
+  /** 扣平台服务费后的到手（个税另算） */
+  net_cents: number;
+  address_hint: string;
+  city: string;
+  deadline: string | null;
+  /** 附近：直线距离；顺路：没有 */
+  distance_m?: number;
+  /** 顺路：多走的路（直线估算） */
+  detour_m?: number;
+  from_start_m?: number;
+}
+export interface GigNearby {
+  radius_km: number;
+  items: GigTaskCard[];
+  notice: string;
+}
+export interface GigAlong {
+  to: string;
+  max_detour_km: number;
+  items: GigTaskCard[];
+  notice: string;
+}
+export interface GigQuote {
+  task_id: number | null;
+  category: string;
+  city: string;
+  sample_size: number;
+  p50_cents: number | null;
+  min_cents: number | null;
+  max_cents: number | null;
+  budget_cents: number | null;
+  suggested_cents: number | null;
+  net_cents: number | null;
+  basis: string[];
+  disclaimer: string;
+}

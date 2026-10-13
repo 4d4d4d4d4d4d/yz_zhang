@@ -85,3 +85,5 @@ from app.modules.notebook.models import NbMethod, NbNote  # noqa: F401
 from app.modules.packs.models import PackEnrollment, PackEvent, ScenarioPack  # noqa: F401
 
 from app.modules.opc.models import OpcEntry, OpcProfile  # noqa: F401
+
+from app.modules.gig.models import GigAvailability, GigPlace  # noqa: F401

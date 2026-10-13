@@ -26,6 +26,7 @@ import Workbench from './pages/Workbench';
 import Notebook from './pages/Notebook';
 import Packs from './pages/Packs';
 import Opc from './pages/Opc';
+import Gig from './pages/Gig';
 const Chain = lazy(() => import('./pages/Chain'));
 const Records = lazy(() => import('./pages/Records'));
 import WalletPage from './pages/Wallet';
@@ -98,6 +99,8 @@ export default function App() {
         <Route path="/packs" element={hasToken ? <Packs /> : <Navigate to="/login?next=/packs" />} />
         {/* OPC-100 一人公司：记账底稿、申报日历、合同体检（124 号 spec）；入口在服务包与工作台 */}
         <Route path="/opc" element={hasToken ? <Opc /> : <Navigate to="/login?next=/opc" />} />
+        {/* GIG-100 接单：现在有空、顺路单、报价参考（125 号 spec）；入口在服务包与广场 */}
+        <Route path="/gig" element={hasToken ? <Gig /> : <Navigate to="/login?next=/gig" />} />
         <Route path="/notifications" element={hasToken ? <Notifications /> : <Navigate to="/login" />} />
         <Route path="/profile" element={hasToken ? <Profile /> : <Navigate to="/login" />} />
         <Route path="/rewards" element={hasToken ? <Rewards /> : <Navigate to="/login" />} />

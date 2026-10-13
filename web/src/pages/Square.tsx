@@ -73,6 +73,8 @@ export default function Square() {
         </select>
         <button onClick={() => void load()}>搜索</button>
         <button className="ghost" onClick={toggleNearby}>{nearby ? '取消附近' : '📍 附近 10km'}</button>
+        {/* GIG-100 有空的时候让新单来找人，而不是一直刷（125 号 spec） */}
+        <Link className="ghost" to="/gig">我现在有空 / 顺路单</Link>
         {hasToken && category && (
           <button className="ghost" title="该类目新任务发布时通知我"
                   onClick={async () => {

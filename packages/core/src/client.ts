@@ -1,6 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
-  Cockpit, ContractReview, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
+  Cockpit, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
   CommercialReadiness,
   AgentProfileView,
   PayoutProposalView,
@@ -381,6 +381,40 @@ export class PlatformClient {
   /** 合同原文不保存：体检完就丢 */
   reviewContract(text: string, role: 'party_a' | 'party_b' | 'unknown' = 'unknown') {
     return this.request<ContractReview>('POST', '/opc/contract-review', { text, role });
+  }
+
+  // ---- GIG-100 接单者（125 号 spec） ----
+  gigAvailability() { return this.request<GigAvailabilityView>('GET', '/gig/available'); }
+  /** 接下来几个小时有空：附近有新单就推给我（每段最多 6 条），到点自动失效、位置随之删除 */
+  setGigAvailable(input: GigAvailabilityInput) {
+    return this.request<GigAvailabilityView>('PUT', '/gig/available', {
+      lat: input.lat, lng: input.lng, radius_km: input.radius_km, hours: input.hours, categories: input.categories,
+    });
+  }
+  stopGigAvailable() { return this.request<GigAvailabilityView>('DELETE', '/gig/available'); }
+  /** 不给坐标时用「现在有空」里的位置 */
+  gigNearby(at?: { lat: number; lng: number; radius_km?: number }) {
+    const p = new URLSearchParams();
+    if (at) { p.set('lat', String(at.lat)); p.set('lng', String(at.lng)); if (at.radius_km) p.set('radius_km', String(at.radius_km)); }
+    const qs = p.toString();
+    return this.request<GigNearby>('GET', `/gig/nearby${qs ? `?${qs}` : ''}`);
+  }
+  /** 顺路单：起点是一个常用地点或当前位置，终点是一个常用地点 */
+  gigAlong(input: { to_place: number; from_place?: number; from_lat?: number; from_lng?: number; max_detour_km?: number }) {
+    const p = new URLSearchParams({ to_place: String(input.to_place) });
+    if (input.from_place !== undefined) p.set('from_place', String(input.from_place));
+    if (input.from_lat !== undefined && input.from_lng !== undefined) { p.set('from_lat', String(input.from_lat)); p.set('from_lng', String(input.from_lng)); }
+    if (input.max_detour_km) p.set('max_detour_km', String(input.max_detour_km));
+    return this.request<GigAlong>('GET', `/gig/along?${p.toString()}`);
+  }
+  gigPlaces() { return this.request<GigPlaceRow[]>('GET', '/gig/places'); }
+  addGigPlace(name: string, lat: number, lng: number) {
+    return this.request<GigPlaceRow>('POST', '/gig/places', { name, lat, lng });
+  }
+  deleteGigPlace(id: number) { return this.request<{ deleted: boolean }>('DELETE', `/gig/places/${id}`); }
+  /** 报价参考：给一单（task_id）或一个类目 */
+  gigQuote(input: { task_id?: number; category?: string; city?: string }) {
+    return this.request<GigQuote>('POST', '/gig/quote', { task_id: input.task_id, category: input.category, city: input.city });
   }
 
   // ---- tasks ----

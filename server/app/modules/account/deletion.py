@@ -157,6 +157,10 @@ def erase_personal_data(db: Session, user: User) -> dict:
     from app.modules.opc.models import OpcEntry, OpcProfile
     db.query(OpcEntry).filter(OpcEntry.owner_id == user.id).delete(synchronize_session=False)
     db.query(OpcProfile).filter(OpcProfile.user_id == user.id).delete(synchronize_session=False)
+    # GIG-109 位置类数据（「现在有空」的粗化位置、常用地点）：注销即删
+    from app.modules.gig.models import GigAvailability, GigPlace
+    db.query(GigAvailability).filter(GigAvailability.user_id == user.id).delete(synchronize_session=False)
+    db.query(GigPlace).filter(GigPlace.owner_id == user.id).delete(synchronize_session=False)
     user.is_deleted = True
     user.phone = f"deleted:{user.id}"
     user.nickname = "已注销用户"

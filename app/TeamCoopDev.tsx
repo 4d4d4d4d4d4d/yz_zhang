@@ -22,13 +22,14 @@ import { WorkbenchScreen } from './workbench';
 import { NotebookScreen } from './notebook';
 import { PacksScreen } from './packs';
 import { OpcScreen } from './opc';
+import { GigScreen } from './gig';
 import { AvailabilityScreen } from './availability';
 import { RightsScreen } from './rights';
 import { ApplicationsScreen, InvitationsScreen, MessagesScreen } from './MessagesAndInvites';
 import { Button, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export type SubScreen = 'messages' | 'invitations' | 'applications' | 'certifications'
-  | 'rights' | 'ask' | 'teams' | 'ventures' | 'developer' | 'workbench' | 'availability' | 'notebook' | 'packs' | 'opc';
+  | 'rights' | 'ask' | 'teams' | 'ventures' | 'developer' | 'workbench' | 'availability' | 'notebook' | 'packs' | 'opc' | 'gig';
 
 export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   messages: '消息',
@@ -44,6 +45,7 @@ export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   notebook: '我的知识库（随手记 / 检索 / 抽待办 / 我的方法）',
   packs: '服务包（助手专家 / 做法 / 知识 / 提醒）',
   opc: '一人公司（账本 / 申报日历 / 合同体检）',
+  gig: '接单（现在有空 / 顺路单 / 报价参考）',
   availability: '我的可用时间（时段 / 少量接单）',
 };
 
@@ -69,6 +71,7 @@ export function SubScreenHost({ client, screen, onBack, onPublish }: {
       {screen === 'notebook' && <NotebookScreen client={client} />}
       {screen === 'packs' && <PacksScreen client={client} onPublish={onPublish} />}
       {screen === 'opc' && <OpcScreen client={client} />}
+      {screen === 'gig' && <GigScreen client={client} />}
       {screen === 'availability' && <AvailabilityScreen client={client} />}
     </ScrollView>
   );

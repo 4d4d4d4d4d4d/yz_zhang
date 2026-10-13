@@ -323,6 +323,18 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     step("一人公司：按主体推算申报日历，合同体检指出缺验收、违约金过高、知识产权未约定付清后转移",
          has_vat and "验收标准与期限" in result and "违约金比例 50% 偏高" in result and "付清" in result)
 
+    # GIG-100（V150）接单：浏览器给定位 → 打开「现在有空」→ 服务端存的是粗化位置并开始算附近；把这里存成「家」
+    page.context.grant_permissions(["geolocation"])
+    page.context.set_geolocation({"latitude": 31.2345, "longitude": 121.4789})
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/gig", wait_until="networkidle")
+    page.get_by_role("button", name="我现在有空").click()
+    page.wait_for_selector("text=现在有空：", timeout=10000)
+    page.get_by_role("button", name="把这里存为「家」").click()
+    page.wait_for_selector("text=已把这里存为「家」", timeout=10000)
+    step("接单：浏览器定位后打开「现在有空」、附近的单由真服务端算出、常用地点存好",
+         page.locator("[aria-label='现在有空'] >> text=公里内").count() > 0
+         and page.locator("[aria-label='顺路单'] >> text=家").count() > 0)
+
     # 客服工单：V102 才补上的自助入口，而且它是**没有前置条件的写路径**——
     # 正好适合用真浏览器验一遍（服务端队列由 V101/V103 的测试盯着）
     page.goto(f"http://127.0.0.1:{WEB_PORT}/support", wait_until="networkidle")

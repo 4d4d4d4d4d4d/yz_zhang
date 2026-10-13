@@ -68,6 +68,8 @@ def create_app() -> FastAPI:
     im_service.register_event_handlers()
     notification_service.register_event_handlers()
     matching_events.register_event_handlers()
+    from app.modules.gig import service as gig_service
+    gig_service.register_event_handlers()
     task_events.register_event_handlers()
     agent_events.register_event_handlers()
     anchor_service.register_event_handlers()
@@ -101,6 +103,7 @@ def create_app() -> FastAPI:
     from app.modules.notebook.router import router as notebook_router
     from app.modules.packs.router import router as packs_router
     from app.modules.opc.router import router as opc_router
+    from app.modules.gig.router import router as gig_router
     from app.modules.account.router import router as account_router
     from app.modules.admin.router import router as admin_router
     from app.modules.analytics.router import router as analytics_router
@@ -137,6 +140,7 @@ def create_app() -> FastAPI:
         notebook_router,
         packs_router,
         opc_router,
+        gig_router,
         wallet_router,
         task_router,
         contract_router,

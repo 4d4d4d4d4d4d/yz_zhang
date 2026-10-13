@@ -203,6 +203,8 @@ def ask(db: Session, user_id: int, pack: ScenarioPack, akey: str, q: str) -> dic
 _ASK_CALENDAR = re.compile(r"申报|报税|截止|什么时候|几号|日历|年报|汇算")
 _ASK_BOOKS = re.compile(r"收入|账|免税|销售额|赚了|利润|多少钱")
 _ASK_CONTRACT = re.compile(r"合同|条款|协议")
+_ASK_NEARBY = re.compile(r"附近|有什么单|接单|有活|顺路")
+_ASK_QUOTE = re.compile(r"报价|多少钱|价格|报多少|行情")
 
 
 def _tool_citations(db: Session, user_id: int, tools: list[str], q: str) -> list[dict]:
@@ -234,6 +236,29 @@ def _tool_citations(db: Session, user_id: int, tools: list[str], q: str) -> list
             out.append({"kind": "tool", "title": "合同体检（按条款清单）",
                         "snippet": "；".join(f"{f['clause']}：{f['finding']}" for f in top),
                         "source": "条款清单与风险句式（不构成法律意见）", "valid_until": None, "expired": False, "note_id": None})
+    if "gig.nearby" in tools and _ASK_NEARBY.search(q):
+        from app.modules.gig import service as gsvc
+
+        a = gsvc.active(db, user_id)
+        if a is None:
+            out.append({"kind": "tool", "title": "附近的单", "snippet": "你还没打开「现在有空」：打开后我才知道你在哪、能接多远的单",
+                        "source": "接单助手（需要你的位置）", "valid_until": None, "expired": False, "note_id": None})
+        else:
+            items = gsvc.nearby(db, user_id, a.lat, a.lng, a.radius_km, a.categories, limit=3)
+            out.append({"kind": "tool", "title": f"你附近 {a.radius_km} 公里内的单",
+                        "snippet": "；".join(f"{i['title']}（{i['category']}，约 {i['distance_m'] / 1000:.1f} 公里，到手约 ¥{i['net_cents'] / 100:.0f}）"
+                                            for i in items) or "现在附近没有招募中的单",
+                        "source": "按你「现在有空」的位置（直线距离）", "valid_until": None, "expired": False, "note_id": None})
+    if "gig.quote" in tools and _ASK_QUOTE.search(q):
+        from app.modules.gig import service as gsvc
+        from app.modules.task.models import Category
+
+        names = [n for (n,) in db.query(Category.name).filter(Category.active.is_(True))]
+        cat = next((n for n in sorted(names, key=len, reverse=True) if n in q), None)
+        if cat:
+            r = gsvc.quote(db, cat, None, None)
+            out.append({"kind": "tool", "title": f"「{cat}」报价参考", "snippet": "；".join(r["basis"]),
+                        "source": "平台近 180 天成交数据（不是承诺价）", "valid_until": None, "expired": False, "note_id": None})
     return out
 
 

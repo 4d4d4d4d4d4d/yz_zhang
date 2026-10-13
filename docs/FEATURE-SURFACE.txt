@@ -5,6 +5,8 @@ api DELETE /api/v1/decompositions/{dec_id}/nodes/{node_id}
 api DELETE /api/v1/developer/api-keys/{key_id}
 api DELETE /api/v1/developer/webhooks/{webhook_id}
 api DELETE /api/v1/friends/{user_id}
+api DELETE /api/v1/gig/available
+api DELETE /api/v1/gig/places/{place_id}
 api DELETE /api/v1/notebook/methods/{method_id}
 api DELETE /api/v1/notebook/notes/{note_id}
 api DELETE /api/v1/notifications/devices/{token}
@@ -96,6 +98,10 @@ api GET /api/v1/finance/tax-ledger
 api GET /api/v1/friends
 api GET /api/v1/friends/requests
 api GET /api/v1/friends/worked-with
+api GET /api/v1/gig/along
+api GET /api/v1/gig/available
+api GET /api/v1/gig/nearby
+api GET /api/v1/gig/places
 api GET /api/v1/invitations
 api GET /api/v1/knowledge/cards
 api GET /api/v1/knowledge/category-demand
@@ -321,6 +327,9 @@ api POST /api/v1/finance/invoices
 api POST /api/v1/finance/jobs/remit-tax
 api POST /api/v1/friends/requests
 api POST /api/v1/friends/requests/{req_id}/decide
+api POST /api/v1/gig/jobs/purge-expired
+api POST /api/v1/gig/places
+api POST /api/v1/gig/quote
 api POST /api/v1/invitations/{invitation_id}/accept
 api POST /api/v1/invitations/{invitation_id}/decline
 api POST /api/v1/knowledge/jobs/cluster
@@ -429,6 +438,7 @@ api POST /api/v1/workbench/routines
 api POST /api/v1/workbench/routines/{routine_id}/run
 api PUT /api/v1/admin/matching-config
 api PUT /api/v1/admin/packs/{pack_id}
+api PUT /api/v1/gig/available
 api PUT /api/v1/notifications/devices
 api PUT /api/v1/notifications/prefs
 api PUT /api/v1/opc/profile
@@ -451,6 +461,7 @@ app certifications
 app collaborators
 app decompose
 app experience
+app gig
 app motion
 app notebook
 app opc
@@ -467,6 +478,7 @@ sdk acceptInvitation
 sdk acceptMilestone
 sdk acceptSettlement
 sdk addDisputeStatement
+sdk addGigPlace
 sdk addNoteTodos
 sdk addOpcEntry
 sdk addOrganizationRecord
@@ -574,6 +586,7 @@ sdk declineInvitation
 sdk decompositionTemplate
 sdk defineMilestones
 sdk deleteDecompositionNode
+sdk deleteGigPlace
 sdk deleteMethod
 sdk deleteNote
 sdk deleteOpcEntry
@@ -624,6 +637,11 @@ sdk getContractByTask
 sdk getMission
 sdk getPayoutAccount
 sdk getTask
+sdk gigAlong
+sdk gigAvailability
+sdk gigNearby
+sdk gigPlaces
+sdk gigQuote
 sdk grantConsent
 sdk grantMachineMandate
 sdk imUnreadCount
@@ -758,6 +776,7 @@ sdk sendMessage
 sdk sendQuoteCard
 sdk sendSmsCode
 sdk setFriendRemark
+sdk setGigAvailable
 sdk setKnowledgeUnitStatus
 sdk setNotificationPref
 sdk setTeamBudget
@@ -768,6 +787,7 @@ sdk signVideoUpload
 sdk smsLogin
 sdk sos
 sdk stepReviews
+sdk stopGigAvailable
 sdk submitCertification
 sdk submitContribution
 sdk submitTeamCompany
@@ -840,6 +860,7 @@ web /circles
 web /community
 web /cooperate
 web /developer
+web /gig
 web /login
 web /messages
 web /notebook
