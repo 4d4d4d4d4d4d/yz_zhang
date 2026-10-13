@@ -1,5 +1,4 @@
 from datetime import datetime
-
 from fastapi import APIRouter, Depends, Header, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.orm import Session
@@ -13,7 +12,7 @@ from app.core.security import create_token, hash_password, verify_password
 
 from .models import Block, LoginSession, User
 from .service import credit_level
-from app.core.timefmt import UtcDatetime, iso
+from app.core.timefmt import UtcDatetime, day, iso
 
 router = APIRouter(tags=["account"])
 
@@ -710,6 +709,20 @@ def _export_notebook(db: Session, user_id: int) -> dict:
     }
 
 
+def _export_opc(db: Session, user_id: int) -> dict:
+    """OPC-109 一人公司的账本与主体设置。"""
+    from app.modules.opc.models import OpcEntry, OpcProfile
+
+    p = db.get(OpcProfile, user_id)
+    rows = db.query(OpcEntry).filter(OpcEntry.owner_id == user_id).order_by(OpcEntry.occurred_on, OpcEntry.id).all()
+    return {
+        "profile": {"entity": p.entity, "vat": p.vat, "vat_period": p.vat_period} if p else None,
+        "entries": [{"occurred_on": day(e.occurred_on), "kind": e.kind, "amount_cents": e.amount_cents,
+                     "tax_cents": e.tax_cents, "category": e.category, "counterparty": e.counterparty,
+                     "invoice_no": e.invoice_no, "note": e.note, "source": e.source} for e in rows],
+    }
+
+
 @router.get("/users/me/export")
 def export_my_data(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from app.modules.content.models import Content
@@ -731,6 +744,7 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
         "profile": _me(user),
         "workbench": _export_workbench(db, user.id),
         "notebook": _export_notebook(db, user.id),
+        "opc": _export_opc(db, user.id),
         "real_name": user.real_name,
         "tasks": [{"id": t.id, "title": t.title, "status": t.status, "budget_cents": t.budget_cents,
                    "role": "creator" if t.creator_id == user.id else "executor"} for t in tasks],

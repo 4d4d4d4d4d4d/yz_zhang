@@ -11,7 +11,7 @@
 
 所以这里只有两个函数，一个管出、一个管进，别处不许再自己拼。
 """
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Annotated, Any
 
 from pydantic import AfterValidator
@@ -49,3 +49,15 @@ def to_utc_naive(value: Any) -> Any:
 # 用 AfterValidator 而不是 Before：要拿到 pydantic 解析好的 datetime，
 # 在字符串阶段自己解析偏移等于把 pydantic 那套又写一遍。
 UtcDatetime = Annotated[datetime, AfterValidator(to_utc_naive)]
+
+
+def day(d: date | None) -> str | None:
+    """日期（不是时间点）的出口：`YYYY-MM-DD`，没有时区可言——申报截止、记账日期、政策有效期。
+
+    传进来的若是 datetime 直接拒绝：时间点必须走 `iso()`，不能悄悄截成日期。
+    """
+    if d is None:
+        return None
+    if isinstance(d, datetime):
+        raise TypeError("时间点请用 iso()，day() 只收日期")
+    return d.isoformat()

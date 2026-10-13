@@ -115,6 +115,9 @@ function PackDetail({ card, onBack, onChanged }: { card: ScenarioPackCard; onBac
         {error && <p className="error">{error}</p>}
       </div>
 
+      {card.assets.assistants.some((a) => a.tools.some((t) => t.startsWith('opc.'))) && (
+        <p><Link to="/opc">打开「一人公司」工具：账本、申报日历、合同体检</Link></p>
+      )}
       {card.assets.assistants.map((a) => <AssistantBox key={a.key} packKey={card.key} a={a} />)}
 
       <div className="card">

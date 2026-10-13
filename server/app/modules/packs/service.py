@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
 from sqlalchemy import distinct, func
 from sqlalchemy.orm import Session
+
+from app.core.timefmt import day
 
 from app.modules.account.models import utcnow
 
@@ -78,7 +81,7 @@ def install(db: Session, user_id: int, pack: ScenarioPack, with_routines: bool =
         db.flush()
         have["methods"][m.key] = row.id
     for k in new_notes:
-        meta = f"\n\n出处：{k.source}" + (f"\n有效期至：{k.valid_until.isoformat()}（以官方最新为准）" if k.valid_until else "")
+        meta = f"\n\n出处：{k.source}" + (f"\n有效期至：{day(k.valid_until)}（以官方最新为准）" if k.valid_until else "")
         row = NbNote(owner_id=user_id, kind="note", title=k.title, body=(k.body + meta)[:20000], url="",
                      status="filed", tags=list(dict.fromkeys([tag, *k.tags]))[:10], created_at=now, updated_at=now)
         db.add(row)
@@ -165,7 +168,7 @@ def ask(db: Session, user_id: int, pack: ScenarioPack, akey: str, q: str) -> dic
         for k, _ in _knowledge_hits(d, a.knowledge, q):
             expired = bool(k.valid_until and k.valid_until < today)
             cites.append({"kind": "pack", "title": k.title, "snippet": nsvc.snippet(k.body, ts),
-                          "source": k.source, "valid_until": k.valid_until.isoformat() if k.valid_until else None,
+                          "source": k.source, "valid_until": day(k.valid_until) if k.valid_until else None,
                           "expired": expired, "note_id": None})
     if "notebook.search" in a.tools:
         for r in nsvc.related(db, user_id, q, k=2):
@@ -180,6 +183,7 @@ def ask(db: Session, user_id: int, pack: ScenarioPack, akey: str, q: str) -> dic
         if best:
             cites.append({"kind": "legal", "title": best["keywords"][0], "snippet": best["answer"][:160],
                           "source": "平台法律常识（不构成法律意见）", "valid_until": None, "expired": False, "note_id": None})
+    cites += _tool_citations(db, user_id, a.tools, q)
     if not cites:
         event(db, pack, user_id, "unanswered")
         remedy = ({"action": "publish_task", "category": a.fallback_category,
@@ -194,6 +198,43 @@ def ask(db: Session, user_id: int, pack: ScenarioPack, akey: str, q: str) -> dic
         tail = f"（出处：{c['source']}" + (f"；有效期至 {c['valid_until']}" if c["valid_until"] else "") + "）"
         lines.append(f"[{c['n']}] {c['title']}：{c['snippet']}{tail}" + ("【已过有效期，以官方最新为准】" if c["expired"] else ""))
     return {**base, "refused": False, "answer": "\n".join(lines), "citations": cites, "remedy": None}
+
+
+_ASK_CALENDAR = re.compile(r"申报|报税|截止|什么时候|几号|日历|年报|汇算")
+_ASK_BOOKS = re.compile(r"收入|账|免税|销售额|赚了|利润|多少钱")
+_ASK_CONTRACT = re.compile(r"合同|条款|协议")
+
+
+def _tool_citations(db: Session, user_id: int, tools: list[str], q: str) -> list[dict]:
+    """白名单里的一人公司工具：问到相关的事，就用本人的数据算一遍，作为一条「按你的数据推算」的出处。"""
+    from app.modules.opc import service as osvc
+    from app.modules.opc.models import OpcProfile
+    from app.modules.workbench.service import local
+
+    out: list[dict] = []
+    today = local(utcnow()).date()
+    profile = db.get(OpcProfile, user_id)
+    if "opc.calendar" in tools and _ASK_CALENDAR.search(q):
+        items = osvc.deadlines(profile or OpcProfile(user_id=user_id, entity="individual", vat="none",
+                                                     vat_period="quarter"), today, 90)[:4]
+        if items:
+            out.append({"kind": "tool", "title": "你的申报日历（近 90 天）",
+                        "snippet": "；".join(f"{i['date']} {i['title']}" for i in items),
+                        "source": "按你在「一人公司」里填的主体与纳税人类型推算" + ("" if profile else "（还没填，按个人推算）"),
+                        "valid_until": None, "expired": False, "note_id": None})
+    if "opc.books" in tools and _ASK_BOOKS.search(q):
+        s = osvc.summary(db, user_id, osvc.current_quarter(today), profile, today)
+        out.append({"kind": "tool", "title": f"你的记账底稿（{s['period']}）",
+                    "snippet": f"收入 ¥{s['income_cents'] / 100:.2f}，支出 ¥{s['expense_cents'] / 100:.2f}。" + (s["notes"][0] if s["notes"] else ""),
+                    "source": "按你的记账底稿汇总（不是申报表）", "valid_until": None, "expired": False, "note_id": None})
+    if "opc.contract_review" in tools and len(q) >= 20 and _ASK_CONTRACT.search(q):
+        r = osvc.review_contract(q)
+        top = [f for f in r["findings"] if f["level"] == "high"][:3] or r["findings"][:3]
+        if top:
+            out.append({"kind": "tool", "title": "合同体检（按条款清单）",
+                        "snippet": "；".join(f"{f['clause']}：{f['finding']}" for f in top),
+                        "source": "条款清单与风险句式（不构成法律意见）", "valid_until": None, "expired": False, "note_id": None})
+    return out
 
 
 # ------------------------------------------------------------------ 指标（PACK-106）

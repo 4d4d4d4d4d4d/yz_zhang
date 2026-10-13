@@ -153,6 +153,10 @@ def erase_personal_data(db: Session, user: User) -> dict:
     from app.modules.packs.models import PackEnrollment, PackEvent
     for model in (PackEnrollment, PackEvent):
         db.query(model).filter(model.user_id == user.id).delete(synchronize_session=False)
+    # OPC-109 一人公司的账本与主体设置：本人私有的财务数据，注销即物理删除
+    from app.modules.opc.models import OpcEntry, OpcProfile
+    db.query(OpcEntry).filter(OpcEntry.owner_id == user.id).delete(synchronize_session=False)
+    db.query(OpcProfile).filter(OpcProfile.user_id == user.id).delete(synchronize_session=False)
     user.is_deleted = True
     user.phone = f"deleted:{user.id}"
     user.nickname = "已注销用户"

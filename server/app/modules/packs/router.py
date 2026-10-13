@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.deps import get_current_user, require_admin
 from app.core.errors import bad_request, conflict, not_found
-from app.core.timefmt import iso
+from app.core.timefmt import day, iso
 from app.modules.account.models import User, utcnow
 
 from . import schema
@@ -55,7 +55,7 @@ def _assets(d: schema.PackDef) -> dict:
                        for a in d.assistants],
         "methods": [{"key": m.key, "name": m.name, "steps": len(m.steps)} for m in d.methods],
         "knowledge": [{"key": k.key, "title": k.title, "kind": k.kind, "source": k.source,
-                       "valid_until": k.valid_until.isoformat() if k.valid_until else None} for k in d.knowledge],
+                       "valid_until": day(k.valid_until) if k.valid_until else None} for k in d.knowledge],
         "routines": [{"key": r.key, "name": r.name, "freq": r.freq, "time_of_day": r.time_of_day} for r in d.routines],
         # 发单模板只预填发布页（标题 / 类目 / 说明含验收标准），发不发由人决定（publish 关口）
         "task_templates": [{"key": t.key, "title": t.title, "category": t.category,
@@ -178,6 +178,19 @@ def _checked(data: dict) -> schema.PackDef:
     return d
 
 
+def _check_categories(db: Session, d: schema.PackDef) -> None:
+    """包里引用的类目（答不了时的去处、发单模板）必须是开着的类目：否则用户点过去就是一个发不出去的单。"""
+    from app.modules.task.models import Category
+
+    names = {a.fallback_category for a in d.assistants if a.fallback_category} | {t.category for t in d.task_templates}
+    if not names:
+        return
+    live = {n for (n,) in db.query(Category.name).filter(Category.name.in_(names), Category.active.is_(True))}
+    missing = sorted(names - live)
+    if missing:
+        raise conflict(f"包里用到的类目不存在或已停用：{'、'.join(missing)}。先在「城市与类目」里开好", "pack_unknown_category")
+
+
 def _new_version(db: Session, d: schema.PackDef, admin: User) -> ScenarioPack:
     pending = db.query(ScenarioPack.id).filter(ScenarioPack.key == d.key,
                                                ScenarioPack.status.in_(("draft", "review"))).first()
@@ -254,7 +267,8 @@ def admin_approve(pack_id: int, admin: User = Depends(require_admin), db: Sessio
         raise conflict("只有待审核的版本能上线", "pack_not_in_review")
     if p.created_by == admin.id:
         raise conflict("上线需要另一位管理员审核：写它的人不能自己批", "pack_four_eyes")
-    _checked(p.definition)
+    d = _checked(p.definition)
+    _check_categories(db, d)
     now = utcnow()
     for old in db.query(ScenarioPack).filter(ScenarioPack.key == p.key, ScenarioPack.status == "published"):
         old.status, old.updated_at = "superseded", now

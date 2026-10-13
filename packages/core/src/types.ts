@@ -1793,7 +1793,7 @@ export interface PackEnableResult extends ScenarioPackCard {
 }
 export interface PackCitation {
   n: number;
-  kind: 'pack' | 'note' | 'legal';
+  kind: 'pack' | 'note' | 'legal' | 'tool';
   title: string;
   snippet: string;
   source: string;
@@ -1860,4 +1860,103 @@ export interface PackImportResult {
   created: string[];
   skipped: string[];
   invalid: { file: string; problems: string[] }[];
+}
+
+// ---- OPC-100 一人公司：财税与合规（124 号 spec）。只出底稿与提醒，申报 / 开票 / 签字由本人在官方渠道完成 ----
+export type OpcEntity = 'individual' | 'sole_prop' | 'company';
+export type OpcVat = 'none' | 'small_scale' | 'general';
+export interface OpcProfileView {
+  entity: OpcEntity;
+  vat: OpcVat;
+  vat_period: 'month' | 'quarter';
+  small_low_profit: boolean;
+  /** 还没填过时是 false（按「个人」推算） */
+  configured: boolean;
+}
+export interface OpcProfileInput {
+  entity: OpcEntity;
+  vat: OpcVat;
+  vat_period?: 'month' | 'quarter';
+  small_low_profit?: boolean;
+}
+export interface OpcEntryRow {
+  id: number;
+  /** YYYY-MM-DD（日期，不是时间点） */
+  occurred_on: string;
+  kind: 'income' | 'expense';
+  amount_cents: number;
+  tax_cents: number;
+  category: string;
+  counterparty: string;
+  invoice_no: string;
+  invoice_kind: 'none' | 'ordinary' | 'special';
+  note: string;
+  source: 'manual' | 'platform';
+  created_at: string;
+}
+export interface OpcEntryInput {
+  occurred_on: string;
+  kind: 'income' | 'expense';
+  amount_cents: number;
+  tax_cents?: number;
+  category?: string;
+  counterparty?: string;
+  invoice_no?: string;
+  invoice_kind?: 'none' | 'ordinary' | 'special';
+  note?: string;
+}
+export interface OpcCategoryTotal {
+  kind: 'income' | 'expense';
+  category: string;
+  amount_cents: number;
+}
+export interface OpcVatCheck {
+  period_kind: 'month' | 'quarter';
+  sales_cents: number;
+  limit_cents: number;
+  over: boolean;
+}
+export interface OpcSummary {
+  period: string;
+  start: string;
+  end: string;
+  kind: 'month' | 'quarter' | 'year';
+  income_cents: number;
+  expense_cents: number;
+  profit_cents: number;
+  by_category: OpcCategoryTotal[];
+  platform_withheld_cents: number;
+  entries: number;
+  vat_check: OpcVatCheck | null;
+  notes: string[];
+  disclaimer: string;
+}
+export interface OpcExport {
+  filename: string;
+  rows: number;
+  csv: string;
+}
+export interface OpcDeadline {
+  /** YYYY-MM-DD */
+  date: string;
+  kind: 'vat' | 'cit' | 'iit' | 'annual';
+  title: string;
+  detail: string;
+}
+export interface OpcCalendar {
+  configured: boolean;
+  items: OpcDeadline[];
+  notice: string;
+}
+export interface ContractFinding {
+  level: 'high' | 'medium' | 'info';
+  clause: string;
+  finding: string;
+  suggestion: string;
+}
+export interface ContractReview {
+  findings: ContractFinding[];
+  amounts: string[];
+  dates: string[];
+  disclaimer: string;
 }

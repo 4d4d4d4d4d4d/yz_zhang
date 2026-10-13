@@ -1,6 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
-  Cockpit, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
+  Cockpit, ContractReview, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
   CommercialReadiness,
   AgentProfileView,
   PayoutProposalView,
@@ -342,6 +342,46 @@ export class PlatformClient {
   }
   adminPackRadar() { return this.request<RadarSignal[]>('GET', '/admin/packs/radar'); }
   adminImportPackSeeds() { return this.request<PackImportResult>('POST', '/admin/packs/import-seeds'); }
+
+  // ---- OPC-100 一人公司（124 号 spec） ----
+  opcProfile() { return this.request<OpcProfileView>('GET', '/opc/profile'); }
+  saveOpcProfile(input: OpcProfileInput) {
+    return this.request<OpcProfileView>('PUT', '/opc/profile', {
+      entity: input.entity, vat: input.vat, vat_period: input.vat_period, small_low_profit: input.small_low_profit,
+    });
+  }
+  /** `period`：2026-10（月）、2026-Q3（季）、2026（年） */
+  opcEntries(filter: { period?: string; kind?: 'income' | 'expense' } = {}) {
+    const p = new URLSearchParams();
+    if (filter.period) p.set('period', filter.period);
+    if (filter.kind) p.set('kind', filter.kind);
+    const qs = p.toString();
+    return this.request<OpcEntryRow[]>('GET', `/opc/entries${qs ? `?${qs}` : ''}`);
+  }
+  addOpcEntry(input: OpcEntryInput) {
+    return this.request<OpcEntryRow>('POST', '/opc/entries', {
+      occurred_on: input.occurred_on, kind: input.kind, amount_cents: input.amount_cents, tax_cents: input.tax_cents,
+      category: input.category, counterparty: input.counterparty, invoice_no: input.invoice_no,
+      invoice_kind: input.invoice_kind, note: input.note,
+    });
+  }
+  updateOpcEntry(id: number, patch: { category?: string; counterparty?: string; invoice_no?: string; note?: string }) {
+    return this.request<OpcEntryRow>('PATCH', `/opc/entries/${id}`, {
+      category: patch.category, counterparty: patch.counterparty, invoice_no: patch.invoice_no, note: patch.note,
+    });
+  }
+  deleteOpcEntry(id: number) { return this.request<{ deleted: boolean }>('DELETE', `/opc/entries/${id}`); }
+  /** 把平台上已到账的报酬记进底稿（按流水去重，导几次都一样） */
+  importPlatformIncome() { return this.request<{ imported: number }>('POST', '/opc/entries/import-platform', {}); }
+  opcSummary(period?: string) {
+    return this.request<OpcSummary>('GET', `/opc/summary${period ? `?period=${encodeURIComponent(period)}` : ''}`);
+  }
+  exportOpcBooks(period: string) { return this.request<OpcExport>('GET', `/opc/export?period=${encodeURIComponent(period)}`); }
+  opcCalendar(days = 120) { return this.request<OpcCalendar>('GET', `/opc/calendar?days=${days}`); }
+  /** 合同原文不保存：体检完就丢 */
+  reviewContract(text: string, role: 'party_a' | 'party_b' | 'unknown' = 'unknown') {
+    return this.request<ContractReview>('POST', '/opc/contract-review', { text, role });
+  }
 
   // ---- tasks ----
   /** APP-060 `ip_assignment` 是**必需参数**，不是可选的。

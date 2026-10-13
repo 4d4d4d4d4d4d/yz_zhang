@@ -20,6 +20,10 @@ SEED_CATEGORIES = [
 ]
 
 
+# 后来加的类目：已有库里没有就补上（只补一次；补上之后运营可以停用，不会被重新打开）。
+# 「财税」——OPC 服务包的发单模板与答不了时的去处（124 号 spec）
+ADDED_CATEGORIES = [{"name": "财税"}]
+
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
 # TASK-003 高频类目发布模板（配合 KB-021 参考价组成模板库）
@@ -36,6 +40,9 @@ def seed_categories(db: Session) -> None:
 
     if not db.query(Category).first():
         for c in SEED_CATEGORIES:
+            db.add(Category(**c))
+    for c in ADDED_CATEGORIES:
+        if not db.query(Category.id).filter(Category.name == c["name"]).first():
             db.add(Category(**c))
     if not db.query(City).first():
         for name in SEED_CITIES:

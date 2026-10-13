@@ -25,6 +25,7 @@ import Verify from './pages/Verify';
 import Workbench from './pages/Workbench';
 import Notebook from './pages/Notebook';
 import Packs from './pages/Packs';
+import Opc from './pages/Opc';
 const Chain = lazy(() => import('./pages/Chain'));
 const Records = lazy(() => import('./pages/Records'));
 import WalletPage from './pages/Wallet';
@@ -95,6 +96,8 @@ export default function App() {
         <Route path="/notebook" element={hasToken ? <Notebook /> : <Navigate to="/login?next=/notebook" />} />
         {/* PACK-100 服务包：助手专家 + 做法 + 知识 + 提醒，一键启用（123 号 spec） */}
         <Route path="/packs" element={hasToken ? <Packs /> : <Navigate to="/login?next=/packs" />} />
+        {/* OPC-100 一人公司：记账底稿、申报日历、合同体检（124 号 spec）；入口在服务包与工作台 */}
+        <Route path="/opc" element={hasToken ? <Opc /> : <Navigate to="/login?next=/opc" />} />
         <Route path="/notifications" element={hasToken ? <Notifications /> : <Navigate to="/login" />} />
         <Route path="/profile" element={hasToken ? <Profile /> : <Navigate to="/login" />} />
         <Route path="/rewards" element={hasToken ? <Rewards /> : <Navigate to="/login" />} />

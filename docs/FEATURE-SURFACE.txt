@@ -8,6 +8,7 @@ api DELETE /api/v1/friends/{user_id}
 api DELETE /api/v1/notebook/methods/{method_id}
 api DELETE /api/v1/notebook/notes/{note_id}
 api DELETE /api/v1/notifications/devices/{token}
+api DELETE /api/v1/opc/entries/{entry_id}
 api DELETE /api/v1/subscriptions/{sub_id}
 api DELETE /api/v1/tasks/{task_id}/bookmark
 api DELETE /api/v1/teams/{team_id}/members/{member_user_id}
@@ -124,6 +125,11 @@ api GET /api/v1/notifications
 api GET /api/v1/notifications/devices
 api GET /api/v1/notifications/prefs
 api GET /api/v1/notifications/unread-count
+api GET /api/v1/opc/calendar
+api GET /api/v1/opc/entries
+api GET /api/v1/opc/export
+api GET /api/v1/opc/profile
+api GET /api/v1/opc/summary
 api GET /api/v1/open/v1/tasks
 api GET /api/v1/open/v1/tasks/{task_id}
 api GET /api/v1/open/v1/wallet
@@ -212,6 +218,7 @@ api PATCH /api/v1/decompositions/{dec_id}/nodes/{node_id}
 api PATCH /api/v1/friends/{user_id}
 api PATCH /api/v1/notebook/methods/{method_id}
 api PATCH /api/v1/notebook/notes/{note_id}
+api PATCH /api/v1/opc/entries/{entry_id}
 api PATCH /api/v1/tasks/{task_id}
 api PATCH /api/v1/teams/{team_id}/members/{member_user_id}
 api PATCH /api/v1/users/me
@@ -337,6 +344,9 @@ api POST /api/v1/notebook/notes/{note_id}/extract-todos
 api POST /api/v1/notebook/notes/{note_id}/todos
 api POST /api/v1/notifications/read-all
 api POST /api/v1/notifications/{notification_id}/read
+api POST /api/v1/opc/contract-review
+api POST /api/v1/opc/entries
+api POST /api/v1/opc/entries/import-platform
 api POST /api/v1/open/v1/tasks
 api POST /api/v1/open/v1/tasks/{task_id}/applications
 api POST /api/v1/open/v1/tasks/{task_id}/deliver
@@ -421,6 +431,7 @@ api PUT /api/v1/admin/matching-config
 api PUT /api/v1/admin/packs/{pack_id}
 api PUT /api/v1/notifications/devices
 api PUT /api/v1/notifications/prefs
+api PUT /api/v1/opc/profile
 api PUT /api/v1/spaces/me
 api PUT /api/v1/users/{user_id}/follow
 api PUT /api/v1/wallet/payout-account
@@ -442,6 +453,7 @@ app decompose
 app experience
 app motion
 app notebook
+app opc
 app packs
 app rights
 app search
@@ -456,6 +468,7 @@ sdk acceptMilestone
 sdk acceptSettlement
 sdk addDisputeStatement
 sdk addNoteTodos
+sdk addOpcEntry
 sdk addOrganizationRecord
 sdk addProgress
 sdk addTeamMember
@@ -563,6 +576,7 @@ sdk defineMilestones
 sdk deleteDecompositionNode
 sdk deleteMethod
 sdk deleteNote
+sdk deleteOpcEntry
 sdk deleteWebhook
 sdk deleteWorkbenchItem
 sdk deleteWorkbenchMemory
@@ -593,6 +607,7 @@ sdk exportContract
 sdk exportEvidence
 sdk exportMyData
 sdk exportNotebook
+sdk exportOpcBooks
 sdk extractNoteTodos
 sdk finalReport
 sdk followStats
@@ -612,6 +627,7 @@ sdk getTask
 sdk grantConsent
 sdk grantMachineMandate
 sdk imUnreadCount
+sdk importPlatformIncome
 sdk inviteAgent
 sdk inviteToGroup
 sdk inviteToTask
@@ -674,6 +690,10 @@ sdk notificationPrefs
 sdk notifications
 sdk oauthLogin
 sdk oauthProviders
+sdk opcCalendar
+sdk opcEntries
+sdk opcProfile
+sdk opcSummary
 sdk openDirect
 sdk openDispute
 sdk openVerificationOrders
@@ -718,6 +738,7 @@ sdk resolveUpload
 sdk retractKnowledgeTask
 sdk review
 sdk reviewAmlActivity
+sdk reviewContract
 sdk reviewQueues
 sdk revokeApiKey
 sdk revokeCertification
@@ -726,6 +747,7 @@ sdk revokeSession
 sdk rotateApiKey
 sdk runAgent
 sdk runWorkbenchRoutine
+sdk saveOpcProfile
 sdk saveSpace
 sdk scenarioPack
 sdk scenarioPacks
@@ -775,6 +797,7 @@ sdk updateGroup
 sdk updateMe
 sdk updateMethod
 sdk updateNote
+sdk updateOpcEntry
 sdk updateTeamMember
 sdk updateWorkbenchItem
 sdk updateWorkbenchProject
@@ -821,6 +844,7 @@ web /login
 web /messages
 web /notebook
 web /notifications
+web /opc
 web /opportunities
 web /packs
 web /people/:id

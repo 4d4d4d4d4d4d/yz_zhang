@@ -307,6 +307,22 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
          "出处：平台服务规则" in answer and "必须你本人确认" in answer
          and page.locator("text=交付后要在期限内验收，过期自动放款").count() > 0)
 
+    # OPC-100（V149）一人公司：设成个体户 + 小规模按季 → 申报日历按真服务端推算；合同体检认出没写验收与过高违约金
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/opc?tab=profile", wait_until="networkidle")
+    page.select_option("select[aria-label='主体']", "sole_prop")
+    page.select_option("select[aria-label='增值税']", "small_scale")
+    page.get_by_role("button", name="保存").click()
+    page.wait_for_selector("text=已保存", timeout=10000)
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/opc?tab=calendar", wait_until="networkidle")
+    has_vat = page.locator("text=申报上季度增值税及附加税费").count() > 0
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/opc?tab=contract", wait_until="networkidle")
+    page.fill("textarea[aria-label='合同全文']", "甲方委托乙方完成品牌设计，总价 50000 元。乙方完成的全部成果著作权归甲方所有。如乙方违约，应支付合同总额 50% 的违约金。")
+    page.get_by_role("button", name="体检").click()
+    page.wait_for_selector("[aria-label='体检结果']", timeout=10000)
+    result = page.locator("[aria-label='体检结果']").inner_text()
+    step("一人公司：按主体推算申报日历，合同体检指出缺验收、违约金过高、知识产权未约定付清后转移",
+         has_vat and "验收标准与期限" in result and "违约金比例 50% 偏高" in result and "付清" in result)
+
     # 客服工单：V102 才补上的自助入口，而且它是**没有前置条件的写路径**——
     # 正好适合用真浏览器验一遍（服务端队列由 V101/V103 的测试盯着）
     page.goto(f"http://127.0.0.1:{WEB_PORT}/support", wait_until="networkidle")

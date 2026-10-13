@@ -81,3 +81,22 @@ export function serverTimeToLocalInput(value: string | number | Date | null | un
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+/** OPC-104 一个北京时间日期（`YYYY-MM-DD`，申报截止这类「日期」）在当天某个钟点的时刻，换成服务端用的 UTC 字符串。
+ *  `daysBefore` 用来算「提前几天提醒」。日期不合法返回空串。 */
+export function chinaDateAt(date: string, hhmm = '18:00', daysBefore = 0): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const t = /^(\d{2}):(\d{2})$/.exec(hhmm);
+  if (!m || !t) return '';
+  const ms = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) - daysBefore, Number(t[1]) - 8, Number(t[2]));
+  return new Date(ms).toISOString();
+}
+
+/** 北京时间的今天（`YYYY-MM-DD`）与当前季度（`2026-Q4`）：申报口径按当地日期，不按浏览器所在时区。 */
+export function chinaToday(now: number = Date.now()): string {
+  return new Date(now + 8 * 3_600_000).toISOString().slice(0, 10);
+}
+export function chinaQuarter(now: number = Date.now()): string {
+  const d = chinaToday(now);
+  return `${d.slice(0, 4)}-Q${Math.floor((Number(d.slice(5, 7)) - 1) / 3) + 1}`;
+}
