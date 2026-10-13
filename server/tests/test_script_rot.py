@@ -31,6 +31,7 @@ CI = REPO / ".github" / "workflows" / "ci.yml"
 # 脚本 -> 谁在跑它。值是**方式**，不是布尔（V90 那条）。
 # 「没有人跑」不许出现在这张表里：那不是一种方式，那是这一篇要修的病。
 EXERCISED: dict[str, str] = {
+    "harness.py": "回归里的 test_harness 直接调用 check() / new_spec() 并做红验；tools/regress.sh 每次回归都跑 check；开发者用它新建 spec、列待办（根目录 CLAUDE.md）",
     "feature_surface.py": "回归里的 test_feature_surface 直接调用它的 current() / snapshot()（FEAT-001 只增不减）；新增功能后由开发者跑 --write 登记",
     "commercial_readiness.py": "运维在实际 API 容器中执行；回归验证分类、管理员访问与脱敏",
     "smoke.py": "CI 的 boot-smoke job（真实 HTTP 主闭环）",

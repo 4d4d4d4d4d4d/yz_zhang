@@ -125,6 +125,13 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 121 | WorkBuddy 蓝皮书逐章对照：门户的助手与知识库还缺什么（V146 复核与排期） | [121-workbuddy-bluebook-gap.md](./121-workbuddy-bluebook-gap.md) | P0 |
+| 120 | 合作驾驶舱：树、关键路径、预算账、预警（SPACE-024 / AI-DEC-021 / APP-007） | [120-collaboration-cockpit.md](./120-collaboration-cockpit.md) | P1 |
+| 119 | 报价卡接上两端；变更单可以改期、改范围（IM-009 / SC-007b） | [119-quote-cards-and-change-orders-with-deadline-scope.md](./119-quote-cards-and-change-orders-with-deadline-scope.md) | P1 |
+| 118 | 可用时段、少量接单与回复时长进入撮合（SPACE-023） | [118-availability-and-reply-time-in-matching.md](./118-availability-and-reply-time-in-matching.md) | P1 |
+| 117 | 真实演示里的粗糙之处（二）：履约上门户、发布不替人选、推荐看相关性 | [117-demo-findings-portal-record-publish-defaults-matching-fit.md](./117-demo-findings-portal-record-publish-defaults-matching-fit.md) | P1 |
+| 116 | 个人工作台：我的任务、进度与助手（PWB-001~012，参照 WorkBuddy） | [116-personal-workbench.md](./116-personal-workbench.md) | P0 |
+| 115 | 列表接口的查询次数不随数据量增长（CONC-066） | [115-list-endpoints-dont-scale-with-data.md](./115-list-endpoints-dont-scale-with-data.md) | P0 |
 | 114 | 谁能碰作品、私聊与证件：内容类两账号行为验与授权总表（可见性单一判据、管理员受限访问写理由并审计） | [114-who-can-touch-content-and-private-data.md](./114-who-can-touch-content-and-private-data.md) | P0 |
 | 113 | 调外部服务时不挂着数据库事务（守卫、三种改法、出款两阶段、提交后投递） | [113-no-vendor-call-inside-a-transaction.md](./113-no-vendor-call-inside-a-transaction.md) | P0 |
 | 112 | 日志不是第二份个人信息库（一个出口、不写 SQL 参数、凭据脱敏、堆栈补回、真进程闸门） | [112-logs-are-not-a-second-pii-store.md](./112-logs-are-not-a-second-pii-store.md) | P0 |
