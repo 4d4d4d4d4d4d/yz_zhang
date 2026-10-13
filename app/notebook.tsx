@@ -156,6 +156,7 @@ function NoteDetail({ client, id, onBack }: { client: PlatformClient; id: number
           : <Button title="取消归档" onPress={() => void patch({ status: 'filed' })} />}
         <Button title={note.pinned ? '取消置顶' : '置顶'} onPress={() => void patch({ pinned: !note.pinned })} />
         <Button title="抽出待办" onPress={() => void extract()} />
+        <Button title="删除" color="#c0392b" onPress={() => void client.deleteNote(note.id).then(onBack).catch((e) => setError(apiErrorText(e)))} />
       </View>
       {todos && (
         <View style={s.card}>

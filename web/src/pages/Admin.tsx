@@ -7,6 +7,7 @@
 import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminTicketRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinanceView, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
+import { PacksAdmin } from '../AdminPacks';
 import { useApp } from '../store';
 
 type Metrics = {
@@ -58,6 +59,7 @@ export default function Admin() {
       <WithdrawReview />
       <AmlQueue />
       <KnowledgeAdmin />
+      <PacksAdmin />
       <TeamVerifyQueue />
       <CertificationQueue />
       <UploadQueue />

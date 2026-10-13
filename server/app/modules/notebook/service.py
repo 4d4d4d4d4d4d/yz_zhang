@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import math
 import re
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
@@ -22,7 +23,9 @@ _CJK = re.compile(r"[一-鿿]")
 _TOKEN = re.compile(r"[一-鿿]+|[a-z0-9_+#]+(?:[.-][a-z0-9_+#]+)*")
 MAX_TERMS = 12
 CANDIDATES = 500
-COVERAGE = 0.6           # 长中文词没整串命中时，二字切片至少要命中这么多：「增值税」不该命中「增值无关」
+# 长中文串没整串命中时，二字切片至少要命中「一半、且不少于 2 个」（短词就是全部）：
+# 「增值税」不命中「增值无关」（1/2），「验收过期会」能命中「……验收，过期自动放款」（2/4）
+COVERAGE = 0.5
 MIN_RELATED = 3          # 「相关笔记」至少要命中这么多分才给：宁缺毋滥，助手不引一条不沾边的
 # 检索词里的虚词：「专票要什么」真正要找的是「专票」。长的先去
 _FILLER = sorted(("要什么", "要怎么", "要多少", "需要什么", "什么", "怎么办", "怎么", "怎样", "如何", "哪些", "哪个",
@@ -96,14 +99,15 @@ def _hit(note: NbNote, t: str, w: int) -> int:
 
 
 def score(note: NbNote, ts: list[tuple[str, int, int]]) -> int:
-    """按组算分：整串命中照算；没整串命中的组，二字切片覆盖不到 60% 就整组不算（只沾一个字边的不是相关）。"""
+    """按组算分：整串命中照算；没整串命中的组，二字切片命中不够（见 COVERAGE）就整组不算——只沾一个字边的不是相关。"""
     total = 0
     for g in dict.fromkeys(x[2] for x in ts):
         group = [(t, w) for t, w, gg in ts if gg == g]
         whole = group[0]
         pieces = group[1:]
         got = {t: _hit(note, t, w) for t, w in group}
-        if got[whole[0]] == 0 and pieces and sum(1 for t, _ in pieces if got[t]) < COVERAGE * len(pieces):
+        need = min(len(pieces), max(2, math.ceil(COVERAGE * len(pieces))))
+        if got[whole[0]] == 0 and pieces and sum(1 for t, _ in pieces if got[t]) < need:
             continue
         total += sum(got.values())
     return total

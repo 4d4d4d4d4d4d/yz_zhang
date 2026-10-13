@@ -110,9 +110,11 @@ def test_terms_and_score_units():
     assert svc.score(n, svc.terms("增值税")) > svc.score(m, svc.terms("增值税")) > 0
     assert svc.terms("专票要什么")[0][0] == "专票"      # 提问里的虚词去掉
     assert svc.terms("十月报税")[0][0] == "报税" and svc.terms("本周周报")[0][0] == "周报"   # 时间词去掉，主题留下
-    # 只沾一个二字边（1/2 < 60%）不算相关；三个切片中两个（≥60%）算
+    # 只沾一个二字边（1/2）不算相关；三个切片中两个算；问句里的长串命中一半（且 ≥2）算
     assert svc.score(NbNote(title="", body="增值无关", url="", tags=[]), svc.terms("增值税")) == 0
     assert svc.score(NbNote(title="", body="增值税申报", url="", tags=[]), svc.terms("个税申报")) > 0
+    assert svc.score(NbNote(title="", body="交付后要验收，过期自动放款", url="", tags=[]), svc.terms("验收过期会怎样")) > 0
+    assert svc.score(NbNote(title="", body="个人信息", url="", tags=[]), svc.terms("个人所得税")) == 0
 
 
 # ------------------------------------------------------------------ 只属于本人（KB-109）

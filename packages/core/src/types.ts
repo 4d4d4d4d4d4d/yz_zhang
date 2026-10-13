@@ -1723,3 +1723,141 @@ export interface NbExport {
   methods: number;
   markdown: string;
 }
+
+// ---- PACK-100 场景包与平台资产（123 号 spec） ----
+export type PackSegment = 'opc' | 'gig' | 'creator' | 'studio' | 'buyer' | 'general';
+export interface PackAssistant {
+  key: string;
+  name: string;
+  persona: string;
+  inputs: string[];
+  outputs: string[];
+  forbidden: string[];
+  tools: string[];
+  /** 人工关口（中文说明）：这些事助手只给草稿，必须本人确认 */
+  human_gates: string[];
+}
+export interface PackMethodBrief {
+  key: string;
+  name: string;
+  steps: number;
+}
+export interface PackKnowledgeBrief {
+  key: string;
+  title: string;
+  kind: 'rule' | 'policy' | 'howto';
+  source: string;
+  valid_until: string | null;
+}
+export interface PackRoutineBrief {
+  key: string;
+  name: string;
+  freq: string;
+  time_of_day: string;
+}
+export interface PackTaskTemplateBrief {
+  key: string;
+  title: string;
+  category: string;
+  /** 说明（含验收标准），用来预填发布页 */
+  description: string;
+}
+export interface PackAssets {
+  assistants: PackAssistant[];
+  methods: PackMethodBrief[];
+  knowledge: PackKnowledgeBrief[];
+  routines: PackRoutineBrief[];
+  task_templates: PackTaskTemplateBrief[];
+}
+export interface ScenarioPackCard {
+  key: string;
+  version: number;
+  title: string;
+  segment: PackSegment;
+  summary: string;
+  pains: string[];
+  enabled: boolean;
+  enabled_version: number | null;
+  upgrade_available: boolean;
+  active_users: number;
+  assets: PackAssets;
+  published_at: string | null;
+}
+export interface PackInstalledCounts {
+  methods: number;
+  notes: number;
+  routines: number;
+}
+export interface PackEnableResult extends ScenarioPackCard {
+  installed: PackInstalledCounts;
+}
+export interface PackCitation {
+  n: number;
+  kind: 'pack' | 'note' | 'legal';
+  title: string;
+  snippet: string;
+  source: string;
+  valid_until: string | null;
+  expired: boolean;
+  note_id: number | null;
+}
+export interface PackRemedy {
+  action: 'publish_task';
+  category: string;
+  label: string;
+}
+export interface PackAnswer {
+  assistant: string;
+  gates: string[];
+  gate_notice: string;
+  refused: boolean;
+  answer: string;
+  citations: PackCitation[];
+  remedy: PackRemedy | null;
+}
+export interface PackMetrics {
+  active: number;
+  enabled_total: number;
+  asks_30d: number;
+  unanswered_30d: number;
+  helpful_30d: number;
+  unhelpful_30d: number;
+  unanswered_rate: number | null;
+  helpful_rate: number | null;
+}
+export interface ScenarioPackAdminRow {
+  id: number;
+  key: string;
+  version: number;
+  title: string;
+  segment: PackSegment;
+  status: 'draft' | 'review' | 'published' | 'superseded' | 'retired';
+  score: number;
+  created_by: number;
+  reviewed_by: number | null;
+  published_at: string | null;
+  retired_reason: string;
+  updated_at: string;
+  definition: Record<string, unknown>;
+}
+export interface ScenarioPackAdminListRow extends ScenarioPackAdminRow {
+  metrics: PackMetrics;
+}
+export interface PackValidation {
+  ok: boolean;
+  problems: string[];
+  score: number | null;
+}
+export interface RadarSignal {
+  source: 'search_gap' | 'stuck_demand' | 'pack_gap';
+  key: string;
+  title: string;
+  evidence: string;
+  people: number;
+  suggested: Record<string, number>;
+}
+export interface PackImportResult {
+  created: string[];
+  skipped: string[];
+  invalid: { file: string; problems: string[] }[];
+}

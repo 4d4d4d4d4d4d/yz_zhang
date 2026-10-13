@@ -149,6 +149,10 @@ def erase_personal_data(db: Session, user: User) -> dict:
     from app.modules.notebook.models import NbMethod, NbNote
     for model in (NbMethod, NbNote):
         db.query(model).filter(model.owner_id == user.id).delete(synchronize_session=False)
+    # PACK-109 启用记录与使用事件：指标只要聚合数，注销后不留可回溯到人的行
+    from app.modules.packs.models import PackEnrollment, PackEvent
+    for model in (PackEnrollment, PackEvent):
+        db.query(model).filter(model.user_id == user.id).delete(synchronize_session=False)
     user.is_deleted = True
     user.phone = f"deleted:{user.id}"
     user.nickname = "已注销用户"

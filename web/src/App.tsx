@@ -24,6 +24,7 @@ import Ventures from './pages/Ventures';
 import Verify from './pages/Verify';
 import Workbench from './pages/Workbench';
 import Notebook from './pages/Notebook';
+import Packs from './pages/Packs';
 const Chain = lazy(() => import('./pages/Chain'));
 const Records = lazy(() => import('./pages/Records'));
 import WalletPage from './pages/Wallet';
@@ -59,7 +60,7 @@ export default function App() {
       <nav className="nav" aria-label="工作台导航">
         <Link className="logo" to="/"><span className="brand-mark" aria-hidden="true">o.</span><span>OPC<small>人与可能</small></span></Link>
         <div className="nav-links">
-          {[['/','发现'],['/cooperate','合作'],['/workbench','工作台'],['/notebook','知识库'],['/messages','消息'],['/space/edit','我的空间']].map(([to,label]) => <NavLink key={to} end={to==='/'} to={to}>{label}</NavLink>)}
+          {[['/','发现'],['/cooperate','合作'],['/workbench','工作台'],['/notebook','知识库'],['/packs','服务包'],['/messages','消息'],['/space/edit','我的空间']].map(([to,label]) => <NavLink key={to} end={to==='/'} to={to}>{label}</NavLink>)}
         </div>
         <span className="spacer" />
         {me ? <div className="nav-account">
@@ -92,6 +93,8 @@ export default function App() {
         <Route path="/workbench" element={hasToken ? <Workbench /> : <Navigate to="/login?next=/workbench" />} />
         {/* KB-100 个人知识库：门户 = 助手 + 知识库（122 号 spec） */}
         <Route path="/notebook" element={hasToken ? <Notebook /> : <Navigate to="/login?next=/notebook" />} />
+        {/* PACK-100 服务包：助手专家 + 做法 + 知识 + 提醒，一键启用（123 号 spec） */}
+        <Route path="/packs" element={hasToken ? <Packs /> : <Navigate to="/login?next=/packs" />} />
         <Route path="/notifications" element={hasToken ? <Notifications /> : <Navigate to="/login" />} />
         <Route path="/profile" element={hasToken ? <Profile /> : <Navigate to="/login" />} />
         <Route path="/rewards" element={hasToken ? <Rewards /> : <Navigate to="/login" />} />

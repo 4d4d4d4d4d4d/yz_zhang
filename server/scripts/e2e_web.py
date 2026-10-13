@@ -292,6 +292,21 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     step("个人知识库：随手记纪要、抽待办进工作台、问笔记带出处",
          page.locator("[aria-label='回答'] >> text=E2E 周会纪要").count() > 0)
 
+    # PACK-100（V148）服务包：运营侧已上线一个种子包（见 `_seed_published_pack`；四眼审核由服务端测试盯着）。
+    # 用户在浏览器里打开、启用（复制进知识库与工作台）、问助手专家——回答带出处、写着人工关口
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/packs", wait_until="networkidle")
+    page.get_by_role("button", name="平台协作入门").click()
+    page.get_by_role("button", name="启用").click()
+    page.wait_for_selector("text=已启用：装进了", timeout=10000)
+    page.fill("input[aria-label='问协作顾问']", "验收过期会怎样")
+    page.get_by_role("button", name="问", exact=True).click()
+    page.wait_for_selector("[aria-label='助手的回答']", timeout=10000)
+    answer = page.locator("[aria-label='助手的回答']").inner_text()
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/notebook?tab=all", wait_until="networkidle")
+    step("服务包：启用后知识进了知识库，助手专家回答带出处与人工关口",
+         "出处：平台服务规则" in answer and "必须你本人确认" in answer
+         and page.locator("text=交付后要在期限内验收，过期自动放款").count() > 0)
+
     # 客服工单：V102 才补上的自助入口，而且它是**没有前置条件的写路径**——
     # 正好适合用真浏览器验一遍（服务端队列由 V101/V103 的测试盯着）
     page.goto(f"http://127.0.0.1:{WEB_PORT}/support", wait_until="networkidle")
@@ -301,6 +316,28 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     step("自助开工单并出现在我的工单里",
          page.locator("text=E2E：提现多久到账").count() > 0)
     return out
+
+
+SEED_PACK = """
+from app.core.db import SessionLocal
+from app.modules.account.models import utcnow
+from app.modules.packs import schema, service
+from app.modules.packs.models import ScenarioPack
+d, problems = schema.validate(service.load_seed(service.SEEDS / "collab-basics.json"))
+assert not problems, problems
+with SessionLocal() as db:
+    now = utcnow()
+    db.add(ScenarioPack(key=d.key, version=1, title=d.title, segment=d.segment, summary=d.summary, status="published",
+                        definition=d.model_dump(mode="json"), score=d.score.total(), created_by=0, reviewed_by=0,
+                        published_at=now, created_at=now, updated_at=now))
+    db.commit()
+"""
+
+
+def _seed_published_pack(env: dict) -> None:
+    """运营数据前置：一个已上线的种子包。走的是与服务端同一份校验，不是手写的行。"""
+    subprocess.run([sys.executable, "-c", SEED_PACK], cwd=str(REPO / "server"), env=env, check=True,
+                   stdout=subprocess.DEVNULL)
 
 
 def main() -> int:
@@ -327,6 +364,7 @@ def main() -> int:
     failed: list[str] = []
     try:
         _wait(f"http://127.0.0.1:{API_PORT}/readyz")
+        _seed_published_pack(env)
         from playwright.sync_api import sync_playwright
 
         with sync_playwright() as pw:

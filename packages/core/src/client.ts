@@ -1,6 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
-  Cockpit, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
+  Cockpit, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
   CommercialReadiness,
   AgentProfileView,
   PayoutProposalView,
@@ -304,6 +304,44 @@ export class PlatformClient {
     return this.request<WbItemDetail>('POST', `/notebook/methods/${id}/apply`, { item_id: itemId });
   }
   exportNotebook() { return this.request<NbExport>('GET', '/notebook/export'); }
+
+  // ---- PACK-100 场景包（123 号 spec） ----
+  scenarioPacks() { return this.request<ScenarioPackCard[]>('GET', '/packs'); }
+  scenarioPack(key: string) { return this.request<ScenarioPackCard>('GET', `/packs/${encodeURIComponent(key)}`); }
+  /** 启用＝把包里的方法、知识、例行任务复制进我的知识库与工作台；已启用时再调＝升级（只补新增的） */
+  enablePack(key: string, withRoutines = true) {
+    return this.request<PackEnableResult>('POST', `/packs/${encodeURIComponent(key)}/enable`, { with_routines: withRoutines });
+  }
+  /** `removeCopies`：删掉没改过的副本（改过的留着）；例行任务无论如何都会关掉 */
+  disablePack(key: string, removeCopies = false) {
+    return this.request<{ disabled: boolean; removed: number; kept_modified: number }>(
+      'POST', `/packs/${encodeURIComponent(key)}/disable`, { remove_copies: removeCopies });
+  }
+  askPackAssistant(key: string, assistantKey: string, q: string) {
+    return this.request<PackAnswer>('POST', `/packs/${encodeURIComponent(key)}/assistants/${encodeURIComponent(assistantKey)}/ask`, { q });
+  }
+  packFeedback(key: string, helpful: boolean) {
+    return this.request<{ recorded: boolean }>('POST', `/packs/${encodeURIComponent(key)}/feedback`, { helpful });
+  }
+  adminPacks() { return this.request<ScenarioPackAdminListRow[]>('GET', '/admin/packs'); }
+  adminValidatePack(definition: Record<string, unknown>) {
+    return this.request<PackValidation>('POST', '/admin/packs/validate', { definition });
+  }
+  adminCreatePack(definition: Record<string, unknown>) {
+    return this.request<ScenarioPackAdminRow>('POST', '/admin/packs', { definition });
+  }
+  adminUpdatePack(id: number, definition: Record<string, unknown>) {
+    return this.request<ScenarioPackAdminRow>('PUT', `/admin/packs/${id}`, { definition });
+  }
+  adminSubmitPack(id: number) { return this.request<ScenarioPackAdminRow>('POST', `/admin/packs/${id}/submit`); }
+  /** 四眼：写它的人不能自己批 */
+  adminApprovePack(id: number) { return this.request<ScenarioPackAdminRow>('POST', `/admin/packs/${id}/approve`); }
+  adminRejectPack(id: number) { return this.request<ScenarioPackAdminRow>('POST', `/admin/packs/${id}/reject`); }
+  adminRetirePack(id: number, reason: string) {
+    return this.request<ScenarioPackAdminRow>('POST', `/admin/packs/${id}/retire`, { reason });
+  }
+  adminPackRadar() { return this.request<RadarSignal[]>('GET', '/admin/packs/radar'); }
+  adminImportPackSeeds() { return this.request<PackImportResult>('POST', '/admin/packs/import-seeds'); }
 
   // ---- tasks ----
   /** APP-060 `ip_assignment` 是**必需参数**，不是可选的。

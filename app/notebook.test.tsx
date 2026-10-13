@@ -73,6 +73,17 @@ describe('KB-100 App 上的个人知识库', () => {
     await waitFor(() => expect((calls.find((c) => c.method === 'POST' && c.path === '/notebook/methods')?.body as { steps: unknown[] }).steps).toEqual([{ title: '核对收入', note: '' }]));
   });
 
+  it('笔记可以删除（知识库满了的补救）', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({ '/notebook/summary': SUMMARY, 'GET /notebook/notes': [brief(4, '旧笔记')],
+      'GET /notebook/notes/4': { ...brief(4, '旧笔记'), body: '不要了' }, 'DELETE /notebook/notes/4': { deleted: true } }, calls);
+    render(<NotebookScreen client={client} />);
+    fireEvent.press(await screen.findByText('旧笔记'));
+    fireEvent.press(await screen.findByText('删除'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.path === '/notebook/notes/4')).toBe(true));
+    expect(await screen.findByText('收件箱（1）')).toBeTruthy();     // 删完回到列表
+  });
+
   it('问笔记：带出处', async () => {
     const calls: Call[] = [];
     const client = makeClient({ '/notebook/summary': SUMMARY,
