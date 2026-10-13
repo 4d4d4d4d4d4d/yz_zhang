@@ -145,6 +145,10 @@ def erase_personal_data(db: Session, user: User) -> dict:
     from app.modules.workbench.models import WbItem, WbLog, WbMemory, WbProject, WbRoutine, WbRoutineRun
     for model in (WbRoutineRun, WbRoutine, WbMemory, WbLog, WbItem, WbProject):
         db.query(model).filter(model.owner_id == user.id).delete(synchronize_session=False)
+    # KB-109 个人知识库同理：笔记与方法只属于本人，注销即物理删除
+    from app.modules.notebook.models import NbMethod, NbNote
+    for model in (NbMethod, NbNote):
+        db.query(model).filter(model.owner_id == user.id).delete(synchronize_session=False)
     user.is_deleted = True
     user.phone = f"deleted:{user.id}"
     user.nickname = "已注销用户"

@@ -5,6 +5,8 @@ api DELETE /api/v1/decompositions/{dec_id}/nodes/{node_id}
 api DELETE /api/v1/developer/api-keys/{key_id}
 api DELETE /api/v1/developer/webhooks/{webhook_id}
 api DELETE /api/v1/friends/{user_id}
+api DELETE /api/v1/notebook/methods/{method_id}
+api DELETE /api/v1/notebook/notes/{note_id}
 api DELETE /api/v1/notifications/devices/{token}
 api DELETE /api/v1/subscriptions/{sub_id}
 api DELETE /api/v1/tasks/{task_id}/bookmark
@@ -110,6 +112,12 @@ api GET /api/v1/me/referrals
 api GET /api/v1/missions
 api GET /api/v1/missions/{mission_id}
 api GET /api/v1/missions/{mission_id}/steps/{step_id}/reviews
+api GET /api/v1/notebook/export
+api GET /api/v1/notebook/methods
+api GET /api/v1/notebook/notes
+api GET /api/v1/notebook/notes/{note_id}
+api GET /api/v1/notebook/related
+api GET /api/v1/notebook/summary
 api GET /api/v1/notifications
 api GET /api/v1/notifications/devices
 api GET /api/v1/notifications/prefs
@@ -198,6 +206,8 @@ api PATCH /api/v1/conversations/{conv_id}
 api PATCH /api/v1/decompositions/{dec_id}
 api PATCH /api/v1/decompositions/{dec_id}/nodes/{node_id}
 api PATCH /api/v1/friends/{user_id}
+api PATCH /api/v1/notebook/methods/{method_id}
+api PATCH /api/v1/notebook/notes/{note_id}
 api PATCH /api/v1/tasks/{task_id}
 api PATCH /api/v1/teams/{team_id}/members/{member_user_id}
 api PATCH /api/v1/users/me
@@ -307,6 +317,13 @@ api POST /api/v1/missions
 api POST /api/v1/missions/jobs/tick-all
 api POST /api/v1/missions/{mission_id}/cancel
 api POST /api/v1/missions/{mission_id}/tick
+api POST /api/v1/notebook/ask
+api POST /api/v1/notebook/methods
+api POST /api/v1/notebook/methods/distill
+api POST /api/v1/notebook/methods/{method_id}/apply
+api POST /api/v1/notebook/notes
+api POST /api/v1/notebook/notes/{note_id}/extract-todos
+api POST /api/v1/notebook/notes/{note_id}/todos
 api POST /api/v1/notifications/read-all
 api POST /api/v1/notifications/{notification_id}/read
 api POST /api/v1/open/v1/tasks
@@ -408,6 +425,7 @@ app collaborators
 app decompose
 app experience
 app motion
+app notebook
 app rights
 app search
 app spaces
@@ -420,6 +438,7 @@ sdk acceptInvitation
 sdk acceptMilestone
 sdk acceptSettlement
 sdk addDisputeStatement
+sdk addNoteTodos
 sdk addOrganizationRecord
 sdk addProgress
 sdk addTeamMember
@@ -444,7 +463,9 @@ sdk apiKeys
 sdk apiScopes
 sdk appealDispute
 sdk apply
+sdk applyMethod
 sdk approveCircleMember
+sdk askNotebook
 sdk askSupport
 sdk assignKnowledgeCard
 sdk availableCoupons
@@ -491,7 +512,9 @@ sdk createCity
 sdk createContent
 sdk createExperiencePost
 sdk createGroup
+sdk createMethod
 sdk createMission
+sdk createNote
 sdk createTask
 sdk createTeam
 sdk createTicket
@@ -510,6 +533,8 @@ sdk declineInvitation
 sdk decompositionTemplate
 sdk defineMilestones
 sdk deleteDecompositionNode
+sdk deleteMethod
+sdk deleteNote
 sdk deleteWebhook
 sdk deleteWorkbenchItem
 sdk deleteWorkbenchMemory
@@ -523,6 +548,7 @@ sdk dispute
 sdk disputeByTask
 sdk disputeStatements
 sdk distillKnowledgeUnit
+sdk distillMethod
 sdk distributeVenture
 sdk editContent
 sdk editDecomposition
@@ -536,6 +562,8 @@ sdk expireTasks
 sdk exportContract
 sdk exportEvidence
 sdk exportMyData
+sdk exportNotebook
+sdk extractNoteTodos
 sdk finalReport
 sdk followStats
 sdk followUser
@@ -608,6 +636,10 @@ sdk myTickets
 sdk myVentures
 sdk newcomerProgress
 sdk northStar
+sdk note
+sdk notebookMethods
+sdk notebookNotes
+sdk notebookSummary
 sdk notificationPrefs
 sdk notifications
 sdk oauthLogin
@@ -638,6 +670,7 @@ sdk register
 sdk registerDevice
 sdk rejectChangeOrder
 sdk rejectDelivery
+sdk relatedNotes
 sdk removeCircleMember
 sdk removeFriend
 sdk removeFromGroup
@@ -707,6 +740,8 @@ sdk updateCategory
 sdk updateCity
 sdk updateGroup
 sdk updateMe
+sdk updateMethod
+sdk updateNote
 sdk updateTeamMember
 sdk updateWorkbenchItem
 sdk updateWorkbenchProject
@@ -751,6 +786,7 @@ web /cooperate
 web /developer
 web /login
 web /messages
+web /notebook
 web /notifications
 web /opportunities
 web /people/:id

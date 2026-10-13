@@ -696,6 +696,20 @@ def _export_workbench(db: Session, user_id: int) -> dict:
     }
 
 
+def _export_notebook(db: Session, user_id: int) -> dict:
+    """KB-109 个人知识库也是个人信息：笔记全文与方法都要能带走。"""
+    from app.modules.notebook.models import NbMethod, NbNote
+
+    notes = db.query(NbNote).filter(NbNote.owner_id == user_id).order_by(NbNote.id).all()
+    methods = db.query(NbMethod).filter(NbMethod.owner_id == user_id).order_by(NbMethod.id).all()
+    return {
+        "notes": [{"id": n.id, "kind": n.kind, "title": n.title, "body": n.body, "url": n.url, "status": n.status,
+                   "tags": n.tags, "created_at": iso(n.created_at), "updated_at": iso(n.updated_at)} for n in notes],
+        "methods": [{"name": m.name, "description": m.description, "steps": m.steps, "uses": m.uses}
+                    for m in methods],
+    }
+
+
 @router.get("/users/me/export")
 def export_my_data(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from app.modules.content.models import Content
@@ -716,6 +730,7 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
             "items": space.items, "published": space.published, "revision": space.revision} if space else None,
         "profile": _me(user),
         "workbench": _export_workbench(db, user.id),
+        "notebook": _export_notebook(db, user.id),
         "real_name": user.real_name,
         "tasks": [{"id": t.id, "title": t.title, "status": t.status, "budget_cents": t.budget_cents,
                    "role": "creator" if t.creator_id == user.id else "executor"} for t in tasks],

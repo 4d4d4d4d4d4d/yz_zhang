@@ -2,6 +2,7 @@ import {
   apiErrorText, formatDateTime, localInputToServerTime, millisUntil, serverTimeToLocalInput,
   type WbItem, type WbItemDetail, type WbLog, type WbMemory, type WbOverview, type WbProject,
   type WbRoutine, type WbRoutineInput, type WbRoutineRun, type WbStatus, type WbStep,
+  type NbMethod, type NbReference,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -259,6 +260,8 @@ function ItemPanel({ id, projects, onClose, onChanged }: { id: number; projects:
   const [logs, setLogs] = useState<WbLog[]>([]);
   const [note, setNote] = useState('');
   const [draft, setDraft] = useState<WbStep[] | null>(null);
+  const [refs, setRefs] = useState<NbReference[]>([]);
+  const [methods, setMethods] = useState<NbMethod[]>([]);
   const [newStep, setNewStep] = useState('');
   const [error, setError] = useState('');
 
@@ -269,6 +272,11 @@ function ItemPanel({ id, projects, onClose, onChanged }: { id: number; projects:
     } catch (e) { setError(apiErrorText(e)); }
   }, [client, id]);
   useEffect(() => { void load(); }, [load]);
+  // KB-104 做这件事时，把自己以前记过的相关笔记与方法摆到眼前（拿不到不影响任务本身）
+  useEffect(() => {
+    client.relatedNotes(id).then(setRefs).catch(() => setRefs([]));
+    client.notebookMethods().then(setMethods).catch(() => setMethods([]));
+  }, [client, id]);
 
   async function patch(p: Parameters<typeof client.updateWorkbenchItem>[1]) {
     if (!item) return;
@@ -320,8 +328,26 @@ function ItemPanel({ id, projects, onClose, onChanged }: { id: number; projects:
       <div className="row">
         <input className="grow" aria-label="新清单项" placeholder="加一项清单" value={newStep} onChange={(e) => setNewStep(e.target.value)} />
         <button className="ghost" onClick={() => newStep.trim() && void act(async () => { await client.addWorkbenchChildren(item.id, [{ title: newStep, note: '' }]); setNewStep(''); })}>加入清单</button>
-        <button onClick={() => void act(async () => setDraft((await client.workbenchBreakdown(item.id)).steps))}>让助手拆一下</button>
+        <button onClick={() => void act(async () => {
+          const res = await client.workbenchBreakdown(item.id);
+          setDraft(res.steps);
+          if (res.references?.length) setRefs(res.references);
+        })}>让助手拆一下</button>
+        {item.parent_id === null && methods.length > 0 && (
+          <select aria-label="套用我的方法" value="" onChange={(e) => e.target.value && void act(() => client.applyMethod(Number(e.target.value), item.id))}>
+            <option value="">套用我的方法…</option>
+            {methods.map((m) => <option key={m.id} value={m.id}>{m.name}（{m.steps.length} 步）</option>)}
+          </select>
+        )}
       </div>
+      {refs.length > 0 && (
+        <div aria-label="相关笔记">
+          <p className="muted">你以前记过的相关内容{draft ? '（助手拆的时候参考了这些）' : ''}：</p>
+          <ul className="list">{refs.map((r) => (
+            <li key={r.note_id}><Link to={`/notebook?tab=all&note=${r.note_id}`}>{r.title}</Link><span className="muted"> · {r.snippet}</span></li>
+          ))}</ul>
+        </div>
+      )}
       {draft && (
         <div className="card" aria-label="助手拆出的草稿">
           <p className="muted">助手给的草稿，确认后才会加进清单。可以先删掉不需要的。</p>

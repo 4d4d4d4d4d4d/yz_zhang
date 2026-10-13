@@ -98,6 +98,7 @@ def create_app() -> FastAPI:
     from app.modules.openapi.machine import router as machine_router
     from app.modules.spaces.router import router as spaces_router
     from app.modules.workbench.router import router as workbench_router
+    from app.modules.notebook.router import router as notebook_router
     from app.modules.account.router import router as account_router
     from app.modules.admin.router import router as admin_router
     from app.modules.analytics.router import router as analytics_router
@@ -131,6 +132,7 @@ def create_app() -> FastAPI:
         account_router,
         spaces_router,
         workbench_router,
+        notebook_router,
         wallet_router,
         task_router,
         contract_router,

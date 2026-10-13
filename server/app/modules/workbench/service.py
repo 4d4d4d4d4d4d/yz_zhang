@@ -293,16 +293,24 @@ def run_due(db: Session, now: datetime | None = None, limit: int = 500) -> dict:
 
 # ------------------------------------------------------------------ 助手拆清单（PWB-005）
 def breakdown(db: Session, item: WbItem) -> dict:
-    """只出草稿。走既有分解网关：配了模型就由模型拆（带上记忆），否则查模板，再没有就给通用清单。"""
+    """只出草稿。走既有分解网关：配了模型就由模型拆（带上记忆与相关笔记），否则查模板，再没有就给通用清单。
+
+    KB-104：每份草稿都带 `references`——个人知识库里与这件事相关的笔记（标题 + 摘录 + 出处 id），
+    让人看到助手参考了自己以前记过的什么。
+    """
     from app.modules.decompose.llm import TemplateLLM, get_gateway
+    from app.modules.notebook.service import related
 
     gw = get_gateway()
     desc = item.notes or ""
+    refs = related(db, item.owner_id, f"{item.title} {' '.join(item.tags or [])} {item.category}")
     if not isinstance(gw, TemplateLLM):
         mem = [m.content for m in db.query(WbMemory).filter(WbMemory.owner_id == item.owner_id)
                .order_by(WbMemory.id).all()]
         if mem:
             desc += "\n\n（我的习惯与偏好：" + "；".join(mem) + "）"
+        if refs:
+            desc += "\n\n（我以前记过的相关内容：" + "；".join(f"{r['title']}：{r['snippet']}" for r in refs) + "）"
     try:
         res = gw.expand(db, {"root": {"title": item.title, "description": desc, "category": item.category,
                                       "budget_cents": 0, "city": ""},
@@ -311,13 +319,13 @@ def breakdown(db: Session, item: WbItem) -> dict:
         res = {"children": [], "source": "generic"}
     children = res.get("children") or []
     if not children or res.get("source") == "generic" or res.get("fallback"):
-        return {"source": "generic", "steps": [{"title": t, "note": n} for t, n in GENERIC_STEPS]}
+        return {"source": "generic", "steps": [{"title": t, "note": n} for t, n in GENERIC_STEPS], "references": refs}
     steps = []
     for c in children[:LIMITS["children"]]:
         note = "；".join(x for x in (f"交付：{c['deliverable']}" if c.get("deliverable") else "",
                                     f"完成标准：{c['acceptance']}" if c.get("acceptance") else "") if x)
         steps.append({"title": c["title"][:200], "note": note[:500]})
-    return {"source": res.get("source", "model"), "steps": steps}
+    return {"source": res.get("source", "model"), "steps": steps, "references": refs}
 
 
 def count(db: Session, model, owner_id: int, *extra) -> int:

@@ -5,7 +5,7 @@
 import {
   apiErrorText, formatDateTime, millisUntil,
   type PlatformClient, type WbItem, type WbItemDetail, type WbLog, type WbMemory, type WbOverview,
-  type WbRoutine, type WbStatus, type WbStep,
+  type WbRoutine, type WbStatus, type WbStep, type NbMethod, type NbReference,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -113,11 +113,18 @@ function ItemDetail({ client, id, onBack }: { client: PlatformClient; id: number
   const [logs, setLogs] = useState<WbLog[]>([]);
   const [note, setNote] = useState('');
   const [draft, setDraft] = useState<WbStep[] | null>(null);
+  const [refs, setRefs] = useState<NbReference[]>([]);
+  const [methods, setMethods] = useState<NbMethod[]>([]);
   const [error, setError] = useState('');
   const load = useCallback(async () => {
     try { setItem(await client.workbenchItem(id)); setLogs(await client.workbenchLogs(id)); } catch (e) { setError(apiErrorText(e)); }
   }, [client, id]);
   useEffect(() => { void load(); }, [load]);
+  // KB-104 相关笔记与我的方法：拿不到不影响任务本身
+  useEffect(() => {
+    client.relatedNotes(id).then(setRefs).catch(() => setRefs([]));
+    client.notebookMethods().then(setMethods).catch(() => setMethods([]));
+  }, [client, id]);
   async function act(fn: () => Promise<unknown>) {
     setError('');
     try { await fn(); await load(); } catch (e) { setError(apiErrorText(e)); }
@@ -152,7 +159,22 @@ function ItemDetail({ client, id, onBack }: { client: PlatformClient; id: number
           <Text>{c.status === 'done' ? '☑' : '☐'} {c.title}</Text>
         </TouchableOpacity>
       ))}
-      <Button title="让助手拆一下" onPress={() => void act(async () => setDraft((await client.workbenchBreakdown(item.id)).steps))} />
+      <Button title="让助手拆一下" onPress={() => void act(async () => {
+        const res = await client.workbenchBreakdown(item.id);
+        setDraft(res.steps);
+        if (res.references?.length) setRefs(res.references);
+      })} />
+      {item.parent_id === null && methods.map((m) => (
+        <TouchableOpacity key={m.id} onPress={() => void act(() => client.applyMethod(m.id, item.id))}>
+          <Text style={s.link}>套用我的方法：{m.name}（{m.steps.length} 步）</Text>
+        </TouchableOpacity>
+      ))}
+      {refs.length > 0 && (
+        <View style={s.card}>
+          <Text style={s.muted}>你以前记过的相关内容：</Text>
+          {refs.map((r) => <Text key={r.note_id}>· {r.title}：{r.snippet}</Text>)}
+        </View>
+      )}
       {draft && (
         <View style={s.card}>
           <Text style={s.muted}>助手给的草稿，确认后才会加进清单</Text>

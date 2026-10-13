@@ -1502,6 +1502,8 @@ export interface WbStep {
 export interface WbBreakdown {
   source: string;
   steps: WbStep[];
+  /** KB-104 助手参考了哪几条自己的笔记（V147 起；更早的服务端没有这个字段） */
+  references?: NbReference[];
 }
 export interface WbPlatformSection {
   to_choose: { task_id: number; title: string; applicants: number }[];
@@ -1616,4 +1618,108 @@ export interface Cockpit {
   critical_path: number[];
   alerts: CockpitAlert[];
   nodes: CockpitNode[];
+}
+
+// ---- KB-100 个人知识库（122 号 spec）：只属于本人 ----
+export type NbKind = 'note' | 'link' | 'minutes';
+export type NbStatus = 'inbox' | 'filed' | 'archived';
+export interface NbNoteBrief {
+  id: number;
+  kind: NbKind;
+  title: string;
+  url: string;
+  status: NbStatus;
+  tags: string[];
+  pinned: boolean;
+  project_id: number | null;
+  revision: number;
+  /** 列表里是正文开头；带 q 检索时是命中处的摘录 */
+  excerpt: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface NbNote extends NbNoteBrief {
+  body: string;
+}
+export interface NbNoteInput {
+  body?: string;
+  title?: string;
+  url?: string;
+  kind?: NbKind;
+  tags?: string[];
+  status?: NbStatus;
+  project_id?: number | null;
+}
+export interface NbNotePatch {
+  revision?: number;
+  title?: string;
+  body?: string;
+  url?: string;
+  kind?: NbKind;
+  tags?: string[];
+  status?: NbStatus;
+  pinned?: boolean;
+  project_id?: number | null;
+}
+export interface NbTagCount {
+  tag: string;
+  count: number;
+}
+export interface NbSummary {
+  total: number;
+  inbox: number;
+  archived: number;
+  methods: number;
+  limit: number;
+  tags: NbTagCount[];
+}
+export interface NbReference {
+  note_id: number;
+  title: string;
+  snippet: string;
+  score: number;
+}
+export interface NbCitation {
+  n: number;
+  note_id: number;
+  title: string;
+  snippet: string;
+}
+export interface NbAnswer {
+  /** 摘录式：每一句都来自自己的笔记，不编 */
+  mode: 'extractive';
+  answer: string;
+  citations: NbCitation[];
+}
+export interface NbTodoDraft {
+  title: string;
+  due_at: string | null;
+  line: string;
+}
+export interface NbTodoInput {
+  title: string;
+  due_at?: string | null;
+}
+export interface NbMethod {
+  id: number;
+  name: string;
+  description: string;
+  steps: WbStep[];
+  source_note_ids: number[];
+  uses: number;
+  created_at: string;
+  updated_at: string;
+}
+export interface NbMethodDraft {
+  name: string;
+  steps: WbStep[];
+  source_note_ids: number[];
+  /** numbered：取的是编号步骤；bullets：圆点列表；none：没找到步骤，请手写 */
+  found: 'numbered' | 'bullets' | 'none';
+}
+export interface NbExport {
+  filename: string;
+  notes: number;
+  methods: number;
+  markdown: string;
 }

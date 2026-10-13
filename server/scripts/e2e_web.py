@@ -275,6 +275,23 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     step("个人工作台：加任务、助手拆清单、勾一项后进度按清单算",
          page.locator("text=进度 25%（按清单）").count() > 0)
 
+    # KB-100（V147）个人知识库：随手记一段纪要 → 服务端认出是纪要 → 抽出待办（草稿）→ 放进工作台；
+    # 再问一句，回答要带出处。抽取、日期、检索打分都是服务端算的
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/notebook", wait_until="networkidle")
+    page.fill("textarea[aria-label='随手记']", "E2E 周会纪要\n- [ ] 小王周五前提交报价单\n待办：联系财务开发票")
+    page.get_by_role("button", name="记下").click()
+    page.get_by_role("button", name="E2E 周会纪要").click()
+    page.get_by_role("button", name="抽出待办").click()
+    page.wait_for_selector("[aria-label='抽出的待办草稿']", timeout=10000)
+    page.get_by_role("button", name="放进工作台").click()
+    page.wait_for_selector("text=已放进工作台 2 项", timeout=10000)
+    page.get_by_role("tab", name="问问我的笔记").click()
+    page.fill("input[aria-label='问我的笔记']", "报价单什么时候交")
+    page.get_by_role("button", name="问", exact=True).click()
+    page.wait_for_timeout(1500)
+    step("个人知识库：随手记纪要、抽待办进工作台、问笔记带出处",
+         page.locator("[aria-label='回答'] >> text=E2E 周会纪要").count() > 0)
+
     # 客服工单：V102 才补上的自助入口，而且它是**没有前置条件的写路径**——
     # 正好适合用真浏览器验一遍（服务端队列由 V101/V103 的测试盯着）
     page.goto(f"http://127.0.0.1:{WEB_PORT}/support", wait_until="networkidle")

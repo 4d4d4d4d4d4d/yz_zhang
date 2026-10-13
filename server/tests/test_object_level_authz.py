@@ -157,6 +157,8 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
     (r"^\w+ /friends/", "self", "好友关系与请求属于调用者本人：决定别人收到的请求必须拒"),
     (r"^\w+ /workbench/", "self",
      "个人工作台的项目、任务、进展、助手记忆与例行任务只属于本人：别人的 id 一律 404，不泄露是否存在（116 号 spec）"),
+    (r"^\w+ /notebook/", "self",
+     "个人知识库的笔记与方法只属于本人：别人的 id 一律 404；蒸馏时混进别人的笔记整批 404（122 号 spec）"),
     (r"^\w+ /circles/.*/members/", "party",
      "圈层成员的审批与移除按圈层管理员鉴权"),
     (r"^POST /circles/.*/join$", "self", "加入圈层是调用者自己的动作，circle_id 是对象而不是凭据"),

@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 122 | 个人知识库：收件箱、笔记与链接、标签与检索、助手引用、纪要抽待办、个人方法蒸馏 | [122-personal-knowledge-base.md](./122-personal-knowledge-base.md) | P0 |
 | 121 | WorkBuddy 蓝皮书逐章对照：门户的助手与知识库还缺什么（V146 复核与排期） | [121-workbuddy-bluebook-gap.md](./121-workbuddy-bluebook-gap.md) | P0 |
 | 120 | 合作驾驶舱：树、关键路径、预算账、预警（SPACE-024 / AI-DEC-021 / APP-007） | [120-collaboration-cockpit.md](./120-collaboration-cockpit.md) | P1 |
 | 119 | 报价卡接上两端；变更单可以改期、改范围（IM-009 / SC-007b） | [119-quote-cards-and-change-orders-with-deadline-scope.md](./119-quote-cards-and-change-orders-with-deadline-scope.md) | P1 |

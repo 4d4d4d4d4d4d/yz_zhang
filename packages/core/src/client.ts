@@ -1,6 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
-  Cockpit, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
+  Cockpit, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
   CommercialReadiness,
   AgentProfileView,
   PayoutProposalView,
@@ -245,6 +245,65 @@ export class PlatformClient {
   workbenchRoutineRuns(id: number) {
     return this.request<WbRoutineRun[]>('GET', `/workbench/routines/${id}/runs`);
   }
+
+  // ---- KB-100 个人知识库（122 号 spec） ----
+  notebookNotes(filter: { q?: string; tag?: string; status?: NbStatus; kind?: NbKind; limit?: number } = {}) {
+    const p = new URLSearchParams();
+    if (filter.q) p.set('q', filter.q);
+    if (filter.tag) p.set('tag', filter.tag);
+    if (filter.status) p.set('status', filter.status);
+    if (filter.kind) p.set('kind', filter.kind);
+    if (filter.limit) p.set('limit', String(filter.limit));
+    const qs = p.toString();
+    return this.request<NbNoteBrief[]>('GET', `/notebook/notes${qs ? `?${qs}` : ''}`);
+  }
+  /** 随手记：一句话、一段纪要或一个链接（服务端不抓取链接内容） */
+  createNote(input: NbNoteInput) {
+    return this.request<NbNote>('POST', '/notebook/notes', {
+      body: input.body, title: input.title, url: input.url, kind: input.kind,
+      tags: input.tags, status: input.status, project_id: input.project_id,
+    });
+  }
+  note(id: number) { return this.request<NbNote>('GET', `/notebook/notes/${id}`); }
+  updateNote(id: number, patch: NbNotePatch) {
+    return this.request<NbNote>('PATCH', `/notebook/notes/${id}`, {
+      revision: patch.revision, title: patch.title, body: patch.body, url: patch.url, kind: patch.kind,
+      tags: patch.tags, status: patch.status, pinned: patch.pinned, project_id: patch.project_id,
+    });
+  }
+  deleteNote(id: number) { return this.request<{ deleted: boolean }>('DELETE', `/notebook/notes/${id}`); }
+  notebookSummary() { return this.request<NbSummary>('GET', '/notebook/summary'); }
+  /** 从自己的笔记里找答案：摘录式、带出处 */
+  askNotebook(q: string) { return this.request<NbAnswer>('POST', '/notebook/ask', { q }); }
+  relatedNotes(itemId: number) { return this.request<NbReference[]>('GET', `/notebook/related?item_id=${itemId}`); }
+  /** 纪要抽待办：只返回草稿，确认后调 `addNoteTodos` */
+  extractNoteTodos(id: number) {
+    return this.request<{ note_id: number; items: NbTodoDraft[] }>('POST', `/notebook/notes/${id}/extract-todos`);
+  }
+  addNoteTodos(id: number, items: NbTodoInput[], projectId?: number | null) {
+    return this.request<WbItem[]>('POST', `/notebook/notes/${id}/todos`, { items, project_id: projectId });
+  }
+  /** 把几条笔记里的步骤收成方法草稿（不写库），确认后调 `createMethod` */
+  distillMethod(noteIds: number[]) {
+    return this.request<NbMethodDraft>('POST', '/notebook/methods/distill', { note_ids: noteIds });
+  }
+  notebookMethods() { return this.request<NbMethod[]>('GET', '/notebook/methods'); }
+  createMethod(input: { name: string; description?: string; steps: WbStep[]; source_note_ids?: number[] }) {
+    return this.request<NbMethod>('POST', '/notebook/methods', {
+      name: input.name, description: input.description, steps: input.steps, source_note_ids: input.source_note_ids,
+    });
+  }
+  updateMethod(id: number, patch: { name?: string; description?: string; steps?: WbStep[] }) {
+    return this.request<NbMethod>('PATCH', `/notebook/methods/${id}`, {
+      name: patch.name, description: patch.description, steps: patch.steps,
+    });
+  }
+  deleteMethod(id: number) { return this.request<{ deleted: boolean }>('DELETE', `/notebook/methods/${id}`); }
+  /** 把方法套到工作台任务上：步骤变成它的清单子项 */
+  applyMethod(id: number, itemId: number) {
+    return this.request<WbItemDetail>('POST', `/notebook/methods/${id}/apply`, { item_id: itemId });
+  }
+  exportNotebook() { return this.request<NbExport>('GET', '/notebook/export'); }
 
   // ---- tasks ----
   /** APP-060 `ip_assignment` 是**必需参数**，不是可选的。

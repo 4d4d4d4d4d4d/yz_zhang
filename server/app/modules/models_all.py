@@ -79,3 +79,5 @@ from app.modules.coop.governance import PayoutProposal  # noqa: F401
 from app.modules.spaces.models import PersonalSpace  # noqa: F401
 
 from app.modules.workbench.models import WbItem, WbLog, WbMemory, WbProject, WbRoutine, WbRoutineRun  # noqa: F401
+
+from app.modules.notebook.models import NbMethod, NbNote  # noqa: F401
