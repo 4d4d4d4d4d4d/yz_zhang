@@ -231,7 +231,8 @@ def my_contents(
         .filter(Content.author_id == user.id, Content.status == status)
         .order_by(Content.id.desc()).limit(limit).all()
     )
-    return [_dump(c, db, user) for c in rows]
+    ctx = _ListCtx(db, user, rows)  # CONC-066 作者与关注状态一次取齐，不逐条查
+    return [_dump(c, db, user, ctx) for c in rows]
 
 
 # ---------- KB-003 闭环任务一键生成经验帖 ----------

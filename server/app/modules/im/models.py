@@ -61,6 +61,20 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class ConversationMember(Base):
+    """CONC-066 会话成员索引：「我参与的会话」按 user_id 走索引查。
+
+    `Conversation.participants` 是 JSON 列表，查不了索引——改造前会话列表**把全平台所有会话读出来、
+    在 Python 里挑出自己的**，量级跟着平台总会话数涨，不是跟着这个人。这张表由 flush 事件自动与
+    `participants` 对齐（见 `sync_members`），写 participants 的地方不用记得维护它。
+    """
+
+    __tablename__ = "conversation_members"
+
+    conversation_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+
 class ConversationRead(Base):
     """IM-010 已读位点：每人每会话记录读到的最后一条消息 id，用于未读数与红点。"""
 
@@ -72,3 +86,32 @@ class ConversationRead(Base):
     user_id: Mapped[int] = mapped_column(Integer, index=True)
     last_read_message_id: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+def _install_member_sync() -> None:
+    """flush 之后把变过的会话的成员表与 participants 对齐（新建、加人、踢人、退群都走这里）。"""
+    from sqlalchemy import delete, event, insert, inspect
+    from sqlalchemy.orm import Session
+
+    @event.listens_for(Session, "after_flush")
+    def sync_members(session, _ctx):  # noqa: ANN001
+        changed = [o for o in list(session.new) + list(session.dirty) if isinstance(o, Conversation)
+                   and (o in session.new or inspect(o).attrs.participants.history.has_changes())]
+        gone = [o.id for o in session.deleted if isinstance(o, Conversation)]
+        conn = session.connection()
+        for conv in changed:
+            want = {int(u) for u in (conv.participants or [])}
+            have = {r[0] for r in conn.execute(
+                ConversationMember.__table__.select().with_only_columns(ConversationMember.user_id)
+                .where(ConversationMember.conversation_id == conv.id))}
+            if have - want:
+                conn.execute(delete(ConversationMember).where(
+                    ConversationMember.conversation_id == conv.id, ConversationMember.user_id.in_(have - want)))
+            if want - have:
+                conn.execute(insert(ConversationMember), [{"conversation_id": conv.id, "user_id": u}
+                                                          for u in sorted(want - have)])
+        if gone:
+            conn.execute(delete(ConversationMember).where(ConversationMember.conversation_id.in_(gone)))
+
+
+_install_member_sync()

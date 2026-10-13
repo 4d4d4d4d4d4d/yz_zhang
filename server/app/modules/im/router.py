@@ -51,26 +51,31 @@ def my_conversations(user: User = Depends(get_current_user), db: Session = Depen
     """IM-010 会话列表附未读数与最后一条消息预览（聊天列表标配）。"""
     from sqlalchemy import func
 
-    rows = [
-        c for c in db.query(Conversation).order_by(Conversation.id.desc()).all()
-        if user.id in c.participants
-    ]
+    # CONC-066 改造前：读出全平台所有会话、在 Python 里挑自己的，再对每个会话各查两次（未读、最后一条）。
+    # 现在：成员表按 user_id 走索引；未读与最后一条各一次分组查询。条数与会话数无关
+    from .models import ConversationMember, ConversationRead
+
+    rows = (db.query(Conversation)
+            .join(ConversationMember, ConversationMember.conversation_id == Conversation.id)
+            .filter(ConversationMember.user_id == user.id)
+            .order_by(Conversation.id.desc()).all())
+    ids = [c.id for c in rows] or [-1]
+    unread = dict(
+        db.query(Message.conversation_id, func.count(Message.id))
+        .outerjoin(ConversationRead, (ConversationRead.conversation_id == Message.conversation_id)
+                   & (ConversationRead.user_id == user.id))
+        .filter(Message.conversation_id.in_(ids), Message.sender_id != user.id,  # 自己发的不算未读
+                Message.id > func.coalesce(ConversationRead.last_read_message_id, 0))
+        .group_by(Message.conversation_id).all())
+    last_ids = (db.query(func.max(Message.id)).filter(Message.conversation_id.in_(ids))
+                .group_by(Message.conversation_id).subquery())
+    lasts = {m.conversation_id: m for m in db.query(Message).filter(Message.id.in_(last_ids))}
     out = []
     for c in rows:
-        cursor = _read_cursor(db, c.id, user.id)
-        unread = (
-            db.query(func.count(Message.id))
-            .filter(Message.conversation_id == c.id, Message.id > cursor,
-                    Message.sender_id != user.id)  # 自己发的不算未读
-            .scalar()
-        )
-        last = (
-            db.query(Message).filter(Message.conversation_id == c.id)
-            .order_by(Message.id.desc()).first()
-        )
+        last = lasts.get(c.id)
         out.append({
             **_dump_conv(c),
-            "unread_count": int(unread),
+            "unread_count": int(unread.get(c.id, 0)),
             "last_message": None if not last else {
                 "id": last.id, "sender_id": last.sender_id, "kind": last.kind,
                 "content": "[消息已撤回]" if last.recalled else last.content[:100],
@@ -88,17 +93,19 @@ def im_unread_count(user: User = Depends(get_current_user), db: Session = Depend
     """IM-010 全局未读消息数（聊天 Tab 红点）。"""
     from sqlalchemy import func
 
-    total = 0
-    for c in db.query(Conversation).all():
-        if user.id not in c.participants:
-            continue
-        cursor = _read_cursor(db, c.id, user.id)
-        total += int(
-            db.query(func.count(Message.id))
-            .filter(Message.conversation_id == c.id, Message.id > cursor,
-                    Message.sender_id != user.id)
-            .scalar()
-        )
+    # CONC-066 同会话列表：此前读出全平台所有会话、逐个各查一次未读
+    from .models import ConversationMember, ConversationRead
+
+    total = (
+        db.query(func.count(Message.id))
+        .join(ConversationMember, (ConversationMember.conversation_id == Message.conversation_id)
+              & (ConversationMember.user_id == user.id))
+        .outerjoin(ConversationRead, (ConversationRead.conversation_id == Message.conversation_id)
+                   & (ConversationRead.user_id == user.id))
+        .filter(Message.sender_id != user.id,
+                Message.id > func.coalesce(ConversationRead.last_read_message_id, 0))
+        .scalar()
+    ) or 0
     return {"unread": total}
 
 

@@ -36,8 +36,12 @@ def active_member(db: Session, circle_id: int, user_id: int) -> CircleMember | N
     return m if m and m.status == "active" else None
 
 
-def _dump(c: Circle, db: Session, viewer: User | None = None) -> dict:
-    my = _member(db, c.id, viewer.id) if viewer else None
+_UNSET = object()
+
+
+def _dump(c: Circle, db: Session, viewer: User | None = None, my=_UNSET) -> dict:
+    if my is _UNSET:
+        my = _member(db, c.id, viewer.id) if viewer else None
     return {
         "id": c.id, "name": c.name, "description": c.description, "kind": c.kind,
         "join_policy": c.join_policy, "owner_id": c.owner_id, "skill_tag": c.skill_tag,
@@ -101,7 +105,11 @@ def discover(
             return s
 
         rows = sorted([c for c in rows if c.id not in mine and score(c) > 0], key=score, reverse=True)
-    return [_dump(c, db, user) for c in rows[:limit]]
+    page = rows[:limit]
+    # CONC-066 我在这些圈里的身份一次取齐，不逐个圈查
+    mine = {m.circle_id: m for m in db.query(CircleMember).filter(
+        CircleMember.user_id == user.id, CircleMember.circle_id.in_([c.id for c in page] or [-1]))}
+    return [_dump(c, db, user, my=mine.get(c.id)) for c in page]
 
 
 @router.get("/{circle_id}")
