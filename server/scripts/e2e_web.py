@@ -255,6 +255,21 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
          ok_tree and "/decompose" not in page.url and page.locator("text=子任务进度").count() > 0,
          f"{leaves} 步")
 
+    # PWB（V141）个人工作台：真服务端上加一条任务、让助手拆一下（没有模型 Key 走通用清单）、
+    # 确认写进清单、勾掉一项——进度从清单算出来。mock 里这些数都是自己喂的，这里是服务端算的
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/workbench?tab=all", wait_until="networkidle")
+    page.fill("input[aria-label='新任务']", "E2E 整理报税材料")
+    page.get_by_role("button", name="添加").click()
+    page.get_by_role("button", name="E2E 整理报税材料").click()
+    page.get_by_role("button", name="让助手拆一下").click()
+    page.wait_for_selector("[aria-label='助手拆出的草稿']", timeout=10000)
+    page.get_by_role("button", name="确认加入清单").click()
+    page.wait_for_selector("input[aria-label='完成：明确目标与完成标准']", timeout=10000)
+    page.locator("input[aria-label='完成：明确目标与完成标准']").click()
+    page.wait_for_timeout(1500)
+    step("个人工作台：加任务、助手拆清单、勾一项后进度按清单算",
+         page.locator("text=进度 25%（按清单）").count() > 0)
+
     # 客服工单：V102 才补上的自助入口，而且它是**没有前置条件的写路径**——
     # 正好适合用真浏览器验一遍（服务端队列由 V101/V103 的测试盯着）
     page.goto(f"http://127.0.0.1:{WEB_PORT}/support", wait_until="networkidle")
