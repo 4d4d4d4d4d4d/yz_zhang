@@ -51,7 +51,7 @@ export default function Messages() {
           {convs.length === 0 && <p className="muted">暂无会话</p>}
           {convs.map((c) => (
             <a key={c.id} onClick={() => void openConv(c)} style={{ cursor: 'pointer' }}>
-              {c.kind === 'task' ? `📋 任务会话 #${c.task_id}` : `💬 私聊 #${c.id}`}
+              {c.kind === 'task' ? '📋' : '💬'} {'title' in c && c.title ? String(c.title) : (c.kind === 'task' ? `任务会话 #${c.task_id}` : `私聊 #${c.id}`)}
             </a>
           ))}
         </div>

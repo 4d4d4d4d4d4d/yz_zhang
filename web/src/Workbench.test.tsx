@@ -128,3 +128,18 @@ describe('PWB 个人工作台', () => {
     expect((await screen.findByTestId('wb-run-output')).textContent).toContain('本周完成 3 项');
   });
 });
+
+describe('IM-060 消息列表写出在和谁聊', () => {
+  it('私聊显示对方昵称、任务会话显示任务标题，不再是「私聊 #2」', async () => {
+    open('/messages', {
+      '/users/me': ME,
+      '/conversations': [
+        { id: 2, kind: 'direct', task_id: null, participants: [2, 5], title: '陈设计', unread_count: 0, last_message: null },
+        { id: 1, kind: 'task', task_id: 9, participants: [2, 3], title: '任务：三居室保洁', unread_count: 0, last_message: null },
+      ],
+    });
+    expect(await screen.findByText(/陈设计/)).toBeTruthy();
+    expect(screen.getByText(/任务：三居室保洁/)).toBeTruthy();
+    expect(screen.queryByText(/私聊 #2/)).toBeNull();
+  });
+});

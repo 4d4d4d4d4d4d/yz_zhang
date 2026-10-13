@@ -27,6 +27,23 @@ CANCEL_RULES = {
 }
 
 
+def _party(db: Session, user_id: int) -> str:
+    """SC-030 合约上写出是谁：昵称 + 实名（姓 + *，平台已核验）+ 平台账号号。
+
+    改造前写的是「发布方: 用户1 / 执行方: 用户2」——V140 真浏览器演示里，合约上看不出是谁。
+    全名不写进正文：正文会给对方看、会进证据包，姓加星号足以让当事人核对，又不把全名摊给对方；
+    需要完整身份时由平台按实名记录出证（证据包）。
+    """
+    from app.modules.account.deletion import mask_name
+    from app.modules.account.models import User
+
+    u = db.get(User, user_id)
+    if u is None:
+        return f"用户{user_id}"
+    real = f"，实名 {mask_name(u.real_name)}（平台已核验）" if u.is_verified and u.real_name else ""
+    return f"{u.nickname}（平台账号 {u.id}{real}）"
+
+
 def generate(db: Session, task, executor_id: int, amount_cents: int) -> Contract:
     """SC-001 成交自动生成合约。"""
     existing = db.query(Contract).filter(Contract.task_id == task.id).first()
@@ -34,7 +51,7 @@ def generate(db: Session, task, executor_id: int, amount_cents: int) -> Contract
         raise conflict("该任务已存在合约", "contract_exists")
     terms = (
         f"任务《{task.title}》(ID:{task.id})\n"
-        f"发布方: 用户{task.creator_id} / 执行方: 用户{executor_id}\n"
+        f"发布方: {_party(db, task.creator_id)} / 执行方: {_party(db, executor_id)}\n"
         f"金额: {amount_cents / 100:.2f} 元(托管) / 平台服务费率: {settings.PLATFORM_FEE_BPS / 100:.1f}%\n"
         f"验收: 交付后由发布方验收，{settings.AUTO_ACCEPT_DAYS} 天未处理视为自动通过\n"
         f"争议: 先经平台按《平台争议处理规则》处理，处理决定自动执行；"

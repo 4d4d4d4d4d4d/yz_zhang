@@ -164,7 +164,7 @@ def _check_linked(db: Session, task_id: int | None, user: User) -> None:
         raise not_found("平台任务不存在或与你无关")
 
 
-def _log(db: Session, item: WbItem, kind: str, body: str) -> None:
+def _add_log(db: Session, item: WbItem, kind: str, body: str) -> None:
     db.add(WbLog(item_id=item.id, owner_id=item.owner_id, kind=kind, body=body))
 
 
@@ -325,10 +325,10 @@ def update_item(item_id: int, body: ItemPatch, user: User = Depends(get_current_
     if data.get("status") and data["status"] != old_status:
         item.status = data["status"]
         item.completed_at = now if item.status == "done" else None
-        _log(db, item, "status", f"{svc.STATUS_NAMES[old_status]} → {svc.STATUS_NAMES[item.status]}")
+        _add_log(db, item, "status", f"{svc.STATUS_NAMES[old_status]} → {svc.STATUS_NAMES[item.status]}")
     if data.get("progress") is not None and data["progress"] != old_progress:
         item.progress = data["progress"]
-        _log(db, item, "progress", f"进度 {old_progress}% → {item.progress}%")
+        _add_log(db, item, "progress", f"进度 {old_progress}% → {item.progress}%")
     item.updated_at = now
     item.revision += 1
     db.add(item)
@@ -392,7 +392,7 @@ def add_children(item_id: int, body: ChildrenIn, user: User = Depends(get_curren
     for n, s in enumerate(body.steps):
         db.add(WbItem(owner_id=user.id, project_id=item.project_id, parent_id=item.id, title=s.title.strip(),
                       notes=s.note, sort=have + n, created_at=now, updated_at=now))
-    _log(db, item, "assistant", f"加入清单 {len(body.steps)} 项")
+    _add_log(db, item, "assistant", f"加入清单 {len(body.steps)} 项")
     item.updated_at = now
     db.add(item)
     db.flush()

@@ -49,7 +49,7 @@ export function MessagesScreen({ client, initialConversationId = null }: {
       {convs.map((c) => (
         <TouchableOpacity key={c.id} style={s.card} onPress={() => setOpen(c.id)}>
           <Text style={s.cardTitle}>
-            {c.kind === 'task' ? `任务会话 #${c.task_id}` : `会话 #${c.id}`}
+            {'title' in c && c.title ? String(c.title) : (c.kind === 'task' ? `任务会话 #${c.task_id}` : `会话 #${c.id}`)}
           </Text>
           <Text style={s.muted}>
             {c.last_message?.content || '（暂无消息）'}

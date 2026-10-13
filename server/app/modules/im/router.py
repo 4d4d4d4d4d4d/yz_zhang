@@ -46,6 +46,29 @@ def _read_cursor(db: Session, conv_id: int, user_id: int) -> int:
     return (row.last_read_message_id or 0) if row else 0
 
 
+def _conv_titles(db: Session, rows: list, me: int) -> dict[int, str]:
+    """IM-060 会话列表上写「在和谁聊」：私聊是对方的昵称，任务会话是任务标题，群是群名。
+
+    V140 真浏览器演示里，列表上只有「私聊 #2」「任务会话 #1」，发起会话还要填对方的用户 ID——
+    用户不知道自己在和谁说话。名字一次取齐（与会话数无关的两条查询，115 号闸门守着）。
+    """
+    from app.modules.task.models import Task
+
+    peers = {c.id: next((p for p in c.participants if p != me), me) for c in rows if c.kind == "direct"}
+    names = {u.id: ("已注销用户" if u.is_deleted else u.nickname)
+             for u in db.query(User).filter(User.id.in_(set(peers.values()) or [-1]))}
+    tasks = dict(db.query(Task.id, Task.title).filter(Task.id.in_({c.task_id for c in rows if c.task_id} or [-1])))
+    out = {}
+    for c in rows:
+        if c.kind == "direct":
+            out[c.id] = names.get(peers[c.id], "对方")
+        elif c.task_id:
+            out[c.id] = f"任务：{tasks.get(c.task_id, c.task_id)}"
+        else:
+            out[c.id] = c.name or "群聊"
+    return out
+
+
 @router.get("/conversations")
 def my_conversations(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """IM-010 会话列表附未读数与最后一条消息预览（聊天列表标配）。"""
@@ -70,11 +93,13 @@ def my_conversations(user: User = Depends(get_current_user), db: Session = Depen
     last_ids = (select(func.max(Message.id)).where(Message.conversation_id.in_(ids))
                 .group_by(Message.conversation_id))
     lasts = {m.conversation_id: m for m in db.query(Message).filter(Message.id.in_(last_ids))}
+    titles = _conv_titles(db, rows, user.id)
     out = []
     for c in rows:
         last = lasts.get(c.id)
         out.append({
             **_dump_conv(c),
+            "title": titles[c.id],
             "unread_count": int(unread.get(c.id, 0)),
             "last_message": None if not last else {
                 "id": last.id, "sender_id": last.sender_id, "kind": last.kind,

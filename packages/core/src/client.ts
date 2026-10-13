@@ -588,6 +588,8 @@ export class PlatformClient {
   // ---- im / notifications / support / dispute ----
   conversations() {
     return this.request<Array<Conversation & {
+      /** IM-060 在和谁聊：私聊是对方昵称、任务会话是任务标题、群是群名 */
+      title: string;
       unread_count: number;
       last_message: { id: number; sender_id: number; kind: string; content: string; created_at: string } | null;
     }>>('GET', '/conversations');
