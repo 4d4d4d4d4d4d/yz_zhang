@@ -16,8 +16,24 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 request_id_var: ContextVar[str] = ContextVar("request_id", default="")
 
-# DEP-040 敏感串脱敏：手机号 / 18 位证件号 / 长数字（卡号）
+# DEP-040 / SEC-065 敏感串脱敏。
+#
+# 只认三种数字（手机号 / 证件号 / 卡号）的那一版漏掉了凭据：本平台的登录 token、
+# `Authorization: Bearer …`、表单里的 `password=` / `sms_code=`、邮箱，
+# 以及 SQLAlchemy 异常里原样带着的 `[parameters: (...)]`（注册撞唯一约束时那里面就是手机号与密码哈希）。
+_SECRET_KEYS = r"password|passwd|pwd|new_password|old_password|token|access_token|refresh_token|secret|" \
+               r"api_key|apikey|sms_code|verify_code|captcha|id_number|authorization|signature"
 _PATTERNS = [
+    # SQL 绑定参数整块去掉：引擎已设 hide_parameters，这一条是第二道
+    (re.compile(r"\[parameters: .*?\](?=\s|$)", re.S), "[parameters: redacted]"),
+    # 本平台的 token（base64 载荷 . 64 位 HMAC）与任何 Bearer 凭据
+    (re.compile(r"[A-Za-z0-9_\-]{16,}={0,2}\.[0-9a-f]{64}"), "[token]"),
+    (re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=\-]+"), "Bearer [redacted]"),
+    # key=value / "key": "value" / 'key': 'value' 形式的凭据
+    (re.compile(rf"(?i)(\b(?:{_SECRET_KEYS})\b\s*[=:]\s*)([\"']?)[^\s,&;\"'}}]+\2"), r"\1\2[redacted]\2"),
+    (re.compile(rf"(?i)([\"'](?:{_SECRET_KEYS})[\"']\s*:\s*)([\"'])[^\"']*\2"), r"\1\2[redacted]\2"),
+    # 邮箱：留首字母与域名，够排障用，不够认人
+    (re.compile(r"\b([A-Za-z0-9])[A-Za-z0-9._%+\-]*@([A-Za-z0-9.\-]+\.[A-Za-z]{2,})\b"), r"\1***@\2"),
     (re.compile(r"(?<!\d)(1[3-9]\d)\d{4}(\d{4})(?!\d)"), r"\1****\2"),      # 手机号
     (re.compile(r"(?<!\d)(\d{6})\d{8}(\d{3}[\dXx])(?!\d)"), r"\1********\2"),  # 身份证
     (re.compile(r"(?<!\d)(\d{4})\d{8,11}(\d{4})(?!\d)"), r"\1********\2"),  # 银行卡
@@ -30,27 +46,72 @@ def redact(text: str) -> str:
     return text
 
 
+_EXTRA_KEYS = ("path", "method", "status", "duration_ms", "user_id")
+
+
 class JsonFormatter(logging.Formatter):
+    """一行一个 JSON，全部字段过脱敏。
+
+    SEC-065：异常堆栈此前被**整个丢掉**（格式化器只输出 message）——生产出 500 时
+    日志里只有一句「request」，查不了；而直接补回堆栈又会把异常文本里的个人信息带出来。
+    所以堆栈补回来，并且和 message 走同一道脱敏。脱敏本身出错时**丢内容、不丢脱敏**。
+    """
+
     def format(self, record: logging.LogRecord) -> str:
-        payload = {
-            "ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(record.created)),
-            "level": record.levelname,
-            "logger": record.name,
-            "msg": redact(record.getMessage()),
-            "request_id": request_id_var.get(""),
-        }
-        for key in ("path", "method", "status", "duration_ms", "user_id"):
-            if hasattr(record, key):
-                payload[key] = getattr(record, key)
-        return json.dumps(payload, ensure_ascii=False)
+        try:
+            payload = {
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(record.created)),
+                "level": record.levelname,
+                "logger": record.name,
+                "msg": redact(record.getMessage()),
+                "request_id": request_id_var.get(""),
+            }
+            for key in _EXTRA_KEYS:
+                if hasattr(record, key):
+                    v = getattr(record, key)
+                    payload[key] = redact(v) if isinstance(v, str) else v
+            if record.exc_info:
+                payload["exc"] = redact(self.formatException(record.exc_info))
+            return json.dumps(payload, ensure_ascii=False)
+        except Exception:  # noqa: BLE001 - 脱敏失败时宁可丢这一条的内容
+            return json.dumps({"level": getattr(record, "levelname", "ERROR"),
+                               "logger": getattr(record, "name", ""),
+                               "msg": "[log redaction failed; content dropped]"})
+
+
+class _DropServerDuplicate(logging.Filter):
+    """uvicorn 对同一个未处理异常再记一遍（不带 request_id）；中间件已经记过，这条去掉。"""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not record.getMessage().startswith("Exception in ASGI application")
 
 
 def setup_logging(level: str = "INFO") -> None:
+    """全进程只有一个出口：stdout 上的 JSON 行，经过脱敏。
+
+    SEC-065：uvicorn 自带一套日志配置，它的两类日志此前**绕开了这里**——
+    - `uvicorn.error`（启动信息与**未处理异常的堆栈**）：纯文本、不脱敏；
+      一次撞唯一约束的 500 会把 SQL 参数（手机号、密码哈希）原样打到 stderr；
+    - `uvicorn.access`：带**查询串**与客户端 IP，`/search?q=…` 的原始搜索词每条都进日志——
+      而 V127 刚定下搜索词是个人信息（不存身份、k-匿名）。
+    前者改为汇入这里；后者关掉（访问日志由 ObservabilityMiddleware 记，只记路由模板、不记查询串）。
+    """
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JsonFormatter())
     root = logging.getLogger()
     root.handlers = [handler]
     root.setLevel(level)
+    for name in ("uvicorn", "uvicorn.error"):
+        lg = logging.getLogger(name)
+        lg.handlers = []
+        lg.propagate = True
+    err = logging.getLogger("uvicorn.error")
+    if not any(isinstance(f, _DropServerDuplicate) for f in err.filters):
+        err.addFilter(_DropServerDuplicate())
+    access = logging.getLogger("uvicorn.access")
+    access.handlers = []
+    access.propagate = False
+    access.disabled = True
 
 
 # ── DEP-042 指标：进程内计数（多副本由 Prometheus 按实例聚合）──────────
@@ -62,10 +123,18 @@ _BUCKETS = (0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0)
 _req_buckets: dict[float, int] = defaultdict(int)
 
 
+UNMATCHED = "<unmatched>"
+
+
 def _route_of(request) -> str:
-    """用路由模板而非真实路径，避免 /tasks/123 把指标基数打爆。"""
+    """用路由模板而非真实路径，避免 /tasks/123 把指标基数打爆。
+
+    SEC-065：没匹配上任何路由的请求（404、扫描器）此前回落到**原始路径**——
+    任何人随便请求 `/api/v1/<随机串>` 就能让指标的标签数无限增长（进程内存跟着涨），
+    原始路径还会把人家塞进 URL 的东西原样写进日志。没匹配上的统一记成一个标签。
+    """
     route = request.scope.get("route")
-    return getattr(route, "path", request.url.path)
+    return getattr(route, "path", None) or UNMATCHED
 
 
 class ObservabilityMiddleware(BaseHTTPMiddleware):
@@ -81,6 +150,12 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
             status = response.status_code
             response.headers["X-Request-Id"] = rid
             return response
+        except Exception:
+            # 未处理异常在这里记一次：带 request_id、过脱敏、**带堆栈**。
+            # uvicorn 随后那条不带 request_id 的重复记录由 _DropServerDuplicate 去掉
+            logging.getLogger("app.error").exception(
+                "unhandled exception", extra={"path": _route_of(request), "method": request.method})
+            raise
         finally:
             elapsed = time.perf_counter() - started
             route = _route_of(request)

@@ -40,7 +40,7 @@ def _make_engine(url: str):
         from sqlalchemy.pool import NullPool
 
         eng = create_engine(url, connect_args={"check_same_thread": False},
-                            poolclass=NullPool)
+                            poolclass=NullPool, hide_parameters=True)
 
         @event.listens_for(eng, "connect")
         def _sqlite_pragmas(dbapi_conn, _record):  # pragma: no cover - 驱动回调
@@ -54,6 +54,9 @@ def _make_engine(url: str):
         return eng
     return create_engine(
         url,
+        # SEC-065 SQL 异常默认带着绑定参数（`[parameters: ('138…', 'pbkdf2…')]`），
+        # 而异常会进日志——撞唯一约束的那一次，日志里就是手机号与密码哈希
+        hide_parameters=True,
         pool_size=settings.DB_POOL_SIZE,
         max_overflow=settings.DB_MAX_OVERFLOW,
         pool_recycle=settings.DB_POOL_RECYCLE,

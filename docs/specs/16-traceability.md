@@ -1,8 +1,8 @@
 # 16 · Spec → 实现 → 测试 追溯矩阵
 
-> 2026-10-13：V136 手机上找合作者；V135 经验变成能被调用的单元与工具；V134 经验按子类生长；V133 任务拆解进 App；V132 任务拆解变成逐层展开、说清谁能闭环的树；V131 写操作在响应发出之前提交（FastAPI yield 依赖的作用域）；V130 幂等键真的护住钱（并发同键、过期、两端发键；Postgres 上实测）；V129 前端测试计数与结构计数进闸门（上线手册的 job 数是错的）；V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
+> 2026-10-13：V137 日志不是第二份个人信息库；V136 手机上找合作者；V135 经验变成能被调用的单元与工具；V134 经验按子类生长；V133 任务拆解进 App；V132 任务拆解变成逐层展开、说清谁能闭环的树；V131 写操作在响应发出之前提交（FastAPI yield 依赖的作用域）；V130 幂等键真的护住钱（并发同键、过期、两端发键；Postgres 上实测）；V129 前端测试计数与结构计数进闸门（上线手册的 job 数是错的）；V128 关注列表与内容流关注状态（关注关系按隐私过滤）；V127 搜索接上两端（热词 k-匿名、搜人看隐私）。
 > 2026-10-09：V119 法定权利入口进 App；V118 单聊并发分叉修复；V117 关注幂等化并接到空间；V115/V116 个人空间进入原生 App；合并 V113/V114 与个体空间增量。历史批次完成不等于商用放行。
-> 后端 1455 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
+> 后端 1470 tests；最新分端测试与部署结果见 CHANGELOG-2026-10-07.md 和实现核对表；
 > **三条**闭环自检通过：`scripts/smoke.py`（真实 HTTP 主链路）、
 > `scripts/sandbox_check.py`（存管合规态 28 项）、`scripts/e2e_web.py`
 > （真 Chromium × 构建产物 × 真服务端，18 项）。
@@ -15,6 +15,18 @@
 > **矩阵缺口（如实记）**：V66~V71 只更新了计数与 `docs/DELIVERY.md` 的批次表，
 > 没有在这里补分批小节。补六段追溯本身价值不大（DELIVERY 里逐批写了），
 > 但缺口要记着，别装作矩阵是完整的。
+
+## 已实现（V137 批次：日志不是第二份个人信息库）
+
+> 模块 spec：[112-logs-are-not-a-second-pii-store.md](112-logs-are-not-a-second-pii-store.md)；复核总纲见 [111 号](111-audit-industry-and-remaining-design.md)
+
+| Spec 功能点 | 实现 | 测试 |
+|---|---|---|
+| **一个出口** | uvicorn 日志汇入 JSON 处理器、它的访问日志关掉 | `test_log_hygiene::test_every_line_the_production_command_writes_is_structured`（真进程） |
+| **不写** | 引擎 `hide_parameters`；访问日志只记路由模板；未匹配路由一个标签 | `::test_engines_hide_sql_parameters`、`::test_access_lines_carry_the_route_not_the_query_string` |
+| **脱敏** | 凭据、邮箱、SQL 参数块；不吃错误码 | `::test_no_credential_or_personal_value_reaches_the_log`、`::test_redaction_*` |
+| **堆栈** | 补回并过脱敏；未处理异常记一次带 request_id | `::test_an_unhandled_500_keeps_its_traceback_but_not_the_sql_parameters` |
+| **兜底** | 脱敏失败丢内容 | `::test_formatter_fails_closed` |
 
 ## 已实现（V136 批次：手机上找合作者）
 
