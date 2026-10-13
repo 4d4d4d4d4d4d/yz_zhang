@@ -196,6 +196,7 @@ def test_accdel022_027_dispositions_are_actually_applied(client):
     assert usr.id_digest and usr.id_masked         # 法定身份资料，保留
     assert (usr.bio, usr.city, usr.skills, usr.interests) == ("", "", [], [])
     assert usr.password_hash == "" and usr.accepting_orders is False
+    assert usr.weekly_slots == [] and usr.limited_capacity is False   # SPACE-023 作息也是个人信息
     db.close()
 
 

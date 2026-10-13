@@ -61,6 +61,8 @@ USER_DISPOSITION: dict[str, Disposition] = {
     "service_rate_cents": E,
     "available_times": E,
     "accepting_orders": E,      # → False，别再进推荐池
+    "weekly_slots": E,          # SPACE-023 可用时段：作息规律也是个人信息
+    "limited_capacity": E,
     "is_verified": R,           # 「这个账户当年通过了实名」属于身份资料
     "real_name": M,             # ACCDEL-022 → 张*（清空既不满足留存，也没多买到隐私）
     "id_digest": R,             # 法定身份资料 + 一人一号防绕过；本身不可逆
@@ -162,6 +164,8 @@ def erase_personal_data(db: Session, user: User) -> dict:
     user.service_rate_cents = 0
     user.available_times = ""
     user.accepting_orders = False
+    user.weekly_slots = []
+    user.limited_capacity = False
     user.is_admin = False
     user.referral_code = ""
     db.add(user)

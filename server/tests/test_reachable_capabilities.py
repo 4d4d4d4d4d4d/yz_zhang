@@ -73,7 +73,8 @@ MUST_BE_REACHABLE: dict[str, tuple[tuple[str, ...], str]] = {
         "服务端给了 2 分钟撤回窗口。发错人、手滑把手机号发出去，"
         "没有入口就永远收不回来",
     ),
-    "proposeChange": (
+    # V144 起两端走 proposeChangeOrder（可同时改期、改范围）；proposeChange 作为兼容方法保留
+    "proposeChangeOrder": (
         ("web", "app"),
         "任务范围一变（「加了两个房间」），这是唯一能把它落地的路。"
         "没有它，双方只剩取消（按违约规则算补偿）或发起纠纷——"
