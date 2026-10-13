@@ -41,6 +41,52 @@ def _distance_score(task, user: User) -> float:
     return 1.0 - (d - 1000) / 19000
 
 
+# SPACE-023 相关性加分：叠加在可配置的四项加权之上，不改后台配置的权重
+FIT_APPLIED = 0.10       # 已经报名这一单：明确表达了意愿
+FIT_DONE_CATEGORY = 0.15  # 在这个类目做成过（平台上闭环的事实，最硬的信号）
+FIT_MENTIONS = 0.08      # 技能或个人空间里写着这个类目（自述，权重低于做成过）
+
+
+def _category_fit(db: Session, task, users: list[User]) -> dict[int, tuple[float, list[str]]]:
+    """每个候选人与这一单的相关性：一次取齐（与候选人数无关的三条查询）。"""
+    from sqlalchemy import func
+
+    from app.modules.spaces.models import PersonalSpace
+    from app.modules.task.models import Application, Task
+
+    user_ids = [u.id for u in users]
+    if not user_ids or not task.category:
+        return {}
+    applied = {a for (a,) in db.query(Application.applicant_id).filter(Application.task_id == task.id)}
+    done = dict(db.query(Task.executor_id, func.count(Task.id)).filter(
+        Task.executor_id.in_(user_ids), Task.category == task.category, Task.status == "completed",
+    ).group_by(Task.executor_id))
+    spaces = {s.user_id: s for s in db.query(PersonalSpace).filter(
+        PersonalSpace.user_id.in_(user_ids), PersonalSpace.published.is_(True))}
+    skills = {u.id: u.skills for u in users}
+    cat = task.category
+    out: dict[int, tuple[float, list[str]]] = {}
+    for uid in user_ids:
+        bonus, why = 0.0, []
+        if uid in applied:
+            bonus += FIT_APPLIED
+            why.append("已报名这一单")
+        if done.get(uid):
+            bonus += FIT_DONE_CATEGORY
+            why.append(f"做成过 {done[uid]} 单「{cat}」")
+        else:
+            sp = spaces.get(uid)
+            text = " ".join([*(skills.get(uid) or []),
+                             *([sp.headline, sp.introduction] + [i.get("title", "") + i.get("summary", "") for i in sp.items]
+                               if sp else [])])
+            if cat in text:
+                bonus += FIT_MENTIONS
+                why.append(f"擅长「{cat}」（本人技能或个人空间）")
+        if bonus:
+            out[uid] = (bonus, why)
+    return out
+
+
 def recommend(db: Session, task, limit: int = 10) -> list[dict]:
     from app.modules.account.models import Block
 
@@ -85,6 +131,7 @@ def recommend(db: Session, task, limit: int = 10) -> list[dict]:
                 CircleMember.circle_id.in_(creator_circles), CircleMember.status == "active"
             )
         }
+    fit = _category_fit(db, task, candidates)
     scored = []
     for user in candidates:
         skill = _skill_score(task.required_skills, user.skills)
@@ -102,9 +149,14 @@ def recommend(db: Session, task, limit: int = 10) -> list[dict]:
         if user.id in same_circle_users:
             total += 0.05  # CIR-010 同圈信任加成
             reasons.append("同圈成员")
-        if skill >= 0.99:
+        # SPACE-023 与这一单相关的信号（V140 演示：设计单里保洁师傅排在报了名的设计师前面）
+        bonus, why = fit.get(user.id, (0.0, []))
+        total += bonus
+        reasons.extend(why)
+        # 任务没写技能要求时 skill 是中性的 0.5——那不是「部分匹配」，不能这样写给人看
+        if task.required_skills and skill >= 0.99:
             reasons.append("技能完全匹配")
-        elif skill > 0:
+        elif task.required_skills and skill > 0:
             reasons.append("技能部分匹配")
         if credit >= 0.6:
             reasons.append(f"信用分 {user.credit_score}")
@@ -118,7 +170,7 @@ def recommend(db: Session, task, limit: int = 10) -> list[dict]:
             {
                 "user_id": user.id,
                 "nickname": user.nickname,
-                "score": round(total, 4),
+                "score": round(min(total, 1.0), 4),
                 "credit_score": user.credit_score,
                 "rating_avg": user.rating_avg,
                 "skills": user.skills,

@@ -188,6 +188,24 @@ export function PublicSpaceScreen({ client, userId, onBack, onOpenConversation }
             {WHO[space.kind]}{space.accepting_orders ? ' · 可接单' : ''}
           </Text>
           {!!space.introduction && <Text>{space.introduction}</Text>}
+          {/* SPACE-029 履约记录：在平台上做成过什么、别人怎么说 */}
+          {space.track_record && (
+            <View style={styles.card} accessibilityLabel="履约记录">
+              <Text style={styles.cardTitle}>履约记录</Text>
+              <Text style={styles.muted}>
+                {space.track_record.tasks_completed > 0
+                  ? `完成 ${space.track_record.tasks_completed} 单${space.track_record.reviews_total > 0
+                    ? ` · 平均 ${space.track_record.rating_avg.toFixed(1)} 星 · ${space.track_record.reviews_total} 条评价` : ''}`
+                  : '还没有在平台上完成过合作'}
+              </Text>
+              {space.track_record.top_tags.length > 0 && (
+                <Text style={styles.muted}>{space.track_record.top_tags.map((t) => `#${t}`).join('  ')}</Text>
+              )}
+              {space.track_record.recent_reviews.map((r, n) => (
+                <Text key={n}>{'★'.repeat(r.stars)}{'☆'.repeat(5 - r.stars)} {r.comment || r.tags.join('、')}</Text>
+              ))}
+            </View>
+          )}
           {space.items.map((it, i) => (
             <View key={`${it.title}-${i}`} style={styles.card}>
               <Text style={styles.cardTitle}>{KIND_LABEL[it.kind]} · {it.title}</Text>

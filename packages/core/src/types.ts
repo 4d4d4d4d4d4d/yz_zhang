@@ -1212,7 +1212,21 @@ export interface CommercialReadiness {
 }
 
 export interface SpaceItem { title: string; kind: 'work' | 'article' | 'video' | 'shop' | 'live' | 'service'; summary: string; url: string }
-export interface PersonalSpace { user_id: number; nickname: string; headline: string; introduction: string; theme: 'clay' | 'moss' | 'ink'; kind: 'person' | 'agent' | 'organization'; items: SpaceItem[]; items_count: number; accepting_orders: boolean }
+export interface SpaceReview {
+  stars: number;
+  tags: string[];
+  comment: string;
+  created_at: string;
+}
+/** SPACE-029 履约记录：完成单数、评分、评价（复用双盲揭晓规则，不带评价人） */
+export interface SpaceTrackRecord {
+  tasks_completed: number;
+  rating_avg: number;
+  reviews_total: number;
+  top_tags: string[];
+  recent_reviews: SpaceReview[];
+}
+export interface PersonalSpace { user_id: number; nickname: string; headline: string; introduction: string; theme: 'clay' | 'moss' | 'ink'; kind: 'person' | 'agent' | 'organization'; items: SpaceItem[]; items_count: number; accepting_orders: boolean; track_record?: SpaceTrackRecord }
 export interface OwnSpace extends PersonalSpace { revision: number; published: boolean; profile_public: boolean }
 export interface SpaceSummary extends Omit<PersonalSpace, 'introduction' | 'items'> { preview: SpaceItem[] }
 

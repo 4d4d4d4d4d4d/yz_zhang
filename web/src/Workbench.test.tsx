@@ -143,3 +143,41 @@ describe('IM-060 消息列表写出在和谁聊', () => {
     expect(screen.queryByText(/私聊 #2/)).toBeNull();
   });
 });
+
+describe('TASK-090 发布页不替人选类目与城市', () => {
+  it('没带参数时类目与城市都是「请选择」；没选就提交会说清楚，不发请求', async () => {
+    const calls: Array<{ method: string; path: string; body?: unknown }> = [];
+    open('/publish', { '/users/me': ME, '/categories': [{ name: '保洁', required_cert: '' }, { name: '设计', required_cert: '' }],
+      '/cities': [{ id: 1, name: '上海' }, { id: 2, name: '杭州' }] }, calls);
+    const category = await screen.findByDisplayValue('请选择类目');
+    expect((category as HTMLSelectElement).value).toBe('');
+    fireEvent.change(screen.getByLabelText(/^标题/), { target: { value: '咖啡店品牌升级' } });
+    fireEvent.submit(category.closest('form')!);
+    await waitFor(() => expect(document.querySelector('.error')?.textContent).toBe('请选择类目'));
+    expect(calls.some((c) => c.method === 'POST' && c.path === '/tasks')).toBe(false);
+  });
+
+  it('资料里填了开通城市的，默认用它；从工作台带着标题过来的照用', async () => {
+    open('/publish?title=%E6%95%B4%E7%90%86%E5%8F%91%E7%A5%A8&category=%E8%AE%BE%E8%AE%A1', {
+      '/users/me': { ...ME, city: '杭州' }, '/categories': [{ name: '保洁', required_cert: '' }, { name: '设计', required_cert: '' }],
+      '/cities': [{ id: 1, name: '上海' }, { id: 2, name: '杭州' }] });
+    expect(await screen.findByDisplayValue('整理发票')).toBeTruthy();
+    expect(await screen.findByDisplayValue('杭州')).toBeTruthy();
+    expect(screen.getByDisplayValue('设计')).toBeTruthy();
+  });
+});
+
+describe('SPACE-029 个人空间显示履约记录', () => {
+  it('完成单数、平均星级、常见标签与最近评价都在；没有记录时如实说', async () => {
+    const space = { user_id: 5, nickname: '周师傅', headline: '保洁八年', introduction: '', theme: 'clay', kind: 'person',
+      items: [], items_count: 0, accepting_orders: true,
+      track_record: { tasks_completed: 3, rating_avg: 4.7, reviews_total: 2, top_tags: ['细致', '准时'],
+        recent_reviews: [{ stars: 5, tags: ['细致'], comment: '厨房很干净', created_at: '2026-10-12T00:00:00Z' }] } };
+    open('/people/5', { '/users/me': ME, '/spaces/5': space, '/users/5/follow-stats': { followers: 0, following: 0, viewer_following: false } });
+    const section = await screen.findByLabelText('履约记录');
+    expect(section.textContent).toContain('完成 3 单');
+    expect(section.textContent).toContain('4.7');
+    expect(section.textContent).toContain('#细致');
+    expect(section.textContent).toContain('厨房很干净');
+  });
+});

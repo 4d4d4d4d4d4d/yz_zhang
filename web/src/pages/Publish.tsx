@@ -6,7 +6,7 @@ import { useApp } from '../store';
 type Feasibility = { level: string; message: string } | null;
 
 export default function Publish() {
-  const { client } = useApp();
+  const { client, me } = useApp();
   const nav = useNavigate();
   // LAW-051 别处把人送到这里时会带上类目（问答答不了 → 「发一单法律咨询」）。
   // 不读这个参数的话，那个补救入口就是**假的**：它看起来把人送到了发布页，
@@ -14,9 +14,11 @@ export default function Publish() {
   const [params] = useSearchParams();
   const [form, setForm] = useState({
     // PWB-008 从个人工作台「找人一起做」过来时带着标题和说明
-    title: params.get('title') || '', description: params.get('description') || '', category: params.get('category') || '保洁', budget_yuan: '200',
+    title: params.get('title') || '', description: params.get('description') || '', // TASK-090 类目与城市**不替人选**：V140 真浏览器演示里，发一个「咖啡店品牌升级」项目，
+    // 默认值把它发成了「保洁 · 上海」。带着参数来的（补救入口、模板）照用参数
+    category: params.get('category') || '', budget_yuan: '200',
     task_type: 'service', pricing: 'fixed', recurrence: 'none',
-    people_needed: '1', deposit_yuan: '0', is_remote: false, city: '上海',
+    people_needed: '1', deposit_yuan: '0', is_remote: false, city: params.get('city') || '',
     lat: '31.2304', lng: '121.4737', address_hint: '', address_exact: '',
     // TZ-064 截止时间此前**网页上根本没有地方填**：服务端有校验、有到期下架 job、
     // 有临期提醒，而线上所有任务的 deadline 都是空的，那个 job 从来没有活可干。
@@ -36,8 +38,13 @@ export default function Publish() {
 
   useEffect(() => {
     void client.categories().then(setCategories).catch(() => {});
-    void client.cities().then((rows) => setCities(rows.map((c) => c.name))).catch(() => {});
-  }, [client]);
+    void client.cities().then((rows) => {
+      const names = rows.map((c) => c.name);
+      setCities(names);
+      // 资料里填了城市、且这个城市开通了，就用它——这是这个人自己说过的，不是我们猜的
+      if (me?.city && names.includes(me.city)) setForm((f) => (f.city ? f : { ...f, city: me.city }));
+    }).catch(() => {});
+  }, [client, me?.city]);
 
   // TASK-003 模板填充
   async function applyTemplate() {
@@ -69,6 +76,8 @@ export default function Publish() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    if (!form.category) { setError('请选择类目'); return; }
+    if (!form.is_remote && !form.city) { setError('线下任务请选择城市，或勾选「线上任务」'); return; }
     const isProject = form.task_type === 'project';
     try {
       const task = await client.createTask({
@@ -119,7 +128,8 @@ export default function Publish() {
           <label>描述<textarea rows={3} value={form.description} onChange={(e) => set('description', e.target.value)} /></label>
           <div className="row">
             <label className="grow">类目
-              <select value={form.category} onChange={(e) => set('category', e.target.value)}>
+              <select value={form.category} onChange={(e) => set('category', e.target.value)} required>
+                <option value="" disabled>请选择类目</option>
                 {(categories.length ? categories.map((c) => c.name) : ['保洁']).map((c) => <option key={c}>{c}</option>)}
               </select>
             </label>
@@ -203,7 +213,8 @@ export default function Publish() {
             <>
               <div className="row">
                 <label className="grow">城市（仅开通城市可发布线下任务）
-                  <select value={form.city} onChange={(e) => set('city', e.target.value)}>
+                  <select value={form.city} onChange={(e) => set('city', e.target.value)} required>
+                    <option value="" disabled>请选择城市</option>
                     {(cities.length ? cities : ['上海']).map((c) => <option key={c}>{c}</option>)}
                   </select>
                 </label>

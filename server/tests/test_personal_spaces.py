@@ -82,3 +82,32 @@ def test_space_erased_with_account_and_included_in_owner_export(client, requeste
         db.commit()
         assert db.get(PersonalSpace, requester['id']) is None
     assert client.get(f"/api/v1/spaces/{requester['id']}").status_code == 404
+
+
+def test_space_shows_track_record_with_blind_review_rule(client, requester, worker):
+    """SPACE-029 履约记录上门户（V140 演示：完成一单拿到五星，空间仍显示「慢慢生长」）。
+
+    评价复用双盲揭晓规则：只有一方评过时不出现；双方都评完才出现；不带评价人。
+    """
+    from tests.conftest import topup
+    from tests.test_client_shape_alignment import _assert_shape
+    from tests.test_task_flow import match_and_fund, publish_task
+
+    client.put('/api/v1/spaces/me', json=dict(payload(), headline='保洁八年'), headers=auth(worker))
+    empty = client.get(f"/api/v1/spaces/{worker['id']}").json()['track_record']
+    assert empty['tasks_completed'] == 0 and empty['recent_reviews'] == []
+    topup(client, requester, 50000)
+    task = publish_task(client, requester)
+    match_and_fund(client, requester, worker, task)
+    client.post(f"/api/v1/tasks/{task['id']}/deliver", headers=auth(worker))
+    client.post(f"/api/v1/tasks/{task['id']}/accept-delivery", headers=auth(requester))
+    client.post(f"/api/v1/tasks/{task['id']}/reviews", json={'stars': 5, 'tags': ['细致'], 'comment': '很干净'},
+                headers=auth(requester))
+    blind = client.get(f"/api/v1/spaces/{worker['id']}").json()['track_record']
+    assert blind['tasks_completed'] == 1 and blind['recent_reviews'] == []      # 对方还没评：盲窗内不出现
+    client.post(f"/api/v1/tasks/{task['id']}/reviews", json={'stars': 5, 'comment': '付款及时'}, headers=auth(worker))
+    rec = client.get(f"/api/v1/spaces/{worker['id']}").json()['track_record']
+    _assert_shape(rec, 'SpaceTrackRecord')
+    _assert_shape(rec['recent_reviews'][0], 'SpaceReview')
+    assert rec['reviews_total'] == 1 and rec['top_tags'] == ['细致'] and rec['recent_reviews'][0]['comment'] == '很干净'
+    assert 'reviewer_id' not in rec['recent_reviews'][0]

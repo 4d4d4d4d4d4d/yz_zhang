@@ -260,3 +260,24 @@ describe('CNT-022 关注：状态从服务端读，关注与取消是两个动�
     expect(screen.queryByText('炸了')).toBeNull();
   });
 });
+
+describe('SPACE-029 App 上的空间显示履约记录', () => {
+  it('完成单数、星级与最近评价；没有记录时如实说', async () => {
+    const client = makeClient({
+      '/spaces/9': { body: { ...PERSON, items: [], track_record: { tasks_completed: 2, rating_avg: 5, reviews_total: 1,
+        top_tags: ['准时'], recent_reviews: [{ stars: 5, tags: ['准时'], comment: '很靠谱', created_at: '2026-10-12T00:00:00Z' }] } } },
+    }, []);
+    render(<PublicSpaceScreen client={client} userId={9} onBack={() => {}} onOpenConversation={() => {}} />);
+    await waitFor(() => expect(screen.getByText('完成 2 单 · 平均 5.0 星 · 1 条评价')).toBeTruthy());
+    expect(screen.getByText('#准时')).toBeTruthy();
+    expect(screen.getByText('★★★★★ 很靠谱')).toBeTruthy();
+  });
+
+  it('还没做成过的人：说清楚，不留白', async () => {
+    const client = makeClient({
+      '/spaces/9': { body: { ...PERSON, items: [], track_record: { tasks_completed: 0, rating_avg: 0, reviews_total: 0, top_tags: [], recent_reviews: [] } } },
+    }, []);
+    render(<PublicSpaceScreen client={client} userId={9} onBack={() => {}} onOpenConversation={() => {}} />);
+    await waitFor(() => expect(screen.getByText('还没有在平台上完成过合作')).toBeTruthy());
+  });
+});

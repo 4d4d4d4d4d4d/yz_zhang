@@ -221,6 +221,9 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     page.goto(f"http://127.0.0.1:{WEB_PORT}/publish", wait_until="networkidle")
     page.fill("label:has-text('标题') input", title)
     page.fill("label:has-text('预算') input", "200")
+    # TASK-090 类目与城市不再替人默认：真按一次「发布」要先选（没选会被页面拦下）
+    page.select_option("label:has-text('类目') select", "保洁")
+    page.select_option("label:has-text('城市') select", index=1)
     # 知识产权归属：必填（V77），不选就是 400
     page.select_option("label:has-text('交付成果归谁') select", index=1)
     page.get_by_role("button", name="发布任务").click()
@@ -241,6 +244,8 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     page.goto(f"http://127.0.0.1:{WEB_PORT}/publish", wait_until="networkidle")
     page.select_option("label:has-text('类型') select", "project")
     page.fill("label:has-text('标题') input", ptitle)
+    page.select_option("label:has-text('类目') select", index=1)
+    page.check("text=线上任务")
     page.fill("label:has-text('预算') input", "3000")
     page.select_option("label:has-text('交付成果归谁') select", index=1)
     page.get_by_role("button", name="创建并让 AI 分解").click()

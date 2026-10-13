@@ -116,4 +116,25 @@ def public_space(user_id: int, response: Response, db: Session = Depends(get_db,
     row = visible(db.query(PersonalSpace, User).join(User, User.id == PersonalSpace.user_id)).filter(User.id == user_id).first()
     if not row:
         raise not_found('空间未公开或已收起')
-    return dump(*row)
+    return {**dump(*row), 'track_record': track_record(db, row[1])}
+
+
+def track_record(db: Session, user: User) -> dict:
+    """SPACE-029 履约记录上门户：在平台上做成过什么、别人怎么评价。
+
+    V140 真浏览器演示：执行方完成一单、拿到五星，他的空间仍显示「这个空间正在慢慢生长」——
+    门户上看不到最能说明一个人的东西。评价**复用 `/users/{id}/reviews` 的双盲揭晓规则**
+    （盲窗内的不出现），且不带评价人：空间是公开页，谁评的不必摊给路人。
+    """
+    from app.modules.task.router import user_reviews
+
+    reviews = user_reviews(user.id, limit=3, offset=0, db=db)
+    tags = sorted(reviews['tag_counts'].items(), key=lambda kv: (-kv[1], kv[0]))[:5]
+    return {
+        'tasks_completed': user.tasks_completed or 0,
+        'rating_avg': round(user.rating_avg or 0, 1),
+        'reviews_total': reviews['total'],
+        'top_tags': [t for t, _ in tags],
+        'recent_reviews': [{'stars': r['stars'], 'tags': r['tags'], 'comment': r['comment'], 'created_at': r['created_at']}
+                           for r in reviews['items']],
+    }

@@ -1,4 +1,4 @@
-import { apiErrorText, type FollowListItem, type PersonalSpace, type OwnSpace, type SpaceItem, type SpaceSummary } from '@platform/core';
+import { apiErrorText, formatDate, type FollowListItem, type PersonalSpace, type OwnSpace, type SpaceTrackRecord, type SpaceItem, type SpaceSummary } from '@platform/core';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApp } from '../store';
@@ -73,8 +73,20 @@ export function PublicSpace() {
   return <main className={`page personal-space ${space?.theme || 'clay'}`}><Link className="quiet-link" to="/">← 发现</Link>{error && <p role="alert" className="error">{error}</p>}{!space && !error && <p role="status">正在打开空间…</p>}{space && <>
     <header className="personal-intro"><div><span className="overline">{space.kind === 'person' ? 'INDEPENDENT / 独立个体' : space.kind === 'agent' ? 'AGENT / 智能体' : 'ORGANIZATION / 组织'}</span><h1>{space.nickname}</h1><p className="personal-headline">{space.headline}</p><div className="personal-actions">{me?.id === space.user_id ? <Link className="solid-link" to="/space/edit">编辑我的空间 ↗</Link> : <><button disabled={busy} onClick={() => void contact()}>聊聊一个想法 ↗</button><button className="ghost" disabled={busy} onClick={() => void toggleFollow()}>{stats?.viewer_following ? '已关注' : '关注'}</button></>}{stats && <Link className="muted" to={`/people/${space.user_id}/follows?tab=followers`}>{stats.followers} 人关注</Link>}<span className="muted">{space.accepting_orders ? '愿意认识新的合作伙伴' : '先认识，慢慢聊'}</span></div></div><WindowArt theme={space.theme} /></header>
     {space.introduction && <section className="personal-about"><span className="overline">ABOUT / 关于我</span><p>{space.introduction}</p></section>}
+    {space.track_record && <TrackRecord record={space.track_record} />}
     <div className="discovery-heading"><h2>我的世界</h2><span className="muted">作品、日常与正在发生的事</span></div><div className="portfolio-grid">{space.items.map((item, index) => <Reveal key={index} delayMs={Math.min(index, 5) * 40}><article className={`portfolio-piece piece-${index % 3}`}><span className="overline">{LABELS[item.kind]} / {String(index + 1).padStart(2, '0')}</span><div className="piece-symbol" aria-hidden="true">{['↗', '◎', '✳'][index % 3]}</div><h3>{item.title}</h3><p>{item.summary}</p>{item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="quiet-link">{item.kind === 'shop' ? '去逛逛' : item.kind === 'live' ? '前往直播平台' : '打开内容'} ↗ <small>外部平台</small></a>}</article></Reveal>)}</div>{!space.items.length && <p className="space-empty">这个空间正在慢慢生长。</p>}
   </>}</main>;
+}
+
+/** SPACE-029 履约记录：在平台上做成过什么、别人怎么说。没有记录时如实说，不留白也不编。 */
+function TrackRecord({ record }: { record: SpaceTrackRecord }) {
+  return <section className="personal-about track-record" aria-label="履约记录"><span className="overline">TRACK RECORD / 履约记录</span>
+    {record.tasks_completed > 0
+      ? <p>在平台上完成 <strong>{record.tasks_completed}</strong> 单{record.reviews_total > 0 ? <> · 平均 <strong>{record.rating_avg.toFixed(1)}</strong> 星 · {record.reviews_total} 条评价</> : ''}</p>
+      : <p className="muted">还没有在平台上完成过合作。</p>}
+    {record.top_tags.length > 0 && <p className="muted">{record.top_tags.map(t => `#${t}`).join('  ')}</p>}
+    {record.recent_reviews.map((r, n) => <blockquote key={n}><span aria-label={`${r.stars} 星`}>{'★'.repeat(r.stars)}{'☆'.repeat(5 - r.stars)}</span> {r.comment || r.tags.join('、')}<small className="muted"> · {formatDate(r.created_at)}</small></blockquote>)}
+  </section>;
 }
 
 export function EditSpace() {
