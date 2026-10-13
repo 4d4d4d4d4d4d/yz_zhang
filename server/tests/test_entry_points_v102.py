@@ -120,7 +120,7 @@ def test_ntf065_prefs_say_which_notices_cannot_be_switched_off(client):
     r = client.get("/api/v1/notifications/prefs", headers=auth(u))
     assert r.status_code == 200, r.text
     body = r.json()
-    assert set(body["prefs"]) == {"task", "system", "interaction"}
+    assert set(body["prefs"]) == {"task", "system", "interaction", "assistant"}   # PWB-007 起多一类：助手
     assert "funds" in body["always_on_categories"]
     # 服务端的必达表逐条返回，而且带上「为什么」
     titles = {(a["category"], a["title"]) for a in body["always_on"]}

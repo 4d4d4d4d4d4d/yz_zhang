@@ -230,7 +230,7 @@ function Board({ version, open, onChanged }: { version: number; open: (id: numbe
   return (
     <>
       {error && <p className="error">{error}</p>}
-      <div className="opportunity-grid" aria-label="看板">
+      <div className="wb-board" aria-label="看板">
         {STATUS.filter(([s]) => s !== 'dropped').map(([s, label]) => (
           <div className="card" key={s} data-column={s}>
             <h3>{label}（{items.filter((i) => i.status === s).length}）</h3>

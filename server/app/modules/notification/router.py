@@ -71,7 +71,7 @@ def get_prefs(user: User = Depends(get_current_user), db: Session = Depends(get_
     from .service import MUST_REACH
 
     rows = db.query(NotificationPref).filter(NotificationPref.user_id == user.id).all()
-    prefs = {"task": True, "system": True, "interaction": True}
+    prefs = {"task": True, "system": True, "interaction": True, "assistant": True}
     for r in rows:
         prefs[r.category] = r.enabled
     return {
@@ -95,7 +95,7 @@ def set_pref(
 
     if category == "funds":
         raise bad_request("资金类通知为必达通知，不可关闭", "funds_mandatory")
-    if category not in ("task", "system", "interaction"):
+    if category not in ("task", "system", "interaction", "assistant"):  # PWB-007 助手的例行任务与提醒可以关
         raise bad_request("非法通知分类", "invalid_category")
     row = (
         db.query(NotificationPref)

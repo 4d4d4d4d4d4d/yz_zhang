@@ -353,3 +353,17 @@ def test_every_workbench_response_matches_the_sdk_types(client, requester):
     _assert_inline_shape(client.delete(f"{API}/memories/{m['id']}", headers=h).json(), "deleteWorkbenchMemory")
     empty = client.post(f"{API}/projects", json={"name": "空的"}, headers=h).json()
     _assert_inline_shape(client.delete(f"{API}/projects/{empty['id']}", headers=h).json(), "deleteWorkbenchProject")
+
+
+def test_assistant_notifications_can_be_turned_off(client, requester):
+    """助手通知不是必达的：关掉之后例行任务照常运行、记录照常写，只是不再发通知。"""
+    h = auth(requester)
+    prefs = client.get("/api/v1/notifications/prefs", headers=h).json()["prefs"]
+    assert prefs["assistant"] is True
+    assert client.put("/api/v1/notifications/prefs?category=assistant&enabled=false", headers=h).status_code == 200
+    ro = client.post(f"{API}/routines", json={"name": "提醒", "kind": "reminder", "freq": "daily", "note": "喝水"},
+                     headers=h).json()
+    assert client.post(f"{API}/routines/{ro['id']}/run", headers=h).json()["status"] == "ok"
+    notes = client.get("/api/v1/notifications", headers=h).json()
+    notes = notes.get("items", notes) if isinstance(notes, dict) else notes
+    assert not any(n["title"] == "助手：提醒" for n in notes)

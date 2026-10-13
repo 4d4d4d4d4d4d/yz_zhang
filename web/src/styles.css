@@ -306,3 +306,29 @@ input[type=checkbox] { width:auto; accent-color:var(--brand); }
 .evidence-hash { display:block; overflow-wrap:anywhere; font-size:11px; color:var(--muted); }
 
 .hero-content h2 { white-space:pre-line; }
+
+/* PWB 个人工作台（116 号 spec）：只作用于工作台页，不动全站样式 */
+.workbench .row > input:not(.grow), .workbench .row > select, .workbench .row label select, .workbench .row label input { width: auto; flex: 0 1 auto; }
+.workbench .row > .grow { flex: 1 1 240px; width: auto; }
+.workbench button.text-link {
+  background: none; border: 0; box-shadow: none; padding: 0; min-height: 0; color: var(--text);
+  font-weight: 600; font-size: 15px; text-align: left; cursor: pointer;
+}
+.workbench button.text-link:hover { background: none; color: var(--brand); text-decoration: underline; }
+.workbench .list { padding-left: 0; list-style: none; }
+.workbench .task-item {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 4px 12px; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--line);
+}
+.workbench .task-item:last-child { border-bottom: 0; }
+.workbench .task-item > div:last-child { grid-column: 1 / -1; }
+.workbench .wb-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: start; }
+.workbench .wb-board li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.workbench .wb-board button.ghost, .workbench .task-item button.ghost { padding: 2px 8px; min-height: 0; font-size: 12px; }
+.workbench [role="tablist"] button { min-width: 72px; }
+@media (max-width: 640px) {
+  .workbench .task-item { grid-template-columns: minmax(0, 1fr) auto; }
+}
+.workbench .list label { display: flex; flex-direction: row; align-items: center; gap: 8px; font-size: 15px; color: var(--text); }
+.workbench input[type="checkbox"] { width: 18px; height: 18px; flex: 0 0 auto; margin: 0; }
+.workbench [role="dialog"] h4 { margin: 16px 0 6px; }

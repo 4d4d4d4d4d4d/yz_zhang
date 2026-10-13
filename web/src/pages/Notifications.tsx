@@ -2,6 +2,11 @@ import { apiErrorText, formatDateTime, type Notice, type NotificationPrefsView }
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 
+// 类目是接口里的键，界面上要说人话；没见过的新类目照原样显示，不吞掉
+const PREF_LABEL: Record<string, string> = {
+  task: '任务进展', system: '系统通知', interaction: '互动（评论、关注、私信）', assistant: '个人助手（例行任务与提醒）',
+};
+
 export default function Notifications() {
   const { client } = useApp();
   const [notes, setNotes] = useState<Notice[]>([]);
@@ -83,7 +88,7 @@ function NotificationSwitches() {
           <label key={category} className="row" data-testid={`pref-${category}`}>
             <input type="checkbox" checked={enabled}
                    onChange={(e) => void toggle(category, e.target.checked)} />
-            <span className="grow">{category}</span>
+            <span className="grow">{PREF_LABEL[category] ?? category}</span>
           </label>
         ))}
       </div>
