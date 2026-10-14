@@ -1,6 +1,7 @@
 import PayoutGovernance from './PayoutGovernance';
 import OrganizationRecords from './OrganizationRecords';
 import MachineMandate from './MachineMandate';
+import { DistributionHistoryBlock, InviteMemberBlock, VentureInvitesBlock } from './ventureInvites';
 // APP-069 三条线的 App 界面：团队 / 合作体 / 开发者（67 号 spec）。
 //
 // V84 把这三页做在了网页上，App 至今一个都没有。V92 给团队审批补了通知，
@@ -269,6 +270,7 @@ function VenturesScreen({ client }: { client: PlatformClient }) {
         没有现金的早期项目：贡献经确认后折算成份额，项目有收入时按份额分配。
       </Text>
       {!!error && <Text style={s.error}>{error}</Text>}
+      <VentureInvitesBlock client={client} onJoined={() => void load()} />
       {mine.length === 0 && <Text style={s.muted}>你还没有参与任何合作体。</Text>}
       {mine.map((v) => (
         <TouchableOpacity key={v.id} style={s.card} onPress={() => setOpen(v.id)}>
@@ -307,6 +309,8 @@ function VentureDetailBlock({ client, ventureId, act }: {
     <View style={{ gap: 10, marginTop: 8 }}>
       <OrganizationRecords client={client} ventureId={ventureId} />
       <PayoutGovernance client={client} ventureId={ventureId} />
+      <DistributionHistoryBlock client={client} ventureId={ventureId} />
+      <InviteMemberBlock client={client} ventureId={ventureId} />
       <Text style={s.cardTitle}>项目贡献份额</Text>
       {/* COOP-021 份额口径要写出来：不说清楚按什么折算，数字没有意义 */}
       {!!basis && <Text style={s.muted}>{basis}</Text>}

@@ -29,6 +29,17 @@ export interface Me {
   limited_capacity: boolean;
 }
 
+/** COOP-060 我收到的合作体邀请（142 号 spec）：接受前要读并签当前版本的风险揭示书 */
+export interface VentureInvitationView {
+  venture_id: number;
+  name: string;
+  purpose: string;
+  inviter_id: number;
+  inviter_nickname: string;
+  expires_at: string;
+  risk_disclosure_version: string;
+}
+
 /** SEC-061b 管理员角色（141 号 spec）。拦在服务端；界面只按它决定显示哪些板块 */
 export type AdminRoleKey = 'super' | 'support' | 'arbiter' | 'compliance' | 'finance' | 'ops';
 export interface AdminRoleDef {

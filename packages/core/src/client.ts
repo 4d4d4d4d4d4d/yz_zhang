@@ -92,6 +92,7 @@ import type {
   AdminAuditRow,
   PlatformFinanceView,
   AdminList,
+  VentureInvitationView,
   AdminRoleCatalog,
   AdminRoleKey,
   AdminRow,
@@ -1731,6 +1732,13 @@ export class PlatformClient {
   }
   votePayout(ventureId: number, proposalId: number, approve: boolean) {
     return this.request<PayoutProposalView>('POST', `/ventures/${ventureId}/payout-proposals/${proposalId}/vote`, {approve});
+  }
+  /** COOP-060 我收到的、还没过期的合作体邀请（142 号 spec） */
+  myVentureInvitations() {
+    return this.request<VentureInvitationView[]>('GET', '/ventures/invitations');
+  }
+  declineVentureInvitation(ventureId: number) {
+    return this.request<{ venture_id: number; status: string }>('POST', `/ventures/${ventureId}/invitations/decline`);
   }
   ventureDistributions(ventureId: number) {
     return this.request<Array<{ id: number; total_cents: number; memo: string; share_snapshot: ShareRow[]; created_at: string }>>(

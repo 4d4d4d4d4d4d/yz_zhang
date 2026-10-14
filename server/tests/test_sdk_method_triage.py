@@ -93,9 +93,8 @@ SCHEDULED: dict[str, str] = {
     "publishTask": "TASK-060", "editTask": "TASK-060",
     "trip": "TASK-060",
     # 编排循环（17 号 spec）：mission 的用户侧界面 V154 已接上两端（131 号）；母任务结项报告 finalReport 由 V161 接上（132 号）
-    # 团队与合作体的成员管理（53/50 号 spec）；团队成员管理 TEAM-065 由 V156 接上两端（136 号）
-    "inviteToVenture": "COOP-060", "joinVenture": "COOP-060",
-    "ventureDistributions": "COOP-060",
+    # 团队与合作体的成员管理（53/50 号 spec）；团队成员管理 TEAM-065 由 V156 接上两端（136 号）；
+    # 合作体邀请、加入、分配记录 COOP-060 由 V170 接上两端（142 号）
     # 账号与推送的长尾
     "changePhone": "ACC-042", "oauthLogin": "ACC-042", "oauthProviders": "ACC-042",
     "unregisterDevice": "ACC-042",

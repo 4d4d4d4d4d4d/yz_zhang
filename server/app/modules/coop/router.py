@@ -118,6 +118,40 @@ def my_ventures(user: User = Depends(get_current_user), db: Session = Depends(ge
     return out
 
 
+# COOP-060 被邀请的人要能看到自己收到的邀请（142 号 spec）：此前只有一条通知文字，
+# 点进去没有任何地方能接受——邀请制的另一半没有入口。放在 /{venture_id} 之前：否则会被当成编号解析
+@router.get("/invitations")
+def my_invitations(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    from app.modules.account.models import utcnow
+
+    from .models import VentureInvitation
+
+    rows = (db.query(VentureInvitation).filter(VentureInvitation.invitee_id == user.id,
+                                               VentureInvitation.status == "pending",
+                                               VentureInvitation.expires_at > utcnow())
+            .order_by(VentureInvitation.id.desc()).limit(50).all())
+    ventures = {v.user_id: v for v in db.query(Venture).filter(Venture.user_id.in_([r.venture_id for r in rows] or [-1]))}
+    names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_([r.inviter_id for r in rows] or [-1]))}
+    return [{"venture_id": r.venture_id, "name": ventures[r.venture_id].name, "purpose": ventures[r.venture_id].purpose,
+             "inviter_id": r.inviter_id, "inviter_nickname": names.get(r.inviter_id, ""),
+             "expires_at": iso(r.expires_at), "risk_disclosure_version": cpath.RISK_DISCLOSURE_VERSION}
+            for r in rows if r.venture_id in ventures and ventures[r.venture_id].status != "closed"]
+
+
+@router.post("/{venture_id}/invitations/decline")
+def decline_invitation(venture_id: int, user: User = Depends(get_current_user),
+                       db: Session = Depends(get_db, scope="function")):
+    """不想加入就说不：邀请人那边不会再挂着一个「待接受」。只能处理发给自己的、还没处理的邀请。"""
+    from .models import VentureInvitation
+
+    changed = (db.query(VentureInvitation)
+               .filter_by(venture_id=venture_id, invitee_id=user.id, status="pending")
+               .update({"status": "declined"}, synchronize_session=False))
+    if changed != 1:
+        raise not_found("没有发给你的待处理邀请", "invitation_not_found")
+    return {"venture_id": venture_id, "status": "declined"}
+
+
 @router.get("/{venture_id}")
 def get_venture(venture_id: int, user: User = Depends(get_current_user),
                 db: Session = Depends(get_db, scope="function")):

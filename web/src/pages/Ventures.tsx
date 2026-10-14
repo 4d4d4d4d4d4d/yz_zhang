@@ -3,7 +3,7 @@ import OrganizationRecords from '../OrganizationRecords';
 import {
   apiErrorText, fmtYuan,
   type CompliancePath, type ContributionKind, type ContributionView,
-  type RiskDisclosure, type ShareRow, type VentureDetail, type VentureView,
+  type RiskDisclosure, type ShareRow, type VentureDetail, type VentureInvitationView, type VentureView,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
@@ -55,6 +55,7 @@ export default function Ventures() {
         </div>
       </div>
 
+      <MyInvitations onJoined={() => void load()} />
       <CreateVenture onCreated={() => void load()} onError={setError} />
       {current !== null && <VentureDetailCard ventureId={current} onChanged={() => void load()} />}
     </div>
@@ -187,6 +188,8 @@ function VentureDetailCard({ ventureId, onChanged }: { ventureId: number; onChan
           {fmtYuan(detail.realized_funds_cents)}。
         </p>
         <PayoutGovernance client={client} ventureId={ventureId} onChanged={load} />
+        <DistributionHistory ventureId={ventureId} />
+        <InviteMember ventureId={ventureId} />
       </div>
 
       <div className="card">
@@ -272,6 +275,92 @@ function CompliancePathCard({ path }: { path: CompliancePath }) {
       <p className="muted" data-testid="compliance-disclaimer" style={{ marginTop: 8 }}>
         {path.disclaimer}
       </p>
+    </div>
+  );
+}
+
+/** COOP-060 我收到的邀请（142 号 spec）：邀请制的另一半。接受之前整篇读风险揭示书——由被邀请的人自己签，不能代签。 */
+function MyInvitations({ onJoined }: { onJoined: () => void }) {
+  const { client } = useApp();
+  const [rows, setRows] = useState<VentureInvitationView[]>([]);
+  const [doc, setDoc] = useState<RiskDisclosure | null>(null);
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [read, setRead] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    const r = await client.myVentureInvitations().catch(() => []);
+    setRows(Array.isArray(r) ? r : []);
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void client.ventureRiskDisclosure().then(setDoc).catch(() => {}); }, [client]);
+  if (rows.length === 0 && !notice) return null;
+  async function act(fn: () => Promise<unknown>, done: string) {
+    setError(''); setNotice('');
+    try { await fn(); setNotice(done); setOpenId(null); setRead(false); await load(); onJoined(); } catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <div className="card" aria-label="我收到的邀请">
+      <h3>我收到的邀请</h3>
+      {notice && <p role="status">{notice}</p>}
+      {error && <p className="error">{error}</p>}
+      {rows.map((r) => (
+        <div className="task-item" key={r.venture_id}>
+          <div>
+            <strong>{r.name}</strong>
+            <p className="muted">{r.inviter_nickname || `#${r.inviter_id}`} 邀请你加入 · {r.purpose || '未填写目标'} · {r.expires_at.slice(0, 10)} 前有效</p>
+            {openId === r.venture_id && doc && (
+              <>
+                <RiskDisclosureBlock doc={doc} read={read} onRead={setRead} />
+                <button disabled={!read} onClick={() => void act(() => client.joinVenture(r.venture_id, r.risk_disclosure_version), `已加入「${r.name}」`)}>签署并加入</button>
+              </>
+            )}
+          </div>
+          {openId !== r.venture_id && <button onClick={() => { setOpenId(r.venture_id); setRead(false); }}>读风险揭示书后加入</button>}
+          <button className="ghost" onClick={() => void act(() => client.declineVentureInvitation(r.venture_id), `已拒绝「${r.name}」的邀请`)}>拒绝</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** COOP-060 邀请成员：按对方的用户编号。对方要自己实名、自己签风险揭示书才能加入。 */
+function InviteMember({ ventureId }: { ventureId: number }) {
+  const { client } = useApp();
+  const [uid, setUid] = useState('');
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  return (
+    <div aria-label="邀请成员">
+      <h4>邀请成员</h4>
+      <p className="muted">邀请制：对方会收到通知，7 天内有效；对方要自己读并签风险揭示书才能加入，你不能替对方签。</p>
+      <div className="row">
+        <input aria-label="被邀请人编号" type="number" placeholder="对方的用户编号" value={uid} onChange={(e) => setUid(e.target.value)} />
+        <button disabled={!Number(uid)} onClick={() => void (async () => {
+          setError(''); setNotice('');
+          try { await client.inviteToVenture(ventureId, Number(uid)); setNotice(`已邀请 #${uid}`); setUid(''); } catch (e) { setError(apiErrorText(e)); }
+        })()}>发出邀请</button>
+      </div>
+      {notice && <p role="status">{notice}</p>}
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
+/** COOP-060 分配记录：每一次分配当时的份额快照，事后核对用。 */
+function DistributionHistory({ ventureId }: { ventureId: number }) {
+  const { client } = useApp();
+  const [rows, setRows] = useState<Array<{ id: number; total_cents: number; memo: string; share_snapshot: ShareRow[]; created_at: string }>>([]);
+  useEffect(() => { void client.ventureDistributions(ventureId).then((r) => setRows(Array.isArray(r) ? r : [])).catch(() => setRows([])); }, [client, ventureId]);
+  return (
+    <div aria-label="分配记录">
+      <h4>分配记录</h4>
+      {rows.length === 0 ? <p className="muted">还没有分配过。</p> : (
+        <ul>{rows.map((d) => (
+          <li key={d.id}>{d.created_at.slice(0, 10)} · 共 {fmtYuan(d.total_cents)}{d.memo ? ` · ${d.memo}` : ''}
+            <span className="muted">（按当时份额：{d.share_snapshot.map((s) => `#${s.user_id} ${(s.share_bps / 100).toFixed(2)}%`).join('、')}）</span></li>
+        ))}</ul>
+      )}
     </div>
   );
 }

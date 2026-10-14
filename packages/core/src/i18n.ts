@@ -66,6 +66,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   opc_platform_entry_locked: '平台导入的收入金额与日期以平台流水为准，不能改；可以补备注、发票号',
   opc_limit_reached: '账目已达上限，请先导出归档后删除旧的',
   skill_alias_taken: '这个写法已经属于别的技能概念：先从那个概念里去掉，再加到这里',
+  invitation_not_found: '没有发给你的待处理邀请：可能已经接受、拒绝或过期了',
   admin_role_required: '这件事需要别的管理员角色：请超级管理员在后台「管理员与角色」里给你加上',
   admin_role_unknown: '不认识的管理员角色：可选的是超级管理员、客服、仲裁、合规、财务、运营',
   admin_last_super: '至少要留一位超级管理员：先给另一位管理员加上「超级管理员」',

@@ -200,6 +200,7 @@ api GET /api/v1/users/{user_id}/followers
 api GET /api/v1/users/{user_id}/following
 api GET /api/v1/users/{user_id}/influence
 api GET /api/v1/users/{user_id}/reviews
+api GET /api/v1/ventures/invitations
 api GET /api/v1/ventures/mine
 api GET /api/v1/ventures/risk-disclosure
 api GET /api/v1/ventures/{venture_id}
@@ -445,6 +446,7 @@ api POST /api/v1/ventures/{venture_id}/contributions
 api POST /api/v1/ventures/{venture_id}/contributions/{contribution_id}/confirm
 api POST /api/v1/ventures/{venture_id}/distributions
 api POST /api/v1/ventures/{venture_id}/invitations
+api POST /api/v1/ventures/{venture_id}/invitations/decline
 api POST /api/v1/ventures/{venture_id}/members
 api POST /api/v1/ventures/{venture_id}/organization-records
 api POST /api/v1/ventures/{venture_id}/payout-proposals
@@ -510,6 +512,7 @@ app rights
 app sandbox
 app search
 app spaces
+app ventureInvites
 app workbench
 sdk acceptAgreements
 sdk acceptApplication
@@ -632,6 +635,7 @@ sdk decideFriendRequest
 sdk decideTeamSpend
 sdk decideWithdraw
 sdk declineInvitation
+sdk declineVentureInvitation
 sdk decompositionTemplate
 sdk defineMilestones
 sdk deleteDecompositionNode
@@ -755,6 +759,7 @@ sdk myTasks
 sdk myTax
 sdk myTeams
 sdk myTickets
+sdk myVentureInvitations
 sdk myVentures
 sdk newcomerProgress
 sdk normalizeSkills
