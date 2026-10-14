@@ -60,5 +60,5 @@ class PackEvent(Base):
     pack_key: Mapped[str] = mapped_column(String(60), index=True)
     pack_id: Mapped[int] = mapped_column(Integer)
     user_id: Mapped[int] = mapped_column(Integer, index=True)
-    kind: Mapped[str] = mapped_column(String(16))      # enable / disable / ask / unanswered / helpful / unhelpful
+    kind: Mapped[str] = mapped_column(String(16))      # enable / disable / ask / unanswered / refused / helpful / unhelpful
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

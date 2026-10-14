@@ -1,7 +1,7 @@
 import {
   apiErrorText, formatDateTime, localInputToServerTime, millisUntil, serverTimeToLocalInput,
   type WbItem, type WbItemDetail, type WbLog, type WbMemory, type WbOverview, type WbProject,
-  type WbRoutine, type WbRoutineInput, type WbRoutineRun, type WbStatus, type WbStep,
+  type WbRoutine, type WbRoutineHealth, type WbRoutineInput, type WbRoutineRun, type WbRunStatus, type WbStatus, type WbStep,
   type NbMethod, type NbReference,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -377,6 +377,7 @@ function ItemPanel({ id, projects, onClose, onChanged }: { id: number; projects:
   );
 }
 
+const RUN_STATUS: Record<WbRunStatus, string> = { ok: '成功', failed: '失败', retrying: '失败，等待重试', skipped: '跳过（数据没就绪）', degraded: '降级送达' };
 const KIND: Record<string, string> = { digest: '概览（今天要做的、逾期的、平台上等我处理的）', review: '回顾（这周完成了什么）', reminder: '提醒' };
 const FREQ: Record<string, string> = { once: '一次', daily: '每天', weekly: '每周', monthly: '每月' };
 const WEEK = ['一', '二', '三', '四', '五', '六', '日'];
@@ -387,7 +388,10 @@ function Assistant() {
   const [routines, setRoutines] = useState<WbRoutine[]>([]);
   const [runs, setRuns] = useState<Record<number, WbRoutineRun[]>>({});
   const [content, setContent] = useState('');
-  const [form, setForm] = useState<WbRoutineInput>({ name: '每天早上的概览', kind: 'digest', freq: 'daily', time_of_day: '08:30', weekday: 0, monthday: 1, note: '' });
+  // REL-101 新建时默认给一份运行合同：失败重试 2 次（1 分钟、5 分钟后），重试用尽时降级交付（130 号 spec）
+  const [form, setForm] = useState<WbRoutineInput>({ name: '每天早上的概览', kind: 'digest', freq: 'daily', time_of_day: '08:30', weekday: 0, monthday: 1, note: '',
+    max_retries: 2, degrade: true, timeout_ms: 10000 });
+  const [health, setHealth] = useState<Record<number, WbRoutineHealth>>({});
   const [error, setError] = useState('');
   const [flash, setFlash] = useState('');
 
@@ -421,14 +425,22 @@ function Assistant() {
           <li key={r.id} data-routine={r.id}>
             <strong>{r.name}</strong> · {FREQ[r.freq]}{r.freq === 'weekly' ? `周${WEEK[r.weekday]}` : ''}{r.freq === 'monthly' ? `${r.monthday} 号` : ''}{r.freq !== 'once' ? ` ${r.time_of_day}` : ''} · {KIND[r.kind].split('（')[0]}
             {' · '}{r.enabled ? `下次 ${formatDateTime(r.next_run_at)}` : '已暂停'}
-            {r.last_status && <span className={r.last_status === 'failed' ? 'error' : 'muted'}> · 上次{r.last_status === 'ok' ? '成功' : '失败'}</span>}
+            {r.last_status && <span className={r.last_status === 'failed' ? 'error' : 'muted'}> · 上次{RUN_STATUS[r.last_status]}</span>}
+            <span className="muted"> · 失败重试 {r.max_retries} 次{r.degrade ? '，用尽后降级交付' : ''}</span>
             <div className="row">
               <button className="ghost" onClick={() => void act(async () => { const res = await client.runWorkbenchRoutine(r.id); setFlash(res.output); })}>现在运行一次</button>
               <button className="ghost" onClick={() => void act(() => client.updateWorkbenchRoutine(r.id, { enabled: !r.enabled }))}>{r.enabled ? '暂停' : '开启'}</button>
               <button className="ghost" onClick={() => void client.workbenchRoutineRuns(r.id).then((x) => setRuns({ ...runs, [r.id]: x }))}>运行记录</button>
+              <button className="ghost" onClick={() => void client.workbenchRoutineHealth(r.id).then((x) => setHealth({ ...health, [r.id]: x }))}>健康度</button>
               <button className="ghost" onClick={() => void act(() => client.deleteWorkbenchRoutine(r.id))}>删除</button>
             </div>
-            {runs[r.id] && <ul className="list">{runs[r.id].map((x) => <li key={x.id}><span className="muted">{formatDateTime(x.started_at)} {x.status === 'ok' ? '成功' : '失败'}</span> {x.output}</li>)}
+            {health[r.id] && (
+              <p className="muted" aria-label={`健康度：${r.name}`}>最近 {health[r.id].runs} 次：成功率 {health[r.id].success_rate === null ? '—' : `${Math.round(health[r.id].success_rate! * 100)}%`}
+                {' '}· 降级 {health[r.id].degraded} · 重试 {health[r.id].retries} · 跳过 {health[r.id].skipped}
+                {health[r.id].p50_ms !== null ? ` · 耗时中位 ${health[r.id].p50_ms} 毫秒` : ''}
+                {health[r.id].error_kinds.length ? ` · 出错：${health[r.id].error_kinds.map((k) => `${k.kind} ${k.count} 次`).join('、')}` : ''}</p>
+            )}
+            {runs[r.id] && <ul className="list">{runs[r.id].map((x) => <li key={x.id}><span className="muted">{formatDateTime(x.started_at)} {RUN_STATUS[x.status]}{x.attempt > 1 ? `（第 ${x.attempt} 次尝试）` : ''}</span> {x.output}</li>)}
               {!runs[r.id].length && <li className="muted">还没有运行过。</li>}</ul>}
           </li>
         ))}</ul>
@@ -446,6 +458,9 @@ function Assistant() {
             ? <input type="datetime-local" aria-label="运行时间" onChange={(e) => setForm({ ...form, run_at: e.target.value ? localInputToServerTime(e.target.value) : null })} />
             : <input type="time" aria-label="几点" value={form.time_of_day} onChange={(e) => setForm({ ...form, time_of_day: e.target.value })} />}
           {form.kind === 'reminder' && <input aria-label="提醒内容" placeholder="提醒我什么" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />}
+          <select aria-label="失败后重试" value={form.max_retries} onChange={(e) => setForm({ ...form, max_retries: Number(e.target.value) })}>
+            {[0, 1, 2, 3].map((n) => <option key={n} value={n}>{n ? `失败后重试 ${n} 次` : '失败不重试'}</option>)}</select>
+          <label><input type="checkbox" aria-label="重试用尽时降级交付" checked={!!form.degrade} onChange={(e) => setForm({ ...form, degrade: e.target.checked })} /> 重试用尽时降级交付</label>
           <button onClick={() => void act(() => client.createWorkbenchRoutine(form))}>添加例行任务</button>
         </div>
       </div>

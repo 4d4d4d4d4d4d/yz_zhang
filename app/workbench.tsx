@@ -5,10 +5,14 @@
 import {
   apiErrorText, formatDateTime, millisUntil,
   type PlatformClient, type WbItem, type WbItemDetail, type WbLog, type WbMemory, type WbOverview,
-  type WbRoutine, type WbStatus, type WbStep, type NbMethod, type NbReference,
+  type WbRoutine, type WbRoutineHealth, type WbRunStatus, type WbStatus, type WbStep, type NbMethod, type NbReference,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+
+// REL-101 新建的例行任务默认带运行合同：失败重试 2 次（1 分钟、5 分钟后），用尽时降级交付（130 号 spec）
+const CONTRACT = { max_retries: 2, degrade: true, timeout_ms: 10000 };
+const RUN_STATUS: Record<WbRunStatus, string> = { ok: '成功', failed: '失败', retrying: '失败，等待重试', skipped: '跳过（数据没就绪）', degraded: '降级送达' };
 
 const STATUS: [WbStatus, string][] = [['todo', '待办'], ['doing', '进行中'], ['blocked', '卡住'], ['done', '完成']];
 const SOURCE: Record<string, string> = { manual: '手填', children: '按清单', platform: '跟平台任务' };
@@ -202,6 +206,7 @@ function ItemDetail({ client, id, onBack }: { client: PlatformClient; id: number
 function Assistant({ client }: { client: PlatformClient }) {
   const [mem, setMem] = useState<WbMemory[]>([]);
   const [routines, setRoutines] = useState<WbRoutine[]>([]);
+  const [health, setHealth] = useState<Record<number, WbRoutineHealth>>({});
   const [content, setContent] = useState('');
   const [time, setTime] = useState('08:30');
   const [output, setOutput] = useState('');
@@ -231,10 +236,16 @@ function Assistant({ client }: { client: PlatformClient }) {
       <Text style={s.muted}>到点由平台运行，结果发到通知里，不用开着 App。连续失败 3 次会自动暂停。</Text>
       {routines.map((r) => (
         <View key={r.id} style={s.card}>
-          <Text>{r.name} · {r.enabled ? `下次 ${formatDateTime(r.next_run_at)}` : '已暂停'}{r.last_status === 'failed' ? ' · 上次失败' : ''}</Text>
+          <Text>{r.name} · {r.enabled ? `下次 ${formatDateTime(r.next_run_at)}` : '已暂停'}{r.last_status === 'failed' ? ' · 上次失败' : ''}
+            {r.last_status && r.last_status !== 'failed' && r.last_status !== 'ok' ? ` · 上次${RUN_STATUS[r.last_status]}` : ''}</Text>
+          <Text style={s.muted}>失败重试 {r.max_retries} 次{r.degrade ? '，用尽后降级交付' : ''}</Text>
+          {health[r.id] && (
+            <Text style={s.muted} accessibilityLabel={`健康度：${r.name}`}>最近 {health[r.id].runs} 次：成功率 {health[r.id].success_rate === null ? '—' : `${Math.round(health[r.id].success_rate! * 100)}%`} · 降级 {health[r.id].degraded} · 重试 {health[r.id].retries} · 跳过 {health[r.id].skipped}</Text>
+          )}
           <View style={s.row}>
             <TouchableOpacity onPress={() => void act(async () => setOutput((await client.runWorkbenchRoutine(r.id)).output))}><Text style={s.link}>现在运行</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => void act(() => client.updateWorkbenchRoutine(r.id, { enabled: !r.enabled }))}><Text style={s.link}>{r.enabled ? '暂停' : '开启'}</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => void client.workbenchRoutineHealth(r.id).then((x) => setHealth((h) => ({ ...h, [r.id]: x }))).catch((e) => setError(apiErrorText(e)))}><Text style={s.link}>健康度</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => void act(() => client.deleteWorkbenchRoutine(r.id))}><Text style={s.link}>删除</Text></TouchableOpacity>
           </View>
         </View>
@@ -242,9 +253,9 @@ function Assistant({ client }: { client: PlatformClient }) {
       {!!output && <Text style={s.summary}>{output}</Text>}
       <View style={s.row}>
         <TextInput style={[s.input, { width: 80 }]} placeholder="08:30" value={time} onChangeText={setTime} accessibilityLabel="几点" />
-        <Button title="每天早上的概览" onPress={() => void act(() => client.createWorkbenchRoutine({ name: '每天早上的概览', kind: 'digest', freq: 'daily', time_of_day: time }))} />
+        <Button title="每天早上的概览" onPress={() => void act(() => client.createWorkbenchRoutine({ name: '每天早上的概览', kind: 'digest', freq: 'daily', time_of_day: time, ...CONTRACT }))} />
       </View>
-      <Button title="每周五回顾" onPress={() => void act(() => client.createWorkbenchRoutine({ name: '每周五回顾', kind: 'review', freq: 'weekly', weekday: 4, time_of_day: '18:00' }))} />
+      <Button title="每周五回顾" onPress={() => void act(() => client.createWorkbenchRoutine({ name: '每周五回顾', kind: 'review', freq: 'weekly', weekday: 4, time_of_day: '18:00', ...CONTRACT }))} />
       {!!error && <Text style={s.error}>{error}</Text>}
     </View>
   );

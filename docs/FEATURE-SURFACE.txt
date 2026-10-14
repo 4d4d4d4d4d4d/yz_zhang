@@ -147,6 +147,7 @@ api GET /api/v1/open/v1/tasks/{task_id}
 api GET /api/v1/open/v1/wallet
 api GET /api/v1/packs
 api GET /api/v1/packs/{key}
+api GET /api/v1/packs/{key}/assistants/{akey}/contract
 api GET /api/v1/sandbox/models
 api GET /api/v1/search
 api GET /api/v1/search/suggest
@@ -214,6 +215,7 @@ api GET /api/v1/workbench/memories
 api GET /api/v1/workbench/overview
 api GET /api/v1/workbench/projects
 api GET /api/v1/workbench/routines
+api GET /api/v1/workbench/routines/{routine_id}/health
 api GET /api/v1/workbench/routines/{routine_id}/runs
 api GET /docs
 api GET /docs/oauth2-redirect
@@ -545,6 +547,7 @@ sdk askNotebook
 sdk askPackAssistant
 sdk askSupport
 sdk assignKnowledgeCard
+sdk assistantContract
 sdk availableCoupons
 sdk banImpact
 sdk banUser
@@ -891,6 +894,7 @@ sdk workbenchLogs
 sdk workbenchMemories
 sdk workbenchOverview
 sdk workbenchProjects
+sdk workbenchRoutineHealth
 sdk workbenchRoutineRuns
 sdk workbenchRoutines
 sdk workedWith

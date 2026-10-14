@@ -1,6 +1,6 @@
 import {
   apiErrorText, formatDateTime,
-  type PackAnswer, type PackAssistant, type ScenarioPackCard,
+  type AssistantContract, type PackAnswer, type PackAssistant, type ScenarioPackCard,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -154,6 +154,7 @@ function AssistantBox({ packKey, a }: { packKey: string; a: PackAssistant }) {
   const { client } = useApp();
   const [q, setQ] = useState('');
   const [ans, setAns] = useState<PackAnswer | null>(null);
+  const [contract, setContract] = useState<AssistantContract | null>(null);
   const [error, setError] = useState('');
   async function ask() {
     setError('');
@@ -165,6 +166,15 @@ function AssistantBox({ packKey, a }: { packKey: string; a: PackAssistant }) {
       <p className="muted">{a.persona}</p>
       <p className="muted">不会做：{a.forbidden.join('；')}</p>
       <p className="muted">必须你本人确认：{a.human_gates.join('；')}</p>
+      {/* REL-107 完整的角色契约：要什么、给什么、用哪些工具（130 号 spec） */}
+      {contract ? (
+        <div className="muted" aria-label={`角色契约：${a.name}`}>
+          <p>需要你给：{contract.inputs.join('；')}</p>
+          <p>它给你：{contract.outputs.join('；')}</p>
+          <p>只用这些工具：{contract.tools.map((t) => t.name).join('；')}</p>
+          {contract.fallback_category && <p>答不了时：建议发一单「{contract.fallback_category}」找专业的人</p>}
+        </div>
+      ) : <button className="text-link" onClick={() => void client.assistantContract(packKey, a.key).then(setContract).catch((e) => setError(apiErrorText(e)))}>看完整的角色契约</button>}
       <div className="row">
         <input className="grow" aria-label={`问${a.name}`} placeholder="说说你的情况或问题" value={q} onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && q.trim() && void ask()} />

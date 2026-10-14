@@ -1,6 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
-  Cockpit, CapabilityProfile, SandboxModelAdminRow, SandboxModelInput, SandboxModelList, SandboxState, InfluenceLeaderboard, InfluenceMine, InfluenceLatestSnapshot, InfluenceProof, InfluencePublic, InfluenceVouchInput, InfluenceVouchRow, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
+  AssistantContract, Cockpit, CapabilityProfile, SandboxModelAdminRow, SandboxModelInput, SandboxModelList, SandboxState, InfluenceLeaderboard, InfluenceMine, InfluenceLatestSnapshot, InfluenceProof, InfluencePublic, InfluenceVouchInput, InfluenceVouchRow, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineHealth, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbRunStatus, WbStatus, WbStep,
   CommercialReadiness,
   AgentProfileView,
   PayoutProposalView,
@@ -247,8 +247,10 @@ export class PlatformClient {
   }
   deleteWorkbenchRoutine(id: number) { return this.request<{ deleted: boolean }>('DELETE', `/workbench/routines/${id}`); }
   runWorkbenchRoutine(id: number) {
-    return this.request<{ status: 'ok' | 'failed'; output: string; routine: WbRoutine }>('POST', `/workbench/routines/${id}/run`);
+    return this.request<{ status: WbRunStatus; output: string; routine: WbRoutine }>('POST', `/workbench/routines/${id}/run`);
   }
+  /** REL-105 最近 30 次运行的健康度（130 号 spec） */
+  workbenchRoutineHealth(id: number) { return this.request<WbRoutineHealth>('GET', `/workbench/routines/${id}/health`); }
   workbenchRoutineRuns(id: number) {
     return this.request<WbRoutineRun[]>('GET', `/workbench/routines/${id}/runs`);
   }
@@ -323,6 +325,10 @@ export class PlatformClient {
   disablePack(key: string, removeCopies = false) {
     return this.request<{ disabled: boolean; removed: number; kept_modified: number }>(
       'POST', `/packs/${encodeURIComponent(key)}/disable`, { remove_copies: removeCopies });
+  }
+  /** REL-107 问之前先看：这位助手要什么、给什么、不做什么、用哪些工具、哪些事必须你本人确认 */
+  assistantContract(packKey: string, assistantKey: string) {
+    return this.request<AssistantContract>('GET', `/packs/${encodeURIComponent(packKey)}/assistants/${encodeURIComponent(assistantKey)}/contract`);
   }
   askPackAssistant(key: string, assistantKey: string, q: string) {
     return this.request<PackAnswer>('POST', `/packs/${encodeURIComponent(key)}/assistants/${encodeURIComponent(assistantKey)}/ask`, { q });

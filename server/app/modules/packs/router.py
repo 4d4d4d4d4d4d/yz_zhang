@@ -155,6 +155,17 @@ def ask(key: str, akey: str, body: AskIn, user: User = Depends(get_current_user)
     return out
 
 
+@router.get("/packs/{key}/assistants/{akey}/contract")
+def assistant_contract(key: str, akey: str, user: User = Depends(get_current_user),
+                       db: Session = Depends(get_db, scope="function")):
+    """REL-107 这位助手的角色契约：问之前就看得到它做什么、不做什么、哪些事必须你本人确认。"""
+    p = _latest_or_404(db, key)
+    a = next((x for x in svc.definition(p).assistants if x.key == akey), None)
+    if a is None:
+        raise not_found("这个场景包里没有这位助手")
+    return svc.contract(a)
+
+
 @router.post("/packs/{key}/feedback")
 def feedback(key: str, body: FeedbackIn, user: User = Depends(get_current_user),
              db: Session = Depends(get_db, scope="function")):

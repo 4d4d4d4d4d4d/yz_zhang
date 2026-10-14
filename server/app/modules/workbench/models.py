@@ -91,6 +91,12 @@ class WbRoutine(Base):
     last_status: Mapped[str] = mapped_column(String(16), default="")
     failures: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # REL-101 运行合同（130 号 spec）：超时、失败重试几次、重试用尽时是否降级交付。默认不重试、不降级（与 V141 行为一致）
+    timeout_ms: Mapped[int] = mapped_column(Integer, default=10000)
+    max_retries: Mapped[int] = mapped_column(Integer, default=0)
+    degrade: Mapped[bool] = mapped_column(Boolean, default=False)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)                 # 当前这次排期已经重试了几次
+    pending_slot_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)   # 正在重试的是哪一次排期
 
 
 class WbRoutineRun(Base):
@@ -102,3 +108,10 @@ class WbRoutineRun(Base):
     status: Mapped[str] = mapped_column(String(16))
     output: Mapped[str] = mapped_column(Text, default="")
     started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # REL-105 运行日志：哪次排期、第几次尝试、耗时、成本、错误类型（只记类型，不记异常文本——可能带个人内容）
+    slot_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    attempt: Mapped[int] = mapped_column(Integer, default=1)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    cost_cents: Mapped[int] = mapped_column(Integer, default=0)
+    error_kind: Mapped[str] = mapped_column(String(40), default="")
+    degraded: Mapped[bool] = mapped_column(Boolean, default=False)

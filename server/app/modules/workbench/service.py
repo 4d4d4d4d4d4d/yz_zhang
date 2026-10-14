@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import calendar
+import random
+import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -22,6 +24,9 @@ PLATFORM_STATUS_NAMES = {"draft": "草稿", "published": "招募中", "matched":
                          "pending_acceptance": "待验收", "disputed": "纠纷中", "completed": "已完成", "cancelled": "已取消"}
 STALE_DAYS = 7
 MAX_FAILURES = 3
+# REL-102 重试退避（130 号 spec）：1 分钟、5 分钟、25 分钟；再往后都按 25 分钟
+BACKOFF_SECONDS = (60, 300, 1500)
+DELIVERED = ("ok", "degraded")
 LIMITS = {"projects": 50, "items": 2000, "children": 50, "logs": 500, "memories": 20, "routines": 20}
 GENERIC_STEPS = [
     ("明确目标与完成标准", "写下做到什么程度算完成"),
@@ -237,35 +242,139 @@ def compose(db: Session, r: WbRoutine, now: datetime) -> str:
     return review_text(ov) if r.kind == "review" else digest_text(ov)
 
 
-def run_routine(db: Session, r: WbRoutine, now: datetime, manual: bool = False) -> WbRoutineRun:
-    """运行一次。失败不抛出：记一条失败，连续 3 次自动暂停并通知（不让坏掉的例行任务每分钟写一条失败）。"""
+class RoutineTimeout(Exception):
+    """REL-101 超过运行合同里的超时：按失败处理（重试或降级）。"""
+
+
+def backoff_seconds(retry: int) -> int:
+    return BACKOFF_SECONDS[min(retry, len(BACKOFF_SECONDS) - 1)]
+
+
+def not_ready(db: Session, r: WbRoutine) -> str:
+    """REL-103 数据源就绪检查：返回「这次不该跑」的原因（空串 = 可以跑）。不跑不算失败。"""
+    if r.kind == "reminder" and r.item_id:
+        item = db.get(WbItem, r.item_id)
+        if item is None or item.owner_id != r.owner_id:
+            return "关联的任务已经删除"
+        if item.status not in OPEN:
+            return f"关联的任务已经{STATUS_NAMES.get(item.status, item.status)}"
+    return ""
+
+
+def degraded_text(r: WbRoutine) -> str:
+    """REL-104 降级交付：不依赖出错的那部分，给出能确定的最少内容。"""
+    if r.kind == "reminder":
+        return r.note or r.name
+    return "这次的内容没能完整生成（已经重试过）。打开个人工作台可以看到最新的任务与进度。"
+
+
+def _fail_count(db: Session, r: WbRoutine) -> None:
     from app.modules.notification.service import notify
 
-    missed = 0 if manual or r.next_run_at is None else missed_between(r, r.next_run_at, now)
-    try:
-        with db.begin_nested():
-            output = compose(db, r, now)
-            if missed:
-                output += f"（服务暂停期间错过了 {missed} 次，只补这一次）"
-            notify(db, r.owner_id, "assistant", f"助手：{r.name}", output)
-        status = "ok"
-        r.failures = 0
-    except Exception as exc:   # noqa: BLE001 —— 例行任务的失败要落库给人看，不能让整批 job 失败
-        status, output = "failed", f"运行失败：{type(exc).__name__}"
-        r.failures += 1
-        if r.failures >= MAX_FAILURES:
-            r.enabled = False
-            notify(db, r.owner_id, "assistant", "例行任务已暂停",
-                   f"「{r.name}」连续 {MAX_FAILURES} 次运行失败，已暂停。修改后重新开启即可。")
-    run = WbRoutineRun(routine_id=r.id, owner_id=r.owner_id, status=status, output=output, started_at=now)
+    r.failures += 1
+    if r.failures >= MAX_FAILURES:
+        r.enabled = False
+        notify(db, r.owner_id, "assistant", "例行任务已暂停",
+               f"「{r.name}」连续 {MAX_FAILURES} 次运行失败，已暂停。修改后重新开启即可。")
+
+
+def run_routine(db: Session, r: WbRoutine, now: datetime, manual: bool = False) -> WbRoutineRun:
+    """运行一次。失败不抛出：记一条失败，连续 3 次自动暂停并通知（不让坏掉的例行任务每分钟写一条失败）。
+
+    REL-101~106 运行合同（130 号 spec）：数据源没就绪就跳过（不算失败）；超时按失败；失败先按退避重试
+    （`max_retries` 次，重试不改原来的排期）；重试用尽时开了 `degrade` 就降级交付；同一次排期只送达一次；
+    每次都记耗时、第几次尝试、错误类型。`max_retries=0, degrade=False` 时与原来完全一样。
+    """
+    from app.modules.notification.service import notify
+
+    slot = None if manual else (r.pending_slot_at or r.next_run_at)
+    if slot is not None:
+        done = (db.query(WbRoutineRun).filter(WbRoutineRun.routine_id == r.id, WbRoutineRun.slot_at == slot,
+                                              WbRoutineRun.status.in_(DELIVERED)).first())
+        if done is not None:
+            # 同一次排期已经送达过（重放、并发的 job）：不再发，只把排期往后挪
+            r.pending_slot_at, r.retry_count = None, 0
+            r.next_run_at = next_run(r, now)
+            db.add(r)
+            return done
+    missed = 0 if manual or slot is None or r.retry_count else missed_between(r, slot, now)
+    attempt = 1 if manual else r.retry_count + 1
+    error_kind, retry = "", False
+    started = time.monotonic()
+    skip = not_ready(db, r)
+    if skip:
+        status, output = "skipped", f"这次没有运行：{skip}"
+    else:
+        try:
+            with db.begin_nested():
+                output = compose(db, r, now)
+                if (time.monotonic() - started) * 1000 > r.timeout_ms:
+                    raise RoutineTimeout()
+                if missed:
+                    output += f"（服务暂停期间错过了 {missed} 次，只补这一次）"
+                notify(db, r.owner_id, "assistant", f"助手：{r.name}", output)
+            status = "ok"
+            r.failures = 0
+        except Exception as exc:   # noqa: BLE001 —— 例行任务的失败要落库给人看，不能让整批 job 失败
+            error_kind = "timeout" if isinstance(exc, RoutineTimeout) else type(exc).__name__[:40]
+            if not manual and r.retry_count < r.max_retries:
+                retry = True
+                status = "retrying"
+                output = f"运行失败（{error_kind}），{backoff_seconds(r.retry_count) // 60} 分钟后重试（第 {attempt} 次）"
+            elif r.degrade:
+                status, output = "degraded", degraded_text(r)
+                notify(db, r.owner_id, "assistant", f"助手：{r.name}", output + "（降级交付）")
+                _fail_count(db, r)
+            else:
+                status, output = "failed", f"运行失败：{type(exc).__name__}"
+                _fail_count(db, r)
+    run = WbRoutineRun(routine_id=r.id, owner_id=r.owner_id, status=status, output=output, started_at=now,
+                       slot_at=slot, attempt=attempt, duration_ms=int((time.monotonic() - started) * 1000),
+                       error_kind=error_kind, degraded=status == "degraded")
     db.add(run)
     r.last_run_at, r.last_status = now, status
     if not manual:
-        r.next_run_at = next_run(r, now)
-        if r.next_run_at is None:
-            r.enabled = False
+        if retry:
+            r.pending_slot_at = slot
+            # 加 ±20% 的随机抖动：同一时刻失败的一批不会在同一分钟一起重试（AWS 退避与抖动）
+            r.next_run_at = now + timedelta(seconds=backoff_seconds(r.retry_count) * random.uniform(0.8, 1.2))
+            r.retry_count += 1
+        else:
+            r.pending_slot_at, r.retry_count = None, 0
+            r.next_run_at = next_run(r, now)
+            if r.next_run_at is None:
+                r.enabled = False
     db.add(r)
     return run
+
+
+def health(db: Session, r: WbRoutine, limit: int = 30) -> dict:
+    """REL-105 最近 30 次运行的健康度：成功率、降级、重试、跳过、耗时分位、错误类型、成本。"""
+    rows = (db.query(WbRoutineRun).filter(WbRoutineRun.routine_id == r.id)
+            .order_by(WbRoutineRun.id.desc()).limit(limit).all())
+    finals = [x for x in rows if x.status in ("ok", "degraded", "failed")]
+    durs = sorted(x.duration_ms for x in rows)
+
+    def pct(p: float) -> int | None:
+        return durs[min(len(durs) - 1, int(p * len(durs)))] if durs else None
+
+    kinds: dict[str, int] = {}
+    for x in rows:
+        if x.error_kind:
+            kinds[x.error_kind] = kinds.get(x.error_kind, 0) + 1
+    return {
+        "routine_id": r.id, "runs": len(rows),
+        "success_rate": round(sum(1 for x in finals if x.status == "ok") / len(finals), 2) if finals else None,
+        "delivered": sum(1 for x in rows if x.status in DELIVERED),
+        "degraded": sum(1 for x in rows if x.status == "degraded"),
+        "retries": sum(1 for x in rows if x.status == "retrying"),
+        "skipped": sum(1 for x in rows if x.status == "skipped"),
+        "failed": sum(1 for x in rows if x.status == "failed"),
+        "p50_ms": pct(0.5), "p95_ms": pct(0.95),
+        "error_kinds": [{"kind": k, "count": n} for k, n in sorted(kinds.items(), key=lambda kv: -kv[1])],
+        "cost_cents": sum(x.cost_cents for x in rows),
+        "contract": {"timeout_ms": r.timeout_ms, "max_retries": r.max_retries, "degrade": r.degrade},
+    }
 
 
 def run_due(db: Session, now: datetime | None = None, limit: int = 500) -> dict:
@@ -277,9 +386,15 @@ def run_due(db: Session, now: datetime | None = None, limit: int = 500) -> dict:
                                       WbRoutine.next_run_at <= now)
            .order_by(WbRoutine.next_run_at).limit(limit).all())
     ok = failed = 0
+    extra = {"retrying": 0, "skipped": 0, "degraded": 0}
     for r in due:
         run = run_routine(db, r, now)
-        ok, failed = (ok + 1, failed) if run.status == "ok" else (ok, failed + 1)
+        if run.status == "ok":
+            ok += 1
+        elif run.status in extra:
+            extra[run.status] += 1
+        else:
+            failed += 1
     items = (db.query(WbItem).filter(WbItem.remind_at.isnot(None), WbItem.remind_at <= now,
                                      WbItem.reminded_at.is_(None), WbItem.status.in_(OPEN))
              .order_by(WbItem.remind_at).limit(limit).all())
@@ -288,7 +403,8 @@ def run_due(db: Session, now: datetime | None = None, limit: int = 500) -> dict:
                (f"截止 {local(i.due_at):%m-%d %H:%M}。" if i.due_at else "") + (i.notes[:100] if i.notes else ""))
         i.reminded_at = now
         db.add(i)
-    return {"routines_ok": ok, "routines_failed": failed, "reminders": len(items)}
+    return {"routines_ok": ok, "routines_failed": failed, "reminders": len(items),
+            **{f"routines_{k}": v for k, v in extra.items()}}
 
 
 # ------------------------------------------------------------------ 助手拆清单（PWB-005）

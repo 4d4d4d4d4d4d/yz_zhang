@@ -42,6 +42,48 @@ def event(db: Session, pack: ScenarioPack, user_id: int, kind: str) -> None:
     db.add(PackEvent(pack_key=pack.key, pack_id=pack.id, user_id=user_id, kind=kind))
 
 
+# ------------------------------------------------------------------ 角色契约（REL-107，130 号 spec）
+# 「让助手去做」的说法：帮我 / 替我 / 代我 / 直接 / 你来 / 你去。「帮我看看、帮我算算、帮我解释」是问，不是让它去做
+_DELEGATE = re.compile(r"(?:帮我|帮忙|替我|代我|给我)(?!看|查|算|想|解释|理解|分析|整理|列|写|讲|说|总结|估)|直接|你来|你去|你替")
+_STRONG_VERBS = set("签付缴转")
+_CORE_STRIP = re.compile(r"^(?:替你|帮你|代你|动用你的|把你的)")
+
+
+def _actions(phrase: str) -> list[str]:
+    """「替你付款、收款或确认验收」→ ["付款", "收款", "确认验收"]。只看「替你 / 动用你的 / 把你的」开头的动作类禁区。"""
+    if not _CORE_STRIP.match(phrase):
+        return []
+    core = _CORE_STRIP.sub("", phrase)
+    return [x for x in re.split(r"[、，,或和及与/]", core) if len(x) >= 2]
+
+
+def _hits(action: str, q: str) -> bool:
+    """动作的关键两字（动词或宾语）在问题里出现。「申报或缴税」→ 申报 / 缴税；「开具发票」→ 开具 / 发票。"""
+    grams = {action[i:i + 2] for i in range(len(action) - 1)} - {"你的"}
+    if action[0] in _STRONG_VERBS:      # 「签署合同」也要认出「帮我签了」
+        grams.add(action[0])
+    return any(g in q for g in grams)
+
+
+def contract_violation(a, q: str) -> str:
+    """问题是在让助手去做它角色契约里禁止的事：返回那条禁区（空串 = 没有）。"""
+    if not _DELEGATE.search(q):
+        return ""
+    for phrase in a.forbidden:
+        if any(_hits(act, q) for act in _actions(phrase)):
+            return phrase
+    return ""
+
+
+def contract(a) -> dict:
+    """REL-107 给人看的角色契约：它是谁、要什么、给什么、不做什么、用哪些工具、哪些事必须你本人确认。"""
+    return {"key": a.key, "name": a.name, "persona": a.persona, "inputs": list(a.inputs), "outputs": list(a.outputs),
+            "forbidden": list(a.forbidden),
+            "tools": [{"key": t, "name": schema.TOOLS.get(t, t)} for t in a.tools],
+            "human_gates": [{"key": g, "name": schema.GATES.get(g, g)} for g in a.human_gates],
+            "fallback_category": a.fallback_category}
+
+
 # ------------------------------------------------------------------ 启用（PACK-104）
 class InstallLimit(Exception):
     pass
@@ -160,6 +202,14 @@ def ask(db: Session, user_id: int, pack: ScenarioPack, akey: str, q: str) -> dic
     if any(kw in q for kw in HIGH_RISK_KEYWORDS):
         event(db, pack, user_id, "ask")
         return {**base, "refused": True, "answer": "这个问题涉及人身安全或刑事风险，请立即拨打 110 或联系专业机构。",
+                "citations": [], "remedy": None}
+    banned = contract_violation(a, q)
+    if banned:
+        # REL-107 角色契约在运行时生效：让它去做禁区里的事，直接说不做、为什么、该怎么办
+        event(db, pack, user_id, "refused")
+        return {**base, "refused": True,
+                "answer": f"这件事不在「{a.name}」的角色契约里：它不会{banned.removeprefix('替你')}。"
+                          f"它能做的是给你草稿、清单和出处；{base['gate_notice']}",
                 "citations": [], "remedy": None}
     cites: list[dict] = []
     today = date.today()

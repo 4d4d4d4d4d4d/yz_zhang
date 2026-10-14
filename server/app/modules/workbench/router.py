@@ -112,6 +112,10 @@ class RoutineIn(_In):
     note: str = Field(default="", max_length=500)
     item_id: int | None = None
     enabled: bool = True
+    # REL-101 运行合同（130 号 spec）：不给就是原来的「不重试、不降级」
+    timeout_ms: int = Field(default=10000, ge=1000, le=60000)
+    max_retries: int = Field(default=0, ge=0, le=5)
+    degrade: bool = False
 
     @field_validator("time_of_day")
     @classmethod
@@ -128,6 +132,9 @@ class RoutinePatch(_In):
     run_at: datetime | None = None
     note: str | None = Field(default=None, max_length=500)
     enabled: bool | None = None
+    timeout_ms: int | None = Field(default=None, ge=1000, le=60000)
+    max_retries: int | None = Field(default=None, ge=0, le=5)
+    degrade: bool | None = None
 
     @field_validator("time_of_day")
     @classmethod
@@ -181,7 +188,9 @@ def _dump_routine(r: WbRoutine) -> dict:
     return {"id": r.id, "name": r.name, "kind": r.kind, "freq": r.freq, "time_of_day": r.time_of_day,
             "weekday": r.weekday, "monthday": r.monthday, "run_at": iso(r.run_at), "note": r.note,
             "item_id": r.item_id, "enabled": r.enabled, "next_run_at": iso(r.next_run_at),
-            "last_run_at": iso(r.last_run_at), "last_status": r.last_status, "failures": r.failures}
+            "last_run_at": iso(r.last_run_at), "last_status": r.last_status, "failures": r.failures,
+            "timeout_ms": r.timeout_ms, "max_retries": r.max_retries, "degrade": r.degrade,
+            "retry_count": r.retry_count, "pending_slot_at": iso(r.pending_slot_at)}
 
 
 # ------------------------------------------------------------------ 项目
@@ -495,7 +504,15 @@ def run_now(routine_id: int, user: User = Depends(get_current_user), db: Session
 def list_runs(routine_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     r = _own(db, WbRoutine, routine_id, user, "例行任务")
     rows = db.query(WbRoutineRun).filter(WbRoutineRun.routine_id == r.id).order_by(WbRoutineRun.id.desc()).limit(50)
-    return [{"id": x.id, "status": x.status, "output": x.output, "started_at": iso(x.started_at)} for x in rows]
+    return [{"id": x.id, "status": x.status, "output": x.output, "started_at": iso(x.started_at),
+             "slot_at": iso(x.slot_at), "attempt": x.attempt, "duration_ms": x.duration_ms, "cost_cents": x.cost_cents,
+             "error_kind": x.error_kind, "degraded": x.degraded} for x in rows]
+
+
+@router.get("/workbench/routines/{routine_id}/health")
+def routine_health(routine_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """REL-105 这个例行任务最近 30 次跑得怎么样：成功率、降级、重试、跳过、耗时、错误类型、成本。"""
+    return svc.health(db, _own(db, WbRoutine, routine_id, user, "例行任务"))
 
 
 @router.post("/workbench/jobs/run-routines")

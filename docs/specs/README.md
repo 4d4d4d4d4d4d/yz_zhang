@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 130 | 助手专家的可靠性：运行合同、重试退避、降级交付、就绪检查、只送达一次、运行日志与健康度、角色契约 | [130-assistant-reliability.md](./130-assistant-reliability.md) | P0 |
 | 129 | 端侧模型下载、断点续传、分块校验与启用；浏览器端模型评估 | [129-on-device-model-download.md](./129-on-device-model-download.md) | P0 |
 | 128 | 端侧隐私沙箱：本机助手、量化小模型、原文不上云、同步前脱敏 | [128-on-device-privacy-sandbox.md](./128-on-device-privacy-sandbox.md) | P0 |
 | 127 | 影响力与专家等级：不可转让、质押担保、罚没、衰减、Merkle 快照锚定 | [127-influence-and-expert-tiers.md](./127-influence-and-expert-tiers.md) | P0 |

@@ -1543,9 +1543,18 @@ export interface WbRoutine {
   enabled: boolean;
   next_run_at: string | null;
   last_run_at: string | null;
-  last_status: '' | 'ok' | 'failed';
+  last_status: '' | WbRunStatus;
   failures: number;
+  /** REL-101 运行合同（130 号 spec）：超时、失败后重试几次、重试用尽时是否降级交付 */
+  timeout_ms: number;
+  max_retries: number;
+  degrade: boolean;
+  /** 当前这次排期已经重试了几次；在重试中时 pending_slot_at 是原来那次排期 */
+  retry_count: number;
+  pending_slot_at: string | null;
 }
+/** ok 送达；degraded 降级送达；retrying 失败、等退避后重试；skipped 数据源没就绪、这次不跑；failed 失败 */
+export type WbRunStatus = 'ok' | 'failed' | 'retrying' | 'skipped' | 'degraded';
 export interface WbRoutineInput {
   name: string;
   kind: WbRoutineKind;
@@ -1557,12 +1566,47 @@ export interface WbRoutineInput {
   note?: string;
   item_id?: number | null;
   enabled?: boolean;
+  timeout_ms?: number;
+  max_retries?: number;
+  degrade?: boolean;
 }
 export interface WbRoutineRun {
   id: number;
-  status: 'ok' | 'failed';
+  status: WbRunStatus;
   output: string;
   started_at: string;
+  /** REL-105 运行日志：哪次排期、第几次尝试、耗时、成本、错误类型（只记类型） */
+  slot_at: string | null;
+  attempt: number;
+  duration_ms: number;
+  cost_cents: number;
+  error_kind: string;
+  degraded: boolean;
+}
+export interface WbRoutineErrorKind {
+  kind: string;
+  count: number;
+}
+export interface WbRoutineContract {
+  timeout_ms: number;
+  max_retries: number;
+  degrade: boolean;
+}
+export interface WbRoutineHealth {
+  routine_id: number;
+  runs: number;
+  /** 最终结果里成功的比例；还没有最终结果时为 null */
+  success_rate: number | null;
+  delivered: number;
+  degraded: number;
+  retries: number;
+  skipped: number;
+  failed: number;
+  p50_ms: number | null;
+  p95_ms: number | null;
+  error_kinds: WbRoutineErrorKind[];
+  cost_cents: number;
+  contract: WbRoutineContract;
 }
 export interface WbRoutinePatch {
   name?: string;
@@ -1573,6 +1617,9 @@ export interface WbRoutinePatch {
   run_at?: string | null;
   note?: string;
   enabled?: boolean;
+  timeout_ms?: number;
+  max_retries?: number;
+  degrade?: boolean;
 }
 
 // ---- SPACE-024 / AI-DEC-021 合作驾驶舱（120 号 spec）----
@@ -2277,4 +2324,21 @@ export interface SandboxModelInput {
   languages?: string[];
   skills?: string[];
   note?: string;
+}
+
+// ---- REL-107 助手专家的角色契约（130 号 spec） ----
+export interface AssistantContractItem {
+  key: string;
+  name: string;
+}
+export interface AssistantContract {
+  key: string;
+  name: string;
+  persona: string;
+  inputs: string[];
+  outputs: string[];
+  forbidden: string[];
+  tools: AssistantContractItem[];
+  human_gates: AssistantContractItem[];
+  fallback_category: string;
 }

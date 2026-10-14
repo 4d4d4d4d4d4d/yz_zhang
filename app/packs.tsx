@@ -1,6 +1,6 @@
 // PACK-100 服务包（123 号 spec）——App 端：浏览、启用 / 升级 / 停用、问助手专家、反馈。
 import {
-  apiErrorText, type PackAnswer, type PlatformClient, type ScenarioPackCard,
+  apiErrorText, type AssistantContract, type PackAnswer, type PlatformClient, type ScenarioPackCard,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -89,6 +89,7 @@ function AssistantBox({ client, packKey, assistantKey, name, persona, gates, onP
 }) {
   const [q, setQ] = useState('');
   const [ans, setAns] = useState<PackAnswer | null>(null);
+  const [contract, setContract] = useState<AssistantContract | null>(null);
   const [error, setError] = useState('');
   async function ask() {
     if (!q.trim()) return;
@@ -100,6 +101,19 @@ function AssistantBox({ client, packKey, assistantKey, name, persona, gates, onP
       <Text style={s.title}>{name}</Text>
       <Text style={s.muted}>{persona}</Text>
       <Text style={s.muted}>必须你本人确认：{gates.join('；')}</Text>
+      {/* REL-107 完整的角色契约（130 号 spec） */}
+      {contract ? (
+        <View accessibilityLabel={`角色契约：${name}`}>
+          <Text style={s.muted}>需要你给：{contract.inputs.join('；')}</Text>
+          <Text style={s.muted}>它给你：{contract.outputs.join('；')}</Text>
+          <Text style={s.muted}>不会做：{contract.forbidden.join('；')}</Text>
+          <Text style={s.muted}>只用这些工具：{contract.tools.map((t) => t.name).join('；')}</Text>
+        </View>
+      ) : (
+        <TouchableOpacity onPress={() => void client.assistantContract(packKey, assistantKey).then(setContract).catch((e) => setError(apiErrorText(e)))}>
+          <Text style={s.link}>看完整的角色契约</Text>
+        </TouchableOpacity>
+      )}
       <TextInput style={s.input} placeholder={`问${name}`} value={q} onChangeText={setQ} onSubmitEditing={() => void ask()} />
       <Button title="问" onPress={() => void ask()} />
       {!!error && <Text style={s.error}>{error}</Text>}
