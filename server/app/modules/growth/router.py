@@ -18,6 +18,7 @@ from app.modules.account.models import User, utcnow
 from . import service
 from .models import Campaign, Coupon, UserCoupon
 from app.core.timefmt import iso
+from app.core.admin_roles import ANY, require_role
 
 router = APIRouter(tags=["growth"])
 
@@ -52,7 +53,7 @@ def _dump_coupon(c: Coupon) -> dict:
 
 
 @router.post("/admin/coupons", status_code=201)
-def create_coupon(body: CouponIn, admin: User = Depends(require_admin),
+def create_coupon(body: CouponIn, admin: User = Depends(require_role("ops")),
                   db: Session = Depends(get_db, scope="function")):
     """GRW-001/005 建券。比例券必须带封顶，否则大额单会失控。"""
     now = utcnow()
@@ -63,7 +64,7 @@ def create_coupon(body: CouponIn, admin: User = Depends(require_admin),
 
 
 @router.post("/admin/coupons/{coupon_id}/pause")
-def pause_coupon(coupon_id: int, admin: User = Depends(require_admin),
+def pause_coupon(coupon_id: int, admin: User = Depends(require_role("ops")),
                  db: Session = Depends(get_db, scope="function")):
     """GRW-005 暂停发放（已领取的券不受影响，不追溯作废用户已得权益）。"""
     coupon = db.get(Coupon, coupon_id)
@@ -75,7 +76,7 @@ def pause_coupon(coupon_id: int, admin: User = Depends(require_admin),
 
 
 @router.get("/admin/coupons")
-def coupon_report(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def coupon_report(admin: User = Depends(require_role("ops", "finance")), db: Session = Depends(get_db, scope="function")):
     """GRW-005 发放/核销/成本报表：运营自己就能看清一张券花了多少钱。"""
     out = []
     for c in db.query(Coupon).order_by(Coupon.id.desc()).all():
@@ -100,7 +101,7 @@ class CampaignIn(BaseModel):
 
 
 @router.post("/admin/campaigns", status_code=201)
-def create_campaign(body: CampaignIn, admin: User = Depends(require_admin),
+def create_campaign(body: CampaignIn, admin: User = Depends(require_role("ops")),
                     db: Session = Depends(get_db, scope="function")):
     """GRW-030 建活动：预算硬顶是必填项，超顶自动停投。"""
     now = utcnow()
@@ -122,7 +123,7 @@ def _dump_campaign(c: Campaign) -> dict:
 
 
 @router.get("/admin/campaigns")
-def list_campaigns(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def list_campaigns(admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     return {"campaigns": [_dump_campaign(c) for c in db.query(Campaign)
                           .order_by(Campaign.id.desc()).all()]}
 
@@ -132,7 +133,7 @@ class FundIn(BaseModel):
 
 
 @router.post("/admin/subsidy-pool/fund")
-def fund_subsidy_pool(body: FundIn, admin: User = Depends(require_admin),
+def fund_subsidy_pool(body: FundIn, admin: User = Depends(require_role("finance")),
                       db: Session = Depends(get_db, scope="function")):
     """GRW-003 补贴池注资：冷启动时平台还没有佣金收入，得先注资才能发券。"""
     from app.modules.wallet import service as wallet
@@ -143,14 +144,14 @@ def fund_subsidy_pool(body: FundIn, admin: User = Depends(require_admin),
 # ---------- 运营：看板 ----------
 @router.get("/admin/market-health")
 def market_health(days: int = Query(default=30, ge=1, le=365),
-                  admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+                  admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     """GRW-022 供需健康度：按城市×类目标出供给缺口与需求缺口。"""
     return service.market_health(db, days)
 
 
 @router.get("/admin/north-star")
 def north_star(days: int = Query(default=30, ge=1, le=365),
-               admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+               admin: User = Depends(require_role(*ANY)), db: Session = Depends(get_db, scope="function")):
     """GRW-052 北极星指标：成单数与成单 GMV。"""
     return service.north_star(db, days)
 

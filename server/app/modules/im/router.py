@@ -194,6 +194,11 @@ def _get_conv(db: Session, conv_id: int, user: User, admin_reason: str | None = 
         return conv
     if not user.is_admin or admin_reason is None:
         raise forbidden()
+    # SEC-061b 事前按角色拦（141 号 spec）：只有仲裁（纠纷举证）与合规（举报核查、法定调取）能读
+    from app.core.admin_roles import has_role
+
+    if not has_role(user, "arbiter", "compliance"):
+        raise forbidden("查看他人私聊只有「仲裁」或「合规」角色的管理员可以（写明理由、进审计）", "admin_role_required")
     reason = admin_reason.strip()
     if len(reason) < ADMIN_REASON_MIN:
         raise forbidden("管理员查看他人私聊必须写明理由（纠纷举证 / 举报核查 / 法定调取），并会记入审计",

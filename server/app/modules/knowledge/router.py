@@ -3,9 +3,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, require_admin, require_job_auth
+from app.core.deps import get_current_user, require_job_auth
 from app.core.errors import bad_request, not_found
 from app.core.locks import job_slot
+from app.core.admin_roles import require_role
 from app.modules.account.models import User
 
 from . import service
@@ -212,7 +213,7 @@ def _audit(db, admin, action, target_type, target_id, detail):
 
 
 @admin_router.get("/overview")
-def admin_overview(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def admin_overview(admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     """各状态的样本数、各大类的阈值（含标定时的模型）、当前模型、被拒的归并次数。"""
     from sqlalchemy import func
 
@@ -239,7 +240,7 @@ def admin_overview(admin: User = Depends(require_admin), db: Session = Depends(g
 
 
 @admin_router.get("/undecided")
-def admin_undecided(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def admin_undecided(admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     """待定区与被拒归并的样本：带最像的子类与相似度，运营据此判。"""
     from app.core.timefmt import iso
 
@@ -254,7 +255,7 @@ def admin_undecided(admin: User = Depends(require_admin), db: Session = Depends(
 
 
 @admin_router.post("/cards/{card_id}/assign")
-def admin_assign(card_id: int, body: AssignIn, admin: User = Depends(require_admin),
+def admin_assign(card_id: int, body: AssignIn, admin: User = Depends(require_role("ops")),
                  db: Session = Depends(get_db, scope="function")):
     """把待定区的样本并进某个子类，或以它为第一个样本新建子类（二选一）。"""
     from . import clusters
@@ -268,7 +269,7 @@ def admin_assign(card_id: int, body: AssignIn, admin: User = Depends(require_adm
 
 @admin_router.get("/thresholds/{category}/pairs")
 def admin_calibration_pairs(category: str, n: int = Query(default=12, ge=6, le=40),
-                            admin: User = Depends(require_admin),
+                            admin: User = Depends(require_role("ops")),
                             db: Session = Depends(get_db, scope="function")):
     """KB-071 标注用的候选对（相似度均匀铺开），运营逐对判「是不是一回事」后交给标定。"""
     from . import clusters
@@ -277,7 +278,7 @@ def admin_calibration_pairs(category: str, n: int = Query(default=12, ge=6, le=4
 
 
 @admin_router.post("/thresholds/{category}/calibrate")
-def admin_calibrate(category: str, body: CalibrateIn, admin: User = Depends(require_admin),
+def admin_calibrate(category: str, body: CalibrateIn, admin: User = Depends(require_role("ops")),
                     db: Session = Depends(get_db, scope="function")):
     """KB-071 用人工标注的「是不是一回事」标定这个大类的阈值（换模型后必须重标）。"""
     from app.core.timefmt import iso
@@ -293,7 +294,7 @@ def admin_calibrate(category: str, body: CalibrateIn, admin: User = Depends(requ
 
 
 @admin_router.post("/tasks/{task_id}/retract")
-def admin_retract(task_id: int, body: RetractIn, admin: User = Depends(require_admin),
+def admin_retract(task_id: int, body: RetractIn, admin: User = Depends(require_role("ops")),
                   db: Session = Depends(get_db, scope="function")):
     """KB-076 风控事后标记的任务：从子类里撤回，受影响的子类重算。"""
     from . import clusters
@@ -304,7 +305,7 @@ def admin_retract(task_id: int, body: RetractIn, admin: User = Depends(require_a
 
 
 @admin_router.post("/clusters/{cluster_id}/merge")
-def admin_merge(cluster_id: int, body: MergeIn, admin: User = Depends(require_admin),
+def admin_merge(cluster_id: int, body: MergeIn, admin: User = Depends(require_role("ops")),
                 db: Session = Depends(get_db, scope="function")):
     from . import clusters
 
@@ -314,7 +315,7 @@ def admin_merge(cluster_id: int, body: MergeIn, admin: User = Depends(require_ad
 
 
 @admin_router.patch("/clusters/{cluster_id}")
-def admin_rename(cluster_id: int, body: RenameIn, admin: User = Depends(require_admin),
+def admin_rename(cluster_id: int, body: RenameIn, admin: User = Depends(require_role("ops")),
                  db: Session = Depends(get_db, scope="function")):
     from . import clusters
     from .models import KnowledgeCluster
@@ -381,7 +382,7 @@ class DistillIn(BaseModel):
 
 
 @admin_router.post("/clusters/{cluster_id}/units", status_code=201)
-def admin_distill(cluster_id: int, body: DistillIn, admin: User = Depends(require_admin),
+def admin_distill(cluster_id: int, body: DistillIn, admin: User = Depends(require_role("ops")),
                   db: Session = Depends(get_db, scope="function")):
     """KB-080 从子类蒸馏一个可复用单元（第一版由运营确认生成，不做自动蒸馏——95 号第 8 节）。"""
     from . import units
@@ -399,7 +400,7 @@ def admin_distill(cluster_id: int, body: DistillIn, admin: User = Depends(requir
 
 @admin_router.get("/units")
 def admin_units(status: str = Query(default="needs_review", pattern="^(active|needs_review|retired)$"),
-                admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+                admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     """KB-084 待复核的单元（返工与失败过半、或贡献者撤回了授权）。"""
     from . import units
     from .models import ReusableUnit
@@ -415,7 +416,7 @@ class UnitStatusIn(BaseModel):
 
 
 @admin_router.patch("/units/{unit_id}")
-def admin_unit_status(unit_id: int, body: UnitStatusIn, admin: User = Depends(require_admin),
+def admin_unit_status(unit_id: int, body: UnitStatusIn, admin: User = Depends(require_role("ops")),
                       db: Session = Depends(get_db, scope="function")):
     """复核后重新启用（**版本号 +1、验证从头算**：复核前的结果属于上一版）或停用。"""
     from . import units

@@ -34,7 +34,7 @@ description: 固定的迭代范式：每一批做完都必须打钩、更新 spe
 | spec 状态行改成「本批实现（V1xx）」 | `docs/specs/NNN-*.md` |
 | spec「没做的」一节写清还欠什么，每件带编号（如 `INF-110`） | 同上 |
 | 台账加「已做」行；「没做的」编号进台账的未做表 | `docs/specs/72-status-ledger.md` |
-| 愿景对照行改成「两端已接」并写上批次号与 SDK 方法 | `docs/VISION.md` |
+| 愿景对照行改成「两端已接」并写上批次号与 SDK 方法（安全、运维这类没有用户界面的批次：spec 第 4 节写明「不涉及」，对照行带上批次号即可，不要假装两端已接） | `docs/VISION.md` |
 | 现状文档划掉这一项（`~~…~~ | 已做`） | `docs/STATUS-*.md` |
 | 版本号、计数（以测试输出为准） | `server/app/core/config.py`，`tests/test_doc_counts.py` 报的数 |
 

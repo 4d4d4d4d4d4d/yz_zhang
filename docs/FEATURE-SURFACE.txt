@@ -20,6 +20,7 @@ api DELETE /api/v1/workbench/items/{item_id}
 api DELETE /api/v1/workbench/memories/{memory_id}
 api DELETE /api/v1/workbench/projects/{project_id}
 api DELETE /api/v1/workbench/routines/{routine_id}
+api GET /api/v1/admin/admins
 api GET /api/v1/admin/agents
 api GET /api/v1/admin/aml/activities
 api GET /api/v1/admin/aml/stats
@@ -42,6 +43,7 @@ api GET /api/v1/admin/packs/radar
 api GET /api/v1/admin/platform-finance
 api GET /api/v1/admin/queues
 api GET /api/v1/admin/reports
+api GET /api/v1/admin/roles
 api GET /api/v1/admin/sandbox/models
 api GET /api/v1/admin/security
 api GET /api/v1/admin/settlements/verify
@@ -467,6 +469,7 @@ api POST /api/v1/workbench/memories
 api POST /api/v1/workbench/projects
 api POST /api/v1/workbench/routines
 api POST /api/v1/workbench/routines/{routine_id}/run
+api PUT /api/v1/admin/admins/{user_id}/roles
 api PUT /api/v1/admin/matching-config
 api PUT /api/v1/admin/packs/{pack_id}
 api PUT /api/v1/gig/available
@@ -537,6 +540,7 @@ sdk adminPacks
 sdk adminRejectPack
 sdk adminReports
 sdk adminRetirePack
+sdk adminRoleCatalog
 sdk adminSandboxModels
 sdk adminSecurity
 sdk adminSkillConcepts
@@ -714,6 +718,7 @@ sdk ledger
 sdk legalAsk
 sdk legalDocument
 sdk likeContent
+sdk listAdmins
 sdk listApplications
 sdk listProgress
 sdk listReviews
@@ -834,6 +839,7 @@ sdk sendFriendRequest
 sdk sendMessage
 sdk sendQuoteCard
 sdk sendSmsCode
+sdk setAdminRoles
 sdk setFriendRemark
 sdk setGigAvailable
 sdk setKnowledgeUnitStatus

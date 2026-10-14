@@ -12,6 +12,8 @@ export interface Me {
   interests: string[];
   is_verified: boolean;
   is_admin: boolean;
+  /** SEC-061b 生效的管理员角色（141 号 spec）；不是管理员就是空。没分配过角色的管理员是 ['super'] */
+  admin_roles: AdminRoleKey[];
   credit_score: number;
   rating_avg: number;
   tasks_completed: number;
@@ -25,6 +27,29 @@ export interface Me {
   weekly_slots: WeeklySlot[];
   /** SPACE-023 少量接单：还接，但这阵子忙 */
   limited_capacity: boolean;
+}
+
+/** SEC-061b 管理员角色（141 号 spec）。拦在服务端；界面只按它决定显示哪些板块 */
+export type AdminRoleKey = 'super' | 'support' | 'arbiter' | 'compliance' | 'finance' | 'ops';
+export interface AdminRoleDef {
+  key: AdminRoleKey;
+  label: string;
+  scope: string;
+}
+export interface AdminRoleCatalog {
+  roles: AdminRoleDef[];
+  mine: AdminRoleKey[];
+}
+export interface AdminRow {
+  user_id: number;
+  nickname: string;
+  roles: AdminRoleKey[];
+  /** 没分配过角色：按超级管理员对待，上线前应当分好 */
+  unclassified: boolean;
+}
+export interface AdminList {
+  admins: AdminRow[];
+  unclassified: number;
 }
 
 /** SPACE-023 每周一个可用时段：d 为 0（周一）~ 6（周日），时间为北京时间 HH:MM */

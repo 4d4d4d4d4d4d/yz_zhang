@@ -163,6 +163,12 @@ def read_sensitive_file(name: str, user=Depends(get_current_user),
     if row.owner_id != user.id and not user.is_admin:
         raise forbidden("无权查看该材料")
     if row.owner_id != user.id:
+        # SEC-061b 证件影像只有合规（资质审核）与仲裁（纠纷举证）角色能读（141 号 spec）
+        from app.core.admin_roles import has_role
+
+        if not has_role(user, "compliance", "arbiter"):
+            raise forbidden("查看他人的敏感材料只有「合规」或「仲裁」角色的管理员可以（写明理由、进审计）",
+                            "admin_role_required")
         # SEC-061 管理员读证件影像：**每一次都进审计**。审资质申请时读申请里的那几张是审核本身，
         # 不用另写理由；读别的敏感材料必须写明理由（纠纷举证 / 法定调取），否则拒绝
         from app.modules.account.models_cert import CertificationApplication

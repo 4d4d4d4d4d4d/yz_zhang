@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import get_current_user
 from app.core.errors import forbidden, not_found
+from app.core.admin_roles import require_role
 from app.modules.account.models import User
 from app.modules.contract.models import Contract
 
@@ -34,7 +35,7 @@ def contract_settlements(
 
 
 @router.get("/admin/settlements/verify")
-def verify_settlements(_: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def verify_settlements(_: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function")):
     """FIN-060 分账守恒校验（同时并入日终对账）。"""
     problems = service.verify_conservation(db)
     return {"ok": not problems, "problems": problems}

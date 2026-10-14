@@ -91,6 +91,10 @@ import type {
   SecurityBoardView,
   AdminAuditRow,
   PlatformFinanceView,
+  AdminList,
+  AdminRoleCatalog,
+  AdminRoleKey,
+  AdminRow,
 } from './types';
 import { isCloudAiRequest } from './sandbox';
 
@@ -1334,6 +1338,17 @@ export class PlatformClient {
    *  会被下架」——又一次「声明了却不给 / 给了却不声明」（V89 那一类）。 */
   banImpact(userId: number) {
     return this.request<BanImpactView>('GET', `/admin/users/${userId}/ban-impact`);
+  }
+  /** SEC-061b 角色说明与我自己的角色（141 号 spec） */
+  adminRoleCatalog() {
+    return this.request<AdminRoleCatalog>('GET', '/admin/roles');
+  }
+  /** SEC-061b 管理员与角色：只有超级管理员能看、能改 */
+  listAdmins() {
+    return this.request<AdminList>('GET', '/admin/admins');
+  }
+  setAdminRoles(userId: number, roles: AdminRoleKey[]) {
+    return this.request<AdminRow>('PUT', `/admin/admins/${userId}/roles`, { roles });
   }
   adminAuditLog(params: { action?: string; limit?: number; offset?: number } = {}) {
     const qs = Object.entries(params)

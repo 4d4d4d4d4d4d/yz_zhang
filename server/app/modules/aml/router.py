@@ -9,7 +9,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import require_admin
+
+from app.core.admin_roles import require_role
 from app.modules.account.models import User
 
 from . import service
@@ -18,13 +19,13 @@ router = APIRouter(prefix="/admin/aml", tags=["aml"])
 
 
 @router.get("/activities")
-def activities(status: str = "pending", admin: User = Depends(require_admin),
+def activities(status: str = "pending", admin: User = Depends(require_role("compliance")),
                db: Session = Depends(get_db, scope="function")):
     return service.listing(db, status)
 
 
 @router.get("/stats")
-def stats(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def stats(admin: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function")):
     return service.stats(db)
 
 
@@ -35,7 +36,7 @@ class ReviewIn(BaseModel):
 
 
 @router.post("/activities/{activity_id}/review")
-def review(activity_id: int, body: ReviewIn, admin: User = Depends(require_admin),
+def review(activity_id: int, body: ReviewIn, admin: User = Depends(require_role("compliance")),
            db: Session = Depends(get_db, scope="function")):
     """AML-021 合规官复核。
 

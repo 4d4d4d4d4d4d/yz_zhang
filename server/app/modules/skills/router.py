@@ -6,9 +6,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import get_current_user
 from app.core.errors import conflict, not_found
 from app.core.timefmt import iso
+from app.core.admin_roles import require_role
 from app.modules.account.models import User, utcnow
 
 from . import service as svc
@@ -43,14 +44,14 @@ def _dump(c: SkillConcept) -> dict:
 
 
 @router.get("/admin/skill-concepts")
-def admin_concepts(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def admin_concepts(admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     """后台：生效的概念（含种子）与后台改过的记录。"""
     return {"effective": svc.concepts(db),
             "overrides": [_dump(c) for c in db.query(SkillConcept).order_by(SkillConcept.id.desc()).all()]}
 
 
 @router.post("/admin/skill-concepts")
-def upsert_concept(body: ConceptIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def upsert_concept(body: ConceptIn, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     """新增或改一个概念（同名覆盖种子）。一个别名不能同时属于两个概念。"""
     name = body.name.strip()
     aliases = list(dict.fromkeys(a.strip() for a in body.aliases if a.strip() and svc.norm(a) != svc.norm(name)))
@@ -71,7 +72,7 @@ def upsert_concept(body: ConceptIn, admin: User = Depends(require_admin), db: Se
 
 
 @router.post("/admin/skill-concepts/{concept_id}/retire")
-def retire_concept(concept_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def retire_concept(concept_id: int, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     """下线：这个概念（含种子里的同名概念）不再参与匹配。"""
     c = db.get(SkillConcept, concept_id)
     if c is None:

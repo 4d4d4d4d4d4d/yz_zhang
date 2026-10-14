@@ -10,6 +10,7 @@ import { KnowledgeAdmin } from '../AdminKnowledge';
 import { PacksAdmin } from '../AdminPacks';
 import { SandboxModelsAdmin } from '../AdminSandbox';
 import { SkillConceptsAdmin } from '../AdminSkills';
+import { AdminRolesPanel } from '../AdminRoles';
 import { useApp } from '../store';
 
 type Metrics = {
@@ -56,6 +57,7 @@ export default function Admin() {
           </div>
         </div>
       )}
+      <AdminRolesPanel />
       <LaunchReadiness />
       <QueueOverview />
       <WithdrawReview />

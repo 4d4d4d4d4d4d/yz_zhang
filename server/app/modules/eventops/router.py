@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.core import events
 from app.core.db import get_db
-from app.core.deps import require_admin, require_job_auth
+from app.core.deps import require_job_auth
 from app.core.locks import job_slot
+from app.core.admin_roles import require_role
 from app.modules.account.models import User
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -49,7 +50,7 @@ def health(db: Session = Depends(get_db, scope="function"), _=Depends(require_jo
 
 
 @router.get("/dead-letters")
-def dead_letters(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def dead_letters(admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     """EVT-022 待人工处理的投递。
 
     死信不是「可以忽略的错误列表」——每一条都代表某个用户少了一个本该发生的

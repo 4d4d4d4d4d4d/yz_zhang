@@ -87,6 +87,12 @@ def _todo_section(text: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _section(text: str, num: str) -> str:
+    """spec 的第 num 节（「## num. …」到下一个二级标题为止）；没有就是空串。"""
+    m = re.search(rf"^## {re.escape(num)}\.[^\n]*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+    return m.group(1) if m else ""
+
+
 def _closeout_problems(rows: list[dict]) -> list[str]:
     """ITER-001 迭代范式（skill iterate，用户 2026-10-14）：做完要打钩、spec 要更新、没做的要有去处。"""
     problems: list[str] = []
@@ -132,8 +138,13 @@ def closeout(batch: str) -> list[tuple[bool, str]]:
     items.append((not homeless, "「没做的」编号都进了台账或 BACKLOG" + (f"（缺：{'、'.join(homeless)}）" if homeless else "")))
     items.append((batch in ledger, f"台账（{LEDGER_NAME}）有这一批的「已做」行"))
     vision = VISION.read_text(encoding="utf-8") if VISION.exists() else ""
-    items.append((bool(re.search(rf"\|[^\n]*{batch}[^\n]*两端已接|两端已接[^\n]*{batch}", vision)),
-                  "VISION 对照行写「两端已接」并带批次号"))
+    both = bool(re.search(rf"\|[^\n]*{batch}[^\n]*两端已接|两端已接[^\n]*{batch}", vision))
+    # 没有用户界面的批次（安全、运维一类）：spec 第 4 节写明「不涉及 / 无界面」时，
+    # 对照行带上批次号即可，不必假装「两端已接」（141 号 spec 收尾时补的规则）
+    no_ui = bool(spec and re.search(r"不涉及|无界面", _section(spec.read_text(encoding="utf-8"), "4")))
+    tagged = bool(re.search(rf"^\| V-[^\n]*{batch}", vision, re.M))
+    items.append((both or (no_ui and tagged),
+                  "VISION 对照行写「两端已接」并带批次号（spec 第 4 节写明不涉及界面的，带批次号即可）"))
     status_docs = sorted((REPO / "docs").glob("STATUS-*.md"))
     items.append((any(batch in d.read_text(encoding="utf-8") for d in status_docs), "现状文档（docs/STATUS-*.md）划掉这一项"))
     nxt = next((r for r in rows if r["status"] in ("todo", "doing")), None)

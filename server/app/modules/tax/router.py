@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, require_admin, require_job_auth
+from app.core.deps import get_current_user, require_job_auth
 from app.core.errors import bad_request, forbidden, not_found
 from app.core.locks import job_slot
 from app.modules.account.models import User
@@ -12,6 +12,7 @@ from app.modules.account.models import User
 from . import service
 from .models import InvoiceRequest
 from app.core.timefmt import iso
+from app.core.admin_roles import require_role
 
 router = APIRouter(prefix="/finance", tags=["tax"])
 
@@ -30,7 +31,7 @@ def remit_tax(db: Session = Depends(get_db, scope="function"), _=Depends(require
 
 
 @router.get("/tax-ledger")
-def tax_ledger(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def tax_ledger(admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function")):
     """TAX-024 管理端代扣与缴库台账。"""
     return service.ledger(db)
 

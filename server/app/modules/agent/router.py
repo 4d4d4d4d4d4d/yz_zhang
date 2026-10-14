@@ -5,13 +5,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import get_current_user
 from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.modules.account.models import User
 
 from . import service
 from .models import AgentProfile, AgentRun
 from app.core.timefmt import iso
+from app.core.admin_roles import require_role
 
 router = APIRouter(tags=["agent"])
 
@@ -62,7 +63,7 @@ def _dump_run(r: AgentRun) -> dict:
 
 # ---------- 平台侧（admin）：agent 是平台自有的，只有平台能注册 ----------
 @router.post("/admin/agents", status_code=201)
-def create_agent(body: AgentIn, admin: User = Depends(require_admin),
+def create_agent(body: AgentIn, admin: User = Depends(require_role("ops")),
                  db: Session = Depends(get_db, scope="function")):
     """注册一个平台自有 agent：建 User 行 + profile。
 
@@ -96,7 +97,7 @@ def create_agent(body: AgentIn, admin: User = Depends(require_admin),
 
 
 @router.get("/admin/agents")
-def list_agents_admin(_: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def list_agents_admin(_: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     """带毛利。AGT-016：没有这个数字，「让 agent 接单」是赚是赔谁也说不清。"""
     out = []
     for p in db.query(AgentProfile).all():
@@ -114,7 +115,7 @@ def list_agents_admin(_: User = Depends(require_admin), db: Session = Depends(ge
 
 
 @router.patch("/admin/agents/{agent_user_id}")
-def patch_agent(agent_user_id: int, body: AgentPatch, admin: User = Depends(require_admin),
+def patch_agent(agent_user_id: int, body: AgentPatch, admin: User = Depends(require_role("ops")),
                 db: Session = Depends(get_db, scope="function")):
     from app.modules.admin.router import record_audit
 

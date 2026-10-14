@@ -20,7 +20,8 @@ from tests.conftest import auth, make_admin, register
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT.parent / "docs" / "AUTHZ-MATRIX.md"
 # 定义「管理员」这个角色本身的地方，不是绕过
-ROLE_DEFINITIONS = {"app/core/deps.py::require_admin", "app/modules/admin/router.py::_job_or_admin"}
+ROLE_DEFINITIONS = {"app/core/deps.py::require_admin", "app/modules/admin/router.py::_job_or_admin",
+                    "app/core/admin_roles.py::roles_of"}   # SEC-061b 角色定义本身（141 号 spec）
 
 
 def _bypasses() -> set[str]:

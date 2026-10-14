@@ -12,10 +12,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import get_current_user
 from app.core.errors import conflict, not_found
 from app.core.sandbox import CLOUD_AI_ROUTES
 from app.core.timefmt import iso
+from app.core.admin_roles import require_role
 from app.modules.account.models import User, utcnow
 
 from .models import SandboxModel
@@ -101,7 +102,7 @@ def models(user: User = Depends(get_current_user), db: Session = Depends(get_db,
 
 
 @router.get("/admin/sandbox/models")
-def admin_models(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def admin_models(admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     return [_dump(m, admin=True) for m in db.query(SandboxModel).order_by(SandboxModel.id.desc()).all()]
 
 
@@ -112,7 +113,7 @@ def _validate(body: ModelIn) -> None:
 
 
 @router.post("/admin/sandbox/models", status_code=201)
-def create_model(body: ModelIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def create_model(body: ModelIn, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     _validate(body)
     if db.query(SandboxModel.id).filter(SandboxModel.key == body.key).first():
         raise conflict("这个模型标识已经登记过了，换一个或者改已有的那条", "sandbox_model_exists")
@@ -126,7 +127,7 @@ def create_model(body: ModelIn, admin: User = Depends(require_admin), db: Sessio
 
 
 @router.patch("/admin/sandbox/models/{model_id}")
-def update_model(model_id: int, body: ModelIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def update_model(model_id: int, body: ModelIn, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     m = db.get(SandboxModel, model_id)
     if m is None:
         raise not_found("模型不存在")
@@ -141,7 +142,7 @@ def update_model(model_id: int, body: ModelIn, admin: User = Depends(require_adm
 
 
 @router.post("/admin/sandbox/models/{model_id}/publish")
-def publish_model(model_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def publish_model(model_id: int, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     m = db.get(SandboxModel, model_id)
     if m is None:
         raise not_found("模型不存在")
@@ -165,7 +166,7 @@ def publish_model(model_id: int, admin: User = Depends(require_admin), db: Sessi
 
 
 @router.post("/admin/sandbox/models/{model_id}/retire")
-def retire_model(model_id: int, body: RetireIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def retire_model(model_id: int, body: RetireIn, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     m = db.get(SandboxModel, model_id)
     if m is None:
         raise not_found("模型不存在")

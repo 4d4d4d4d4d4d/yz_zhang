@@ -3,7 +3,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import get_current_user
+from app.core.admin_roles import require_role
 from app.modules.account.models import User
 
 from . import service
@@ -25,7 +26,7 @@ def track_event(body: TrackIn, user: User = Depends(get_current_user), db: Sessi
 
 
 @router.get("/admin/funnels")
-def funnels(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def funnels(admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     """13.C 发布漏斗 + 接单漏斗看板（运营）。"""
     return service.funnels(db)
 

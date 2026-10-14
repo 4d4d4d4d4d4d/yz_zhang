@@ -57,6 +57,10 @@ REACHED_BY: dict[str, str] = {
     "/admin/sandbox/models": "adminSandboxModels",
     # SKL-101 技能概念表（135 号 spec）：后台「技能概念表」一块
     "/admin/skill-concepts": "adminSkillConcepts",
+    # SEC-061b 管理员与角色（141 号 spec）
+    "/admin/roles": "adminRoleCatalog",
+    "/admin/admins": "listAdmins",
+    "/admin/admins/{x}/roles": "setAdminRoles",
     "/admin/skill-concepts/{x}/retire": "retireSkillConcept",
     "/admin/sandbox/models/{x}": "updateSandboxModel",
     "/admin/sandbox/models/{x}/publish": "publishSandboxModel",

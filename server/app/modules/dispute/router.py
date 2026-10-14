@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.locks import job_slot
-from app.core.deps import get_current_user, require_admin, require_job_auth
+from app.core.deps import get_current_user, require_job_auth
 from app.core.errors import conflict, forbidden, not_found
 from app.core.events import publish
 from app.modules.account import service as credit
@@ -17,6 +17,7 @@ from app.modules.task.service import transition
 
 from .models import Dispute
 from app.core.timefmt import iso
+from app.core.admin_roles import require_role
 
 router = APIRouter(tags=["dispute"])
 
@@ -266,7 +267,7 @@ def accept_settlement(
 
 @router.post("/disputes/{dispute_id}/verdict")
 def issue_verdict(
-    dispute_id: int, body: ShareIn, arbiter: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
+    dispute_id: int, body: ShareIn, arbiter: User = Depends(require_role("arbiter")), db: Session = Depends(get_db, scope="function")
 ):
     """DSP-006/007 **平台处理决定**：自动执行分账 + 责任方信用惩罚（CRED-004）。
 
@@ -323,7 +324,7 @@ def appeal(dispute_id: int, user: User = Depends(get_current_user), db: Session 
 
 @router.post("/disputes/{dispute_id}/appeal-verdict")
 def appeal_verdict(
-    dispute_id: int, body: ShareIn, senior: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
+    dispute_id: int, body: ShareIn, senior: User = Depends(require_role("arbiter")), db: Session = Depends(get_db, scope="function")
 ):
     """高级审核员复核终局：与原决定的差额做纠正性划转（原分账不回滚，差额多退少补）。"""
     from app.modules.wallet import service as wallet

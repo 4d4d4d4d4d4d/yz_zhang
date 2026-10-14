@@ -58,6 +58,8 @@ class User(Base):
     # 钱包、托管、合约、纠纷、发任务全部以 user_id 为键。
     is_team: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    # SEC-061b 管理员角色（141 号 spec，app/core/admin_roles.py）：空 = 未分级，按超级管理员对待
+    admin_roles: Mapped[list] = mapped_column(JSON, default=list)
     # RISK-006 封禁（封禁后所有需登录操作被拒）
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
     # ACC-006 注销（脱敏保留，登录与被检索均拒绝）

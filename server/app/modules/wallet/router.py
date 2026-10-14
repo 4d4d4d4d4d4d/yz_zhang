@@ -13,6 +13,7 @@ from app.modules.account.models import User
 from . import service
 from .models import LedgerEntry
 from app.core.timefmt import iso
+from app.core.admin_roles import require_role
 
 router = APIRouter(prefix="/wallet", tags=["wallet"])
 
@@ -152,7 +153,7 @@ def withdraw(
 @router.get("/withdraw-requests")
 def list_withdraw_requests(
     status: str = "pending", limit: int = 50, offset: int = 0,
-    admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
+    admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function"),
 ):
     from .models import WithdrawRequest
 
@@ -221,7 +222,7 @@ def list_withdraw_requests(
 
 @router.post("/withdraw-requests/{request_id}/approve")
 def approve_withdraw(
-    request_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
+    request_id: int, admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function"),
 ):
     from .models import WithdrawRequest
 
@@ -245,7 +246,7 @@ def approve_withdraw(
 
 @router.post("/withdraw-requests/{request_id}/reject")
 def reject_withdraw(
-    request_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
+    request_id: int, admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function"),
 ):
     from .models import WithdrawRequest
 

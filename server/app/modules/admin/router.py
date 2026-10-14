@@ -1,13 +1,13 @@
 """管理后台 API（12.E）：用户管理、举报处置队列、平台指标看板。"""
 from fastapi import APIRouter, Depends, Header, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.deps import get_current_user, require_admin
-from app.core.errors import bad_request, forbidden, not_found
+from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.core.locks import job_slot
 from app.modules.account.models import User
 from app.modules.content.models import Content
@@ -17,6 +17,7 @@ from app.modules.task.models import Task
 
 from .models import AdminAudit, Report
 from app.core.timefmt import iso
+from app.core.admin_roles import ANY, require_role
 
 router = APIRouter(tags=["admin"])
 
@@ -33,7 +34,7 @@ class UnbanIn(BaseModel):
 
 
 @router.get("/admin/security")
-def security_board(_: User = Depends(require_admin)):
+def security_board(_: User = Depends(require_role("compliance"))):
     """SECEV-020 安全看板：全局封禁列表、观察名单与人机验证触发次数。
 
     **读 DB，所以任何副本看到的都一样。** 改造前它读的是进程内 dict——
@@ -45,7 +46,7 @@ def security_board(_: User = Depends(require_admin)):
 
 
 @router.post("/admin/security/unban")
-def security_unban(body: UnbanIn, admin: User = Depends(require_admin),
+def security_unban(body: UnbanIn, admin: User = Depends(require_role("compliance")),
                    db: Session = Depends(get_db, scope="function")):
     """SECEV-021 解除封禁（误封公司出口 IP 时的补救手段）。
 
@@ -60,7 +61,7 @@ def security_unban(body: UnbanIn, admin: User = Depends(require_admin),
 
 
 @router.get("/admin/vendors")
-def vendor_status(db: Session = Depends(get_db, scope="function"), _: User = Depends(require_admin)):
+def vendor_status(db: Session = Depends(get_db, scope="function"), _: User = Depends(require_role(*ANY))):
     """VND-041 供应商健康面板：各能力当前实现、是否仍是模拟、熔断状态、
     近 24h 成功率。生产环境若有 P0 能力仍是模拟实现，这里显式列出（上线阻塞项）。"""
     from datetime import timedelta
@@ -97,7 +98,7 @@ def audit_log(
     action: str | None = None,
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
-    admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
+    admin: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function"),
 ):
     """OPS-012 审计日志查询（管理员）。"""
     query = db.query(AdminAudit)
@@ -136,7 +137,7 @@ def create_report(body: ReportIn, user: User = Depends(get_current_user), db: Se
 # ---------- 审核队列（RISK-002） ----------
 @router.get("/admin/reports")
 def report_queue(
-    status: str = "pending", admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
+    status: str = "pending", admin: User = Depends(require_role("support", "compliance")), db: Session = Depends(get_db, scope="function")
 ):
     rows = db.query(Report).filter(Report.status == status).order_by(Report.id).limit(100).all()
     return [
@@ -148,7 +149,7 @@ def report_queue(
 
 @router.post("/admin/reports/{report_id}/resolve")
 def resolve_report(
-    report_id: int, body: ResolveIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
+    report_id: int, body: ResolveIn, admin: User = Depends(require_role("support", "compliance")), db: Session = Depends(get_db, scope="function")
 ):
     """处置留痕（RISK-002/006）：驳回 / 下架内容 / 封禁用户。"""
     report = db.get(Report, report_id)
@@ -195,7 +196,7 @@ class TicketResolveIn(BaseModel):
 @router.get("/admin/tickets")
 def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
                  offset: int = Query(0, ge=0),
-                 admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+                 admin: User = Depends(require_role("support")), db: Session = Depends(get_db, scope="function")):
     """PAY-045 带分页：此前它接受 `offset` 然后忽略它——
     翻页的人会看到第一页无限重复，而且不知道自己在原地。
     **接受一个参数然后忽略它**，比拒绝它更糟。"""
@@ -212,7 +213,7 @@ def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
 
 @router.post("/admin/tickets/{ticket_id}/resolve")
 def resolve_ticket(
-    ticket_id: int, body: TicketResolveIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
+    ticket_id: int, body: TicketResolveIn, admin: User = Depends(require_role("support")), db: Session = Depends(get_db, scope="function")
 ):
     from app.modules.account.models import utcnow
     from app.modules.notification.service import notify
@@ -233,7 +234,7 @@ def resolve_ticket(
 # ---------- 用户管理（OPS-002） ----------
 @router.get("/admin/users")
 def list_users(
-    q: str | None = None, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
+    q: str | None = None, admin: User = Depends(require_role("support", "compliance")), db: Session = Depends(get_db, scope="function"),
     limit: int = Query(default=50, le=200),
 ):
     query = db.query(User)
@@ -248,7 +249,7 @@ def list_users(
 
 
 @router.get("/admin/users/{user_id}/ban-impact")
-def ban_impact(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def ban_impact(user_id: int, admin: User = Depends(require_role("support", "compliance")), db: Session = Depends(get_db, scope="function")):
     """OPS-013 封禁前预览影响面（不产生副作用）。"""
     if not db.get(User, user_id):
         raise not_found("用户不存在")
@@ -258,7 +259,7 @@ def ban_impact(user_id: int, admin: User = Depends(require_admin), db: Session =
 
 
 @router.post("/admin/users/{user_id}/ban")
-def ban_user(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def ban_user(user_id: int, admin: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function")):
     """OPS-013 封禁：影响面、对手方通知、挂单下架、审计——见 admin/service。"""
     from . import service as admin_service
 
@@ -266,7 +267,7 @@ def ban_user(user_id: int, admin: User = Depends(require_admin), db: Session = D
 
 
 @router.post("/admin/users/{user_id}/unban")
-def unban_user(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def unban_user(user_id: int, admin: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function")):
     user = db.get(User, user_id)
     if not user:
         raise not_found("用户不存在")
@@ -283,7 +284,7 @@ class CategoryIn(BaseModel):
 
 
 @router.post("/admin/categories", status_code=201)
-def create_category(body: CategoryIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def create_category(body: CategoryIn, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     from app.modules.task.models import Category
 
     if db.query(Category).filter(Category.name == body.name).first():
@@ -297,7 +298,7 @@ def create_category(body: CategoryIn, admin: User = Depends(require_admin), db: 
 @router.patch("/admin/categories/{category_id}")
 def update_category(
     category_id: int, active: bool | None = None, required_cert: str | None = None,
-    admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
+    admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function"),
 ):
     from app.modules.task.models import Category
 
@@ -321,7 +322,7 @@ class WeightsIn(BaseModel):
 
 
 @router.get("/admin/matching-config")
-def get_matching_config(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def get_matching_config(admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     from app.modules.matching.service import get_weights
 
     return {"weights": get_weights(db)}
@@ -329,7 +330,7 @@ def get_matching_config(admin: User = Depends(require_admin), db: Session = Depe
 
 @router.put("/admin/matching-config")
 def set_matching_config(
-    body: WeightsIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
+    body: WeightsIn, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")
 ):
     total = body.skill + body.credit + body.distance + body.rating
     if abs(total - 1.0) > 0.001:
@@ -351,7 +352,7 @@ class CityIn(BaseModel):
 
 
 @router.post("/admin/cities", status_code=201)
-def open_city(body: CityIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def open_city(body: CityIn, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     from app.modules.task.models import City
 
     existing = db.query(City).filter(City.name == body.name).first()
@@ -367,7 +368,7 @@ def open_city(body: CityIn, admin: User = Depends(require_admin), db: Session = 
 
 @router.patch("/admin/cities/{city_id}")
 def toggle_city(
-    city_id: int, active: bool, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
+    city_id: int, active: bool, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")
 ):
     from app.modules.task.models import City
 
@@ -387,7 +388,7 @@ class AnnouncementIn(BaseModel):
 
 @router.post("/admin/announcements")
 def broadcast_announcement(
-    body: AnnouncementIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
+    body: AnnouncementIn, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")
 ):
     """OPS-009 平台公告：向全体（或已实名）活跃用户广播站内通知。"""
     from app.modules.notification.service import notify
@@ -409,7 +410,7 @@ class SettleIn(BaseModel):
 
 
 @router.get("/admin/platform-finance")
-def platform_finance(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def platform_finance(admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function")):
     """平台收入总览：累计佣金（实收）、已结算、可结算余额。"""
     from app.modules.wallet import service as wallet
 
@@ -418,7 +419,7 @@ def platform_finance(admin: User = Depends(require_admin), db: Session = Depends
 
 @router.post("/admin/platform-finance/settle")
 def settle_platform(
-    body: SettleIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")
+    body: SettleIn, admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function")
 ):
     """OPS-010 平台收入结算：把平台账户余额划出（模拟对公结算）。"""
     from app.modules.wallet import service as wallet
@@ -448,6 +449,11 @@ def _job_or_admin(
     user = get_current_user(db=db, authorization=authorization)
     if not user.is_admin:
         raise forbidden("需要管理员权限", "admin_required")
+    # SEC-061b 手动触发对账是财务的事（141 号 spec）；调度器走上面的令牌，不受影响
+    from app.core.admin_roles import has_role, labels, roles_of
+
+    if not has_role(user, "finance"):
+        raise forbidden(f"这件事需要「财务」角色的管理员；你的角色是「{labels(sorted(roles_of(user)))}」", "admin_role_required")
     return user.id
 
 
@@ -474,7 +480,7 @@ def run_reconcile(triggered_by: int = Depends(_job_or_admin),
 
 # ---------- 数据看板（OPS-007） ----------
 @router.get("/admin/metrics")
-def metrics(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def metrics(admin: User = Depends(require_role(*ANY)), db: Session = Depends(get_db, scope="function")):
     total_users = db.query(User).count()
     verified_users = db.query(User).filter(User.is_verified.is_(True)).count()
     total_tasks = db.query(Task).count()
@@ -505,7 +511,7 @@ def metrics(admin: User = Depends(require_admin), db: Session = Depends(get_db, 
 @router.get("/admin/uploads/pending")
 def pending_uploads(
     limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
-    _: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
+    _: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function"),
 ):
     """UMOD-020 机审拿不准的图片队列。
 
@@ -535,7 +541,7 @@ class UploadVerdictIn(BaseModel):
 @router.post("/admin/uploads/{name}/resolve")
 def resolve_upload(
     name: str, body: UploadVerdictIn,
-    admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
+    admin: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function"),
 ):
     """UMOD-021 审核员处置：通过，或**物理删除并告知上传者**。
 
@@ -614,7 +620,7 @@ def _certifications(db: Session, status: str, limit: int, offset: int = 0) -> li
 @router.get("/admin/certifications/pending")
 def pending_certifications(
     limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
-    _: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
+    _: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function"),
 ):
     return _certifications(db, "pending", limit, offset)
 
@@ -623,7 +629,7 @@ def pending_certifications(
 def list_certifications(
     status: str = Query("approved", pattern="^(pending|approved|rejected|revoked)$"),
     limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
-    _: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
+    _: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function"),
 ):
     """CERT-031 按状态列资质（76 号 spec）。
 
@@ -638,7 +644,7 @@ def list_certifications(
 @router.post("/admin/certifications/{application_id}/decide")
 def decide_certification(
     application_id: int, body: CertVerdictIn,
-    admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
+    admin: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function"),
 ):
     from app.modules.account import cert_service
     from app.modules.account.models_cert import CertificationApplication
@@ -655,7 +661,7 @@ def decide_certification(
 @router.post("/admin/certifications/{application_id}/revoke")
 def revoke_certification(
     application_id: int, body: CertVerdictIn,
-    admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
+    admin: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function"),
 ):
     from app.modules.account import cert_service
     from app.modules.account.models_cert import CertificationApplication
@@ -684,7 +690,7 @@ class TeamVerifyIn(BaseModel):
 @router.get("/admin/teams/pending")
 def pending_teams(
     limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
-    _: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
+    _: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function"),
 ):
     """待核验的团队企业信息。
 
@@ -713,7 +719,7 @@ def pending_teams(
 @router.post("/admin/teams/{team_id}/verify")
 def verify_team(
     team_id: int, body: TeamVerifyIn,
-    admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function"),
+    admin: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function"),
 ):
     """核过，或驳回**并写明要补什么**。
 
@@ -750,7 +756,7 @@ def verify_team(
 
 # ---------- QUEUE-010/011/012 人审队列概览与催办（78 号 spec） ----------
 @router.get("/admin/queues")
-def review_queues(_: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def review_queues(_: User = Depends(require_role(*ANY)), db: Session = Depends(get_db, scope="function")):
     """每个人审队列：几件在等、最久等了多久、SLA 多长、超没超。
 
     三个地方共用这一份：催办 job、管理后台首屏、测试。
@@ -827,3 +833,58 @@ def run_remind_review_queues(_triggered_by: int = Depends(_job_or_admin),
             told += 1
     return {"breached": [r["key"] for r in breached], "admins_notified": digested,
             "submitters_told": told}
+
+
+# ------------------------------------------------------------------ SEC-061b 管理员与角色（141 号 spec）
+class AdminRolesIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    roles: list[str] = Field(min_length=1, max_length=6)
+
+
+def _admin_row(u: User) -> dict:
+    from app.core.admin_roles import roles_of
+
+    return {"user_id": u.id, "nickname": u.nickname, "roles": sorted(roles_of(u)),
+            "unclassified": not [r for r in (u.admin_roles or []) if r]}
+
+
+@router.get("/admin/roles")
+def admin_role_catalog(user: User = Depends(require_role(*ANY))):
+    """角色说明与我自己的角色：后台按这个决定显示哪些板块（拦在服务端，显示只是不让人白点）。"""
+    from app.core.admin_roles import ROLES, roles_of
+
+    return {"roles": [{"key": k, "label": v.split("：")[0], "scope": v.split("：", 1)[1]} for k, v in ROLES.items()],
+            "mine": sorted(roles_of(user))}
+
+
+@router.get("/admin/admins")
+def list_admins(_: User = Depends(require_role("super")), db: Session = Depends(get_db, scope="function")):
+    rows = [_admin_row(u) for u in db.query(User).filter(User.is_admin.is_(True), User.is_deleted.is_(False))
+            .order_by(User.id)]
+    return {"admins": rows, "unclassified": sum(1 for r in rows if r["unclassified"])}
+
+
+@router.put("/admin/admins/{user_id}/roles")
+def set_admin_roles(user_id: int, body: AdminRolesIn, admin: User = Depends(require_role("super")),
+                    db: Session = Depends(get_db, scope="function")):
+    """只有超级管理员能分配；至少留一位超级管理员；每次都进审计。"""
+    from app.core.admin_roles import ROLES, roles_of
+
+    target = db.get(User, user_id)
+    if target is None or not target.is_admin or target.is_deleted:
+        raise not_found("这个用户不是管理员：管理员身份由运维开通，这里只分配角色", "admin_target_not_admin")
+    unknown = sorted(set(body.roles) - set(ROLES))
+    if unknown:
+        raise bad_request(f"不认识的角色：{'、'.join(unknown)}；可选的是 {'、'.join(ROLES)}", "admin_role_unknown")
+    new = sorted(set(body.roles))
+    others_super = [u for u in db.query(User).filter(User.is_admin.is_(True), User.is_deleted.is_(False), User.id != target.id)
+                    if "super" in roles_of(u)]
+    if "super" not in new and not others_super:
+        raise conflict("至少要留一位超级管理员：否则以后没人能再分配角色。先给另一位管理员加上「超级管理员」",
+                       "admin_last_super")
+    before = sorted(roles_of(target))
+    target.admin_roles = new
+    record_audit(db, admin.id, "set_admin_roles", "user", target.id, f"{before} -> {new}")
+    db.commit()
+    return _admin_row(target)
+

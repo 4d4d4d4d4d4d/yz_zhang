@@ -6,9 +6,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import get_current_user
 from app.core.errors import bad_request, conflict, not_found
 from app.core.timefmt import day, iso
+from app.core.admin_roles import require_role
 from app.modules.account.models import User, utcnow
 
 from . import schema
@@ -218,21 +219,21 @@ def _new_version(db: Session, d: schema.PackDef, admin: User) -> ScenarioPack:
 
 
 @router.post("/admin/packs/validate")
-def admin_validate(body: PackIn, admin: User = Depends(require_admin)):
+def admin_validate(body: PackIn, admin: User = Depends(require_role("ops"))):
     """只校验不保存：给编辑器用，也给 skill `scenario-discovery` 产出的文件用。"""
     d, problems = schema.validate(body.definition)
     return {"ok": not problems, "problems": problems, "score": d.score.total() if d else None}
 
 
 @router.get("/admin/packs")
-def admin_list(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def admin_list(admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     rows = db.query(ScenarioPack).order_by(ScenarioPack.key, ScenarioPack.version.desc()).all()
     m = svc.metrics(db, sorted({p.key for p in rows}))
     return [{**_admin_row(p), "metrics": m[p.key]} for p in rows]
 
 
 @router.post("/admin/packs", status_code=201)
-def admin_create(body: PackIn, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def admin_create(body: PackIn, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     from app.modules.admin.router import record_audit
 
     p = _new_version(db, _checked(body.definition), admin)
@@ -241,7 +242,7 @@ def admin_create(body: PackIn, admin: User = Depends(require_admin), db: Session
 
 
 @router.put("/admin/packs/{pack_id}")
-def admin_update(pack_id: int, body: PackIn, admin: User = Depends(require_admin),
+def admin_update(pack_id: int, body: PackIn, admin: User = Depends(require_role("ops")),
                  db: Session = Depends(get_db, scope="function")):
     p = _own_pack(db, pack_id)
     if p.status != "draft":
@@ -257,7 +258,7 @@ def admin_update(pack_id: int, body: PackIn, admin: User = Depends(require_admin
 
 
 @router.post("/admin/packs/{pack_id}/submit")
-def admin_submit(pack_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def admin_submit(pack_id: int, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     p = _own_pack(db, pack_id)
     if p.status != "draft":
         raise conflict("只有草稿能提交审核", "pack_not_draft")
@@ -269,7 +270,7 @@ def admin_submit(pack_id: int, admin: User = Depends(require_admin), db: Session
 
 
 @router.post("/admin/packs/{pack_id}/approve")
-def admin_approve(pack_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def admin_approve(pack_id: int, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     """四眼原则：上线的人不能是写它的人。上线后同 key 的旧版本转为 superseded（已启用的用户照常可用）。"""
     from app.modules.admin.router import record_audit
 
@@ -292,7 +293,7 @@ def admin_approve(pack_id: int, admin: User = Depends(require_admin), db: Sessio
 
 
 @router.post("/admin/packs/{pack_id}/reject")
-def admin_reject(pack_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def admin_reject(pack_id: int, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     p = _own_pack(db, pack_id)
     if p.status != "review":
         raise conflict("只有待审核的版本能退回", "pack_not_in_review")
@@ -303,7 +304,7 @@ def admin_reject(pack_id: int, admin: User = Depends(require_admin), db: Session
 
 
 @router.post("/admin/packs/{pack_id}/retire")
-def admin_retire(pack_id: int, body: RetireIn, admin: User = Depends(require_admin),
+def admin_retire(pack_id: int, body: RetireIn, admin: User = Depends(require_role("ops")),
                  db: Session = Depends(get_db, scope="function")):
     """下线要写理由（只增不删：记录留着、已启用用户装进去的副本留着）。"""
     from app.modules.admin.router import record_audit
@@ -319,12 +320,12 @@ def admin_retire(pack_id: int, body: RetireIn, admin: User = Depends(require_adm
 
 
 @router.get("/admin/packs/radar")
-def admin_radar(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def admin_radar(admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     return svc.radar(db)
 
 
 @router.post("/admin/packs/import-seeds")
-def admin_import_seeds(admin: User = Depends(require_admin), db: Session = Depends(get_db, scope="function")):
+def admin_import_seeds(admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     """把仓库里的种子包（`app/modules/packs/seeds/*.json`）导成草稿：内容与最新版本一样的跳过。
 
     导进来是**草稿**，照样要另一位管理员审核才上线——仓库里的文件不能绕过四眼。

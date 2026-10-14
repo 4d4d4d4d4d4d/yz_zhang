@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.deps import get_current_user
+from app.core.admin_roles import roles_of
 from app.vendors import sms_service
 from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.core.security import create_token, hash_password, verify_password
@@ -124,6 +125,8 @@ def _me(user: User) -> dict:
         "interests": user.interests,
         "is_verified": user.is_verified,
         "is_admin": user.is_admin,
+        # SEC-061b 生效的管理员角色（141 号 spec）：不是管理员就是空
+        "admin_roles": sorted(roles_of(user)),
         "certifications": user.certifications,
         "credit_score": user.credit_score,
         "credit_level": credit_level(user.credit_score),

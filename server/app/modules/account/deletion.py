@@ -75,6 +75,7 @@ USER_DISPOSITION: dict[str, Disposition] = {
     "is_venture": R,          # 同 is_agent：清掉会让这行退化成「看起来像真人」的账号
     "is_agent": R,
     "is_admin": E,              # ACCDEL-024 注销一个管理员，管理员标记不能留着
+    "admin_roles": E,           # SEC-061b 同上：角色随管理员身份一起清掉
     "is_banned": R,             # ACCDEL-025 注销不是洗白封禁的手段
     "is_deleted": R,            # 由注销流程置 True
     "referral_code": E,         # ACCDEL-026 注销后这个码不该还能被别人填
@@ -189,6 +190,7 @@ def erase_personal_data(db: Session, user: User) -> dict:
     user.weekly_slots = []
     user.limited_capacity = False
     user.is_admin = False
+    user.admin_roles = []
     user.referral_code = ""
     db.add(user)
 

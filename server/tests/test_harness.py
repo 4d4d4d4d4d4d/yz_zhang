@@ -125,3 +125,17 @@ def test_closeout_lists_what_is_still_unticked():
     assert all(items.values()), items
     missing = harness.closeout("V9999")
     assert not missing[0][0] and any(text.startswith("下一批") for _, text in missing)
+
+
+def test_red_closeout_vision_row_for_ui_and_no_ui_batches(sandbox, monkeypatch):
+    """141 号收尾补的规则：有界面的批次要「两端已接」；spec 第 4 节写明不涉及界面的（安全、运维），带批次号即可。"""
+    vision = sandbox / "VISION.md"
+    vision.write_text("| V-1 | 甲 | — | 部分 | V9981 安全加固 |\n| V-2 | 乙 | — | 部分 | V9982 只有网页 |\n", encoding="utf-8")
+    monkeypatch.setattr(harness, "VISION", vision)
+    key = "VISION 对照行写「两端已接」并带批次号（spec 第 4 节写明不涉及界面的，带批次号即可）"
+    _add_spec(sandbox, 9981, "\n# 9981 x\n\n> 状态：本批实现（V9981）。\n\n## 4. 两端\n\n无界面。\n\n## 7. 没做的\n\n- 无\n")
+    _add_row(sandbox, "| V9981 | 安全 | 9981 | done | x |")
+    assert dict((t, ok) for ok, t in harness.closeout("V9981"))[key] is True
+    _add_spec(sandbox, 9982, "\n# 9982 x\n\n> 状态：本批实现（V9982）。\n\n## 4. 两端\n\n- Web：一个新页面\n\n## 7. 没做的\n\n- 无\n")
+    _add_row(sandbox, "| V9982 | 有界面 | 9982 | done | x |")
+    assert dict((t, ok) for ok, t in harness.closeout("V9982"))[key] is False, "有界面却只写了「部分」，不能算收尾"
