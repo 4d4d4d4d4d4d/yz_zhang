@@ -488,6 +488,7 @@ app OrganizationRecords
 app PayoutGovernance
 app TeamCoopDev
 app VideoFeed
+app appGaps
 app ask
 app availability
 app certifications

@@ -27,6 +27,7 @@ import { CapabilityScreen, SkillsScreen } from './profiles';
 import { InfluenceScreen } from './influence';
 import { SandboxScreen } from './sandbox';
 import { MissionsScreen } from './missions';
+import { TeamMembersBlock } from './appGaps';
 import { AvailabilityScreen } from './availability';
 import { RightsScreen } from './rights';
 import { ApplicationsScreen, InvitationsScreen, MessagesScreen } from './MessagesAndInvites';
@@ -176,6 +177,9 @@ function TeamDetailBlock({ client, teamId }: { client: PlatformClient; teamId: n
           ? `团队本月预算池 ${fmtYuan(team.monthly_budget_cents)}，已用 ${fmtYuan(team.month_spent_cents)}，剩余 ${fmtYuan(poolLeft)}`
           : `未设预算池（本月已花 ${fmtYuan(team.month_spent_cents)}）`}
       </Text>
+
+      {/* TEAM-065 成员管理（136 号 spec） */}
+      <TeamMembersBlock client={client} teamId={teamId} team={team} onChanged={() => void load()} />
 
       <Text style={s.cardTitle}>申请支出</Text>
       <TextInput style={s.input} keyboardType="numeric" value={amount}

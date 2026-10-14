@@ -1,4 +1,5 @@
 import { ChainEntry } from './ChainEntry';
+import { EvidenceExportButton, InvoicesBlock } from './appGaps';
 import { DraftHints, TaskProfileBlock } from './profiles';
 import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
@@ -463,6 +464,10 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
             <Text style={styles.mutedLeft}>
               签署：发布方{contract.signed_by_requester ? '✓' : '…'} / 执行方{contract.signed_by_executor ? '✓' : '…'}
             </Text>
+            {/* APP-076 开票在合约上：放款后发布方在这里申请这一单的平台服务费发票（136 号 spec） */}
+            {['released', 'split'].includes(contract.status) && meId === contract.requester_id && (
+              <InvoicesBlock client={client} contractId={contract.id} />
+            )}
           </View>
         </View>
       )}
@@ -866,6 +871,8 @@ function DisputeBlock({ client, taskId, meId }: {
           )}
         </>
       )}
+      {/* APP-090 证据包导出（136 号 spec）：整包原样，用系统分享发出去 */}
+      <EvidenceExportButton client={client} disputeId={dispute.id} />
       {!!error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
@@ -1010,6 +1017,8 @@ export function WalletScreen({ client }: { client: PlatformClient }) {
       {!!error && <Text style={styles.error}>{error}</Text>}
 
       <PayoutAccountBlock client={client} />
+      {/* APP-090 平台服务费发票（136 号 spec） */}
+      <InvoicesBlock client={client} />
 
       {/* APP-065 账单流水。此前这一页只有三个数字：「余额少了一百块」
           而看不到为什么，是最容易变成工单的一类问题。 */}

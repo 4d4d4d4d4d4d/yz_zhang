@@ -409,3 +409,20 @@ def test_coop_and_team_are_different_things(client):
 
     paths = [p for p in app.openapi()["paths"] if "/teams" in p]
     assert not any("distribution" in p or "share" in p for p in paths), paths
+
+
+# ------------------------------------------- TEAM-065 成员管理两端（136 号 spec）
+def test_team065_members_carry_nicknames_for_the_member_list(client):
+    """两端的成员列表要显示「谁」，不能只给一串用户编号——所以 GET /teams/{id} 的成员带昵称。"""
+    from tests.test_client_shape_alignment import _assert_shape
+
+    owner = make_user(client, "13300000090", "老板")
+    team_id = make_team(client, owner)
+    staff = make_user(client, "13300000091", "小林")
+    assert add_member(client, team_id, owner, staff, limit=50000).status_code in (200, 201)
+    info = client.get(f"/api/v1/teams/{team_id}", headers=auth(owner)).json()
+    _assert_shape(info, "TeamDetail")
+    by_id = {m["user_id"]: m for m in info["members"]}
+    assert by_id[staff["id"]]["nickname"] == "小林"
+    assert by_id[staff["id"]]["spend_limit_cents"] == 50000
+    assert by_id[owner["id"]]["nickname"] == "老板"

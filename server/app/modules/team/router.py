@@ -114,12 +114,14 @@ def get_team(team_id: int, user: User = Depends(get_current_user),
     acct = wallet.get_or_create(db, team_id)
     members = db.query(TeamMember).filter(TeamMember.team_id == team_id,
                                           TeamMember.active.is_(True)).all()
+    names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_([m.user_id for m in members] or [-1]))}
     return {
         **_dump(team),
         "balance_cents": acct.available_cents,
         "my_role": me.role, "my_spend_limit_cents": me.spend_limit_cents,
-        "members": [{"user_id": m.user_id, "role": m.role,
-                     "spend_limit_cents": m.spend_limit_cents} for m in members],
+        # TEAM-065 昵称：成员管理的界面要写人名，不能只写编号（136 号 spec）
+        "members": [{"user_id": m.user_id, "role": m.role, "spend_limit_cents": m.spend_limit_cents,
+                     "nickname": names.get(m.user_id, "")} for m in members],
         # TEAM-030 客户端的「开票」按钮读这个，与服务端同一判断
         "invoice_block": service.can_invoice(team),
         # TEAM-052 预算池与本月用量：界面要能说清「还剩多少」，

@@ -3,6 +3,7 @@ import {
   type SpendRequestView, type TeamDetail, type TeamView,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '../store';
 
 /** UI-075 团队账户（53 号 spec 的界面侧）。
@@ -117,6 +118,9 @@ function TeamCard({ teamId }: { teamId: number }) {
         {error && <p className="error">{error}</p>}
         {notice && <p className="muted" data-testid="spend-notice">{notice}</p>}
 
+        {/* TEAM-065 成员管理（136 号 spec）：只有所有者能加人、改角色与月度额度、移出 */}
+        <TeamMembers teamId={teamId} team={team} onChanged={() => void load()} />
+
         <h4>申请支出</h4>
         <div className="row">
           <input style={{ width: 140 }} type="number" min={0.01} step={0.01} placeholder="金额（元）"
@@ -190,5 +194,59 @@ function TeamCard({ teamId }: { teamId: number }) {
         </button>
       </div>
     </>
+  );
+}
+
+function TeamMembers({ teamId, team, onChanged }: { teamId: number; team: TeamDetail; onChanged: () => void }) {
+  const { client } = useApp();
+  const [userId, setUserId] = useState('');
+  const [limit, setLimit] = useState('0');
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const owner = team.my_role === 'owner';
+  async function act(fn: () => Promise<unknown>, done: string) {
+    setError(''); setNotice('');
+    try { await fn(); setNotice(done); onChanged(); } catch (e) { setError(apiErrorText(e)); }
+  }
+  const ROLE: Record<string, string> = { owner: '所有者', admin: '管理员', member: '成员' };
+  return (
+    <div aria-label="团队成员">
+      <h4>成员（{team.members.length}）</h4>
+      <table>
+        <thead><tr><th>成员</th><th>角色</th><th>月度额度</th>{owner && <th>操作</th>}</tr></thead>
+        <tbody>
+          {team.members.map((m) => (
+            <tr key={m.user_id}>
+              <td><Link to={`/people/${m.user_id}`}>{m.nickname || `用户 #${m.user_id}`}</Link></td>
+              <td>{ROLE[m.role] ?? m.role}</td>
+              <td>{fmtYuan(m.spend_limit_cents)}</td>
+              {owner && <td>{m.role !== 'owner' && <>
+                <button className="text-link" onClick={() => void act(() => client.updateTeamMember(teamId, m.user_id, { role: m.role === 'admin' ? 'member' : 'admin' }), '角色已更新')}>
+                  {m.role === 'admin' ? '设为成员' : '设为管理员'}</button>
+                {' '}<button className="text-link" onClick={() => {
+                  const yuan = prompt('这个成员的月度额度（元）：', String(m.spend_limit_cents / 100));
+                  if (yuan !== null) void act(() => client.updateTeamMember(teamId, m.user_id, { spend_limit_cents: Math.round(parseFloat(yuan || '0') * 100) }), '额度已更新');
+                }}>改额度</button>
+                {' '}<button className="text-link" onClick={() => {
+                  if (window.confirm(`把 ${m.nickname || m.user_id} 移出团队？移出后对方不能再用团队的钱。`)) void act(() => client.removeTeamMember(teamId, m.user_id), '已移出');
+                }}>移出</button>
+              </>}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {owner ? (
+        <div className="row">
+          <input aria-label="成员用户编号" type="number" placeholder="对方的用户编号（在对方个人空间地址里）" value={userId} onChange={(e) => setUserId(e.target.value)} />
+          <input aria-label="月度额度" type="number" min={0} placeholder="月度额度（元）" value={limit} onChange={(e) => setLimit(e.target.value)} />
+          <button disabled={!Number(userId)} onClick={() => void act(async () => {
+            await client.addTeamMember(teamId, Number(userId), 'member', Math.round(Number(limit || '0') * 100));
+            setUserId('');
+          }, '已加入')}>加入团队</button>
+        </div>
+      ) : <p className="muted">只有团队所有者能管理成员。</p>}
+      {notice && <p role="status">{notice}</p>}
+      {error && <p className="error">{error}</p>}
+    </div>
   );
 }
