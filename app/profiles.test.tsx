@@ -28,6 +28,16 @@ describe('PROF-100 App 上的画像', () => {
     await waitFor(() => expect(calls.find((c) => c.path === '/profiles/task-draft')?.body).toMatchObject({ title: '帮忙取快递', budget_cents: 3500 }));
   });
 
+  it('SCN-106 创作类的单：列出九项里还没写的（140 号 spec）', async () => {
+    const client = makeClient({ 'POST /profiles/task-draft': { category: '设计', mode: 'remote', declared_skills: [], inferred_skills: [], size: 'unknown',
+      price: { sample_size: 0, p50_cents: null, min_cents: null, max_cents: null, position: 'unknown' }, risks: [],
+      completeness: 0.5, checks: [], brief: { missing: 1, items: [{ name: '用途', ok: true, ask: '用在哪儿？' }, { name: '版权授权', ok: false, ask: '版权怎么约定？' }] } } }, []);
+    render(<DraftHints client={client} draft={{ title: '海报', category: '设计' }} delayMs={0} />);
+    expect(await screen.findByText('创作类需求一般写清九项，已写 1/2。还可以补：')).toBeTruthy();
+    expect(screen.getByText('· 版权授权：版权怎么约定？')).toBeTruthy();
+    expect(screen.queryByText(/用在哪儿/)).toBeNull();
+  });
+
   it('取不到画像时不显示，不挡发布', async () => {
     const client = makeClient({}, []);
     render(<DraftHints client={client} draft={{ title: 'x' }} delayMs={0} />);

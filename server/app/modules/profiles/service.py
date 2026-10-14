@@ -62,6 +62,33 @@ def infer_skills(text: str, vocab: list[str], declared: list[str], db: Session |
     return out
 
 
+# ------------------------------------------------------------------ 创作类需求九项（SCN-106，140 号 spec）
+# 类目是这些，或者要求 / 认出的技能（按 135 号概念表的规范名）是这些，就按创作类需求单的九项看缺什么
+BRIEF_CATEGORIES = ("设计", "文案", "视频剪辑", "剪辑", "摄影", "插画", "动画")
+BRIEF_SKILLS = ("品牌设计", "平面设计", "UI设计", "视频剪辑", "摄影", "文案")
+
+
+def brief(t: dict, category: str, text: str, skills: list[str]) -> dict | None:
+    """创作类的单才有：九项里写到了哪些、没写的该补什么。表单里填了的（预算、截止时间）也算写到。
+
+    只是提示，不计入「说明完整度」——那个分数的口径（126 号）不变。"""
+    from app.modules.packs.creator import ITEMS, brief_check
+
+    if category not in BRIEF_CATEGORIES and not set(skills) & set(BRIEF_SKILLS):
+        return None
+    r = brief_check(text)
+    filled = {"预算": int(t.get("budget_cents") or 0) > 0, "交期": bool(t.get("deadline"))}
+    items = [{"name": name, "ok": name in r["present"] or filled.get(name, False), "ask": ask} for name, _, ask in ITEMS]
+    return {"items": items, "missing": sum(1 for i in items if not i["ok"])}
+
+
+def _canonical_all(db: Session, skills: list[str]) -> list[str]:
+    from app.modules.skills.service import canonical, index
+
+    idx = index(db)
+    return [canonical(x, idx) for x in skills]
+
+
 # ------------------------------------------------------------------ 任务画像（PROF-101~104）
 def task_profile(db: Session, t: dict) -> dict:
     """`t` 是任务的字段字典（草稿也行）：title / description / category / budget_cents / is_remote / city /
@@ -121,6 +148,7 @@ def task_profile(db: Session, t: dict) -> dict:
         "inferred_skills": inferred, "size": size, "price": price, "risks": risks,
         "completeness": round(passed / len(checks), 2),
         "checks": [{"key": k, "ok": ok, "hint": "" if ok else hint} for k, ok, hint in checks],
+        "brief": brief(t, category, text, _canonical_all(db, declared) + inferred),
     }
 
 

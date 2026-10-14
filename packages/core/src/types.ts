@@ -2160,6 +2160,18 @@ export interface TaskProfile {
   /** 0~1：说明完整度 */
   completeness: number;
   checks: TaskProfileCheck[];
+  /** SCN-106 创作类的单才有（140 号 spec）：需求单九项写到了哪些；不计入说明完整度 */
+  brief: TaskBrief | null;
+}
+export interface TaskBriefItem {
+  name: string;
+  ok: boolean;
+  /** 没写时该补的那句话 */
+  ask: string;
+}
+export interface TaskBrief {
+  items: TaskBriefItem[];
+  missing: number;
 }
 export interface TaskProfileView extends TaskProfile {
   task_id: number;

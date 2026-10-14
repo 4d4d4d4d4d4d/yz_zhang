@@ -30,6 +30,13 @@ export function DraftHints({ draft }: { draft: TaskDraftInput }) {
       <p><strong>说明完整度 {Math.round(p.completeness * 100)}%</strong>
         {p.price.sample_size > 0 && <span className="muted"> · 预算{POSITION[p.price.position]}（中位 {fmtYuan(p.price.p50_cents ?? 0)}）</span>}</p>
       {missing.length > 0 && <ul>{missing.map((c) => <li key={c.key}>{c.hint}</li>)}</ul>}
+      {/* SCN-106 创作类需求九项（140 号 spec）：只是提示，不计入完整度 */}
+      {p.brief && p.brief.missing > 0 && (
+        <div aria-label="创作类需求九项">
+          <p className="muted">创作类需求一般写清九项，已写 {p.brief.items.length - p.brief.missing}/{p.brief.items.length}。还可以补：</p>
+          <ul>{p.brief.items.filter((i) => !i.ok).map((i) => <li key={i.name}>{i.name}：{i.ask}</li>)}</ul>
+        </div>
+      )}
       {p.inferred_skills.length > 0 && <p className="muted">从说明里认出的技能：{p.inferred_skills.join('、')}（会用来推荐合适的人）</p>}
       {p.risks.length > 0 && <ul className="muted">{p.risks.map((r) => <li key={r.kind}>⚠ {r.text}</li>)}</ul>}
     </div>

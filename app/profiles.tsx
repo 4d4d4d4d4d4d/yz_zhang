@@ -28,6 +28,13 @@ export function DraftHints({ client, draft, delayMs = 500 }: { client: PlatformC
       <Text style={s.title}>说明完整度 {Math.round(p.completeness * 100)}%</Text>
       {p.price.sample_size > 0 && <Text style={s.muted}>预算{POSITION[p.price.position]}（中位 {fmtYuan(p.price.p50_cents ?? 0)}）</Text>}
       {missing.map((c) => <Text key={c.key}>· {c.hint}</Text>)}
+      {/* SCN-106 创作类需求九项（140 号 spec）：只是提示，不计入完整度 */}
+      {p.brief && p.brief.missing > 0 && (
+        <View accessibilityLabel="创作类需求九项">
+          <Text style={s.muted}>创作类需求一般写清九项，已写 {p.brief.items.length - p.brief.missing}/{p.brief.items.length}。还可以补：</Text>
+          {p.brief.items.filter((i) => !i.ok).map((i) => <Text key={i.name}>· {i.name}：{i.ask}</Text>)}
+        </View>
+      )}
       {p.risks.map((r) => <Text key={r.kind} style={s.muted}>⚠ {r.text}</Text>)}
     </View>
   );

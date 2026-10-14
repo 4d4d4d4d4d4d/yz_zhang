@@ -36,6 +36,26 @@ function open(path: string, routes: Record<string, unknown>, calls: Call[] = [])
 }
 
 describe('PROF-100 画像', () => {
+  it('SCN-106 创作类的单：列出九项里还没写的与该补的话（140 号 spec）', async () => {
+    const brief = { missing: 2, items: [
+      { name: '用途', ok: true, ask: '用在哪儿？' },
+      { name: '改稿次数', ok: false, ask: '包含几次修改？' },
+      { name: '版权授权', ok: false, ask: '版权怎么约定？' },
+    ] };
+    open('/publish', { 'POST /profiles/task-draft': { ...PROFILE, brief }, '/categories': [{ name: '设计', required_cert: '' }] });
+    const box = await screen.findByLabelText('创作类需求九项', {}, { timeout: 3000 });
+    expect(box.textContent).toContain('已写 1/3');
+    expect(box.textContent).toContain('改稿次数：包含几次修改？');
+    expect(box.textContent).toContain('版权授权：版权怎么约定？');
+    expect(box.textContent).not.toContain('用在哪儿');
+  });
+
+  it('SCN-106 不是创作类（brief 为空）就不显示九项', async () => {
+    open('/publish', { 'POST /profiles/task-draft': { ...PROFILE, brief: null }, '/categories': [{ name: '设计', required_cert: '' }] });
+    await screen.findByLabelText('说明完整度', {}, { timeout: 3000 });
+    expect(screen.queryByLabelText('创作类需求九项')).toBeNull();
+  });
+
   it('发布页：边写边提示缺什么、预算位置、认出的技能与风险；停下来才请求', async () => {
     const calls: Call[] = [];
     open('/publish', { 'POST /profiles/task-draft': PROFILE, '/categories': [{ name: '设计', required_cert: '' }] }, calls);
