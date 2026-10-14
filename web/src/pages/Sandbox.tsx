@@ -4,7 +4,7 @@ import {
 } from '@platform/core';
 import { useEffect, useState } from 'react';
 import { useApp } from '../store';
-import { loadLocalNotes, readSandbox, saveLocalNotes, writeSandbox, type LocalNote } from '../sandboxLocal';
+import { hasWebGpu, loadLocalNotes, readSandbox, saveLocalNotes, writeSandbox, type LocalNote } from '../sandboxLocal';
 
 /** SBX-100 隐私沙箱（128 号 spec）。
  *
@@ -136,6 +136,10 @@ export default function Sandbox() {
       <div className="card" aria-label="端侧模型">
         <h4>端侧模型</h4>
         <p className="muted">{catalog?.note ?? ''} 浏览器里不下载模型，用的是本机规则；在手机 App 的「隐私沙箱」里可以下载。</p>
+        {/* SBX-112 129 号 spec：一个 1B 级 4 bit 模型约 700 MB，每个浏览器各下一份、随时可能被清理，所以浏览器端暂不提供 */}
+        <p className="muted" aria-label="浏览器端模型">{hasWebGpu()
+          ? '这个浏览器支持 WebGPU，但浏览器端模型暂不提供：模型要几百 MB，每个浏览器各存一份、可能被浏览器清理。'
+          : '这个浏览器没有 WebGPU，跑不了端侧模型；本机规则照常可用。'}</p>
         {catalog && catalog.items.length === 0 && <p className="muted">平台还没有上架端侧模型。</p>}
         <ul className="list">
           {catalog?.items.map((m) => (

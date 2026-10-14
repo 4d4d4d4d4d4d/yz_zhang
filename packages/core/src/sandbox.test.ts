@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError, PlatformClient } from './client';
 import {
-  CLOUD_AI_ENDPOINTS, LOCAL_REFUSAL, Sha256, askLocal, canRunModel, influenceLeaf, isCloudAiRequest, redact,
+  CLOUD_AI_ENDPOINTS, LOCAL_REFUSAL, Sha256, base64ToBytes, askLocal, canRunModel, influenceLeaf, isCloudAiRequest, redact,
   routeInstruction, runLocal, sha256Hex, utf8, verifyInfluenceProof, verifyModelChunks, type LocalModel,
 } from './sandbox';
 
@@ -22,6 +22,16 @@ describe('sha256（纯 TS）', () => {
     const chunks = [data.subarray(0, 63), data.subarray(63, 64), data.subarray(64)];
     expect(verifyModelChunks(chunks, '41EDECE42D63E8D9BF515A9BA6932E1C20CBC9F5A5D134645ADB5DB1B9737EA3').ok).toBe(true);
     expect(verifyModelChunks([data.subarray(1)], sha256Hex(data)).ok).toBe(false);
+  });
+});
+
+describe('SBX-111 base64 分块读出的字节', () => {
+  it('与原文一致，任意长度（含补位）', () => {
+    for (const text of ['', 'a', 'ab', 'abc', '中文模型文件', 'x'.repeat(1001)]) {
+      const b64 = Buffer.from(text, 'utf8').toString('base64');
+      expect(Array.from(base64ToBytes(b64))).toEqual(Array.from(utf8(text)));
+    }
+    expect(sha256Hex(base64ToBytes(Buffer.from('abc').toString('base64')))).toBe(sha256Hex('abc'));
   });
 });
 

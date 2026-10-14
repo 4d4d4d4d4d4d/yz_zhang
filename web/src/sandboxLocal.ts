@@ -20,3 +20,8 @@ export function loadLocalNotes(): LocalNote[] {
 export function saveLocalNotes(notes: LocalNote[]): void {
   try { localStorage.setItem(NOTES, JSON.stringify(notes)); } catch { /* 存不下就只留在内存里 */ }
 }
+
+/** SBX-112 这个浏览器有没有 WebGPU（只用来如实告诉人「浏览器里为什么只用本机规则」）。 */
+export function hasWebGpu(): boolean {
+  try { return typeof navigator !== 'undefined' && 'gpu' in navigator && !!(navigator as unknown as { gpu?: unknown }).gpu; } catch { return false; }
+}

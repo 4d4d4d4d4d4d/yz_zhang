@@ -2,17 +2,21 @@
 // 开着时：助手的活在手机上本机做，原文不发到云端；把原文交给云端 AI 的请求在发出之前就被拦下。
 import {
   LOCAL_SKILL_NAMES, REDACT_NAMES, apiErrorText, askLocal, redact, runLocal,
-  type LocalResult, type LocalSkill, type PlatformClient, type SandboxModelList, type SandboxState,
+  type LocalResult, type LocalSkill, type PlatformClient, type SandboxModelList, type SandboxModelRow, type SandboxState,
 } from '@platform/core';
 import { useEffect, useState } from 'react';
 import { Button, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ModelError, activateModel, downloadModel, installedModels, pauseDownload, removeModel, staleModels,
+  type InstalledModel, type ModelFs,
+} from './modelStore';
 import {
   getLocalModel, isSandbox, loadLocalNotes, loadSandbox, saveLocalNotes, setSandboxLocal, type LocalNote,
 } from './sandboxState';
 
 const SKILLS: LocalSkill[] = ['summarize', 'checklist', 'todos', 'rewrite', 'reply'];
 
-export function SandboxScreen({ client }: { client: PlatformClient }) {
+export function SandboxScreen({ client, fs }: { client: PlatformClient; fs?: ModelFs }) {
   const [state, setState] = useState<SandboxState | null>(null);
   const [on, setOn] = useState(isSandbox());
   const [notes, setNotes] = useState<LocalNote[]>([]);
@@ -24,7 +28,9 @@ export function SandboxScreen({ client }: { client: PlatformClient }) {
   const [catalog, setCatalog] = useState<SandboxModelList | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
-  const model = getLocalModel();
+  const [model, setModel] = useState(getLocalModel());
+  const [installed, setInstalled] = useState<InstalledModel[]>([]);
+  const [progress, setProgress] = useState<Record<string, string>>({});
 
   useEffect(() => {
     void loadSandbox().then(setOn);
@@ -34,7 +40,30 @@ export function SandboxScreen({ client }: { client: PlatformClient }) {
       if (s.enabled && !isSandbox()) { await setSandboxLocal(true); setOn(true); }   // 服务端记着开着：以开着为准
     }).catch((e) => setError(apiErrorText(e)));
     client.sandboxModels().then(setCatalog).catch(() => setCatalog(null));
+    void installedModels().then(setInstalled);
   }, [client]);
+
+  // SBX-111 下载 → 校验 → 登记；暂停后再点会续上
+  async function download(m: SandboxModelRow) {
+    setError(''); setNotice('');
+    try {
+      const inst = await downloadModel(m, (phase, r) => setProgress((p) => ({ ...p, [m.key]: `${phase === 'download' ? '下载' : '校验'} ${Math.round(r * 100)}%` })), fs);
+      setInstalled(await installedModels());
+      setNotice(`「${inst.name}」已下载并通过 sha256 校验`);
+    } catch (e) { setError(e instanceof ModelError ? e.message : apiErrorText(e)); }
+    finally { setProgress((p) => { const n = { ...p }; delete n[m.key]; return n; }); }
+  }
+  async function activate(inst: InstalledModel) {
+    const r = await activateModel(inst);
+    setModel(r.model);
+    setNotice(r.model ? `已启用「${inst.name}」：本机助手用它生成` : r.reason);
+  }
+  async function remove(inst: InstalledModel) {
+    await removeModel(inst, fs);
+    setInstalled(await installedModels()); setModel(getLocalModel());
+    setNotice(`已从这台手机上删掉「${inst.name}」`);
+  }
+  const stale = catalog ? staleModels(installed, catalog.items) : [];
 
   async function toggle(next: boolean) {
     setError(''); setNotice('');
@@ -132,8 +161,29 @@ export function SandboxScreen({ client }: { client: PlatformClient }) {
         <Text style={s.title}>端侧模型</Text>
         <Text style={s.muted}>{catalog?.note ?? ''}</Text>
         {catalog && catalog.items.length === 0 && <Text style={s.muted}>平台还没有上架端侧模型。</Text>}
-        {catalog?.items.map((m) => (
-          <Text key={m.id}>{m.name} · {m.params_b}B · {m.quant} · {m.size_mb} MB · 至少 {m.min_ram_gb} GB 内存</Text>
+        {catalog?.items.map((m) => {
+          const inst = installed.find((i) => i.key === m.key && i.sha256 === m.sha256.toLowerCase());
+          return (
+            <View key={m.id} style={s.card} accessibilityLabel={`模型 ${m.name}`}>
+              <Text>{m.name} · {m.params_b}B · {m.quant} · {m.size_mb} MB · 至少 {m.min_ram_gb} GB 内存</Text>
+              {progress[m.key] ? (
+                <View style={s.row}><Text style={{ flex: 1 }}>{progress[m.key]}</Text>
+                  <Button title="暂停" onPress={() => void pauseDownload(m.key)} /></View>
+              ) : inst ? (
+                <View style={s.row}>
+                  <Text style={{ flex: 1 }}>已下载，校验通过</Text>
+                  <Button title="启用" onPress={() => void activate(inst)} />
+                  <Button title="删除" onPress={() => void remove(inst)} />
+                </View>
+              ) : <Button title="下载并校验" onPress={() => void download(m)} />}
+            </View>
+          );
+        })}
+        {stale.map((i) => (
+          <View key={i.key} style={s.row} accessibilityLabel="已下架的模型">
+            <Text style={{ flex: 1 }}>「{i.name}」平台已下架或换了版本，建议删掉</Text>
+            <Button title="删掉" onPress={() => void remove(i)} />
+          </View>
         ))}
       </View>
     </View>

@@ -111,6 +111,24 @@ export function sha256Hex(data: Uint8Array | string): string {
   return new Sha256().update(typeof data === 'string' ? utf8(data) : data).hex();
 }
 
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const B64_INDEX = (() => { const t = new Int16Array(128).fill(-1); for (let i = 0; i < 64; i++) t[B64.charCodeAt(i)] = i; return t; })();
+/** SBX-111 手机上按块读文件拿到的是 base64：解成字节再喂给 sha256（不依赖 atob / Buffer，Hermes 上也能用）。 */
+export function base64ToBytes(b64: string): Uint8Array {
+  const clean = b64.replace(/[^A-Za-z0-9+/]/g, '');
+  const out = new Uint8Array(Math.floor((clean.length * 3) / 4));
+  let o = 0;
+  for (let i = 0; i + 1 < clean.length; i += 4) {
+    const a = B64_INDEX[clean.charCodeAt(i)], b = B64_INDEX[clean.charCodeAt(i + 1)];
+    const c = i + 2 < clean.length ? B64_INDEX[clean.charCodeAt(i + 2)] : -1;
+    const d = i + 3 < clean.length ? B64_INDEX[clean.charCodeAt(i + 3)] : -1;
+    out[o++] = (a << 2) | (b >> 4);
+    if (c >= 0) out[o++] = ((b & 15) << 4) | (c >> 2);
+    if (d >= 0) out[o++] = ((c & 3) << 6) | d;
+  }
+  return out.subarray(0, o);
+}
+
 /** SBX-106 下载完的模型文件：按目录登记的 sha256 校验，对不上就不要用（App 会删掉重下）。 */
 export function verifyModelChunks(chunks: Iterable<Uint8Array>, expected: string): { ok: boolean; actual: string } {
   const h = new Sha256();

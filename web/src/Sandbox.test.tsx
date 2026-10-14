@@ -43,6 +43,7 @@ describe('SBX-100 隐私沙箱（Web）', () => {
     expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ enabled: true });
     expect(screen.getByLabelText('沙箱开关').textContent).toContain('14 类云端助手接口被拦下');
     expect(screen.getByLabelText('端侧模型').textContent).toContain('Qwen2.5 0.5B Instruct');
+    expect(screen.getByLabelText('浏览器端模型').textContent).toContain('没有 WebGPU');
     fireEvent.click(screen.getByRole('button', { name: '关闭沙箱' }));
     await screen.findByText('隐私沙箱已关闭：可以用云端助手了');
     expect(localStorage.getItem('sandbox')).toBeNull();
