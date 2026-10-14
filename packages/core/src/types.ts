@@ -2024,3 +2024,77 @@ export interface GigQuote {
   basis: string[];
   disclaimer: string;
 }
+
+// ---- PROF-100 任务画像与能力画像（126 号 spec） ----
+export interface TaskProfilePrice {
+  sample_size: number;
+  p50_cents: number | null;
+  min_cents: number | null;
+  max_cents: number | null;
+  /** below_min / below_median / around_median / above_median / unknown */
+  position: 'below_min' | 'below_median' | 'around_median' | 'above_median' | 'unknown';
+}
+export interface TaskProfileRisk {
+  kind: string;
+  text: string;
+}
+export interface TaskProfileCheck {
+  key: string;
+  ok: boolean;
+  /** 没通过时怎么补；通过时是空串 */
+  hint: string;
+}
+export interface TaskProfile {
+  category: string;
+  mode: 'remote' | 'onsite';
+  declared_skills: string[];
+  /** 从标题与说明里认出来的技能（不含已写明的） */
+  inferred_skills: string[];
+  size: 'small' | 'medium' | 'large' | 'unknown';
+  price: TaskProfilePrice;
+  risks: TaskProfileRisk[];
+  /** 0~1：说明完整度 */
+  completeness: number;
+  checks: TaskProfileCheck[];
+}
+export interface TaskProfileView extends TaskProfile {
+  task_id: number;
+}
+export interface TaskDraftInput {
+  title?: string;
+  description?: string;
+  category?: string;
+  budget_cents?: number;
+  is_remote?: boolean;
+  city?: string;
+  lat?: number | null;
+  deadline?: string | null;
+  required_skills?: string[];
+  acceptance_criteria?: string[];
+}
+export interface CapabilityCategory {
+  category: string;
+  completed: number;
+  rating_avg: number | null;
+}
+export interface CapabilitySkill {
+  skill: string;
+  /** true：有成交佐证；false：只是自述 */
+  evidenced: boolean;
+}
+export interface CapabilityProfile {
+  user_id: number;
+  tasks_completed: number;
+  categories: CapabilityCategory[];
+  skills: CapabilitySkill[];
+  certifications: string[];
+  /** 样本少于 3 单时为 null */
+  on_time_rate: number | null;
+  rework_rate: number | null;
+  reply_hours_median: number | null;
+  has_weekly_slots: boolean;
+  limited_capacity: boolean;
+  note: string;
+  /** 只有本人看得到；对外是 null */
+  disputes: number | null;
+}

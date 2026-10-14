@@ -160,6 +160,7 @@ api GET /api/v1/tasks/{task_id}/decomposition
 api GET /api/v1/tasks/{task_id}/dispute
 api GET /api/v1/tasks/{task_id}/eligible-agents
 api GET /api/v1/tasks/{task_id}/final-report
+api GET /api/v1/tasks/{task_id}/profile
 api GET /api/v1/tasks/{task_id}/progress
 api GET /api/v1/tasks/{task_id}/recommendations
 api GET /api/v1/tasks/{task_id}/reviews
@@ -172,9 +173,11 @@ api GET /api/v1/users/me
 api GET /api/v1/users/me/applications
 api GET /api/v1/users/me/blocks
 api GET /api/v1/users/me/bookmarks
+api GET /api/v1/users/me/capability
 api GET /api/v1/users/me/certifications
 api GET /api/v1/users/me/export
 api GET /api/v1/users/{user_id}
+api GET /api/v1/users/{user_id}/capability
 api GET /api/v1/users/{user_id}/contents
 api GET /api/v1/users/{user_id}/follow-stats
 api GET /api/v1/users/{user_id}/followers
@@ -364,6 +367,7 @@ api POST /api/v1/packs/{key}/assistants/{akey}/ask
 api POST /api/v1/packs/{key}/disable
 api POST /api/v1/packs/{key}/enable
 api POST /api/v1/packs/{key}/feedback
+api POST /api/v1/profiles/task-draft
 api POST /api/v1/reports
 api POST /api/v1/subscriptions
 api POST /api/v1/support/ask
@@ -466,6 +470,7 @@ app motion
 app notebook
 app opc
 app packs
+app profiles
 app rights
 app search
 app spaces
@@ -684,6 +689,7 @@ sdk myAgreements
 sdk myApplications
 sdk myBlocks
 sdk myBookmarks
+sdk myCapability
 sdk myCertifications
 sdk myCoupons
 sdk myDrafts
@@ -794,6 +800,8 @@ sdk submitTeamCompany
 sdk submitVerificationOutcome
 sdk subscribeCategory
 sdk supplyHint
+sdk taskDraftProfile
+sdk taskProfile
 sdk taskTemplate
 sdk taskTree
 sdk team
@@ -823,6 +831,7 @@ sdk updateWorkbenchItem
 sdk updateWorkbenchProject
 sdk updateWorkbenchRoutine
 sdk uploadImage
+sdk userCapability
 sdk userContents
 sdk userReviews
 sdk venture

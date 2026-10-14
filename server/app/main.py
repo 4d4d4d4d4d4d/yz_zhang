@@ -108,6 +108,7 @@ def create_app() -> FastAPI:
     from app.modules.packs.router import router as packs_router
     from app.modules.opc.router import router as opc_router
     from app.modules.gig.router import router as gig_router
+    from app.modules.profiles.router import router as profiles_router
     from app.modules.account.router import router as account_router
     from app.modules.admin.router import router as admin_router
     from app.modules.analytics.router import router as analytics_router
@@ -145,6 +146,7 @@ def create_app() -> FastAPI:
         packs_router,
         opc_router,
         gig_router,
+        profiles_router,
         wallet_router,
         task_router,
         contract_router,

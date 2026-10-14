@@ -74,6 +74,7 @@ GUARDED: dict[str, dict[str, str]] = {
         "EntryPatch": "同上；平台导入的那几行金额锁定，以平台流水为准（OPC-101）",
     },
     "budget_cents": {
+        "DraftIn": "发布页草稿画像：只用来算提示，不落库、不建任务（PROF-101）",
         "TaskIn": "发布方定预算，本来就是他的钱",
         "TaskEditIn": "发布方改预算，托管前有效",
         "ClarifyIn": "AI 澄清时带上预算作上下文，不落库",

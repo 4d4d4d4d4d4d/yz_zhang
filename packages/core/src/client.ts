@@ -1,6 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
-  Cockpit, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
+  Cockpit, CapabilityProfile, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
   CommercialReadiness,
   AgentProfileView,
   PayoutProposalView,
@@ -382,6 +382,19 @@ export class PlatformClient {
   reviewContract(text: string, role: 'party_a' | 'party_b' | 'unknown' = 'unknown') {
     return this.request<ContractReview>('POST', '/opc/contract-review', { text, role });
   }
+
+  // ---- PROF-100 任务画像与能力画像（126 号 spec） ----
+  /** 发布页实时调用：还缺什么、价格在什么位置、有什么风险（不落库） */
+  taskDraftProfile(draft: TaskDraftInput) {
+    return this.request<TaskProfile>('POST', '/profiles/task-draft', {
+      title: draft.title, description: draft.description, category: draft.category, budget_cents: draft.budget_cents,
+      is_remote: draft.is_remote, city: draft.city, lat: draft.lat, deadline: draft.deadline,
+      required_skills: draft.required_skills, acceptance_criteria: draft.acceptance_criteria,
+    });
+  }
+  taskProfile(taskId: number) { return this.request<TaskProfileView>('GET', `/tasks/${taskId}/profile`); }
+  myCapability() { return this.request<CapabilityProfile>('GET', '/users/me/capability'); }
+  userCapability(userId: number) { return this.request<CapabilityProfile>('GET', `/users/${userId}/capability`); }
 
   // ---- GIG-100 接单者（125 号 spec） ----
   gigAvailability() { return this.request<GigAvailabilityView>('GET', '/gig/available'); }

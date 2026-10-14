@@ -65,6 +65,12 @@ def _category_fit(db: Session, task, users: list[User]) -> dict[int, tuple[float
         PersonalSpace.user_id.in_(user_ids), PersonalSpace.published.is_(True))}
     skills = {u.id: u.skills for u in users}
     cat = task.category
+    # PROF-104 发布方没写技能要求时，从标题与说明里认出技能（126 号 spec）：只加分，不改原有的技能匹配
+    inferred: list[str] = []
+    if not task.required_skills:
+        from app.modules.profiles.service import infer_skills, skill_vocab
+
+        inferred = infer_skills(f"{task.title}\n{task.description}", skill_vocab(db), [])
     out: dict[int, tuple[float, list[str]]] = {}
     for uid in user_ids:
         bonus, why = 0.0, []
@@ -82,10 +88,16 @@ def _category_fit(db: Session, task, users: list[User]) -> dict[int, tuple[float
             if cat in text:
                 bonus += FIT_MENTIONS
                 why.append(f"擅长「{cat}」（本人技能或个人空间）")
+        hit = [s for s in inferred if s.lower() in {x.lower() for x in (skills.get(uid) or []) if isinstance(x, str)}]
+        if hit:
+            bonus += FIT_INFERRED_SKILL
+            why.append(f"说明里提到了你的技能「{'、'.join(hit[:2])}」")
         if bonus:
             out[uid] = (bonus, why)
     return out
 
+
+FIT_INFERRED_SKILL = 0.05     # PROF-104：说明里认出的技能与本人技能对上
 
 # SPACE-023 可用性：时段只回答「有没有空」，回复时长样本够了才说
 FIT_FREE_BEFORE_DEADLINE = 0.04

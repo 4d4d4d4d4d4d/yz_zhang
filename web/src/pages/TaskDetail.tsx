@@ -1,4 +1,5 @@
 import ContractEvidence from '../ContractEvidence';
+import { TaskProfilePanel } from '../Profiles';
 import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, describeChangeOrder, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -154,6 +155,9 @@ export default function TaskDetail() {
 
       {/* CLI-063 AI 助理面板：邀请、执行、交付闸门与人工核验入口。
           V73/V74 把服务端做完了，网页上此前一个入口都没有。 */}
+      {/* PROF-103 报名前看一眼这单的画像：风险、技能、价格位置（126 号 spec） */}
+      {task.status !== 'draft' && <TaskProfilePanel taskId={taskId} />}
+
       {isCreator && <AgentPanel task={task} onChanged={() => void load()} />}
 
       {/* AGT-080~083 经验工具：双方都能用，只出草稿（109 号 spec） */}

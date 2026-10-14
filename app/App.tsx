@@ -1,4 +1,5 @@
 import { ChainEntry } from './ChainEntry';
+import { DraftHints, TaskProfileBlock } from './profiles';
 import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
@@ -427,6 +428,8 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       {isProjectRoot && onOpenTask && <TaskTreeBlock client={client} task={task} onOpenTask={onOpenTask} />}
       {/* SPACE-024 合作驾驶舱（移动简化版：进度、钱、预警、关键路径；APP-007）——只给发布方 */}
       {isProjectRoot && meId === task.creator_id && <CockpitBlock client={client} taskId={task.id} />}
+      {/* PROF-103 这单的画像（126 号 spec） */}
+      {task.status !== 'draft' && <TaskProfileBlock client={client} taskId={task.id} />}
       {/* AGT-080~083 经验工具：双方都能用，只出草稿（109 号 spec） */}
       {meId !== null && (meId === task.creator_id || meId === task.executor_id) && (
         <ExperienceToolsBlock client={client} task={task} />
@@ -906,6 +909,8 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
       )}
       <TextInput style={styles.input} placeholder="标题（如：帮忙取快递）" value={title} onChangeText={setTitle} />
       <TextInput style={styles.input} placeholder="预算（元）" value={budget} onChangeText={setBudget} keyboardType="numeric" />
+      {/* PROF-101 边写边提示还缺什么（126 号 spec） */}
+      <DraftHints client={client} draft={{ title, category, budget_cents: Math.round(parseFloat(budget || '0') * 100), is_remote: true }} />
       <Text style={styles.mutedLeft}>交付成果归谁（必选）</Text>
       {(Object.keys(IP_ASSIGNMENT_LABEL) as IpAssignment[]).map((key) => (
         <TouchableOpacity key={key} onPress={() => setIp(key)}>
@@ -1218,7 +1223,7 @@ function MeScreen({ client, me, refresh, onLogout }: {
       {/* APP-069 团队 / 合作体 / 开发者。三条线此前**只有网页看得见**，
           而 V92 刚给团队审批加了通知——通知把人叫来、他点进去无路可走，
           比没有通知更糟（APP-066 同一条教训）。 */}
-      {(['workbench', 'notebook', 'packs', 'opc', 'gig', 'availability', 'messages', 'invitations', 'applications', 'certifications', 'rights',
+      {(['workbench', 'notebook', 'packs', 'opc', 'gig', 'capability', 'availability', 'messages', 'invitations', 'applications', 'certifications', 'rights',
          'ask', 'teams', 'ventures', 'developer'] as SubScreen[]).map((key) => (
         <TouchableOpacity key={key} onPress={() => setSub(key)}>
           <Text style={styles.linkRow}>{SUB_SCREEN_LABEL[key]} ›</Text>

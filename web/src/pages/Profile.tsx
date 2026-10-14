@@ -1,4 +1,5 @@
 import { apiErrorText, fmtYuan, formatDateTime, type AgreementStatus, type CertificationApplicationView, type InvitationItem, type SensitiveScope, type WeeklySlot } from '@platform/core';
+import { CapabilityCard } from '../Profiles';
 import { compressToBase64 } from '../PhotoPicker';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -414,6 +415,8 @@ export default function Profile() {
       <MyCertifications />
       <ServicePricing />
       <Availability />
+      {/* PROF-105 被证明过的能力（自述与佐证分开），126 号 spec */}
+      <CapabilityCard />
       <MyApplications />
       <PrivacyConsents />
       <ChangePassword />

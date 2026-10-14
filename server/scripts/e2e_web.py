@@ -335,6 +335,14 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
          page.locator("[aria-label='现在有空'] >> text=公里内").count() > 0
          and page.locator("[aria-label='顺路单'] >> text=家").count() > 0)
 
+    # PROF-101（V151）发布页边写边提示：真服务端算出完整度与缺什么
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/publish", wait_until="networkidle")
+    page.locator("form.form input").first.fill("E2E 设计")
+    page.wait_for_selector("[aria-label='说明完整度']", timeout=10000)
+    hints = page.locator("[aria-label='说明完整度']").inner_text()
+    step("发布页：边写边提示说明完整度与缺什么（验收标准、截止时间）",
+         "说明完整度" in hints and "验收标准" in hints and "截止时间" in hints)
+
     # 客服工单：V102 才补上的自助入口，而且它是**没有前置条件的写路径**——
     # 正好适合用真浏览器验一遍（服务端队列由 V101/V103 的测试盯着）
     page.goto(f"http://127.0.0.1:{WEB_PORT}/support", wait_until="networkidle")

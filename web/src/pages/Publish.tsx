@@ -1,4 +1,5 @@
 import { apiErrorText, IP_ASSIGNMENT_LABEL, fmtYuan, localInputToServerTime, type IpAssignment, type PriceReference, type Task } from '@platform/core';
+import { DraftHints } from '../Profiles';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../store';
@@ -123,6 +124,12 @@ export default function Publish() {
         {checklist.length > 0 && (
           <p className="muted">避坑清单：{checklist.join('；')}</p>
         )}
+        {/* PROF-101 边写边提示还缺什么（126 号 spec） */}
+        <DraftHints draft={{
+          title: form.title, description: form.description, category: form.category,
+          budget_cents: Math.round(Number(form.budget_yuan || 0) * 100), is_remote: form.is_remote, city: form.city,
+          lat: form.is_remote ? null : Number(form.lat), deadline: form.deadline_local ? localInputToServerTime(form.deadline_local) : null,
+        }} />
         <form className="form" onSubmit={submit}>
           <label>标题<input value={form.title} onChange={(e) => set('title', e.target.value)} required minLength={2} /></label>
           <label>描述<textarea rows={3} value={form.description} onChange={(e) => set('description', e.target.value)} /></label>
