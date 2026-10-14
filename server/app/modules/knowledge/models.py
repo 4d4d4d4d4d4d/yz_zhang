@@ -138,6 +138,9 @@ class UnitInvocation(Base):
     # KB-089 来源被撤回：草稿不追回，但要标出来
     source_revoked: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # AGT-084 审计（131 号 spec）：哪个 agent 代谁调用的（空 = 人自己点的）；草稿有没有被人采用
+    agent: Mapped[str] = mapped_column(String(60), default="")
+    adopted: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class DecompositionTemplate(Base):

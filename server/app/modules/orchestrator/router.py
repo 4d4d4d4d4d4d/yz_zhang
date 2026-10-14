@@ -4,13 +4,13 @@
 所有资金动作仍走既有托管合约链路，护栏见 service。
 """
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.locks import job_slot
 from app.core.deps import get_current_user, require_job_auth
-from app.core.errors import forbidden, not_found
+from app.core.errors import conflict, forbidden, not_found
 from app.modules.account.models import User
 
 from . import service
@@ -29,6 +29,13 @@ class MissionIn(BaseModel):
     acceptance_criteria: list[str] = Field(default_factory=list)
     # ORC-061 默认关：发起人授权了「自动花钱」，不等于授权「活由 AI 做」。
     allow_agents: bool = False
+    # AGT-084 默认关：允许分发时用平台经验工具生成草稿（只出草稿，等你确认）
+    allow_tools: bool = False
+
+
+class ToolsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    allow_tools: bool
 
 
 def _dump(m: Mission) -> dict:
@@ -41,7 +48,7 @@ def _dump(m: Mission) -> dict:
         "committed_cents": m.committed_cents, "spent_cents": m.spent_cents,
         "iteration": m.iteration, "max_iterations": m.max_iterations,
         "completion_pct": m.completion_pct, "quality_pct": m.quality_pct,
-        "model_calls": m.model_calls, "allow_agents": m.allow_agents,
+        "model_calls": m.model_calls, "allow_agents": m.allow_agents, "allow_tools": m.allow_tools,
         "acceptance_criteria": m.acceptance_criteria,
         "last_error": m.last_error, "created_at": iso(m.created_at),
     }
@@ -65,6 +72,7 @@ def create_mission(
         owner_id=user.id, goal=body.goal, detail=body.detail, category=body.category,
         budget_cap_cents=body.budget_cap_cents, max_iterations=body.max_iterations,
         acceptance_criteria=body.acceptance_criteria, allow_agents=body.allow_agents,
+        allow_tools=body.allow_tools,
     )
     db.add(m)
     db.flush()
@@ -104,7 +112,8 @@ def get_mission(
              "agent_user_id": s.agent_user_id,
              "acceptance": s.acceptance or [],
              "review_verdict": s.review_verdict, "review_score": s.review_score,
-             "review_missing": s.review_missing or []}
+             "review_missing": s.review_missing or [],
+             "tool_drafts": s.tool_drafts or []}
             for s in steps
         ],
         # AIO-023 时间线：人类可读的「做了什么 / 卡在哪 / 下一步」
@@ -176,6 +185,64 @@ def cancel_mission(
             db.add_all([s, m])
             closed += 1
     return {**_dump(m), "closed_open_tasks": closed}
+
+
+@router.put("/missions/{mission_id}/tools")
+def set_tools(mission_id: int, body: ToolsIn, user: User = Depends(get_current_user),
+              db: Session = Depends(get_db, scope="function")):
+    """AGT-084 开关：之后分发的步骤才会用经验工具；已经生成的草稿不受影响。只有发起人能改。"""
+    m = _get_mission(db, mission_id, user)
+    if m.owner_id != user.id:
+        raise forbidden("只有发起人能授权编排使用经验工具")
+    m.allow_tools = body.allow_tools
+    db.add(m)
+    db.flush()
+    return _dump(m)
+
+
+def _draft(db: Session, mission_id: int, step_id: int, invocation_id: int, user: User):
+    m = _get_mission(db, mission_id, user)
+    if m.owner_id != user.id:
+        raise forbidden("只有发起人能确认编排生成的草稿")
+    s = db.get(MissionStep, step_id)
+    if s is None or s.mission_id != m.id:
+        raise not_found("这一步不存在")
+    drafts = [dict(d) for d in (s.tool_drafts or [])]
+    d = next((x for x in drafts if x["invocation_id"] == invocation_id), None)
+    if d is None:
+        raise not_found("这一步没有这份草稿")
+    if d["status"] != "pending":
+        raise conflict("这份草稿已经处理过了", "draft_already_decided")
+    return s, drafts, d
+
+
+@router.post("/missions/{mission_id}/steps/{step_id}/drafts/{invocation_id}/adopt")
+def adopt_draft(mission_id: int, step_id: int, invocation_id: int,
+                user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """AGT-084 采用编排生成的草稿。采用只是标记，不会替你发给任何人。"""
+    return _decide(db, mission_id, step_id, invocation_id, user, "adopt")
+
+
+@router.post("/missions/{mission_id}/steps/{step_id}/drafts/{invocation_id}/discard")
+def discard_draft(mission_id: int, step_id: int, invocation_id: int,
+                  user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """AGT-084 丢弃编排生成的草稿（留着记录，标为已丢弃）。"""
+    return _decide(db, mission_id, step_id, invocation_id, user, "discard")
+
+
+def _decide(db: Session, mission_id: int, step_id: int, invocation_id: int, user: User, decision: str) -> dict:
+    from app.modules.knowledge.models import UnitInvocation
+
+    s, drafts, d = _draft(db, mission_id, step_id, invocation_id, user)
+    d["status"] = "adopted" if decision == "adopt" else "discarded"
+    s.tool_drafts = drafts
+    inv = db.get(UnitInvocation, invocation_id)
+    if inv is not None:
+        inv.adopted, inv.discarded = decision == "adopt", decision == "discard"
+        db.add(inv)
+    db.add(s)
+    db.flush()
+    return {"step_id": s.id, "invocation_id": invocation_id, "status": d["status"]}
 
 
 @router.post("/missions/jobs/tick-all")

@@ -448,27 +448,25 @@ def invoke_tool(unit_id: int, body: InvokeIn, user: User = Depends(get_current_u
     from app.core.errors import conflict, forbidden
     from app.modules.task.models import Task
 
-    from . import clusters, tools, units
+    from . import tools, units
     from .models import ReusableUnit
 
     unit = db.get(ReusableUnit, unit_id)
     if unit is None or unit.kind != "skill_tool":
         raise not_found("没有这个经验工具")
-    if not units.usable(unit):
-        raise conflict("这个经验工具在复核中或已停用，暂不可用", "tool_unavailable")
-    _, semantic = clusters._provider_state()
-    if not semantic:
-        # 95 号第 6 节：退化态下只读单元可用，可执行的不行
-        raise conflict("当前经验检索不是语义模型，可执行的经验工具暂停使用", "tool_degraded")
-    if unit.est_cost_cents > settings_max_cost():
-        raise conflict("这次调用的预估成本超过上限，没有执行；请改为人工处理", "tool_over_budget")
+    try:
+        units.tool_ready(unit)
+    except units.ToolBlocked as b:
+        raise b.http
     task = db.get(Task, body.task_id)
     if task is None:
         raise not_found("任务不存在")
     if user.id not in (task.creator_id, task.executor_id):
         raise forbidden("只有这一单的双方能用经验工具处理它")
-    if not units.applies_to(unit, task.category, task.city or "", task.budget_cents):
-        raise conflict("这个经验工具不适用于这一单（类目、城市或预算不在它的适用范围内）", "tool_not_applicable")
+    try:
+        units.tool_applies(unit, task)
+    except units.ToolBlocked as b:
+        raise b.http
     started = time.monotonic()
     out = tools.RUNNERS[unit.content["tool"]](unit, task)
     inv = units.record_use(db, unit, "agent_tool", user.id, task.id,

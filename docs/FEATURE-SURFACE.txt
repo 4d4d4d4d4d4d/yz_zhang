@@ -179,6 +179,7 @@ api GET /api/v1/teams/{team_id}
 api GET /api/v1/teams/{team_id}/spends
 api GET /api/v1/users/me
 api GET /api/v1/users/me/applications
+api GET /api/v1/users/me/assistant-costs
 api GET /api/v1/users/me/blocks
 api GET /api/v1/users/me/bookmarks
 api GET /api/v1/users/me/capability
@@ -363,6 +364,8 @@ api POST /api/v1/messages/{message_id}/recall
 api POST /api/v1/missions
 api POST /api/v1/missions/jobs/tick-all
 api POST /api/v1/missions/{mission_id}/cancel
+api POST /api/v1/missions/{mission_id}/steps/{step_id}/drafts/{invocation_id}/adopt
+api POST /api/v1/missions/{mission_id}/steps/{step_id}/drafts/{invocation_id}/discard
 api POST /api/v1/missions/{mission_id}/tick
 api POST /api/v1/notebook/ask
 api POST /api/v1/notebook/methods
@@ -460,6 +463,7 @@ api POST /api/v1/workbench/routines/{routine_id}/run
 api PUT /api/v1/admin/matching-config
 api PUT /api/v1/admin/packs/{pack_id}
 api PUT /api/v1/gig/available
+api PUT /api/v1/missions/{mission_id}/tools
 api PUT /api/v1/notifications/devices
 api PUT /api/v1/notifications/prefs
 api PUT /api/v1/opc/profile
@@ -485,6 +489,7 @@ app decompose
 app experience
 app gig
 app influence
+app missions
 app motion
 app notebook
 app opc
@@ -532,6 +537,7 @@ sdk adminUpdatePack
 sdk adminUsers
 sdk adminValidatePack
 sdk adminVendors
+sdk adoptMissionDraft
 sdk agentRuns
 sdk agents
 sdk amlActivities
@@ -548,6 +554,7 @@ sdk askPackAssistant
 sdk askSupport
 sdk assignKnowledgeCard
 sdk assistantContract
+sdk assistantCosts
 sdk availableCoupons
 sdk banImpact
 sdk banUser
@@ -627,6 +634,7 @@ sdk deleteWorkbenchRoutine
 sdk deliver
 sdk deliverMilestone
 sdk disablePack
+sdk discardMissionDraft
 sdk discardToolDraft
 sdk discoverSpaces
 sdk dispute
@@ -816,6 +824,7 @@ sdk sendSmsCode
 sdk setFriendRemark
 sdk setGigAvailable
 sdk setKnowledgeUnitStatus
+sdk setMissionTools
 sdk setNotificationPref
 sdk setSandbox
 sdk setTeamBudget
@@ -910,6 +919,7 @@ web /gig
 web /influence
 web /login
 web /messages
+web /missions
 web /notebook
 web /notifications
 web /opc

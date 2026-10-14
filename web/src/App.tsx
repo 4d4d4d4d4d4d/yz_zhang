@@ -29,6 +29,7 @@ import Opc from './pages/Opc';
 import Gig from './pages/Gig';
 import Influence from './pages/Influence';
 import Sandbox from './pages/Sandbox';
+import Missions from './pages/Missions';
 const Chain = lazy(() => import('./pages/Chain'));
 const Records = lazy(() => import('./pages/Records'));
 import WalletPage from './pages/Wallet';
@@ -107,6 +108,8 @@ export default function App() {
         <Route path="/influence" element={hasToken ? <Influence /> : <Navigate to="/login?next=/influence" />} />
         {/* SBX-100 隐私沙箱：本机助手、原文不上云、同步前脱敏（128 号 spec）；入口在个人中心 */}
         <Route path="/sandbox" element={hasToken ? <Sandbox /> : <Navigate to="/login?next=/sandbox" />} />
+        {/* ORC-066 / AGT-084 AI 编排：目标 → 任务 → 结果 → 整改；经验工具草稿等你确认（131 号 spec）；入口在工作台 */}
+        <Route path="/missions" element={hasToken ? <Missions /> : <Navigate to="/login?next=/missions" />} />
         <Route path="/notifications" element={hasToken ? <Notifications /> : <Navigate to="/login" />} />
         <Route path="/profile" element={hasToken ? <Profile /> : <Navigate to="/login" />} />
         <Route path="/rewards" element={hasToken ? <Rewards /> : <Navigate to="/login" />} />

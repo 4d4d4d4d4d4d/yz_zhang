@@ -535,9 +535,35 @@ export interface Mission {
   /** ORC-061 是否允许把步骤派给平台 AI 助理。**默认关**：发起人授权了
    *  「自动花钱」，不等于授权「活由 AI 做」。 */
   allow_agents: boolean;
+  /** AGT-084 是否允许分发时用平台经验工具生成草稿（只出草稿，等你确认）。默认关（131 号 spec） */
+  allow_tools: boolean;
   acceptance_criteria: string[];
   last_error: string;
   created_at: string;
+}
+/** AGT-084 编排用经验工具给某一步生成的草稿 */
+export interface MissionToolDraft {
+  invocation_id: number;
+  unit_id: number;
+  version: number;
+  label: string;
+  text: string;
+  status: 'pending' | 'adopted' | 'discarded';
+}
+export interface MissionDraftDecision {
+  step_id: number;
+  invocation_id: number;
+  status: 'adopted' | 'discarded';
+}
+/** REL-110 本月助手成本（北京时间自然月） */
+export interface AssistantCosts {
+  month: string;
+  agent_tools_cents: number;
+  routines_cents: number;
+  total_cents: number;
+  cap_cents: number;
+  remaining_cents: number;
+  agent_calls: number;
 }
 
 /** AIO-023 编排时间线的一条：做了什么 / 现在怎样 / 下一步。 */
@@ -581,6 +607,7 @@ export interface MissionStep {
   review_verdict: '' | 'pass' | 'revise' | 'fail';
   review_score: number;
   review_missing: string[];
+  tool_drafts: MissionToolDraft[];
 }
 
 export interface MissionTickResult {
@@ -1840,7 +1867,7 @@ export interface PackEnableResult extends ScenarioPackCard {
 }
 export interface PackCitation {
   n: number;
-  kind: 'pack' | 'note' | 'legal' | 'tool';
+  kind: 'pack' | 'note' | 'legal' | 'tool' | 'experience';
   title: string;
   snippet: string;
   source: string;

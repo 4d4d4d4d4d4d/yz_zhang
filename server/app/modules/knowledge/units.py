@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.errors import bad_request, conflict, not_found
 from app.core.timefmt import iso
+from app.modules.account.models import utcnow
 
 from .models import KnowledgeCard, KnowledgeCluster, ReusableUnit, UnitInvocation
 
@@ -329,3 +330,64 @@ def on_reuse_revoked(db: Session, user_id: int) -> list[str]:
     if flagged:
         out.append(f"drafts_flagged:{flagged}")
     return out
+
+
+# ------------------------------------------------------------------ AGT-084 经验工具的统一关口（131 号 spec）
+class ToolBlocked(Exception):
+    """带着要返回给人的那个 409：人点按钮时原样抛出，编排代调用时只取文字写进时间线。"""
+
+    def __init__(self, http):
+        super().__init__(http.detail["message"])
+        self.http, self.code, self.message = http, http.detail["code"], http.detail["message"]
+
+
+def tool_gate(unit: ReusableUnit, task) -> None:
+    """人点按钮（KB-088）和编排代调用（AGT-084）走同一道关口：可用、非退化态、成本不超单次上限、适用于这一单。"""
+    tool_ready(unit)
+    tool_applies(unit, task)
+
+
+def tool_ready(unit: ReusableUnit) -> None:
+    from . import clusters
+
+    if not usable(unit):
+        raise ToolBlocked(conflict("这个经验工具在复核中或已停用，暂不可用", "tool_unavailable"))
+    _, semantic = clusters._provider_state()
+    if not semantic:
+        raise ToolBlocked(conflict("当前经验检索不是语义模型，可执行的经验工具暂停使用", "tool_degraded"))
+    if unit.est_cost_cents > settings.KB_TOOL_MAX_COST_CENTS:
+        raise ToolBlocked(conflict("这次调用的预估成本超过上限，没有执行；请改为人工处理", "tool_over_budget"))
+
+
+def tool_applies(unit: ReusableUnit, task) -> None:
+    if not applies_to(unit, task.category, task.city or "", task.budget_cents):
+        raise ToolBlocked(conflict("这个经验工具不适用于这一单（类目、城市或预算不在它的适用范围内）", "tool_not_applicable"))
+
+
+def month_start_utc(now):
+    """北京时间本月 1 号 0 点对应的 UTC。"""
+    from datetime import timedelta
+
+    local = now + timedelta(hours=8)
+    return local.replace(day=1, hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=8)
+
+
+def assistant_costs(db: Session, user_id: int, now=None) -> dict:
+    """REL-110 本月助手花了多少（北京时间自然月）：agent 代调用的经验工具 + 例行任务的模型调用。"""
+    from datetime import timedelta
+
+    from sqlalchemy import func
+
+    from app.modules.workbench.models import WbRoutineRun
+
+    now = now or utcnow()
+    since = month_start_utc(now)
+    tools_cents, calls = db.query(func.coalesce(func.sum(UnitInvocation.cost_cents), 0), func.count(UnitInvocation.id))\
+        .filter(UnitInvocation.caller_id == user_id, UnitInvocation.agent != "", UnitInvocation.created_at >= since).one()
+    routines_cents = db.query(func.coalesce(func.sum(WbRoutineRun.cost_cents), 0))\
+        .filter(WbRoutineRun.owner_id == user_id, WbRoutineRun.started_at >= since).scalar() or 0
+    cap = settings.AGENT_MONTHLY_COST_CAP_CENTS
+    total = int(tools_cents) + int(routines_cents)
+    return {"month": (now + timedelta(hours=8)).strftime("%Y-%m"),
+            "agent_tools_cents": int(tools_cents), "routines_cents": int(routines_cents), "total_cents": total,
+            "cap_cents": cap, "remaining_cents": max(cap - total, 0), "agent_calls": int(calls)}

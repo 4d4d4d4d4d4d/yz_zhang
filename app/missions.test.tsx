@@ -1,0 +1,60 @@
+// ORC-066 / AGT-084 AI 编排在 App 上的行为（131 号 spec）。
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { PlatformClient } from '@platform/core';
+import { MissionsScreen } from './missions';
+import { WorkbenchScreen } from './workbench';
+
+type Call = { method: string; path: string; body?: unknown };
+function makeClient(routes: Record<string, unknown>, calls: Call[]) {
+  const fetchImpl = (async (url: string, init?: { method?: string; body?: string }) => {
+    const path = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+    const method = init?.method ?? 'GET';
+    calls.push({ method, path, body: init?.body ? JSON.parse(init.body) : undefined });
+    const hit = Object.keys(routes).find((k) => k === `${method} ${path}`) ?? Object.keys(routes).find((k) => k === path);
+    return { ok: true, status: 200, text: async () => JSON.stringify(hit ? routes[hit] : []) };
+  }) as unknown as typeof fetch;
+  return new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl });
+}
+const MISSION = {
+  id: 7, owner_id: 2, goal: '周六搬家', detail: '', category: '跑腿', status: 'running', budget_cap_cents: 30000, committed_cents: 21000,
+  spent_cents: 0, iteration: 1, max_iterations: 3, completion_pct: 0, quality_pct: 0, model_calls: 0, allow_agents: false,
+  allow_tools: true, acceptance_criteria: [], last_error: '', created_at: '2026-10-14T00:00:00Z',
+};
+const STEP = {
+  id: 3, iteration: 0, tool: 'publish_task', title: '周六搬家 - 打包', task_id: 11, status: 'dispatched', observation: '', is_remedy: false,
+  agent_user_id: null, budget_cents: 21000, parent_step_id: null, attempt: 1, acceptance: [], review_verdict: '', review_score: 0, review_missing: [],
+  tool_drafts: [{ invocation_id: 41, unit_id: 5, version: 1, label: '由经验单元生成，未经人工确认', text: '☐ 易碎品单独装箱', status: 'pending' }],
+};
+
+describe('ORC-066 App 上的 AI 编排', () => {
+  it('新建（默认授权经验工具）→ 打开详情 → 采用草稿 → 推进一轮', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({
+      'GET /missions': [], 'POST /missions': MISSION, '/missions/7': { ...MISSION, steps: [STEP], timeline: [] },
+      'POST /missions/7/steps/3/drafts/41/adopt': { step_id: 3, invocation_id: 41, status: 'adopted' },
+      'POST /missions/7/tick': { action: 'waiting', status: 'running', total_steps: 1, done: 0, failed: 0, superseded: 0, completion_pct: 0, quality_pct: 0 },
+    }, calls);
+    render(<MissionsScreen client={client} />);
+    fireEvent.changeText(await screen.findByLabelText('目标'), '周六搬家');
+    fireEvent.press(screen.getByText('建好，先不花钱'));
+    expect(await screen.findByText('预算：已付 ¥0.00，占用 ¥210.00，上限 ¥300.00')).toBeTruthy();
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/missions')?.body).toEqual({ goal: '周六搬家', budget_cap_cents: 30000, allow_tools: true });
+    expect(screen.getByText('由经验单元生成，未经人工确认 · 待你确认')).toBeTruthy();
+    fireEvent.press(screen.getByText('采用'));
+    expect(await screen.findByText('已采用（只是标记，没有发给任何人）')).toBeTruthy();
+    fireEvent.press(screen.getByText('推进一轮'));
+    await waitFor(() => expect(calls.some((c) => c.path === '/missions/7/tick')).toBe(true));
+  });
+
+  it('工作台：本月助手成本与上限', async () => {
+    const client = makeClient({
+      '/workbench/overview': { counts: { overdue: 0, today: 0, doing: 0, blocked: 0, stale: 0, done_this_week: 0, open: 0 }, overdue: [], today: [], doing: [],
+        blocked: [], stale: [], done_this_week: [], projects: [], platform: { to_choose: [], to_accept: [], executing: [] }, summary: '' },
+      'GET /workbench/memories': { limit: 20, items: [] }, 'GET /workbench/routines': [],
+      '/users/me/assistant-costs': { month: '2026-10', agent_tools_cents: 30, routines_cents: 0, total_cents: 30, cap_cents: 2000, remaining_cents: 1970, agent_calls: 1 },
+    }, []);
+    render(<WorkbenchScreen client={client} />);
+    fireEvent.press(await screen.findByText('助手'));
+    expect(await screen.findByText('本月助手成本 ¥0.30 / 上限 ¥20.00（经验工具 1 次）')).toBeTruthy();
+  });
+});

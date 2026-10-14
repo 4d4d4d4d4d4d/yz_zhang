@@ -21,7 +21,7 @@
       "inputs": ["你的问题", "你的笔记（只读你自己的）"],
       "outputs": ["带出处的规则说明", "可以套用的清单"],
       "forbidden": ["替你付款、收款或确认验收", "替你签署协议", "承诺平台规则之外的结果"],
-      "tools": ["pack.knowledge", "notebook.search", "workbench.method"],
+      "tools": ["pack.knowledge", "notebook.search", "workbench.method", "experience.search"],
       "human_gates": ["money", "sign"],
       "methods": ["before-taking-order", "delivery-acceptance"],
       "knowledge": ["escrow", "acceptance", "dispute", "fee"],

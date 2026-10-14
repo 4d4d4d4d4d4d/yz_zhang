@@ -1,7 +1,7 @@
 import {
-  apiErrorText, formatDateTime, localInputToServerTime, millisUntil, serverTimeToLocalInput,
+  apiErrorText, fmtYuan, formatDateTime, localInputToServerTime, millisUntil, serverTimeToLocalInput,
   type WbItem, type WbItemDetail, type WbLog, type WbMemory, type WbOverview, type WbProject,
-  type WbRoutine, type WbRoutineHealth, type WbRoutineInput, type WbRoutineRun, type WbRunStatus, type WbStatus, type WbStep,
+  type AssistantCosts, type WbRoutine, type WbRoutineHealth, type WbRoutineInput, type WbRoutineRun, type WbRunStatus, type WbStatus, type WbStep,
   type NbMethod, type NbReference,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -392,6 +392,9 @@ function Assistant() {
   const [form, setForm] = useState<WbRoutineInput>({ name: '每天早上的概览', kind: 'digest', freq: 'daily', time_of_day: '08:30', weekday: 0, monthday: 1, note: '',
     max_retries: 2, degrade: true, timeout_ms: 10000 });
   const [health, setHealth] = useState<Record<number, WbRoutineHealth>>({});
+  // REL-110 本月助手成本（131 号 spec）：取不到就不显示
+  const [costs, setCosts] = useState<AssistantCosts | null>(null);
+  useEffect(() => { Promise.resolve().then(() => client.assistantCosts()).then((c) => setCosts(c && typeof c.total_cents === 'number' ? c : null)).catch(() => setCosts(null)); }, [client]);
   const [error, setError] = useState('');
   const [flash, setFlash] = useState('');
 
@@ -420,6 +423,7 @@ function Assistant() {
 
       <div className="card">
         <h3>例行任务</h3>
+        {costs && <p className="muted" aria-label="本月助手成本">本月助手成本 {fmtYuan(costs.total_cents)} / 上限 {fmtYuan(costs.cap_cents)}（经验工具 {costs.agent_calls} 次）。要让 AI 帮你把一个目标拆成任务去办，用 <Link to="/missions">AI 编排</Link>。</p>}
         <p className="muted">到点由平台运行，结果发到你的通知里，不需要开着网页。连续失败 3 次会自动暂停并告诉你。时间按北京时间算。</p>
         <ul className="list">{routines.map((r) => (
           <li key={r.id} data-routine={r.id}>

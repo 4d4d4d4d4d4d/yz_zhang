@@ -61,6 +61,8 @@ class Mission(Base):
     # 那条规矩在编排里的形态：**一次授权覆盖整个 mission**，
     # 既保住知情同意，又不毁掉自动化（每步再问一次就没有编排了）。
     allow_agents: Mapped[bool] = mapped_column(Boolean, default=False)
+    # AGT-084 允许编排在分发时调用平台经验工具（只出草稿，挂在步骤上等发起人确认）。默认关（131 号 spec）
+    allow_tools: Mapped[bool] = mapped_column(Boolean, default=False)
     # ORC-005 验收标准：每步产出按此校验（人工验收 + 规则校验的依据）
     acceptance_criteria: Mapped[list] = mapped_column(JSON, default=list)
     last_error: Mapped[str] = mapped_column(String(300), default="")
@@ -97,6 +99,8 @@ class MissionStep(Base):
     review_verdict: Mapped[str] = mapped_column(String(10), default="")
     review_score: Mapped[int] = mapped_column(Integer, default=0)
     review_missing: Mapped[list] = mapped_column(JSON, default=list)
+    # AGT-084 这一步由经验工具生成的草稿：[{invocation_id, unit_id, version, label, text, status}]，status 待确认 / 采用 / 丢弃
+    tool_drafts: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

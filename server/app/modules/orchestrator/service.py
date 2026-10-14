@@ -128,6 +128,55 @@ def _dispatch_step(db: Session, mission: Mission, step: MissionStep) -> None:
     mission.committed_cents += budget
     db.add_all([step, mission])
     _maybe_hand_to_agent(db, mission, step, task)
+    _attach_tool_drafts(db, mission, step, task)
+
+
+TOOLS_PER_STEP = 2
+
+
+def _attach_tool_drafts(db: Session, mission: Mission, step: MissionStep, task) -> None:
+    """AGT-084 发起人授权了，就用平台经验工具给这一步生成草稿（131 号 spec）。
+
+    - 只出草稿：挂在步骤上等发起人「采用 / 丢弃」，不发给任何人、不碰钱；
+    - 走与人点按钮同一道关口（可用、非退化态、单次成本、适用范围），再加每月助手成本上限；
+    - 审计：调用记录写明 agent 身份（编排 #id 第几步）、授权人（发起人）、工具与版本、结果。
+    任何一个工具出问题都只记一条时间线，不影响这一步本身。
+    """
+    if not mission.allow_tools:
+        return
+    import time
+
+    from app.modules.knowledge import tools, units
+    from app.modules.knowledge.models import ReusableUnit
+
+    candidates = [u for u in db.query(ReusableUnit).filter(ReusableUnit.kind == "skill_tool", ReusableUnit.status == "active")
+                  .order_by(ReusableUnit.id).all()
+                  if units.usable(u) and units.applies_to(u, task.category, task.city or "", task.budget_cents)]
+    drafts = list(step.tool_drafts or [])
+    for unit in candidates[:TOOLS_PER_STEP]:
+        try:
+            units.tool_gate(unit, task)
+        except units.ToolBlocked as b:
+            _log_event(db, mission, "tool_skipped", f"经验工具「{unit.title}」没用上：{b.message}")
+            continue
+        cost = units.assistant_costs(db, mission.owner_id)
+        if cost["total_cents"] + unit.est_cost_cents > cost["cap_cents"]:
+            _log_event(db, mission, "tool_skipped",
+                       f"本月助手成本已到上限（{cost['cap_cents'] / 100:.2f} 元），经验工具「{unit.title}」这次没调用")
+            continue
+        started = time.monotonic()
+        out = tools.RUNNERS[unit.content["tool"]](unit, task)
+        inv = units.record_use(db, unit, "agent_tool", mission.owner_id, task.id,
+                               summary=f"编排 #{mission.id}《{task.title}》", output=out, draft=True,
+                               cost_cents=unit.est_cost_cents, duration_ms=int((time.monotonic() - started) * 1000))
+        inv.agent = f"orchestrator:mission#{mission.id}:step#{step.id}"
+        db.add(inv)
+        drafts.append({"invocation_id": inv.id, "unit_id": unit.id, "version": unit.version, "label": out["label"],
+                       "text": out["text"], "status": "pending"})
+        _log_event(db, mission, "tool_draft", f"用经验工具「{unit.title}」给「{step.title}」生成了草稿，等你确认")
+    if len(drafts) != len(step.tool_drafts or []):
+        step.tool_drafts = drafts
+        db.add(step)
 
 
 def _maybe_hand_to_agent(db: Session, mission: Mission, step: MissionStep, task) -> None:

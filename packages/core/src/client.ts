@@ -57,6 +57,8 @@ import type {
   Message,
   Mission,
   MissionEvent,
+  MissionDraftDecision,
+  AssistantCosts,
   MissionStep,
   AnchorCoverage,
   SettlementOrderView,
@@ -731,7 +733,8 @@ export class PlatformClient {
   }
 
   // ---- orchestrator（Agent Harness：发任务给人=工具调用）----
-  createMission(body: { goal: string; detail?: string; category?: string; budget_cap_cents: number; max_iterations?: number; acceptance_criteria?: string[] }) {
+  createMission(body: { goal: string; detail?: string; category?: string; budget_cap_cents: number; max_iterations?: number; acceptance_criteria?: string[];
+    allow_agents?: boolean; allow_tools?: boolean }) {
     return this.request<Mission>('POST', '/missions', body);
   }
   myMissions(params: { status?: string; limit?: number; offset?: number } = {}) {
@@ -777,6 +780,19 @@ export class PlatformClient {
   tickMission(id: number) {
     return this.request<MissionTickResult>('POST', `/missions/${id}/tick`);
   }
+  /** AGT-084 授权（或收回）编排使用平台经验工具：只影响之后分发的步骤（131 号 spec） */
+  setMissionTools(id: number, allowTools: boolean) {
+    return this.request<Mission>('PUT', `/missions/${id}/tools`, { allow_tools: allowTools });
+  }
+  /** AGT-084 采用编排生成的草稿（只是标记，不会替你发给任何人） */
+  adoptMissionDraft(missionId: number, stepId: number, invocationId: number) {
+    return this.request<MissionDraftDecision>('POST', `/missions/${missionId}/steps/${stepId}/drafts/${invocationId}/adopt`);
+  }
+  discardMissionDraft(missionId: number, stepId: number, invocationId: number) {
+    return this.request<MissionDraftDecision>('POST', `/missions/${missionId}/steps/${stepId}/drafts/${invocationId}/discard`);
+  }
+  /** REL-110 本月助手花了多少、上限多少 */
+  assistantCosts() { return this.request<AssistantCosts>('GET', '/users/me/assistant-costs'); }
   cancelMission(id: number) {
     return this.request<Mission & { closed_open_tasks: number }>('POST', `/missions/${id}/cancel`);
   }

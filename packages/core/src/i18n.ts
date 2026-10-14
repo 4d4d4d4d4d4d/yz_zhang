@@ -65,6 +65,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   opc_tax_exceeds_amount: '税额不能大于含税金额',
   opc_platform_entry_locked: '平台导入的收入金额与日期以平台流水为准，不能改；可以补备注、发票号',
   opc_limit_reached: '账目已达上限，请先导出归档后删除旧的',
+  draft_already_decided: '这份草稿已经采用或丢弃过了，不用再处理',
   sandbox_cloud_ai_blocked: '隐私沙箱开着：这类助手的活在本机做，内容不发到云端。要用云端助手，先在「隐私沙箱」里关掉',
   sandbox_model_exists: '这个模型标识已经登记过了，换一个或者改已有的那条',
   sandbox_model_not_draft: '只有草稿能改或上架：已上架的要先下架，再登记一条新的',

@@ -509,6 +509,14 @@ def list_runs(routine_id: int, user: User = Depends(get_current_user), db: Sessi
              "error_kind": x.error_kind, "degraded": x.degraded} for x in rows]
 
 
+@router.get("/users/me/assistant-costs")
+def assistant_costs(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """REL-110 本月助手花了多少、上限多少（131 号 spec）：agent 代调用的经验工具 + 例行任务的模型调用。"""
+    from app.modules.knowledge.units import assistant_costs as costs
+
+    return costs(db, user.id)
+
+
 @router.get("/workbench/routines/{routine_id}/health")
 def routine_health(routine_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """REL-105 这个例行任务最近 30 次跑得怎么样：成功率、降级、重试、跳过、耗时、错误类型、成本。"""

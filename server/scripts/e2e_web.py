@@ -367,6 +367,17 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     step("隐私沙箱：开关由真服务端记住，本机助手抽出待办，同步预览里手机号已遮掉",
          server_on is True and "138****5678" in preview and "13812345678" not in preview)
 
+    # ORC-066 / AGT-084（V154）AI 编排：建一个目标（先不花钱），详情页由真服务端给出预算与授权状态
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/missions", wait_until="networkidle")
+    page.fill("input[aria-label='目标']", "E2E 周六搬家")
+    page.fill("input[aria-label='预算上限']", "300")
+    page.get_by_role("button", name="建好，先不花钱").click()
+    page.wait_for_selector("[aria-label='编排详情']", timeout=10000)
+    mission = page.locator("[aria-label='编排详情']").inner_text()
+    step("AI 编排：建好一个目标，详情里写清预算上限、还没花钱、经验工具已授权",
+         "E2E 周六搬家" in mission and "上限 ¥300.00" in mission and "已付 ¥0.00" in mission
+         and page.locator("input[aria-label='允许用经验工具生成草稿']").is_checked())
+
     # 客服工单：V102 才补上的自助入口，而且它是**没有前置条件的写路径**——
     # 正好适合用真浏览器验一遍（服务端队列由 V101/V103 的测试盯着）
     page.goto(f"http://127.0.0.1:{WEB_PORT}/support", wait_until="networkidle")

@@ -3,9 +3,9 @@
 // 个人门户不只对外展示，也要能管自己的事。手机上这一页最常用的是：
 // 看今天要做什么、勾掉一项清单、记一笔进展、让助手把一件事拆开。
 import {
-  apiErrorText, formatDateTime, millisUntil,
+  apiErrorText, fmtYuan, formatDateTime, millisUntil,
   type PlatformClient, type WbItem, type WbItemDetail, type WbLog, type WbMemory, type WbOverview,
-  type WbRoutine, type WbRoutineHealth, type WbRunStatus, type WbStatus, type WbStep, type NbMethod, type NbReference,
+  type AssistantCosts, type WbRoutine, type WbRoutineHealth, type WbRunStatus, type WbStatus, type WbStep, type NbMethod, type NbReference,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -207,6 +207,9 @@ function Assistant({ client }: { client: PlatformClient }) {
   const [mem, setMem] = useState<WbMemory[]>([]);
   const [routines, setRoutines] = useState<WbRoutine[]>([]);
   const [health, setHealth] = useState<Record<number, WbRoutineHealth>>({});
+  // REL-110 本月助手成本（131 号 spec）：取不到就不显示
+  const [costs, setCosts] = useState<AssistantCosts | null>(null);
+  useEffect(() => { Promise.resolve().then(() => client.assistantCosts()).then((c) => setCosts(c && typeof c.total_cents === 'number' ? c : null)).catch(() => setCosts(null)); }, [client]);
   const [content, setContent] = useState('');
   const [time, setTime] = useState('08:30');
   const [output, setOutput] = useState('');
@@ -233,6 +236,7 @@ function Assistant({ client }: { client: PlatformClient }) {
         <Button title="记住" onPress={() => content.trim() && void act(async () => { await client.addWorkbenchMemory(content); setContent(''); })} />
       </View>
       <Text style={s.h}>例行任务</Text>
+      {costs && <Text style={s.muted} accessibilityLabel="本月助手成本">本月助手成本 {fmtYuan(costs.total_cents)} / 上限 {fmtYuan(costs.cap_cents)}（经验工具 {costs.agent_calls} 次）</Text>}
       <Text style={s.muted}>到点由平台运行，结果发到通知里，不用开着 App。连续失败 3 次会自动暂停。</Text>
       {routines.map((r) => (
         <View key={r.id} style={s.card}>

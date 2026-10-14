@@ -257,6 +257,31 @@ _ASK_NEARBY = re.compile(r"附近|有什么单|接单|有活|顺路")
 _ASK_QUOTE = re.compile(r"报价|多少钱|价格|报多少|行情")
 
 
+def _experience_citations(db: Session, q: str, k: int = 2) -> list[dict]:
+    """AGT-084 助手只读检索平台经验单元（131 号 spec）：只引用、不执行；只用可复用、在用的单元，写明版本与验证状态。"""
+    from app.modules.knowledge import units
+    from app.modules.knowledge.models import ReusableUnit
+    from app.modules.notebook.service import MIN_RELATED, score, snippet, terms
+
+    ts = terms(q)
+    if not ts:
+        return []
+    scored = []
+    for u in db.query(ReusableUnit).filter(ReusableUnit.status == "active").order_by(ReusableUnit.id.desc()).limit(500):
+        if not units.usable(u):
+            continue
+        content = u.content or {}
+        body = " ".join(str(x) for x in [content.get("summary", ""), *(content.get("steps") or []), *(content.get("checklist") or [])])
+        s = score(SimpleNamespace(title=u.title, body=body, tags=[], url=""), ts)
+        if s >= MIN_RELATED:
+            scored.append((s, u, body))
+    scored.sort(key=lambda x: -x[0])
+    status = {"validated": "已验证", "unvalidated": "未验证"}
+    return [{"kind": "experience", "title": u.title, "snippet": snippet(body or u.title, ts),
+             "source": f"平台经验（第 {u.version} 版，{status.get((u.validation or {}).get('status'), '未验证')}）",
+             "valid_until": None, "expired": False, "note_id": None} for _, u, body in scored[:k]]
+
+
 def _tool_citations(db: Session, user_id: int, tools: list[str], q: str) -> list[dict]:
     """白名单里的一人公司工具：问到相关的事，就用本人的数据算一遍，作为一条「按你的数据推算」的出处。"""
     from app.modules.opc import service as osvc
@@ -264,6 +289,8 @@ def _tool_citations(db: Session, user_id: int, tools: list[str], q: str) -> list
     from app.modules.workbench.service import local
 
     out: list[dict] = []
+    if "experience.search" in tools:
+        out += _experience_citations(db, q)
     today = local(utcnow()).date()
     profile = db.get(OpcProfile, user_id)
     if "opc.calendar" in tools and _ASK_CALENDAR.search(q):

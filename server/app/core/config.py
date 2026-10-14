@@ -80,6 +80,8 @@ class Settings:
     # 内置的验收报告草稿是模板填充，成本 0；接模型的工具要在这里留出空间
     KB_TOOL_COST_CENTS = int(os.environ.get("PLATFORM_KB_TOOL_COST_CENTS", "0"))
     KB_TOOL_MAX_COST_CENTS = int(os.environ.get("PLATFORM_KB_TOOL_MAX_COST_CENTS", "100"))
+    # REL-110 每人每月助手（agent 代调用的经验工具 + 例行任务的模型调用）成本上限，分（131 号 spec）
+    AGENT_MONTHLY_COST_CAP_CENTS = int(os.environ.get("PLATFORM_AGENT_MONTHLY_COST_CAP_CENTS", "2000"))
     # FIN-071 幂等记录保留多久（104 号 spec）。24 小时是 Stripe 的语义：
     # 两端在「这一次操作」得到确定结果之前一直用同一个键重试，之后换新键——
     # 重试发生在几秒到几分钟内，不会跨天。过期判断在读的时候就生效。
@@ -145,7 +147,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.145.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.146.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")
