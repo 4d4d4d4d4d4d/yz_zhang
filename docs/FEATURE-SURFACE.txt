@@ -7,6 +7,7 @@ api DELETE /api/v1/developer/webhooks/{webhook_id}
 api DELETE /api/v1/friends/{user_id}
 api DELETE /api/v1/gig/available
 api DELETE /api/v1/gig/places/{place_id}
+api DELETE /api/v1/influence/vouches/{vouch_id}
 api DELETE /api/v1/notebook/methods/{method_id}
 api DELETE /api/v1/notebook/notes/{note_id}
 api DELETE /api/v1/notifications/devices/{token}
@@ -102,6 +103,10 @@ api GET /api/v1/gig/along
 api GET /api/v1/gig/available
 api GET /api/v1/gig/nearby
 api GET /api/v1/gig/places
+api GET /api/v1/influence/leaderboard
+api GET /api/v1/influence/me
+api GET /api/v1/influence/me/proof
+api GET /api/v1/influence/snapshots/latest
 api GET /api/v1/invitations
 api GET /api/v1/knowledge/cards
 api GET /api/v1/knowledge/category-demand
@@ -182,6 +187,7 @@ api GET /api/v1/users/{user_id}/contents
 api GET /api/v1/users/{user_id}/follow-stats
 api GET /api/v1/users/{user_id}/followers
 api GET /api/v1/users/{user_id}/following
+api GET /api/v1/users/{user_id}/influence
 api GET /api/v1/users/{user_id}/reviews
 api GET /api/v1/ventures/mine
 api GET /api/v1/ventures/risk-disclosure
@@ -333,6 +339,8 @@ api POST /api/v1/friends/requests/{req_id}/decide
 api POST /api/v1/gig/jobs/purge-expired
 api POST /api/v1/gig/places
 api POST /api/v1/gig/quote
+api POST /api/v1/influence/jobs/snapshot
+api POST /api/v1/influence/vouches
 api POST /api/v1/invitations/{invitation_id}/accept
 api POST /api/v1/invitations/{invitation_id}/decline
 api POST /api/v1/knowledge/jobs/cluster
@@ -466,6 +474,7 @@ app collaborators
 app decompose
 app experience
 app gig
+app influence
 app motion
 app notebook
 app opc
@@ -577,6 +586,7 @@ sdk createTask
 sdk createTeam
 sdk createTicket
 sdk createVenture
+sdk createVouch
 sdk createWebhook
 sdk createWorkbenchItem
 sdk createWorkbenchProject
@@ -651,6 +661,7 @@ sdk grantConsent
 sdk grantMachineMandate
 sdk imUnreadCount
 sdk importPlatformIncome
+sdk influenceLeaderboard
 sdk inviteAgent
 sdk inviteToGroup
 sdk inviteToTask
@@ -667,6 +678,7 @@ sdk knowledgeSearch
 sdk knowledgeUndecided
 sdk knowledgeUnit
 sdk knowledgeUnits
+sdk latestInfluenceSnapshot
 sdk ledger
 sdk legalAsk
 sdk legalDocument
@@ -693,6 +705,8 @@ sdk myCapability
 sdk myCertifications
 sdk myCoupons
 sdk myDrafts
+sdk myInfluence
+sdk myInfluenceProof
 sdk myInvitations
 sdk myInvoices
 sdk myMissions
@@ -833,6 +847,7 @@ sdk updateWorkbenchRoutine
 sdk uploadImage
 sdk userCapability
 sdk userContents
+sdk userInfluence
 sdk userReviews
 sdk venture
 sdk ventureCompliancePath
@@ -851,6 +866,7 @@ sdk webhooks
 sdk withdraw
 sdk withdrawApplication
 sdk withdrawRequests
+sdk withdrawVouch
 sdk workbenchBreakdown
 sdk workbenchItem
 sdk workbenchItems
@@ -870,6 +886,7 @@ web /community
 web /cooperate
 web /developer
 web /gig
+web /influence
 web /login
 web /messages
 web /notebook

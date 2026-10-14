@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 127 | 影响力与专家等级：不可转让、质押担保、罚没、衰减、Merkle 快照锚定 | [127-influence-and-expert-tiers.md](./127-influence-and-expert-tiers.md) | P0 |
 | 126 | 任务画像与能力画像：说明完整度与补全建议、价格位置、风险、推断技能；被证明过的能力 | [126-task-and-capability-profiles.md](./126-task-and-capability-profiles.md) | P0 |
 | 125 | 接单者服务包：现在有空推单、顺路单（新增绕行）、报价参考 | [125-gig-nearby.md](./125-gig-nearby.md) | P0 |
 | 124 | 一人公司服务包：记账底稿、申报日历、合同体检与财税 / 合同 / 政策三位助手专家 | [124-opc-finance-compliance.md](./124-opc-finance-compliance.md) | P0 |

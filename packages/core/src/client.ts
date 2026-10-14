@@ -1,6 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
-  Cockpit, CapabilityProfile, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
+  Cockpit, CapabilityProfile, InfluenceLeaderboard, InfluenceMine, InfluenceLatestSnapshot, InfluenceProof, InfluencePublic, InfluenceVouchInput, InfluenceVouchRow, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
   CommercialReadiness,
   AgentProfileView,
   PayoutProposalView,
@@ -395,6 +395,24 @@ export class PlatformClient {
   taskProfile(taskId: number) { return this.request<TaskProfileView>('GET', `/tasks/${taskId}/profile`); }
   myCapability() { return this.request<CapabilityProfile>('GET', '/users/me/capability'); }
   userCapability(userId: number) { return this.request<CapabilityProfile>('GET', `/users/${userId}/capability`); }
+
+  // ---- INF-100 影响力与专家等级（127 号 spec）：不可转让——SDK 里也没有任何转让方法 ----
+  myInfluence() { return this.request<InfluenceMine>('GET', '/influence/me'); }
+  userInfluence(userId: number) { return this.request<InfluencePublic>('GET', `/users/${userId}/influence`); }
+  influenceLeaderboard(category: string) {
+    return this.request<InfluenceLeaderboard>('GET', `/influence/leaderboard?category=${encodeURIComponent(category)}`);
+  }
+  /** 拿自己在这个类目的影响力为别人作保：对方做成了你得一点，对方纠纷败诉罚没担保额的一半 */
+  createVouch(input: InfluenceVouchInput) {
+    return this.request<InfluenceVouchRow>('POST', '/influence/vouches', {
+      subject_id: input.subject_id, category: input.category, task_id: input.task_id ?? null, stake: input.stake,
+      note: input.note ?? '',
+    });
+  }
+  withdrawVouch(id: number) { return this.request<{ withdrawn: boolean }>('DELETE', `/influence/vouches/${id}`); }
+  latestInfluenceSnapshot() { return this.request<InfluenceLatestSnapshot>('GET', '/influence/snapshots/latest'); }
+  /** 我在最近一次快照里的每一条，附 Merkle 路径：拿锚定的根就能自己验 */
+  myInfluenceProof() { return this.request<InfluenceProof>('GET', '/influence/me/proof'); }
 
   // ---- GIG-100 接单者（125 号 spec） ----
   gigAvailability() { return this.request<GigAvailabilityView>('GET', '/gig/available'); }

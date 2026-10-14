@@ -343,6 +343,15 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     step("发布页：边写边提示说明完整度与缺什么（验收标准、截止时间）",
          "说明完整度" in hints and "验收标准" in hints and "截止时间" in hints)
 
+    # INF-100（V152）影响力：真服务端算出的等级页；新账号没有影响力也如实说；快照证明能取到
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/influence", wait_until="networkidle")
+    page.wait_for_selector("[aria-label='我的等级']", timeout=10000)
+    tiers = page.locator("[aria-label='我的等级']").inner_text()
+    page.get_by_role("button", name="查看我的证明").click()
+    page.wait_for_selector("[aria-label='存证'] >> text=/还没有做过快照|快照 #/", timeout=10000)
+    step("影响力：等级页由真服务端给出（不能转让的规则写在页头），快照证明可取",
+         ("还没有影响力" in tiers or "·" in tiers) and page.locator("text=不能转让").count() > 0)
+
     # 客服工单：V102 才补上的自助入口，而且它是**没有前置条件的写路径**——
     # 正好适合用真浏览器验一遍（服务端队列由 V101/V103 的测试盯着）
     page.goto(f"http://127.0.0.1:{WEB_PORT}/support", wait_until="networkidle")

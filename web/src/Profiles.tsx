@@ -1,8 +1,9 @@
 import {
   apiErrorText, fmtYuan,
-  type CapabilityProfile, type TaskDraftInput, type TaskProfile, type TaskProfileView,
+  type CapabilityProfile, type InfluencePublic, type TaskDraftInput, type TaskProfile, type TaskProfileView,
 } from '@platform/core';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from './store';
 
 /** PROF-100 任务画像与能力画像（126 号 spec）的两端展示件。 */
@@ -77,6 +78,52 @@ export function CapabilityCard({ userId }: { userId?: number }) {
         {c.reply_hours_median !== null ? ` · 回复邀约中位 ${c.reply_hours_median} 小时` : ''}
         {c.disputes !== null ? ` · 纠纷 ${c.disputes} 次（只有你看得到）` : ''}</p>
       <p className="muted">{c.note}</p>
+    </section>
+  );
+}
+
+/** INF-107 对外的影响力：各类目等级与有多少人为他作保（127 号 spec）。熟手以上的访客可以为他作保。 */
+export function InfluenceCard({ userId, isMe }: { userId: number; isMe: boolean }) {
+  const { client } = useApp();
+  const [inf, setInf] = useState<InfluencePublic | null>(null);
+  const [form, setForm] = useState<{ category: string; stake: string; note: string } | null>(null);
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    // 附加信息：取不到（含老服务端没有这个接口）就不显示
+    Promise.resolve().then(() => client.userInfluence(userId))
+      .then((x) => setInf(Array.isArray(x?.categories) ? x : null)).catch(() => setInf(null));
+  }, [client, userId]);
+  if (!inf || (inf.categories.length === 0 && isMe)) return null;
+  async function vouch() {
+    if (!form) return;
+    setError(''); setMsg('');
+    try {
+      const v = await client.createVouch({ subject_id: userId, category: form.category, stake: Number(form.stake), note: form.note });
+      setMsg(`已用 ${v.stake} 点「${v.category}」影响力为他担保`); setForm(null);
+      setInf(await client.userInfluence(userId));
+    } catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <section className="card" aria-label="影响力">
+      <h4>影响力{isMe && <> <Link className="muted" to="/influence">我的明细 ↗</Link></>}</h4>
+      {inf.categories.length === 0 ? <p className="muted">还没有在平台上做成过事，暂无影响力。</p> : (
+        <ul>{inf.categories.map((c) => <li key={c.category}>{c.category}：<strong>{c.tier_name}</strong> · 影响力 {c.points} · 完成 {c.completed} 单</li>)}</ul>
+      )}
+      {inf.vouched.length > 0 && <p className="muted">{inf.vouched.map((v) => `${v.vouchers} 人以 ${v.stake} 点为他的「${v.category}」作保`).join('；')}</p>}
+      {!isMe && !form && <button className="ghost" onClick={() => setForm({ category: inf.categories[0]?.category ?? '', stake: '10', note: '' })}>为他担保</button>}
+      {form && (
+        <div className="row">
+          <input aria-label="担保类目" placeholder="类目" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+          <input aria-label="担保额" type="number" min={1} value={form.stake} onChange={(e) => setForm({ ...form, stake: e.target.value })} />
+          <input className="grow" aria-label="担保说明" placeholder="说一句为什么（可不填）" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+          <button disabled={!form.category || !(Number(form.stake) > 0)} onClick={() => void vouch()}>确认担保</button>
+          <button className="ghost" onClick={() => setForm(null)}>算了</button>
+        </div>
+      )}
+      {!isMe && <p className="muted">担保要你在这个类目是熟手以上；他做成了你得一点，他纠纷败诉你被罚没担保额的一半。</p>}
+      {msg && <p role="status">{msg}</p>}
+      {error && <p className="error">{error}</p>}
     </section>
   );
 }

@@ -27,6 +27,7 @@ import Notebook from './pages/Notebook';
 import Packs from './pages/Packs';
 import Opc from './pages/Opc';
 import Gig from './pages/Gig';
+import Influence from './pages/Influence';
 const Chain = lazy(() => import('./pages/Chain'));
 const Records = lazy(() => import('./pages/Records'));
 import WalletPage from './pages/Wallet';
@@ -101,6 +102,8 @@ export default function App() {
         <Route path="/opc" element={hasToken ? <Opc /> : <Navigate to="/login?next=/opc" />} />
         {/* GIG-100 接单：现在有空、顺路单、报价参考（125 号 spec）；入口在服务包与广场 */}
         <Route path="/gig" element={hasToken ? <Gig /> : <Navigate to="/login?next=/gig" />} />
+        {/* INF-100 影响力与专家等级：不可转让、担保、罚没、衰减、快照证明（127 号 spec）；入口在个人中心 */}
+        <Route path="/influence" element={hasToken ? <Influence /> : <Navigate to="/login?next=/influence" />} />
         <Route path="/notifications" element={hasToken ? <Notifications /> : <Navigate to="/login" />} />
         <Route path="/profile" element={hasToken ? <Profile /> : <Navigate to="/login" />} />
         <Route path="/rewards" element={hasToken ? <Rewards /> : <Navigate to="/login" />} />

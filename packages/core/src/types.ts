@@ -2098,3 +2098,113 @@ export interface CapabilityProfile {
   /** 只有本人看得到；对外是 null */
   disputes: number | null;
 }
+
+// ---- INF-100 影响力与专家等级（127 号 spec） ----
+export type InfluenceTier = 'newcomer' | 'skilled' | 'expert' | 'expert_senior';
+export const INFLUENCE_TIER_NAMES: Record<InfluenceTier, string> = {
+  newcomer: '新手', skilled: '熟手', expert: '专家', expert_senior: '资深专家',
+};
+/** 对外看到的一个类目 */
+export interface InfluenceCategory {
+  category: string;
+  /** 衰减后的影响力（取整） */
+  points: number;
+  tier: InfluenceTier;
+  tier_name: string;
+  completed: number;
+  rating_avg: number | null;
+}
+/** 本人看到的一个类目：多了担保占用、可用额度与升级还差什么 */
+export interface InfluenceMyCategory {
+  category: string;
+  points: number;
+  tier: InfluenceTier;
+  tier_name: string;
+  completed: number;
+  rating_avg: number | null;
+  locked: number;
+  available: number;
+  gaps: string[];
+}
+export interface InfluenceEventRow {
+  id: number;
+  category: string;
+  /** earn_task / earn_publish / earn_vouch / slash_dispute / slash_vouch / restore */
+  kind: string;
+  points: number;
+  reason: string;
+  created_at: string;
+}
+export interface InfluenceVouchRow {
+  id: number;
+  voucher_id: number;
+  voucher_nickname: string;
+  subject_id: number;
+  subject_nickname: string;
+  category: string;
+  task_id: number | null;
+  stake: number;
+  status: 'active' | 'released' | 'slashed' | 'withdrawn';
+  note: string;
+  created_at: string;
+  resolved_at: string | null;
+}
+export interface InfluenceMine {
+  categories: InfluenceMyCategory[];
+  events: InfluenceEventRow[];
+  vouches_given: InfluenceVouchRow[];
+  vouches_received: InfluenceVouchRow[];
+  rules: string;
+}
+export interface InfluenceVouchedSummary {
+  category: string;
+  vouchers: number;
+  stake: number;
+}
+export interface InfluencePublic {
+  user_id: number;
+  categories: InfluenceCategory[];
+  vouched: InfluenceVouchedSummary[];
+}
+export interface InfluenceLeaderRow {
+  user_id: number;
+  nickname: string;
+  tier: InfluenceTier;
+  tier_name: string;
+  points: number;
+  completed: number;
+}
+export interface InfluenceLeaderboard {
+  category: string;
+  items: InfluenceLeaderRow[];
+}
+export interface InfluenceVouchInput {
+  subject_id: number;
+  category: string;
+  /** 为某一单作保；不给 = 整个类目（180 天后自动释放） */
+  task_id?: number | null;
+  stake: number;
+  note?: string;
+}
+export interface InfluenceSnapshotView {
+  id: number;
+  taken_at: string;
+  merkle_root: string;
+  leaves: number;
+  anchor_seq: number | null;
+}
+/** 最近一次快照；还没做过是 null */
+export interface InfluenceLatestSnapshot {
+  snapshot: InfluenceSnapshotView | null;
+}
+export interface InfluenceProofItem {
+  category: string;
+  points: number;
+  leaf: string;
+  path: string[];
+  verified: boolean;
+}
+export interface InfluenceProof {
+  snapshot: InfluenceSnapshotView | null;
+  items: InfluenceProofItem[];
+}

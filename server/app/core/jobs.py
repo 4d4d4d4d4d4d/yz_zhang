@@ -75,6 +75,8 @@ JOBS: tuple[ScheduledJob, ...] = (
     ScheduledJob("/knowledge/jobs/cluster", 3600, "kb_cluster",
                  "KB-070 新经验归进子类：串行跑（并发更新同一子类的质心是静默错误的温床），"
                  "没标定阈值的大类原样等着，标定后下一轮重试"),
+    ScheduledJob("/influence/jobs/snapshot", 86400, "influence_snapshot",
+                 "INF-106 影响力快照：Merkle 根锚定进存证哈希链；到期的类目担保释放"),
     ScheduledJob("/gig/jobs/purge-expired", 3600, "gig_purge",
                  "GIG-101 过期的「现在有空」连同粗化位置一起删：位置不留着过夜（读的时候也会顺手删）"),
     ScheduledJob("/workbench/jobs/run-routines", 60, "wb_routines",

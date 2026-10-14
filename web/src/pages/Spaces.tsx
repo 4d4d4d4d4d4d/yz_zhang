@@ -1,5 +1,5 @@
 import { apiErrorText, formatDate, type FollowListItem, type PersonalSpace, type OwnSpace, type SpaceTrackRecord, type SpaceItem, type SpaceSummary } from '@platform/core';
-import { CapabilityCard } from '../Profiles';
+import { CapabilityCard, InfluenceCard } from '../Profiles';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApp } from '../store';
@@ -76,6 +76,7 @@ export function PublicSpace() {
     {space.introduction && <section className="personal-about"><span className="overline">ABOUT / 关于我</span><p>{space.introduction}</p></section>}
     {space.track_record && <TrackRecord record={space.track_record} />}
     {hasToken && <CapabilityCard userId={space.user_id} />}
+    {hasToken && <InfluenceCard userId={space.user_id} isMe={me?.id === space.user_id} />}
     <div className="discovery-heading"><h2>我的世界</h2><span className="muted">作品、日常与正在发生的事</span></div><div className="portfolio-grid">{space.items.map((item, index) => <Reveal key={index} delayMs={Math.min(index, 5) * 40}><article className={`portfolio-piece piece-${index % 3}`}><span className="overline">{LABELS[item.kind]} / {String(index + 1).padStart(2, '0')}</span><div className="piece-symbol" aria-hidden="true">{['↗', '◎', '✳'][index % 3]}</div><h3>{item.title}</h3><p>{item.summary}</p>{item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="quiet-link">{item.kind === 'shop' ? '去逛逛' : item.kind === 'live' ? '前往直播平台' : '打开内容'} ↗ <small>外部平台</small></a>}</article></Reveal>)}</div>{!space.items.length && <p className="space-empty">这个空间正在慢慢生长。</p>}
   </>}</main>;
 }

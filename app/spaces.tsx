@@ -21,6 +21,7 @@ import {
   Button, FlatList, Linking, RefreshControl, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
+import { InfluenceBlock } from './influence';
 
 const KIND_LABEL: Record<SpaceItem['kind'], string> = {
   work: '作品', article: '文章', video: '视频', shop: '小店', live: '直播', service: '服务',
@@ -188,6 +189,8 @@ export function PublicSpaceScreen({ client, userId, onBack, onOpenConversation }
             {WHO[space.kind]}{space.accepting_orders ? ' · 可接单' : ''}
           </Text>
           {!!space.introduction && <Text>{space.introduction}</Text>}
+          {/* INF-107 影响力与担保（127 号 spec） */}
+          <InfluenceBlock client={client} userId={userId} />
           {/* SPACE-029 履约记录：在平台上做成过什么、别人怎么说 */}
           {space.track_record && (
             <View style={styles.card} accessibilityLabel="履约记录">

@@ -71,6 +71,10 @@ def _category_fit(db: Session, task, users: list[User]) -> dict[int, tuple[float
         from app.modules.profiles.service import infer_skills, skill_vocab
 
         inferred = infer_skills(f"{task.title}\n{task.description}", skill_vocab(db), [])
+    # INF-104 专家等级（127 号 spec）：只加分，不改原有的打分
+    from app.modules.influence.service import TIER_NAMES, tiers_for
+
+    tiers = tiers_for(db, users, cat)
     out: dict[int, tuple[float, list[str]]] = {}
     for uid in user_ids:
         bonus, why = 0.0, []
@@ -88,6 +92,10 @@ def _category_fit(db: Session, task, users: list[User]) -> dict[int, tuple[float
             if cat in text:
                 bonus += FIT_MENTIONS
                 why.append(f"擅长「{cat}」（本人技能或个人空间）")
+        lvl = tiers.get(uid, "newcomer")
+        if FIT_TIER.get(lvl):
+            bonus += FIT_TIER[lvl]
+            why.append(f"「{cat}」{TIER_NAMES[lvl]}（平台影响力）")
         hit = [s for s in inferred if s.lower() in {x.lower() for x in (skills.get(uid) or []) if isinstance(x, str)}]
         if hit:
             bonus += FIT_INFERRED_SKILL
@@ -98,6 +106,7 @@ def _category_fit(db: Session, task, users: list[User]) -> dict[int, tuple[float
 
 
 FIT_INFERRED_SKILL = 0.05     # PROF-104：说明里认出的技能与本人技能对上
+FIT_TIER = {"skilled": 0.02, "expert": 0.05, "expert_senior": 0.08}   # INF-104 类目等级
 
 # SPACE-023 可用性：时段只回答「有没有空」，回复时长样本够了才说
 FIT_FREE_BEFORE_DEADLINE = 0.04

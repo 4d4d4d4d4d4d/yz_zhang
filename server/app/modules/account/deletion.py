@@ -161,6 +161,12 @@ def erase_personal_data(db: Session, user: User) -> dict:
     from app.modules.gig.models import GigAvailability, GigPlace
     db.query(GigAvailability).filter(GigAvailability.user_id == user.id).delete(synchronize_session=False)
     db.query(GigPlace).filter(GigPlace.owner_id == user.id).delete(synchronize_session=False)
+    # INF-109 影响力账本与担保：本人的删掉；别人为他作的担保一并释放（不罚没、不奖励）
+    from app.modules.influence.models import InfluenceEvent, InfluenceVouch
+    db.query(InfluenceEvent).filter(InfluenceEvent.user_id == user.id).delete(synchronize_session=False)
+    db.query(InfluenceVouch).filter(InfluenceVouch.voucher_id == user.id).delete(synchronize_session=False)
+    db.query(InfluenceVouch).filter(InfluenceVouch.subject_id == user.id, InfluenceVouch.status == "active").update(
+        {"status": "released"}, synchronize_session=False)
     user.is_deleted = True
     user.phone = f"deleted:{user.id}"
     user.nickname = "已注销用户"

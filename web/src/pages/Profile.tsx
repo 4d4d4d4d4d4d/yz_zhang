@@ -417,6 +417,8 @@ export default function Profile() {
       <Availability />
       {/* PROF-105 被证明过的能力（自述与佐证分开），126 号 spec */}
       <CapabilityCard />
+      {/* INF-100 影响力与专家等级（127 号 spec） */}
+      <div className="card row"><span className="grow">影响力与专家等级：只能靠做成事挣，不能转让</span><Link to="/influence">查看 ↗</Link></div>
       <MyApplications />
       <PrivacyConsents />
       <ChangePassword />

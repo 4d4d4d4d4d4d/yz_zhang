@@ -723,6 +723,21 @@ def _export_opc(db: Session, user_id: int) -> dict:
     }
 
 
+def _export_influence(db: Session, user_id: int) -> dict:
+    """INF-109 影响力账本（每一条挣与罚）与担保。"""
+    from app.modules.influence.models import InfluenceEvent, InfluenceVouch
+
+    events = db.query(InfluenceEvent).filter(InfluenceEvent.user_id == user_id).order_by(InfluenceEvent.id).all()
+    vouches = db.query(InfluenceVouch).filter((InfluenceVouch.voucher_id == user_id) | (InfluenceVouch.subject_id == user_id))\
+        .order_by(InfluenceVouch.id).all()
+    return {
+        "events": [{"category": e.category, "kind": e.kind, "points": e.points, "reason": e.reason,
+                    "created_at": iso(e.created_at)} for e in events],
+        "vouches": [{"role": "voucher" if v.voucher_id == user_id else "subject", "category": v.category,
+                     "task_id": v.task_id, "stake": v.stake, "status": v.status} for v in vouches],
+    }
+
+
 @router.get("/users/me/export")
 def export_my_data(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from app.modules.content.models import Content
@@ -745,6 +760,7 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
         "workbench": _export_workbench(db, user.id),
         "notebook": _export_notebook(db, user.id),
         "opc": _export_opc(db, user.id),
+        "influence": _export_influence(db, user.id),
         "real_name": user.real_name,
         "tasks": [{"id": t.id, "title": t.title, "status": t.status, "budget_cents": t.budget_cents,
                    "role": "creator" if t.creator_id == user.id else "executor"} for t in tasks],
