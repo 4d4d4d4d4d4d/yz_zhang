@@ -218,6 +218,25 @@ def test_a_transaction_committed_on_another_thread_does_not_haunt_the_thread_tha
     assert not txguard.violations
 
 
+def test_another_requests_open_transaction_on_the_same_thread_is_not_mine(client, guarded):
+    """真浏览器全量回归里偶发的 `/search` 500：请求 A 在线程 X 上开着一个只读事务（合法，还没结束），
+    请求 B 恰好也落在线程 X 上调供应商——按线程归属的守卫把 A 的事务算给了 B。现在按请求归属。"""
+    import contextvars
+
+    a, b = contextvars.copy_context(), contextvars.copy_context()
+    a.run(txguard.enter_request)
+    b.run(txguard.enter_request)
+    db = SessionLocal()
+    a.run(lambda: db.execute(sa.text("SELECT 1")))     # A 在本线程开了事务
+    assert a.run(txguard.in_transaction) and not b.run(txguard.in_transaction)
+    assert b.run(guarded.ping) == "pong"                # B 在同一个线程上调供应商：不是 B 的事务
+    with pytest.raises(txguard.TransactionHeldAcrossVendorCall):
+        a.run(guarded.ping)                             # A 自己调，照样抓
+    db.rollback()
+    db.close()
+    assert not a.run(txguard.in_transaction)
+
+
 def test_the_report_names_the_write_that_keeps_the_transaction_open(client, guarded):
     from app.modules.account.models import User
 

@@ -35,6 +35,10 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # CONC-067 事务守卫按请求归属（最外层：之后的每一层与线程池都继承这个请求上下文）
+    from app.core.txguard import RequestScope
+
+    app.add_middleware(RequestScope)
     # VND-042 生产环境配置自检：P0 能力仍是模拟实现 / 弱密钥 / SQLite → 拒绝启动
     from app.vendors.registry import startup_check
 

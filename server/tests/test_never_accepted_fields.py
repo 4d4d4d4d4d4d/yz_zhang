@@ -70,6 +70,8 @@ GUARDED: dict[str, dict[str, str]] = {
         "DistributeIn": "合作体分配金额，需全员一致同意（治理流程）",
         "ProposalIn": "合作体出款提案金额，需全员投票通过才执行（一致同意治理）",
         "SpendIn": "团队花钱申请，按成员额度与档位审批（TEAM-010）",
+        "EntryIn": "一人公司记账底稿：本人记自己的账，只出底稿、不动钱（OPC-101）",
+        "EntryPatch": "同上；平台导入的那几行金额锁定，以平台流水为准（OPC-101）",
     },
     "budget_cents": {
         "TaskIn": "发布方定预算，本来就是他的钱",
@@ -81,6 +83,7 @@ GUARDED: dict[str, dict[str, str]] = {
     "role": {
         "MemberIn": "团队成员角色由 owner 设定（require_role owner）",
         "MemberPatch": "改角色与额度同样仅 owner（TEAM-010 只有 owner 能改角色与额度）",
+        "ReviewIn": "合同体检的视角（甲方 / 乙方）：只决定提示从谁的角度写，不授予任何权限（OPC-105）",
     },
     "user_id": {
         "DirectIn": "目标用户：和谁聊天",

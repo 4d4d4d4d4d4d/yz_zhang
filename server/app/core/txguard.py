@@ -15,6 +15,7 @@
 """
 from __future__ import annotations
 
+import contextvars
 import logging
 import threading
 from collections import Counter
@@ -36,11 +37,50 @@ _log = logging.getLogger("txguard")
 # commit / rollback 无论在哪个线程触发，都从**登记它的那个集合**里删掉。
 # 连接上的 info 跟着池里的物理连接走（跨多次借出都在）：登记用一次性的令牌，
 # 万一某次归还没有触发 commit / rollback 事件，下一次 begin 先把那个旧令牌从旧集合里清掉。
+#
+# 第二版（V151 前的全量回归里，真浏览器偶发 `/search` 500）：仍按**线程**归属，并发时会把**别人的**事务算到自己头上——
+# 请求 A 在线程 X 上开了一个只读事务、还没结束（合法），请求 B 这时恰好也落在线程 X 上调供应商，
+# 守卫看到「线程 X 有一个打开着的事务」就判 B 违规。报错写的是「未写过，打开着的事务 1 个」，而 B 自己早已 release 过。
+# 现在按**请求**归属：`RequestScope` 中间件在每个请求开始时放一个新的集合进 ContextVar，
+# 线程池里跑的依赖与处理函数拿到的是同一个请求上下文的拷贝（引用同一个集合）；
+# 请求之外（job 脚本、测试里直接调服务函数）退回按线程。
+_request_open: contextvars.ContextVar[dict | None] = contextvars.ContextVar("txguard_request_open", default=None)
+
+
 def _open() -> dict:
+    scoped = _request_open.get()
+    if scoped is not None:
+        return scoped
     s = getattr(_state, "open", None)
     if s is None:
         s = _state.open = {}
     return s
+
+
+def enter_request() -> contextvars.Token:
+    """一个请求开始：它的事务单独记。返回的令牌交给 `leave_request`。"""
+    return _request_open.set({})
+
+
+def leave_request(token: contextvars.Token) -> None:
+    _request_open.reset(token)
+
+
+class RequestScope:
+    """纯 ASGI 中间件（放在最外层）：给每个 HTTP 请求一个自己的「打开着的事务」集合。"""
+
+    def __init__(self, app) -> None:  # noqa: ANN001
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:  # noqa: ANN001
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        token = enter_request()
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            leave_request(token)
 
 
 def _depth() -> int:
