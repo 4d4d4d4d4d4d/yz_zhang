@@ -1,4 +1,5 @@
 import { PlatformClient, type Me } from '@platform/core';
+import { readSandbox } from './sandboxLocal';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 interface AppState {
@@ -21,6 +22,8 @@ export function AppProvider({ children, client: injected }: { children: ReactNod
       new PlatformClient({
         baseUrl: '', // 同源，经 vite 代理 / 生产反代
         getToken: () => localStorage.getItem('token'),
+        // SBX-102 隐私沙箱开着：把原文交给云端 AI 的请求在发出之前就拦下
+        sandbox: readSandbox,
       }),
     [injected],
   );

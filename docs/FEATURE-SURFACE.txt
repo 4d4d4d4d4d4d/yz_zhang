@@ -42,6 +42,7 @@ api GET /api/v1/admin/packs/radar
 api GET /api/v1/admin/platform-finance
 api GET /api/v1/admin/queues
 api GET /api/v1/admin/reports
+api GET /api/v1/admin/sandbox/models
 api GET /api/v1/admin/security
 api GET /api/v1/admin/settlements/verify
 api GET /api/v1/admin/teams/pending
@@ -146,6 +147,7 @@ api GET /api/v1/open/v1/tasks/{task_id}
 api GET /api/v1/open/v1/wallet
 api GET /api/v1/packs
 api GET /api/v1/packs/{key}
+api GET /api/v1/sandbox/models
 api GET /api/v1/search
 api GET /api/v1/search/suggest
 api GET /api/v1/search/trending
@@ -181,6 +183,7 @@ api GET /api/v1/users/me/bookmarks
 api GET /api/v1/users/me/capability
 api GET /api/v1/users/me/certifications
 api GET /api/v1/users/me/export
+api GET /api/v1/users/me/sandbox
 api GET /api/v1/users/{user_id}
 api GET /api/v1/users/{user_id}/capability
 api GET /api/v1/users/{user_id}/contents
@@ -226,6 +229,7 @@ api PATCH /api/v1/admin/categories/{category_id}
 api PATCH /api/v1/admin/cities/{city_id}
 api PATCH /api/v1/admin/knowledge/clusters/{cluster_id}
 api PATCH /api/v1/admin/knowledge/units/{unit_id}
+api PATCH /api/v1/admin/sandbox/models/{model_id}
 api PATCH /api/v1/contents/{content_id}
 api PATCH /api/v1/conversations/{conv_id}
 api PATCH /api/v1/decompositions/{dec_id}
@@ -266,6 +270,9 @@ api POST /api/v1/admin/packs/{pack_id}/retire
 api POST /api/v1/admin/packs/{pack_id}/submit
 api POST /api/v1/admin/platform-finance/settle
 api POST /api/v1/admin/reports/{report_id}/resolve
+api POST /api/v1/admin/sandbox/models
+api POST /api/v1/admin/sandbox/models/{model_id}/publish
+api POST /api/v1/admin/sandbox/models/{model_id}/retire
 api POST /api/v1/admin/security/unban
 api POST /api/v1/admin/subsidy-pool/fund
 api POST /api/v1/admin/teams/{team_id}/verify
@@ -455,6 +462,7 @@ api PUT /api/v1/notifications/devices
 api PUT /api/v1/notifications/prefs
 api PUT /api/v1/opc/profile
 api PUT /api/v1/spaces/me
+api PUT /api/v1/users/me/sandbox
 api PUT /api/v1/users/{user_id}/follow
 api PUT /api/v1/wallet/payout-account
 app App
@@ -481,6 +489,7 @@ app opc
 app packs
 app profiles
 app rights
+app sandbox
 app search
 app spaces
 app workbench
@@ -513,6 +522,7 @@ sdk adminPacks
 sdk adminRejectPack
 sdk adminReports
 sdk adminRetirePack
+sdk adminSandboxModels
 sdk adminSecurity
 sdk adminSubmitPack
 sdk adminTickets
@@ -582,6 +592,7 @@ sdk createGroup
 sdk createMethod
 sdk createMission
 sdk createNote
+sdk createSandboxModel
 sdk createTask
 sdk createTeam
 sdk createTicket
@@ -711,6 +722,7 @@ sdk myInvitations
 sdk myInvoices
 sdk myMissions
 sdk myReferrals
+sdk mySandbox
 sdk mySessions
 sdk mySubscriptions
 sdk myTasks
@@ -752,6 +764,7 @@ sdk proposePayout
 sdk proposeSettlement
 sdk publicProfile
 sdk publishContent
+sdk publishSandboxModel
 sdk publishTask
 sdk recallMessage
 sdk recommendations
@@ -773,6 +786,7 @@ sdk resetPassword
 sdk resolveReport
 sdk resolveTicket
 sdk resolveUpload
+sdk retireSandboxModel
 sdk retractKnowledgeTask
 sdk review
 sdk reviewAmlActivity
@@ -785,6 +799,7 @@ sdk revokeSession
 sdk rotateApiKey
 sdk runAgent
 sdk runWorkbenchRoutine
+sdk sandboxModels
 sdk saveOpcProfile
 sdk saveSpace
 sdk scenarioPack
@@ -799,6 +814,7 @@ sdk setFriendRemark
 sdk setGigAvailable
 sdk setKnowledgeUnitStatus
 sdk setNotificationPref
+sdk setSandbox
 sdk setTeamBudget
 sdk setTripShare
 sdk settlePlatform
@@ -840,6 +856,7 @@ sdk updateMe
 sdk updateMethod
 sdk updateNote
 sdk updateOpcEntry
+sdk updateSandboxModel
 sdk updateTeamMember
 sdk updateWorkbenchItem
 sdk updateWorkbenchProject
@@ -900,6 +917,7 @@ web /profile
 web /publish
 web /records
 web /rewards
+web /sandbox
 web /search
 web /space/edit
 web /support

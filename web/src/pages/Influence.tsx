@@ -1,5 +1,5 @@
 import {
-  apiErrorText, formatDateTime,
+  apiErrorText, formatDateTime, influenceLeaf, verifyInfluenceProof,
   type InfluenceLatestSnapshot, type InfluenceLeaderboard, type InfluenceMine, type InfluenceProof, type InfluenceVouchRow,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -20,7 +20,8 @@ const VOUCH_STATUS: Record<InfluenceVouchRow['status'], string> = {
 };
 
 export default function Influence() {
-  const { client } = useApp();
+  const { client, me } = useApp();
+  const meId = me?.id;
   const [mine, setMine] = useState<InfluenceMine | null>(null);
   const [proof, setProof] = useState<InfluenceProof | null>(null);
   const [latest, setLatest] = useState<InfluenceLatestSnapshot | null>(null);
@@ -121,7 +122,13 @@ export default function Influence() {
             <p>快照 #{proof.snapshot.id} · {formatDateTime(proof.snapshot.taken_at)} · {proof.snapshot.leaves} 条 · 存证序号 {proof.snapshot.anchor_seq ?? '—'}</p>
             <p className="muted" style={{ wordBreak: 'break-all' }}>树根 {proof.snapshot.merkle_root}</p>
             {proof.items.length === 0 ? <p className="muted">这次快照里还没有你。</p> : (
-              <ul>{proof.items.map((i) => <li key={i.category}>{i.category}：{i.points} · {i.verified ? '验证通过' : '验证不通过'}（路径 {i.path.length} 层）</li>)}</ul>
+              <ul>{proof.items.map((i) => {
+                // INF-110 不只信服务端：叶子由本机重新算，再沿路径算到锚定的树根
+                const mine = influenceLeaf(meId ?? 0, i.category, i.points) === i.leaf
+                  && verifyInfluenceProof(i.leaf, i.path, proof.snapshot!.merkle_root);
+                return <li key={i.category}>{i.category}：{i.points} · {i.verified ? '验证通过' : '验证不通过'}（路径 {i.path.length} 层）
+                  · 本机验算{mine ? '通过' : '不通过'}</li>;
+              })}</ul>
             )}
           </div>
         ))}

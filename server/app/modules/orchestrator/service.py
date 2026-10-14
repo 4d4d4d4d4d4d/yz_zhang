@@ -31,8 +31,6 @@ def transition(db: Session, mission: Mission, new_status: str) -> Mission:
 
 def plan(db: Session, mission: Mission) -> list[MissionStep]:
     """规划：复用 AI 分解网关把目标拆成可分发的工具调用（无 Key 时走模板引擎）。"""
-    from app.modules.decompose.llm import get_gateway
-
     existing = db.query(MissionStep).filter(MissionStep.mission_id == mission.id).count()
     if existing:
         return []
@@ -40,7 +38,10 @@ def plan(db: Session, mission: Mission) -> list[MissionStep]:
 
     # ORC-004 规划只用上限的一部分，其余留作重试预留金
     plan_budget = mission.budget_cap_cents * (10000 - settings.ORC_PLAN_RESERVE_BPS) // 10000
-    items = get_gateway().decompose(
+    from app.core.sandbox import gateway_for
+
+    # SBX-103 开着沙箱的人：已经建好的使命也不把他的目标交给云端模型
+    items = gateway_for(db, mission.owner_id).decompose(
         db, mission.goal, mission.detail, mission.category, plan_budget
     )
     steps = []

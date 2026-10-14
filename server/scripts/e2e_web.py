@@ -352,6 +352,21 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     step("影响力：等级页由真服务端给出（不能转让的规则写在页头），快照证明可取",
          ("还没有影响力" in tiers or "·" in tiers) and page.locator("text=不能转让").count() > 0)
 
+    # SBX-100（V158）隐私沙箱：真服务端记住开关；本机助手抽待办；同步预览里号码已遮掉；之后关掉沙箱
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/sandbox", wait_until="networkidle")
+    page.get_by_role("button", name="打开沙箱").click()
+    page.wait_for_selector("text=隐私沙箱已打开", timeout=10000)
+    page.fill("textarea[aria-label='本机内容']", "周会纪要。需要联系 13812345678 确认上门时间。")
+    page.get_by_role("button", name="抽出待办").click()
+    page.wait_for_selector("[aria-label='同步前脱敏']", timeout=10000)
+    preview = page.locator("[aria-label='同步前脱敏']").inner_text()
+    server_on = page.evaluate("""async () => (await (await fetch('/api/v1/users/me/sandbox',
+        {headers: {Authorization: 'Bearer ' + localStorage.getItem('token')}})).json()).enabled""")
+    page.get_by_role("button", name="关闭沙箱").click()
+    page.wait_for_selector("text=隐私沙箱已关闭", timeout=10000)
+    step("隐私沙箱：开关由真服务端记住，本机助手抽出待办，同步预览里手机号已遮掉",
+         server_on is True and "138****5678" in preview and "13812345678" not in preview)
+
     # 客服工单：V102 才补上的自助入口，而且它是**没有前置条件的写路径**——
     # 正好适合用真浏览器验一遍（服务端队列由 V101/V103 的测试盯着）
     page.goto(f"http://127.0.0.1:{WEB_PORT}/support", wait_until="networkidle")

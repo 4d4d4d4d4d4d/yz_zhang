@@ -2208,3 +2208,73 @@ export interface InfluenceProof {
   snapshot: InfluenceSnapshotView | null;
   items: InfluenceProofItem[];
 }
+
+// ---- SBX-100 端侧隐私沙箱（128 号 spec） ----
+export interface SandboxState {
+  enabled: boolean;
+  since: string | null;
+  /** 开着时被拦下的云端 AI 接口数 */
+  blocked_endpoints: number;
+  note: string;
+}
+export interface SandboxModelRow {
+  id: number;
+  key: string;
+  name: string;
+  family: string;
+  params_b: number;
+  quant: string;
+  file_format: string;
+  size_mb: number;
+  sha256: string;
+  url: string;
+  license: string;
+  min_ram_gb: number;
+  languages: string[];
+  skills: string[];
+  note: string;
+  published_at: string | null;
+}
+export interface SandboxModelList {
+  items: SandboxModelRow[];
+  note: string;
+}
+export interface SandboxModelAdminRow {
+  id: number;
+  key: string;
+  name: string;
+  family: string;
+  params_b: number;
+  quant: string;
+  file_format: string;
+  size_mb: number;
+  sha256: string;
+  url: string;
+  license: string;
+  min_ram_gb: number;
+  languages: string[];
+  skills: string[];
+  note: string;
+  published_at: string | null;
+  status: 'draft' | 'published' | 'retired';
+  created_by: number;
+  reviewed_by: number | null;
+  retired_reason: string;
+  created_at: string;
+}
+export interface SandboxModelInput {
+  key: string;
+  name: string;
+  family?: string;
+  params_b?: number;
+  quant?: string;
+  file_format?: string;
+  size_mb?: number;
+  sha256?: string;
+  url?: string;
+  license?: string;
+  min_ram_gb?: number;
+  languages?: string[];
+  skills?: string[];
+  note?: string;
+}

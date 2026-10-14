@@ -419,6 +419,8 @@ export default function Profile() {
       <CapabilityCard />
       {/* INF-100 影响力与专家等级（127 号 spec） */}
       <div className="card row"><span className="grow">影响力与专家等级：只能靠做成事挣，不能转让</span><Link to="/influence">查看 ↗</Link></div>
+      {/* SBX-100 隐私沙箱（128 号 spec） */}
+      <div className="card row"><span className="grow">隐私沙箱：助手的活在本机做，原文不上云</span><Link to="/sandbox">打开 ↗</Link></div>
       <MyApplications />
       <PrivacyConsents />
       <ChangePassword />

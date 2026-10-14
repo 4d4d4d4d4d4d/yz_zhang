@@ -53,6 +53,11 @@ REACHED_BY: dict[str, str] = {
     "/admin/knowledge/overview": "knowledgeAdminOverview",
     # PACK-102/103/107 场景包运营（123 号 spec）：管理后台「服务包（场景包）」一节
     "/admin/packs": "adminPacks",
+    # SBX-106 端侧模型目录（128 号 spec）：登记 / 改 / 四眼上架 / 下架都在后台「端侧模型目录」一块
+    "/admin/sandbox/models": "adminSandboxModels",
+    "/admin/sandbox/models/{x}": "updateSandboxModel",
+    "/admin/sandbox/models/{x}/publish": "publishSandboxModel",
+    "/admin/sandbox/models/{x}/retire": "retireSandboxModel",
     "/admin/packs/import-seeds": "adminImportPackSeeds",
     "/admin/packs/radar": "adminPackRadar",
     "/admin/packs/validate": "adminValidatePack",

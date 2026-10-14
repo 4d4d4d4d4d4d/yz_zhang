@@ -5,6 +5,7 @@ import { ContractEvidence } from './ContractEvidence';
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
 import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, describeChangeOrder, fmtYuan, formatDateTime, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
+import { isSandbox, loadSandbox } from './sandboxState';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
 import { DiscoverScreen } from './Discover';
@@ -57,9 +58,12 @@ export default function App() {
   const [conversation, setConversation] = useState<number | null>(null);
 
   const client = useMemo(
-    () => new PlatformClient({ baseUrl: BASE_URL, getToken: () => token }),
+    // SBX-102 隐私沙箱开着：把原文交给云端 AI 的请求在发出之前就拦下（128 号 spec）
+    () => new PlatformClient({ baseUrl: BASE_URL, getToken: () => token, sandbox: isSandbox }),
     [token],
   );
+
+  useEffect(() => { void loadSandbox(); }, []);
 
   useEffect(() => {
     if (token) client.me().then(setMe).catch(() => setToken(null));

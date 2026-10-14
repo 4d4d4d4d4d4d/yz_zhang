@@ -1,5 +1,5 @@
 // INF-100 影响力与专家等级（127 号 spec）：我的等级与还差什么、担保与撤回、排行、快照证明；别人空间里的影响力与担保。
-import { PlatformClient } from '@platform/core';
+import { PlatformClient, influenceLeaf, sha256Hex } from '@platform/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -25,9 +25,14 @@ const MINE = {
   vouches_received: [],
   rules: '只能靠在平台上做成事挣；不能转让',
 };
+// 叶子与树根按服务端同样的算法真算出来：页面要能自己验算
+const LEAF = influenceLeaf(2, '保洁', 64);
+const SIB = 'ef'.repeat(32);
+const ROOT = sha256Hex(LEAF < SIB ? LEAF + SIB : SIB + LEAF);
 const PROOF = {
-  snapshot: { id: 3, taken_at: '2026-10-13T00:00:00Z', merkle_root: 'ab'.repeat(32), leaves: 40, anchor_seq: 17 },
-  items: [{ category: '保洁', points: 64, leaf: 'cd'.repeat(32), path: ['ef'.repeat(32)], verified: true }],
+  snapshot: { id: 3, taken_at: '2026-10-13T00:00:00Z', merkle_root: ROOT, leaves: 40, anchor_seq: 17 },
+  items: [{ category: '保洁', points: 64, leaf: LEAF, path: [SIB], verified: true },
+    { category: '设计', points: 9, leaf: LEAF, path: [SIB], verified: true }],
 };
 
 function open(path: string, routes: Record<string, unknown>, calls: Call[] = []) {
@@ -60,8 +65,10 @@ describe('INF-100 影响力', () => {
     await screen.findByText('已撤回对 林 的担保');
     expect(calls.some((c) => c.method === 'DELETE' && c.path === '/influence/vouches/5')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: '查看我的证明' }));
-    const proof = await screen.findByText(/验证通过/);
-    expect(proof.textContent).toContain('保洁：64');
+    const proof = await screen.findByText(/保洁：64/);
+    expect(proof.textContent).toContain('本机验算通过');
+    // 服务端说通过、而分数和叶子对不上：本机验算如实说不通过
+    expect(screen.getByText(/设计：9/).textContent).toContain('本机验算不通过');
     expect(screen.getByLabelText('存证').textContent).toContain('存证序号 17');
   });
 

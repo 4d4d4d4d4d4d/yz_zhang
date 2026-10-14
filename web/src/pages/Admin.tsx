@@ -8,6 +8,7 @@ import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminTi
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { PacksAdmin } from '../AdminPacks';
+import { SandboxModelsAdmin } from '../AdminSandbox';
 import { useApp } from '../store';
 
 type Metrics = {
@@ -60,6 +61,7 @@ export default function Admin() {
       <AmlQueue />
       <KnowledgeAdmin />
       <PacksAdmin />
+      <SandboxModelsAdmin />
       <TeamVerifyQueue />
       <CertificationQueue />
       <UploadQueue />

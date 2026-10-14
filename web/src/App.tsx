@@ -28,6 +28,7 @@ import Packs from './pages/Packs';
 import Opc from './pages/Opc';
 import Gig from './pages/Gig';
 import Influence from './pages/Influence';
+import Sandbox from './pages/Sandbox';
 const Chain = lazy(() => import('./pages/Chain'));
 const Records = lazy(() => import('./pages/Records'));
 import WalletPage from './pages/Wallet';
@@ -104,6 +105,8 @@ export default function App() {
         <Route path="/gig" element={hasToken ? <Gig /> : <Navigate to="/login?next=/gig" />} />
         {/* INF-100 影响力与专家等级：不可转让、担保、罚没、衰减、快照证明（127 号 spec）；入口在个人中心 */}
         <Route path="/influence" element={hasToken ? <Influence /> : <Navigate to="/login?next=/influence" />} />
+        {/* SBX-100 隐私沙箱：本机助手、原文不上云、同步前脱敏（128 号 spec）；入口在个人中心 */}
+        <Route path="/sandbox" element={hasToken ? <Sandbox /> : <Navigate to="/login?next=/sandbox" />} />
         <Route path="/notifications" element={hasToken ? <Notifications /> : <Navigate to="/login" />} />
         <Route path="/profile" element={hasToken ? <Profile /> : <Navigate to="/login" />} />
         <Route path="/rewards" element={hasToken ? <Rewards /> : <Navigate to="/login" />} />

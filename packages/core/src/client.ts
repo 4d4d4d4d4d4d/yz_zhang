@@ -1,6 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
-  Cockpit, CapabilityProfile, InfluenceLeaderboard, InfluenceMine, InfluenceLatestSnapshot, InfluenceProof, InfluencePublic, InfluenceVouchInput, InfluenceVouchRow, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
+  Cockpit, CapabilityProfile, SandboxModelAdminRow, SandboxModelInput, SandboxModelList, SandboxState, InfluenceLeaderboard, InfluenceMine, InfluenceLatestSnapshot, InfluenceProof, InfluencePublic, InfluenceVouchInput, InfluenceVouchRow, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbStatus, WbStep,
   CommercialReadiness,
   AgentProfileView,
   PayoutProposalView,
@@ -88,6 +88,7 @@ import type {
   AdminAuditRow,
   PlatformFinanceView,
 } from './types';
+import { isCloudAiRequest } from './sandbox';
 
 export class ApiError extends Error {
   constructor(
@@ -103,6 +104,8 @@ export interface ClientOptions {
   baseUrl: string;
   getToken: () => string | null;
   fetchImpl?: typeof fetch;
+  /** SBX-102 隐私沙箱开着吗：开着时，把原文交给云端 AI 的请求在发出之前就拦下（128 号 spec） */
+  sandbox?: () => boolean;
 }
 
 export class PlatformClient {
@@ -110,6 +113,10 @@ export class PlatformClient {
 
   private async request<T>(method: string, path: string, body?: unknown,
                            extraHeaders?: Record<string, string>): Promise<T> {
+    if (this.opts.sandbox?.() && isCloudAiRequest(method, path)) {
+      // 不发请求：原文一个字也不出设备
+      throw new ApiError(409, 'sandbox_cloud_ai_blocked', '隐私沙箱开着：这类助手的活在本机做');
+    }
     const doFetch = this.opts.fetchImpl ?? fetch;
     const headers: Record<string, string> = { 'Content-Type': 'application/json', ...extraHeaders };
     const token = this.opts.getToken();
@@ -413,6 +420,21 @@ export class PlatformClient {
   latestInfluenceSnapshot() { return this.request<InfluenceLatestSnapshot>('GET', '/influence/snapshots/latest'); }
   /** 我在最近一次快照里的每一条，附 Merkle 路径：拿锚定的根就能自己验 */
   myInfluenceProof() { return this.request<InfluenceProof>('GET', '/influence/me/proof'); }
+
+  // ---- SBX-100 端侧隐私沙箱（128 号 spec）：本机助手不走这里，这里只有开关与模型目录 ----
+  mySandbox() { return this.request<SandboxState>('GET', '/users/me/sandbox'); }
+  setSandbox(enabled: boolean) { return this.request<SandboxState>('PUT', '/users/me/sandbox', { enabled }); }
+  sandboxModels() { return this.request<SandboxModelList>('GET', '/sandbox/models'); }
+  adminSandboxModels() { return this.request<SandboxModelAdminRow[]>('GET', '/admin/sandbox/models'); }
+  createSandboxModel(input: SandboxModelInput) { return this.request<SandboxModelAdminRow>('POST', '/admin/sandbox/models', input); }
+  updateSandboxModel(id: number, input: SandboxModelInput) {
+    return this.request<SandboxModelAdminRow>('PATCH', `/admin/sandbox/models/${id}`, input);
+  }
+  /** 四眼：登记的人不能自己上架；上架时必须有 sha256、https 地址、大小、许可证、最低内存 */
+  publishSandboxModel(id: number) { return this.request<SandboxModelAdminRow>('POST', `/admin/sandbox/models/${id}/publish`); }
+  retireSandboxModel(id: number, reason: string) {
+    return this.request<SandboxModelAdminRow>('POST', `/admin/sandbox/models/${id}/retire`, { reason });
+  }
 
   // ---- GIG-100 接单者（125 号 spec） ----
   gigAvailability() { return this.request<GigAvailabilityView>('GET', '/gig/available'); }

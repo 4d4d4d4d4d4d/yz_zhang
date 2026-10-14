@@ -298,10 +298,11 @@ def breakdown(db: Session, item: WbItem) -> dict:
     KB-104：每份草稿都带 `references`——个人知识库里与这件事相关的笔记（标题 + 摘录 + 出处 id），
     让人看到助手参考了自己以前记过的什么。
     """
-    from app.modules.decompose.llm import TemplateLLM, get_gateway
+    from app.core.sandbox import gateway_for
+    from app.modules.decompose.llm import TemplateLLM
     from app.modules.notebook.service import related
 
-    gw = get_gateway()
+    gw = gateway_for(db, item.owner_id)   # SBX-103 开着沙箱的人：只用模板，不出网
     desc = item.notes or ""
     refs = related(db, item.owner_id, f"{item.title} {' '.join(item.tags or [])} {item.category}")
     if not isinstance(gw, TemplateLLM):

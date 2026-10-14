@@ -112,6 +112,7 @@ def create_app() -> FastAPI:
     from app.modules.gig.router import router as gig_router
     from app.modules.profiles.router import router as profiles_router
     from app.modules.influence.router import router as influence_router
+    from app.modules.sandbox.router import router as sandbox_router
     from app.modules.account.router import router as account_router
     from app.modules.admin.router import router as admin_router
     from app.modules.analytics.router import router as analytics_router
@@ -151,6 +152,7 @@ def create_app() -> FastAPI:
         gig_router,
         profiles_router,
         influence_router,
+        sandbox_router,
         wallet_router,
         task_router,
         contract_router,

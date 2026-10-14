@@ -1,4 +1,4 @@
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -8,7 +8,8 @@ from app.modules.account.models import User
 
 
 def get_current_user(
-    db: Session = Depends(get_db, scope="function"), authorization: str = Header(default="")
+    db: Session = Depends(get_db, scope="function"), authorization: str = Header(default=""),
+    request: Request = None,  # type: ignore[assignment]  # 直接调用（非依赖注入）时没有请求
 ) -> User:
     if not authorization.startswith("Bearer "):
         raise forbidden("未登录", "unauthenticated")
@@ -30,6 +31,11 @@ def get_current_user(
         raise forbidden("账号已被封禁，如有异议请申诉", "account_banned")
     if user.is_deleted:
         raise forbidden("账号已注销", "account_deleted")
+    if request is not None:
+        # SBX-103 隐私沙箱开着时，把原文交给 AI 的接口一律拒绝（128 号 spec）
+        from app.core.sandbox import check_request
+
+        check_request(request, user)
     return user
 
 

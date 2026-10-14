@@ -89,3 +89,4 @@ from app.modules.opc.models import OpcEntry, OpcProfile  # noqa: F401
 from app.modules.gig.models import GigAvailability, GigPlace  # noqa: F401
 
 from app.modules.influence.models import InfluenceEvent, InfluenceSnapshot, InfluenceVouch  # noqa: F401
+from app.modules.sandbox.models import SandboxModel  # noqa: F401

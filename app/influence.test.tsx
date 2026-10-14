@@ -1,6 +1,6 @@
 // INF-100 影响力与专家等级在 App 上的行为（127 号 spec）。
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { PlatformClient } from '@platform/core';
+import { PlatformClient, influenceLeaf, sha256Hex } from '@platform/core';
 import { InfluenceBlock, InfluenceScreen } from './influence';
 
 type Call = { method: string; path: string; query: string; body?: unknown };
@@ -20,6 +20,10 @@ const VOUCH = {
   id: 5, voucher_id: 2, voucher_nickname: '我', subject_id: 9, subject_nickname: '林', category: '保洁', task_id: null,
   stake: 20, status: 'active', note: '', created_at: '2026-10-13T08:00:00Z', resolved_at: null,
 };
+// 按服务端同样的算法真算出叶子与树根：App 要能自己验算
+const LEAF = influenceLeaf(2, '保洁', 64);
+const SIB = 'ef'.repeat(32);
+const ROOT = sha256Hex(LEAF < SIB ? LEAF + SIB : SIB + LEAF);
 const MINE = {
   categories: [{ category: '保洁', points: 64, tier: 'skilled', tier_name: '熟手', completed: 6, rating_avg: 4.8, locked: 20, available: 12,
     gaps: ['升到「专家」：影响力还差 56 点'] }],
@@ -33,8 +37,9 @@ describe('INF-100 App 上的影响力', () => {
     const client = makeClient({
       '/influence/me': MINE, 'DELETE /influence/vouches/5': { withdrawn: true },
       '/influence/leaderboard': { category: '保洁', items: [{ user_id: 7, nickname: '老王', tier: 'expert', tier_name: '专家', points: 180, completed: 25 }] },
-      '/influence/me/proof': { snapshot: { id: 3, taken_at: '2026-10-13T00:00:00Z', merkle_root: 'ab', leaves: 40, anchor_seq: 17 },
-        items: [{ category: '保洁', points: 64, leaf: 'cd', path: ['ef'], verified: true }] },
+      '/users/me': { id: 2 },
+      '/influence/me/proof': { snapshot: { id: 3, taken_at: '2026-10-13T00:00:00Z', merkle_root: ROOT, leaves: 40, anchor_seq: 17 },
+        items: [{ category: '保洁', points: 64, leaf: LEAF, path: [SIB], verified: true }] },
     }, calls);
     render(<InfluenceScreen client={client} />);
     expect(await screen.findByText('保洁 · 熟手 · 影响力 64 · 完成 6 单')).toBeTruthy();
@@ -46,7 +51,7 @@ describe('INF-100 App 上的影响力', () => {
     expect(await screen.findByText('已撤回对 林 的担保')).toBeTruthy();
     expect(calls.some((c) => c.method === 'DELETE' && c.path === '/influence/vouches/5')).toBe(true);
     fireEvent.press(screen.getByText('查看我的证明'));
-    expect(await screen.findByText('保洁：64 · 验证通过')).toBeTruthy();
+    expect(await screen.findByText('保洁：64 · 验证通过 · 本机验算通过')).toBeTruthy();
     expect(screen.getByText('快照 #3 · 40 条 · 存证序号 17')).toBeTruthy();
   });
 

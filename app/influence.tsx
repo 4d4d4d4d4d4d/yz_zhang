@@ -1,7 +1,7 @@
 // INF-100 影响力与专家等级（127 号 spec）——App 端：我的等级与还差什么、担保与撤回、类目排行、快照证明；
 // 别人空间里的影响力与「为他担保」。影响力只能靠做成事挣，不能转让——这里也没有任何转让入口。
 import {
-  apiErrorText, formatDateTime,
+  apiErrorText, formatDateTime, influenceLeaf, verifyInfluenceProof,
   type InfluenceLatestSnapshot, type InfluenceLeaderboard, type InfluenceMine, type InfluenceProof, type InfluencePublic, type InfluenceVouchRow,
   type PlatformClient,
 } from '@platform/core';
@@ -16,13 +16,17 @@ const VOUCH_STATUS: Record<InfluenceVouchRow['status'], string> = {
   active: '担保中', released: '已释放', slashed: '已罚没', withdrawn: '已撤回',
 };
 
-export function InfluenceScreen({ client }: { client: PlatformClient }) {
+export function InfluenceScreen({ client, meId }: { client: PlatformClient; meId?: number }) {
   const [mine, setMine] = useState<InfluenceMine | null>(null);
   const [board, setBoard] = useState<InfluenceLeaderboard | null>(null);
   const [proof, setProof] = useState<InfluenceProof | null>(null);
   const [latest, setLatest] = useState<InfluenceLatestSnapshot | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [uid, setUid] = useState<number | undefined>(meId);
+  useEffect(() => {
+    if (uid === undefined) Promise.resolve().then(() => client.me()).then((m) => setUid(m?.id)).catch(() => undefined);
+  }, [client, uid]);
 
   const load = useCallback(async () => {
     try {
@@ -92,7 +96,12 @@ export function InfluenceScreen({ client }: { client: PlatformClient }) {
         {proof && (proof.snapshot === null ? <Text style={s.muted}>还没有做过快照（每天一次）。</Text> : (
           <View>
             <Text>快照 #{proof.snapshot.id} · {proof.snapshot.leaves} 条 · 存证序号 {proof.snapshot.anchor_seq ?? '—'}</Text>
-            {proof.items.map((i) => <Text key={i.category}>{i.category}：{i.points} · {i.verified ? '验证通过' : '验证不通过'}</Text>)}
+            {proof.items.map((i) => {
+              // INF-110 不只信服务端：叶子在本机重新算，再沿路径算到锚定的树根
+              const local = uid !== undefined && influenceLeaf(uid, i.category, i.points) === i.leaf
+                && verifyInfluenceProof(i.leaf, i.path, proof.snapshot!.merkle_root);
+              return <Text key={i.category}>{i.category}：{i.points} · {i.verified ? '验证通过' : '验证不通过'} · 本机验算{local ? '通过' : '不通过'}</Text>;
+            })}
             {proof.items.length === 0 && <Text style={s.muted}>这次快照里还没有你。</Text>}
           </View>
         ))}
