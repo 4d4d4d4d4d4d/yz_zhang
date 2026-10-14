@@ -58,6 +58,7 @@ import type {
   Mission,
   MissionEvent,
   MissionDraftDecision,
+  MissionSummary,
   AssistantCosts,
   MissionStep,
   AnchorCoverage,
@@ -791,6 +792,8 @@ export class PlatformClient {
   discardMissionDraft(missionId: number, stepId: number, invocationId: number) {
     return this.request<MissionDraftDecision>('POST', `/missions/${missionId}/steps/${stepId}/drafts/${invocationId}/discard`);
   }
+  /** AGT-091 编排复盘：花了多少、几轮、哪些步骤整改过、下一步建议（133 号 spec） */
+  missionSummary(id: number) { return this.request<MissionSummary>('GET', `/missions/${id}/summary`); }
   /** REL-110 本月助手花了多少、上限多少 */
   assistantCosts() { return this.request<AssistantCosts>('GET', '/users/me/assistant-costs'); }
   cancelMission(id: number) {

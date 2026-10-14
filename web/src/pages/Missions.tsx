@@ -1,6 +1,6 @@
 import {
   apiErrorText, fmtYuan, formatDateTime,
-  type Mission, type MissionEvent, type MissionStep,
+  type Mission, type MissionEvent, type MissionStep, type MissionSummary,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -24,6 +24,7 @@ export default function Missions() {
   const id = Number(params.get('id')) || null;
   const [list, setList] = useState<Mission[]>([]);
   const [detail, setDetail] = useState<Detail | null>(null);
+  const [summary, setSummary] = useState<MissionSummary | null>(null);
   const [form, setForm] = useState({ goal: '', detail: '', category: '跑腿', budget: '300', iters: 3, acceptance: '', allow_agents: false, allow_tools: true });
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -32,6 +33,8 @@ export default function Missions() {
     try {
       setList(await client.myMissions());
       setDetail(id ? await client.getMission(id) : null);
+      // AGT-091 复盘（133 号 spec）：取不到不影响详情
+      setSummary(id ? await client.missionSummary(id).catch(() => null) : null);
     } catch (e) { setError(apiErrorText(e)); }
   }, [client, id]);
   useEffect(() => { void load(); }, [load]);
@@ -79,6 +82,16 @@ export default function Missions() {
               if (window.confirm('取消后，还没人接的任务会关闭，已经在做的照常结算。确定取消？')) void act(() => client.cancelMission(detail.id), '已取消');
             }}>取消编排</button>
           </div>
+          {summary && Array.isArray(summary.highlights) && (
+            <div className="card" aria-label="复盘">
+              <h4>复盘</h4>
+              <p className="muted">{summary.rounds}/{summary.max_rounds} 轮 · 完成 {summary.steps_done}/{summary.steps_total} 步 · 整改 {summary.remedies} 次
+                {summary.avg_review_score !== null ? ` · 平均评审 ${summary.avg_review_score} 分` : ''} · 实付 {fmtYuan(summary.spent_cents)} / 上限 {fmtYuan(summary.cap_cents)}
+                {summary.duration_days !== null ? ` · 用时 ${summary.duration_days} 天` : ''}</p>
+              {summary.highlights.length > 0 && <ul>{summary.highlights.map((h) => <li key={h}>{h}</li>)}</ul>}
+              <p>下一步：{summary.next}</p>
+            </div>
+          )}
           <h4>步骤</h4>
           {detail.steps.length === 0 && <p className="muted">还没有规划：点「推进一轮」。</p>}
           <ul className="list">

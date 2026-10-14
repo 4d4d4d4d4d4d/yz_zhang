@@ -127,6 +127,7 @@ api GET /api/v1/me/referrals
 api GET /api/v1/missions
 api GET /api/v1/missions/{mission_id}
 api GET /api/v1/missions/{mission_id}/steps/{step_id}/reviews
+api GET /api/v1/missions/{mission_id}/summary
 api GET /api/v1/notebook/export
 api GET /api/v1/notebook/methods
 api GET /api/v1/notebook/notes
@@ -719,6 +720,7 @@ sdk marketHealth
 sdk me
 sdk mergeKnowledgeCluster
 sdk messages
+sdk missionSummary
 sdk myAgreements
 sdk myApplications
 sdk myBlocks

@@ -155,7 +155,7 @@
 | V-5b | AI 协助：找合作者 | `recommendations` `eligibleAgents` | 两端已接（V136） | 110 号 spec：推荐带理由、不可用的助理原样说理由；V142 / V143 推荐看报名、做成过的类目、空间自述、可用时段、少量接单与回复时长（117、118 号）；作品语义匹配未做（SPACE-023b） |
 | V-5c | AI 协助：任务拆解 | `propose` `confirmDecomposition` `taskTree` | 两端已接（V133） | V132 起是逐层展开的树并判定谁能闭环（106 号）；V135 起第一层先用经验流程单元（109 号），更深的层不查 |
 | V-6 | 平台累积成功经验 | `knowledgeCards` `knowledgeSearch` `knowledgeClusters` `knowledgeUnits` | 两端已接（V122 样本、V134 子类、V135 单元） | 个案引用授权未开放（KB-077）；分成口径未定（SPACE-027） |
-| V-7 | 经验作为检索库与 skill tool | `knowledgeUnits` `knowledgeUnit` `invokeExperienceTool` `adoptMissionDraft` `createMission` | 两端已接（V135） | 109 号 spec：只出草稿、不碰钱、结果回流、撤回穿透；V154（131 号）起编排按发起人授权调用经验工具（草稿挂在步骤上等人确认、审计记 agent 身份），场景包助手可只读引用经验单元，本月助手成本有账有上限；个人 Agent 仍不存在（SPACE-026），训练授权没有消费者（KB-091） |
+| V-7 | 经验作为检索库与 skill tool | `knowledgeUnits` `knowledgeUnit` `invokeExperienceTool` `adoptMissionDraft` `createMission` `missionSummary` | 两端已接（V135） | 109 号 spec：只出草稿、不碰钱、结果回流、撤回穿透；V162（133 号）编排有复盘；V154（131 号）起编排按发起人授权调用经验工具（草稿挂在步骤上等人确认、审计记 agent 身份），场景包助手可只读引用经验单元，本月助手成本有账有上限；个人 Agent 仍不存在（SPACE-026），训练授权没有消费者（KB-091） |
 | V-8 | 经验按子类聚类生长 | `knowledgeClusters` `knowledgeCluster` | 两端已接（V134） | 108 号 spec：按大类标定阈值、退化态不自动生长、待定区由运营判；分歧无条件标签（KB-078） |
 | V-9 | 拆解成够细够具体的树 | `expandDecomposition` `editDecompositionNode` `currentDecomposition` | 两端已接（V132 web、V133 App） | 四条判据定叶子、每个叶子有执行主体与依据、要资质的类目硬否决 AI（106/107 号）；每层未查子类共识（KB-070）；`needs_machine` 无产能登记可核对（SPACE-025） |
 | V-10 | 部署并发 | — | 部分 | 连接预算已有闸门与启动拦截（CONC-061，见 98 号 spec）；**V138 起调外部服务不挂数据库事务**（守卫 + 出款两阶段 + 提交后投递，113 号 spec）；未做 PgBouncer、未做容量证明（V140） |

@@ -187,6 +187,46 @@ def cancel_mission(
     return {**_dump(m), "closed_open_tasks": closed}
 
 
+@router.get("/missions/{mission_id}/summary")
+def mission_summary(mission_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """AGT-091 编排复盘（133 号 spec）：花了多少、几轮、哪些步骤整改过、评审多少分、经验工具草稿用了几份、下一步建议。"""
+    m = _get_mission(db, mission_id, user)
+    steps = db.query(MissionStep).filter(MissionStep.mission_id == m.id).order_by(MissionStep.id).all()
+    live = [s for s in steps if s.status != "superseded"]
+    done = [s for s in live if s.status == "done"]
+    failed = [s for s in live if s.status == "failed"]
+    remedies = [s for s in steps if s.is_remedy]
+    scored = [s.review_score for s in done if s.review_verdict]
+    drafts = [d for s in steps for d in (s.tool_drafts or [])]
+    reworked = sorted({s.title for s in remedies})
+    end = m.updated_at if m.status in ("succeeded", "failed", "cancelled") else None
+    days = max((end - m.created_at).days, 0) if end and m.created_at else None
+    highlights = []
+    if m.status == "succeeded":
+        highlights.append(f"达标：{len(done)} 步全部验收，平均评审 {m.quality_pct} 分")
+    if reworked:
+        highlights.append(f"整改过 {len(reworked)} 步：{'、'.join(reworked[:5])}")
+    if m.spent_cents > m.budget_cap_cents * 0.9:
+        highlights.append("花费接近预算上限：下次同类目标可以把上限放宽一些，或者拆得更细")
+    if drafts:
+        adopted = sum(1 for d in drafts if d.get("status") == "adopted")
+        highlights.append(f"经验工具生成 {len(drafts)} 份草稿，你采用了 {adopted} 份")
+    nxt = {
+        "succeeded": "可以把这次的做法存进个人知识库，下次同类目标直接套用",
+        "failed": "看看没通过的步骤卡在哪：改验收要点或预算后再建一个编排",
+        "cancelled": "已取消：还在做的任务照常结算",
+        "blocked": "卡住了：看时间线里最后一条，补预算或改目标后再推进",
+    }.get(m.status, "还在进行：推进下一轮，或等已发布的任务有人接")
+    return {
+        "mission_id": m.id, "goal": m.goal, "status": m.status, "rounds": m.iteration, "max_rounds": m.max_iterations,
+        "spent_cents": m.spent_cents, "committed_cents": m.committed_cents, "cap_cents": m.budget_cap_cents,
+        "steps_total": len(live), "steps_done": len(done), "steps_failed": len(failed), "remedies": len(remedies),
+        "avg_review_score": round(sum(scored) / len(scored)) if scored else None,
+        "drafts_total": len(drafts), "drafts_adopted": sum(1 for d in drafts if d.get("status") == "adopted"),
+        "duration_days": days, "highlights": highlights, "next": nxt,
+    }
+
+
 @router.put("/missions/{mission_id}/tools")
 def set_tools(mission_id: int, body: ToolsIn, user: User = Depends(get_current_user),
               db: Session = Depends(get_db, scope="function")):

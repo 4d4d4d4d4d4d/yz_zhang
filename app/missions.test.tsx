@@ -32,6 +32,9 @@ describe('ORC-066 App 上的 AI 编排', () => {
     const client = makeClient({
       'GET /missions': [], 'POST /missions': MISSION, '/missions/7': { ...MISSION, steps: [STEP], timeline: [] },
       'POST /missions/7/steps/3/drafts/41/adopt': { step_id: 3, invocation_id: 41, status: 'adopted' },
+      '/missions/7/summary': { mission_id: 7, goal: '周六搬家', status: 'running', rounds: 1, max_rounds: 3, spent_cents: 0, committed_cents: 21000, cap_cents: 30000,
+        steps_total: 1, steps_done: 0, steps_failed: 0, remedies: 0, avg_review_score: null, drafts_total: 1, drafts_adopted: 0, duration_days: null,
+        highlights: ['经验工具生成 1 份草稿，你采用了 0 份'], next: '还在进行：推进下一轮，或等已发布的任务有人接' },
       'POST /missions/7/tick': { action: 'waiting', status: 'running', total_steps: 1, done: 0, failed: 0, superseded: 0, completion_pct: 0, quality_pct: 0 },
     }, calls);
     render(<MissionsScreen client={client} />);
@@ -40,6 +43,8 @@ describe('ORC-066 App 上的 AI 编排', () => {
     expect(await screen.findByText('预算：已付 ¥0.00，占用 ¥210.00，上限 ¥300.00')).toBeTruthy();
     expect(calls.find((c) => c.method === 'POST' && c.path === '/missions')?.body).toEqual({ goal: '周六搬家', budget_cap_cents: 30000, allow_tools: true });
     expect(screen.getByText('由经验单元生成，未经人工确认 · 待你确认')).toBeTruthy();
+    expect(await screen.findByText('下一步：还在进行：推进下一轮，或等已发布的任务有人接')).toBeTruthy();
+    expect(screen.getByText('• 经验工具生成 1 份草稿，你采用了 0 份')).toBeTruthy();
     fireEvent.press(screen.getByText('采用'));
     expect(await screen.findByText('已采用（只是标记，没有发给任何人）')).toBeTruthy();
     fireEvent.press(screen.getByText('推进一轮'));

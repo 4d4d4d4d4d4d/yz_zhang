@@ -1,7 +1,7 @@
 // ORC-066 / AGT-084 AI 编排（131 号 spec）——App 端：说一个目标，平台在预算上限内拆成任务发出去、看结果、不达标就整改；
 // 授权后分发时用平台经验工具生成草稿，挂在步骤上等你「采用 / 丢弃」，不会替你发给任何人。
 import {
-  apiErrorText, fmtYuan, type Mission, type MissionEvent, type MissionStep, type PlatformClient,
+  apiErrorText, fmtYuan, type Mission, type MissionEvent, type MissionStep, type MissionSummary, type PlatformClient,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -18,6 +18,7 @@ export function MissionsScreen({ client }: { client: PlatformClient }) {
   const [list, setList] = useState<Mission[]>([]);
   const [openId, setOpenId] = useState<number | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
+  const [summary, setSummary] = useState<MissionSummary | null>(null);
   const [goal, setGoal] = useState('');
   const [budget, setBudget] = useState('300');
   const [tools, setTools] = useState(true);
@@ -28,6 +29,7 @@ export function MissionsScreen({ client }: { client: PlatformClient }) {
     try {
       setList(await client.myMissions());
       setDetail(openId ? await client.getMission(openId) : null);
+      setSummary(openId ? await client.missionSummary(openId).catch(() => null) : null);
     } catch (e) { setError(apiErrorText(e)); }
   }, [client, openId]);
   useEffect(() => { void load(); }, [load]);
@@ -57,6 +59,14 @@ export function MissionsScreen({ client }: { client: PlatformClient }) {
           { text: '不取消', style: 'cancel' },
           { text: '取消', style: 'destructive', onPress: () => void act(() => client.cancelMission(d.id), '已取消') },
         ])} />
+        {summary && Array.isArray(summary.highlights) && (
+          <View style={s.card} accessibilityLabel="复盘">
+            <Text style={s.title}>复盘</Text>
+            <Text style={s.muted}>{summary.rounds}/{summary.max_rounds} 轮 · 完成 {summary.steps_done}/{summary.steps_total} 步 · 整改 {summary.remedies} 次 · 实付 {fmtYuan(summary.spent_cents)}</Text>
+            {summary.highlights.map((h) => <Text key={h}>• {h}</Text>)}
+            <Text>下一步：{summary.next}</Text>
+          </View>
+        )}
         {d.steps.map((st) => (
           <View key={st.id} style={s.card} accessibilityLabel={`步骤：${st.title}`}>
             <Text>{st.title} · {STEP[st.status] ?? st.status}{st.budget_cents ? ` · ${fmtYuan(st.budget_cents)}` : ''}</Text>

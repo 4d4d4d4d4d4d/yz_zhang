@@ -555,6 +555,29 @@ export interface MissionDraftDecision {
   invocation_id: number;
   status: 'adopted' | 'discarded';
 }
+/** AGT-091 编排复盘（133 号 spec） */
+export interface MissionSummary {
+  mission_id: number;
+  goal: string;
+  status: MissionStatus;
+  rounds: number;
+  max_rounds: number;
+  spent_cents: number;
+  committed_cents: number;
+  cap_cents: number;
+  /** 不含被整改替代的步骤 */
+  steps_total: number;
+  steps_done: number;
+  steps_failed: number;
+  remedies: number;
+  avg_review_score: number | null;
+  drafts_total: number;
+  drafts_adopted: number;
+  /** 还没结束时为 null */
+  duration_days: number | null;
+  highlights: string[];
+  next: string;
+}
 /** REL-110 本月助手成本（北京时间自然月） */
 export interface AssistantCosts {
   month: string;
