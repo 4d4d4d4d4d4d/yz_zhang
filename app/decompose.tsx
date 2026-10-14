@@ -225,6 +225,7 @@ export function TaskTreeBlock({ client, task, onOpenTask }: {
 /** SPACE-024 合作驾驶舱（APP-007 移动简化版）：进度、钱、要我出手的事、关键路径。 */
 export function CockpitBlock({ client, taskId }: { client: PlatformClient; taskId: number }) {
   const [data, setData] = useState<Cockpit | null>(null);
+  const [report, setReport] = useState<Awaited<ReturnType<PlatformClient['finalReport']>> | null>(null);
   useEffect(() => { void client.cockpit(taskId).then(setData).catch(() => setData(null)); }, [client, taskId]);
   if (!data || !Array.isArray(data.nodes) || data.nodes.length === 0) return null;
   const title = (id: number) => data.nodes.find((n) => n.id === id)?.title ?? `#${id}`;
@@ -239,6 +240,19 @@ export function CockpitBlock({ client, taskId }: { client: PlatformClient; taskI
       {data.critical_path.length > 0 && (
         <Text style={styles.small}>关键路径：{data.critical_path.map(title).join(' → ')}</Text>
       )}
+      {/* AGT-090 全部步骤完成后：结项报告（132 号 spec） */}
+      {data.steps_total > 0 && data.steps_done === data.steps_total && (report ? (
+        <View accessibilityLabel="结项报告">
+          <Text style={styles.title}>结项报告</Text>
+          <Text>{report.summary}</Text>
+          <Text style={styles.muted}>实付（按合约放款）{fmtYuan(report.paid_cents)} · 计划 {fmtYuan(report.planned_budget_cents)}{report.duration_days !== null ? ` · 用时 ${report.duration_days} 天` : ''}</Text>
+          {report.deliverables.map((d) => <Text key={d.task_id} style={styles.small}>• {d.title} · {fmtYuan(d.cost_cents)}</Text>)}
+        </View>
+      ) : (
+        <TouchableOpacity style={styles.ghost} onPress={() => void client.finalReport(taskId).then(setReport).catch(() => setReport(null))}>
+          <Text>看结项报告</Text>
+        </TouchableOpacity>
+      ))}
     </View>
   );
 }

@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, describeChangeOrder, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, describeChangeOrder, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -582,6 +582,24 @@ function QuoteToCreator({ taskId, creatorId }: { taskId: number; creatorId: numb
 }
 
 
+type FinalReport = Awaited<ReturnType<PlatformClient['finalReport']>>;
+
+/** AGT-090 结项报告：花了多少（按实际放款）、多久、谁交付了什么。只有发布者看得到。 */
+function FinalReportBox({ taskId }: { taskId: number }) {
+  const { client } = useApp();
+  const [r, setR] = useState<FinalReport | null>(null);
+  const [error, setError] = useState('');
+  if (!r) return <p><button className="ghost" onClick={() => void client.finalReport(taskId).then(setR).catch((e) => setError(apiErrorText(e)))}>看结项报告</button>{error && <span className="error"> {error}</span>}</p>;
+  return (
+    <div className="card" aria-label="结项报告">
+      <h4>结项报告</h4>
+      <p>{r.summary}</p>
+      <p className="muted">实付（按合约放款）{fmtYuan(r.paid_cents)} · 计划 {fmtYuan(r.planned_budget_cents)}{r.duration_days !== null ? ` · 用时 ${r.duration_days} 天` : ''}</p>
+      <ul className="list">{r.deliverables.map((d) => <li key={d.task_id}><Link to={`/tasks/${d.task_id}`}>{d.title}</Link> <span className="muted">· {fmtYuan(d.cost_cents)} · {d.status === 'completed' ? '已完成' : d.status}</span></li>)}</ul>
+    </div>
+  );
+}
+
 /** SPACE-024 / AI-DEC-021 合作驾驶舱：现在做到哪、卡在谁那里、钱花了多少、哪里要我出手。 */
 function CockpitPanel({ taskId }: { taskId: number }) {
   const { client } = useApp();
@@ -611,6 +629,8 @@ function CockpitPanel({ taskId }: { taskId: number }) {
         <p><span className="muted">关键路径（剩余步骤最多的一条，任何一步拖一天，整件事就晚一天）：</span>
           {data.critical_path.map(title).join(' → ')}</p>
       )}
+      {/* AGT-090 全部步骤完成后：结项报告（132 号 spec） */}
+      {data.steps_total > 0 && data.steps_done === data.steps_total && <FinalReportBox taskId={taskId} />}
       <table aria-label="每一步">
         <thead><tr><th>步骤</th><th>谁在做</th><th>状态</th><th>预算</th><th>截止</th><th>卡在</th></tr></thead>
         <tbody>

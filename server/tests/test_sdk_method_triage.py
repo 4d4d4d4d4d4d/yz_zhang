@@ -92,8 +92,7 @@ SCHEDULED: dict[str, str] = {
     # 任务侧的三条（03 号 spec）：我的任务、草稿发布、编辑
     "publishTask": "TASK-060", "editTask": "TASK-060",
     "trip": "TASK-060",
-    # 编排循环（17 号 spec）：mission 的用户侧界面 V154 已接上两端（131 号）；最终报告还没有界面
-    "finalReport": "ORC-066",
+    # 编排循环（17 号 spec）：mission 的用户侧界面 V154 已接上两端（131 号）；母任务结项报告 finalReport 由 V161 接上（132 号）
     # 团队与合作体的成员管理（53/50 号 spec）
     "addTeamMember": "TEAM-065", "updateTeamMember": "TEAM-065",
     "removeTeamMember": "TEAM-065",

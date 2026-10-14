@@ -258,7 +258,13 @@ def final_report(task_id: int, user: User = Depends(get_current_user), db: Sessi
     duration_days = 0
     if parent.completed_at and parent.created_at:
         duration_days = max((parent.completed_at - parent.created_at).days, 0)
+    # AGT-090 实付按合约放款算（与合作驾驶舱同一口径），`total_cost_cents` 仍是已完成子任务的预算合计（原口径不变）
+    from app.modules.task.cockpit import cockpit
+
+    cp = cockpit(db, parent)
     return {
+        "paid_cents": cp["budget"]["paid_cents"],
+        "ready": cp["steps_total"] > 0 and cp["steps_done"] == cp["steps_total"],
         "task_id": parent.id,
         "title": parent.title,
         "status": parent.status,

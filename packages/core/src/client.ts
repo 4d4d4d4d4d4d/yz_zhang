@@ -1122,6 +1122,8 @@ export class PlatformClient {
     return this.request<{
       task_id: number; title: string; status: string;
       summary: string; total_cost_cents: number; planned_budget_cents: number;
+      /** AGT-090 按合约放款算的实付（与合作驾驶舱同一口径）；ready：所有步骤都已完成 */
+      paid_cents: number; ready: boolean;
       duration_days: number | null;
       children_completed: number; children_total: number;
       deliverables: Array<{ task_id: number; title: string; executor_id: number | null; cost_cents: number; status: string }>;
