@@ -173,14 +173,27 @@ def uninstall(db: Session, user_id: int, installed: dict, remove_copies: bool) -
 
 
 # ------------------------------------------------------------------ 助手专家（PACK-105）
-def _knowledge_hits(d: schema.PackDef, keys: list[str], q: str) -> list[tuple[schema.KnowledgeDef, int]]:
-    from app.modules.notebook.service import MIN_RELATED, score, terms
+# SCN-105 标签整词出现在问题里就算强命中（138 号 spec）：标签是运营挑出来的关键词，
+# 「雇人还是发临时单」切成二字片覆盖不到一半，但「雇人」「临时单」两个标签整词都在
+TAG_IN_QUESTION = 6
 
-    ts = terms(q)
+
+def tag_bonus(tags: list[str], q: str) -> int:
+    low = q.lower()
+    return sum(TAG_IN_QUESTION for t in dict.fromkeys(tags) if len(t) >= 2 and t.lower() in low)
+
+
+def _knowledge_hits(d: schema.PackDef, keys: list[str], q: str,
+                    db: Session | None = None) -> list[tuple[schema.KnowledgeDef, int]]:
+    from app.modules.notebook.service import MIN_RELATED, score, terms
+    from app.modules.skills.service import expand_query
+
+    # SCN-105 与个人知识库一样，问题里的技能概念展开成「规范名 + 别名」再检索（135 号的概念表）
+    ts = terms(expand_query(q, db))
     pool = [k for k in d.knowledge if not keys or k.key in keys]
     scored = []
     for k in pool:
-        s = score(SimpleNamespace(title=k.title, body=k.body, tags=k.tags, url=""), ts)
+        s = score(SimpleNamespace(title=k.title, body=k.body, tags=k.tags, url=""), ts) + tag_bonus(k.tags, q)
         if s >= MIN_RELATED:
             scored.append((k, s))
     scored.sort(key=lambda x: -x[1])
@@ -215,7 +228,7 @@ def ask(db: Session, user_id: int, pack: ScenarioPack, akey: str, q: str) -> dic
     today = date.today()
     if "pack.knowledge" in a.tools:
         ts = nsvc.terms(q)
-        for k, _ in _knowledge_hits(d, a.knowledge, q):
+        for k, _ in _knowledge_hits(d, a.knowledge, q, db):
             expired = bool(k.valid_until and k.valid_until < today)
             cites.append({"kind": "pack", "title": k.title, "snippet": nsvc.snippet(k.body, ts),
                           "source": k.source, "valid_until": day(k.valid_until) if k.valid_until else None,
