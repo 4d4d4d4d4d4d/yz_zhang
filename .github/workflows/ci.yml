@@ -39,6 +39,9 @@ jobs:
           cache: pip
           cache-dependency-path: server/requirements.txt
       - run: pip install -r requirements.txt
+      # LINT-001（139 号 spec）：只开「一定是错」的几条规则（未定义名字、重复字典键……），
+      # 由 tests/test_metrics_truthful.py 调用；没装 ruff 时那条测试会跳过，所以这里必须装
+      - run: pip install ruff==0.15.8
       - run: python -m pytest tests/ -q
 
   frontend:

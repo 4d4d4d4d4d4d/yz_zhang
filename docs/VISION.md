@@ -150,7 +150,7 @@
 | # | 愿景条目 | 关键 SDK 方法 | 状态 | 还缺什么 |
 |---|---|---|---|---|
 | V-1 | 个人独立门户 | `ownSpace` `personalSpace` `discoverSpaces` `followUser` `followers` | 两端已接（V128 起关注/粉丝列表可看，按隐私过滤） | 封面/作品上传、独立域名、SSR 与分享预览（SPACE-021）；内容举报（SPACE-022） |
-| V-2 | 日常协作（遛狗、跑腿、上门） | `createTask` `apply` `deliver` `acceptDelivery` | 两端已接 | 真实支付与实名供应商未接（上线红线 1~6），**现在还收不了真钱** |
+| V-2 | 日常协作（遛狗、跑腿、上门） | `createTask` `apply` `deliver` `acceptDelivery` | 两端已接 | V168 起上传图片（头像、资质材料）的审核积压指标真的在算（此前恒为 0，告警不可能响，139 号）；真实支付与实名供应商未接（上线红线 1~6），**现在还收不了真钱** |
 | V-3 | 高级协作（合伙公司、商业活动） | `createTeam` `myTeams` `confirmContribution` `distributeVenture` `finalReport` | 两端已接 | V156 团队成员管理两端已接（TEAM-065，136 号）；V145 母任务合作驾驶舱两端已接（树 + 关键路径 + 预算账 + 预警，120 号）；V161 全部完成后可看结项报告（实付按合约放款，132 号） |
 | V-4 | 智能合约保证可信流程 | `signContract` `fundContract` `acceptDelivery` `openDispute` | 两端已接 | V156 证据包导出两端已接（App 交给系统分享，136 号）；可靠电子签名与司法存证需持牌机构（红线 4、5）；链上资产未正式部署 |
 | V-5a | AI 协助：不懂领域 | `legalAsk` | 两端已接（V122） | 文书生成仍无客户端（LAW-050）；专业供应商与专家复核闭环未验收 |

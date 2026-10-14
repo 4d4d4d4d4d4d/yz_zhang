@@ -321,11 +321,17 @@ def _reconcile_ok(db) -> bool:
     try:
         return bool(risk.reconcile(db).get("ok"))
     except Exception:
-        # 指标端点不能因为一个聚合出错就整体 500——那会让**所有**告警一起瞎掉
+        # 指标端点不能因为一个聚合出错就整体 500——那会让**所有**告警一起瞎掉。
+        # 但吞掉也要留痕（LINT-001，139 号 spec）：否则一个写错的名字会让指标永远是「安全值」
+        logging.getLogger("app.error").exception("metrics: reconcile_ok 计算失败")
         return False
 
 
 def _pending_uploads(db) -> int:
+    # LINT-001（139 号 spec）：这里曾经用了没导入的 `func`，NameError 被下面的 except 吞掉，
+    # 审核积压指标恒为 0——deploy/alerts.prom.yml 里那条「审核积压」告警永远不会响
+    from sqlalchemy import func
+
     from app.modules.files.models import UploadedFile
 
     try:
@@ -334,6 +340,7 @@ def _pending_uploads(db) -> int:
             .filter(UploadedFile.moderation_status == "review").scalar() or 0
         )
     except Exception:
+        logging.getLogger("app.error").exception("metrics: uploads_pending_review 计算失败")
         return 0
 
 
