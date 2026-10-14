@@ -255,6 +255,7 @@ _ASK_BOOKS = re.compile(r"收入|账|免税|销售额|赚了|利润|多少钱")
 _ASK_CONTRACT = re.compile(r"合同|条款|协议")
 _ASK_NEARBY = re.compile(r"附近|有什么单|接单|有活|顺路")
 _ASK_QUOTE = re.compile(r"报价|多少钱|价格|报多少|行情")
+_ASK_BRIEF = re.compile(r"需求|甲方|客户|brief|要求|帮我看看|缺什么", re.I)
 
 
 def _experience_citations(db: Session, q: str, k: int = 2) -> list[dict]:
@@ -336,6 +337,14 @@ def _tool_citations(db: Session, user_id: int, tools: list[str], q: str) -> list
             r = gsvc.quote(db, cat, None, None)
             out.append({"kind": "tool", "title": f"「{cat}」报价参考", "snippet": "；".join(r["basis"]),
                         "source": "平台近 180 天成交数据（不是承诺价）", "valid_until": None, "expired": False, "note_id": None})
+    if "creator.brief" in tools and len(q) >= 20 and _ASK_BRIEF.search(q):
+        from app.modules.packs.creator import brief_check
+
+        r = brief_check(q)
+        out.append({"kind": "tool", "title": f"需求单体检（写到 {len(r['present'])}/{len(r['present']) + len(r['missing'])} 项）",
+                    "snippet": ("没写：" + "、".join(r["missing"]) + "。先问甲方：" + "".join(r["questions"][:3]))
+                    if r["missing"] else "九项都写到了：可以按这份需求报价、写进验收标准",
+                    "source": "需求单九项清单（只看你贴的这段文字）", "valid_until": None, "expired": False, "note_id": None})
     return out
 
 

@@ -27,6 +27,9 @@ GATES = {
     "share_personal": "把个人信息交给第三方",
 }
 REQUIRED_HIGH_RISK_GATES = {"money", "sign", "file"}
+# 137 号 spec（SCN-103）：按人群补的关口。发单方（buyer）的助手碰的是钱与对外发布任务；
+# 创作者（creator）的助手碰的是钱与版权授权（签署）。缺一道就不能上线
+SEGMENT_REQUIRED_GATES = {"buyer": {"money", "publish"}, "creator": {"money", "sign"}}
 # 助手专家能调用的工具（白名单）。每个工具都是**只读或只出草稿**的平台能力，碰钱的一个没有
 TOOLS = {
     "pack.knowledge": "本包的知识条目（带出处与有效期）",
@@ -39,6 +42,7 @@ TOOLS = {
     "gig.nearby": "接单者：「现在有空」时半径内招募中的单（直线距离）",
     "gig.quote": "接单者：同类目近 180 天成交价分布与到手估算（不是承诺价）",
     "experience.search": "平台经验单元（只读引用：历史闭环沉淀的做法与清单，写明版本与验证状态）",
+    "creator.brief": "创作者：需求单体检——按九项清单指出甲方需求里没写的项和该追问的话（只读你贴进来的文字）",
 }
 
 
@@ -158,6 +162,9 @@ def rule_problems(p: PackDef) -> list[str]:
             out.append(f"助手「{a.name}」的人工关口不认识：{bad_gates}")
         if p.segment in HIGH_RISK_SEGMENTS and not REQUIRED_HIGH_RISK_GATES <= set(a.human_gates):
             out.append(f"助手「{a.name}」服务高风险人群（{p.segment}），钱、签署、申报都必须是人工关口")
+        need = SEGMENT_REQUIRED_GATES.get(p.segment, set()) - set(a.human_gates)
+        if need:
+            out.append(f"助手「{a.name}」服务{p.segment}人群，缺人工关口：{sorted(need)}")
         if sorted(set(a.methods) - methods):
             out.append(f"助手「{a.name}」引用了包里没有的方法：{sorted(set(a.methods) - methods)}")
         if sorted(set(a.knowledge) - knowledge):

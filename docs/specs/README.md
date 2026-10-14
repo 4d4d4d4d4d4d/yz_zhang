@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 137 | 场景发掘第二轮：自由创作者与小店临时帮手 | [137-scenario-round-2.md](./137-scenario-round-2.md) | P0 |
 | 136 | App 补齐：开票、证据包导出、团队成员管理 | [136-app-gaps.md](./136-app-gaps.md) | P0 |
 | 135 | 技能的语义匹配：技能概念表（撮合、认技能、个人空间、知识库检索） | [135-skill-concepts.md](./135-skill-concepts.md) | P0 |
 | 134 | 编排复盘一键存进个人知识库 | [134-mission-summary-to-notebook.md](./134-mission-summary-to-notebook.md) | P0 |
