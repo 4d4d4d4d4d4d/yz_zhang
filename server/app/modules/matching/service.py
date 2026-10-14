@@ -21,10 +21,14 @@ def get_weights(db: Session) -> dict:
     return WEIGHTS
 
 
-def _skill_score(task_skills: list[str], user_skills: list[str]) -> float:
+def _skill_score(task_skills: list[str], user_skills: list[str], same=None) -> float:
     if not task_skills:
         return 0.5  # 无技能要求时给中性分
-    hit = len(set(task_skills) & set(user_skills))
+    if same is None:
+        hit = len(set(task_skills) & set(user_skills))
+    else:
+        # SKL-102 按技能概念比（135 号 spec）：「VI 设计」与「品牌设计」算同一项；写法完全相同的照旧算
+        hit = sum(1 for t in dict.fromkeys(task_skills) if any(same(t, u) for u in user_skills or [] if isinstance(u, str)))
     return hit / len(task_skills)
 
 
@@ -70,11 +74,16 @@ def _category_fit(db: Session, task, users: list[User]) -> dict[int, tuple[float
     if not task.required_skills:
         from app.modules.profiles.service import infer_skills, skill_vocab
 
-        inferred = infer_skills(f"{task.title}\n{task.description}", skill_vocab(db), [])
+        inferred = infer_skills(f"{task.title}\n{task.description}", skill_vocab(db), [], db)
     # INF-104 专家等级（127 号 spec）：只加分，不改原有的打分
     from app.modules.influence.service import TIER_NAMES, tiers_for
 
     tiers = tiers_for(db, users, cat)
+    # SPACE-023b / SKL-104 个人空间与技能里写的是类目的别名也算（「做 VI」≈「品牌设计」，135 号 spec）
+    from app.modules.skills.service import concepts, matcher, norm
+
+    same = matcher(db)
+    cat_words = next(([c["name"], *c["aliases"]] for c in concepts(db) if c["name"] == cat or cat in c["aliases"]), [cat])
     out: dict[int, tuple[float, list[str]]] = {}
     for uid in user_ids:
         bonus, why = 0.0, []
@@ -89,14 +98,14 @@ def _category_fit(db: Session, task, users: list[User]) -> dict[int, tuple[float
             text = " ".join([*(skills.get(uid) or []),
                              *([sp.headline, sp.introduction] + [i.get("title", "") + i.get("summary", "") for i in sp.items]
                                if sp else [])])
-            if cat in text:
+            if any(norm(w) in norm(text) for w in cat_words):
                 bonus += FIT_MENTIONS
                 why.append(f"擅长「{cat}」（本人技能或个人空间）")
         lvl = tiers.get(uid, "newcomer")
         if FIT_TIER.get(lvl):
             bonus += FIT_TIER[lvl]
             why.append(f"「{cat}」{TIER_NAMES[lvl]}（平台影响力）")
-        hit = [s for s in inferred if s.lower() in {x.lower() for x in (skills.get(uid) or []) if isinstance(x, str)}]
+        hit = [s for s in inferred if any(same(s, x) for x in (skills.get(uid) or []) if isinstance(x, str))]
         if hit:
             bonus += FIT_INFERRED_SKILL
             why.append(f"说明里提到了你的技能「{'、'.join(hit[:2])}」")
@@ -232,9 +241,12 @@ def recommend(db: Session, task, limit: int = 10) -> list[dict]:
         }
     fit = _category_fit(db, task, candidates)
     avail = _availability(db, task, candidates)
+    from app.modules.skills.service import matcher
+
+    same = matcher(db)
     scored = []
     for user in candidates:
-        skill = _skill_score(task.required_skills, user.skills)
+        skill = _skill_score(task.required_skills, user.skills, same)
         credit = min(user.credit_score, 200) / 200
         distance = _distance_score(task, user)
         rating = user.rating_avg / 5 if user.rating_count else 0.4

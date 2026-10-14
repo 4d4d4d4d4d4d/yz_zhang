@@ -23,7 +23,7 @@ import { NotebookScreen } from './notebook';
 import { PacksScreen } from './packs';
 import { OpcScreen } from './opc';
 import { GigScreen } from './gig';
-import { CapabilityScreen } from './profiles';
+import { CapabilityScreen, SkillsScreen } from './profiles';
 import { InfluenceScreen } from './influence';
 import { SandboxScreen } from './sandbox';
 import { MissionsScreen } from './missions';
@@ -33,7 +33,7 @@ import { ApplicationsScreen, InvitationsScreen, MessagesScreen } from './Message
 import { Button, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export type SubScreen = 'messages' | 'invitations' | 'applications' | 'certifications'
-  | 'rights' | 'ask' | 'teams' | 'ventures' | 'developer' | 'workbench' | 'availability' | 'notebook' | 'packs' | 'opc' | 'gig' | 'capability' | 'influence' | 'sandbox' | 'missions';
+  | 'rights' | 'ask' | 'teams' | 'ventures' | 'developer' | 'workbench' | 'availability' | 'notebook' | 'packs' | 'opc' | 'gig' | 'capability' | 'influence' | 'sandbox' | 'missions' | 'skills';
 
 export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   messages: '消息',
@@ -54,6 +54,7 @@ export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   influence: '影响力与专家等级（不能转让 / 担保 / 快照证明）',
   sandbox: '隐私沙箱（本机助手，原文不上云）',
   missions: 'AI 编排（目标 → 任务 → 结果，预算上限内）',
+  skills: '我的技能（按平台技能概念匹配）',
   availability: '我的可用时间（时段 / 少量接单）',
 };
 
@@ -84,6 +85,7 @@ export function SubScreenHost({ client, screen, onBack, onPublish }: {
       {screen === 'influence' && <InfluenceScreen client={client} />}
       {screen === 'sandbox' && <SandboxScreen client={client} />}
       {screen === 'missions' && <MissionsScreen client={client} />}
+      {screen === 'skills' && <SkillsScreen client={client} />}
       {screen === 'availability' && <AvailabilityScreen client={client} />}
     </ScrollView>
   );

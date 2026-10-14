@@ -45,6 +45,7 @@ api GET /api/v1/admin/reports
 api GET /api/v1/admin/sandbox/models
 api GET /api/v1/admin/security
 api GET /api/v1/admin/settlements/verify
+api GET /api/v1/admin/skill-concepts
 api GET /api/v1/admin/teams/pending
 api GET /api/v1/admin/tickets
 api GET /api/v1/admin/uploads/pending
@@ -153,6 +154,8 @@ api GET /api/v1/sandbox/models
 api GET /api/v1/search
 api GET /api/v1/search/suggest
 api GET /api/v1/search/trending
+api GET /api/v1/skills/concepts
+api GET /api/v1/skills/normalize
 api GET /api/v1/spaces
 api GET /api/v1/spaces/me
 api GET /api/v1/spaces/{user_id}
@@ -278,6 +281,8 @@ api POST /api/v1/admin/sandbox/models
 api POST /api/v1/admin/sandbox/models/{model_id}/publish
 api POST /api/v1/admin/sandbox/models/{model_id}/retire
 api POST /api/v1/admin/security/unban
+api POST /api/v1/admin/skill-concepts
+api POST /api/v1/admin/skill-concepts/{concept_id}/retire
 api POST /api/v1/admin/subsidy-pool/fund
 api POST /api/v1/admin/teams/{team_id}/verify
 api POST /api/v1/admin/tickets/{ticket_id}/resolve
@@ -533,6 +538,7 @@ sdk adminReports
 sdk adminRetirePack
 sdk adminSandboxModels
 sdk adminSecurity
+sdk adminSkillConcepts
 sdk adminSubmitPack
 sdk adminTickets
 sdk adminUpdatePack
@@ -745,6 +751,7 @@ sdk myTeams
 sdk myTickets
 sdk myVentures
 sdk newcomerProgress
+sdk normalizeSkills
 sdk northStar
 sdk note
 sdk notebookMethods
@@ -801,6 +808,7 @@ sdk resolveReport
 sdk resolveTicket
 sdk resolveUpload
 sdk retireSandboxModel
+sdk retireSkillConcept
 sdk retractKnowledgeTask
 sdk review
 sdk reviewAmlActivity
@@ -836,6 +844,7 @@ sdk setTripShare
 sdk settlePlatform
 sdk signContract
 sdk signVideoUpload
+sdk skillConcepts
 sdk smsLogin
 sdk sos
 sdk stepReviews
@@ -878,6 +887,7 @@ sdk updateWorkbenchItem
 sdk updateWorkbenchProject
 sdk updateWorkbenchRoutine
 sdk uploadImage
+sdk upsertSkillConcept
 sdk userCapability
 sdk userContents
 sdk userInfluence

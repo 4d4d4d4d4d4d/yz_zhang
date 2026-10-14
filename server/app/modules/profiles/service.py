@@ -39,7 +39,7 @@ def skill_vocab(db: Session) -> list[str]:
     return [s for s, _ in c.most_common(SKILL_VOCAB_LIMIT)]
 
 
-def infer_skills(text: str, vocab: list[str], declared: list[str]) -> list[str]:
+def infer_skills(text: str, vocab: list[str], declared: list[str], db: Session | None = None) -> list[str]:
     low = text.lower()
     seen = {s.lower() for s in declared}
     out = []
@@ -48,6 +48,17 @@ def infer_skills(text: str, vocab: list[str], declared: list[str]) -> list[str]:
             out.append(s)
         if len(out) >= 8:
             break
+    # PROF-110 / SKL-103 说明里写的是别名（「做个 logo 设计」）也认出来，给规范名（135 号 spec）
+    from app.modules.skills.service import aliases_in, canonical, index
+
+    idx = index(db)
+    taken = {canonical(x, idx) for x in [*out, *declared]}
+    for name in dict.fromkeys(aliases_in(text, db).values()):
+        if len(out) >= 8:
+            break
+        if name not in taken:
+            out.append(name)
+            taken.add(name)
     return out
 
 
@@ -61,7 +72,7 @@ def task_profile(db: Session, t: dict) -> dict:
     title, desc = (t.get("title") or "").strip(), (t.get("description") or "").strip()
     text = f"{title}\n{desc}"
     declared = [s for s in (t.get("required_skills") or []) if s]
-    inferred = infer_skills(text, skill_vocab(db), declared)
+    inferred = infer_skills(text, skill_vocab(db), declared, db)
     category = t.get("category") or ""
     cat = get_category(db, category) if category else None
     budget = int(t.get("budget_cents") or 0)
@@ -139,8 +150,11 @@ def capability(db: Session, user, public: bool) -> dict:
                          for c, v in by_cat.items()), key=lambda x: (-x["completed"], x["category"]))
     evidenced_pool = {s.lower() for t in done for s in (t.required_skills or [])} | {t.category.lower() for t in done}
     claimed = [s for s in (user.skills or []) if isinstance(s, str)]
-    skills = [{"skill": s, "evidenced": s.lower() in evidenced_pool or any(s.lower() in e for e in evidenced_pool)}
-              for s in claimed]
+    from app.modules.skills.service import matcher
+
+    same = matcher(db)
+    skills = [{"skill": s, "evidenced": s.lower() in evidenced_pool or any(s.lower() in e for e in evidenced_pool)
+               or any(same(s, e) for e in evidenced_pool)} for s in claimed]
     from app.modules.account.cert_service import active_certifications
 
     # 只认平台核验通过且没过期的资质（CERT-005），不认用户自己填进资料里的名字

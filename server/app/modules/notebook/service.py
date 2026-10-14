@@ -132,7 +132,10 @@ def search(db: Session, owner_id: int, q: str = "", tag: str = "", status: str |
         qy = qy.filter(NbNote.status != "archived")
     if kind:
         qy = qy.filter(NbNote.kind == kind)
-    ts = terms(q)
+    # KB-110 / SKL-105 问题里的概念展开成「规范名 + 别名」再检索（135 号 spec）
+    from app.modules.skills.service import expand_query
+
+    ts = terms(expand_query(q, db) if q else q)
     if ts:
         conds = []
         for t, _, _ in ts:

@@ -1,6 +1,6 @@
 import {
   apiErrorText, fmtYuan,
-  type CapabilityProfile, type InfluencePublic, type TaskDraftInput, type TaskProfile, type TaskProfileView,
+  type CapabilityProfile, type InfluencePublic, type SkillNormalized, type TaskDraftInput, type TaskProfile, type TaskProfileView,
 } from '@platform/core';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -125,5 +125,46 @@ export function InfluenceCard({ userId, isMe }: { userId: number; isMe: boolean 
       {msg && <p role="status">{msg}</p>}
       {error && <p className="error">{error}</p>}
     </section>
+  );
+}
+
+/** SKL-106 技能会按什么来匹配（135 号 spec）：「VI设计」按「品牌设计」；平台还不认识的如实说只按原样匹配。停下半秒再查。 */
+export function SkillHints({ skills }: { skills: string[] }) {
+  const { client } = useApp();
+  const [items, setItems] = useState<SkillNormalized[]>([]);
+  const key = skills.join(',');
+  useEffect(() => {
+    if (!key) { setItems([]); return undefined; }
+    const timer = setTimeout(() => {
+      Promise.resolve().then(() => client.normalizeSkills(key.split(',')))
+        .then((r) => setItems(Array.isArray(r?.items) ? r.items : [])).catch(() => setItems([]));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [client, key]);
+  const mapped = items.filter((i) => i.known && i.canonical !== i.skill);
+  const unknown = items.filter((i) => !i.known);
+  if (!mapped.length && !unknown.length) return null;
+  return (
+    <p className="muted" aria-label="技能怎么匹配">
+      {mapped.map((i) => `「${i.skill}」按「${i.canonical}」匹配`).join('；')}
+      {mapped.length && unknown.length ? '；' : ''}
+      {unknown.length ? `${unknown.map((i) => `「${i.skill}」`).join('')}平台还不认识，只按原样匹配` : ''}
+    </p>
+  );
+}
+
+/** SKL-106 平台认得的技能（点一下加进去）：用规范名写，匹配最准。 */
+export function SkillSuggestions({ current, onAdd }: { current: string[]; onAdd: (name: string) => void }) {
+  const { client } = useApp();
+  const [names, setNames] = useState<string[]>([]);
+  useEffect(() => {
+    Promise.resolve().then(() => client.skillConcepts())
+      .then((r) => setNames(Array.isArray(r?.items) ? r.items.map((c) => c.name) : [])).catch(() => setNames([]));
+  }, [client]);
+  const left = names.filter((n) => !current.includes(n)).slice(0, 12);
+  if (!left.length) return null;
+  return (
+    <p className="muted" aria-label="平台认得的技能">平台认得的技能：{left.map((n) => (
+      <button key={n} className="text-link" onClick={() => onAdd(n)}>{n}</button>))}</p>
   );
 }

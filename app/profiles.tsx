@@ -1,9 +1,9 @@
 // PROF-100 任务画像与能力画像（126 号 spec）——App 端：发布时边写边提示、我的能力画像。
 import {
-  apiErrorText, fmtYuan, type CapabilityProfile, type PlatformClient, type TaskDraftInput, type TaskProfile,
+  apiErrorText, fmtYuan, type CapabilityProfile, type PlatformClient, type SkillNormalized, type TaskDraftInput, type TaskProfile,
 } from '@platform/core';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
 
 const POSITION: Record<string, string> = {
   below_min: '低于近期同类最低成交价', below_median: '低于同类成交中位', around_median: '与同类成交中位相当',
@@ -69,9 +69,55 @@ export function CapabilityScreen({ client }: { client: PlatformClient }) {
   );
 }
 
+/** SKL-106 App 上编辑我的技能（135 号 spec）：写的是别名也没关系，平台按技能概念匹配，这里写清会按什么匹配。 */
+export function SkillsScreen({ client }: { client: PlatformClient }) {
+  const [text, setText] = useState('');
+  const [hints, setHints] = useState<SkillNormalized[]>([]);
+  const [known, setKnown] = useState<string[]>([]);
+  useEffect(() => {
+    Promise.resolve().then(() => client.skillConcepts())
+      .then((r) => setKnown(Array.isArray(r?.items) ? r.items.map((c) => c.name) : [])).catch(() => setKnown([]));
+  }, [client]);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => { client.me().then((m) => setText((m.skills ?? []).join('、'))).catch((e) => setError(apiErrorText(e))); }, [client]);
+  const list = text.split(/[、,，\s]+/).filter(Boolean);
+  const key = list.join(',');
+  useEffect(() => {
+    if (!key) { setHints([]); return undefined; }
+    const t = setTimeout(() => {
+      Promise.resolve().then(() => client.normalizeSkills(key.split(',')))
+        .then((r) => setHints(Array.isArray(r?.items) ? r.items : [])).catch(() => setHints([]));
+    }, 500);
+    return () => clearTimeout(t);
+  }, [client, key]);
+  const mapped = hints.filter((i) => i.known && i.canonical !== i.skill);
+  const unknown = hints.filter((i) => !i.known);
+  return (
+    <View style={s.box}>
+      <Text style={s.muted}>技能用于推荐接单。写「VI 设计」「标志设计」都可以：平台按技能概念匹配。</Text>
+      <TextInput style={s.input} accessibilityLabel="我的技能" value={text} onChangeText={setText} placeholder="用、分隔，如：保洁、跑腿" />
+      {mapped.map((i) => <Text key={i.skill} style={s.muted}>「{i.skill}」按「{i.canonical}」匹配</Text>)}
+      {unknown.length > 0 && <Text style={s.muted}>{unknown.map((i) => `「${i.skill}」`).join('')}平台还不认识，只按原样匹配</Text>}
+      {known.filter((n) => !list.includes(n)).length > 0 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }} accessibilityLabel="平台认得的技能">
+          {known.filter((n) => !list.includes(n)).slice(0, 12).map((n) => (
+            <Text key={n} style={s.chip} onPress={() => setText([...list, n].join('、'))}>{n}</Text>
+          ))}
+        </View>
+      )}
+      <Button title="保存" onPress={() => void client.updateMe({ skills: list }).then(() => setNotice('技能已更新')).catch((e) => setError(apiErrorText(e)))} />
+      {!!notice && <Text accessibilityRole="alert">{notice}</Text>}
+      {!!error && <Text style={{ color: '#b91c1c' }}>{error}</Text>}
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
   box: { gap: 8 },
   card: { borderWidth: 1, borderColor: '#eee', borderRadius: 10, padding: 10, gap: 4, alignSelf: 'stretch' },
   title: { fontSize: 15, fontWeight: '600' },
   muted: { color: '#777' },
+  input: { backgroundColor: '#fff', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#e5e7eb' },
+  chip: { borderWidth: 1, borderColor: '#ddd', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4, color: '#275c52' },
 });

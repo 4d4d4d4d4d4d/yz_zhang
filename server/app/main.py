@@ -113,6 +113,7 @@ def create_app() -> FastAPI:
     from app.modules.profiles.router import router as profiles_router
     from app.modules.influence.router import router as influence_router
     from app.modules.sandbox.router import router as sandbox_router
+    from app.modules.skills.router import router as skills_router
     from app.modules.account.router import router as account_router
     from app.modules.admin.router import router as admin_router
     from app.modules.analytics.router import router as analytics_router
@@ -153,6 +154,7 @@ def create_app() -> FastAPI:
         profiles_router,
         influence_router,
         sandbox_router,
+        skills_router,
         wallet_router,
         task_router,
         contract_router,

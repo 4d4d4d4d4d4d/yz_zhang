@@ -55,6 +55,9 @@ REACHED_BY: dict[str, str] = {
     "/admin/packs": "adminPacks",
     # SBX-106 端侧模型目录（128 号 spec）：登记 / 改 / 四眼上架 / 下架都在后台「端侧模型目录」一块
     "/admin/sandbox/models": "adminSandboxModels",
+    # SKL-101 技能概念表（135 号 spec）：后台「技能概念表」一块
+    "/admin/skill-concepts": "adminSkillConcepts",
+    "/admin/skill-concepts/{x}/retire": "retireSkillConcept",
     "/admin/sandbox/models/{x}": "updateSandboxModel",
     "/admin/sandbox/models/{x}/publish": "publishSandboxModel",
     "/admin/sandbox/models/{x}/retire": "retireSandboxModel",

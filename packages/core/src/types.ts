@@ -2399,3 +2399,33 @@ export interface AssistantContract {
   human_gates: AssistantContractItem[];
   fallback_category: string;
 }
+
+// ---- SKL-100 技能概念表（135 号 spec） ----
+export interface SkillConceptView {
+  name: string;
+  aliases: string[];
+}
+export interface SkillConceptList {
+  items: SkillConceptView[];
+}
+export interface SkillNormalized {
+  skill: string;
+  /** 会按这个规范名去匹配；认不出时就是原样 */
+  canonical: string;
+  known: boolean;
+}
+export interface SkillNormalizeResult {
+  items: SkillNormalized[];
+}
+export interface SkillConceptRow {
+  id: number;
+  name: string;
+  aliases: string[];
+  status: 'active' | 'retired';
+  updated_by: number;
+  updated_at: string;
+}
+export interface SkillConceptAdminView {
+  effective: SkillConceptView[];
+  overrides: SkillConceptRow[];
+}

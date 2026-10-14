@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { PacksAdmin } from '../AdminPacks';
 import { SandboxModelsAdmin } from '../AdminSandbox';
+import { SkillConceptsAdmin } from '../AdminSkills';
 import { useApp } from '../store';
 
 type Metrics = {
@@ -62,6 +63,7 @@ export default function Admin() {
       <KnowledgeAdmin />
       <PacksAdmin />
       <SandboxModelsAdmin />
+      <SkillConceptsAdmin />
       <TeamVerifyQueue />
       <CertificationQueue />
       <UploadQueue />

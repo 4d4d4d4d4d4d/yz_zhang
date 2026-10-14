@@ -1,5 +1,5 @@
 import { apiErrorText, fmtYuan, formatDateTime, type AgreementStatus, type CertificationApplicationView, type InvitationItem, type SensitiveScope, type WeeklySlot } from '@platform/core';
-import { CapabilityCard } from '../Profiles';
+import { CapabilityCard, SkillHints, SkillSuggestions } from '../Profiles';
 import { compressToBase64 } from '../PhotoPicker';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -378,6 +378,10 @@ export default function Profile() {
             () => client.updateMe({ skills: skills.split(/[、,，\s]+/).filter(Boolean) }), '技能已更新',
           )}>保存</button>
         </div>
+        {/* SKL-106 写的是别名也没关系：按平台技能概念匹配（135 号 spec） */}
+        <SkillHints skills={skills.split(/[、,，\s]+/).filter(Boolean)} />
+        <SkillSuggestions current={skills.split(/[、,，\s]+/).filter(Boolean)}
+          onAdd={(n) => setSkills((v) => [...v.split(/[、,，\s]+/).filter(Boolean), n].join('、'))} />
         <p className="muted" style={{ marginTop: 6 }}>设置定位城市可提升附近任务匹配：
           <button className="ghost" style={{ marginLeft: 8 }} onClick={() => {
             navigator.geolocation?.getCurrentPosition((pos) =>
