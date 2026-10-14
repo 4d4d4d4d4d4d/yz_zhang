@@ -3,6 +3,7 @@
     python -m scripts.harness new-spec "标题" --batch V147 --ids KB-100~110 [--slug personal-knowledge-base]
     python -m scripts.harness check        # spec 索引 / 状态行 / 待办 / skills / CLAUDE.md，有问题就非零退出
     python -m scripts.harness backlog      # 列出没做完的批次
+    python -m scripts.harness closeout V152  # 一批的收尾清单：打钩、spec、台账、愿景、现状、没做的去处（skill iterate）
 
 只用标准库：回归脚本与 CI 都能直接跑。
 """
@@ -19,9 +20,15 @@ INDEX = SPECS / "README.md"
 BACKLOG = REPO / "docs" / "BACKLOG.md"
 SKILLS = REPO / ".claude" / "skills"
 CLAUDE = REPO / "CLAUDE.md"
+LEDGER_NAME = "72-status-ledger.md"
+VISION = REPO / "docs" / "VISION.md"
+# 「没做的」里的编号：KB-110、SPACE-023b、APPB-050b……
+OPEN_ID = re.compile(r"\b([A-Z][A-Z0-9]{1,6}(?:-[A-Z]+)?-\d{2,3}[a-z]?)\b")
 STATUSES = ("todo", "doing", "done", "外")
 # 从这一篇起 spec 必须有状态行（更早的 spec 写法不一，不追溯）
 STATUS_REQUIRED_FROM = 113
+# 从 harness 建立（121 号）起，做完的批次必须有「没做的」且编号有去处（更早的不追溯）
+HARNESS_FROM = 121
 
 TEMPLATE = """
 # {num} {title}
@@ -74,6 +81,66 @@ def _status_line(p: Path) -> str:
     return next((ln for ln in head if ln.startswith("> 状态：")), "")
 
 
+def _todo_section(text: str) -> str | None:
+    """spec 的「没做的」一节（到下一个二级标题为止）；没有这一节返回 None。"""
+    m = re.search(r"^##[^\n]*没做的[^\n]*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+    return m.group(1) if m else None
+
+
+def _closeout_problems(rows: list[dict]) -> list[str]:
+    """ITER-001 迭代范式（skill iterate，用户 2026-10-14）：做完要打钩、spec 要更新、没做的要有去处。"""
+    problems: list[str] = []
+    by_batch = {r["batch"]: r for r in rows}
+    ledger = (SPECS / LEDGER_NAME).read_text(encoding="utf-8") if (SPECS / LEDGER_NAME).exists() else ""
+    backlog = BACKLOG.read_text(encoding="utf-8")
+    for p in spec_files():
+        if spec_number(p) < HARNESS_FROM:
+            continue
+        m = re.search(r"实现（(V\d+)）", _status_line(p))
+        if m and m.group(1) in by_batch and by_batch[m.group(1)]["status"] != "done":
+            problems.append(f"{p.name} 写着已实现（{m.group(1)}），BACKLOG 里这一批还没打钩（不是 done）")
+    for r in rows:
+        if r["status"] != "done" or r["spec"] == "—":
+            continue
+        spec = next((p for p in spec_files() if spec_number(p) == int(r["spec"])), None)
+        if spec is None or spec_number(spec) < HARNESS_FROM:
+            continue
+        section = _todo_section(spec.read_text(encoding="utf-8"))
+        if section is None or not section.strip():
+            problems.append(f"{spec.name}（{r['batch']} done）缺「没做的」一节：做完一批要写清还欠什么")
+            continue
+        for oid in sorted(set(OPEN_ID.findall(section))):
+            if oid not in ledger and oid not in backlog:
+                problems.append(f"{spec.name}「没做的」里的 {oid} 没有去处：写进台账（{LEDGER_NAME}）或排进 BACKLOG")
+    return problems
+
+
+def closeout(batch: str) -> list[tuple[bool, str]]:
+    """一批的收尾清单（skill iterate 第 2 步）。每一项：(做了没, 说明)。"""
+    rows = backlog_rows()
+    row = next((r for r in rows if r["batch"] == batch), None)
+    items: list[tuple[bool, str]] = [(row is not None and row["status"] == "done", f"BACKLOG：{batch} 打钩（done）并写上 spec 号")]
+    spec = None
+    if row and row["spec"] != "—":
+        spec = next((p for p in spec_files() if spec_number(p) == int(row["spec"])), None)
+    items.append((bool(spec and re.search(r"实现|复核", _status_line(spec))), "spec 状态行改成「本批实现（…）」"))
+    section = _todo_section(spec.read_text(encoding="utf-8")) if spec else None
+    items.append((bool(section and section.strip()), "spec「没做的」写清还欠什么"))
+    ledger = (SPECS / LEDGER_NAME).read_text(encoding="utf-8")
+    ids = sorted(set(OPEN_ID.findall(section or "")))
+    homeless = [i for i in ids if i not in ledger and i not in BACKLOG.read_text(encoding="utf-8")]
+    items.append((not homeless, "「没做的」编号都进了台账或 BACKLOG" + (f"（缺：{'、'.join(homeless)}）" if homeless else "")))
+    items.append((batch in ledger, f"台账（{LEDGER_NAME}）有这一批的「已做」行"))
+    vision = VISION.read_text(encoding="utf-8") if VISION.exists() else ""
+    items.append((bool(re.search(rf"\|[^\n]*{batch}[^\n]*两端已接|两端已接[^\n]*{batch}", vision)),
+                  "VISION 对照行写「两端已接」并带批次号"))
+    status_docs = sorted((REPO / "docs").glob("STATUS-*.md"))
+    items.append((any(batch in d.read_text(encoding="utf-8") for d in status_docs), "现状文档（docs/STATUS-*.md）划掉这一项"))
+    nxt = next((r for r in rows if r["status"] in ("todo", "doing")), None)
+    items.append((nxt is not None, f"下一批：{nxt['batch']} {nxt['title']}" if nxt else "BACKLOG 没有待办了：走 skill scenario-discovery 补"))
+    return items
+
+
 def check() -> list[str]:
     problems: list[str] = []
     index = INDEX.read_text(encoding="utf-8")
@@ -107,6 +174,7 @@ def check() -> list[str]:
         text = f.read_text(encoding="utf-8") if f.exists() else ""
         if not re.match(r"^---\nname: [a-z0-9-]+\ndescription: .{40,}\n---\n", text):
             problems.append(f"skill 缺 frontmatter（name / description）：{d.name}")
+    problems += _closeout_problems(rows)
     if not CLAUDE.exists() or "BACKLOG" not in CLAUDE.read_text(encoding="utf-8"):
         problems.append("根目录 CLAUDE.md 缺失或没有指向 docs/BACKLOG.md")
     return problems
@@ -134,7 +202,7 @@ def new_spec(title: str, batch: str, ids: str, slug: str = "") -> Path:
 
 
 def main(argv: list[str]) -> int:
-    if not argv or argv[0] not in ("new-spec", "check", "backlog"):
+    if not argv or argv[0] not in ("new-spec", "check", "backlog", "closeout"):
         print(__doc__)
         return 2
     if argv[0] == "check":
@@ -146,6 +214,14 @@ def main(argv: list[str]) -> int:
             if r["status"] in ("todo", "doing"):
                 print(f"{r['batch']}  [{r['status']}]  {r['title']}")
         return 0
+    if argv[0] == "closeout":
+        if len(argv) < 2:
+            print("用法：closeout V1xx")
+            return 2
+        items = closeout(argv[1])
+        for ok, text in items:
+            print(("[x] " if ok else "[ ] ") + text)
+        return 0 if all(ok for ok, _ in items) else 1
     args = argv[1:]
     title = args[0] if args and not args[0].startswith("--") else ""
     opts = {k: v for k, v in zip(args[1::2], args[2::2])} if title else {}

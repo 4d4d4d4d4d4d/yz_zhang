@@ -15,10 +15,13 @@
 | 现状台账（已做 / 欠 / 外 / 有意不做） | `docs/specs/72-status-ledger.md` |
 | 功能面清单（只增不减） | `docs/FEATURE-SURFACE.txt` |
 | 批次做法（skills） | `.claude/skills/*/SKILL.md` |
-| 脚手架与检查 | `server/scripts/harness.py`（`new-spec` / `check` / `backlog`） |
+| 脚手架与检查 | `server/scripts/harness.py`（`new-spec` / `check` / `backlog` / `closeout`） |
 | 全量回归（独立 worktree） | `tools/regress.sh` |
 
-## 2. 一批怎么做（详见 skill `spec-batch`）
+## 2. 一批怎么做（外层循环见 skill `iterate`，一批内部详见 skill `spec-batch`）
+
+> 用户 2026-10-14：「做完的记得在文档里打钩，更新 spec，然后继续把没做的完成……每次应该都要这么迭代。」
+> 每批收尾跑 `python -m scripts.harness closeout V1xx`，全部 `[x]` 才算做完；「没做的」必须进台账或 BACKLOG，然后接着做。
 
 1. **取活**：从 `docs/BACKLOG.md` 取最上面的一批；用户新说了需求，先走 skill `vision-sync` 写进愿景与待办；待办不多了，走 skill `scenario-discovery` 按方法发掘新场景（不只做用户举过的例子）。
 2. **写 spec**：`python -m scripts.harness new-spec "标题" --batch V147 --ids KB-100~110`，生成带编号的 spec 骨架并登记进索引。写清：来源原话、业界做法、数据、接口、两端、隐私与边界、闸门与红验、没做的。

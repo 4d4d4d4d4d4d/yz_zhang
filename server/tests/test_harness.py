@@ -20,7 +20,7 @@ def test_the_scanner_actually_sees_the_specs_backlog_and_skills():
     assert len(harness.spec_files()) >= 120
     rows = harness.backlog_rows()
     assert any(r["status"] == "todo" for r in rows) and any(r["status"] == "done" for r in rows)
-    assert {"spec-batch", "vision-sync", "regression", "live-demo"} <= {p.name for p in harness.SKILLS.iterdir()}
+    assert {"spec-batch", "vision-sync", "regression", "live-demo", "iterate"} <= {p.name for p in harness.SKILLS.iterdir()}
 
 
 @pytest.fixture()
@@ -86,3 +86,42 @@ def test_new_spec_scaffolds_the_next_number_and_indexes_it(sandbox):
     assert "> 状态：设计（V999）。编号 TST-001~002。" in text and "## 6. 闸门与红验" in text
     assert f"](./{path.name})" in (sandbox / "specs" / "README.md").read_text(encoding="utf-8")
     assert harness.check() == []
+
+
+# ---------- ITER-001 迭代范式（skill iterate，用户 2026-10-14）：打钩、更新 spec、没做的要有去处 ----------
+def _add_spec(sandbox, num, body):
+    (sandbox / "specs" / f"{num}-x.md").write_text(body, encoding="utf-8")
+    idx = sandbox / "specs" / "README.md"
+    idx.write_text(idx.read_text(encoding="utf-8") + f"\n| {num} | x | [{num}-x.md](./{num}-x.md) | P0 |\n", encoding="utf-8")
+
+
+def _add_row(sandbox, row):
+    b = sandbox / "BACKLOG.md"
+    b.write_text(b.read_text(encoding="utf-8") + row + "\n", encoding="utf-8")
+
+
+def test_red_implemented_spec_whose_batch_is_not_ticked_is_caught(sandbox):
+    _add_spec(sandbox, 995, "\n# 995 x\n\n> 状态：本批实现（V995）。\n\n## 7. 没做的\n\n- 无\n")
+    _add_row(sandbox, "| V995 | 做完了没打钩 | 995 | todo | x |")
+    assert any("V995" in p and "打钩" in p for p in harness.check())
+
+
+def test_red_done_batch_without_open_items_section_is_caught(sandbox):
+    _add_spec(sandbox, 994, "\n# 994 x\n\n> 状态：本批实现（V994）。\n\n## 6. 闸门\n")
+    _add_row(sandbox, "| V994 | 做完了 | 994 | done | x |")
+    assert any("994-x.md" in p and "没做的" in p for p in harness.check())
+
+
+def test_red_open_item_without_a_home_is_caught(sandbox):
+    _add_spec(sandbox, 993, "\n# 993 x\n\n> 状态：本批实现（V993）。\n\n## 7. 没做的\n\n- **ZZQ-110** 还欠一件事\n")
+    _add_row(sandbox, "| V993 | 做完了 | 993 | done | x |")
+    assert any("ZZQ-110" in p and "去处" in p for p in harness.check())
+    _add_row(sandbox, "| V9931 | ZZQ-110 排进来了 | — | todo | x |")
+    assert not any("ZZQ-110" in p for p in harness.check())
+
+
+def test_closeout_lists_what_is_still_unticked():
+    items = dict((text, ok) for ok, text in harness.closeout("V152"))
+    assert all(items.values()), items
+    missing = harness.closeout("V9999")
+    assert not missing[0][0] and any(text.startswith("下一批") for _, text in missing)

@@ -38,6 +38,7 @@ description: Run one spec-driven batch in this repo end to end — pick the next
 - spec 状态改成「本批实现（V1xx）」；`docs/BACKLOG.md` 勾掉；台账（72 号）对应 ID 改成「已做」；
   `docs/VISION.md` 对照行；`docs/STATUS-*.md`；版本号 `server/app/core/config.py`。
 - 计数：`python -m pytest tests/test_doc_counts.py` 报的真实数写进文档（不要改断言）。
+- `python -m scripts.harness closeout V1xx` 全部 `[x]`（打钩、spec、没做的去处；外层循环见 skill `iterate`）。
 - `python -m scripts.harness check` 全绿。
 
 ## 7. 回归、提交、推送
