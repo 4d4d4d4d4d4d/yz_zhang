@@ -55,6 +55,7 @@ describe('ORC-066 AI 编排', () => {
     open('/missions?id=7', {
       'GET /missions': [MISSION], '/missions/7': { ...MISSION, steps: [STEP], timeline: [{ iteration: 1, action: 'tool_draft', summary: '用经验工具生成了草稿，等你确认', at: '2026-10-14T00:01:00Z' }] },
       'POST /missions/7/steps/3/drafts/41/adopt': { step_id: 3, invocation_id: 41, status: 'adopted' },
+      'POST /missions/7/summary/save': { note_id: 9, created: true, title: '编排复盘：周六搬家（#7）', saved_at: '2026-10-14T01:00:00Z' },
       '/missions/7/summary': { mission_id: 7, goal: '周六搬家', status: 'running', rounds: 1, max_rounds: 3, spent_cents: 0, committed_cents: 21000, cap_cents: 30000,
         steps_total: 1, steps_done: 0, steps_failed: 0, remedies: 0, avg_review_score: null, drafts_total: 1, drafts_adopted: 0, duration_days: null,
         highlights: ['经验工具生成 1 份草稿，你采用了 0 份'], next: '还在进行：推进下一轮，或等已发布的任务有人接' },
@@ -67,6 +68,8 @@ describe('ORC-066 AI 编排', () => {
     const sum = await screen.findByLabelText('复盘');
     expect(sum.textContent).toContain('1/3 轮 · 完成 0/1 步 · 整改 0 次');
     expect(sum.textContent).toContain('下一步：还在进行');
+    fireEvent.click(screen.getByRole('button', { name: '存进我的知识库' }));
+    await screen.findByText('已存进你的知识库：「编排复盘：周六搬家（#7）」');
     expect(screen.getByLabelText('经验工具草稿').textContent).toContain('待你确认');
     fireEvent.click(screen.getByRole('button', { name: '采用' }));
     await screen.findByText('已采用（只是标记，没有发给任何人）');

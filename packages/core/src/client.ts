@@ -59,6 +59,7 @@ import type {
   MissionEvent,
   MissionDraftDecision,
   MissionSummary,
+  MissionSummarySaved,
   AssistantCosts,
   MissionStep,
   AnchorCoverage,
@@ -794,6 +795,8 @@ export class PlatformClient {
   }
   /** AGT-091 编排复盘：花了多少、几轮、哪些步骤整改过、下一步建议（133 号 spec） */
   missionSummary(id: number) { return this.request<MissionSummary>('GET', `/missions/${id}/summary`); }
+  /** AGT-092 把复盘存进个人知识库（标签「编排复盘」；再存一次更新同一条） */
+  saveMissionSummary(id: number) { return this.request<MissionSummarySaved>('POST', `/missions/${id}/summary/save`); }
   /** REL-110 本月助手花了多少、上限多少 */
   assistantCosts() { return this.request<AssistantCosts>('GET', '/users/me/assistant-costs'); }
   cancelMission(id: number) {

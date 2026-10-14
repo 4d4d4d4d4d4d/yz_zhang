@@ -41,7 +41,7 @@ export default function Missions() {
 
   async function act(fn: () => Promise<unknown>, done: string) {
     setError(''); setNotice('');
-    try { await fn(); setNotice(done); await load(); } catch (e) { setError(apiErrorText(e)); }
+    try { await fn(); if (done) setNotice(done); await load(); } catch (e) { setError(apiErrorText(e)); }
   }
   async function create() {
     setError(''); setNotice('');
@@ -90,6 +90,11 @@ export default function Missions() {
                 {summary.duration_days !== null ? ` · 用时 ${summary.duration_days} 天` : ''}</p>
               {summary.highlights.length > 0 && <ul>{summary.highlights.map((h) => <li key={h}>{h}</li>)}</ul>}
               <p>下一步：{summary.next}</p>
+              {/* AGT-092 一键存进个人知识库（134 号 spec） */}
+              <button className="ghost" onClick={() => void act(async () => {
+                const r = await client.saveMissionSummary(detail.id);
+                setNotice(r.created ? `已存进你的知识库：「${r.title}」` : `已更新知识库里的「${r.title}」`);
+              }, '')}>存进我的知识库</button>
             </div>
           )}
           <h4>步骤</h4>

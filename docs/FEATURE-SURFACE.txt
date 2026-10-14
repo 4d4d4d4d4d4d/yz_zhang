@@ -367,6 +367,7 @@ api POST /api/v1/missions/jobs/tick-all
 api POST /api/v1/missions/{mission_id}/cancel
 api POST /api/v1/missions/{mission_id}/steps/{step_id}/drafts/{invocation_id}/adopt
 api POST /api/v1/missions/{mission_id}/steps/{step_id}/drafts/{invocation_id}/discard
+api POST /api/v1/missions/{mission_id}/summary/save
 api POST /api/v1/missions/{mission_id}/tick
 api POST /api/v1/notebook/ask
 api POST /api/v1/notebook/methods
@@ -813,6 +814,7 @@ sdk rotateApiKey
 sdk runAgent
 sdk runWorkbenchRoutine
 sdk sandboxModels
+sdk saveMissionSummary
 sdk saveOpcProfile
 sdk saveSpace
 sdk scenarioPack

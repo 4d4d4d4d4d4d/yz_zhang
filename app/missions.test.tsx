@@ -32,6 +32,7 @@ describe('ORC-066 App 上的 AI 编排', () => {
     const client = makeClient({
       'GET /missions': [], 'POST /missions': MISSION, '/missions/7': { ...MISSION, steps: [STEP], timeline: [] },
       'POST /missions/7/steps/3/drafts/41/adopt': { step_id: 3, invocation_id: 41, status: 'adopted' },
+      'POST /missions/7/summary/save': { note_id: 9, created: false, title: '编排复盘：周六搬家（#7）', saved_at: '2026-10-14T01:00:00Z' },
       '/missions/7/summary': { mission_id: 7, goal: '周六搬家', status: 'running', rounds: 1, max_rounds: 3, spent_cents: 0, committed_cents: 21000, cap_cents: 30000,
         steps_total: 1, steps_done: 0, steps_failed: 0, remedies: 0, avg_review_score: null, drafts_total: 1, drafts_adopted: 0, duration_days: null,
         highlights: ['经验工具生成 1 份草稿，你采用了 0 份'], next: '还在进行：推进下一轮，或等已发布的任务有人接' },
@@ -45,6 +46,8 @@ describe('ORC-066 App 上的 AI 编排', () => {
     expect(screen.getByText('由经验单元生成，未经人工确认 · 待你确认')).toBeTruthy();
     expect(await screen.findByText('下一步：还在进行：推进下一轮，或等已发布的任务有人接')).toBeTruthy();
     expect(screen.getByText('• 经验工具生成 1 份草稿，你采用了 0 份')).toBeTruthy();
+    fireEvent.press(screen.getByText('存进我的知识库'));
+    expect(await screen.findByText('已更新知识库里的「编排复盘：周六搬家（#7）」')).toBeTruthy();
     fireEvent.press(screen.getByText('采用'));
     expect(await screen.findByText('已采用（只是标记，没有发给任何人）')).toBeTruthy();
     fireEvent.press(screen.getByText('推进一轮'));

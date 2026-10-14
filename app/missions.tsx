@@ -36,7 +36,7 @@ export function MissionsScreen({ client }: { client: PlatformClient }) {
 
   async function act(fn: () => Promise<unknown>, done: string) {
     setError(''); setNotice('');
-    try { await fn(); setNotice(done); await load(); } catch (e) { setError(apiErrorText(e)); }
+    try { await fn(); if (done) setNotice(done); await load(); } catch (e) { setError(apiErrorText(e)); }
   }
 
   if (detail) {
@@ -65,6 +65,10 @@ export function MissionsScreen({ client }: { client: PlatformClient }) {
             <Text style={s.muted}>{summary.rounds}/{summary.max_rounds} 轮 · 完成 {summary.steps_done}/{summary.steps_total} 步 · 整改 {summary.remedies} 次 · 实付 {fmtYuan(summary.spent_cents)}</Text>
             {summary.highlights.map((h) => <Text key={h}>• {h}</Text>)}
             <Text>下一步：{summary.next}</Text>
+            <Button title="存进我的知识库" onPress={() => void act(async () => {
+              const r = await client.saveMissionSummary(d.id);
+              setNotice(r.created ? `已存进你的知识库：「${r.title}」` : `已更新知识库里的「${r.title}」`);
+            }, '')} />
           </View>
         )}
         {d.steps.map((st) => (

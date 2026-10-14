@@ -190,7 +190,10 @@ def cancel_mission(
 @router.get("/missions/{mission_id}/summary")
 def mission_summary(mission_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """AGT-091 编排复盘（133 号 spec）：花了多少、几轮、哪些步骤整改过、评审多少分、经验工具草稿用了几份、下一步建议。"""
-    m = _get_mission(db, mission_id, user)
+    return _summary(db, _get_mission(db, mission_id, user))
+
+
+def _summary(db: Session, m: Mission) -> dict:
     steps = db.query(MissionStep).filter(MissionStep.mission_id == m.id).order_by(MissionStep.id).all()
     live = [s for s in steps if s.status != "superseded"]
     done = [s for s in live if s.status == "done"]
@@ -225,6 +228,44 @@ def mission_summary(mission_id: int, user: User = Depends(get_current_user), db:
         "drafts_total": len(drafts), "drafts_adopted": sum(1 for d in drafts if d.get("status") == "adopted"),
         "duration_days": days, "highlights": highlights, "next": nxt,
     }
+
+
+@router.post("/missions/{mission_id}/summary/save")
+def save_summary(mission_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """AGT-092 把复盘存进个人知识库（134 号 spec）：一份笔记，标签「编排复盘」；再存一次更新同一条，不会重复。"""
+    from app.core.timefmt import iso as _iso
+    from app.modules.account.models import utcnow
+    from app.modules.notebook import service as nsvc
+    from app.modules.notebook.models import NbNote
+
+    m = _get_mission(db, mission_id, user)
+    if m.owner_id != user.id:
+        raise forbidden("只有发起人能把复盘存进自己的知识库")
+    s = _summary(db, m)
+    steps = db.query(MissionStep).filter(MissionStep.mission_id == m.id, MissionStep.status != "superseded")\
+        .order_by(MissionStep.id).all()
+    title = f"编排复盘：{m.goal}（#{m.id}）"[:200]
+    lines = [f"目标：{m.goal}", f"状态：{s['status']}；{s['rounds']}/{s['max_rounds']} 轮；完成 {s['steps_done']}/{s['steps_total']} 步；整改 {s['remedies']} 次",
+             f"花费：实付 {s['spent_cents'] / 100:.2f} 元，上限 {s['cap_cents'] / 100:.2f} 元"]
+    if s["avg_review_score"] is not None:
+        lines.append(f"平均评审：{s['avg_review_score']} 分")
+    lines += ["", "步骤："] + [f"- {x.title}（{x.status}）" + (f"：{'、'.join(x.acceptance[:3])}" if x.acceptance else "") for x in steps]
+    lines += ["", "要点："] + [f"- {h}" for h in s["highlights"]] + ["", f"下一步：{s['next']}"]
+    body = "\n".join(lines)
+    now = utcnow()
+    note = db.query(NbNote).filter(NbNote.owner_id == user.id, NbNote.title == title).first()
+    created = note is None
+    if created:
+        if db.query(NbNote).filter(NbNote.owner_id == user.id).count() >= nsvc.LIMITS["notes"]:
+            raise conflict(f"笔记数量已达上限（{nsvc.LIMITS['notes']}），请先归档导出后删除不用的", "nb_limit_reached")
+        note = NbNote(owner_id=user.id, kind="note", title=title, body=body, tags=["编排复盘"], status="filed",
+                      created_at=now, updated_at=now)
+        db.add(note)
+    else:
+        note.body, note.updated_at, note.revision = body, now, note.revision + 1
+        db.add(note)
+    db.flush()
+    return {"note_id": note.id, "created": created, "title": note.title, "saved_at": _iso(note.updated_at)}
 
 
 @router.put("/missions/{mission_id}/tools")

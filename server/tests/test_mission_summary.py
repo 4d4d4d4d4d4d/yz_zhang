@@ -30,3 +30,27 @@ def test_summary_after_a_remedy_and_success(client, requester, worker):
     assert "个人知识库" in s["next"] and s["spent_cents"] > 0 and s["cap_cents"] == 200000
     # 只有发起人（与管理员）能看
     assert client.get(f"{API}/{m['id']}/summary", headers=auth(worker)).status_code == 403
+
+
+def test_save_summary_into_my_notebook_once(client, requester, worker):
+    from app.core.db import SessionLocal
+    from app.modules.notebook.models import NbNote
+    from tests.test_client_shape_alignment import _assert_shape
+
+    topup(client, requester, 300000)
+    m = _mission(client, requester, goal="活动执行统筹")
+    client.post(f"{API}/{m['id']}/tick", headers=auth(requester))
+    first = client.post(f"{API}/{m['id']}/summary/save", headers=auth(requester)).json()
+    _assert_shape(first, "MissionSummarySaved")
+    assert first["created"] is True and first["title"] == f"编排复盘：活动执行统筹（#{m['id']}）"
+    note = client.get(f"/api/v1/notebook/notes/{first['note_id']}", headers=auth(requester)).json()
+    assert "编排复盘" in note["tags"] and "步骤：" in note["body"] and "下一步：" in note["body"]
+    again = client.post(f"{API}/{m['id']}/summary/save", headers=auth(requester)).json()
+    assert again["created"] is False and again["note_id"] == first["note_id"]          # 再存一次更新同一条
+    with SessionLocal() as db:
+        assert db.query(NbNote).filter(NbNote.owner_id == requester["id"], NbNote.title == first["title"]).count() == 1
+    assert client.post(f"{API}/{m['id']}/summary/save", headers=auth(worker)).status_code == 403
+    from tests.conftest import make_admin
+
+    admin = make_admin(client, "13800160001", "运营")          # 管理员看得到复盘，但不能存进别人（或自己）的知识库
+    assert client.post(f"{API}/{m['id']}/summary/save", headers=auth(admin)).status_code == 403

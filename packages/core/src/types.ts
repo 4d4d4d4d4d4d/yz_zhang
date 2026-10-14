@@ -578,6 +578,13 @@ export interface MissionSummary {
   highlights: string[];
   next: string;
 }
+/** AGT-092 复盘存进个人知识库的结果（134 号 spec）：再存一次更新同一条 */
+export interface MissionSummarySaved {
+  note_id: number;
+  created: boolean;
+  title: string;
+  saved_at: string;
+}
 /** REL-110 本月助手成本（北京时间自然月） */
 export interface AssistantCosts {
   month: string;
