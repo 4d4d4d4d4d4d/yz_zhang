@@ -76,6 +76,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   api_key_rate_limited: '这把 API Key 本分钟的请求次数用完了：稍等再试，或联系平台提高额度',
   api_key_rate_above_cap: '每分钟上限不能超过平台默认值；需要更高额度请联系平台',
   assignee_not_support: '只能指派给有「客服」角色的管理员；需要的话先在「管理员与角色」里给对方加上',
+  bad_audience: '公告的人群只能是：全体用户、近 180 天发过单的人、近 180 天报过名接单的人',
   api_key_quota_exceeded: '这把 API Key 今天（北京时间）的配额用完了，明天 0 点恢复；需要更高配额请联系平台',
   api_key_quota_above_cap: '每日配额不能超过平台默认值；需要更高配额请联系平台',
   api_account_quota_exceeded: '你账号下所有 API Key 今天（北京时间）合计的配额用完了，明天 0 点恢复；需要更高配额请联系平台',

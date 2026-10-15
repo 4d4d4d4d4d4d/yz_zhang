@@ -566,12 +566,17 @@ class AnnouncementIn(BaseModel):
     verified_only: bool = False  # 仅通知已实名用户（如资金/合规类公告）
     # NTF-064 定时发送（151 号 spec）：不填就马上发（原有行为）
     scheduled_at: UtcDatetime | None = None
+    # NTF-066 定向（159 号 spec）：城市（空 = 不限）、人群（all / publishers / workers）
+    city: str = Field(default="", max_length=50)
+    audience: str = Field(default="all", max_length=12)
 
 
 class AnnouncementPreviewIn(BaseModel):
     title: str = Field(min_length=2, max_length=120)
     body: str = Field(default="", max_length=2000)
     verified_only: bool = False
+    city: str = Field(default="", max_length=50)
+    audience: str = Field(default="all", max_length=12)
 
 
 class AnnouncementCloseIn(BaseModel):
@@ -589,10 +594,14 @@ def broadcast_announcement(
     响应保留原有的 `delivered`，多了 `id`、`status`、`scheduled_at`。"""
     from . import announcements as ann_svc
 
-    ann = ann_svc.create(db, admin.id, body.title, body.body, body.verified_only, body.scheduled_at)
+    ann = ann_svc.create(db, admin.id, body.title, body.body, body.verified_only, body.scheduled_at,
+                         body.city.strip(), body.audience)
+    target = (f"{'仅已实名' if ann.verified_only else '全体'}"
+              + (f"·{ann.city}" if ann.city else "")
+              + (f"·{ann_svc.AUDIENCES[ann.audience]}" if ann.audience != "all" else ""))
     record_audit(db, admin.id, "announcement_schedule" if ann.status == "scheduled" else "announcement_send",
                  "announcement", ann.id,
-                 f"「{ann.title[:60]}」{'仅已实名' if ann.verified_only else '全体'}，"
+                 f"「{ann.title[:60]}」{target}，"
                  + (f"定时 {iso(ann.scheduled_at)}" if ann.status == "scheduled" else f"送达 {ann.delivered} 人"))
     return {"delivered": ann.delivered, "id": ann.id, "status": ann.status, "scheduled_at": iso(ann.scheduled_at)}
 
@@ -603,7 +612,7 @@ def preview_announcement(body: AnnouncementPreviewIn, admin: User = Depends(requ
     """NTF-064 发之前先看：会送给多少人、多少人关了公告通知、用户看到的样子、要留意的地方。不发、不落库。"""
     from . import announcements as ann_svc
 
-    return ann_svc.preview(db, body.title, body.body, body.verified_only)
+    return ann_svc.preview(db, body.title, body.body, body.verified_only, body.city.strip(), body.audience)
 
 
 @router.get("/admin/announcements")
@@ -616,7 +625,9 @@ def list_announcements(status: str = "", limit: int = Query(50, ge=1, le=200), o
     q = db.query(Announcement)
     if status:
         q = q.filter(Announcement.status == status)
-    return [ann_svc.row(a) for a in q.order_by(Announcement.id.desc()).offset(offset).limit(limit).all()]
+    rows = q.order_by(Announcement.id.desc()).offset(offset).limit(limit).all()
+    reads = ann_svc.read_counts(db, [a.id for a in rows])     # NTF-067 阅读率（159 号 spec）
+    return [ann_svc.row(a, reads.get(a.id, 0)) for a in rows]
 
 
 @router.post("/admin/announcements/{announcement_id}/cancel")

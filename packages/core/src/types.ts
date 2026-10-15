@@ -1325,11 +1325,17 @@ export interface AnnouncementPreview {
   /** 会收到的人数（公告这一类用户关不掉） */
   audience: number;
   verified_only: boolean;
+  /** NTF-066（159 号 spec）定向的城市（空 = 不限）与人群 */
+  city: string;
+  audience_kind: AnnouncementAudience;
   title: string;
   body: string;
   /** 要留意的地方，例如「标题太长锁屏会被截断」 */
   warnings: string[];
 }
+
+/** NTF-066 公告的人群：全体 / 近 180 天发过单的人 / 近 180 天报过名接单的人 */
+export type AnnouncementAudience = 'all' | 'publishers' | 'workers';
 
 /** NTF-064 一条公告的记录 */
 export interface AnnouncementRow {
@@ -1337,6 +1343,12 @@ export interface AnnouncementRow {
   title: string;
   body: string;
   verified_only: boolean;
+  /** NTF-066（159 号 spec）定向 */
+  city: string;
+  audience: AnnouncementAudience;
+  /** NTF-067 点开过的人数与阅读率（送达为 0 时为 null） */
+  read: number;
+  read_rate: number | null;
   /** scheduled / sent / cancelled / revoked */
   status: string;
   scheduled_at: string | null;

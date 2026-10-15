@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketRow, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { PacksAdmin } from '../AdminPacks';
@@ -439,6 +439,9 @@ function Announcement() {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   // 北京时间的日期与时刻，交给服务端前带上 +08:00
   const [when, setWhen] = useState('');
+  // NTF-066（159 号 spec）定向
+  const [city, setCity] = useState('');
+  const [aud, setAud] = useState<AnnouncementAudience>('all');
   const [preview, setPreview] = useState<AnnouncementPreview | null>(null);
   const [history, setHistory] = useState<AnnouncementRow[]>([]);
   const [notice, setNotice] = useState('');
@@ -457,7 +460,8 @@ function Announcement() {
   const draftChanged = () => setPreview(null);
   // 「发布」保持一步可发（原有行为）；预览是建议的前一步，发布时一并清掉
   const publish = () => run(async () => {
-    const r = await client.broadcastAnnouncement(title.trim(), body, verifiedOnly, when ? `${when}:00+08:00` : undefined);
+    const r = await client.broadcastAnnouncement(title.trim(), body, verifiedOnly, when ? `${when}:00+08:00` : undefined,
+      { city: city.trim(), audience: aud });
     setTitle(''); setBody(''); setWhen(''); setPreview(null);
     // 送达人数原样回显：公告发出去收不回来，得让人看到自己刚影响了多少人
     setNotice(r.status === 'scheduled' ? `已定时，到 ${formatDateTime(r.scheduled_at ?? '')} 发出；发出前可以取消` : `已送达 ${r.delivered} 人`);
@@ -476,18 +480,25 @@ function Announcement() {
           <input type="checkbox" checked={verifiedOnly}
                  onChange={(e) => { setVerifiedOnly(e.target.checked); draftChanged(); }} /> 仅已实名
         </label>
+        <input style={{ width: 110 }} aria-label="只发给城市" placeholder="城市（可不填）" value={city}
+               onChange={(e) => { setCity(e.target.value); draftChanged(); }} />
+        <select aria-label="发给哪类人" value={aud} onChange={(e) => { setAud(e.target.value as AnnouncementAudience); draftChanged(); }}>
+          <option value="all">全体用户</option>
+          <option value="publishers">近 180 天发过单的人</option>
+          <option value="workers">近 180 天报过名接单的人</option>
+        </select>
         <label className="muted">定时（北京时间，可不填）
           <input aria-label="定时发送" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
         </label>
         <button className="ghost" disabled={title.trim().length < 2} onClick={() => void run(async () => {
-          setPreview(await client.previewAnnouncement(title.trim(), body, verifiedOnly));
+          setPreview(await client.previewAnnouncement(title.trim(), body, verifiedOnly, { city: city.trim(), audience: aud }));
         })}>预览</button>
         <button disabled={title.trim().length < 2} onClick={() => void publish()}>发布</button>
       </div>
       {when && <p className="muted">已填定时：按「发布」后先排队，到时间才发出，发出前可以取消。</p>}
       {preview && (
         <div data-testid="ann-preview" style={{ marginTop: 8 }}>
-          <p>将送给 <strong>{preview.audience}</strong> 人（{preview.verified_only ? '仅已实名用户' : '全体用户'}），用户会看到：</p>
+          <p>将送给 <strong>{preview.audience}</strong> 人（{preview.verified_only ? '仅已实名用户' : '全体用户'}{preview.city ? ` · ${preview.city}` : ''}{preview.audience_kind && preview.audience_kind !== 'all' ? ` · ${AUD_LABEL[preview.audience_kind]}` : ''}），用户会看到：</p>
           <div className="task-item"><div><strong>{preview.title}</strong><p className="muted">{preview.body || '（没有正文）'}</p></div></div>
           {preview.warnings.map((w) => <p key={w} className="error">留意：{w}</p>)}
           <p className="muted">没问题就按上面的「发布」。</p>
@@ -497,14 +508,16 @@ function Announcement() {
       {error && <p className="error">{error}</p>}
       {history.length > 0 && (
         <table style={{ marginTop: 8 }} aria-label="发过的公告">
-          <thead><tr><th>标题</th><th>状态</th><th>时间</th><th>送达</th><th></th></tr></thead>
+          <thead><tr><th>标题</th><th>状态</th><th>时间</th><th>送达</th><th>已读</th><th></th></tr></thead>
           <tbody>
             {history.map((a) => (
               <tr key={a.id}>
-                <td>{a.title}{a.verified_only ? '（仅已实名）' : ''}</td>
+                <td>{a.title}{a.verified_only ? '（仅已实名）' : ''}{a.city ? `（${a.city}）` : ''}{a.audience && a.audience !== 'all' ? `（${AUD_LABEL[a.audience]}）` : ''}</td>
                 <td>{ANN_STATUS[a.status] ?? a.status}{a.close_reason ? `：${a.close_reason}` : ''}</td>
                 <td>{formatDateTime(a.sent_at ?? a.scheduled_at ?? a.created_at)}</td>
                 <td>{a.status === 'scheduled' ? '—' : a.delivered}</td>
+                {/* NTF-067（159 号 spec）阅读率 */}
+                <td>{typeof a.read_rate === 'number' ? `${a.read} 人（${Math.round(a.read_rate * 100)}%）` : '—'}</td>
                 <td>
                   {a.status === 'scheduled' && <button className="ghost" onClick={() => void run(async () => {
                     await client.cancelAnnouncement(a.id, prompt('取消的原因（可不填）：') ?? '');
@@ -527,6 +540,7 @@ function Announcement() {
   );
 }
 
+const AUD_LABEL: Record<string, string> = { all: '全体用户', publishers: '近 180 天发过单的人', workers: '近 180 天报过名接单的人' };
 const ANN_STATUS: Record<string, string> = { scheduled: '等待定时发出', sent: '已发出', cancelled: '已取消', revoked: '已撤回' };
 
 function Stat({ label, value }: { label: string; value: string }) {

@@ -83,6 +83,9 @@ class Announcement(Base):
     title: Mapped[str] = mapped_column(String(120))
     body: Mapped[str] = mapped_column(String(2000), default="")
     verified_only: Mapped[bool] = mapped_column(Boolean, default=False)
+    # NTF-066（159 号 spec）定向：城市（空 = 不限）与人群（all / publishers 近 180 天发过单 / workers 近 180 天报过名）
+    city: Mapped[str] = mapped_column(String(50), default="")
+    audience: Mapped[str] = mapped_column(String(12), default="all")
     # scheduled（等时间到）/ sent / cancelled（定时的取消了，没发）/ revoked（发了又撤回）
     status: Mapped[str] = mapped_column(String(12), default="sent", index=True)
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
