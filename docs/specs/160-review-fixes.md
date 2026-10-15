@@ -41,6 +41,8 @@
 
 6 处变异全部变红（`scratchpad/mut160.py`）：去掉 `expose_headers`、不清工单文字、不清往来、转纠纷的也清、不去掉分析事件的人、导出里去掉工单 → `tests/test_review_fixes_160.py` 对应用例红。
 
+> 补记：回归里防脚本腐烂的闸门指出 `walk_review.py` 没登记谁在跑；已在 `tests/test_script_rot.py` 登记为「功能检视时对真服务端手动跑」，并加一条编译检查。
+
 ## 7. 没做的
 
 - **ESCA-056 提单人在工单里追加回复**（157 号已记）。

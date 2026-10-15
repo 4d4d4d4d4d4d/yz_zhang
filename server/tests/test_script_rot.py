@@ -47,6 +47,8 @@ EXERCISED: dict[str, str] = {
     "scrub_experience.py": "回归里跑 --dry-run（本文件）；生产是开站前手动跑一次",
     "check_frontend_counts.py": "CI 的 frontend 与 app-typecheck job（紧跟各自的测试之后）"
                                 "+ 回归里用伪造结果核对比对逻辑（test_doc_counts）",
+    # 160 号 spec：走查要连一个真服务端与 Postgres，回归跑不了全程；回归里至少编译一遍（本文件）
+    "walk_review.py": "功能检视时对真服务端手动跑（160 号 spec 第 0 节）；回归里编译检查（本文件）",
 }
 
 
@@ -232,3 +234,14 @@ def test_scr013_contract_failures_fail_the_run():
     for capacity_code in ("429", "503"):
         assert f"c in ({capacity_code}" not in src, \
             f"{capacity_code} 被当成了契约性失败——那是容量信号，不是缺陷"
+
+
+def test_scr010_walk_review_still_compiles():
+    """walk_review 只在功能检视时对真服务端手动跑；回归里至少保证它还能编译、函数还在。"""
+    import py_compile
+
+    path = REPO / "server" / "scripts" / "walk_review.py"
+    py_compile.compile(str(path), doraise=True)
+    src = path.read_text(encoding="utf-8")
+    assert "def step(" in src and "def req(" in src
+
