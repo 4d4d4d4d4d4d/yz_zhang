@@ -1265,6 +1265,15 @@ export interface ApiKeyView {
   active: boolean;
   last_used_at: string | null;
   created_at: string;
+  /** API-050 自己设的每分钟上限（145 号 spec）；0 = 用平台默认 */
+  rate_per_minute: number;
+  /** 生效的每分钟上限 */
+  effective_rate_per_minute: number;
+}
+export interface ApiKeyRate {
+  id: number;
+  rate_per_minute: number;
+  effective_rate_per_minute: number;
 }
 
 export interface WebhookView {

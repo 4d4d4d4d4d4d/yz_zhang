@@ -248,3 +248,11 @@ def _http_send(url: str, body: str, timestamp: str, signature: str):
             return resp.status, resp.read(500).decode(errors="replace")
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read(500).decode(errors="replace")
+
+
+def effective_rate(key: ApiKey) -> int:
+    """API-050 这把 Key 生效的每分钟上限：自己设的（更低）或平台默认。"""
+    from app.core.config import settings
+
+    cap = settings.API_KEY_RATE_PER_MINUTE
+    return min(key.rate_per_minute, cap) if key.rate_per_minute and key.rate_per_minute > 0 else cap

@@ -92,6 +92,10 @@ export default function Developer() {
                   最近使用 {k.last_used_at ? formatDateTime(k.last_used_at) : '从未'}
                 </p>
                 {k.scopes.includes('tasks:write') && k.active && <MachineMandate client={client} keyId={k.id} />}
+                {k.active && typeof k.effective_rate_per_minute === 'number' && (
+                  <KeyRate keyId={k.id} own={k.rate_per_minute} effective={k.effective_rate_per_minute}
+                           onSave={(n) => act(() => client.setApiKeyRate(k.id, n))} />
+                )}
               </div>
               {k.active && (
                 <span className="row">
@@ -170,5 +174,18 @@ export default function Developer() {
         )}
       </div>
     </div>
+  );
+}
+
+/** API-050 每把 Key 的每分钟上限（145 号 spec）：超了回 429 并带 Retry-After；只能设得比平台默认低，0 = 恢复默认。 */
+function KeyRate({ keyId, own, effective, onSave }: { keyId: number; own: number; effective: number; onSave: (n: number) => void }) {
+  const [v, setV] = useState('');
+  return (
+    <p className="muted row" data-testid={`key-rate-${keyId}`}>
+      每分钟最多 {effective} 次{own ? '（你设的）' : '（平台默认）'}，超了会收到 429 并告诉你几秒后重试 ·
+      <input style={{ width: 90 }} aria-label={`Key ${keyId} 每分钟上限`} type="number" min={0} placeholder="设更低" value={v}
+             onChange={(e) => setV(e.target.value)} />
+      <button className="ghost" disabled={v === ''} onClick={() => { onSave(Number(v)); setV(''); }}>保存</button>
+    </p>
   );
 }

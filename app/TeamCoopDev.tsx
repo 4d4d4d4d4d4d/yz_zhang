@@ -369,6 +369,7 @@ function DeveloperScreen({ client }: { client: PlatformClient }) {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [plain, setPlain] = useState('');
+  const [rates, setRates] = useState<Record<number, string>>({});
   const { error, act } = useAct();
 
   const load = useCallback(async () => {
@@ -401,6 +402,24 @@ function DeveloperScreen({ client }: { client: PlatformClient }) {
           <Text style={s.cardTitle}>{k.name} · {k.key_prefix}…</Text>
           <Text style={s.muted}>{k.scopes.join('、')} · {k.active ? '启用中' : '已吊销'}</Text>
           {k.active && k.scopes.includes('tasks:write') && <MachineMandate client={client} keyId={k.id} />}
+          {/* API-050 每分钟上限（145 号 spec）：只能设得更低，0 = 恢复平台默认 */}
+          {k.active && typeof k.effective_rate_per_minute === 'number' && (
+            <>
+              <Text style={s.muted}>每分钟最多 {k.effective_rate_per_minute} 次{k.rate_per_minute ? '（你设的）' : '（平台默认）'}，超了会收到 429 并告诉你几秒后重试</Text>
+              <TextInput style={s.input} accessibilityLabel={`Key ${k.id} 每分钟上限`} keyboardType="numeric" placeholder="设更低的每分钟上限（0 = 默认）"
+                         value={rates[k.id] ?? ''} onChangeText={(v) => setRates({ ...rates, [k.id]: v })} />
+              <Button title="保存上限" disabled={(rates[k.id] ?? '') === ''} onPress={() => act(async () => {
+                await client.setApiKeyRate(k.id, Number(rates[k.id])); setRates({ ...rates, [k.id]: '' }); await load();
+              })} />
+            </>
+          )}
+          {/* API-001 轮换：明文找不回来，丢了只能轮换；旧 Key 立刻失效，新 Key 同样只显示这一次 */}
+          {k.active && (
+            <Button title="轮换（旧 Key 立刻失效）" onPress={() => act(async () => {
+              const r = await client.rotateApiKey(k.id);
+              setPlain(`${r.key}\n\n${r.warning}`); await load();
+            })} />
+          )}
           {k.active && (
             <Button title="吊销" color="#dc2626"
                     onPress={() => act(async () => { await client.revokeApiKey(k.id); await load(); })} />

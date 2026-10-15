@@ -20,7 +20,7 @@ from app.core.i18n import DEFAULT_LOCALE, SUPPORTED_LOCALES, resolve_locale
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 I18N_TS = ROOT / "packages/core/src/i18n.ts"
 
-ERROR_FUNCS = {"bad_request", "conflict", "forbidden", "not_found"}
+ERROR_FUNCS = {"bad_request", "conflict", "forbidden", "not_found", "too_many_requests"}   # 429 助手见 145 号 spec
 GENERIC_CODES = {"bad_request", "conflict", "forbidden", "not_found"}
 
 

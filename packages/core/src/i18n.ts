@@ -66,6 +66,8 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   opc_platform_entry_locked: '平台导入的收入金额与日期以平台流水为准，不能改；可以补备注、发票号',
   opc_limit_reached: '账目已达上限，请先导出归档后删除旧的',
   skill_alias_taken: '这个写法已经属于别的技能概念：先从那个概念里去掉，再加到这里',
+  api_key_rate_limited: '这把 API Key 本分钟的请求次数用完了：稍等再试，或联系平台提高额度',
+  api_key_rate_above_cap: '每分钟上限不能超过平台默认值；需要更高额度请联系平台',
   period_range_too_long: '一次最多看 24 个期间：请缩短起止范围',
   period_range_invalid: '结束期间不能早于开始期间',
   invitation_not_found: '没有发给你的待处理邀请：可能已经接受、拒绝或过期了',

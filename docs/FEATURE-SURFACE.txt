@@ -477,6 +477,7 @@ api POST /api/v1/workbench/routines/{routine_id}/run
 api PUT /api/v1/admin/admins/{user_id}/roles
 api PUT /api/v1/admin/matching-config
 api PUT /api/v1/admin/packs/{pack_id}
+api PUT /api/v1/developer/api-keys/{key_id}/rate-limit
 api PUT /api/v1/gig/available
 api PUT /api/v1/missions/{mission_id}/tools
 api PUT /api/v1/notifications/devices
@@ -852,6 +853,7 @@ sdk sendMessage
 sdk sendQuoteCard
 sdk sendSmsCode
 sdk setAdminRoles
+sdk setApiKeyRate
 sdk setFriendRemark
 sdk setGigAvailable
 sdk setKnowledgeUnitStatus

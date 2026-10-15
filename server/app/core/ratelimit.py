@@ -98,8 +98,9 @@ def _note_failure(exc: Exception) -> None:
         _cooldown_until = time.time() + settings.RATELIMIT_COOLDOWN_SECONDS
 
 
-def check(key: str, limit: int, window_seconds: int) -> None:
-    """在 window 内超过 limit 次则拒绝（429 语义，用 400 承载错误码）。"""
+def hit(key: str, limit: int, window_seconds: int) -> int | None:
+    """记一次；超限时返回建议重试秒数，未超限返回 None（不抛异常，调用方自己决定怎么拒绝）。
+    API-050（145 号 spec）开放 API 要回真正的 429 与 Retry-After，所以把判断从 `check` 里拆出来。"""
     global _fail_count
     remote = _get_remote() if time.time() >= _cooldown_until else None
     if remote is not None:
@@ -109,10 +110,13 @@ def check(key: str, limit: int, window_seconds: int) -> None:
             _note_failure(exc)
         else:
             _fail_count = 0
-            if retry is not None:
-                _reject(retry)
-            return
-    retry = _memory.hit(key, limit, window_seconds)
+            return retry
+    return _memory.hit(key, limit, window_seconds)
+
+
+def check(key: str, limit: int, window_seconds: int) -> None:
+    """在 window 内超过 limit 次则拒绝（429 语义，用 400 承载错误码）。"""
+    retry = hit(key, limit, window_seconds)
     if retry is not None:
         _reject(retry)
 

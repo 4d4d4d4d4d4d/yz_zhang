@@ -147,7 +147,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.159.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.160.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")
@@ -163,6 +163,8 @@ class Settings:
     # 公司出口、校园网、运营商 NAT 后面共享同一个公网 IP 的可能是成百上千人，
     # 定得太紧会把正常用户整片误杀。精细限流交给端点级的 guard()（账号+IP 双维度）。
     WRITE_RATE_PER_MINUTE = int(os.environ.get("PLATFORM_WRITE_RATE_PER_MINUTE", "600"))
+    # API-050（145 号 spec）每把 API Key 每分钟的请求上限（平台给的天花板；用户可以给自己的 Key 设得更低）
+    API_KEY_RATE_PER_MINUTE = int(os.environ.get("PLATFORM_API_KEY_RATE_PER_MINUTE", "120"))
     # SEC-020 认证失败自动封禁：窗口内失败达阈值即临时封禁该 IP
     AUTH_FAIL_WINDOW_SECONDS = int(os.environ.get("PLATFORM_AUTH_FAIL_WINDOW_SECONDS", "300"))
     AUTH_FAIL_BAN_THRESHOLD = int(os.environ.get("PLATFORM_AUTH_FAIL_BAN_THRESHOLD", "10"))

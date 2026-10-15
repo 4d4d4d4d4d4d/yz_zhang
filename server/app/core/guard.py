@@ -319,6 +319,9 @@ EXEMPT_PREFIXES = ("/healthz", "/readyz", "/version", "/metrics", "/jobz")
 BAN_EXEMPT_PREFIXES = ("/api/v1/admin/security",)
 
 
+OPEN_API_PREFIX = "/api/v1/open/"
+
+
 class WriteRateLimitMiddleware(BaseHTTPMiddleware):
     """所有写操作按 IP 限速，兜住「新端点忘了加限流」这类遗漏。"""
 
@@ -337,8 +340,11 @@ class WriteRateLimitMiddleware(BaseHTTPMiddleware):
                 content={"detail": {"code": "temporarily_banned",
                                     "message": f"操作异常频繁，请 {left} 秒后重试"}},
             )
+        # API-050（145 号 spec）开放 API 的写请求单独一个 IP 池：它们另有按 Key 的限额，
+        # 一个跑飞的集成不该把同一出口 IP 后面的真人用户一起限住
+        pool = "write-open" if path.startswith(OPEN_API_PREFIX) else "write"
         try:
-            rl_check(f"write:ip:{ip}", limit=settings.WRITE_RATE_PER_MINUTE,
+            rl_check(f"{pool}:ip:{ip}", limit=settings.WRITE_RATE_PER_MINUTE,
                      window_seconds=60)
         except Exception as exc:  # rl_check 抛的是 HTTPException
             detail = getattr(exc, "detail", {"code": "rate_limited", "message": "操作过于频繁"})

@@ -92,6 +92,7 @@ import type {
   AdminAuditRow,
   PlatformFinanceView,
   AdminList,
+  ApiKeyRate,
   PeriodQuery,
   PlatformFinanceExport,
   PlatformFinancePeriods,
@@ -1896,6 +1897,10 @@ export class PlatformClient {
     return this.request<{ id: number; active: boolean }>('DELETE', `/developer/api-keys/${keyId}`);
   }
   /** 明文找不回来，所以轮换是「丢了怎么办」的唯一出路。 */
+  /** API-050 给自己的 Key 设更低的每分钟上限；0 = 恢复平台默认（145 号 spec） */
+  setApiKeyRate(keyId: number, ratePerMinute: number) {
+    return this.request<ApiKeyRate>('PUT', `/developer/api-keys/${keyId}/rate-limit`, { rate_per_minute: ratePerMinute });
+  }
   rotateApiKey(keyId: number) {
     return this.request<{ id: number; key: string; revoked_id: number; warning: string }>(
       'POST', `/developer/api-keys/${keyId}/rotate`,

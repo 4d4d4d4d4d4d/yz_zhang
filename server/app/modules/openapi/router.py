@@ -1,12 +1,12 @@
 """开发者设置（会话鉴权）+ 开放 API（Key 鉴权）（54 号 spec）。"""
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import or_
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.deps import get_current_user, require_job_auth
-from app.core.errors import forbidden, not_found
+from app.core.errors import bad_request, forbidden, not_found
 from app.core.locks import job_slot
 from app.core.timefmt import iso
 from app.modules.account.models import User
@@ -70,9 +70,33 @@ def list_keys(user: User = Depends(get_current_user), db: Session = Depends(get_
         {"id": r.id, "name": r.name, "scopes": r.scopes, "key_prefix": r.key_prefix,
          "active": r.active,
          "last_used_at": iso(r.last_used_at),
-         "created_at": iso(r.created_at)}
+         "created_at": iso(r.created_at),
+         # API-050（145 号 spec）：自己设的上限（0 = 用平台默认）与生效的上限
+         "rate_per_minute": r.rate_per_minute, "effective_rate_per_minute": service.effective_rate(r)}
         for r in rows
     ]
+
+
+class RateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    rate_per_minute: int = Field(ge=0, le=100_000)
+
+
+@router.put("/developer/api-keys/{key_id}/rate-limit")
+def set_key_rate(key_id: int, body: RateIn, user: User = Depends(get_current_user),
+                 db: Session = Depends(get_db, scope="function")):
+    """API-050 给自己的 Key 设一个更低的每分钟上限（例如只给测试环境用的 Key）；0 = 恢复平台默认。
+    不能设得比平台默认高：需要更高额度要找平台。"""
+    from app.core.config import settings
+
+    row = db.get(ApiKey, key_id)
+    if not row or row.user_id != user.id:
+        raise not_found("密钥不存在")
+    cap = settings.API_KEY_RATE_PER_MINUTE
+    if body.rate_per_minute > cap:
+        raise bad_request(f"每分钟上限不能超过平台默认的 {cap} 次；需要更高额度请联系平台", "api_key_rate_above_cap")
+    row.rate_per_minute = body.rate_per_minute
+    return {"id": row.id, "rate_per_minute": row.rate_per_minute, "effective_rate_per_minute": service.effective_rate(row)}
 
 
 @router.delete("/developer/api-keys/{key_id}")
@@ -97,6 +121,7 @@ def rotate_key(key_id: int, user: User = Depends(get_current_user),
         raise not_found("密钥不存在")
     service.revoke(db, old)
     row, raw = service.issue_key(db, user, old.name, list(old.scopes or []))
+    row.rate_per_minute = old.rate_per_minute   # API-050 轮换不改额度
     return {"id": row.id, "key": raw, "revoked_id": old.id,
             "warning": "旧密钥已立即失效；新密钥同样只显示这一次。"}
 

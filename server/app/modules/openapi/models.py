@@ -67,6 +67,8 @@ class ApiKey(Base):
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # API-050 这把 Key 自己的每分钟上限（145 号 spec）：0 = 用平台默认；只能设得比平台默认低
+    rate_per_minute: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class Webhook(Base):
