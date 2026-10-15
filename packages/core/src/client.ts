@@ -104,7 +104,9 @@ import type {
   TeamInviteCreated,
   TeamInviteLink,
   TeamInvitePreview,
+  ApiKeyQuota,
   ApiKeyRate,
+  ApiKeyUsageView,
   PeriodQuery,
   PlatformFinanceExport,
   PlatformFinancePeriods,
@@ -1976,6 +1978,14 @@ export class PlatformClient {
   /** API-050 给自己的 Key 设更低的每分钟上限；0 = 恢复平台默认（145 号 spec） */
   setApiKeyRate(keyId: number, ratePerMinute: number) {
     return this.request<ApiKeyRate>('PUT', `/developer/api-keys/${keyId}/rate-limit`, { rate_per_minute: ratePerMinute });
+  }
+  /** API-052 给自己的 Key 设更低的每日配额（北京时间按天）；0 = 平台默认（152 号 spec） */
+  setApiKeyQuota(keyId: number, dailyQuota: number) {
+    return this.request<ApiKeyQuota>('PUT', `/developer/api-keys/${keyId}/quota`, { daily_quota: dailyQuota });
+  }
+  /** API-052 这把 Key 每天用了多少、被挡回去多少、今天还剩多少、几点恢复 */
+  apiKeyUsage(keyId: number, days = 14) {
+    return this.request<ApiKeyUsageView>('GET', `/developer/api-keys/${keyId}/usage?days=${days}`);
   }
   rotateApiKey(keyId: number) {
     return this.request<{ id: number; key: string; revoked_id: number; warning: string }>(

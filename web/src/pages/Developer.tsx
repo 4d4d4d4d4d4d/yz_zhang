@@ -1,6 +1,6 @@
 import {
   apiErrorText, formatDateTime,
-  type ApiKeyView, type WebhookDeliveryView, type WebhookView,
+  type ApiKeyUsageView, type ApiKeyView, type WebhookDeliveryView, type WebhookView,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
@@ -96,6 +96,8 @@ export default function Developer() {
                   <KeyRate keyId={k.id} own={k.rate_per_minute} effective={k.effective_rate_per_minute}
                            onSave={(n) => act(() => client.setApiKeyRate(k.id, n))} />
                 )}
+                {/* API-052 用量与每日配额（152 号 spec） */}
+                {k.active && <KeyUsage keyId={k.id} />}
               </div>
               {k.active && (
                 <span className="row">
@@ -178,6 +180,47 @@ export default function Developer() {
 }
 
 /** API-050 每把 Key 的每分钟上限（145 号 spec）：超了回 429 并带 Retry-After；只能设得比平台默认低，0 = 恢复默认。 */
+/** API-052 今天用了多少、还剩多少、几点恢复；最近 14 天每天进来多少、挡回去多少；可设更低的每日配额 */
+function KeyUsage({ keyId }: { keyId: number }) {
+  const { client } = useApp();
+  const [u, setU] = useState<ApiKeyUsageView | null>(null);
+  const [v, setV] = useState('');
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    try { setU(await client.apiKeyUsage(keyId)); } catch (e) { setError(apiErrorText(e)); }
+  }, [client, keyId]);
+  useEffect(() => { void load(); }, [load]);
+  // 载荷不对就不显示这一块，别把整个开发者页拖白
+  if (!u || !Array.isArray(u.days)) return error ? <p className="error">{error}</p> : null;
+  const peak = Math.max(1, ...u.days.map((d) => d.count + d.rejected));
+  return (
+    <div data-testid={`key-usage-${keyId}`}>
+      <p className="muted row">
+        今天（{u.time_zone}）已用 {u.today_used} / {u.effective_daily_quota} 次{u.daily_quota ? '（你设的配额）' : '（平台默认配额）'}，
+        还剩 {u.today_remaining} 次，{formatDateTime(u.resets_at)} 恢复 ·
+        <input style={{ width: 110 }} aria-label={`Key ${keyId} 每日配额`} type="number" min={0} placeholder="设更低的配额" value={v}
+               onChange={(e) => setV(e.target.value)} />
+        <button className="ghost" disabled={v === ''} onClick={async () => {
+          setError('');
+          try { await client.setApiKeyQuota(keyId, Number(v)); setV(''); await load(); } catch (e) { setError(apiErrorText(e)); }
+        }}>保存配额</button>
+      </p>
+      <table aria-label={`Key ${keyId} 最近用量`}>
+        <thead><tr><th>日期</th><th>进来</th><th>挡回</th><th></th></tr></thead>
+        <tbody>
+          {u.days.map((d) => (
+            <tr key={d.day}>
+              <td>{d.day}</td><td>{d.count}</td><td>{d.rejected || ''}</td>
+              <td><div style={{ height: 6, width: `${Math.round(((d.count + d.rejected) / peak) * 120)}px`, background: d.rejected ? '#f59e0b' : '#3b82f6' }} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 function KeyRate({ keyId, own, effective, onSave }: { keyId: number; own: number; effective: number; onSave: (n: number) => void }) {
   const [v, setV] = useState('');
   return (

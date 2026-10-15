@@ -93,6 +93,7 @@ api GET /api/v1/coupons
 api GET /api/v1/developer/api-keys
 api GET /api/v1/developer/api-keys/{key_id}/actions
 api GET /api/v1/developer/api-keys/{key_id}/mandate
+api GET /api/v1/developer/api-keys/{key_id}/usage
 api GET /api/v1/developer/scopes
 api GET /api/v1/developer/webhooks
 api GET /api/v1/developer/webhooks/{webhook_id}/deliveries
@@ -494,6 +495,7 @@ api POST /api/v1/workbench/routines/{routine_id}/run
 api PUT /api/v1/admin/admins/{user_id}/roles
 api PUT /api/v1/admin/matching-config
 api PUT /api/v1/admin/packs/{pack_id}
+api PUT /api/v1/developer/api-keys/{key_id}/quota
 api PUT /api/v1/developer/api-keys/{key_id}/rate-limit
 api PUT /api/v1/gig/available
 api PUT /api/v1/missions/{mission_id}/tools
@@ -514,6 +516,7 @@ app OrganizationRecords
 app PayoutGovernance
 app TeamCoopDev
 app VideoFeed
+app apiKeyUsage
 app appGaps
 app ask
 app availability
@@ -586,6 +589,7 @@ sdk amlActivities
 sdk amlStats
 sdk anchorCoverage
 sdk announcements
+sdk apiKeyUsage
 sdk apiKeys
 sdk apiScopes
 sdk appealDispute
@@ -884,6 +888,7 @@ sdk sendMessage
 sdk sendQuoteCard
 sdk sendSmsCode
 sdk setAdminRoles
+sdk setApiKeyQuota
 sdk setApiKeyRate
 sdk setFriendRemark
 sdk setGigAvailable

@@ -12,7 +12,7 @@
 """
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -69,6 +69,23 @@ class ApiKey(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # API-050 这把 Key 自己的每分钟上限（145 号 spec）：0 = 用平台默认；只能设得比平台默认低
     rate_per_minute: Mapped[int] = mapped_column(Integer, default=0)
+    # API-052 这把 Key 自己的每日配额（152 号 spec）：0 = 用平台默认；只能设得比平台默认低
+    daily_quota: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class ApiKeyUsage(Base):
+    """API-052 每把 Key 每天（北京时间）的用量（152 号 spec）。
+
+    `count` 是通过了限流与配额、真正进到接口的请求；`rejected` 是被每分钟限流或每日配额挡回去的。
+    集成方要看到这两个数：一个告诉他用了多少，一个告诉他有多少请求根本没进来。"""
+    __tablename__ = "api_key_usage"
+    __table_args__ = (UniqueConstraint("key_id", "day"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key_id: Mapped[int] = mapped_column(Integer, index=True)
+    day: Mapped[str] = mapped_column(String(10))   # 北京时间的日期 YYYY-MM-DD
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    rejected: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class Webhook(Base):

@@ -12,9 +12,9 @@ from sqlalchemy.orm import Session
 from app.core import ratelimit
 from app.core.db import get_db
 from app.core.errors import forbidden, too_many_requests
-from app.modules.account.models import User
+from app.modules.account.models import User, utcnow
 
-from . import service
+from . import service, usage
 from .models import ApiKey
 
 
@@ -31,8 +31,21 @@ def api_principal(
     response.headers["X-RateLimit-Limit"] = str(limit)
     retry = ratelimit.hit(f"apikey:{key.id}", limit, 60)
     if retry is not None:
+        # API-052：被挡回去的也记一笔，集成方要看得到「有多少请求根本没进来」
+        usage.record_rejected(db, key.id)
         raise too_many_requests(f"这把 API Key 每分钟最多 {limit} 次请求，请 {retry} 秒后重试；需要更高额度请联系平台",
                                 "api_key_rate_limited", retry, {"X-RateLimit-Limit": str(limit)})
+    # API-052 每日配额（152 号 spec）：按北京时间的天算，超了回 429 并说清几点恢复
+    now = utcnow()
+    used, quota = usage.consume(db, key, now)
+    response.headers["X-Quota-Limit"] = str(quota)
+    response.headers["X-Quota-Remaining"] = str(max(0, quota - used))
+    if used > quota:
+        reset = usage.next_reset(now)
+        wait = max(1, int((reset - now).total_seconds()))
+        raise too_many_requests(
+            f"这把 API Key 今天（北京时间）的 {quota} 次已经用完，北京时间明天 0 点恢复；需要更高配额请联系平台",
+            "api_key_quota_exceeded", wait, {"X-Quota-Limit": str(quota), "X-Quota-Remaining": "0"})
     return key, user
 
 

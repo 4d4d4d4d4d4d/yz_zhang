@@ -1417,6 +1417,38 @@ export interface ApiKeyView {
   rate_per_minute: number;
   /** 生效的每分钟上限 */
   effective_rate_per_minute: number;
+  /** API-052 自己设的每日配额（152 号 spec）；0 = 用平台默认 */
+  daily_quota: number;
+  /** 生效的每日配额 */
+  effective_daily_quota: number;
+}
+/** API-052 设每日配额的结果 */
+export interface ApiKeyQuota {
+  id: number;
+  daily_quota: number;
+  effective_daily_quota: number;
+}
+/** API-052 某一天（北京时间）的用量 */
+export interface ApiKeyUsageDay {
+  /** YYYY-MM-DD，北京时间 */
+  day: string;
+  /** 进到接口的请求 */
+  count: number;
+  /** 被每分钟限流或每日配额挡回去的请求 */
+  rejected: number;
+}
+/** API-052 一把 Key 的用量（最近的一天在前） */
+export interface ApiKeyUsageView {
+  key_id: number;
+  daily_quota: number;
+  effective_daily_quota: number;
+  today: string;
+  today_used: number;
+  today_remaining: number;
+  /** 下一次恢复配额的时间（北京时间零点，ISO） */
+  resets_at: string;
+  time_zone: string;
+  days: ApiKeyUsageDay[];
 }
 export interface ApiKeyRate {
   id: number;

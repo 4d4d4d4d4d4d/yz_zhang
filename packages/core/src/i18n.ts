@@ -75,6 +75,8 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   batch_total_mismatch: '合计金额对不上：有一期的状态刚变过，刷新一下再确认',
   api_key_rate_limited: '这把 API Key 本分钟的请求次数用完了：稍等再试，或联系平台提高额度',
   api_key_rate_above_cap: '每分钟上限不能超过平台默认值；需要更高额度请联系平台',
+  api_key_quota_exceeded: '这把 API Key 今天（北京时间）的配额用完了，明天 0 点恢复；需要更高配额请联系平台',
+  api_key_quota_above_cap: '每日配额不能超过平台默认值；需要更高配额请联系平台',
   period_range_too_long: '一次最多看 24 个期间：请缩短起止范围',
   period_range_invalid: '结束期间不能早于开始期间',
   invitation_not_found: '没有发给你的待处理邀请：可能已经接受、拒绝或过期了',

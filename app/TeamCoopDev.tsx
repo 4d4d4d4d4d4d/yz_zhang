@@ -4,6 +4,7 @@ import MachineMandate from './MachineMandate';
 import { DistributionHistoryBlock, InviteMemberBlock, VentureInvitesBlock } from './ventureInvites';
 import { JoinTeamByCode } from './teamInvites';
 import { SupportTicketsScreen } from './supportTickets';
+import { KeyUsageBlock } from './apiKeyUsage';
 // APP-069 三条线的 App 界面：团队 / 合作体 / 开发者（67 号 spec）。
 //
 // V84 把这三页做在了网页上，App 至今一个都没有。V92 给团队审批补了通知，
@@ -418,6 +419,8 @@ function DeveloperScreen({ client }: { client: PlatformClient }) {
               })} />
             </>
           )}
+          {/* API-052 用量与每日配额（152 号 spec） */}
+          {k.active && <KeyUsageBlock client={client} keyId={k.id} />}
           {/* API-001 轮换：明文找不回来，丢了只能轮换；旧 Key 立刻失效，新 Key 同样只显示这一次 */}
           {k.active && (
             <Button title="轮换（旧 Key 立刻失效）" onPress={() => act(async () => {

@@ -11,7 +11,7 @@ from app.core.locks import job_slot
 from app.core.timefmt import iso
 from app.modules.account.models import User
 
-from . import service
+from . import service, usage
 from .deps import require_scope
 from .models import (
     SCOPE_LABELS,
@@ -72,7 +72,9 @@ def list_keys(user: User = Depends(get_current_user), db: Session = Depends(get_
          "last_used_at": iso(r.last_used_at),
          "created_at": iso(r.created_at),
          # API-050（145 号 spec）：自己设的上限（0 = 用平台默认）与生效的上限
-         "rate_per_minute": r.rate_per_minute, "effective_rate_per_minute": service.effective_rate(r)}
+         "rate_per_minute": r.rate_per_minute, "effective_rate_per_minute": service.effective_rate(r),
+         # API-052（152 号 spec）：自己设的每日配额（0 = 用平台默认）与生效的配额
+         "daily_quota": r.daily_quota, "effective_daily_quota": usage.effective_quota(r)}
         for r in rows
     ]
 
@@ -99,6 +101,38 @@ def set_key_rate(key_id: int, body: RateIn, user: User = Depends(get_current_use
     return {"id": row.id, "rate_per_minute": row.rate_per_minute, "effective_rate_per_minute": service.effective_rate(row)}
 
 
+class QuotaIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    daily_quota: int = Field(ge=0, le=10_000_000)
+
+
+@router.put("/developer/api-keys/{key_id}/quota")
+def set_key_quota(key_id: int, body: QuotaIn, user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db, scope="function")):
+    """API-052 给自己的 Key 设一个更低的每日配额（例如测试环境的 Key 一天 500 次就够）；0 = 恢复平台默认。
+    不能设得比平台默认高：需要更高配额要找平台。"""
+    from app.core.config import settings
+
+    row = db.get(ApiKey, key_id)
+    if not row or row.user_id != user.id:
+        raise not_found("密钥不存在")
+    cap = settings.API_KEY_DAILY_QUOTA
+    if body.daily_quota > cap:
+        raise bad_request(f"每日配额不能超过平台默认的 {cap} 次；需要更高配额请联系平台", "api_key_quota_above_cap")
+    row.daily_quota = body.daily_quota
+    return {"id": row.id, "daily_quota": row.daily_quota, "effective_daily_quota": usage.effective_quota(row)}
+
+
+@router.get("/developer/api-keys/{key_id}/usage")
+def key_usage(key_id: int, days: int = Query(14, ge=1, le=90), user: User = Depends(get_current_user),
+              db: Session = Depends(get_db, scope="function")):
+    """API-052 这把 Key 每天（北京时间）用了多少、被挡回去多少，今天还剩多少、几点恢复。最近的一天在前。"""
+    row = db.get(ApiKey, key_id)
+    if not row or row.user_id != user.id:
+        raise not_found("密钥不存在")
+    return usage.view(db, row, days)
+
+
 @router.delete("/developer/api-keys/{key_id}")
 def revoke_key(key_id: int, user: User = Depends(get_current_user),
                db: Session = Depends(get_db, scope="function")):
@@ -122,6 +156,9 @@ def rotate_key(key_id: int, user: User = Depends(get_current_user),
     service.revoke(db, old)
     row, raw = service.issue_key(db, user, old.name, list(old.scopes or []))
     row.rate_per_minute = old.rate_per_minute   # API-050 轮换不改额度
+    row.daily_quota = old.daily_quota           # API-052 轮换不改配额，也不清零当天用量
+    db.flush()
+    usage.carry_today(db, old.id, row.id)
     return {"id": row.id, "key": raw, "revoked_id": old.id,
             "warning": "旧密钥已立即失效；新密钥同样只显示这一次。"}
 
