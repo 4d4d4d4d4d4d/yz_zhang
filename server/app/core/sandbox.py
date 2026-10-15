@@ -24,6 +24,8 @@ CLOUD_AI_ROUTES: frozenset[tuple[str, str]] = frozenset({
     ("POST", "/legal/ask"),
     ("POST", "/legal/documents"),
     ("POST", "/missions"),
+    # AGT-093（154 号 spec）：蒸馏本身不调模型，但编排在沙箱里本来就建不了，同一类一起拦
+    ("POST", "/missions/{mission_id}/summary/distill"),
 })
 
 
