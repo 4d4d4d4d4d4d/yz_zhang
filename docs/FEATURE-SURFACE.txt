@@ -25,6 +25,7 @@ api GET /api/v1/admin/agents
 api GET /api/v1/admin/aml/activities
 api GET /api/v1/admin/aml/stats
 api GET /api/v1/admin/audit-log
+api GET /api/v1/admin/audit-log/export
 api GET /api/v1/admin/campaigns
 api GET /api/v1/admin/certifications
 api GET /api/v1/admin/certifications/pending
@@ -533,6 +534,7 @@ sdk addWorkbenchLog
 sdk addWorkbenchMemory
 sdk adminApprovePack
 sdk adminAuditLog
+sdk adminAuditLogPage
 sdk adminCertifications
 sdk adminCreatePack
 sdk adminImportPackSeeds
@@ -670,6 +672,7 @@ sdk escalateTicket
 sdk executeTeamSpend
 sdk expandDecomposition
 sdk expireTasks
+sdk exportAuditLog
 sdk exportContract
 sdk exportEvidence
 sdk exportMyData
@@ -921,6 +924,7 @@ sdk webhooks
 sdk withdraw
 sdk withdrawApplication
 sdk withdrawRequests
+sdk withdrawRequestsPage
 sdk withdrawVouch
 sdk workbenchBreakdown
 sdk workbenchItem

@@ -57,6 +57,8 @@ REACHED_BY: dict[str, str] = {
     "/admin/sandbox/models": "adminSandboxModels",
     # SKL-101 技能概念表（135 号 spec）：后台「技能概念表」一块
     "/admin/skill-concepts": "adminSkillConcepts",
+    # ADMIN-061 审计日志导出（143 号 spec）
+    "/admin/audit-log/export": "exportAuditLog",
     # SEC-061b 管理员与角色（141 号 spec）
     "/admin/roles": "adminRoleCatalog",
     "/admin/admins": "listAdmins",
@@ -107,7 +109,7 @@ REACHED_BY: dict[str, str] = {
     "/admin/reports": "adminReports",
     "/admin/reports/{x}/resolve": "resolveReport",
     "/admin/metrics": "adminMetrics",
-    "/admin/audit-log": "adminAuditLog",
+    "/admin/audit-log": "adminAuditLogPage",   # V171 起后台用带总条数的分页版本（143 号）
     "/admin/platform-finance": "platformFinance",
     "/admin/platform-finance/settle": "settlePlatform",
     "/admin/announcements": "broadcastAnnouncement",

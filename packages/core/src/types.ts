@@ -40,6 +40,37 @@ export interface VentureInvitationView {
   risk_disclosure_version: string;
 }
 
+/** ADMIN-061 审计日志筛选（143 号 spec）。since / until 是 ISO 时间 */
+export interface AuditLogFilter {
+  action?: string;
+  admin_id?: number;
+  target_type?: string;
+  target_id?: number;
+  since?: string;
+  until?: string;
+  q?: string;
+}
+export interface AuditLogExport {
+  filename: string;
+  rows: number;
+  total: number;
+  /** 超过 1 万行时只导出最新的 1 万行 */
+  truncated: boolean;
+  /** 表头里写明的时区，例如「北京时间 UTC+8」 */
+  timezone: string;
+  csv: string;
+}
+/** PAY-043 提现复核台筛选（143 号 spec） */
+export interface WithdrawQueueFilter {
+  status?: 'pending' | 'awaiting_second' | 'approved' | 'rejected';
+  user_id?: number;
+  min_amount_cents?: number;
+  flagged_only?: boolean;
+  sort?: 'oldest' | 'largest';
+  limit?: number;
+  offset?: number;
+}
+
 /** SEC-061b 管理员角色（141 号 spec）。拦在服务端；界面只按它决定显示哪些板块 */
 export type AdminRoleKey = 'super' | 'support' | 'arbiter' | 'compliance' | 'finance' | 'ops';
 export interface AdminRoleDef {

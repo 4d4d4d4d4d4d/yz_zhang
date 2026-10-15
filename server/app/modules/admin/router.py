@@ -1,5 +1,5 @@
 """管理后台 API（12.E）：用户管理、举报处置队列、平台指标看板。"""
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -16,7 +16,7 @@ from app.modules.dispute.models import Dispute
 from app.modules.task.models import Task
 
 from .models import AdminAudit, Report
-from app.core.timefmt import iso
+from app.core.timefmt import UtcDatetime, iso
 from app.core.admin_roles import ANY, require_role
 
 router = APIRouter(tags=["admin"])
@@ -93,17 +93,48 @@ def vendor_status(db: Session = Depends(get_db, scope="function"), _: User = Dep
             "commercial_readiness": report()}
 
 
-@router.get("/admin/audit-log")
-def audit_log(
-    action: str | None = None,
-    limit: int = Query(default=50, le=200),
-    offset: int = Query(default=0, ge=0),
-    admin: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function"),
-):
-    """OPS-012 审计日志查询（管理员）。"""
+def _audit_query(db: Session, action: str | None, admin_id: int | None, target_type: str | None,
+                 target_id: int | None, since, until, q: str | None):
+    """ADMIN-061 审计日志的筛选（143 号 spec）：查询与导出共用同一套条件，导出的就是界面上筛出来的。"""
     query = db.query(AdminAudit)
     if action:
         query = query.filter(AdminAudit.action == action)
+    if admin_id is not None:
+        query = query.filter(AdminAudit.admin_id == admin_id)
+    if target_type:
+        query = query.filter(AdminAudit.target_type == target_type)
+    if target_id is not None:
+        query = query.filter(AdminAudit.target_id == target_id)
+    if since is not None:
+        query = query.filter(AdminAudit.created_at >= since)
+    if until is not None:
+        query = query.filter(AdminAudit.created_at < until)
+    if q:
+        query = query.filter(AdminAudit.detail.contains(q))
+    return query
+
+
+AUDIT_EXPORT_MAX = 10_000
+
+
+@router.get("/admin/audit-log")
+def audit_log(
+    response: Response,
+    action: str | None = None,
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    admin_id: int | None = None,
+    target_type: str | None = Query(default=None, max_length=40),
+    target_id: int | None = None,
+    since: UtcDatetime | None = None,
+    until: UtcDatetime | None = None,
+    q: str | None = Query(default=None, max_length=100),
+    admin: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function"),
+):
+    """OPS-012 审计日志查询（管理员）。ADMIN-061 起可按管理员、对象、时间段、说明里的字筛选；
+    总条数在响应头 `X-Total-Count`（响应体仍是数组，原有调用方不受影响）。"""
+    query = _audit_query(db, action, admin_id, target_type, target_id, since, until, q)
+    response.headers["X-Total-Count"] = str(query.count())
     rows = query.order_by(AdminAudit.id.desc()).offset(offset).limit(limit).all()
     return [
         {"id": r.id, "admin_id": r.admin_id, "action": r.action,
@@ -111,6 +142,42 @@ def audit_log(
          "detail": r.detail, "created_at": iso(r.created_at)}
         for r in rows
     ]
+
+
+@router.get("/admin/audit-log/export")
+def export_audit_log(
+    action: str | None = None,
+    admin_id: int | None = None,
+    target_type: str | None = Query(default=None, max_length=40),
+    target_id: int | None = None,
+    since: UtcDatetime | None = None,
+    until: UtcDatetime | None = None,
+    q: str | None = Query(default=None, max_length=100),
+    admin: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function"),
+):
+    """ADMIN-061 导出 CSV（监管调取、内审）。时间是北京时间并在表头写明（TZ-068）；
+    最多 1 万行，超出写明「已截断」；**导出本身也进审计**——谁在什么时候拿走了哪一段。"""
+    import csv
+    import io
+
+    from app.core.timefmt import EXPORT_TZ_LABEL, export_time
+
+    query = _audit_query(db, action, admin_id, target_type, target_id, since, until, q)
+    total = query.count()
+    rows = query.order_by(AdminAudit.id.desc()).limit(AUDIT_EXPORT_MAX).all()
+    names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_({r.admin_id for r in rows} or {-1}))}
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([f"时间（{EXPORT_TZ_LABEL}）", "管理员编号", "管理员昵称", "动作", "对象类型", "对象编号", "说明"])
+    for r in rows:
+        w.writerow([export_time(r.created_at), r.admin_id, names.get(r.admin_id, ""), r.action,
+                    r.target_type, "" if r.target_id is None else r.target_id, r.detail])
+    cond = {k: v for k, v in {"action": action, "admin_id": admin_id, "target_type": target_type,
+                              "target_id": target_id, "since": iso(since), "until": iso(until), "q": q}.items() if v}
+    record_audit(db, admin.id, "export_audit_log", "audit_log", None, f"{len(rows)} 行；条件 {cond}")
+    db.commit()
+    return {"filename": "audit-log.csv", "rows": len(rows), "total": total,
+            "truncated": total > len(rows), "timezone": EXPORT_TZ_LABEL, "csv": buf.getvalue()}
 
 
 class ReportIn(BaseModel):

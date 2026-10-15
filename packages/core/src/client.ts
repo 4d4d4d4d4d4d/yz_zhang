@@ -92,6 +92,9 @@ import type {
   AdminAuditRow,
   PlatformFinanceView,
   AdminList,
+  AuditLogExport,
+  AuditLogFilter,
+  WithdrawQueueFilter,
   VentureInvitationView,
   AdminRoleCatalog,
   AdminRoleKey,
@@ -117,11 +120,32 @@ export interface ClientOptions {
   sandbox?: () => boolean;
 }
 
+/** 查询串：跳过 undefined / 空串 / false */
+function qs(params: object): string {
+  const pairs = Object.entries(params as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined && v !== null && v !== '' && v !== false)
+    .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`);
+  return pairs.length ? `?${pairs.join('&')}` : '';
+}
+
 export class PlatformClient {
   constructor(private opts: ClientOptions) {}
 
   private async request<T>(method: string, path: string, body?: unknown,
                            extraHeaders?: Record<string, string>): Promise<T> {
+    return (await this.send<T>(method, path, body, extraHeaders)).data;
+  }
+
+  /** ADMIN-061 / PAY-043 分页列表（143 号 spec）：响应体照旧是数组，总条数在响应头 `X-Total-Count`。
+   *  老服务端没有这个头时 `total` 是 null，界面按「不知道总数」显示。 */
+  private async requestPage<T>(path: string): Promise<{ items: T[]; total: number | null }> {
+    const { data, res } = await this.send<T[]>('GET', path);
+    const raw = (res as { headers?: { get?: (k: string) => string | null } }).headers?.get?.('X-Total-Count');
+    return { items: Array.isArray(data) ? data : [], total: raw == null || raw === '' ? null : Number(raw) };
+  }
+
+  private async send<T>(method: string, path: string, body?: unknown,
+                        extraHeaders?: Record<string, string>): Promise<{ data: T; res: Response }> {
     if (this.opts.sandbox?.() && isCloudAiRequest(method, path)) {
       // 不发请求：原文一个字也不出设备
       throw new ApiError(409, 'sandbox_cloud_ai_blocked', '隐私沙箱开着：这类助手的活在本机做');
@@ -145,7 +169,7 @@ export class PlatformClient {
         detail?.message ?? (typeof detail === 'string' ? detail : '请求失败'),
       );
     }
-    return data as T;
+    return { data: data as T, res };
   }
 
   // ---- auth / account ----
@@ -1350,6 +1374,18 @@ export class PlatformClient {
   }
   setAdminRoles(userId: number, roles: AdminRoleKey[]) {
     return this.request<AdminRow>('PUT', `/admin/admins/${userId}/roles`, { roles });
+  }
+  /** ADMIN-061 审计日志分页与筛选（143 号 spec）：带总条数 */
+  adminAuditLogPage(params: AuditLogFilter & { limit?: number; offset?: number } = {}) {
+    return this.requestPage<AdminAuditRow>(`/admin/audit-log${qs(params)}`);
+  }
+  /** ADMIN-061 导出 CSV：时间是北京时间并在表头写明；导出本身进审计 */
+  exportAuditLog(params: AuditLogFilter = {}) {
+    return this.request<AuditLogExport>('GET', `/admin/audit-log/export${qs(params)}`);
+  }
+  /** PAY-043 提现复核台筛选与分页（143 号 spec）：带总条数 */
+  withdrawRequestsPage(params: WithdrawQueueFilter = {}) {
+    return this.requestPage<WithdrawRequestRow>(`/wallet/withdraw-requests${qs(params)}`);
   }
   adminAuditLog(params: { action?: string; limit?: number; offset?: number } = {}) {
     const qs = Object.entries(params)

@@ -44,6 +44,9 @@ def _unused(method: str) -> bool:
 # 判定标准：**这个方法本来就不该由用户侧界面调用**，
 # 不是「还没做」。后者属于第 3 类。
 INTENTIONAL: dict[str, str] = {
+    # V171（143 号 spec）后台改用带总条数的分页版本；旧方法只返回数组，保留给旧客户端与脚本（只增不减，FEAT-001）
+    "adminAuditLog": "兼容保留：V171 起后台改用 adminAuditLogPage（带总条数与更多筛选）",
+    "withdrawRequests": "兼容保留：V171 起提现复核台改用 withdrawRequestsPage（带总条数与筛选）",
     "proposeChange": "兼容保留（只增不减，FEAT-001）：只改价的老调用方式；两端自 V144 起改用 proposeChangeOrder（可同时改期、改范围），第三方集成仍可用它",
     # V132 两端改用逐步编辑（editDecompositionNode）；一层整表替换的写法只在树还只有一层时
     # 有意义，保留给 V132 之前的客户端与直接调 API 的人（服务端对多层的树返回 409）

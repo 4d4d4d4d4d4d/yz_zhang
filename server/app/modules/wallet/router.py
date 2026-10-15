@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -152,18 +152,34 @@ def withdraw(
 # ---------- PAY-007 大额提现人审（管理端） ----------
 @router.get("/withdraw-requests")
 def list_withdraw_requests(
+    response: Response,
     status: str = "pending", limit: int = 50, offset: int = 0,
+    user_id: int | None = None,
+    min_amount_cents: int = Query(default=0, ge=0),
+    flagged_only: bool = False,
+    sort: str = Query(default="oldest", pattern="^(oldest|largest)$"),
     admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function"),
 ):
+    from app.modules.aml.models import SuspiciousActivity
+
     from .models import WithdrawRequest
 
     # PAY-045 带分页。此前上限写死 200 且忽略 offset：
     # 队列超过 200 之后，第 201 笔在界面上**不存在**——而那是一笔冻着的钱。
     limit = max(1, min(limit, 200))
-    rows = (
-        db.query(WithdrawRequest).filter(WithdrawRequest.status == status)
-        .order_by(WithdrawRequest.id).offset(max(0, offset)).limit(limit).all()
-    )
+    # PAY-043 复核台筛选（143 号 spec）：按用户、按金额下限、只看命中风控的、先看最大的。
+    # 总条数在响应头 `X-Total-Count`：队列有多长、冻着多少笔，翻页前就该知道
+    query = db.query(WithdrawRequest).filter(WithdrawRequest.status == status)
+    if user_id is not None:
+        query = query.filter(WithdrawRequest.user_id == user_id)
+    if min_amount_cents:
+        query = query.filter(WithdrawRequest.amount_cents >= min_amount_cents)
+    if flagged_only:
+        flagged = db.query(SuspiciousActivity.ref_id).filter(SuspiciousActivity.ref_type == "withdraw_request")
+        query = query.filter(WithdrawRequest.id.in_(flagged))
+    response.headers["X-Total-Count"] = str(query.count())
+    order = (WithdrawRequest.amount_cents.desc(), WithdrawRequest.id) if sort == "largest" else (WithdrawRequest.id,)
+    rows = query.order_by(*order).offset(max(0, offset)).limit(limit).all()
     # PAY-040 复核台要给够判断的依据。
     #
     # 改造前每行只有 id / user_id / amount_cents / status / created_at——
@@ -171,8 +187,6 @@ def list_withdraw_requests(
     #
     # 这里带出的**命中标记**只出现在 require_admin 的响应里：
     # AML-030/031 的分界是「合规官看得到为什么，用户只看到中性话术」。
-    from app.modules.aml.models import SuspiciousActivity
-
     from .models import LedgerEntry
 
     # PERF 一次把三类关联数据取齐，而不是每行三条查询。

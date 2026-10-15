@@ -197,21 +197,57 @@ function BanConfirm({ userId, onClose, onDone }: {
 function AuditLog() {
   const { client } = useApp();
   const [rows, setRows] = useState<AdminAuditRow[]>([]);
-  const [action, setAction] = useState('');
+  const [total, setTotal] = useState<number | null>(null);
+  const [page, setPage] = useState(0);
+  const [f, setF] = useState({ action: '', admin_id: '', target_type: '', target_id: '', since: '', until: '', q: '' });
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const PAGE = 50;
+  // ADMIN-061 筛选条件（143 号 spec）：日期按北京时间的整天算，换成 UTC 交给服务端
+  const filter = useCallback(() => ({
+    action: f.action || undefined, target_type: f.target_type || undefined, q: f.q || undefined,
+    admin_id: f.admin_id ? Number(f.admin_id) : undefined, target_id: f.target_id ? Number(f.target_id) : undefined,
+    since: f.since ? `${f.since}T00:00:00+08:00` : undefined,
+    until: f.until ? new Date(new Date(`${f.until}T00:00:00+08:00`).getTime() + 86400000).toISOString() : undefined,
+  }), [f]);
 
-  const load = useCallback(async () => {
-    setRows(await client.adminAuditLog({ action: action || undefined, limit: 50 }).catch(() => []));
-  }, [client, action]);
-  useEffect(() => { void load(); }, [load]);
+  const load = useCallback(async (p = 0) => {
+    setError('');
+    try {
+      const r = await client.adminAuditLogPage({ ...filter(), limit: PAGE, offset: p * PAGE });
+      setRows(r.items); setTotal(r.total); setPage(p);
+    } catch (e) { setRows([]); setError(apiErrorText(e)); }
+  }, [client, filter]);
+  useEffect(() => { void load(0); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function exportCsv() {
+    setError(''); setNotice('');
+    try {
+      const r = await client.exportAuditLog(filter());
+      const url = URL.createObjectURL(new Blob(['\ufeff' + r.csv], { type: 'text/csv;charset=utf-8' }));
+      const a = document.createElement('a'); a.href = url; a.download = r.filename; a.click(); URL.revokeObjectURL(url);
+      setNotice(`已导出 ${r.rows} 行（时间为${r.timezone}）${r.truncated ? `；共 ${r.total} 行，超过上限只导出了最新的 ${r.rows} 行，请缩小时间段` : ''}。导出已记入审计。`);
+    } catch (e) { setError(apiErrorText(e)); }
+  }
+  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  const pages = total === null ? null : Math.max(1, Math.ceil(total / PAGE));
 
   return (
-    <div className="card">
-      <div className="row">
-        <h3 className="grow">管理员审计日志</h3>
-        <input style={{ width: 180 }} placeholder="按动作过滤，如 withdraw_approve"
-               value={action} onChange={(e) => setAction(e.target.value)} />
-        <button className="ghost" onClick={() => void load()}>查询</button>
+    <div className="card" aria-label="管理员审计日志">
+      <h3>管理员审计日志</h3>
+      <div className="row" style={{ flexWrap: 'wrap' }}>
+        <input style={{ width: 170 }} aria-label="动作" placeholder="动作，如 withdraw_approve" value={f.action} onChange={set('action')} />
+        <input style={{ width: 100 }} aria-label="管理员编号" type="number" placeholder="管理员编号" value={f.admin_id} onChange={set('admin_id')} />
+        <input style={{ width: 110 }} aria-label="对象类型" placeholder="对象类型" value={f.target_type} onChange={set('target_type')} />
+        <input style={{ width: 90 }} aria-label="对象编号" type="number" placeholder="对象编号" value={f.target_id} onChange={set('target_id')} />
+        <input aria-label="开始日期" type="date" value={f.since} onChange={set('since')} />
+        <input aria-label="结束日期" type="date" value={f.until} onChange={set('until')} />
+        <input style={{ width: 140 }} aria-label="说明包含" placeholder="说明里包含" value={f.q} onChange={set('q')} />
+        <button className="ghost" onClick={() => void load(0)}>查询</button>
+        <button className="ghost" onClick={() => void exportCsv()}>导出 CSV</button>
       </div>
+      {notice && <p role="status">{notice}</p>}
+      {error && <p className="error">{error}</p>}
       {rows.length === 0 ? <p className="muted">没有匹配的记录。</p> : (
         <table style={{ marginTop: 8 }}>
           <thead><tr><th>时间</th><th>管理员</th><th>动作</th><th>对象</th><th>说明</th></tr></thead>
@@ -228,6 +264,11 @@ function AuditLog() {
           </tbody>
         </table>
       )}
+      <div className="row">
+        <button className="ghost" disabled={page === 0} onClick={() => void load(page - 1)}>上一页</button>
+        <span className="muted" data-testid="audit-pages">第 {page + 1}{pages !== null ? ` / ${pages}` : ''} 页{total !== null ? ` · 共 ${total} 条` : ''}</span>
+        <button className="ghost" disabled={pages !== null ? page + 1 >= pages : rows.length < PAGE} onClick={() => void load(page + 1)}>下一页</button>
+      </div>
     </div>
   );
 }
@@ -331,18 +372,28 @@ function Stat({ label, value }: { label: string; value: string }) {
 function WithdrawReview() {
   const { client } = useApp();
   const [rows, setRows] = useState<WithdrawRequestRow[]>([]);
+  const [totals, setTotals] = useState<{ pending: number | null; awaiting: number | null }>({ pending: null, awaiting: null });
+  const [minYuan, setMinYuan] = useState('');
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [largest, setLargest] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     // PAY-042 两个队列都要看得到：只看 pending 的话，**等二次确认的那些
     // 会从界面上消失**——而那正是钱冻着等人的状态。
+    // PAY-043 筛选（143 号 spec）：金额下限、只看命中风控的、先看最大的；队列总长在服务端算
+    // 没设筛选时发出去的请求与原来一字不差（只有 status）
+    const f = { min_amount_cents: minYuan ? Math.round(Number(minYuan) * 100) : undefined, flagged_only: flaggedOnly,
+      sort: largest ? 'largest' as const : undefined };
+    const empty = { items: [] as WithdrawRequestRow[], total: null };
     const [pending, awaiting] = await Promise.all([
-      client.withdrawRequests('pending').catch(() => []),
-      client.withdrawRequests('awaiting_second').catch(() => []),
+      client.withdrawRequestsPage({ status: 'pending', ...f }).catch(() => empty),
+      client.withdrawRequestsPage({ status: 'awaiting_second', ...f }).catch(() => empty),
     ]);
-    setRows([...awaiting, ...pending]);
-  }, [client]);
+    setRows([...awaiting.items, ...pending.items]);
+    setTotals({ pending: pending.total, awaiting: awaiting.total });
+  }, [client, minYuan, flaggedOnly, largest]);
   useEffect(() => { void load(); }, [load]);
 
   async function decide(id: number, approve: boolean) {
@@ -357,6 +408,15 @@ function WithdrawReview() {
   return (
     <div className="card">
       <h3>提现复核（{rows.length}）</h3>
+      <div className="row" aria-label="提现复核筛选">
+        <input style={{ width: 120 }} aria-label="金额下限" type="number" min={0} placeholder="金额下限（元）" value={minYuan} onChange={(e) => setMinYuan(e.target.value)} />
+        <label className="row"><input type="checkbox" style={{ width: 'auto' }} checked={flaggedOnly} onChange={(e) => setFlaggedOnly(e.target.checked)} />只看命中风控的</label>
+        <label className="row"><input type="checkbox" style={{ width: 'auto' }} checked={largest} onChange={(e) => setLargest(e.target.checked)} />先看金额大的</label>
+      </div>
+      {(totals.pending !== null || totals.awaiting !== null) && (
+        <p className="muted" data-testid="wd-totals">符合条件的：待初审 {totals.pending ?? '—'} 笔，待二次确认 {totals.awaiting ?? '—'} 笔
+          {(totals.pending ?? 0) + (totals.awaiting ?? 0) > rows.length ? `（这里先显示 ${rows.length} 笔，缩小条件看其余的）` : ''}</p>
+      )}
       {rows.length === 0
         ? <p className="muted">没有待复核的提现。</p>
         : <p className="muted">这些钱正冻在用户账上等人放行，合计 {fmtYuan(frozen)}。</p>}

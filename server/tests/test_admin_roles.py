@@ -27,6 +27,7 @@ ROUTE_ROLES = {
     "GET /admin/aml/activities": ('compliance',),
     "GET /admin/aml/stats": ('compliance',),
     "GET /admin/audit-log": ('compliance',),
+    "GET /admin/audit-log/export": ('compliance',),
     "GET /admin/campaigns": ('ops',),
     "GET /admin/certifications": ('compliance',),
     "GET /admin/certifications/pending": ('compliance',),

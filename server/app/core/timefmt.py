@@ -61,3 +61,20 @@ def day(d: date | None) -> str | None:
     if isinstance(d, datetime):
         raise TypeError("时间点请用 iso()，day() 只收日期")
     return d.isoformat()
+
+
+# TZ-068 导出文件里的时间（143 号 spec）：CSV / 表格没有「本地化显示」这一层，
+# 一列裸的 `2026-10-14T00:30:00Z` 被人在表格里一看就是「10 月 14 日零点半」，实际是北京时间早上八点半。
+# 所以导出一律换成北京时间，并且**在表头写明时区**——不写明的时间列等于没给时间。
+EXPORT_TZ_LABEL = "北京时间 UTC+8"
+
+
+def export_time(dt: datetime | None) -> str:
+    """导出用：北京时间 `YYYY-MM-DD HH:MM:SS`（朴素值视为 UTC）。表头用 `EXPORT_TZ_LABEL` 写明时区。"""
+    if dt is None:
+        return ""
+    from zoneinfo import ZoneInfo
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S")
