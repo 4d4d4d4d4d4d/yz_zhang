@@ -503,23 +503,82 @@ class AnnouncementIn(BaseModel):
     title: str = Field(min_length=2, max_length=120)
     body: str = Field(default="", max_length=2000)
     verified_only: bool = False  # 仅通知已实名用户（如资金/合规类公告）
+    # NTF-064 定时发送（151 号 spec）：不填就马上发（原有行为）
+    scheduled_at: UtcDatetime | None = None
+
+
+class AnnouncementPreviewIn(BaseModel):
+    title: str = Field(min_length=2, max_length=120)
+    body: str = Field(default="", max_length=2000)
+    verified_only: bool = False
+
+
+class AnnouncementCloseIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(default="", max_length=200)
 
 
 @router.post("/admin/announcements")
 def broadcast_announcement(
     body: AnnouncementIn, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")
 ):
-    """OPS-009 平台公告：向全体（或已实名）活跃用户广播站内通知。"""
-    from app.modules.notification.service import notify
+    """OPS-009 平台公告：向全体（或已实名）活跃用户广播站内通知。
 
-    q = db.query(User).filter(User.is_deleted.is_(False), User.is_banned.is_(False))
-    if body.verified_only:
-        q = q.filter(User.is_verified.is_(True))
-    count = 0
-    for u in q:
-        notify(db, u.id, "announcement", body.title, body.body)
-        count += 1
-    return {"delivered": count}
+    NTF-064（151 号 spec）：每条公告留记录（谁、何时、发给谁、送达多少人）并进审计；可以定时；
+    响应保留原有的 `delivered`，多了 `id`、`status`、`scheduled_at`。"""
+    from . import announcements as ann_svc
+
+    ann = ann_svc.create(db, admin.id, body.title, body.body, body.verified_only, body.scheduled_at)
+    record_audit(db, admin.id, "announcement_schedule" if ann.status == "scheduled" else "announcement_send",
+                 "announcement", ann.id,
+                 f"「{ann.title[:60]}」{'仅已实名' if ann.verified_only else '全体'}，"
+                 + (f"定时 {iso(ann.scheduled_at)}" if ann.status == "scheduled" else f"送达 {ann.delivered} 人"))
+    return {"delivered": ann.delivered, "id": ann.id, "status": ann.status, "scheduled_at": iso(ann.scheduled_at)}
+
+
+@router.post("/admin/announcements/preview")
+def preview_announcement(body: AnnouncementPreviewIn, admin: User = Depends(require_role("ops")),
+                         db: Session = Depends(get_db, scope="function")):
+    """NTF-064 发之前先看：会送给多少人、多少人关了公告通知、用户看到的样子、要留意的地方。不发、不落库。"""
+    from . import announcements as ann_svc
+
+    return ann_svc.preview(db, body.title, body.body, body.verified_only)
+
+
+@router.get("/admin/announcements")
+def list_announcements(status: str = "", limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
+                       admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
+    """NTF-064 公告记录：最新的在前；可按状态筛选（scheduled / sent / cancelled / revoked）。"""
+    from . import announcements as ann_svc
+    from .models import Announcement
+
+    q = db.query(Announcement)
+    if status:
+        q = q.filter(Announcement.status == status)
+    return [ann_svc.row(a) for a in q.order_by(Announcement.id.desc()).offset(offset).limit(limit).all()]
+
+
+@router.post("/admin/announcements/{announcement_id}/cancel")
+def cancel_announcement(announcement_id: int, body: AnnouncementCloseIn, admin: User = Depends(require_role("ops")),
+                        db: Session = Depends(get_db, scope="function")):
+    """NTF-064 取消还没发出的定时公告。"""
+    from . import announcements as ann_svc
+
+    ann = ann_svc.cancel(db, announcement_id, admin.id, body.reason.strip())
+    record_audit(db, admin.id, "announcement_cancel", "announcement", ann.id, f"「{ann.title[:60]}」：{ann.close_reason}")
+    return ann_svc.row(ann)
+
+
+@router.post("/admin/announcements/{announcement_id}/revoke")
+def revoke_announcement(announcement_id: int, body: AnnouncementCloseIn, admin: User = Depends(require_role("ops")),
+                        db: Session = Depends(get_db, scope="function")):
+    """NTF-064 撤回已发出的公告：已送达的通知改成「已撤回」并写明理由（理由必填）。推送收不回来。"""
+    from . import announcements as ann_svc
+
+    ann, n = ann_svc.revoke(db, announcement_id, admin.id, body.reason)
+    record_audit(db, admin.id, "announcement_revoke", "announcement", ann.id,
+                 f"「{ann.title[:60]}」改写 {n} 条通知：{ann.close_reason}")
+    return {**ann_svc.row(ann), "notifications_updated": n}
 
 
 # ---------- 平台收入结算（OPS-010） ----------
@@ -1099,6 +1158,17 @@ def run_remind_review_queues(_triggered_by: int = Depends(_job_or_admin),
             told += 1
     return {"breached": [r["key"] for r in breached], "admins_notified": digested,
             "submitters_told": told}
+
+
+@router.post("/admin/jobs/send-scheduled-announcements")
+def run_send_scheduled_announcements(_triggered_by: int = Depends(_job_or_admin),
+                                     db: Session = Depends(get_db, scope="function"),
+                                     __=Depends(job_slot("scheduled_announcements"), scope="function")):
+    """NTF-064 定时公告到点发出（151 号 spec）：调度器每 5 分钟一次。"""
+    from .announcements import send_due
+
+    sent = send_due(db)
+    return {"sent": sent}
 
 
 @router.post("/admin/jobs/escalate-tickets")

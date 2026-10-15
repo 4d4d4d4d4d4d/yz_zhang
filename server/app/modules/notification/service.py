@@ -34,7 +34,7 @@ MUST_REACH: dict[tuple[str, str], str] = {
 
 
 def notify(db: Session, user_id: int, category: str, title: str, body: str = "",
-           force: bool = False) -> None:
+           force: bool = False, announcement_id: int | None = None) -> None:
     """DSPC-013 `force=True` 表示这条通知**不可被偏好开关关掉**。
 
     此前只有 `funds` 类是必达的。但「有人对你发起纠纷，你有 48 小时答辩，
@@ -54,7 +54,8 @@ def notify(db: Session, user_id: int, category: str, title: str, body: str = "",
         )
         if pref and not pref.enabled:
             return
-    db.add(Notification(user_id=user_id, category=category, title=title, body=body))
+    db.add(Notification(user_id=user_id, category=category, title=title, body=body,
+                        announcement_id=announcement_id))
     # NTF-002 推送走**发件箱**，不在这里直接打供应商：
     # ① 通知常在业务事务里发出，同步打第三方会把一次网络抖动变成一笔交易失败；
     # ② 发件箱本来就有重试、死信与跨副本补做（EVT-021），推送白拿这些能力。

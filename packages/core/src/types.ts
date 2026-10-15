@@ -1310,6 +1310,48 @@ export interface PendingUploadRow {
 }
 
 /** CS-030 工单队列里的一条。 */
+/** NTF-064 公告发前预览（151 号 spec）：不发、不落库 */
+export interface AnnouncementPreview {
+  /** 会收到的人数（公告这一类用户关不掉） */
+  audience: number;
+  verified_only: boolean;
+  title: string;
+  body: string;
+  /** 要留意的地方，例如「标题太长锁屏会被截断」 */
+  warnings: string[];
+}
+
+/** NTF-064 一条公告的记录 */
+export interface AnnouncementRow {
+  id: number;
+  title: string;
+  body: string;
+  verified_only: boolean;
+  /** scheduled / sent / cancelled / revoked */
+  status: string;
+  scheduled_at: string | null;
+  created_by: number;
+  created_at: string;
+  sent_at: string | null;
+  delivered: number;
+  closed_by: number | null;
+  closed_at: string | null;
+  close_reason: string;
+}
+
+/** NTF-064 发布结果：保留原有的 delivered */
+export interface AnnouncementSent {
+  delivered: number;
+  id: number;
+  status: string;
+  scheduled_at: string | null;
+}
+
+/** NTF-064 撤回结果 */
+export interface AnnouncementRevoked extends AnnouncementRow {
+  notifications_updated: number;
+}
+
 export interface AdminTicketRow {
   id: number;
   user_id: number;

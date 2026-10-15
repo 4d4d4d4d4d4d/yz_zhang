@@ -88,6 +88,10 @@ import type {
   PendingCertificationRow,
   PendingUploadRow,
   AdminTicketRow,
+  AnnouncementPreview,
+  AnnouncementRevoked,
+  AnnouncementRow,
+  AnnouncementSent,
   MyTicket,
   TicketClaimed,
   SecurityBoardView,
@@ -730,10 +734,29 @@ export class PlatformClient {
       new_phone: newPhone, sms_code: smsCode, password,
     });
   }
-  broadcastAnnouncement(title: string, body = '', verifiedOnly = false) {
-    return this.request<{ delivered: number }>('POST', '/admin/announcements', {
+  /** NTF-064 起可以定时（scheduledAt 为带时区的 ISO 时间，不填就马上发），响应多了 id / status（151 号 spec） */
+  broadcastAnnouncement(title: string, body = '', verifiedOnly = false, scheduledAt?: string) {
+    return this.request<AnnouncementSent>('POST', '/admin/announcements', {
+      title, body, verified_only: verifiedOnly, scheduled_at: scheduledAt ?? null,
+    });
+  }
+  /** NTF-064 发之前先看：会送给多少人、要留意的地方。不发、不落库 */
+  previewAnnouncement(title: string, body = '', verifiedOnly = false) {
+    return this.request<AnnouncementPreview>('POST', '/admin/announcements/preview', {
       title, body, verified_only: verifiedOnly,
     });
+  }
+  /** NTF-064 公告记录（最新的在前） */
+  announcements(status = '') {
+    return this.request<AnnouncementRow[]>('GET', `/admin/announcements${qs({ status })}`);
+  }
+  /** NTF-064 取消还没发出的定时公告 */
+  cancelAnnouncement(id: number, reason = '') {
+    return this.request<AnnouncementRow>('POST', `/admin/announcements/${id}/cancel`, { reason });
+  }
+  /** NTF-064 撤回已发出的公告：用户通知中心里那条会改成「已撤回」并显示理由；推送收不回来 */
+  revokeAnnouncement(id: number, reason: string) {
+    return this.request<AnnouncementRevoked>('POST', `/admin/announcements/${id}/revoke`, { reason });
   }
   // ---- AML 合规官视图（全部 require_admin，AML-030 tipping-off）----
   /** AML-021 可疑活动清单。V55 就建好了这三个端点，**SDK 里一个都没有**

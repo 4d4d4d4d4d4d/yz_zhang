@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AuditChainReport, type AdminTicketRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AuditChainReport, type AdminTicketRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { PacksAdmin } from '../AdminPacks';
@@ -423,42 +423,105 @@ function FinancePeriods() {
   );
 }
 
-/** NTF-060b 全站公告。发出去就收不回来，所以按下之前先说清会送给多少人。 */
+/** NTF-060b 全站公告。发出去就收不回来，所以按下之前先说清会送给多少人。
+ *  NTF-064（151 号 spec）：先预览（受众人数、要留意的地方）再发；可以定时；发错了可以撤回（写明理由），
+ *  定时的还没发可以取消。下面列出发过的公告。 */
 function Announcement() {
   const { client } = useApp();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  // 北京时间的日期与时刻，交给服务端前带上 +08:00
+  const [when, setWhen] = useState('');
+  const [preview, setPreview] = useState<AnnouncementPreview | null>(null);
+  const [history, setHistory] = useState<AnnouncementRow[]>([]);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
+  const loadHistory = useCallback(async () => {
+    const r = await client.announcements().catch(() => []);
+    setHistory(Array.isArray(r) ? r : []);
+  }, [client]);
+  useEffect(() => { void loadHistory(); }, [loadHistory]);
+
+  async function run(fn: () => Promise<void>) {
+    setNotice(''); setError('');
+    try { await fn(); } catch (e) { setError(apiErrorText(e)); }
+  }
+  const draftChanged = () => setPreview(null);
+  // 「发布」保持一步可发（原有行为）；预览是建议的前一步，发布时一并清掉
+  const publish = () => run(async () => {
+    const r = await client.broadcastAnnouncement(title.trim(), body, verifiedOnly, when ? `${when}:00+08:00` : undefined);
+    setTitle(''); setBody(''); setWhen(''); setPreview(null);
+    // 送达人数原样回显：公告发出去收不回来，得让人看到自己刚影响了多少人
+    setNotice(r.status === 'scheduled' ? `已定时，到 ${formatDateTime(r.scheduled_at ?? '')} 发出；发出前可以取消` : `已送达 ${r.delivered} 人`);
+    await loadHistory();
+  });
+
   return (
-    <div className="card">
+    <div className="card" aria-label="全站公告">
       <h3>发布全站公告</h3>
-      <div className="row">
+      <div className="row" style={{ flexWrap: 'wrap' }}>
         <input style={{ width: 200 }} placeholder="标题" value={title}
-               onChange={(e) => setTitle(e.target.value)} />
+               onChange={(e) => { setTitle(e.target.value); draftChanged(); }} />
         <input className="grow" placeholder="正文" value={body}
-               onChange={(e) => setBody(e.target.value)} />
+               onChange={(e) => { setBody(e.target.value); draftChanged(); }} />
         <label className="muted">
           <input type="checkbox" checked={verifiedOnly}
-                 onChange={(e) => setVerifiedOnly(e.target.checked)} /> 仅已实名
+                 onChange={(e) => { setVerifiedOnly(e.target.checked); draftChanged(); }} /> 仅已实名
         </label>
-        <button disabled={title.trim().length < 2} onClick={async () => {
-          setNotice(''); setError('');
-          try {
-            const r = await client.broadcastAnnouncement(title.trim(), body, verifiedOnly);
-            setTitle(''); setBody('');
-            // 送达人数原样回显：公告发出去收不回来，得让人看到自己刚影响了多少人
-            setNotice(`已送达 ${r.delivered} 人`);
-          } catch (e) { setError(apiErrorText(e)); }
-        }}>发布</button>
+        <label className="muted">定时（北京时间，可不填）
+          <input aria-label="定时发送" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+        </label>
+        <button className="ghost" disabled={title.trim().length < 2} onClick={() => void run(async () => {
+          setPreview(await client.previewAnnouncement(title.trim(), body, verifiedOnly));
+        })}>预览</button>
+        <button disabled={title.trim().length < 2} onClick={() => void publish()}>发布</button>
       </div>
+      {when && <p className="muted">已填定时：按「发布」后先排队，到时间才发出，发出前可以取消。</p>}
+      {preview && (
+        <div data-testid="ann-preview" style={{ marginTop: 8 }}>
+          <p>将送给 <strong>{preview.audience}</strong> 人（{preview.verified_only ? '仅已实名用户' : '全体用户'}），用户会看到：</p>
+          <div className="task-item"><div><strong>{preview.title}</strong><p className="muted">{preview.body || '（没有正文）'}</p></div></div>
+          {preview.warnings.map((w) => <p key={w} className="error">留意：{w}</p>)}
+          <p className="muted">没问题就按上面的「发布」。</p>
+        </div>
+      )}
       {notice && <p className="muted" data-testid="ann-result">{notice}</p>}
       {error && <p className="error">{error}</p>}
+      {history.length > 0 && (
+        <table style={{ marginTop: 8 }} aria-label="发过的公告">
+          <thead><tr><th>标题</th><th>状态</th><th>时间</th><th>送达</th><th></th></tr></thead>
+          <tbody>
+            {history.map((a) => (
+              <tr key={a.id}>
+                <td>{a.title}{a.verified_only ? '（仅已实名）' : ''}</td>
+                <td>{ANN_STATUS[a.status] ?? a.status}{a.close_reason ? `：${a.close_reason}` : ''}</td>
+                <td>{formatDateTime(a.sent_at ?? a.scheduled_at ?? a.created_at)}</td>
+                <td>{a.status === 'scheduled' ? '—' : a.delivered}</td>
+                <td>
+                  {a.status === 'scheduled' && <button className="ghost" onClick={() => void run(async () => {
+                    await client.cancelAnnouncement(a.id, prompt('取消的原因（可不填）：') ?? '');
+                    setNotice('已取消，这条不会发出'); await loadHistory();
+                  })}>取消</button>}
+                  {a.status === 'sent' && <button className="ghost" onClick={() => void run(async () => {
+                    const reason = prompt('撤回的理由（用户会看到这句话）：') ?? '';
+                    if (!reason.trim()) return;
+                    const r = await client.revokeAnnouncement(a.id, reason);
+                    setNotice(`已撤回：${r.notifications_updated} 条通知改成「已撤回」并显示理由。已经推到手机上的推送收不回来，需要的话再发一条更正。`);
+                    await loadHistory();
+                  })}>撤回</button>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
+
+const ANN_STATUS: Record<string, string> = { scheduled: '等待定时发出', sent: '已发出', cancelled: '已取消', revoked: '已撤回' };
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (

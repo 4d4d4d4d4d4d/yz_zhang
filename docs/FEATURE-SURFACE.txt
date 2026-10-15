@@ -24,6 +24,7 @@ api GET /api/v1/admin/admins
 api GET /api/v1/admin/agents
 api GET /api/v1/admin/aml/activities
 api GET /api/v1/admin/aml/stats
+api GET /api/v1/admin/announcements
 api GET /api/v1/admin/audit-log
 api GET /api/v1/admin/audit-log/export
 api GET /api/v1/admin/audit-log/verify
@@ -264,6 +265,9 @@ api PATCH /api/v1/workbench/routines/{routine_id}
 api POST /api/v1/admin/agents
 api POST /api/v1/admin/aml/activities/{activity_id}/review
 api POST /api/v1/admin/announcements
+api POST /api/v1/admin/announcements/preview
+api POST /api/v1/admin/announcements/{announcement_id}/cancel
+api POST /api/v1/admin/announcements/{announcement_id}/revoke
 api POST /api/v1/admin/campaigns
 api POST /api/v1/admin/categories
 api POST /api/v1/admin/certifications/{application_id}/decide
@@ -274,6 +278,7 @@ api POST /api/v1/admin/coupons/{coupon_id}/pause
 api POST /api/v1/admin/jobs/escalate-tickets
 api POST /api/v1/admin/jobs/reconcile
 api POST /api/v1/admin/jobs/remind-review-queues
+api POST /api/v1/admin/jobs/send-scheduled-announcements
 api POST /api/v1/admin/knowledge/cards/{card_id}/assign
 api POST /api/v1/admin/knowledge/clusters/{cluster_id}/merge
 api POST /api/v1/admin/knowledge/clusters/{cluster_id}/units
@@ -580,6 +585,7 @@ sdk agents
 sdk amlActivities
 sdk amlStats
 sdk anchorCoverage
+sdk announcements
 sdk apiKeys
 sdk apiScopes
 sdk appealDispute
@@ -601,6 +607,7 @@ sdk blockchainStatus
 sdk bookmark
 sdk broadcastAnnouncement
 sdk calibrateKnowledge
+sdk cancelAnnouncement
 sdk cancelMission
 sdk cancelTask
 sdk captchaConfig
@@ -815,6 +822,7 @@ sdk pendingUploads
 sdk personalSpace
 sdk platformFinance
 sdk platformFinancePeriods
+sdk previewAnnouncement
 sdk priceReference
 sdk propose
 sdk proposeChange
@@ -854,6 +862,7 @@ sdk review
 sdk reviewAmlActivity
 sdk reviewContract
 sdk reviewQueues
+sdk revokeAnnouncement
 sdk revokeApiKey
 sdk revokeCertification
 sdk revokeConsent

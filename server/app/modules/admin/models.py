@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String
+from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -71,6 +71,28 @@ class QueueSlaNotice(Base):
     queue_key: Mapped[str] = mapped_column(String(24), index=True)
     item_key: Mapped[str] = mapped_column(String(64), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Announcement(Base):
+    """NTF-064 全站公告的记录（151 号 spec）：预览之后发、可以定时、发错了可以撤回。
+
+    此前公告只是一个循环：发给谁、什么时候、多少人收到，事后都查不到；发错了只能再发一条更正。"""
+    __tablename__ = "announcements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(120))
+    body: Mapped[str] = mapped_column(String(2000), default="")
+    verified_only: Mapped[bool] = mapped_column(Boolean, default=False)
+    # scheduled（等时间到）/ sent / cancelled（定时的取消了，没发）/ revoked（发了又撤回）
+    status: Mapped[str] = mapped_column(String(12), default="sent", index=True)
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by: Mapped[int] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delivered: Mapped[int] = mapped_column(Integer, default=0)
+    closed_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    close_reason: Mapped[str] = mapped_column(String(200), default="")
 
 
 class PlatformSettleRequest(Base):

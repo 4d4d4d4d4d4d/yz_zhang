@@ -19,3 +19,5 @@ class Notification(Base):
     body: Mapped[str] = mapped_column(String(500), default="")
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # NTF-064 来自哪条全站公告（151 号 spec）：撤回时据此把已送达的通知标成「已撤回」
+    announcement_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
