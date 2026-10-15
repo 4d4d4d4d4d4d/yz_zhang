@@ -116,7 +116,7 @@ def test_violations_are_visible_on_the_metrics_endpoint(client, guarded, monkeyp
 CHECKPOINTS = {
     "app/modules/openapi/usage.py::record_rejected":
         "被挡回去的 API 请求也是独立的用量记账：回 429 之后请求会回滚，必须先落库",
-    "app/modules/openapi/usage.py::consume":
+    "app/modules/openapi/usage.py::consume_ex":
         "API Key 当日用量是独立记账：与最近使用时间一样在鉴权时当场提交，接口失败也算用过一次",
     "app/modules/orchestrator/service.py::_dispatch_step":
         "编排本来就逐步可续跑：每一步的状态独立成立，前面各步已提交不影响后面重试",

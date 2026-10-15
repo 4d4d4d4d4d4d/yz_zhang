@@ -158,7 +158,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.172.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.173.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")
@@ -178,6 +178,8 @@ class Settings:
     API_KEY_RATE_PER_MINUTE = int(os.environ.get("PLATFORM_API_KEY_RATE_PER_MINUTE", "120"))
     # API-052（152 号 spec）每把 Key 每天（北京时间）最多多少次请求；Key 自己可以设得更低
     API_KEY_DAILY_QUOTA = int(os.environ.get("PLATFORM_API_KEY_DAILY_QUOTA", "20000"))
+    # API-054（158 号 spec）同一个账号所有 Key 当天（北京时间）合计最多多少次：多建几把 Key 不能叠加配额
+    API_ACCOUNT_DAILY_QUOTA = int(os.environ.get("PLATFORM_API_ACCOUNT_DAILY_QUOTA", "50000"))
     # SEC-020 认证失败自动封禁：窗口内失败达阈值即临时封禁该 IP
     AUTH_FAIL_WINDOW_SECONDS = int(os.environ.get("PLATFORM_AUTH_FAIL_WINDOW_SECONDS", "300"))
     AUTH_FAIL_BAN_THRESHOLD = int(os.environ.get("PLATFORM_AUTH_FAIL_BAN_THRESHOLD", "10"))

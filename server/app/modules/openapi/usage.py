@@ -68,20 +68,41 @@ def record_rejected(db: Session, key_id: int, now: datetime | None = None) -> No
     checkpoint(db, "被挡回去的 API 请求也是独立的用量记账，回 429 之前当场提交")
 
 
+def account_used(db: Session, user_id: int, day: str) -> int:
+    """API-054 同一账号所有 Key（含已吊销、已轮换的）当天进来的次数合计。"""
+    from sqlalchemy import func
+
+    total = (db.query(func.coalesce(func.sum(ApiKeyUsage.count), 0))
+             .join(ApiKey, ApiKey.id == ApiKeyUsage.key_id)
+             .filter(ApiKey.user_id == user_id, ApiKeyUsage.day == day).scalar())
+    return int(total or 0)
+
+
 def consume(db: Session, key: ApiKey, now: datetime | None = None) -> tuple[int, int]:
-    """记一次用量并核对每日配额。返回 (今天已用, 配额)；超了返回 used > limit，由调用方回 429。"""
+    """记一次用量并核对每日配额。返回 (今天已用, 配额)；超了返回 used > limit，由调用方回 429。
+
+    API-054（158 号 spec）账号合计也要在账号配额以内；超了同样撤回这一次、记一次 rejected，
+    返回值里用 `account_over` 区分（见 `consume_ex`）。"""
+    used, limit, _acct = consume_ex(db, key, now)
+    return used, limit
+
+
+def consume_ex(db: Session, key: ApiKey, now: datetime | None = None) -> tuple[int, int, dict]:
     from app.vendors.base import checkpoint
 
     now = now or utcnow()
     day, limit = day_of(now), effective_quota(key)
+    acct_limit = settings.API_ACCOUNT_DAILY_QUOTA
     _bump(db, key.id, day, "count")
     db.flush()
     used = _used(db, key.id, day)
-    if used > limit:
+    acct = account_used(db, key.user_id, day)
+    over_key, over_acct = used > limit, acct > acct_limit
+    if over_key or over_acct:
         _bump(db, key.id, day, "count", -1)
         _bump(db, key.id, day, "rejected")
     checkpoint(db, "API Key 当日用量是独立记账，鉴权时当场提交（与最近使用时间同一个理由）")
-    return used, limit
+    return used, limit, {"used": acct, "limit": acct_limit, "over": over_acct and not over_key}
 
 
 def carry_today(db: Session, old_id: int, new_id: int, now: datetime | None = None) -> None:
@@ -101,7 +122,11 @@ def view(db: Session, key: ApiKey, days: int = 14, now: datetime | None = None) 
             .filter(ApiKeyUsage.key_id == key.id, ApiKeyUsage.day.in_(wanted)).all()}
     limit = effective_quota(key)
     used = rows[wanted[0]].count if wanted[0] in rows else 0
+    acct_used, acct_limit = account_used(db, key.user_id, wanted[0]), settings.API_ACCOUNT_DAILY_QUOTA
     return {
+        # API-054（158 号 spec）账号所有 Key 当天合计
+        "account_today_used": acct_used, "account_daily_quota": acct_limit,
+        "account_today_remaining": max(0, acct_limit - acct_used),
         "key_id": key.id, "daily_quota": key.daily_quota, "effective_daily_quota": limit,
         "today": wanted[0], "today_used": used, "today_remaining": max(0, limit - used),
         "resets_at": iso(next_reset(now)), "time_zone": "北京时间 UTC+8",

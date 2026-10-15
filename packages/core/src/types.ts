@@ -1480,6 +1480,10 @@ export interface ApiKeyUsageDay {
 }
 /** API-052 一把 Key 的用量（最近的一天在前） */
 export interface ApiKeyUsageView {
+  /** API-054（158 号 spec）账号下所有 Key 今天合计 */
+  account_today_used: number;
+  account_daily_quota: number;
+  account_today_remaining: number;
   key_id: number;
   daily_quota: number;
   effective_daily_quota: number;

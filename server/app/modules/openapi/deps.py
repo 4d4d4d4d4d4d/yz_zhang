@@ -35,11 +35,21 @@ def api_principal(
         usage.record_rejected(db, key.id)
         raise too_many_requests(f"这把 API Key 每分钟最多 {limit} 次请求，请 {retry} 秒后重试；需要更高额度请联系平台",
                                 "api_key_rate_limited", retry, {"X-RateLimit-Limit": str(limit)})
+    # API-053（158 号 spec）本分钟还剩几次
+    response.headers["X-RateLimit-Remaining"] = str(max(0, limit - ratelimit.count(f"apikey:{key.id}", 60)))
     # API-052 每日配额（152 号 spec）：按北京时间的天算，超了回 429 并说清几点恢复
     now = utcnow()
-    used, quota = usage.consume(db, key, now)
+    used, quota, acct = usage.consume_ex(db, key, now)
     response.headers["X-Quota-Limit"] = str(quota)
     response.headers["X-Quota-Remaining"] = str(max(0, quota - used))
+    response.headers["X-Account-Quota-Remaining"] = str(max(0, acct["limit"] - acct["used"]))
+    if acct["over"]:
+        # API-054 账号合计超了：多建几把 Key 不能叠加配额
+        reset = usage.next_reset(now)
+        raise too_many_requests(
+            f"你账号下所有 API Key 今天（北京时间）合计的 {acct['limit']} 次已经用完，北京时间明天 0 点恢复；"
+            "需要更高配额请联系平台", "api_account_quota_exceeded", max(1, int((reset - now).total_seconds())),
+            {"X-Account-Quota-Remaining": "0"})
     if used > quota:
         reset = usage.next_reset(now)
         wait = max(1, int((reset - now).total_seconds()))

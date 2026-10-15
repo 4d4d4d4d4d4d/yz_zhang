@@ -39,4 +39,11 @@ describe('API-052 App 上的 Key 用量', () => {
     await waitFor(() => expect(calls.length).toBe(1));
     expect(r.toJSON()).toBeNull();
   });
+
+  it('API-054 写明账号下所有 Key 当天合计（158 号 spec）', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({ 'GET /developer/api-keys/4/usage': { ...USAGE, account_today_used: 41000, account_daily_quota: 50000, account_today_remaining: 9000 } }, calls);
+    render(<KeyUsageBlock client={client} keyId={4} />);
+    expect(await screen.findByText('账号下所有 Key 今天合计 41000 / 50000 次')).toBeTruthy();
+  });
 });

@@ -42,4 +42,17 @@ describe('API-052 Key 用量与每日配额', () => {
     await waitFor(() => expect(screen.getByTestId('key-usage-4').textContent).toContain('已用 1500 / 5000 次（你设的配额）'));
     expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ daily_quota: 5000 });
   });
+
+  it('API-054 写明账号下所有 Key 当天合计（158 号 spec）', async () => {
+    localStorage.setItem('token', 'tok');
+    const fetchImpl = vi.fn(async (url: string) => {
+      const path = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+      const body = path === '/users/me' ? ME : path === '/developer/api-keys' ? [KEY]
+        : path === '/developer/scopes' ? { scopes: [], events: [], notice: '' }
+        : path === '/developer/api-keys/4/usage' ? { ...USAGE(20000, 0), account_today_used: 41000, account_daily_quota: 50000, account_today_remaining: 9000 } : [];
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    }) as unknown as typeof fetch;
+    render(<MemoryRouter initialEntries={['/developer']}><AppProvider client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })}><App /></AppProvider></MemoryRouter>);
+    expect((await screen.findByTestId('key-usage-4')).textContent).toContain('账号下所有 Key 合计 41000 / 50000 次');
+  });
 });

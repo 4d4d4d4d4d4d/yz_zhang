@@ -24,6 +24,9 @@ class RateLimiter(Protocol):
     def hit(self, key: str, limit: int, window_seconds: int) -> int | None:
         """超限时返回建议重试秒数，未超限返回 None。"""
 
+    def count(self, key: str, window_seconds: int) -> int:
+        """API-053 当前窗口里已经记了几次（不记新的一次）。"""
+
     def reset(self) -> None: ...
 
 
@@ -42,6 +45,13 @@ class MemoryRateLimiter:
             return int(window_seconds - (now - bucket[0])) + 1
         bucket.append(now)
         return None
+
+    def count(self, key: str, window_seconds: int) -> int:
+        now = time.time()
+        bucket = self._buckets[key]
+        while bucket and now - bucket[0] > window_seconds:
+            bucket.popleft()
+        return len(bucket)
 
     def reset(self) -> None:
         self._buckets.clear()
@@ -62,6 +72,9 @@ class RedisRateLimiter:
             ttl = int(self._client.ttl(bucket) or window_seconds)
             return max(ttl, 1)
         return None
+
+    def count(self, key: str, window_seconds: int) -> int:
+        return int(self._client.get(f"rl:{key}:{int(time.time()) // window_seconds}") or 0)
 
     def reset(self) -> None:  # pragma: no cover - 生产不清库
         pass
@@ -112,6 +125,17 @@ def hit(key: str, limit: int, window_seconds: int) -> int | None:
             _fail_count = 0
             return retry
     return _memory.hit(key, limit, window_seconds)
+
+
+def count(key: str, window_seconds: int) -> int:
+    """API-053（158 号 spec）当前窗口已用次数，用来回 X-RateLimit-Remaining。Redis 抖动时落回内存实现。"""
+    remote = _get_remote() if time.time() >= _cooldown_until else None
+    if remote is not None:
+        try:
+            return remote.count(key, window_seconds)
+        except Exception as exc:
+            _note_failure(exc)
+    return _memory.count(key, window_seconds)
 
 
 def check(key: str, limit: int, window_seconds: int) -> None:

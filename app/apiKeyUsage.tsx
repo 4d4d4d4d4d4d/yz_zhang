@@ -16,6 +16,8 @@ export function KeyUsageBlock({ client, keyId }: { client: PlatformClient; keyId
   return (
     <View style={s.box} accessibilityLabel={`Key ${keyId} 用量`}>
       <Text>今天（{u.time_zone}）已用 {u.today_used} / {u.effective_daily_quota} 次{u.daily_quota ? '（你设的配额）' : '（平台默认配额）'}，还剩 {u.today_remaining} 次；{formatDateTime(u.resets_at)} 恢复</Text>
+      {/* API-054（158 号 spec）多把 Key 不能叠加配额 */}
+      {typeof u.account_daily_quota === 'number' && <Text style={s.muted}>账号下所有 Key 今天合计 {u.account_today_used} / {u.account_daily_quota} 次</Text>}
       <Text style={s.muted}>最近 7 天：{u.days.map((d) => `${d.day.slice(5)} ${d.count}${d.rejected ? `（挡回 ${d.rejected}）` : ''}`).join(' · ')}</Text>
       <TextInput style={s.input} accessibilityLabel={`Key ${keyId} 每日配额`} keyboardType="numeric" placeholder="设更低的每日配额（0 = 默认）"
                  value={quota} onChangeText={setQuota} />
