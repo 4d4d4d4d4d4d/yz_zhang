@@ -123,6 +123,9 @@ def test_revoke_rewrites_delivered_notifications_with_the_reason(client):
     v = client.post(f"{URL}/{r['id']}/revoke", json={"reason": "数字写错了，实际是 3%"}, headers=auth(ops))
     assert v.status_code == 200, v.text
     assert v.json()["status"] == "revoked" and v.json()["notifications_updated"] == r["delivered"]
+    from tests.test_client_shape_alignment import _assert_shape
+
+    _assert_shape(v.json(), "AnnouncementRevoked")
     for who in (u, other):
         titles = {n["title"]: n["body"] for n in _inbox(client, who)}
         assert titles["【已撤回】平台佣金下调到 1%"] == "这条公告已撤回：数字写错了，实际是 3%"
