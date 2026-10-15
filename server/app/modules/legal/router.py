@@ -156,7 +156,7 @@ class AskIn(BaseModel):
 
 
 @router.post("/ask")
-def legal_ask(body: AskIn, user: User = Depends(get_current_user)):
+def legal_ask(body: AskIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """LAW-001 法律常识问答。三种结局，**含义完全不同**（97 号 spec）。
 
     改造前三种只由 `refused: bool` 区分，也就是说「请立即拨打 110」与
@@ -185,6 +185,12 @@ def legal_ask(body: AskIn, user: User = Depends(get_current_user)):
         if hits > best_hits:
             best, best_hits = faq, hits
     if not best:
+        # SCN-108（153 号 spec）：答不上的只记一个粗主题 + 是谁（用于「至少 3 个不同的人」），不存问题原文。
+        # 场景雷达按主题聚合，告诉运营哪类法律问题最常答不上——该补知识还是该补一个场景包
+        from app.modules.analytics.models import AnalyticsEvent
+        from app.modules.packs.topics import LEGAL_TOPICS, topic_of
+
+        db.add(AnalyticsEvent(user_id=user.id, name="legal_unanswered", ref_type=topic_of(body.question, LEGAL_TOPICS)))
         return {
             "answer": "该问题超出平台法律知识库范围，建议通过「找律师」发布法律咨询任务，由执业律师解答。",
             "disclaimer": DISCLAIMER,

@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 153 | 第三轮场景发掘：雷达新信号与三个场景包 | [153-scenario-round3.md](./153-scenario-round3.md) | P0 |
 | 152 | API Key 用量与每日配额 | [152-api-key-usage.md](./152-api-key-usage.md) | P0 |
 | 151 | 全站公告的预览、定时与撤回 | [151-announcements.md](./151-announcements.md) | P0 |
 | 150 | 客服工单超时自动升级与 App 我的工单 | [150-ticket-escalation.md](./150-ticket-escalation.md) | P0 |

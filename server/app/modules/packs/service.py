@@ -398,7 +398,9 @@ def radar(db: Session) -> list[dict]:
 
     1. 搜了没有供给：至少 3 个不同的人近 30 天搜过、而公开招募中的任务里一条都匹配不上的词；
     2. 有需求没人接：同一类目近 60 天有 ≥3 单招募超过 3 天还没人报名；
-    3. 已上线的包没接住：答不上的比例 ≥30%、或觉得没用的比例 ≥50%（样本 ≥5）、或知识过了有效期。
+    3. 已上线的包没接住：答不上的比例 ≥30%、或觉得没用的比例 ≥50%（样本 ≥5）、或知识过了有效期；
+    4. 法律问答答不上的问题按粗主题（153 号 spec，原文不落库）；
+    5. 客服没接住的工单（超时或升级过）按标题归到粗主题（153 号 spec，只出主题与人数）。
     """
     from app.modules.analytics.models import SearchQuery
     from app.modules.task.models import Application, Task
@@ -426,6 +428,7 @@ def radar(db: Session) -> list[dict]:
         out.append({"source": "stuck_demand", "key": category, "title": f"「{category}」有需求没人接",
                     "evidence": f"{n} 单招募超过 {STUCK_DAYS} 天还没人报名（来自至少 {K_ANON} 个发布方）",
                     "people": n, "suggested": {"coverage": _level(n), "frequency": _level(n)}})
+    out += _legal_gaps(db, now) + _support_gaps(db, now)
     live = db.query(ScenarioPack).filter(ScenarioPack.status == "published").all()
     m = metrics(db, [p.key for p in live])
     today = date.today()
@@ -444,6 +447,47 @@ def radar(db: Session) -> list[dict]:
         if reasons:
             out.append({"source": "pack_gap", "key": p.key, "title": f"场景包「{p.title}」要复核",
                         "evidence": "；".join(reasons), "people": x.get("active", 0), "suggested": {}})
+    return out
+
+
+def _legal_gaps(db: Session, now) -> list[dict]:
+    """SCN-108 法律问答答不上的问题，按粗主题聚合（原文从不落库，见 legal_ask）。"""
+    from app.modules.analytics.models import AnalyticsEvent
+
+    users = func.count(distinct(AnalyticsEvent.user_id))
+    rows = (db.query(AnalyticsEvent.ref_type, users)
+            .filter(AnalyticsEvent.name == "legal_unanswered", AnalyticsEvent.user_id.isnot(None),
+                    AnalyticsEvent.created_at >= now - timedelta(days=RADAR_DAYS))
+            .group_by(AnalyticsEvent.ref_type).having(users >= K_ANON).order_by(users.desc()).all())
+    return [{"source": "legal_gap", "key": topic, "title": f"「{topic}」类法律问题常答不上",
+             "evidence": f"近 {RADAR_DAYS} 天 {n} 个不同的人问到这类问题，平台法律知识库答不上（只记主题，不存原文）",
+             "people": n, "suggested": {"coverage": _level(n), "frequency": _level(n)}} for topic, n in rows]
+
+
+def _support_gaps(db: Session, now) -> list[dict]:
+    """SCN-108 客服没接住的工单：近 30 天超时升级过、或至今未结且已超过 SLA 的，按标题归到粗主题聚合。
+    标题只在这里归类，雷达上只出现主题与不同的人数。"""
+    from app.core.config import settings
+    from app.modules.support.models import Ticket
+
+    from .topics import SUPPORT_TOPICS, topic_of
+
+    overdue = now - timedelta(hours=settings.SUPPORT_SLA_HOURS)
+    rows = (db.query(Ticket.user_id, Ticket.subject)
+            .filter(Ticket.created_at >= now - timedelta(days=RADAR_DAYS),
+                    (Ticket.escalation_level > 0) | ((Ticket.status == "open") & (Ticket.created_at < overdue)))
+            .all())
+    people: dict[str, set[int]] = {}
+    for uid, subject in rows:
+        people.setdefault(topic_of(subject or "", SUPPORT_TOPICS), set()).add(uid)
+    out = []
+    for topic, who in sorted(people.items(), key=lambda kv: -len(kv[1])):
+        if len(who) < K_ANON:
+            continue
+        n = len(who)
+        out.append({"source": "support_gap", "key": topic, "title": f"「{topic}」类工单客服没接住",
+                    "evidence": f"近 {RADAR_DAYS} 天 {n} 个不同的人的这类工单超时或被升级（只按标题归类，不出原文）",
+                    "people": n, "suggested": {"coverage": _level(n), "frequency": _level(n)}})
     return out
 
 

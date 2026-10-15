@@ -11,7 +11,7 @@ description: Discover, score and queue new user scenarios for the platform on yo
 - **愿景**：`docs/VISION.md` 1.6~1.8 的人群表。
 - **平台数据**（场景雷达，管理后台「服务包 → 场景雷达」，`GET /admin/packs/radar`；只看聚合，每条至少 3 个不同的人，不看个人内容）：
   搜了没有供给的词、招募超过 3 天没人报名的类目、已上线的包答不上 / 没人觉得有用 / 知识过期。
-  雷达还没覆盖的（法律问答转律师的类别、客服没解决的工单类别）手动查聚合计数。
+  V167（153 号 spec）起雷达还会给出：法律问答答不上的主题（`legal_gap`）、客服没接住的工单主题（`support_gap`）；主题表在 `server/app/modules/packs/topics.py`，落到「其他」的多了就补主题词。
 - **业界**：WebSearch 查同类平台与研究，带链接写进场景卡。
 
 ## 2. 写场景卡（每个候选一张）

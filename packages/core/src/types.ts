@@ -2243,7 +2243,8 @@ export interface PackValidation {
   score: number | null;
 }
 export interface RadarSignal {
-  source: 'search_gap' | 'stuck_demand' | 'pack_gap';
+  /** SCN-108 起多 legal_gap（法律问答答不上的主题）与 support_gap（客服没接住的工单主题） */
+  source: 'search_gap' | 'stuck_demand' | 'pack_gap' | 'legal_gap' | 'support_gap';
   key: string;
   title: string;
   evidence: string;
