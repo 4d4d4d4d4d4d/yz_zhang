@@ -992,6 +992,12 @@ export class PlatformClient {
   acceptMilestone(contractId: number, idx: number) {
     return this.request<Contract>('POST', `/contracts/${contractId}/milestones/${idx}/accept`);
   }
+  /** SC-014 只放点名的、已交付的那几期（146 号 spec）。`expectedTotalCents` 是界面上给人看的合计：
+   *  对不上（期间有一期状态变了）就整批不放，不会放出一笔没看到的钱 */
+  releaseDelivered(contractId: number, idxs: number[], expectedTotalCents: number) {
+    return this.request<Contract>('POST', `/contracts/${contractId}/milestones/release-delivered`,
+      { idxs, expected_total_cents: expectedTotalCents });
+  }
   /** SC-007b 变更单：金额、截止时间、范围三样可以单独改也可以一起改；只传要改的 */
   proposeChangeOrder(contractId: number, input: { new_amount_cents?: number; new_deadline?: string; scope_change?: string; reason?: string }) {
     // 不改的那几样传 undefined：JSON 序列化时整个键都不出现，服务端就当「这一样不改」

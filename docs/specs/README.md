@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 146 | 只放已交付的那几期：分期合约的批量放款；App 补上分期列表 | [146-batch-release.md](./146-batch-release.md) | P0 |
 | 145 | 开放 API 按 API Key 独立限流 | [145-api-key-rate.md](./145-api-key-rate.md) | P0 |
 | 144 | 平台财务按期间报表；合约导出与证据包写明时区 | [144-finance-periods.md](./144-finance-periods.md) | P0 |
 | 143 | 后台审计日志与提现复核台：筛选、总数、导出；导出时间写明时区 | [143-admin-lists.md](./143-admin-lists.md) | P0 |

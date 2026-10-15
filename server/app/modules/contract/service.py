@@ -479,6 +479,36 @@ def release_milestone(db: Session, contract: Contract, user_id: int, milestone: 
     return milestone
 
 
+def release_delivered(db: Session, contract: Contract, user_id: int, idxs: list[int],
+                      expected_total_cents: int) -> list[Milestone]:
+    """SC-014 只放已交付的那几期（146 号 spec）。
+
+    与「整单验收」（`accept-delivery`，放掉剩余全部期）的区别写在这里也写在界面上：
+    这里**只放你点名的、已经交付的期**，没交付的一期也不会动。
+    客户端要把它看到的合计金额一起传上来：界面停留期间如果有一期状态变了（被撤回、被纠纷冻结），
+    合计对不上就整批不放（`batch_total_mismatch`），不会放出一笔发布方没看到的钱。
+    整批在同一个事务里：其中一期不能放，前面放过的也一起回滚。
+    """
+    if not idxs:
+        raise bad_request("至少选一期", "batch_empty")
+    if len(set(idxs)) != len(idxs):
+        raise bad_request("同一期选了两次", "batch_duplicate")
+    rows = {m.idx: m for m in db.query(Milestone).filter(Milestone.contract_id == contract.id,
+                                                          Milestone.idx.in_(idxs)).all()}
+    missing = sorted(set(idxs) - set(rows))
+    if missing:
+        raise bad_request(f"没有第 {'、'.join(map(str, missing))} 期", "milestone_not_found")
+    not_delivered = sorted(i for i, m in rows.items() if m.status != "delivered")
+    if not_delivered:
+        raise conflict(f"第 {'、'.join(map(str, not_delivered))} 期还没交付或已经放过：只能放已交付的期",
+                       "invalid_milestone_state")
+    total = sum(m.amount_cents for m in rows.values())
+    if total != expected_total_cents:
+        raise conflict(f"合计金额对不上（你看到的是 {expected_total_cents / 100:.2f} 元，现在是 {total / 100:.2f} 元）："
+                       "刷新一下再确认", "batch_total_mismatch")
+    return [release_milestone(db, contract, user_id, rows[i]) for i in sorted(idxs)]
+
+
 def propose_change(db: Session, contract: Contract, user_id: int, new_amount: int | None, reason: str,
                    new_deadline=None, scope_change: str = "") -> ChangeOrder:
     """SC-007 变更单：改价 / 改期 / 改范围（SC-007b），三样可以单独改也可以一起改。

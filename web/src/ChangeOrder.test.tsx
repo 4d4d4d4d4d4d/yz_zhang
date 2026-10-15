@@ -215,3 +215,40 @@ describe('SC-013 整单验收前要说清会放掉几期', () => {
     }
   });
 });
+
+// SC-014 只放已交付的那几期（146 号 spec）：与整单验收是两个按钮、两种说法
+describe('SC-014 只放已交付的那几期', () => {
+  const FUNDED_TASK = { ...TASK, status: 'in_progress' };
+  const REQUESTER = { ...ME, id: 1, nickname: '发布者' };
+  const STAGED = {
+    ...CONTRACT, status: 'funded', frozen: false,
+    milestones: [
+      { idx: 1, title: '一期', amount_cents: 6000, status: 'delivered' },
+      { idx: 2, title: '二期', amount_cents: 6000, status: 'delivered' },
+      { idx: 3, title: '三期', amount_cents: 8000, status: 'pending' },
+    ],
+  };
+
+  it('确认框列出这几期与合计、说明没交付的不动；确认后带合计一起发', async () => {
+    localStorage.setItem('token', 'tok');
+    const calls: Array<{ method: string; path: string; body: unknown }> = [];
+    const client = makeClient({
+      '/users/me': REQUESTER, '/tasks/7': FUNDED_TASK, '/contracts/by-task/7': STAGED, '/contracts/3/change-orders': [],
+      '/contracts/3/milestones/release-delivered': { ...STAGED, released_cents: 12000 },
+    }, calls);
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    try {
+      render(<MemoryRouter initialEntries={['/tasks/7']}><AppProvider client={client}><App /></AppProvider></MemoryRouter>);
+      fireEvent.click(await screen.findByText('放款已交付的 2 期（共 ¥120.00）'));
+      const text = confirmSpy.mock.calls[0][0] as string;
+      expect(text).toContain('第 1 期 一期 ¥60.00');
+      expect(text).toContain('第 2 期 二期 ¥60.00');
+      expect(text).toContain('还没交付的期不会动');
+      await waitFor(() => expect(calls.find((c) => c.path === '/contracts/3/milestones/release-delivered')?.body)
+        .toEqual({ idxs: [1, 2], expected_total_cents: 12000 }));
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
+});
+

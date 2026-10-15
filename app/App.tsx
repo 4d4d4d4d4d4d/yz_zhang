@@ -1,5 +1,6 @@
 import { ChainEntry } from './ChainEntry';
 import { EvidenceExportButton, InvoicesBlock } from './appGaps';
+import { MilestonesBlock } from './milestones';
 import { DraftHints, TaskProfileBlock } from './profiles';
 import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
@@ -470,6 +471,11 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
             )}
           </View>
         </View>
+      )}
+      {/* SC-004 / SC-014 分期列表（146 号 spec）：整单验收的提示里说的「验收本期」在这里 */}
+      {contract && (
+        <MilestonesBlock client={client} contract={contract} isCreator={meId === contract.requester_id}
+                         isExecutor={meId === contract.executor_id} onChanged={(c) => { setContract(c); void reload(); }} />
       )}
       {!!error && <Text style={styles.error}>{error}</Text>}
 

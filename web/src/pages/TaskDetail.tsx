@@ -295,6 +295,18 @@ export default function TaskDetail() {
             <DefineMilestones contractId={contract.id} amountCents={contract.amount_cents}
                               onDefined={async () => setContract(await client.getContract(contract.id))} />
           )}
+          {/* SC-014 只放已交付的那几期（146 号 spec）：与「整单验收」不同，没交付的一期也不会动 */}
+          {isCreator && contract.status === 'funded' && !contract.frozen && (() => {
+            const delivered = (contract.milestones ?? []).filter((m) => m.status === 'delivered');
+            if (delivered.length < 2) return null;
+            const sum = delivered.reduce((n, m) => n + m.amount_cents, 0);
+            return (
+              <button style={{ marginTop: 10 }} onClick={() => {
+                if (!confirm(`只放这 ${delivered.length} 期已交付的：\n${delivered.map((m) => `第 ${m.idx} 期 ${m.title} ${fmtYuan(m.amount_cents)}`).join('\n')}\n合计 ${fmtYuan(sum)}。\n\n还没交付的期不会动。确认放款？`)) return;
+                void act(async () => setContract(await client.releaseDelivered(contract.id, delivered.map((m) => m.idx), sum)));
+              }}>放款已交付的 {delivered.length} 期（共 {fmtYuan(sum)}）</button>
+            );
+          })()}
           {/* SC-004 里程碑分期 */}
           {contract.milestones && contract.milestones.length > 1 && (
             <table style={{ marginTop: 10 }}>

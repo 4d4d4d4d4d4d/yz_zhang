@@ -324,6 +324,7 @@ api POST /api/v1/contracts/{contract_id}/change-orders/{order_id}/accept
 api POST /api/v1/contracts/{contract_id}/change-orders/{order_id}/reject
 api POST /api/v1/contracts/{contract_id}/fund
 api POST /api/v1/contracts/{contract_id}/milestones
+api POST /api/v1/contracts/{contract_id}/milestones/release-delivered
 api POST /api/v1/contracts/{contract_id}/milestones/{idx}/accept
 api POST /api/v1/contracts/{contract_id}/milestones/{idx}/deliver
 api POST /api/v1/contracts/{contract_id}/sign
@@ -506,6 +507,7 @@ app decompose
 app experience
 app gig
 app influence
+app milestones
 app missions
 app motion
 app notebook
@@ -813,6 +815,7 @@ sdk registerDevice
 sdk rejectChangeOrder
 sdk rejectDelivery
 sdk relatedNotes
+sdk releaseDelivered
 sdk removeCircleMember
 sdk removeFriend
 sdk removeFromGroup

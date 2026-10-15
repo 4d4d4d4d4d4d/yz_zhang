@@ -9,7 +9,7 @@ from app.modules.account.models import User
 from app.modules.task.models import Task
 from app.modules.task.service import transition
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from . import service
 from .models import ChangeOrder, Contract, Milestone
@@ -203,6 +203,29 @@ def accept_milestone(
 ):
     contract = _get(db, contract_id, user)
     service.release_milestone(db, contract, user.id, _milestone(db, contract, idx))
+    _close_task_if_released(db, contract)
+    return _dump(contract, db)
+
+
+class BatchReleaseIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    idxs: list[int] = Field(min_length=1, max_length=50)
+    expected_total_cents: int = Field(ge=1)
+
+
+@router.post("/{contract_id}/milestones/release-delivered")
+def release_delivered(
+    contract_id: int, body: BatchReleaseIn, user: User = Depends(get_current_user),
+    db: Session = Depends(get_db, scope="function"),
+):
+    """SC-014 只放已交付的那几期（146 号 spec）：一次放掉点名的已交付期，不动没交付的。"""
+    contract = _get(db, contract_id, user)
+    service.release_delivered(db, contract, user.id, body.idxs, body.expected_total_cents)
+    _close_task_if_released(db, contract)
+    return _dump(contract, db)
+
+
+def _close_task_if_released(db: Session, contract) -> None:
     # 末期放款 → 任务闭环（状态机按白名单两步走）
     if contract.status == "released":
         from app.modules.account import service as credit
@@ -218,7 +241,6 @@ def accept_milestone(
                 transition(db, task, "completed")
                 if task.executor_id:
                     credit.record_task_completed(db, task.executor_id)
-    return _dump(contract, db)
 
 
 # ---------- SC-007 变更单 ----------
