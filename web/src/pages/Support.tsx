@@ -1,4 +1,4 @@
-import { apiErrorText, formatDateTime } from '@platform/core';
+import { apiErrorText, formatDateTime, type MyTicket } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 
@@ -56,9 +56,7 @@ export default function Support() {
  */
 function MyTickets() {
   const { client } = useApp();
-  const [rows, setRows] = useState<Array<{
-    id: number; subject: string; body: string; status: string; reply: string; created_at: string;
-  }>>([]);
+  const [rows, setRows] = useState<MyTicket[]>([]);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
@@ -98,6 +96,13 @@ function MyTickets() {
               {/* 运营的回复原文——回复只发一条通知的话，
                   用户回到平台上就再也找不到它 */}
               {t.reply && <p data-testid={`ticket-reply-${t.id}`}>客服回复：{t.reply}</p>}
+              {/* ESCA-051（150 号 spec）：等的人要知道有没有人在管、是不是已经升级 */}
+              {t.status === 'open' && (
+                <p className="muted" data-testid={`ticket-progress-${t.id}`}>
+                  {t.claimed ? '已有客服接手' : '排队等待客服接手'} · 已等 {t.waited_hours} 小时（承诺 {t.sla_hours} 小时内处理）
+                  {t.escalation_level >= 2 ? ' · 已升级给客服主管跟进' : t.escalation_level === 1 ? ' · 已超时，已催办' : ''}
+                </p>
+              )}
             </div>
           </div>
         ))}

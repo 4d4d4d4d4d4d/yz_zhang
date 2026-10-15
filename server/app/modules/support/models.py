@@ -24,6 +24,12 @@ class Ticket(Base):
     handler_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # ESCA-051 认领与超时升级（150 号 spec）：谁接手了；升到第几级（0 未升级 / 1 叫醒客服 / 2 叫醒主管）。
+    # 级别本身就是去重：每一级只叫一次人
+    assignee_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    escalation_level: Mapped[int] = mapped_column(Integer, default=0)
+    escalated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class NotificationPref(Base):

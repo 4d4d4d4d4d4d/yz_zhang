@@ -40,8 +40,11 @@ class Settings:
     # VER 人类核验（49 号 spec）
     VERIFY_DEADLINE_HOURS = int(os.environ.get("PLATFORM_VERIFY_DEADLINE_HOURS", "24"))
     VERIFIER_MIN_CREDIT = int(os.environ.get("PLATFORM_VERIFIER_MIN_CREDIT", "100"))
-    # ESCA 客服工单 SLA（超时只做可见，不自动升级——纠纷会冻结资金，留给人决定）
+    # ESCA 客服工单 SLA（超时不自动转纠纷——纠纷会冻结资金，留给人决定；V178 起只在平台内部逐级叫人，见下一项）
     SUPPORT_SLA_HOURS = int(os.environ.get("PLATFORM_SUPPORT_SLA_HOURS", "24"))
+    # ESCA-051（150 号 spec）超时自动升级只在**平台内部**逐级叫人（不转纠纷、不动钱）：
+    # 到 SUPPORT_SLA_HOURS 叫醒接手的客服（没人接手就叫全体客服），到这个时长叫醒超级管理员（主管）
+    SUPPORT_ESCALATE_L2_HOURS = int(os.environ.get("PLATFORM_SUPPORT_ESCALATE_L2_HOURS", "48"))
     # QUEUE-010 人审队列的 SLA（78 号 spec）。
     # SUPPORT_SLA_HOURS 此前**全仓只有定义、没有任何使用**——
     # 一条写下来却没人核对的承诺（V96/V99/V101 同一条规律的第四次）。
@@ -150,7 +153,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.164.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.165.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

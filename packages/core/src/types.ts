@@ -1316,6 +1316,41 @@ export interface AdminTicketRow {
   subject: string;
   body: string;
   created_at: string;
+  /** ESCA-051 接手的客服（150 号 spec）；没人接手为 null */
+  assignee_id: number | null;
+  assignee_nickname: string;
+  /** 0 未升级 / 1 已叫醒客服 / 2 已升级给主管 */
+  escalation_level: number;
+  escalation_label: string;
+  /** 服务端算好的小时数：等了多久、承诺多久、超了多久 */
+  waited_hours: number;
+  sla_hours: number;
+  overdue_hours: number;
+}
+
+/** ESCA-051 认领结果（150 号 spec） */
+export interface TicketClaimed {
+  id: number;
+  assignee_id: number;
+  assignee_nickname: string;
+  previous_assignee_id: number | null;
+}
+
+/** CS-013 我的工单；ESCA-051 起带接手与升级状态（不含接手人身份，150 号 spec） */
+export interface MyTicket {
+  id: number;
+  subject: string;
+  body: string;
+  status: string;
+  reply: string;
+  created_at: string;
+  /** 已有客服接手 */
+  claimed: boolean;
+  escalation_level: number;
+  escalation_label: string;
+  waited_hours: number;
+  sla_hours: number;
+  overdue_hours: number;
 }
 
 /** SECEV-030 安全看板。读 DB，所以任何副本看到的都一样。 */

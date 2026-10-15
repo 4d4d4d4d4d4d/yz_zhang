@@ -824,14 +824,22 @@ function TicketQueue() {
   // PAY-045 分页：此前上限写死、offset 被忽略，队列一长后面的就在界面上不存在
   const PAGE = 20;
   const [more, setMore] = useState(false);
+  // ESCA-051 筛选（150 号 spec）：只看已升级的、只看我接手的、最急的在前
+  const [view, setView] = useState<{ escalated_only: boolean; mine: boolean; sort: 'id' | 'urgent' }>(
+    { escalated_only: false, mine: false, sort: 'urgent' });
 
   const load = useCallback(async (limit = PAGE) => {
-    const r = await client.adminTickets('open', limit + 1, 0).catch(() => []);
+    const r = await client.adminTickets('open', limit + 1, 0, view).catch(() => []);
     // 多取一条来判断「还有没有」——这样「加载更多」不会在最后一页还挂着
     setMore(r.length > limit);
     setRows(r.slice(0, limit));
-  }, [client]);
+  }, [client, view]);
   useEffect(() => { void load(); }, [load]);
+
+  async function claim(id: number) {
+    setError('');
+    try { await client.claimTicket(id); await load(); } catch (err) { setError(apiErrorText(err)); }
+  }
 
   async function reply(id: number) {
     setError('');
@@ -843,18 +851,31 @@ function TicketQueue() {
     } catch (err) { setError(apiErrorText(err)); }
   }
 
-  if (rows.length === 0) return null;
+  const filtered = view.escalated_only || view.mine;
+  if (rows.length === 0 && !filtered) return null;
   return (
-    <div className="card">
+    <div className="card" aria-label="待处理工单">
       <h3>待处理工单（{rows.length}）</h3>
+      <div className="row" style={{ flexWrap: 'wrap', gap: 12 }}>
+        <label><input type="checkbox" checked={view.escalated_only} onChange={(e) => setView({ ...view, escalated_only: e.target.checked })} /> 只看已升级的</label>
+        <label><input type="checkbox" checked={view.mine} onChange={(e) => setView({ ...view, mine: e.target.checked })} /> 只看我接手的</label>
+        <label><input type="checkbox" checked={view.sort === 'urgent'} onChange={(e) => setView({ ...view, sort: e.target.checked ? 'urgent' : 'id' })} /> 最急的在前</label>
+      </div>
       {error && <p className="error">{error}</p>}
+      {rows.length === 0 && <p className="muted">没有符合条件的工单。</p>}
       <div className="list" style={{ marginTop: 8 }}>
         {rows.map((t) => (
           <div className="task-item" key={t.id} data-testid={`ticket-${t.id}`}>
             <div>
               <strong>{t.subject}</strong> · 用户 #{t.user_id}
+              {t.escalation_level > 0 && <span className="badge" data-testid={`ticket-level-${t.id}`}> {t.escalation_label}</span>}
               <p className="muted">{t.body} · {formatDateTime(t.created_at)}</p>
+              <p className="muted" data-testid={`ticket-sla-${t.id}`}>
+                已等 {t.waited_hours} 小时（承诺 {t.sla_hours} 小时{t.overdue_hours > 0 ? `，已超 ${t.overdue_hours} 小时` : ''}）
+                · {t.assignee_id ? `接手人：${t.assignee_nickname || `#${t.assignee_id}`}` : '还没人接手'}
+              </p>
             </div>
+            <button className="ghost" onClick={() => void claim(t.id)}>{t.assignee_id ? '改由我处理' : '我来处理'}</button>
             <button onClick={() => reply(t.id)}>回复并结单</button>
           </div>
         ))}

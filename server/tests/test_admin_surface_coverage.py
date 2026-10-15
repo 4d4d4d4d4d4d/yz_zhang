@@ -67,6 +67,7 @@ REACHED_BY: dict[str, str] = {
     # ADMIN-061 审计日志导出（143 号 spec）
     "/admin/audit-log/export": "exportAuditLog",
     "/admin/audit-log/verify": "verifyAuditChain",   # V177 审计哈希链自检（149 号）
+    "/admin/tickets/{x}/claim": "claimTicket",       # V178 工单认领（150 号）
     # SEC-061b 管理员与角色（141 号 spec）
     "/admin/roles": "adminRoleCatalog",
     "/admin/admins": "listAdmins",
@@ -143,6 +144,7 @@ ADMIN_EXEMPT: dict[str, str] = {
     "/admin/settlements/verify": "分账自检是运维核对工具，`scripts/consistency_check.py` 也能跑",
     "/admin/jobs/reconcile": "日终对账由调度器执行（32 号调度表里在册），不靠人点",
     "/admin/jobs/remind-review-queues": "队列催办由调度器按 32 号调度表执行，不该由界面触发",
+    "/admin/jobs/escalate-tickets": "工单超时升级由调度器按调度表每小时执行（150 号），不该由界面触发",
     "/admin/matching-config": "匹配权重是调参，不调用默认值，不卡任何人",
     "/admin/cities/{x}": "停用城市是收缩动作；开通（createCity）才是会卡住人的那一半",
 }

@@ -88,6 +88,8 @@ import type {
   PendingCertificationRow,
   PendingUploadRow,
   AdminTicketRow,
+  MyTicket,
+  TicketClaimed,
   SecurityBoardView,
   AdminAuditRow,
   PlatformFinanceView,
@@ -1508,10 +1510,17 @@ export class PlatformClient {
     );
   }
   /** CS-030 工单队列。用户的求助在这里，不回就是 SLA 是摆设。 */
-  adminTickets(status = 'open', limit = 50, offset = 0) {
+  adminTickets(status = 'open', limit = 50, offset = 0,
+    opts: { escalated_only?: boolean; mine?: boolean; sort?: 'id' | 'urgent' } = {}) {
+    // ESCA-051（150 号 spec）：只看已升级的、只看我接手的、按最急排
+    const extra = qs(opts);
     return this.request<AdminTicketRow[]>(
-      'GET', `/admin/tickets?status=${status}&limit=${limit}&offset=${offset}`,
+      'GET', `/admin/tickets?status=${status}&limit=${limit}&offset=${offset}${extra ? `&${extra.slice(1)}` : ''}`,
     );
+  }
+  /** ESCA-051 「我来处理」：接手后超时提醒只叫醒接手人；可以从别人手里接过来，进审计 */
+  claimTicket(ticketId: number) {
+    return this.request<TicketClaimed>('POST', `/admin/tickets/${ticketId}/claim`);
   }
   resolveTicket(ticketId: number, reply: string) {
     return this.request<{ id: number; status: string }>(
@@ -2025,9 +2034,7 @@ export class PlatformClient {
     return this.request<{ id: number; status: string; reply: string }>('POST', '/support/tickets', { subject, body });
   }
   myTickets() {
-    return this.request<Array<{ id: number; subject: string; body: string; status: string; reply: string; created_at: string }>>(
-      'GET', '/support/tickets',
-    );
+    return this.request<MyTicket[]>('GET', '/support/tickets');
   }
   /** ESCA-001 工单转纠纷**带上下文**：不带的话用户要把刚说过的话重说一遍，
    *  而两次陈述不一致会在纠纷里被当成翻供。 */

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.deps import get_current_user
-from app.modules.account.models import User
+from app.modules.account.models import User, utcnow
 from app.modules.knowledge import service as kb
 from app.core.timefmt import iso
 
@@ -65,11 +65,16 @@ def create_ticket(body: TicketIn, user: User = Depends(get_current_user), db: Se
 def my_tickets(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from .models import Ticket
 
+    from .escalation import sla_view
+
     rows = db.query(Ticket).filter(Ticket.user_id == user.id).order_by(Ticket.id.desc()).all()
+    now = utcnow()
     return [
         # 少了 `body`，用户看到的是一排标题、点进去没有内容——
         # 那不是类型问题，是这个页面缺了东西
+        # ESCA-051（150 号）：提单人看得到「有没有人接手」「是否已升级」，看不到接手的是哪位管理员
         {"id": t.id, "subject": t.subject, "body": t.body, "status": t.status,
-         "reply": t.reply, "created_at": iso(t.created_at)}
+         "reply": t.reply, "created_at": iso(t.created_at), "claimed": bool(t.assignee_id),
+         **sla_view(t, now)}
         for t in rows
     ]

@@ -1,4 +1,6 @@
 """管理后台 API（12.E）：用户管理、举报处置队列、平台指标看板。"""
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Header, Query, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func
@@ -277,19 +279,55 @@ class TicketResolveIn(BaseModel):
 @router.get("/admin/tickets")
 def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
                  offset: int = Query(0, ge=0),
+                 escalated_only: bool = False, mine: bool = False,
+                 sort: Literal["id", "urgent"] = "id",
                  admin: User = Depends(require_role("support")), db: Session = Depends(get_db, scope="function")):
     """PAY-045 带分页：此前它接受 `offset` 然后忽略它——
     翻页的人会看到第一页无限重复，而且不知道自己在原地。
-    **接受一个参数然后忽略它**，比拒绝它更糟。"""
+    **接受一个参数然后忽略它**，比拒绝它更糟。
+
+    ESCA-051（150 号 spec）：每行带接手人、等了多久、超了多久、升到第几级；可只看已升级的、只看我接手的、
+    按「最急」排（级别高的在前，同级等得久的在前）。默认排序不变。"""
+    from app.modules.support.escalation import sla_view
     from app.modules.support.models import Ticket
 
-    rows = (db.query(Ticket).filter(Ticket.status == status)
-            .order_by(Ticket.id).offset(offset).limit(limit).all())
+    q = db.query(Ticket).filter(Ticket.status == status)
+    if escalated_only:
+        q = q.filter(Ticket.escalation_level > 0)
+    if mine:
+        q = q.filter(Ticket.assignee_id == admin.id)
+    q = (q.order_by(Ticket.escalation_level.desc(), Ticket.created_at, Ticket.id) if sort == "urgent"
+         else q.order_by(Ticket.id))
+    rows = q.offset(offset).limit(limit).all()
+    ids = {t.assignee_id for t in rows if t.assignee_id}
+    names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_(ids)).all()} if ids else {}
+    now = utcnow()
     return [
         {"id": t.id, "user_id": t.user_id, "subject": t.subject, "body": t.body,
-         "created_at": iso(t.created_at)}
+         "created_at": iso(t.created_at), "assignee_id": t.assignee_id,
+         "assignee_nickname": names.get(t.assignee_id, "") if t.assignee_id else "",
+         **sla_view(t, now)}
         for t in rows
     ]
+
+
+@router.post("/admin/tickets/{ticket_id}/claim")
+def claim_ticket(ticket_id: int, admin: User = Depends(require_role("support")),
+                 db: Session = Depends(get_db, scope="function")):
+    """ESCA-051 「我来处理」：接手后超时提醒只叫醒接手人。可以从别人手里接过来（主管指派、同事请假），
+    审计里写明从谁手里接的。认领不重置计时。"""
+    from app.modules.support.models import Ticket
+
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.status != "open":
+        raise not_found("工单不存在或已处理")
+    prev = ticket.assignee_id
+    ticket.assignee_id, ticket.claimed_at = admin.id, utcnow()
+    record_audit(db, admin.id, "ticket_claim", "ticket", ticket.id,
+                 f"接手工单（此前接手人：{'#' + str(prev) if prev else '无'}）")
+    return {"id": ticket.id, "assignee_id": admin.id, "assignee_nickname": admin.nickname,
+            "previous_assignee_id": prev}
+
 
 
 @router.post("/admin/tickets/{ticket_id}/resolve")
@@ -1061,6 +1099,16 @@ def run_remind_review_queues(_triggered_by: int = Depends(_job_or_admin),
             told += 1
     return {"breached": [r["key"] for r in breached], "admins_notified": digested,
             "submitters_told": told}
+
+
+@router.post("/admin/jobs/escalate-tickets")
+def run_escalate_tickets(_triggered_by: int = Depends(_job_or_admin),
+                         db: Session = Depends(get_db, scope="function"),
+                         __=Depends(job_slot("ticket_escalations"), scope="function")):
+    """ESCA-051 工单超时逐级升级（150 号 spec）：调度器每小时跑一次；每级只叫一次人。"""
+    from app.modules.support.escalation import escalate_overdue
+
+    return escalate_overdue(db)
 
 
 # ------------------------------------------------------------------ SEC-061b 管理员与角色（141 号 spec）

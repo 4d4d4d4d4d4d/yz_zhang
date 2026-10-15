@@ -3,6 +3,7 @@ import OrganizationRecords from './OrganizationRecords';
 import MachineMandate from './MachineMandate';
 import { DistributionHistoryBlock, InviteMemberBlock, VentureInvitesBlock } from './ventureInvites';
 import { JoinTeamByCode } from './teamInvites';
+import { SupportTicketsScreen } from './supportTickets';
 // APP-069 三条线的 App 界面：团队 / 合作体 / 开发者（67 号 spec）。
 //
 // V84 把这三页做在了网页上，App 至今一个都没有。V92 给团队审批补了通知，
@@ -36,7 +37,7 @@ import { ApplicationsScreen, InvitationsScreen, MessagesScreen } from './Message
 import { Button, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export type SubScreen = 'messages' | 'invitations' | 'applications' | 'certifications'
-  | 'rights' | 'ask' | 'teams' | 'ventures' | 'developer' | 'workbench' | 'availability' | 'notebook' | 'packs' | 'opc' | 'gig' | 'capability' | 'influence' | 'sandbox' | 'missions' | 'skills';
+  | 'rights' | 'ask' | 'teams' | 'ventures' | 'developer' | 'workbench' | 'availability' | 'notebook' | 'packs' | 'opc' | 'gig' | 'capability' | 'influence' | 'sandbox' | 'missions' | 'skills' | 'support';
 
 export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   messages: '消息',
@@ -59,6 +60,7 @@ export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   missions: 'AI 编排（目标 → 任务 → 结果，预算上限内）',
   skills: '我的技能（按平台技能概念匹配）',
   availability: '我的可用时间（时段 / 少量接单）',
+  support: '客服与工单（提交 / 回复 / 处理进度）',
 };
 
 export function SubScreenHost({ client, screen, onBack, onPublish }: {
@@ -90,6 +92,7 @@ export function SubScreenHost({ client, screen, onBack, onPublish }: {
       {screen === 'missions' && <MissionsScreen client={client} />}
       {screen === 'skills' && <SkillsScreen client={client} />}
       {screen === 'availability' && <AvailabilityScreen client={client} />}
+      {screen === 'support' && <SupportTicketsScreen client={client} />}
     </ScrollView>
   );
 }

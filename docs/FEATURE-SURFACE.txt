@@ -271,6 +271,7 @@ api POST /api/v1/admin/certifications/{application_id}/revoke
 api POST /api/v1/admin/cities
 api POST /api/v1/admin/coupons
 api POST /api/v1/admin/coupons/{coupon_id}/pause
+api POST /api/v1/admin/jobs/escalate-tickets
 api POST /api/v1/admin/jobs/reconcile
 api POST /api/v1/admin/jobs/remind-review-queues
 api POST /api/v1/admin/knowledge/cards/{card_id}/assign
@@ -297,6 +298,7 @@ api POST /api/v1/admin/skill-concepts
 api POST /api/v1/admin/skill-concepts/{concept_id}/retire
 api POST /api/v1/admin/subsidy-pool/fund
 api POST /api/v1/admin/teams/{team_id}/verify
+api POST /api/v1/admin/tickets/{ticket_id}/claim
 api POST /api/v1/admin/tickets/{ticket_id}/resolve
 api POST /api/v1/admin/uploads/{name}/resolve
 api POST /api/v1/admin/users/{user_id}/ban
@@ -527,6 +529,7 @@ app rights
 app sandbox
 app search
 app spaces
+app supportTickets
 app teamInvites
 app ventureInvites
 app workbench
@@ -614,6 +617,7 @@ sdk circleTasks
 sdk circles
 sdk cities
 sdk claimCoupon
+sdk claimTicket
 sdk claimVerificationOrder
 sdk clarify
 sdk cockpit

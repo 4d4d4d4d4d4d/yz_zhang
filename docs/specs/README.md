@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 150 | 客服工单超时自动升级与 App 我的工单 | [150-ticket-escalation.md](./150-ticket-escalation.md) | P0 |
 | 149 | 审计日志防篡改：哈希链与自检 | [149-audit-chain.md](./149-audit-chain.md) | P0 |
 | 148 | 大额平台结算的四眼：两位不同的财务先后确认 | [148-settle-four-eyes.md](./148-settle-four-eyes.md) | P0 |
 | 147 | 团队邀请链接 | [147-team-invites.md](./147-team-invites.md) | P0 |
