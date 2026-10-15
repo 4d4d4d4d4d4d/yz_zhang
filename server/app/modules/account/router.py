@@ -741,6 +741,20 @@ def _export_influence(db: Session, user_id: int) -> dict:
     }
 
 
+def _export_tickets(db: Session, user_id: int) -> list[dict]:
+    from app.modules.support.models import Ticket, TicketReply
+
+    rows = db.query(Ticket).filter(Ticket.user_id == user_id).order_by(Ticket.id).all()
+    replies: dict[int, list[dict]] = {}
+    if rows:
+        for r in (db.query(TicketReply).filter(TicketReply.ticket_id.in_([t.id for t in rows]))
+                  .order_by(TicketReply.id)):
+            replies.setdefault(r.ticket_id, []).append(
+                {"body": r.body, "from": "客服" if r.is_staff else "我", "created_at": iso(r.created_at)})
+    return [{"id": t.id, "subject": t.subject, "body": t.body, "status": t.status, "created_at": iso(t.created_at),
+             "replies": replies.get(t.id, [])} for t in rows]
+
+
 @router.get("/users/me/export")
 def export_my_data(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from app.modules.content.models import Content
@@ -764,6 +778,8 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
         "notebook": _export_notebook(db, user.id),
         "opc": _export_opc(db, user.id),
         "influence": _export_influence(db, user.id),
+        # ESCA-055（160 号 spec）客服工单与往来也是本人的数据
+        "tickets": _export_tickets(db, user.id),
         "real_name": user.real_name,
         "tasks": [{"id": t.id, "title": t.title, "status": t.status, "budget_cents": t.budget_cents,
                    "role": "creator" if t.creator_id == user.id else "executor"} for t in tasks],

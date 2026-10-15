@@ -168,6 +168,19 @@ def erase_personal_data(db: Session, user: User) -> dict:
     db.query(InfluenceVouch).filter(InfluenceVouch.voucher_id == user.id).delete(synchronize_session=False)
     db.query(InfluenceVouch).filter(InfluenceVouch.subject_id == user.id, InfluenceVouch.status == "active").update(
         {"status": "released"}, synchronize_session=False)
+    # ESCA-055（160 号 spec）客服工单：标题、内容、往来都可能写着个人情况。没转成纠纷的清空文字；
+    # 转成纠纷的保留（纠纷材料按法定期限留存，见 ESCA-001 工单与纠纷互相能找到）
+    from app.modules.support.models import Ticket, TicketReply
+    plain = [t for t in db.query(Ticket).filter(Ticket.user_id == user.id) if not t.escalated_to_dispute_id]
+    for t in plain:
+        t.subject, t.body, t.reply = "（已注销用户的工单）", "", ""
+    if plain:
+        db.query(TicketReply).filter(TicketReply.ticket_id.in_([t.id for t in plain])).update(
+            {"body": ""}, synchronize_session=False)
+    # 分析事件只要聚合数：去掉与人的关联（法律问答答不上的主题等，153 号 spec）
+    from app.modules.analytics.models import AnalyticsEvent
+    db.query(AnalyticsEvent).filter(AnalyticsEvent.user_id == user.id).update(
+        {"user_id": None}, synchronize_session=False)
     user.is_deleted = True
     user.phone = f"deleted:{user.id}"
     user.nickname = "已注销用户"

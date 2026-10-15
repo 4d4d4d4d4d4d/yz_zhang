@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 160 | 功能检视：CORS 暴露响应头与工单进导出和注销处置 | [160-review-fixes.md](./160-review-fixes.md) | P0 |
 | 159 | 全站公告按城市与人群定向、阅读率 | [159-announcement-targeting.md](./159-announcement-targeting.md) | P0 |
 | 158 | 开放 API 按账号的总配额与每分钟剩余次数 | [158-api-account-quota.md](./158-api-account-quota.md) | P0 |
 | 157 | 客服主管指派工单与首次响应时限 | [157-ticket-assign-first-response.md](./157-ticket-assign-first-response.md) | P0 |

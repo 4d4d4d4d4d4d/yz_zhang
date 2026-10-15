@@ -5,6 +5,10 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+
+# CORS-001 客户端要读的响应头（160 号 spec）。新加一个客户端会读的头，要同时登记在这里
+EXPOSED_HEADERS = ("X-Total-Count", "Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining",
+                   "X-Quota-Limit", "X-Quota-Remaining", "X-Account-Quota-Remaining", "X-Request-ID")
 from app.core.db import SessionLocal, get_db, init_db
 from app.core.deps import require_job_auth
 from app.core.guard import WriteRateLimitMiddleware
@@ -34,6 +38,9 @@ def create_app() -> FastAPI:
         allow_origins=settings.cors_origins(),
         allow_methods=["*"],
         allow_headers=["*"],
+        # CORS-001（160 号 spec）：网页与 API 不同源部署时，浏览器只让脚本读到这里列出的响应头。
+        # 不列出来，后台分页的总条数、开放 API 的剩余次数在浏览器里都是 null
+        expose_headers=list(EXPOSED_HEADERS),
     )
     # CONC-067 事务守卫按请求归属（最外层：之后的每一层与线程池都继承这个请求上下文）
     from app.core.txguard import RequestScope
