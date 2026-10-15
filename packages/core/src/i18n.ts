@@ -321,6 +321,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   percent_needs_cap: '比例券必须设置封顶金额',
   phone_taken: '该手机号已被占用',
   reason_required: '驳回必须写明原因，否则申请人不知道该补什么',
+  second_approver_rank: '第二位确认人的级别不能低于第一位：第一次复核是超级管理员，请由另一位超级管理员确认',
   revoke_reason_required: '撤回公告要写明理由：用户会在通知里看到这句话',
   schedule_in_past: '定时发送的时间要晚于现在至少 1 分钟；要马上发就不填时间',
   schedule_too_far: '定时最多提前 30 天；更远的请到时候再排',
@@ -392,6 +393,8 @@ export const SERVER_WORDED_CODES: string[] = [
   // PAY-042 消息里带着**取自配置的门槛金额**（运维改了那句话要跟着变），
   // 客户端编不出等价文案
   'same_approver',
+  // SEC-061f（155 号 spec）消息里带着取自配置的超管确认线金额
+  'second_approver_role',
   'capacity_full',
   'category_mismatch',
   'certification_required',

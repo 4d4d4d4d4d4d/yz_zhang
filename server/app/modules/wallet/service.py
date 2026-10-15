@@ -358,6 +358,13 @@ def decide_withdraw(db: Session, req, approve: bool, admin_id: int | None,
                 "两个不同管理员先后确认。第一次复核就是你——请转交另一位管理员确认",
                 "same_approver",
             )
+        # SEC-061f / PAY-042c（155 号 spec）：大额的第二人要超级管理员；第二人级别不低于第一人
+        if admin_id is not None:
+            from app.core.admin_roles import check_second_approver
+            from app.modules.account.models import User
+
+            check_second_approver(db.get(User, req.first_approved_by) if req.first_approved_by else None,
+                                  db.get(User, admin_id), req.amount_cents)
     lock_wallets(db, req.user_id)  # CONC-012
     acct = get_or_create(db, req.user_id)
     if approve:

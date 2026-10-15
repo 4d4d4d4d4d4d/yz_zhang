@@ -359,7 +359,9 @@ function SettleRequests({ onChanged }: { onChanged: () => void }) {
       {error && <p className="error">{error}</p>}
       {rows.map((r) => (
         <div className="task-item" key={r.id}>
-          <div>{fmtYuan(r.amount_cents)} · {r.memo} <span className="muted">由财务 #{r.requested_by} 于 {formatDateTime(r.created_at)} 发起；钱还没划出</span></div>
+          <div>{fmtYuan(r.amount_cents)} · {r.memo} <span className="muted">由财务 #{r.requested_by} 于 {formatDateTime(r.created_at)} 发起；钱还没划出</span>
+            {/* SEC-061f（155 号 spec） */}
+            {r.needs_super_second && <span className="badge" data-testid={`settle-super-${r.id}`}>金额较大：须超级管理员确认</span>}</div>
           <span className="row">
             <button onClick={() => void act(() => client.approveSettle(r.id))}>确认划出</button>
             <button className="danger" onClick={() => {
@@ -607,6 +609,8 @@ function WithdrawReview() {
               {r.status === 'awaiting_second' && (
                 <p className="muted" data-testid={`wd-first-${r.id}`}>
                   已由管理员 #{r.first_approved_by} 初次复核，等待第二人确认（钱仍在冻结中）
+                  {/* SEC-061f / PAY-042c（155 号 spec） */}
+                  {r.needs_super_second && <span className="badge" data-testid={`withdraw-super-${r.id}`}>金额较大：第二人须是超级管理员</span>}
                 </p>
               )}
               {/* 命中依据带具体数值：只写「疑似拆分」，复核的人无从判断 */}

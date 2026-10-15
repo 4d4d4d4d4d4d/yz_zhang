@@ -47,6 +47,8 @@ export interface PlatformSettleRequestRow {
   decision_reason: string;
   created_at: string;
   decided_at: string | null;
+  /** SEC-061f（155 号 spec）：达到超管确认线，第二人必须是超级管理员 */
+  needs_super_second: boolean;
 }
 /** 第二位财务确认后：多一个划出后的平台余额 */
 export interface PlatformSettleApproved extends PlatformSettleRequestRow {
@@ -471,6 +473,8 @@ export interface WithdrawRequestRow {
   /** PAY-042 第一次复核人。第二个人必须知道自己在确认谁的意见——
    *  也才看得出「这是不是我自己刚批的那一笔」。 */
   first_approved_by: number | null;
+  /** SEC-061f / PAY-042c（155 号 spec）：这一笔要超级管理员作第二人 */
+  needs_super_second: boolean;
   created_at: string;
   nickname: string;
   is_verified: boolean;

@@ -42,6 +42,29 @@ def has_role(user: User, *roles: str) -> bool:
     return "super" in mine or bool(mine & set(roles))
 
 
+# SEC-061f / PAY-042c 四眼的级别（155 号 spec）：超级管理员高于其他角色。第二位确认人的级别不能低于第一位——
+# 超级管理员先批的，由普通财务「确认」，等于下级给上级盖章，复核形同虚设
+RANK = {"super": 2}
+
+
+def rank(user: User) -> int:
+    return max((RANK.get(r, 1) for r in roles_of(user)), default=0)
+
+
+def check_second_approver(first: User | None, second: User, amount_cents: int) -> None:
+    """四眼第二步的人选：金额达到超管确认线时必须是超级管理员；任何金额下级别都不能低于第一位。"""
+    from app.core.config import settings
+    from app.core.errors import forbidden
+
+    line = settings.SUPER_SECOND_APPROVAL_CENTS
+    if amount_cents >= line and "super" not in roles_of(second):
+        raise forbidden(f"达到 ¥{line / 100:.2f} 的出款，第二位确认人必须是超级管理员；请转交超级管理员确认",
+                        "second_approver_role")
+    if first is not None and rank(second) < rank(first):
+        raise forbidden("第二位确认人的级别不能低于第一位：第一次复核是超级管理员，请由另一位超级管理员确认",
+                        "second_approver_rank")
+
+
 def labels(roles) -> str:
     return "、".join(ROLES[r].split("：")[0] for r in roles if r in ROLES)
 

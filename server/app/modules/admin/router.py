@@ -694,7 +694,9 @@ def settle_platform(
 def _settle_row(r) -> dict:
     return {"id": r.id, "amount_cents": r.amount_cents, "memo": r.memo, "requested_by": r.requested_by,
             "status": r.status, "decided_by": r.decided_by, "decision_reason": r.decision_reason,
-            "created_at": iso(r.created_at), "decided_at": iso(r.decided_at)}
+            "created_at": iso(r.created_at), "decided_at": iso(r.decided_at),
+            # SEC-061f（155 号 spec）：这一笔要超级管理员作第二人
+            "needs_super_second": r.amount_cents >= settings.SUPER_SECOND_APPROVAL_CENTS}
 
 
 @router.get("/admin/platform-finance/settle-requests")
@@ -734,6 +736,10 @@ def approve_settle(request_id: int, admin: User = Depends(require_role("finance"
     if req.requested_by == admin.id:
         raise bad_request(f"达到 ¥{settings.PLATFORM_SETTLE_DUAL_APPROVAL_CENTS / 100:.2f} 的结算要另一位财务确认："
                           "发起的就是你，请转交另一位财务", "same_approver")
+    # SEC-061f（155 号 spec）：大额结算的第二人要超级管理员；第二人级别不低于发起人
+    from app.core.admin_roles import check_second_approver
+
+    check_second_approver(db.get(User, req.requested_by), admin, req.amount_cents)
     result = wallet.settle_platform(db, req.amount_cents, req.memo)
     req.status, req.decided_by, req.decided_at = "settled", admin.id, utcnow()
     record_audit(db, admin.id, "platform_settle", "platform_settle", req.id,

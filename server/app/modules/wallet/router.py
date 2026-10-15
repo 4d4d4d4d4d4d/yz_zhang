@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Header, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.db import get_db
 from app.core.deps import (get_current_user, require_admin, require_job_auth,
                             require_verified)
@@ -223,6 +224,9 @@ def list_withdraw_requests(
             # PAY-042 第一次复核是谁——第二个人必须知道自己是在确认谁的意见，
             # 也才看得出「这是不是我自己刚批的那一笔」
             "first_approved_by": r.first_approved_by,
+            # SEC-061f / PAY-042c（155 号 spec）：这一笔要超级管理员作第二人
+            "needs_super_second": (r.amount_cents > settings.WITHDRAW_DUAL_APPROVAL_CENTS
+                                   and r.amount_cents >= settings.SUPER_SECOND_APPROVAL_CENTS),
             "nickname": u.nickname if u else "",
             "is_verified": bool(u and u.is_verified),
             "registered_at": iso(u.created_at) if u else None,
