@@ -53,6 +53,9 @@ class Settings:
     # 通知里的数字不许是字面量，运维改了配置那句话要跟着变。
     WITHDRAW_DUAL_APPROVAL_CENTS = int(
         os.environ.get("PLATFORM_WITHDRAW_DUAL_APPROVAL_CENTS", "2000000"))  # ¥2万
+    # SEC-061c / PAY-042b（148 号 spec）平台结算达到这个金额要两位不同的财务先后确认
+    PLATFORM_SETTLE_DUAL_APPROVAL_CENTS = int(
+        os.environ.get("PLATFORM_SETTLE_DUAL_APPROVAL_CENTS", "1000000"))  # ¥1万
     LARGE_WITHDRAW_CENTS = int(os.environ.get("PLATFORM_LARGE_WITHDRAW_CENTS", "1000000"))  # ≥¥1万人审
     # PAY-044 人审提现的催办与超时兜底（75 号 spec）。
     # 超时**只往可逆方向兜**：退回可用余额，绝不自动放款——
@@ -147,7 +150,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.162.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.163.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

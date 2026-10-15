@@ -56,3 +56,19 @@ class QueueSlaNotice(Base):
     queue_key: Mapped[str] = mapped_column(String(24), index=True)
     item_key: Mapped[str] = mapped_column(String(64), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class PlatformSettleRequest(Base):
+    """SEC-061c / PAY-042b 大额平台结算的四眼（148 号 spec）：一位财务发起，另一位财务确认后才真的划出。"""
+    __tablename__ = "platform_settle_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    memo: Mapped[str] = mapped_column(String(200), default="")
+    requested_by: Mapped[int] = mapped_column(Integer, index=True)
+    # awaiting_second / settled / rejected
+    status: Mapped[str] = mapped_column(String(16), default="awaiting_second", index=True)
+    decided_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    decision_reason: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

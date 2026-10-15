@@ -92,6 +92,9 @@ import type {
   AdminAuditRow,
   PlatformFinanceView,
   AdminList,
+  PlatformSettleApproved,
+  PlatformSettlePending,
+  PlatformSettleRequestRow,
   TeamInviteCreated,
   TeamInviteLink,
   TeamInvitePreview,
@@ -751,10 +754,20 @@ export class PlatformClient {
       'GET', '/admin/platform-finance',
     );
   }
+  /** 小额一步划出；达到双人确认金额时返回 `PlatformSettlePending`（148 号 spec），钱还没动 */
   settlePlatform(amountCents: number, memo = '平台收入结算') {
-    return this.request<{ settled_cents: number; balance_cents: number }>(
+    return this.request<{ settled_cents: number; balance_cents: number } | PlatformSettlePending>(
       'POST', '/admin/platform-finance/settle', { amount_cents: amountCents, memo },
     );
+  }
+  settleRequests(status: 'awaiting_second' | 'settled' | 'rejected' = 'awaiting_second') {
+    return this.request<PlatformSettleRequestRow[]>('GET', `/admin/platform-finance/settle-requests?status=${status}`);
+  }
+  approveSettle(requestId: number) {
+    return this.request<PlatformSettleApproved>('POST', `/admin/platform-finance/settle-requests/${requestId}/approve`);
+  }
+  rejectSettle(requestId: number, reason = '') {
+    return this.request<PlatformSettleRequestRow>('POST', `/admin/platform-finance/settle-requests/${requestId}/reject`, { reason });
   }
   withdrawApplication(applicationId: number) {
     return this.request<{ id: number; status: string }>('POST', `/applications/${applicationId}/withdraw`);

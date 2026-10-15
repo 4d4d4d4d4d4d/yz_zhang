@@ -29,6 +29,30 @@ export interface Me {
   limited_capacity: boolean;
 }
 
+/** SEC-061c / PAY-042b 大额平台结算等第二位财务确认（148 号 spec） */
+export interface PlatformSettlePending {
+  status: 'awaiting_second';
+  request_id: number;
+  amount_cents: number;
+  balance_cents: number;
+  message: string;
+}
+export interface PlatformSettleRequestRow {
+  id: number;
+  amount_cents: number;
+  memo: string;
+  requested_by: number;
+  status: 'awaiting_second' | 'settled' | 'rejected';
+  decided_by: number | null;
+  decision_reason: string;
+  created_at: string;
+  decided_at: string | null;
+}
+/** 第二位财务确认后：多一个划出后的平台余额 */
+export interface PlatformSettleApproved extends PlatformSettleRequestRow {
+  balance_cents: number;
+}
+
 /** TEAM-066 团队邀请链接（147 号 spec） */
 export interface TeamInviteLink {
   id: number;

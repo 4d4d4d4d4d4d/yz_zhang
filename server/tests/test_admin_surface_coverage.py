@@ -57,6 +57,10 @@ REACHED_BY: dict[str, str] = {
     "/admin/sandbox/models": "adminSandboxModels",
     # SKL-101 技能概念表（135 号 spec）：后台「技能概念表」一块
     "/admin/skill-concepts": "adminSkillConcepts",
+    # SEC-061c / PAY-042b 大额结算的四眼（148 号 spec）
+    "/admin/platform-finance/settle-requests": "settleRequests",
+    "/admin/platform-finance/settle-requests/{x}/approve": "approveSettle",
+    "/admin/platform-finance/settle-requests/{x}/reject": "rejectSettle",
     # FIN-061 按期间的平台财务（144 号 spec）
     "/admin/platform-finance/periods": "platformFinancePeriods",
     "/admin/platform-finance/periods/export": "exportPlatformFinancePeriods",

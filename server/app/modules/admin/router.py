@@ -9,7 +9,7 @@ from app.core.db import get_db
 from app.core.deps import get_current_user, require_admin
 from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.core.locks import job_slot
-from app.modules.account.models import User
+from app.modules.account.models import User, utcnow
 from app.modules.content.models import Content
 from app.modules.contract.models import Contract
 from app.modules.dispute.models import Dispute
@@ -554,13 +554,94 @@ def export_platform_finance_periods(
 def settle_platform(
     body: SettleIn, admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function")
 ):
-    """OPS-010 平台收入结算：把平台账户余额划出（模拟对公结算）。"""
+    """OPS-010 平台收入结算：把平台账户余额划出（模拟对公结算）。
+
+    SEC-061c / PAY-042b（148 号 spec）：达到 `PLATFORM_SETTLE_DUAL_APPROVAL_CENTS` 的结算先记成「等第二位财务确认」，
+    不动钱；另一位财务在「待确认的结算」里确认后才真的划出。小额照旧一步完成（响应不变）。"""
     from app.modules.wallet import service as wallet
 
+    if body.amount_cents >= settings.PLATFORM_SETTLE_DUAL_APPROVAL_CENTS:
+        bal = wallet.get_or_create(db, wallet.PLATFORM_USER_ID).available_cents
+        if body.amount_cents <= 0 or body.amount_cents > bal:
+            raise bad_request("结算金额超出平台可用余额", "insufficient_platform_balance")
+        from .models import PlatformSettleRequest
+
+        req = PlatformSettleRequest(amount_cents=body.amount_cents, memo=body.memo, requested_by=admin.id)
+        db.add(req)
+        db.flush()
+        record_audit(db, admin.id, "platform_settle_request", "platform_settle", req.id,
+                     f"发起结算 {body.amount_cents} 分：{body.memo}（等另一位财务确认）")
+        return {"status": "awaiting_second", "request_id": req.id, "amount_cents": body.amount_cents,
+                "balance_cents": bal,
+                "message": f"达到 ¥{settings.PLATFORM_SETTLE_DUAL_APPROVAL_CENTS / 100:.2f} 的结算要另一位财务确认后才会划出"}
     result = wallet.settle_platform(db, body.amount_cents, body.memo)
     record_audit(db, admin.id, "platform_settle", "platform", None,
                  f"结算 {body.amount_cents} 分：{body.memo}")
     return result
+
+
+def _settle_row(r) -> dict:
+    return {"id": r.id, "amount_cents": r.amount_cents, "memo": r.memo, "requested_by": r.requested_by,
+            "status": r.status, "decided_by": r.decided_by, "decision_reason": r.decision_reason,
+            "created_at": iso(r.created_at), "decided_at": iso(r.decided_at)}
+
+
+@router.get("/admin/platform-finance/settle-requests")
+def settle_requests(status: str = Query(default="awaiting_second", pattern="^(awaiting_second|settled|rejected)$"),
+                    admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function")):
+    from .models import PlatformSettleRequest
+
+    rows = (db.query(PlatformSettleRequest).filter(PlatformSettleRequest.status == status)
+            .order_by(PlatformSettleRequest.id.desc()).limit(100).all())
+    return [_settle_row(r) for r in rows]
+
+
+class SettleDecisionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(default="", max_length=200)
+
+
+def _pending_settle(db: Session, request_id: int):
+    from .models import PlatformSettleRequest
+
+    req = (db.query(PlatformSettleRequest).filter(PlatformSettleRequest.id == request_id)
+           .with_for_update().first())
+    if req is None:
+        raise not_found("没有这笔待确认的结算")
+    if req.status != "awaiting_second":
+        raise conflict("这笔结算已经处理过了", "settle_already_decided")
+    return req
+
+
+@router.post("/admin/platform-finance/settle-requests/{request_id}/approve")
+def approve_settle(request_id: int, admin: User = Depends(require_role("finance")),
+                   db: Session = Depends(get_db, scope="function")):
+    """第二位财务确认：发起人自己不能确认（`same_approver`）；确认时再查一次余额，余额不够就不划。"""
+    from app.modules.wallet import service as wallet
+
+    req = _pending_settle(db, request_id)
+    if req.requested_by == admin.id:
+        raise bad_request(f"达到 ¥{settings.PLATFORM_SETTLE_DUAL_APPROVAL_CENTS / 100:.2f} 的结算要另一位财务确认："
+                          "发起的就是你，请转交另一位财务", "same_approver")
+    result = wallet.settle_platform(db, req.amount_cents, req.memo)
+    req.status, req.decided_by, req.decided_at = "settled", admin.id, utcnow()
+    record_audit(db, admin.id, "platform_settle", "platform_settle", req.id,
+                 f"确认结算 {req.amount_cents} 分：{req.memo}（发起人 #{req.requested_by}）")
+    return {**_settle_row(req), "balance_cents": result["balance_cents"]}
+
+
+@router.post("/admin/platform-finance/settle-requests/{request_id}/reject")
+def reject_settle(request_id: int, body: SettleDecisionIn, admin: User = Depends(require_role("finance")),
+                  db: Session = Depends(get_db, scope="function")):
+    """驳回或撤回（发起人自己也可以撤回）；不动钱。驳回别人发起的要写理由。"""
+    req = _pending_settle(db, request_id)
+    if req.requested_by != admin.id and len(body.reason.strip()) < 2:
+        raise bad_request("驳回别人发起的结算要写明理由", "reason_required")
+    req.status, req.decided_by, req.decided_at = "rejected", admin.id, utcnow()
+    req.decision_reason = body.reason.strip() or "发起人撤回"
+    record_audit(db, admin.id, "platform_settle_reject", "platform_settle", req.id,
+                 f"驳回结算 {req.amount_cents} 分：{req.decision_reason}")
+    return _settle_row(req)
 
 
 # ---------- 对账 job（PAY-006/008） ----------

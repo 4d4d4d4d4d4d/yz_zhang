@@ -44,6 +44,7 @@ api GET /api/v1/admin/packs/radar
 api GET /api/v1/admin/platform-finance
 api GET /api/v1/admin/platform-finance/periods
 api GET /api/v1/admin/platform-finance/periods/export
+api GET /api/v1/admin/platform-finance/settle-requests
 api GET /api/v1/admin/queues
 api GET /api/v1/admin/reports
 api GET /api/v1/admin/roles
@@ -284,6 +285,8 @@ api POST /api/v1/admin/packs/{pack_id}/reject
 api POST /api/v1/admin/packs/{pack_id}/retire
 api POST /api/v1/admin/packs/{pack_id}/submit
 api POST /api/v1/admin/platform-finance/settle
+api POST /api/v1/admin/platform-finance/settle-requests/{request_id}/approve
+api POST /api/v1/admin/platform-finance/settle-requests/{request_id}/reject
 api POST /api/v1/admin/reports/{report_id}/resolve
 api POST /api/v1/admin/sandbox/models
 api POST /api/v1/admin/sandbox/models/{model_id}/publish
@@ -579,6 +582,7 @@ sdk appealDispute
 sdk apply
 sdk applyMethod
 sdk approveCircleMember
+sdk approveSettle
 sdk askNotebook
 sdk askPackAssistant
 sdk askSupport
@@ -822,6 +826,7 @@ sdk register
 sdk registerDevice
 sdk rejectChangeOrder
 sdk rejectDelivery
+sdk rejectSettle
 sdk relatedNotes
 sdk releaseDelivered
 sdk removeCircleMember
@@ -875,6 +880,7 @@ sdk setSandbox
 sdk setTeamBudget
 sdk setTripShare
 sdk settlePlatform
+sdk settleRequests
 sdk signContract
 sdk signVideoUpload
 sdk skillConcepts

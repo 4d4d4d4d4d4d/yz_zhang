@@ -66,6 +66,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   opc_platform_entry_locked: '平台导入的收入金额与日期以平台流水为准，不能改；可以补备注、发票号',
   opc_limit_reached: '账目已达上限，请先导出归档后删除旧的',
   skill_alias_taken: '这个写法已经属于别的技能概念：先从那个概念里去掉，再加到这里',
+  settle_already_decided: '这笔结算已经处理过了',
   team_invite_invalid: '这条邀请链接无效：可能已过期、已用完或被作废。请找团队所有者重新发一条',
   team_invite_limit: '同时有效的邀请链接太多了：先作废用不到的',
   batch_empty: '至少选一期',

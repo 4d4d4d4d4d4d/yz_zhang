@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminTicketRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminTicketRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { PacksAdmin } from '../AdminPacks';
@@ -280,6 +280,7 @@ function PlatformFinance() {
   const { client } = useApp();
   const [fin, setFin] = useState<PlatformFinanceView | null>(null);
   const [amount, setAmount] = useState('');
+  const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -301,17 +302,56 @@ function PlatformFinance() {
         <input style={{ width: 140 }} type="number" min={0.01} step={0.01} placeholder="结算金额（元）"
                value={amount} onChange={(e) => setAmount(e.target.value)} />
         <button disabled={!amount} onClick={async () => {
-          setError('');
+          setError(''); setNotice('');
           try {
-            await client.settlePlatform(Math.round(parseFloat(amount) * 100));
+            const r = await client.settlePlatform(Math.round(parseFloat(amount) * 100));
+            // SEC-061c 大额结算先等第二位财务确认（148 号 spec）：钱还没动，说清楚
+            if ('status' in r && r.status === 'awaiting_second') setNotice(r.message);
             setAmount('');
             await load();
           } catch (e) { setError(apiErrorText(e)); }
         }}>结算划出</button>
       </div>
+      {notice && <p role="status">{notice}</p>}
       {error && <p className="error">{error}</p>}
+      <SettleRequests onChanged={() => void load()} />
       <p className="muted">结算只动平台自己的收入；代扣税款在独立专户，不与佣金混同。</p>
       <FinancePeriods />
+    </div>
+  );
+}
+
+/** SEC-061c / PAY-042b 待第二位财务确认的结算（148 号 spec）：发起人自己不能确认，可以撤回；驳回别人的要写理由。 */
+function SettleRequests({ onChanged }: { onChanged: () => void }) {
+  const { client } = useApp();
+  const [rows, setRows] = useState<PlatformSettleRequestRow[]>([]);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    const r = await client.settleRequests().catch(() => []);
+    setRows(Array.isArray(r) ? r : []);
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+  if (rows.length === 0 && !error) return null;
+  async function act(fn: () => Promise<unknown>) {
+    setError('');
+    try { await fn(); await load(); onChanged(); } catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <div aria-label="待确认的结算">
+      <h4>待第二位财务确认的结算（{rows.length}）</h4>
+      {error && <p className="error">{error}</p>}
+      {rows.map((r) => (
+        <div className="task-item" key={r.id}>
+          <div>{fmtYuan(r.amount_cents)} · {r.memo} <span className="muted">由财务 #{r.requested_by} 于 {formatDateTime(r.created_at)} 发起；钱还没划出</span></div>
+          <span className="row">
+            <button onClick={() => void act(() => client.approveSettle(r.id))}>确认划出</button>
+            <button className="danger" onClick={() => {
+              const reason = prompt('驳回理由（发起人自己撤回可以不写）：');
+              if (reason !== null) void act(() => client.rejectSettle(r.id, reason));
+            }}>驳回 / 撤回</button>
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

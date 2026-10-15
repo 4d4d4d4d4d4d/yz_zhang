@@ -18,7 +18,7 @@ from app.modules.contract.models import (  # noqa: F401
     Milestone,
 )
 from app.modules.decompose.models import Decomposition  # noqa: F401
-from app.modules.admin.models import Report  # noqa: F401
+from app.modules.admin.models import PlatformSettleRequest, Report  # noqa: F401
 from app.modules.dispute.models import Dispute  # noqa: F401
 from app.modules.files.models import UploadedFile  # noqa: F401
 from app.modules.finance.models import SettlementOrder, SettlementSplit  # noqa: F401
