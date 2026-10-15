@@ -92,6 +92,9 @@ import type {
   AdminAuditRow,
   PlatformFinanceView,
   AdminList,
+  TeamInviteCreated,
+  TeamInviteLink,
+  TeamInvitePreview,
   ApiKeyRate,
   PeriodQuery,
   PlatformFinanceExport,
@@ -1785,6 +1788,23 @@ export class PlatformClient {
   }
   votePayout(ventureId: number, proposalId: number, approve: boolean) {
     return this.request<PayoutProposalView>('POST', `/ventures/${ventureId}/payout-proposals/${proposalId}/vote`, {approve});
+  }
+  /** TEAM-066 团队邀请链接（147 号 spec）：所有者生成、列出、作废；被邀请人预览、加入 */
+  createTeamInviteLink(teamId: number, input: { spend_limit_cents?: number; max_uses?: number; days?: number } = {}) {
+    return this.request<TeamInviteCreated>('POST', `/teams/${teamId}/invite-links`, input);
+  }
+  teamInviteLinks(teamId: number) {
+    return this.request<TeamInviteLink[]>('GET', `/teams/${teamId}/invite-links`);
+  }
+  revokeTeamInviteLink(teamId: number, linkId: number) {
+    return this.request<TeamInviteLink>('POST', `/teams/${teamId}/invite-links/${linkId}/revoke`);
+  }
+  teamInvitePreview(token: string) {
+    return this.request<TeamInvitePreview>('GET', `/team-invites/${encodeURIComponent(token)}`);
+  }
+  acceptTeamInvite(token: string) {
+    return this.request<{ team_id: number; user_id: number; role: string; spend_limit_cents: number }>(
+      'POST', `/team-invites/${encodeURIComponent(token)}/accept`);
   }
   /** COOP-060 我收到的、还没过期的合作体邀请（142 号 spec） */
   myVentureInvitations() {

@@ -29,6 +29,33 @@ export interface Me {
   limited_capacity: boolean;
 }
 
+/** TEAM-066 团队邀请链接（147 号 spec） */
+export interface TeamInviteLink {
+  id: number;
+  spend_limit_cents: number;
+  uses: number;
+  max_uses: number;
+  expires_at: string;
+  created_at: string;
+  state: 'active' | 'used_up' | 'expired' | 'revoked';
+}
+/** 生成时的响应：令牌只出现这一次 */
+export interface TeamInviteCreated extends TeamInviteLink {
+  token: string;
+  /** 站内路径，例如 /teams/join/xxxx */
+  path: string;
+  warning: string;
+}
+export interface TeamInvitePreview {
+  team_id: number;
+  team_name: string;
+  inviter_nickname: string;
+  role: 'member';
+  spend_limit_cents: number;
+  expires_at: string;
+  already_member: boolean;
+}
+
 /** COOP-060 我收到的合作体邀请（142 号 spec）：接受前要读并签当前版本的风险揭示书 */
 export interface VentureInvitationView {
   venture_id: number;

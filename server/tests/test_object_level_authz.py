@@ -111,6 +111,9 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
      "接受报名限发布方，撤回报名限报名人本人"),
     (r"^POST /invitations/", "party", "邀约的接受与拒绝限被邀请人：替别人接单会把他绑进一份合约"),
     # ---- 团队 / 合作体 ----
+    (r"^\w+ /team-invites/", "self",
+     "TEAM-066（147 号 spec）：令牌本身就是授权——只存哈希、不可猜、有有效期与次数上限、可作废；"
+     "预览只给团队名、邀请人与额度，不给成员名单；加入要登录，且只能把自己加进去"),
     (r"^\w+ /teams/.*/spends", "party",
      "预算申请、审批、执行按团队成员档位（owner/admin/member）鉴权"),
     (r"^\w+ /teams/", "party",

@@ -20,6 +20,7 @@ import Support from './pages/Support';
 import TaskDetail from './pages/TaskDetail';
 import Developer from './pages/Developer';
 import Teams from './pages/Teams';
+import TeamJoin from './pages/TeamJoin';
 import Ventures from './pages/Ventures';
 import Verify from './pages/Verify';
 import Workbench from './pages/Workbench';
@@ -120,6 +121,7 @@ export default function App() {
         <Route path="/verify" element={hasToken ? <Verify /> : <Navigate to="/login" />} />
         <Route path="/ventures" element={hasToken ? <Ventures /> : <Navigate to="/login" />} />
         <Route path="/teams" element={hasToken ? <Teams /> : <Navigate to="/login" />} />
+        <Route path="/teams/join/:token" element={hasToken ? <TeamJoin /> : <Navigate to="/login" />} />
         <Route path="/developer" element={hasToken ? <Developer /> : <Navigate to="/login" />} />
         <Route path="/admin" element={hasToken ? <Admin /> : <Navigate to="/login" />} />
       </Routes>

@@ -2,6 +2,7 @@ import PayoutGovernance from './PayoutGovernance';
 import OrganizationRecords from './OrganizationRecords';
 import MachineMandate from './MachineMandate';
 import { DistributionHistoryBlock, InviteMemberBlock, VentureInvitesBlock } from './ventureInvites';
+import { JoinTeamByCode } from './teamInvites';
 // APP-069 三条线的 App 界面：团队 / 合作体 / 开发者（67 号 spec）。
 //
 // V84 把这三页做在了网页上，App 至今一个都没有。V92 给团队审批补了通知，
@@ -128,6 +129,7 @@ function TeamsScreen({ client }: { client: PlatformClient }) {
       </Text>
       {!!error && <Text style={s.error}>{error}</Text>}
       {mine.length === 0 && <Text style={s.muted}>你还没有加入任何团队。</Text>}
+      <JoinTeamByCode client={client} onJoined={() => void load()} />
       {mine.map((t) => (
         <TouchableOpacity key={t.id} style={s.card} onPress={() => setOpen(t.id)}>
           <Text style={s.cardTitle}>{t.name}</Text>

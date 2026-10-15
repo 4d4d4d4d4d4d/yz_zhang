@@ -3,6 +3,7 @@
 import { apiErrorText, fmtYuan, formatDate, type InvoiceRow, type PlatformClient, type TeamDetail } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { TeamInviteLinkBlock } from './teamInvites';
 
 /** TAX-024 平台服务费发票：文案照服务端口径，只开平台佣金那部分。
  *  APP-076：开票是按合约的动作——传了 `contractId` 就是合约卡片里的入口，合约号已填好、只列这一单的发票。 */
@@ -99,6 +100,7 @@ export function TeamMembersBlock({ client, teamId, team, onChanged }: { client: 
             await client.addTeamMember(teamId, Number(userId), 'member', Math.round(Number(limit || '0') * 100));
             setUserId('');
           }, '已加入')} />
+          <TeamInviteLinkBlock client={client} teamId={teamId} />
         </>
       )}
       {!owner && <Text style={s.muted}>只有团队所有者能管理成员。</Text>}

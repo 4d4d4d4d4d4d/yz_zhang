@@ -1,6 +1,6 @@
 import {
   apiErrorText, fmtYuan,
-  type SpendRequestView, type TeamDetail, type TeamView,
+  type SpendRequestView, type TeamDetail, type TeamInviteLink, type TeamView,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -247,6 +247,48 @@ function TeamMembers({ teamId, team, onChanged }: { teamId: number; team: TeamDe
       ) : <p className="muted">只有团队所有者能管理成员。</p>}
       {notice && <p role="status">{notice}</p>}
       {error && <p className="error">{error}</p>}
+      {owner && <InviteLinks teamId={teamId} />}
+    </div>
+  );
+}
+
+/** TEAM-066 邀请链接（147 号 spec）：不用让对方先报用户编号。链接只显示一次，用完、过期或作废就失效。 */
+function InviteLinks({ teamId }: { teamId: number }) {
+  const { client } = useApp();
+  const [rows, setRows] = useState<TeamInviteLink[]>([]);
+  const [limit, setLimit] = useState('0');
+  const [uses, setUses] = useState('1');
+  const [fresh, setFresh] = useState('');
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    const r = await client.teamInviteLinks(teamId).catch(() => []);
+    setRows(Array.isArray(r) ? r : []);
+  }, [client, teamId]);
+  useEffect(() => { void load(); }, [load]);
+  const STATE: Record<string, string> = { active: '有效', used_up: '已用完', expired: '已过期', revoked: '已作废' };
+  return (
+    <div aria-label="邀请链接">
+      <h4>邀请链接</h4>
+      <div className="row">
+        <input aria-label="链接的月度额度" type="number" min={0} placeholder="加入后的月度额度（元）" value={limit} onChange={(e) => setLimit(e.target.value)} />
+        <input aria-label="可用次数" type="number" min={1} max={50} value={uses} onChange={(e) => setUses(e.target.value)} />
+        <button onClick={() => void (async () => {
+          setError('');
+          try {
+            const r = await client.createTeamInviteLink(teamId, { spend_limit_cents: Math.round(Number(limit || '0') * 100), max_uses: Number(uses || '1') });
+            setFresh(`${window.location.origin}${r.path}`);
+            await load();
+          } catch (e) { setError(apiErrorText(e)); }
+        })()}>生成邀请链接（7 天有效）</button>
+      </div>
+      {fresh && <p role="status" data-testid="fresh-invite">把这条链接发给对方（只显示这一次）：<code>{fresh}</code></p>}
+      {error && <p className="error">{error}</p>}
+      <ul className="muted">
+        {rows.map((r) => (
+          <li key={r.id}>额度 {fmtYuan(r.spend_limit_cents)} · 已用 {r.uses}/{r.max_uses} · {STATE[r.state] ?? r.state}
+            {r.state === 'active' && <> <button className="text-link" onClick={() => void client.revokeTeamInviteLink(teamId, r.id).then(load)}>作废</button></>}</li>
+        ))}
+      </ul>
     </div>
   );
 }

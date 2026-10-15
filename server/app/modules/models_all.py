@@ -39,7 +39,7 @@ from app.modules.openapi.models import (  # noqa: F401
     WebhookDelivery,
 )
 from app.modules.openapi.machine import MachineMandate, MachineAction  # noqa: F401
-from app.modules.team.models import SpendRequest, Team, TeamMember  # noqa: F401
+from app.modules.team.models import SpendRequest, Team, TeamInvite, TeamMember  # noqa: F401
 from app.modules.coop.models import (  # noqa: F401
     Contribution,
     Distribution,

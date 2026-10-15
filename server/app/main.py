@@ -102,6 +102,7 @@ def create_app() -> FastAPI:
     from app.modules.coop.governance import router as governance_router
     from app.modules.coop.organization import router as organization_router
     from app.modules.team.router import router as team_router
+    from app.modules.team.invites import router as team_invite_router
     from app.modules.openapi.router import router as openapi_router
     from app.modules.openapi.machine import router as machine_router
     from app.modules.spaces.router import router as spaces_router
@@ -188,6 +189,7 @@ def create_app() -> FastAPI:
         organization_router,
         governance_router,
         team_router,
+        team_invite_router,
         openapi_router,
         machine_router,
     ):

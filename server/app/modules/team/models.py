@@ -104,3 +104,23 @@ class SpendRequest(Base):
     # 「第二次提醒」如果也只有一次，三个月后还是同一个问题。
     reminded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class TeamInvite(Base):
+    """TEAM-066 团队邀请链接（147 号 spec）：所有者生成一条链接，对方点开、登录后自己加入。
+
+    只存令牌的哈希（与 API Key 同一条道理）；有有效期与使用次数上限；所有者随时可以作废。
+    通过链接加入的一律是普通成员，额度是生成链接时定好的——提成管理员仍要所有者手动改。
+    """
+    __tablename__ = "team_invites"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    team_id: Mapped[int] = mapped_column(Integer, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    spend_limit_cents: Mapped[int] = mapped_column(Integer, default=0)
+    max_uses: Mapped[int] = mapped_column(Integer, default=1)
+    uses: Mapped[int] = mapped_column(Integer, default=0)
+    created_by: Mapped[int] = mapped_column(Integer)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

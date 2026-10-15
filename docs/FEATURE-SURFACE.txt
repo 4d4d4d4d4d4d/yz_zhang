@@ -183,8 +183,10 @@ api GET /api/v1/tasks/{task_id}/recommendations
 api GET /api/v1/tasks/{task_id}/reviews
 api GET /api/v1/tasks/{task_id}/tree
 api GET /api/v1/tasks/{task_id}/trip
+api GET /api/v1/team-invites/{token}
 api GET /api/v1/teams/mine
 api GET /api/v1/teams/{team_id}
+api GET /api/v1/teams/{team_id}/invite-links
 api GET /api/v1/teams/{team_id}/spends
 api GET /api/v1/users/me
 api GET /api/v1/users/me/applications
@@ -433,10 +435,13 @@ api POST /api/v1/tasks/{task_id}/reviews
 api POST /api/v1/tasks/{task_id}/sos
 api POST /api/v1/tasks/{task_id}/trip-share
 api POST /api/v1/tasks/{task_id}/verification
+api POST /api/v1/team-invites/{token}/accept
 api POST /api/v1/teams
 api POST /api/v1/teams/jobs/remind-approvals
 api POST /api/v1/teams/{team_id}/budget
 api POST /api/v1/teams/{team_id}/company
+api POST /api/v1/teams/{team_id}/invite-links
+api POST /api/v1/teams/{team_id}/invite-links/{link_id}/revoke
 api POST /api/v1/teams/{team_id}/members
 api POST /api/v1/teams/{team_id}/spends
 api POST /api/v1/teams/{team_id}/spends/{request_id}/decide
@@ -518,6 +523,7 @@ app rights
 app sandbox
 app search
 app spaces
+app teamInvites
 app ventureInvites
 app workbench
 sdk acceptAgreements
@@ -527,6 +533,7 @@ sdk acceptDelivery
 sdk acceptInvitation
 sdk acceptMilestone
 sdk acceptSettlement
+sdk acceptTeamInvite
 sdk addDisputeStatement
 sdk addGigPlace
 sdk addNoteTodos
@@ -628,6 +635,7 @@ sdk createNote
 sdk createSandboxModel
 sdk createTask
 sdk createTeam
+sdk createTeamInviteLink
 sdk createTicket
 sdk createVenture
 sdk createVouch
@@ -840,6 +848,7 @@ sdk revokeApiKey
 sdk revokeCertification
 sdk revokeConsent
 sdk revokeSession
+sdk revokeTeamInviteLink
 sdk rotateApiKey
 sdk runAgent
 sdk runWorkbenchRoutine
@@ -884,6 +893,8 @@ sdk taskProfile
 sdk taskTemplate
 sdk taskTree
 sdk team
+sdk teamInviteLinks
+sdk teamInvitePreview
 sdk teamSpends
 sdk tickMission
 sdk toggleBlock
@@ -977,6 +988,7 @@ web /support
 web /tasks/:id
 web /tasks/:id/decompose
 web /teams
+web /teams/join/:token
 web /ventures
 web /verify
 web /wallet
