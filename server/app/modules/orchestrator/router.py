@@ -234,13 +234,44 @@ def _summary(db: Session, m: Mission) -> dict:
 def save_summary(mission_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """AGT-092 把复盘存进个人知识库（134 号 spec）：一份笔记，标签「编排复盘」；再存一次更新同一条，不会重复。"""
     from app.core.timefmt import iso as _iso
-    from app.modules.account.models import utcnow
-    from app.modules.notebook import service as nsvc
-    from app.modules.notebook.models import NbNote
 
     m = _get_mission(db, mission_id, user)
     if m.owner_id != user.id:
         raise forbidden("只有发起人能把复盘存进自己的知识库")
+    note, created = _save_summary_note(db, m, user)
+    return {"note_id": note.id, "created": created, "title": note.title, "saved_at": _iso(note.updated_at)}
+
+
+@router.post("/missions/{mission_id}/summary/distill")
+def distill_summary(mission_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """AGT-093 从复盘一步蒸馏成「我的方法」草稿（154 号 spec）。
+
+    此前要先存笔记、再到知识库里选那条笔记蒸馏；而编排的步骤本来就是结构化的，不必从文字里再猜。
+    先把复盘存进知识库（同 save，作为方法的出处），再把**做成了的步骤**按顺序收成方法草稿：
+    步骤名作标题、验收标准作说明；失败的、被替换的不进方法。只出草稿，用户确认后再调「保存为我的方法」。
+    """
+    m = _get_mission(db, mission_id, user)
+    if m.owner_id != user.id:
+        raise forbidden("只有发起人能把复盘蒸馏成自己的方法")
+    note, _created = _save_summary_note(db, m, user)
+    live = db.query(MissionStep).filter(MissionStep.mission_id == m.id, MissionStep.status != "superseded")\
+        .order_by(MissionStep.id).all()
+    done = [x for x in live if x.status == "done"]
+    from app.modules.notebook.service import LIMITS
+
+    steps = [{"title": x.title[:200], "note": "；".join(x.acceptance or [])[:500]} for x in done][:LIMITS["steps"]]
+    base = m.goal.strip()
+    return {"name": f"{base}的做法"[:60], "steps": steps, "source_note_ids": [note.id],
+            "found": "mission_steps" if steps else "none", "note_id": note.id, "note_title": note.title,
+            "skipped_steps": len(live) - len(done)}
+
+
+def _save_summary_note(db: Session, m, user: User):
+    """把复盘写成（或更新）一条「编排复盘」笔记，返回 (笔记, 是否新建)。save 与 distill 共用。"""
+    from app.modules.account.models import utcnow
+    from app.modules.notebook import service as nsvc
+    from app.modules.notebook.models import NbNote
+
     s = _summary(db, m)
     steps = db.query(MissionStep).filter(MissionStep.mission_id == m.id, MissionStep.status != "superseded")\
         .order_by(MissionStep.id).all()
@@ -265,7 +296,7 @@ def save_summary(mission_id: int, user: User = Depends(get_current_user), db: Se
         note.body, note.updated_at, note.revision = body, now, note.revision + 1
         db.add(note)
     db.flush()
-    return {"note_id": note.id, "created": created, "title": note.title, "saved_at": _iso(note.updated_at)}
+    return note, created
 
 
 @router.put("/missions/{mission_id}/tools")

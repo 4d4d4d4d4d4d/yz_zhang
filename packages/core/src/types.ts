@@ -2111,6 +2111,19 @@ export interface NbMethodDraft {
   /** numbered：取的是编号步骤；bullets：圆点列表；none：没找到步骤，请手写 */
   found: 'numbered' | 'bullets' | 'none';
 }
+/** AGT-093 从编排复盘蒸馏出的方法草稿（154 号 spec）：只收做成了的步骤；确认后调 `createMethod` */
+export interface MissionMethodDraft {
+  name: string;
+  steps: WbStep[];
+  /** 复盘存进知识库的那条笔记（方法的出处） */
+  source_note_ids: number[];
+  /** mission_steps：取自做成了的步骤；none：还没有做成的步骤 */
+  found: 'mission_steps' | 'none';
+  note_id: number;
+  note_title: string;
+  /** 没收进方法的步骤数（失败、进行中等） */
+  skipped_steps: number;
+}
 export interface NbExport {
   filename: string;
   notes: number;

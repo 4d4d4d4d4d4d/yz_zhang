@@ -1,6 +1,6 @@
 import {
   apiErrorText, fmtYuan, formatDateTime,
-  type Mission, type MissionEvent, type MissionStep, type MissionSummary,
+  type Mission, type MissionEvent, type MissionMethodDraft, type MissionStep, type MissionSummary,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -25,6 +25,8 @@ export default function Missions() {
   const [list, setList] = useState<Mission[]>([]);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [summary, setSummary] = useState<MissionSummary | null>(null);
+  // AGT-093 复盘蒸馏出的方法草稿（154 号 spec）
+  const [draft, setDraft] = useState<MissionMethodDraft | null>(null);
   const [form, setForm] = useState({ goal: '', detail: '', category: '跑腿', budget: '300', iters: 3, acceptance: '', allow_agents: false, allow_tools: true });
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -95,6 +97,24 @@ export default function Missions() {
                 const r = await client.saveMissionSummary(detail.id);
                 setNotice(r.created ? `已存进你的知识库：「${r.title}」` : `已更新知识库里的「${r.title}」`);
               }, '')}>存进我的知识库</button>
+              {/* AGT-093 一步蒸馏成「我的方法」：只出草稿，确认后才保存（154 号 spec） */}
+              <button className="ghost" onClick={() => void act(async () => {
+                setDraft(await client.distillMissionMethod(detail.id));
+              }, '')}>蒸馏成我的方法</button>
+              {draft && (
+                <div className="card" aria-label="方法草稿">
+                  {draft.steps.length === 0
+                    ? <p className="muted">还没有做成的步骤，等有步骤完成后再蒸馏。复盘已存进知识库「{draft.note_title}」。</p>
+                    : (<>
+                        <p><strong>{draft.name}</strong>（{draft.steps.length} 步，取自做成了的步骤{draft.skipped_steps ? `；${draft.skipped_steps} 步没做成，没收进来` : ''}）</p>
+                        <ol>{draft.steps.map((x) => <li key={x.title}>{x.title}{x.note ? `：${x.note}` : ''}</li>)}</ol>
+                        <button onClick={() => void act(async () => {
+                          await client.createMethod({ name: draft.name, steps: draft.steps, source_note_ids: draft.source_note_ids });
+                          setDraft(null);
+                        }, '已保存为你的方法，在「我的知识库 → 我的方法」里可以修改和套用')}>保存为我的方法</button>
+                      </>)}
+                </div>
+              )}
             </div>
           )}
           <h4>步骤</h4>

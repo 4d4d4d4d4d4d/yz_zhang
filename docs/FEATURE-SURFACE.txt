@@ -393,6 +393,7 @@ api POST /api/v1/missions/jobs/tick-all
 api POST /api/v1/missions/{mission_id}/cancel
 api POST /api/v1/missions/{mission_id}/steps/{step_id}/drafts/{invocation_id}/adopt
 api POST /api/v1/missions/{mission_id}/steps/{step_id}/drafts/{invocation_id}/discard
+api POST /api/v1/missions/{mission_id}/summary/distill
 api POST /api/v1/missions/{mission_id}/summary/save
 api POST /api/v1/missions/{mission_id}/tick
 api POST /api/v1/notebook/ask
@@ -694,6 +695,7 @@ sdk disputeByTask
 sdk disputeStatements
 sdk distillKnowledgeUnit
 sdk distillMethod
+sdk distillMissionMethod
 sdk distributeVenture
 sdk editContent
 sdk editDecomposition

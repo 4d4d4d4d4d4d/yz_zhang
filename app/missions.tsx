@@ -1,7 +1,7 @@
 // ORC-066 / AGT-084 AI 编排（131 号 spec）——App 端：说一个目标，平台在预算上限内拆成任务发出去、看结果、不达标就整改；
 // 授权后分发时用平台经验工具生成草稿，挂在步骤上等你「采用 / 丢弃」，不会替你发给任何人。
 import {
-  apiErrorText, fmtYuan, type Mission, type MissionEvent, type MissionStep, type MissionSummary, type PlatformClient,
+  apiErrorText, fmtYuan, type Mission, type MissionEvent, type MissionMethodDraft, type MissionStep, type MissionSummary, type PlatformClient,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -19,6 +19,8 @@ export function MissionsScreen({ client }: { client: PlatformClient }) {
   const [openId, setOpenId] = useState<number | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [summary, setSummary] = useState<MissionSummary | null>(null);
+  // AGT-093 复盘蒸馏出的方法草稿（154 号 spec）
+  const [draft, setDraft] = useState<MissionMethodDraft | null>(null);
   const [goal, setGoal] = useState('');
   const [budget, setBudget] = useState('300');
   const [tools, setTools] = useState(true);
@@ -69,6 +71,21 @@ export function MissionsScreen({ client }: { client: PlatformClient }) {
               const r = await client.saveMissionSummary(d.id);
               setNotice(r.created ? `已存进你的知识库：「${r.title}」` : `已更新知识库里的「${r.title}」`);
             }, '')} />
+            <Button title="蒸馏成我的方法" onPress={() => void act(async () => { setDraft(await client.distillMissionMethod(d.id)); }, '')} />
+            {draft && (
+              <View style={s.card} accessibilityLabel="方法草稿">
+                {draft.steps.length === 0
+                  ? <Text style={s.muted}>还没有做成的步骤，等有步骤完成后再蒸馏。复盘已存进知识库。</Text>
+                  : (<>
+                      <Text>{draft.name}（{draft.steps.length} 步{draft.skipped_steps ? `；${draft.skipped_steps} 步没做成，没收进来` : ''}）</Text>
+                      {draft.steps.map((x, i) => <Text key={x.title}>{i + 1}. {x.title}{x.note ? `：${x.note}` : ''}</Text>)}
+                      <Button title="保存为我的方法" onPress={() => void act(async () => {
+                        await client.createMethod({ name: draft.name, steps: draft.steps, source_note_ids: draft.source_note_ids });
+                        setDraft(null);
+                      }, '已保存为你的方法，在「我的知识库 → 我的方法」里可以修改和套用')} />
+                    </>)}
+              </View>
+            )}
           </View>
         )}
         {d.steps.map((st) => (

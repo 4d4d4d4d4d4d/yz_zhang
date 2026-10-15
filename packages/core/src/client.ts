@@ -59,6 +59,7 @@ import type {
   MissionEvent,
   MissionDraftDecision,
   MissionSummary,
+  MissionMethodDraft,
   MissionSummarySaved,
   AssistantCosts,
   MissionStep,
@@ -885,6 +886,8 @@ export class PlatformClient {
   missionSummary(id: number) { return this.request<MissionSummary>('GET', `/missions/${id}/summary`); }
   /** AGT-092 把复盘存进个人知识库（标签「编排复盘」；再存一次更新同一条） */
   saveMissionSummary(id: number) { return this.request<MissionSummarySaved>('POST', `/missions/${id}/summary/save`); }
+  /** AGT-093 复盘一步蒸馏成「我的方法」草稿（154 号 spec）：先存复盘笔记作出处，只收做成了的步骤；确认后调 createMethod */
+  distillMissionMethod(id: number) { return this.request<MissionMethodDraft>('POST', `/missions/${id}/summary/distill`); }
   /** REL-110 本月助手花了多少、上限多少 */
   assistantCosts() { return this.request<AssistantCosts>('GET', '/users/me/assistant-costs'); }
   cancelMission(id: number) {
