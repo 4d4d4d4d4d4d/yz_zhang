@@ -28,6 +28,7 @@ ROUTE_ROLES = {
     "GET /admin/aml/stats": ('compliance',),
     "GET /admin/audit-log": ('compliance',),
     "GET /admin/audit-log/export": ('compliance',),
+    "GET /admin/audit-log/verify": ('compliance',),
     "GET /admin/platform-finance/periods": ('finance',),
     "GET /admin/platform-finance/settle-requests": ('finance',),
     "POST /admin/platform-finance/settle-requests/{request_id}/approve": ('finance',),

@@ -102,6 +102,7 @@ import type {
   PeriodQuery,
   PlatformFinanceExport,
   PlatformFinancePeriods,
+  AuditChainReport,
   AuditLogExport,
   AuditLogFilter,
   WithdrawQueueFilter,
@@ -1415,6 +1416,10 @@ export class PlatformClient {
   /** ADMIN-061 导出 CSV：时间是北京时间并在表头写明；导出本身进审计 */
   exportAuditLog(params: AuditLogFilter = {}) {
     return this.request<AuditLogExport>('GET', `/admin/audit-log/export${qs(params)}`);
+  }
+  /** ADMIN-062 审计日志自检（149 号 spec）：哈希链从头走到链头，指出被改、被删、被绕过的位置 */
+  verifyAuditChain() {
+    return this.request<AuditChainReport>('GET', '/admin/audit-log/verify');
   }
   /** PAY-043 提现复核台筛选与分页（143 号 spec）：带总条数 */
   withdrawRequestsPage(params: WithdrawQueueFilter = {}) {

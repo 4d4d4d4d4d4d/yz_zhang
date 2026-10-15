@@ -24,9 +24,11 @@ router = APIRouter(tags=["admin"])
 
 def record_audit(db, admin_id: int, action: str, target_type: str = "",
                  target_id: int | None = None, detail: str = "") -> None:
-    """OPS-012 管理员操作审计留痕（高权限动作统一调用）。"""
-    db.add(AdminAudit(admin_id=admin_id, action=action, target_type=target_type,
-                      target_id=target_id, detail=detail[:500]))
+    """OPS-012 管理员操作审计留痕（高权限动作统一调用）。ADMIN-062 起每条进哈希链（149 号 spec）。"""
+    from .audit_chain import append
+
+    append(db, AdminAudit(admin_id=admin_id, action=action, target_type=target_type,
+                          target_id=target_id, detail=detail[:500]))
 
 
 class UnbanIn(BaseModel):
@@ -142,6 +144,18 @@ def audit_log(
          "detail": r.detail, "created_at": iso(r.created_at)}
         for r in rows
     ]
+
+
+@router.get("/admin/audit-log/verify")
+def verify_audit_log(admin: User = Depends(require_role("compliance")), db: Session = Depends(get_db, scope="function")):
+    """ADMIN-062 审计日志自检（149 号 spec）：从链上第一条走到链头，指出第一处断点。自检本身也进审计。"""
+    from .audit_chain import verify
+
+    out = verify(db)
+    record_audit(db, admin.id, "verify_audit_log", "audit_log", None,
+                 f"{'完整' if out['ok'] else '有断点'}，检查 {out['checked']} 条")
+    db.commit()
+    return out
 
 
 @router.get("/admin/audit-log/export")

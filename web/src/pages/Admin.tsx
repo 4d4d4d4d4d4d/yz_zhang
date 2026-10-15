@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminTicketRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AuditChainReport, type AdminTicketRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { PacksAdmin } from '../AdminPacks';
@@ -230,6 +230,12 @@ function AuditLog() {
       setNotice(`已导出 ${r.rows} 行（时间为${r.timezone}）${r.truncated ? `；共 ${r.total} 行，超过上限只导出了最新的 ${r.rows} 行，请缩小时间段` : ''}。导出已记入审计。`);
     } catch (e) { setError(apiErrorText(e)); }
   }
+  // ADMIN-062 完整性自检（149 号 spec）
+  const [chain, setChain] = useState<AuditChainReport | null>(null);
+  async function verifyChain() {
+    setError(''); setChain(null);
+    try { setChain(await client.verifyAuditChain()); } catch (e) { setError(apiErrorText(e)); }
+  }
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const pages = total === null ? null : Math.max(1, Math.ceil(total / PAGE));
 
@@ -246,7 +252,18 @@ function AuditLog() {
         <input style={{ width: 140 }} aria-label="说明包含" placeholder="说明里包含" value={f.q} onChange={set('q')} />
         <button className="ghost" onClick={() => void load(0)}>查询</button>
         <button className="ghost" onClick={() => void exportCsv()}>导出 CSV</button>
+        <button className="ghost" onClick={() => void verifyChain()}>校验完整性</button>
       </div>
+      {chain && (
+        <div aria-label="审计完整性" className={chain.ok ? 'muted' : 'error'}>
+          {chain.ok
+            ? <p>完整：链上 {chain.checked} 条逐条对得上，最新一条是 #{chain.head_audit_id}。{chain.legacy_unchained > 0 && `另有 ${chain.legacy_unchained} 条是启用哈希链之前的旧记录，不在链上。`}</p>
+            : (<>
+                <p>发现断点：日志可能被改过或删过。请保留现场，交合规负责人和数据库管理员核查。</p>
+                <ul>{chain.problems.map((x, i) => <li key={i}>#{x.audit_id}：{x.reason}</li>)}</ul>
+              </>)}
+        </div>
+      )}
       {notice && <p role="status">{notice}</p>}
       {error && <p className="error">{error}</p>}
       {rows.length === 0 ? <p className="muted">没有匹配的记录。</p> : (

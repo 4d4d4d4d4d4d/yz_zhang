@@ -66,6 +66,7 @@ REACHED_BY: dict[str, str] = {
     "/admin/platform-finance/periods/export": "exportPlatformFinancePeriods",
     # ADMIN-061 审计日志导出（143 号 spec）
     "/admin/audit-log/export": "exportAuditLog",
+    "/admin/audit-log/verify": "verifyAuditChain",   # V177 审计哈希链自检（149 号）
     # SEC-061b 管理员与角色（141 号 spec）
     "/admin/roles": "adminRoleCatalog",
     "/admin/admins": "listAdmins",

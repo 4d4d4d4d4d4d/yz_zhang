@@ -38,6 +38,21 @@ class AdminAudit(Base):
     target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     detail: Mapped[str] = mapped_column(String(500), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # ADMIN-062 哈希链（149 号 spec）：本条的哈希 = sha256(上一条的哈希 + 本条内容)。
+    # 改一条、删中间一条、删最后几条，自检都能指出在哪里断的。V177 之前的旧记录没有哈希，不在链上
+    prev_hash: Mapped[str] = mapped_column(String(64), default="")
+    hash: Mapped[str] = mapped_column(String(64), default="", index=True)
+
+
+class AuditChainHead(Base):
+    """ADMIN-062 链头（只有一行）：最新一条的编号与哈希。写审计时锁住它，并发写也排成一条链；
+    删掉最后几条时，链头对不上就能发现。"""
+    __tablename__ = "audit_chain_head"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    last_audit_id: Mapped[int] = mapped_column(Integer, default=0)
+    last_hash: Mapped[str] = mapped_column(String(64), default="")
+    count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class QueueSlaNotice(Base):

@@ -26,6 +26,7 @@ api GET /api/v1/admin/aml/activities
 api GET /api/v1/admin/aml/stats
 api GET /api/v1/admin/audit-log
 api GET /api/v1/admin/audit-log/export
+api GET /api/v1/admin/audit-log/verify
 api GET /api/v1/admin/campaigns
 api GET /api/v1/admin/certifications
 api GET /api/v1/admin/certifications/pending
@@ -941,6 +942,7 @@ sdk ventureRiskDisclosure
 sdk ventureShares
 sdk verificationOrder
 sdk verifyAnchorChain
+sdk verifyAuditChain
 sdk verifyIdentity
 sdk verifyTeam
 sdk votePayout

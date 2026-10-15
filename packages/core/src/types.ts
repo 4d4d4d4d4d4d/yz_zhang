@@ -135,6 +135,26 @@ export interface AuditLogFilter {
   until?: string;
   q?: string;
 }
+/** ADMIN-062 审计链自检的一处断点（149 号 spec） */
+export interface AuditChainProblem {
+  audit_id: number;
+  /** 人话原因，例如「内容与哈希对不上：这一条被改过」 */
+  reason: string;
+}
+
+/** ADMIN-062 审计日志自检结果（149 号 spec） */
+export interface AuditChainReport {
+  ok: boolean;
+  /** 链上走过的条数 */
+  checked: number;
+  head_hash: string;
+  head_audit_id: number;
+  /** V177 之前写入、不在链上的旧记录条数 */
+  legacy_unchained: number;
+  /** 最多 20 处 */
+  problems: AuditChainProblem[];
+}
+
 export interface AuditLogExport {
   filename: string;
   rows: number;
