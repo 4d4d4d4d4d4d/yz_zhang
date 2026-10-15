@@ -33,3 +33,11 @@ J="$W/counts"; mkdir -p "$J"
 } > "$W/fe.txt" )
 echo done >> "$W/fe.txt"
 cat "$W/be.txt" "$W/fe.txt"
+# REG-001（V171 回归误推之后补）：此前这个脚本无论测试红没红都以 0 退出，
+# 看输出的人只看了最后几行就推送了一个后端有 3 条失败的提交。现在任何一处失败都以非 0 退出，并在最后一行写明。
+if grep -qE "[0-9]+ failed|[0-9]+ error|FAIL|×|error TS|problems|计数不一致|联调失败" "$W/be.txt" "$W/fe.txt" \
+   || ! grep -q "harness 检查通过" "$W/fe.txt" || ! grep -q "联调通过" "$W/fe.txt"; then
+  echo "回归失败：见上面的输出，不要推送"
+  exit 1
+fi
+echo "回归全绿"

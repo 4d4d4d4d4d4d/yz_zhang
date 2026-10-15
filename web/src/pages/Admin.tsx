@@ -208,7 +208,8 @@ function AuditLog() {
     action: f.action || undefined, target_type: f.target_type || undefined, q: f.q || undefined,
     admin_id: f.admin_id ? Number(f.admin_id) : undefined, target_id: f.target_id ? Number(f.target_id) : undefined,
     since: f.since ? `${f.since}T00:00:00+08:00` : undefined,
-    until: f.until ? new Date(new Date(`${f.until}T00:00:00+08:00`).getTime() + 86400000).toISOString() : undefined,
+    // 结束日期这一天整天都算：到北京时间当天 23:59:59.999999（服务端按「早于」比较）
+    until: f.until ? `${f.until}T23:59:59.999999+08:00` : undefined,
   }), [f]);
 
   const load = useCallback(async (p = 0) => {

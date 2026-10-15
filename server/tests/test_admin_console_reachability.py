@@ -89,9 +89,14 @@ def test_cli077_table_says_why():
         assert sdk_has(method), f"{method} 在 SDK 上不存在"
 
 
+# 能力不变、调用换成了替代方法（旧方法在 SDK 里兼容保留，见 test_sdk_method_triage 的 INTENTIONAL）
+REPLACED_BY = {"withdrawRequests": "withdrawRequestsPage", "adminAuditLog": "adminAuditLogPage"}
+
+
 @pytest.mark.parametrize("method", sorted(ADMIN_CONSOLE))
 def test_cli077_admin_capability_is_reachable(method):
-    assert _calls(method), (
+    # V171（143 号 spec）起后台改用带总条数的分页版本：同一个能力，调用替代方法也算够得到
+    assert _calls(method) or (method in REPLACED_BY and _calls(REPLACED_BY[method])), (
         f"管理后台里没有任何地方调用 {method}()。\n"
         f"不做会怎样：{ADMIN_CONSOLE[method]}"
     )
