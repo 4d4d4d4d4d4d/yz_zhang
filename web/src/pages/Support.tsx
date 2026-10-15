@@ -96,10 +96,16 @@ function MyTickets() {
               {/* 运营的回复原文——回复只发一条通知的话，
                   用户回到平台上就再也找不到它 */}
               {t.reply && <p data-testid={`ticket-reply-${t.id}`}>客服回复：{t.reply}</p>}
+              {/* ESCA-053（157 号 spec）往来记录：多于一条时把之前的也列出来 */}
+              {(t.replies?.length ?? 0) > 1 && (
+                <ol className="muted" data-testid={`ticket-replies-${t.id}`}>
+                  {t.replies.map((x, i) => <li key={i}>{x.is_staff ? '客服' : '我'}（{formatDateTime(x.created_at)}）：{x.body}</li>)}
+                </ol>
+              )}
               {/* ESCA-051（150 号 spec）：等的人要知道有没有人在管、是不是已经升级 */}
               {t.status === 'open' && (
                 <p className="muted" data-testid={`ticket-progress-${t.id}`}>
-                  {t.claimed ? '已有客服接手' : '排队等待客服接手'} · 已等 {t.waited_hours} 小时（承诺 {t.sla_hours} 小时内处理）
+                  {t.claimed ? '已有客服接手' : '排队等待客服接手'}{t.first_responded ? ' · 客服已回复' : ''} · 已等 {t.waited_hours} 小时（承诺 {t.sla_hours} 小时内处理）
                   {t.escalation_level >= 2 ? ' · 已升级给客服主管跟进' : t.escalation_level === 1 ? ' · 已超时，已催办' : ''}
                 </p>
               )}

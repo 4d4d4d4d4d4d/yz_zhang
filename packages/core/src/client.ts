@@ -95,6 +95,7 @@ import type {
   AnnouncementSent,
   MyTicket,
   TicketClaimed,
+  TicketReplied,
   SecurityBoardView,
   AdminAuditRow,
   PlatformFinanceView,
@@ -1545,6 +1546,14 @@ export class PlatformClient {
     return this.request<AdminTicketRow[]>(
       'GET', `/admin/tickets?status=${status}&limit=${limit}&offset=${offset}${extra ? `&${extra.slice(1)}` : ''}`,
     );
+  }
+  /** ESCA-053 先回一句、不结单（157 号 spec）；第一次回复记为首次响应 */
+  replyTicket(ticketId: number, reply: string) {
+    return this.request<TicketReplied>('POST', `/admin/tickets/${ticketId}/reply`, { reply });
+  }
+  /** ESCA-054 主管把工单指派给某位客服（只有超级管理员），进审计 */
+  assignTicket(ticketId: number, assigneeId: number) {
+    return this.request<TicketClaimed>('POST', `/admin/tickets/${ticketId}/assign`, { assignee_id: assigneeId });
   }
   /** ESCA-051 「我来处理」：接手后超时提醒只叫醒接手人；可以从别人手里接过来，进审计 */
   claimTicket(ticketId: number) {

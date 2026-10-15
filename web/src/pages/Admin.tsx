@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AuditChainReport, type AdminTicketRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { PacksAdmin } from '../AdminPacks';
@@ -889,8 +889,16 @@ function UploadQueue() {
 
 /** CS-030 工单队列。SUPPORT_SLA_HOURS 定了多久要回，而回的那个人此前没有界面。 */
 function TicketQueue() {
-  const { client } = useApp();
+  const { client, me } = useApp();
   const [rows, setRows] = useState<AdminTicketRow[]>([]);
+  // ESCA-054（157 号 spec）主管（超级管理员，含未分级）可以把工单指派给某位客服
+  const isSuper = !!me && (!(me.admin_roles?.length) || me.admin_roles.includes('super'));
+  const [agents, setAgents] = useState<AdminRow[]>([]);
+  useEffect(() => {
+    if (!isSuper) return;
+    void client.listAdmins().then((r) => setAgents((r.admins ?? []).filter((a) => a.unclassified || a.roles.includes('support') || a.roles.includes('super'))))
+      .catch(() => setAgents([]));
+  }, [client, isSuper]);
   const [error, setError] = useState('');
   // PAY-045 分页：此前上限写死、offset 被忽略，队列一长后面的就在界面上不存在
   const PAGE = 20;
@@ -910,6 +918,20 @@ function TicketQueue() {
   async function claim(id: number) {
     setError('');
     try { await client.claimTicket(id); await load(); } catch (err) { setError(apiErrorText(err)); }
+  }
+  // ESCA-053 先回一句、不结单（157 号 spec）
+  async function replyOnly(id: number) {
+    setError('');
+    try {
+      const text = prompt('先回一句（不结单，会作为站内信发给提单人）：') ?? '';
+      if (!text.trim()) return;
+      await client.replyTicket(id, text);
+      await load();
+    } catch (err) { setError(apiErrorText(err)); }
+  }
+  async function assign(id: number, assigneeId: number) {
+    setError('');
+    try { await client.assignTicket(id, assigneeId); await load(); } catch (err) { setError(apiErrorText(err)); }
   }
 
   async function reply(id: number) {
@@ -944,9 +966,19 @@ function TicketQueue() {
               <p className="muted" data-testid={`ticket-sla-${t.id}`}>
                 已等 {t.waited_hours} 小时（承诺 {t.sla_hours} 小时{t.overdue_hours > 0 ? `，已超 ${t.overdue_hours} 小时` : ''}）
                 · {t.assignee_id ? `接手人：${t.assignee_nickname || `#${t.assignee_id}`}` : '还没人接手'}
+                {/* ESCA-053（157 号 spec）首次响应 */}
+                {` · ${t.first_responded ? `已回复 ${t.replies_count} 次` : `还没回过（首次响应时限 ${t.first_response_hours} 小时）`}`}
               </p>
+              {t.first_response_overdue && <p className="error" data-testid={`ticket-fr-${t.id}`}>首次响应已超时：先回一句告诉对方在处理</p>}
             </div>
             <button className="ghost" onClick={() => void claim(t.id)}>{t.assignee_id ? '改由我处理' : '我来处理'}</button>
+            <button className="ghost" onClick={() => void replyOnly(t.id)}>先回一句</button>
+            {isSuper && agents.length > 0 && (
+              <select aria-label={`指派工单 ${t.id}`} value="" onChange={(e) => { if (e.target.value) void assign(t.id, Number(e.target.value)); }}>
+                <option value="">指派给…</option>
+                {agents.map((a) => <option key={a.user_id} value={a.user_id}>{a.nickname || `#${a.user_id}`}</option>)}
+              </select>
+            )}
             <button onClick={() => reply(t.id)}>回复并结单</button>
           </div>
         ))}

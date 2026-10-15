@@ -110,6 +110,8 @@ ROUTE_ROLES = {
     "POST /admin/teams/{team_id}/verify": ('compliance',),
     "POST /admin/tickets/{ticket_id}/resolve": ('support',),
     "POST /admin/tickets/{ticket_id}/claim": ('support',),
+    "POST /admin/tickets/{ticket_id}/reply": ('support',),
+    "POST /admin/tickets/{ticket_id}/assign": ('super',),
     "POST /admin/uploads/{name}/resolve": ('compliance',),
     "POST /admin/users/{user_id}/ban": ('compliance',),
     "POST /admin/users/{user_id}/unban": ('compliance',),

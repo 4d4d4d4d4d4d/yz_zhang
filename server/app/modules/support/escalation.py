@@ -41,13 +41,35 @@ def due_level(t: Ticket, now: datetime | None = None) -> int:
     return 2 if w >= l2 * 3600 else 1 if w >= l1 * 3600 else 0
 
 
+def first_response_overdue(t: Ticket, now: datetime | None = None) -> bool:
+    """ESCA-053 还开着、客服一句话都没回、且已经等过首次响应时限。"""
+    if t.status != "open" or t.first_response_at is not None:
+        return False
+    return ((now or utcnow()) - t.created_at).total_seconds() >= settings.SUPPORT_FIRST_RESPONSE_HOURS * 3600
+
+
 def sla_view(t: Ticket, now: datetime | None = None) -> dict:
-    """列表与详情共用：等了多久、承诺多久、超了多久、升到第几级。时间差在服务端算好，客户端不自己解析时间。"""
+    """列表与详情共用：等了多久、承诺多久、超了多久、升到第几级。时间差在服务端算好，客户端不自己解析时间。
+    ESCA-053（157 号 spec）起多首次响应：有没有人回过第一句话、首次响应时限、是否已超。"""
     w = waited_hours(t, now)
     sla = settings.SUPPORT_SLA_HOURS
     return {"escalation_level": t.escalation_level or 0, "escalation_label": LEVEL_LABEL.get(t.escalation_level or 0, ""),
             "waited_hours": w, "sla_hours": sla,
-            "overdue_hours": max(0, w - sla) if t.status == "open" else 0}
+            "overdue_hours": max(0, w - sla) if t.status == "open" else 0,
+            "first_responded": t.first_response_at is not None,
+            "first_response_hours": settings.SUPPORT_FIRST_RESPONSE_HOURS,
+            "first_response_overdue": first_response_overdue(t, now)}
+
+
+def record_staff_reply(db: Session, t: Ticket, admin_id: int, body: str) -> None:
+    """ESCA-053 客服的一次回复：记进往来、更新最近一次回复（兼容 `Ticket.reply`）、第一次回复记下首次响应时间。"""
+    from .models import TicketReply
+
+    now = utcnow()
+    db.add(TicketReply(ticket_id=t.id, author_id=admin_id, is_staff=True, body=body, created_at=now))
+    t.reply = body
+    if t.first_response_at is None:
+        t.first_response_at = now
 
 
 def _admins(db: Session) -> list[User]:
@@ -75,8 +97,17 @@ def escalate_overdue(db: Session, now: datetime | None = None) -> dict:
 
     now = now or utcnow()
     l1h, l2h = thresholds()
-    out = {"level1": [], "level2": [], "notified": 0, "submitters_told": 0}
+    out = {"level1": [], "level2": [], "notified": 0, "submitters_told": 0, "first_response_alerts": []}
     for t in db.query(Ticket).filter(Ticket.status == "open").order_by(Ticket.id).all():
+        # ESCA-053 首次响应超时：叫醒接手人（没人接手叫醒客服），只叫一次；与解决时限的分级各算各的
+        if first_response_overdue(t, now) and t.first_response_alerted_at is None:
+            for uid in level1_recipients(db, t):
+                notify(db, uid, "system", "工单首次响应超时",
+                       f"工单 #{t.id}「{t.subject[:40]}」已等 {waited_hours(t, now)} 小时还没有客服回过一句话"
+                       f"（首次响应时限 {settings.SUPPORT_FIRST_RESPONSE_HOURS} 小时）。先回一句告诉对方在处理，不必等到能结单。")
+                out["notified"] += 1
+            t.first_response_alerted_at = now
+            out["first_response_alerts"].append(t.id)
         target = due_level(t, now)
         if target <= (t.escalation_level or 0):
             continue

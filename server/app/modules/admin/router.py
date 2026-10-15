@@ -301,14 +301,72 @@ def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
     rows = q.offset(offset).limit(limit).all()
     ids = {t.assignee_id for t in rows if t.assignee_id}
     names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_(ids)).all()} if ids else {}
+    from app.modules.support.models import TicketReply
+
+    tids = [t.id for t in rows]
+    counts = dict(db.query(TicketReply.ticket_id, func.count(TicketReply.id))
+                  .filter(TicketReply.ticket_id.in_(tids)).group_by(TicketReply.ticket_id).all()) if tids else {}
     now = utcnow()
     return [
         {"id": t.id, "user_id": t.user_id, "subject": t.subject, "body": t.body,
          "created_at": iso(t.created_at), "assignee_id": t.assignee_id,
          "assignee_nickname": names.get(t.assignee_id, "") if t.assignee_id else "",
-         **sla_view(t, now)}
+         **sla_view(t, now), "replies_count": int(counts.get(t.id, 0))}
         for t in rows
     ]
+
+
+class TicketReplyIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reply: str = Field(min_length=1, max_length=2000)
+
+
+class TicketAssignIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    assignee_id: int
+
+
+@router.post("/admin/tickets/{ticket_id}/reply")
+def reply_ticket(ticket_id: int, body: TicketReplyIn, admin: User = Depends(require_role("support")),
+                 db: Session = Depends(get_db, scope="function")):
+    """ESCA-053 先回一句、不结单（157 号 spec）：「在处理了，需要你补一张截图」。第一次回复记为首次响应。"""
+    from app.modules.notification.service import notify
+    from app.modules.support.escalation import record_staff_reply
+    from app.modules.support.models import Ticket, TicketReply
+
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.status != "open":
+        raise not_found("工单不存在或已处理")
+    record_staff_reply(db, ticket, admin.id, body.reply)
+    notify(db, ticket.user_id, "system", "客服回复了你的工单", f"「{ticket.subject[:40]}」：{body.reply[:100]}")
+    db.flush()
+    n = db.query(TicketReply).filter(TicketReply.ticket_id == ticket.id).count()
+    return {"id": ticket.id, "status": ticket.status, "first_response_at": iso(ticket.first_response_at), "replies": n}
+
+
+@router.post("/admin/tickets/{ticket_id}/assign")
+def assign_ticket(ticket_id: int, body: TicketAssignIn, admin: User = Depends(require_role("super")),
+                  db: Session = Depends(get_db, scope="function")):
+    """ESCA-054 主管把工单指派给某位客服（157 号 spec）：被指派的人必须是能处理工单的管理员；进审计、通知被指派的人。"""
+    from app.core.admin_roles import has_role
+    from app.modules.notification.service import notify
+    from app.modules.support.models import Ticket
+
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or ticket.status != "open":
+        raise not_found("工单不存在或已处理")
+    target = db.get(User, body.assignee_id)
+    if not target or not target.is_admin or target.is_banned or target.is_deleted or not has_role(target, "support"):
+        raise bad_request("只能指派给有「客服」角色的管理员；需要的话先在「管理员与角色」里给对方加上", "assignee_not_support")
+    prev = ticket.assignee_id
+    ticket.assignee_id, ticket.claimed_at = target.id, utcnow()
+    record_audit(db, admin.id, "ticket_assign", "ticket", ticket.id,
+                 f"指派给 #{target.id}（此前接手人：{'#' + str(prev) if prev else '无'}）")
+    if target.id != admin.id:
+        notify(db, target.id, "system", "你被指派了一张工单",
+               f"工单 #{ticket.id}「{ticket.subject[:40]}」由主管指派给你，请尽快回复。")
+    return {"id": ticket.id, "assignee_id": target.id, "assignee_nickname": target.nickname,
+            "previous_assignee_id": prev}
 
 
 @router.post("/admin/tickets/{ticket_id}/claim")
@@ -342,7 +400,10 @@ def resolve_ticket(
     if not ticket or ticket.status != "open":
         raise not_found("工单不存在或已处理")
     ticket.status = "resolved"
-    ticket.reply = body.reply
+    # ESCA-053（157 号 spec）：结单时的回复也记进往来；第一次回复同时就是首次响应
+    from app.modules.support.escalation import record_staff_reply
+
+    record_staff_reply(db, ticket, admin.id, body.reply)
     ticket.handler_id = admin.id
     ticket.resolved_at = utcnow()
     db.add(ticket)

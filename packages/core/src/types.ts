@@ -1378,6 +1378,29 @@ export interface AdminTicketRow {
   waited_hours: number;
   sla_hours: number;
   overdue_hours: number;
+  /** ESCA-053（157 号 spec）客服回过第一句话没有 */
+  first_responded: boolean;
+  /** 首次响应时限（小时） */
+  first_response_hours: number;
+  /** 还开着、没人回过、且已超首次响应时限 */
+  first_response_overdue: boolean;
+  /** 往来条数 */
+  replies_count: number;
+}
+
+/** ESCA-053 工单里的一条往来（不含是哪位管理员） */
+export interface TicketReplyItem {
+  body: string;
+  is_staff: boolean;
+  created_at: string;
+}
+
+/** ESCA-053 客服回复（不结单）的结果 */
+export interface TicketReplied {
+  id: number;
+  status: string;
+  first_response_at: string | null;
+  replies: number;
 }
 
 /** ESCA-051 认领结果（150 号 spec） */
@@ -1403,6 +1426,14 @@ export interface MyTicket {
   waited_hours: number;
   sla_hours: number;
   overdue_hours: number;
+  /** ESCA-053（157 号 spec）客服回过第一句话没有 */
+  first_responded: boolean;
+  /** 首次响应时限（小时） */
+  first_response_hours: number;
+  /** 还开着、没人回过、且已超首次响应时限 */
+  first_response_overdue: boolean;
+  /** 往来记录，早的在前 */
+  replies: TicketReplyItem[];
 }
 
 /** SECEV-030 安全看板。读 DB，所以任何副本看到的都一样。 */

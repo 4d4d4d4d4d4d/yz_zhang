@@ -45,6 +45,8 @@ class Settings:
     # ESCA-051（150 号 spec）超时自动升级只在**平台内部**逐级叫人（不转纠纷、不动钱）：
     # 到 SUPPORT_SLA_HOURS 叫醒接手的客服（没人接手就叫全体客服），到这个时长叫醒超级管理员（主管）
     SUPPORT_ESCALATE_L2_HOURS = int(os.environ.get("PLATFORM_SUPPORT_ESCALATE_L2_HOURS", "48"))
+    # ESCA-053（157 号 spec）首次响应时限：多久之内要有客服回第一句话（与「多久解决」分开）
+    SUPPORT_FIRST_RESPONSE_HOURS = int(os.environ.get("PLATFORM_SUPPORT_FIRST_RESPONSE_HOURS", "4"))
     # QUEUE-010 人审队列的 SLA（78 号 spec）。
     # SUPPORT_SLA_HOURS 此前**全仓只有定义、没有任何使用**——
     # 一条写下来却没人核对的承诺（V96/V99/V101 同一条规律的第四次）。
@@ -156,7 +158,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.171.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.172.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

@@ -16,7 +16,8 @@ function makeClient(routes: Record<string, unknown>, calls: Call[]) {
 }
 
 const T: MyTicket = { id: 3, subject: '提现没到账', body: '三天了', status: 'open', reply: '', created_at: '2026-10-13T00:00:00Z',
-  claimed: true, escalation_level: 2, escalation_label: '已升级给主管', waited_hours: 49, sla_hours: 24, overdue_hours: 25 };
+  claimed: true, escalation_level: 2, escalation_label: '已升级给主管', waited_hours: 49, sla_hours: 24, overdue_hours: 25,
+  first_responded: false, first_response_hours: 4, first_response_overdue: true, replies: [] };
 
 describe('ESCA-051 App 上的我的工单', () => {
   it('处理进度：有没有人接手、等了多久、是否已升级；结了单的不显示进度', () => {
@@ -39,5 +40,18 @@ describe('ESCA-051 App 上的我的工单', () => {
       && (c.body as { subject: string }).subject === '账户被冻结')).toBe(true));
     expect(await screen.findByText(/已提交/)).toBeTruthy();
     expect(calls.filter((c) => c.method === 'GET' && c.path === '/support/tickets').length).toBe(2);
+  });
+});
+
+describe('ESCA-053 App 上的往来记录（157 号 spec）', () => {
+  it('客服回过话的写明「客服已回复」，多条往来都列出来', async () => {
+    expect(ticketProgress({ ...T, first_responded: true })).toContain('已有客服接手 · 客服已回复');
+    const calls: Call[] = [];
+    const replies = [{ body: '在查了', is_staff: true, created_at: '2026-10-14T01:00:00Z' },
+      { body: '银行退回了，已重新打款', is_staff: true, created_at: '2026-10-14T05:00:00Z' }];
+    const client = makeClient({ 'GET /support/tickets': [{ ...T, first_responded: true, reply: '银行退回了，已重新打款', replies }] }, calls);
+    render(<SupportTicketsScreen client={client} />);
+    expect(await screen.findByText(/客服（.*）：在查了/)).toBeTruthy();
+    expect(screen.getByText(/客服（.*）：银行退回了，已重新打款/)).toBeTruthy();
   });
 });

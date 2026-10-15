@@ -30,6 +30,22 @@ class Ticket(Base):
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     escalation_level: Mapped[int] = mapped_column(Integer, default=0)
     escalated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # ESCA-053 首次响应（157 号 spec）：客服第一次回话的时间；超时提醒只发一次
+    first_response_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    first_response_alerted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class TicketReply(Base):
+    """ESCA-053 工单里的往来（157 号 spec）：客服可以先回一句、不结单；结单时的回复也记一条。
+    `Ticket.reply` 仍是最近一次客服回复（兼容原有字段）。"""
+    __tablename__ = "ticket_replies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticket_id: Mapped[int] = mapped_column(Integer, index=True)
+    author_id: Mapped[int] = mapped_column(Integer)
+    is_staff: Mapped[bool] = mapped_column(Boolean, default=True)
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class NotificationPref(Base):

@@ -66,15 +66,23 @@ def my_tickets(user: User = Depends(get_current_user), db: Session = Depends(get
     from .models import Ticket
 
     from .escalation import sla_view
+    from .models import TicketReply
 
     rows = db.query(Ticket).filter(Ticket.user_id == user.id).order_by(Ticket.id.desc()).all()
     now = utcnow()
+    # ESCA-053（157 号 spec）往来记录：只给回复内容与时间，不给是哪位管理员
+    replies: dict[int, list[dict]] = {}
+    if rows:
+        for r in (db.query(TicketReply).filter(TicketReply.ticket_id.in_([t.id for t in rows]))
+                  .order_by(TicketReply.id).all()):
+            replies.setdefault(r.ticket_id, []).append(
+                {"body": r.body, "is_staff": r.is_staff, "created_at": iso(r.created_at)})
     return [
         # 少了 `body`，用户看到的是一排标题、点进去没有内容——
         # 那不是类型问题，是这个页面缺了东西
         # ESCA-051（150 号）：提单人看得到「有没有人接手」「是否已升级」，看不到接手的是哪位管理员
         {"id": t.id, "subject": t.subject, "body": t.body, "status": t.status,
          "reply": t.reply, "created_at": iso(t.created_at), "claimed": bool(t.assignee_id),
-         **sla_view(t, now)}
+         **sla_view(t, now), "replies": replies.get(t.id, [])}
         for t in rows
     ]

@@ -68,6 +68,8 @@ REACHED_BY: dict[str, str] = {
     "/admin/audit-log/export": "exportAuditLog",
     "/admin/audit-log/verify": "verifyAuditChain",   # V177 审计哈希链自检（149 号）
     "/admin/tickets/{x}/claim": "claimTicket",       # V178 工单认领（150 号）
+    "/admin/tickets/{x}/reply": "replyTicket",       # V183 先回一句（157 号）
+    "/admin/tickets/{x}/assign": "assignTicket",     # V183 主管指派（157 号）
     "/admin/announcements/preview": "previewAnnouncement",        # V179 公告预览（151 号）
     "/admin/announcements/{x}/cancel": "cancelAnnouncement",
     "/admin/announcements/{x}/revoke": "revokeAnnouncement",
