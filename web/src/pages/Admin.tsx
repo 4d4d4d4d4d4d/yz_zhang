@@ -257,7 +257,11 @@ function AuditLog() {
       {chain && (
         <div aria-label="审计完整性" className={chain.ok ? 'muted' : 'error'}>
           {chain.ok
-            ? <p>完整：链上 {chain.checked} 条逐条对得上，最新一条是 #{chain.head_audit_id}。{chain.legacy_unchained > 0 && `另有 ${chain.legacy_unchained} 条是启用哈希链之前的旧记录，不在链上。`}</p>
+            ? <p>完整：链上 {chain.checked} 条逐条对得上，最新一条是 #{chain.head_audit_id}。{chain.legacy_unchained > 0 && `另有 ${chain.legacy_unchained} 条是启用哈希链之前的旧记录，不在链上。`}
+                {/* ADMIN-063（156 号 spec）存证锚点 */}
+                {chain.anchors_checked > 0
+                  ? ` 存证锚点 ${chain.anchors_checked} 个都对得上，最近一次锚定到 #${chain.last_anchor_audit_id}（${formatDateTime(chain.last_anchored_at ?? '')}）。`
+                  : ' 还没有存证锚点（每天自动锚定一次）。'}</p>
             : (<>
                 <p>发现断点：日志可能被改过或删过。请保留现场，交合规负责人和数据库管理员核查。</p>
                 <ul>{chain.problems.map((x, i) => <li key={i}>#{x.audit_id}：{x.reason}</li>)}</ul>

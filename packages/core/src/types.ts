@@ -155,6 +155,12 @@ export interface AuditChainReport {
   legacy_unchained: number;
   /** 最多 20 处 */
   problems: AuditChainProblem[];
+  /** ADMIN-063 核对了几个存证锚点（156 号 spec） */
+  anchors_checked: number;
+  /** 最近一次锚定的是哪一条；还没锚定过为 null */
+  last_anchor_audit_id: number | null;
+  /** 最近一次锚定的时间（ISO） */
+  last_anchored_at: string | null;
 }
 
 export interface AuditLogExport {

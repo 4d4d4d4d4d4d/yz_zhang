@@ -1166,6 +1166,16 @@ def run_remind_review_queues(_triggered_by: int = Depends(_job_or_admin),
             "submitters_told": told}
 
 
+@router.post("/admin/jobs/anchor-audit-head")
+def run_anchor_audit_head(_triggered_by: int = Depends(_job_or_admin),
+                          db: Session = Depends(get_db, scope="function"),
+                          __=Depends(job_slot("audit_head_anchor"), scope="function")):
+    """ADMIN-063 每天把审计链头写进存证链（156 号 spec）；存证链再由公证 job 交给第三方背书。"""
+    from .audit_chain import anchor_head
+
+    return anchor_head(db)
+
+
 @router.post("/admin/jobs/send-scheduled-announcements")
 def run_send_scheduled_announcements(_triggered_by: int = Depends(_job_or_admin),
                                      db: Session = Depends(get_db, scope="function"),

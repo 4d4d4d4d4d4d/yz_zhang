@@ -93,6 +93,9 @@ JOBS: tuple[ScheduledJob, ...] = (
     ScheduledJob("/admin/jobs/remind-review-queues", 3600, "review_queue_reminders",
                  "QUEUE-011/012 人审队列积压催办——队列里躺着的东西不会主动发声，"
                  "而运营是「想起来才去看」；超过 SLA 时提交方也会收到一次告知"),
+    ScheduledJob("/admin/jobs/anchor-audit-head", 86400, "audit_head_anchor",
+                 "ADMIN-063 审计链头每天写进存证链——只有链本身，数据库管理员可以整条重算；"
+                 "锚点在存证链上（再由公证背书），重算过的链对不上锚点（156 号 spec）"),
     ScheduledJob("/admin/jobs/send-scheduled-announcements", 300, "scheduled_announcements",
                  "NTF-064 定时公告到点发出——不跑的话「定时」就是一个永远不会到来的时间（151 号 spec）"),
     ScheduledJob("/admin/jobs/escalate-tickets", 3600, "ticket_escalations",

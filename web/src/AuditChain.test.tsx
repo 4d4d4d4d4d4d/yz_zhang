@@ -24,16 +24,19 @@ function open(report: unknown) {
 
 describe('ADMIN-062 审计完整性', () => {
   it('完整：说清走了多少条、最新一条，并单列不在链上的旧记录', async () => {
-    open({ ok: true, checked: 42, head_hash: 'a'.repeat(64), head_audit_id: 99, legacy_unchained: 7, problems: [] });
+    open({ ok: true, checked: 42, head_hash: 'a'.repeat(64), head_audit_id: 99, legacy_unchained: 7, problems: [],
+      anchors_checked: 3, last_anchor_audit_id: 98, last_anchored_at: '2026-10-15T00:00:00Z' });
     fireEvent.click(await screen.findByText('校验完整性'));
     const box = await screen.findByLabelText('审计完整性');
     expect(box.textContent).toContain('链上 42 条逐条对得上');
     expect(box.textContent).toContain('#99');
     expect(box.textContent).toContain('7 条是启用哈希链之前的旧记录');
+    // ADMIN-063（156 号 spec）
+    expect(box.textContent).toContain('存证锚点 3 个都对得上，最近一次锚定到 #98');
   });
 
   it('有断点：逐条列出编号与原因，并说怎么办', async () => {
-    open({ ok: false, checked: 10, head_hash: 'b'.repeat(64), head_audit_id: 12, legacy_unchained: 0,
+    open({ ok: false, checked: 10, head_hash: 'b'.repeat(64), head_audit_id: 12, legacy_unchained: 0, anchors_checked: 0, last_anchor_audit_id: null, last_anchored_at: null,
       problems: [{ audit_id: 5, reason: '内容与哈希对不上：这一条被改过' }, { audit_id: 12, reason: '链头记的最新一条与实际不符：最后几条被删了' }] });
     fireEvent.click(await screen.findByText('校验完整性'));
     const box = await screen.findByLabelText('审计完整性');

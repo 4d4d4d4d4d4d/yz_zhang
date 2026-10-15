@@ -276,6 +276,7 @@ api POST /api/v1/admin/certifications/{application_id}/revoke
 api POST /api/v1/admin/cities
 api POST /api/v1/admin/coupons
 api POST /api/v1/admin/coupons/{coupon_id}/pause
+api POST /api/v1/admin/jobs/anchor-audit-head
 api POST /api/v1/admin/jobs/escalate-tickets
 api POST /api/v1/admin/jobs/reconcile
 api POST /api/v1/admin/jobs/remind-review-queues
