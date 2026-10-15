@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminTicketRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinanceView, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminTicketRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { PacksAdmin } from '../AdminPacks';
@@ -310,6 +310,57 @@ function PlatformFinance() {
       </div>
       {error && <p className="error">{error}</p>}
       <p className="muted">结算只动平台自己的收入；代扣税款在独立专户，不与佣金混同。</p>
+      <FinancePeriods />
+    </div>
+  );
+}
+
+/** FIN-061 按期间的平台财务（144 号 spec）：本月佣金、本季结算。期间按北京时间自然月 / 季度。 */
+function FinancePeriods() {
+  const { client } = useApp();
+  const [granularity, setGranularity] = useState<'month' | 'quarter'>('month');
+  const [data, setData] = useState<PlatformFinancePeriods | null>(null);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    client.platformFinancePeriods({ granularity })
+      .then((d) => setData(d && Array.isArray(d.periods) ? d : null)).catch((e) => setError(apiErrorText(e)));
+  }, [client, granularity]);
+  async function exportCsv() {
+    setError(''); setNotice('');
+    try {
+      const r = await client.exportPlatformFinancePeriods({ granularity });
+      const url = URL.createObjectURL(new Blob(['\ufeff' + r.csv], { type: 'text/csv;charset=utf-8' }));
+      const a = document.createElement('a'); a.href = url; a.download = r.filename; a.click(); URL.revokeObjectURL(url);
+      setNotice(`已导出 ${r.rows} 个期间（起止时间为${r.timezone}）。导出已记入审计。`);
+    } catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <div aria-label="按期间">
+      <div className="row">
+        <h4 className="grow">按期间</h4>
+        <select aria-label="期间粒度" value={granularity} onChange={(e) => setGranularity(e.target.value as 'month' | 'quarter')}>
+          <option value="month">按月（最近 12 个月）</option>
+          <option value="quarter">按季度（最近 4 个季度）</option>
+        </select>
+        <button className="ghost" onClick={() => void exportCsv()}>导出 CSV</button>
+      </div>
+      {notice && <p role="status">{notice}</p>}
+      {error && <p className="error">{error}</p>}
+      {data && (
+        <table>
+          <thead><tr><th>期间</th><th>佣金</th><th>笔数</th><th>结算划出</th><th>补贴</th><th>其他</th><th>期末余额</th><th /></tr></thead>
+          <tbody>
+            {[...data.periods].reverse().map((r) => (
+              <tr key={r.period}>
+                <td>{r.period}</td><td>{fmtYuan(r.fee_cents)}</td><td>{r.fee_count}</td><td>{fmtYuan(r.settled_cents)}</td>
+                <td>{fmtYuan(r.subsidy_cents)}</td><td>{fmtYuan(r.other_cents)}</td><td>{fmtYuan(r.closing_cents)}</td>
+                <td>{r.balanced ? '' : <span className="badge warn">期末与期初对不上</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

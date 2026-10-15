@@ -484,6 +484,72 @@ def platform_finance(admin: User = Depends(require_role("finance")), db: Session
     return wallet.platform_finance(db)
 
 
+def _period_args(granularity: str, start: str, end: str) -> tuple[str, str, str]:
+    """FIN-061 默认：北京时间最近 12 个月（月报）/ 最近 4 个季度（季报）。"""
+    from app.modules.account.models import utcnow
+    from app.modules.workbench.service import local
+
+    now = local(utcnow())
+    end = end or f"{now.year}-{now.month:02d}"
+    if not start:
+        back = 11 if granularity == "month" else 9
+        y, m = now.year, now.month - back
+        while m <= 0:
+            y, m = y - 1, m + 12
+        start = f"{y}-{m:02d}"
+    return granularity, start, end
+
+
+PERIOD_PATTERN = r"^(\d{4}-(0[1-9]|1[0-2]))?$"   # 空串 = 用默认
+
+
+@router.get("/admin/platform-finance/periods")
+def platform_finance_periods(
+    granularity: str = Query(default="month", pattern="^(month|quarter)$"),
+    start: str = Query(default="", pattern=PERIOD_PATTERN),
+    end: str = Query(default="", pattern=PERIOD_PATTERN),
+    admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function"),
+):
+    """FIN-061 按期间的平台财务（144 号 spec）：本月佣金、本季结算——此前只有累计数。期间按北京时间自然月 / 季度。"""
+    from app.modules.wallet import service as wallet
+
+    out = wallet.platform_finance_periods(db, *_period_args(granularity, start, end))
+    for r in out["periods"]:
+        r["start"], r["end"] = iso(r["start"]), iso(r["end"])
+    return out
+
+
+@router.get("/admin/platform-finance/periods/export")
+def export_platform_finance_periods(
+    granularity: str = Query(default="month", pattern="^(month|quarter)$"),
+    start: str = Query(default="", pattern=PERIOD_PATTERN),
+    end: str = Query(default="", pattern=PERIOD_PATTERN),
+    admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function"),
+):
+    """FIN-061 导出 CSV 给财务 / 记账代理：期间起止写成北京时间并在表头写明（TZ-068）；导出进审计。"""
+    import csv
+    import io
+
+    from app.core.timefmt import EXPORT_TZ_LABEL, export_time
+    from app.modules.wallet import service as wallet
+
+    out = wallet.platform_finance_periods(db, *_period_args(granularity, start, end))
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["期间", f"起（{EXPORT_TZ_LABEL}）", f"止（{EXPORT_TZ_LABEL}，不含）", "佣金收入（元）", "佣金笔数",
+                "结算划出（元）", "补贴支出（元）", "其他调整（元）", "本期净额（元）", "期初余额（元）", "期末余额（元）", "自检"])
+    for r in out["periods"]:
+        w.writerow([r["period"], export_time(r["start"]), export_time(r["end"]), f"{r['fee_cents'] / 100:.2f}", r["fee_count"],
+                    f"{r['settled_cents'] / 100:.2f}", f"{r['subsidy_cents'] / 100:.2f}", f"{r['other_cents'] / 100:.2f}",
+                    f"{r['net_cents'] / 100:.2f}", f"{r['opening_cents'] / 100:.2f}", f"{r['closing_cents'] / 100:.2f}",
+                    "平" if r["balanced"] else "不平"])
+    first, last = out["periods"][0]["period"], out["periods"][-1]["period"]
+    record_audit(db, admin.id, "export_platform_finance", "platform", None, f"{granularity} {first}~{last}")
+    db.commit()
+    return {"filename": f"platform-finance-{first}-{last}.csv", "rows": len(out["periods"]),
+            "timezone": EXPORT_TZ_LABEL, "csv": buf.getvalue()}
+
+
 @router.post("/admin/platform-finance/settle")
 def settle_platform(
     body: SettleIn, admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function")

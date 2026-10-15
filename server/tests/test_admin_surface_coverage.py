@@ -57,6 +57,9 @@ REACHED_BY: dict[str, str] = {
     "/admin/sandbox/models": "adminSandboxModels",
     # SKL-101 技能概念表（135 号 spec）：后台「技能概念表」一块
     "/admin/skill-concepts": "adminSkillConcepts",
+    # FIN-061 按期间的平台财务（144 号 spec）
+    "/admin/platform-finance/periods": "platformFinancePeriods",
+    "/admin/platform-finance/periods/export": "exportPlatformFinancePeriods",
     # ADMIN-061 审计日志导出（143 号 spec）
     "/admin/audit-log/export": "exportAuditLog",
     # SEC-061b 管理员与角色（141 号 spec）

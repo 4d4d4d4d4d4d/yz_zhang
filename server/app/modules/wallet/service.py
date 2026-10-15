@@ -1,5 +1,7 @@
 """钱包核心操作。所有资金变动必须走这里并落流水（12.A 审计要求）。"""
 from sqlalchemy.exc import IntegrityError
+from datetime import datetime, timezone
+
 from sqlalchemy.orm import Session
 
 import logging
@@ -674,3 +676,73 @@ def dispute_split(
             platform = get_or_create(db, PLATFORM_USER_ID)
             platform.available_cents += fee
             _log(db, PLATFORM_USER_ID, "fee", fee, contract_id, "平台佣金(仲裁)")
+
+
+# ------------------------------------------------------------------ FIN-061 按期间的平台财务（144 号 spec）
+PERIOD_MAX = 24   # 一次最多 24 个期间（两年的月报 / 六年的季报）
+# 平台账户上的科目怎么归到报表的几栏。没列出来的科目归「其他调整」，不会被悄悄漏掉
+PERIOD_COLUMNS = {"fee": "fee_cents", "platform_settle": "settled_cents", "subsidy_out": "subsidy_cents"}
+
+
+def period_bounds(granularity: str, start: str, end: str) -> list[tuple[str, datetime, datetime]]:
+    """北京时间的自然月 / 自然季度，返回 [(标签, UTC 起, UTC 止)]。start / end 形如 2026-07（季度按所在季度）。"""
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("Asia/Shanghai")
+
+    def first(label: str) -> tuple[int, int]:
+        y, m = (int(x) for x in label.split("-"))
+        if not (1 <= m <= 12):
+            raise ValueError(label)
+        return y, (m - 1) // 3 * 3 + 1 if granularity == "quarter" else m
+
+    y, m = first(start)
+    ey, em = first(end)
+    step = 3 if granularity == "quarter" else 1
+    out = []
+    while (y, m) <= (ey, em):
+        ny, nm = (y + (m - 1 + step) // 12, (m - 1 + step) % 12 + 1)
+        lo = datetime(y, m, 1, tzinfo=tz).astimezone(timezone.utc).replace(tzinfo=None)
+        hi = datetime(ny, nm, 1, tzinfo=tz).astimezone(timezone.utc).replace(tzinfo=None)
+        label = f"{y}-Q{(m - 1) // 3 + 1}" if granularity == "quarter" else f"{y}-{m:02d}"
+        out.append((label, lo, hi))
+        if len(out) > PERIOD_MAX:
+            raise bad_request(f"一次最多看 {PERIOD_MAX} 个期间：请缩短起止范围", "period_range_too_long")
+        y, m = ny, nm
+    if not out:
+        raise bad_request("结束期间不能早于开始期间", "period_range_invalid")
+    return out
+
+
+def platform_finance_periods(db: Session, granularity: str, start: str, end: str) -> dict:
+    """平台账户按期间的收支：佣金（实收）、结算划出、补贴支出、其他调整，期初 / 期末余额，
+    以及一条自检：期末 − 期初 = 本期净额。数字全部来自平台账户流水（与累计口径同一个事实来源）。"""
+    from sqlalchemy import func
+
+    rows = []
+    for label, lo, hi in period_bounds(granularity, start, end):
+        opening = db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0)).filter(
+            LedgerEntry.user_id == PLATFORM_USER_ID, LedgerEntry.created_at < lo).scalar()
+        by_kind = dict(db.query(LedgerEntry.kind, func.coalesce(func.sum(LedgerEntry.amount_cents), 0))
+                       .filter(LedgerEntry.user_id == PLATFORM_USER_ID, LedgerEntry.created_at >= lo,
+                               LedgerEntry.created_at < hi).group_by(LedgerEntry.kind).all())
+        fee_count = db.query(func.count(LedgerEntry.id)).filter(
+            LedgerEntry.user_id == PLATFORM_USER_ID, LedgerEntry.kind == "fee",
+            LedgerEntry.created_at >= lo, LedgerEntry.created_at < hi).scalar()
+        cols = {"fee_cents": 0, "settled_cents": 0, "subsidy_cents": 0, "other_cents": 0}
+        for kind, amount in by_kind.items():
+            cols[PERIOD_COLUMNS.get(kind, "other_cents")] += int(amount)
+        net = sum(cols.values())
+        # 期末余额单独查一次，不由期初加净额推出来——这样「期末 − 期初 = 本期净额」才是一条真的自检
+        closing = db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0)).filter(
+            LedgerEntry.user_id == PLATFORM_USER_ID, LedgerEntry.created_at < hi).scalar()
+        rows.append({
+            "period": label, "start": lo, "end": hi,
+            "fee_cents": cols["fee_cents"], "fee_count": int(fee_count),
+            # 出账在流水里是负数；报表里写成正数「划出 / 支出了多少」，人读起来不绕
+            "settled_cents": -cols["settled_cents"], "subsidy_cents": -cols["subsidy_cents"],
+            "other_cents": cols["other_cents"], "net_cents": net,
+            "opening_cents": int(opening), "closing_cents": int(closing),
+            "balanced": int(closing) - int(opening) == net,
+        })
+    return {"granularity": granularity, "periods": rows}

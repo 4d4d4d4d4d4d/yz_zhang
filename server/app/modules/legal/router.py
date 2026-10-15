@@ -327,6 +327,8 @@ def evidence_export(
         DisputeStatement.dispute_id == dispute.id).order_by(DisputeStatement.id).all()
 
     package = {
+        # TZ-069（144 号 spec）：证据包是机器可读的 JSON，时间保持 ISO 8601 UTC；把口径写进文件本身，交出去的人不会误读
+        "time_zone": "本文件中的时间均为 UTC（ISO 8601，末尾 Z）；换算北京时间请加 8 小时",
         "dispute_id": dispute.id,
         "task": {
             "id": task.id, "title": task.title, "category": task.category,

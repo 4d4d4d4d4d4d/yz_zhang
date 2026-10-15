@@ -40,6 +40,40 @@ export interface VentureInvitationView {
   risk_disclosure_version: string;
 }
 
+/** FIN-061 平台财务的一个期间（144 号 spec）：北京时间自然月 / 季度；金额都是正数「收了 / 划出了多少」 */
+export interface PlatformFinancePeriod {
+  /** 2026-07 或 2026-Q3 */
+  period: string;
+  start: string;
+  end: string;
+  fee_cents: number;
+  fee_count: number;
+  settled_cents: number;
+  subsidy_cents: number;
+  other_cents: number;
+  net_cents: number;
+  opening_cents: number;
+  closing_cents: number;
+  /** 自检：期末 − 期初 = 本期净额 */
+  balanced: boolean;
+}
+export interface PlatformFinancePeriods {
+  granularity: 'month' | 'quarter';
+  periods: PlatformFinancePeriod[];
+}
+export interface PlatformFinanceExport {
+  filename: string;
+  rows: number;
+  timezone: string;
+  csv: string;
+}
+export interface PeriodQuery {
+  granularity?: 'month' | 'quarter';
+  /** YYYY-MM；不填用默认（最近 12 个月 / 4 个季度） */
+  start?: string;
+  end?: string;
+}
+
 /** ADMIN-061 审计日志筛选（143 号 spec）。since / until 是 ISO 时间 */
 export interface AuditLogFilter {
   action?: string;

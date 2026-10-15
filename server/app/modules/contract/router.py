@@ -128,6 +128,8 @@ def export_contract(
     from app.modules.anchor.models import AnchorEntry
     from app.modules.wallet.models import LedgerEntry
 
+    from app.core.timefmt import EXPORT_TZ_LABEL, export_time
+
     contract = _get(db, contract_id, user)
     milestones = (
         db.query(Milestone).filter(Milestone.contract_id == contract.id).order_by(Milestone.idx).all()
@@ -149,8 +151,9 @@ def export_contract(
         "── 里程碑 ──",
         *[f"{m.idx}. {m.title}  {m.amount_cents / 100:.2f} 元  [{m.status}]" for m in milestones],
         "",
-        "── 结算凭证（资金流水） ──",
-        *[f"{iso(e.created_at)}  {e.kind}  {e.amount_cents / 100:+.2f} 元  {e.memo}"
+        # TZ-069（144 号 spec）：这是给人看、交给律师的文本——时间换成北京时间并写明，不留一个裸的 UTC
+        f"── 结算凭证（资金流水；时间为{EXPORT_TZ_LABEL}） ──",
+        *[f"{export_time(e.created_at)}  {e.kind}  {e.amount_cents / 100:+.2f} 元  {e.memo}"
           for e in ledger],
     ]
     if anchors:

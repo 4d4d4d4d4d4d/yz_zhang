@@ -42,6 +42,8 @@ api GET /api/v1/admin/north-star
 api GET /api/v1/admin/packs
 api GET /api/v1/admin/packs/radar
 api GET /api/v1/admin/platform-finance
+api GET /api/v1/admin/platform-finance/periods
+api GET /api/v1/admin/platform-finance/periods/export
 api GET /api/v1/admin/queues
 api GET /api/v1/admin/reports
 api GET /api/v1/admin/roles
@@ -678,6 +680,7 @@ sdk exportEvidence
 sdk exportMyData
 sdk exportNotebook
 sdk exportOpcBooks
+sdk exportPlatformFinancePeriods
 sdk extractNoteTodos
 sdk finalReport
 sdk followStats
@@ -791,6 +794,7 @@ sdk pendingTeams
 sdk pendingUploads
 sdk personalSpace
 sdk platformFinance
+sdk platformFinancePeriods
 sdk priceReference
 sdk propose
 sdk proposeChange

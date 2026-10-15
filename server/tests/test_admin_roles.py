@@ -28,6 +28,8 @@ ROUTE_ROLES = {
     "GET /admin/aml/stats": ('compliance',),
     "GET /admin/audit-log": ('compliance',),
     "GET /admin/audit-log/export": ('compliance',),
+    "GET /admin/platform-finance/periods": ('finance',),
+    "GET /admin/platform-finance/periods/export": ('finance',),
     "GET /admin/campaigns": ('ops',),
     "GET /admin/certifications": ('compliance',),
     "GET /admin/certifications/pending": ('compliance',),

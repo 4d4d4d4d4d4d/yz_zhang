@@ -92,6 +92,9 @@ import type {
   AdminAuditRow,
   PlatformFinanceView,
   AdminList,
+  PeriodQuery,
+  PlatformFinanceExport,
+  PlatformFinancePeriods,
   AuditLogExport,
   AuditLogFilter,
   WithdrawQueueFilter,
@@ -1374,6 +1377,13 @@ export class PlatformClient {
   }
   setAdminRoles(userId: number, roles: AdminRoleKey[]) {
     return this.request<AdminRow>('PUT', `/admin/admins/${userId}/roles`, { roles });
+  }
+  /** FIN-061 按期间的平台财务（144 号 spec） */
+  platformFinancePeriods(params: PeriodQuery = {}) {
+    return this.request<PlatformFinancePeriods>('GET', `/admin/platform-finance/periods${qs(params)}`);
+  }
+  exportPlatformFinancePeriods(params: PeriodQuery = {}) {
+    return this.request<PlatformFinanceExport>('GET', `/admin/platform-finance/periods/export${qs(params)}`);
   }
   /** ADMIN-061 审计日志分页与筛选（143 号 spec）：带总条数 */
   adminAuditLogPage(params: AuditLogFilter & { limit?: number; offset?: number } = {}) {
