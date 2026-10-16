@@ -121,6 +121,9 @@ FIT_TIER = {"skilled": 0.02, "expert": 0.05, "expert_senior": 0.08}   # INF-104 
 FIT_FREE_BEFORE_DEADLINE = 0.04
 FIT_NO_SLOT_BEFORE_DEADLINE = -0.06
 FIT_FAST_REPLY = 0.03
+# SCN-128（180 号 spec）名额写了哪天几点到几点：本人设的时段整段盖住它才算「那天有空」；一点都不沾就降权
+FIT_COVERS_SHIFT = 0.06
+FIT_MISSES_SHIFT = -0.08
 FIT_LIMITED = -0.03
 REPLY_MIN_SAMPLES = 5          # 与 Upwork 同一做法：样本不够不给标签
 REPLY_FAST_HOURS = 12
@@ -153,6 +156,23 @@ def has_slot_between(slots: list[dict], start, end) -> bool:
     return False
 
 
+def shift_fit(slots: list[dict], work_date, shift_start: str, shift_end: str) -> str:
+    """SCN-128 本人的每周时段（北京时间）与名额那天的时段比：covers（整段盖住）/ overlap（沾一部分）/ none（不沾）。
+    时间都是 HH:MM 字符串，同一天内比较；24:00 当一天的结束。"""
+    if not slots or not work_date or not shift_start or not shift_end:
+        return "none"
+    best = "none"
+    for sl in slots:
+        if sl.get("d") != work_date.weekday():
+            continue
+        a, b = sl["from"], sl["to"]
+        if a <= shift_start and b >= shift_end:
+            return "covers"
+        if a < shift_end and b > shift_start:
+            best = "overlap"
+    return best
+
+
 def _reply_hours(db: Session, user_ids: list[int]) -> dict[int, float]:
     """回复邀约的中位时长（小时），样本 ≥ REPLY_MIN_SAMPLES 才给。一次查询。"""
     from statistics import median
@@ -174,7 +194,16 @@ def _availability(db: Session, task, users: list[User]) -> dict[int, tuple[float
     out: dict[int, tuple[float, list[str]]] = {}
     for u in users:
         bonus, why = 0.0, []
-        if u.weekly_slots and not task.is_remote:
+        shift = getattr(task, "shift_start", "") and getattr(task, "work_date", None)
+        if u.weekly_slots and shift:
+            # SCN-128：名额写了哪天几点到几点，就按那一段比，比「截止前有没有空」准
+            fit = shift_fit(u.weekly_slots, task.work_date, task.shift_start, task.shift_end)
+            if fit == "covers":
+                bonus += FIT_COVERS_SHIFT
+                why.append(f"{task.work_date.month:02d}-{task.work_date.day:02d} {task.shift_start}–{task.shift_end} 有空（按本人设的时段）")
+            elif fit == "none":
+                bonus += FIT_MISSES_SHIFT                  # 只降权、不写进理由：不替他公开日程
+        elif u.weekly_slots and not task.is_remote:
             end = task.deadline if task.deadline and task.deadline > now else None
             if end is not None:
                 if has_slot_between(u.weekly_slots, now, end):
