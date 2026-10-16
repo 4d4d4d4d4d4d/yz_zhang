@@ -24,6 +24,7 @@ from app.modules.files.models import UploadedFile  # noqa: F401
 from app.modules.finance.models import SettlementOrder, SettlementSplit  # noqa: F401
 from app.modules.growth.models import Campaign, Coupon, ReferralReward, UserCoupon  # noqa: F401
 from app.modules.legal.consent import UserConsent  # noqa: F401
+from app.modules.legal.faq import LegalFaq  # noqa: F401
 from app.modules.matching.models import Invitation, MatchingConfig, Subscription  # noqa: F401
 from app.modules.support.models import NotificationPref, Ticket, TicketReply  # noqa: F401
 from app.modules.tax.models import InvoiceRequest, TaxWithholding  # noqa: F401

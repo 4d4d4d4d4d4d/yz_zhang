@@ -72,6 +72,17 @@ describe('LAW-051 三种结局是三件不同的事', () => {
     expect(screen.queryByText('这个问题平台不作解答')).toBeNull();
     expect(screen.queryByText('平台知识库答不了这一条')).toBeNull();
     expect(screen.getByText(DISCLAIMER)).toBeTruthy();
+    expect(screen.queryByLabelText('出处')).toBeNull();
+  });
+
+  it('LAW-060 运营上线的条目带出处', async () => {
+    const client = makeClient(asked({
+      answer: '抚养费一般按月给付。', refused: false, refused_reason: '', remedy: null, source: '《民法典》第一千零八十五条',
+    }));
+    render(<AskScreen client={client} />);
+    fireEvent.changeText(screen.getByPlaceholderText('描述你的问题…'), '抚养费');
+    fireEvent.press(screen.getByText('提问'));
+    expect(await screen.findByText('出处：《民法典》第一千零八十五条')).toBeTruthy();
   });
 });
 

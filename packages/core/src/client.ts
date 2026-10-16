@@ -1,6 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
-  AssistantContract, SkillConceptAdminView, SkillConceptList, SkillConceptRow, SkillNormalizeResult, Cockpit, CapabilityProfile, SandboxModelAdminRow, SandboxModelInput, SandboxModelList, SandboxState, InfluenceLeaderboard, InfluenceMine, InfluenceLatestSnapshot, InfluenceProof, InfluencePublic, InfluenceVouchInput, InfluenceVouchRow, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarKnowledgeDraft, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineHealth, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbRunStatus, WbStatus, WbStep,
+  AssistantContract, SkillConceptAdminView, SkillConceptList, SkillConceptRow, SkillNormalizeResult, Cockpit, CapabilityProfile, SandboxModelAdminRow, SandboxModelInput, SandboxModelList, SandboxState, InfluenceLeaderboard, InfluenceMine, InfluenceLatestSnapshot, InfluenceProof, InfluencePublic, InfluenceVouchInput, InfluenceVouchRow, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarKnowledgeDraft, RadarSignal, LegalFaqInput, LegalFaqRow, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineHealth, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbRunStatus, WbStatus, WbStep,
   CommercialReadiness,
   AgentProfileView,
   PayoutProposalView,
@@ -1378,8 +1378,20 @@ export class PlatformClient {
       answer: string; disclaimer: string; refused: boolean;
       refused_reason: '' | 'high_risk' | 'out_of_scope';
       remedy: { action: string; category: string; label: string } | null;
+      /** LAW-060（163 号 spec）运营上线的条目带出处（法规名与条号）；代码里的老条目与拒答为空串 */
+      source: string;
     }>('POST', '/legal/ask', { question });
   }
+  // ---- LAW-060 / SCN-114 法律常识库的运营草稿流（163 号 spec，合规管理员） ----
+  adminLegalFaqs() { return this.request<LegalFaqRow[]>('GET', '/admin/legal/faqs'); }
+  adminCreateLegalFaq(input: LegalFaqInput) { return this.request<LegalFaqRow>('POST', '/admin/legal/faqs', input); }
+  adminUpdateLegalFaq(id: number, input: LegalFaqInput) { return this.request<LegalFaqRow>('PUT', `/admin/legal/faqs/${id}`, input); }
+  /** 雷达上「法律问答答不上」的主题起草成一条草稿：回答与出处留「【待填写】」，填完才能提交 */
+  adminLegalFaqFromRadar(topic: string) { return this.request<LegalFaqRow>('POST', '/admin/legal/faqs/radar-draft', { topic }); }
+  adminSubmitLegalFaq(id: number) { return this.request<LegalFaqRow>('POST', `/admin/legal/faqs/${id}/submit`); }
+  adminApproveLegalFaq(id: number) { return this.request<LegalFaqRow>('POST', `/admin/legal/faqs/${id}/approve`); }
+  adminRejectLegalFaq(id: number) { return this.request<LegalFaqRow>('POST', `/admin/legal/faqs/${id}/reject`); }
+  adminRetireLegalFaq(id: number, reason: string) { return this.request<LegalFaqRow>('POST', `/admin/legal/faqs/${id}/retire`, { reason }); }
   exportEvidence(disputeId: number) {
     /* `evidentiary_notice` 是这份证据包**证明力边界**的说明——尤其那句
      * 「平台处理决定**不是**法律意义上的仲裁裁决」。此前 SDK 没声明它，

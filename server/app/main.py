@@ -129,6 +129,7 @@ def create_app() -> FastAPI:
     from app.modules.anchor.router import router as anchor_router
     from app.modules.circle.router import router as circle_router
     from app.modules.legal.router import router as legal_router
+    from app.modules.legal.faq import router as legal_faq_router
     from app.modules.matching.router import router as matching_router
     from app.modules.content.router import router as content_router
     from app.modules.contract.router import router as contract_router
@@ -180,6 +181,7 @@ def create_app() -> FastAPI:
         circle_router,
         matching_router,
         legal_router,
+        legal_faq_router,
         admin_router,
         search_router,
         anchor_router,

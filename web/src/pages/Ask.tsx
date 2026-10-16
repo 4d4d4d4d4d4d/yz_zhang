@@ -94,6 +94,8 @@ function LegalAsk() {
           ) : (
             <div className="card" role="status">
               <p>{res.answer}</p>
+              {/* LAW-060（163 号 spec）：运营上线的条目带出处 */}
+              {res.source && <p className="muted" aria-label="出处">出处：{res.source}</p>}
             </div>
           )}
           {/* 原样展示：平台给的是一般性法律信息，不是法律意见。这句话的

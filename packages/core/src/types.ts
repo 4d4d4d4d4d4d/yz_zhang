@@ -2321,6 +2321,28 @@ export interface RadarSignal {
   people: number;
   suggested: Record<string, number>;
 }
+/** LAW-060 法律常识库的一条（163 号 spec）：草稿 → 待审核 → 已上线 → 已下线 */
+export interface LegalFaqRow {
+  id: number;
+  topic: string;
+  keywords: string[];
+  answer: string;
+  source: string;
+  status: 'draft' | 'review' | 'published' | 'retired';
+  origin: string;
+  created_by: number;
+  reviewed_by: number | null;
+  published_at: string | null;
+  retired_reason: string;
+  placeholders: string[];
+  updated_at: string | null;
+}
+export interface LegalFaqInput {
+  topic?: string;
+  keywords: string[];
+  answer: string;
+  source: string;
+}
 /** SCN-112 雷达一键起草知识条目（162 号 spec）：进场景包草稿，「【待填写】」不填完不能提交审核 */
 export interface RadarKnowledgeDraft {
   pack: ScenarioPackAdminRow;

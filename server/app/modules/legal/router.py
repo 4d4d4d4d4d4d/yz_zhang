@@ -178,9 +178,15 @@ def legal_ask(body: AskIn, user: User = Depends(get_current_user), db: Session =
             # 在它旁边摆一个「发布咨询任务」的按钮，是把紧急情况降级成一笔生意。
             "refused_reason": "high_risk",
             "remedy": None,
+            "source": "",
         }
     best, best_hits = None, 0
-    for faq in LEGAL_FAQS:
+    # LAW-060（163 号 spec）：代码里的四条 + 运营上线的条目（带出处）一起匹配；同样命中数时代码里的在前
+    from .faq import published
+
+    candidates = LEGAL_FAQS + [{"keywords": f.keywords or [], "answer": f.answer, "source": f.source}
+                               for f in published(db)]
+    for faq in candidates:
         hits = sum(1 for kw in faq["keywords"] if kw in body.question)
         if hits > best_hits:
             best, best_hits = faq, hits
@@ -201,10 +207,12 @@ def legal_ask(body: AskIn, user: User = Depends(get_current_user), db: Session =
             # 而且是静默的——发布页只会显示一个空的下拉。
             "remedy": {"action": "publish_task", "category": _lawyer_category(),
                        "label": "发布法律咨询任务（由执业律师接单）"},
+            "source": "",
         }
     return {
         "answer": best["answer"], "disclaimer": DISCLAIMER,
         "refused": False, "refused_reason": "", "remedy": None,
+        "source": best.get("source", ""),
     }
 
 

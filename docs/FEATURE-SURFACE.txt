@@ -38,6 +38,7 @@ api GET /api/v1/admin/knowledge/overview
 api GET /api/v1/admin/knowledge/thresholds/{category}/pairs
 api GET /api/v1/admin/knowledge/undecided
 api GET /api/v1/admin/knowledge/units
+api GET /api/v1/admin/legal/faqs
 api GET /api/v1/admin/market-health
 api GET /api/v1/admin/matching-config
 api GET /api/v1/admin/metrics
@@ -291,6 +292,12 @@ api POST /api/v1/admin/knowledge/clusters/{cluster_id}/merge
 api POST /api/v1/admin/knowledge/clusters/{cluster_id}/units
 api POST /api/v1/admin/knowledge/tasks/{task_id}/retract
 api POST /api/v1/admin/knowledge/thresholds/{category}/calibrate
+api POST /api/v1/admin/legal/faqs
+api POST /api/v1/admin/legal/faqs/radar-draft
+api POST /api/v1/admin/legal/faqs/{faq_id}/approve
+api POST /api/v1/admin/legal/faqs/{faq_id}/reject
+api POST /api/v1/admin/legal/faqs/{faq_id}/retire
+api POST /api/v1/admin/legal/faqs/{faq_id}/submit
 api POST /api/v1/admin/packs
 api POST /api/v1/admin/packs/import-seeds
 api POST /api/v1/admin/packs/radar/draft-knowledge
@@ -510,6 +517,7 @@ api POST /api/v1/xapp/runs/{run_id}/steps/{step_id}/confirm
 api POST /api/v1/xapp/runs/{run_id}/steps/{step_id}/result
 api POST /api/v1/xapp/runs/{run_id}/stop
 api PUT /api/v1/admin/admins/{user_id}/roles
+api PUT /api/v1/admin/legal/faqs/{faq_id}
 api PUT /api/v1/admin/matching-config
 api PUT /api/v1/admin/packs/{pack_id}
 api PUT /api/v1/developer/api-keys/{key_id}/quota
@@ -577,26 +585,34 @@ sdk addTeamMember
 sdk addWorkbenchChildren
 sdk addWorkbenchLog
 sdk addWorkbenchMemory
+sdk adminApproveLegalFaq
 sdk adminApprovePack
 sdk adminAuditLog
 sdk adminAuditLogPage
 sdk adminCertifications
+sdk adminCreateLegalFaq
 sdk adminCreatePack
 sdk adminDraftKnowledgeFromRadar
 sdk adminImportPackSeeds
 sdk adminKnowledgeUnits
+sdk adminLegalFaqFromRadar
+sdk adminLegalFaqs
 sdk adminMetrics
 sdk adminPackRadar
 sdk adminPacks
+sdk adminRejectLegalFaq
 sdk adminRejectPack
 sdk adminReports
+sdk adminRetireLegalFaq
 sdk adminRetirePack
 sdk adminRoleCatalog
 sdk adminSandboxModels
 sdk adminSecurity
 sdk adminSkillConcepts
+sdk adminSubmitLegalFaq
 sdk adminSubmitPack
 sdk adminTickets
+sdk adminUpdateLegalFaq
 sdk adminUpdatePack
 sdk adminUsers
 sdk adminValidatePack

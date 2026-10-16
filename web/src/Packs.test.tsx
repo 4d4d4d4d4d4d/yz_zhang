@@ -1,6 +1,6 @@
 // PACK-100 服务包（123 号 spec）：浏览、启用、问助手专家（带出处与人工关口）、运营台的四眼与雷达。
 import { PlatformClient } from '@platform/core';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -119,7 +119,7 @@ describe('PACK-100 服务包', () => {
       '/admin/packs/radar': [{ source: 'legal_gap', key: '婚姻家庭', title: '「婚姻家庭」类法律问题常答不上', evidence: '近 30 天 3 个不同的人', people: 3, suggested: {} }],
       'POST /admin/packs/radar/draft-knowledge': { pack: draft, knowledge_key: 'radar-legal-gap-1', new_version: true, placeholders: 1 },
     }, calls, { ...ME, is_admin: true });
-    await screen.findByText('「婚姻家庭」类法律问题常答不上');
+    await within(await screen.findByLabelText('服务包运营')).findByText('「婚姻家庭」类法律问题常答不上');
     fireEvent.change(screen.getByLabelText('起草进哪个服务包'), { target: { value: 'household-chores' } });
     fireEvent.click(screen.getByRole('button', { name: '起草知识条目' }));
     await waitFor(() => expect(calls.find((c) => c.path === '/admin/packs/radar/draft-knowledge')?.body)

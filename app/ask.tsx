@@ -95,7 +95,11 @@ export function AskScreen({ client, onPublish }: {
           </View>
         )}
         {res && !high && !out && (
-          <View style={styles.answer}><Text>{res.answer}</Text></View>
+          <View style={styles.answer}>
+            <Text>{res.answer}</Text>
+            {/* LAW-060（163 号 spec）：运营上线的条目带出处 */}
+            {!!res.source && <Text style={styles.muted} accessibilityLabel="出处">出处：{res.source}</Text>}
+          </View>
         )}
         {/* 原样展示：平台给的是一般性法律信息，不是法律意见。
             这句话的法律含义不容客户端改写（与 V119 的代扣免责声明同一条规矩）。 */}

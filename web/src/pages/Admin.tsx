@@ -7,6 +7,7 @@
 import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketRow, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
+import { LegalFaqAdmin } from '../AdminLegal';
 import { PacksAdmin } from '../AdminPacks';
 import { SandboxModelsAdmin } from '../AdminSandbox';
 import { SkillConceptsAdmin } from '../AdminSkills';
@@ -64,6 +65,7 @@ export default function Admin() {
       <AmlQueue />
       <KnowledgeAdmin />
       <PacksAdmin />
+      <LegalFaqAdmin />
       <SandboxModelsAdmin />
       <SkillConceptsAdmin />
       <TeamVerifyQueue />
