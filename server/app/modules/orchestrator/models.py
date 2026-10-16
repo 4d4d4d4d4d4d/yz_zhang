@@ -63,6 +63,8 @@ class Mission(Base):
     allow_agents: Mapped[bool] = mapped_column(Boolean, default=False)
     # AGT-084 允许编排在分发时调用平台经验工具（只出草稿，挂在步骤上等发起人确认）。默认关（131 号 spec）
     allow_tools: Mapped[bool] = mapped_column(Boolean, default=False)
+    # AGT-094（164 号 spec）用本人的「我的方法」作第一轮计划：按方法的步骤拆，不调模型
+    method_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # ORC-005 验收标准：每步产出按此校验（人工验收 + 规则校验的依据）
     acceptance_criteria: Mapped[list] = mapped_column(JSON, default=list)
     last_error: Mapped[str] = mapped_column(String(300), default="")

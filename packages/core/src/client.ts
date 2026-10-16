@@ -844,7 +844,7 @@ export class PlatformClient {
 
   // ---- orchestrator（Agent Harness：发任务给人=工具调用）----
   createMission(body: { goal: string; detail?: string; category?: string; budget_cap_cents: number; max_iterations?: number; acceptance_criteria?: string[];
-    allow_agents?: boolean; allow_tools?: boolean }) {
+    allow_agents?: boolean; allow_tools?: boolean; method_id?: number | null }) {
     return this.request<Mission>('POST', '/missions', body);
   }
   myMissions(params: { status?: string; limit?: number; offset?: number } = {}) {

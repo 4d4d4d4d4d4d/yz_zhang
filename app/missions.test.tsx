@@ -26,6 +26,21 @@ const STEP = {
   tool_drafts: [{ invocation_id: 41, unit_id: 5, version: 1, label: '由经验单元生成，未经人工确认', text: '☐ 易碎品单独装箱', status: 'pending' }],
 };
 
+describe('AGT-094 App 上按自己的方法拆第一轮', () => {
+  it('选了方法就带 method_id，再点一下取消', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({ 'GET /missions': [], '/notebook/methods': [{ id: 5, name: '我的搬家做法', description: '', steps: [{ title: '打包', note: '' }, { title: '搬运', note: '' }], source_note_ids: [], uses: 0, created_at: '2026-10-14T00:00:00Z', updated_at: '2026-10-14T00:00:00Z' }], 'POST /missions': { ...MISSION, method_id: 5 },
+      '/missions/7': { ...MISSION, method_id: 5, steps: [], timeline: [] } }, calls);
+    render(<MissionsScreen client={client} />);
+    fireEvent.changeText(await screen.findByLabelText('目标'), '周六搬家');
+    fireEvent.press(await screen.findByText('按「我的搬家做法」拆（2 步）'));
+    expect(screen.getByText('第一轮怎么拆：按我的方法「我的搬家做法」')).toBeTruthy();
+    fireEvent.press(screen.getByText('建好，先不花钱'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/missions')?.body)
+      .toEqual({ goal: '周六搬家', budget_cap_cents: 30000, allow_tools: true, method_id: 5 }));
+  });
+});
+
 describe('ORC-066 App 上的 AI 编排', () => {
   it('新建（默认授权经验工具）→ 打开详情 → 采用草稿 → 推进一轮', async () => {
     const calls: Call[] = [];

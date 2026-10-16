@@ -720,6 +720,8 @@ export interface Mission {
   /** AGT-084 是否允许分发时用平台经验工具生成草稿（只出草稿，等你确认）。默认关（131 号 spec） */
   allow_tools: boolean;
   acceptance_criteria: string[];
+  /** AGT-094（164 号 spec）第一轮按哪个「我的方法」拆；null 表示由 AI 分解 */
+  method_id: number | null;
   last_error: string;
   created_at: string;
 }

@@ -1,7 +1,6 @@
 import {
   apiErrorText, fmtYuan, formatDateTime,
-  type Mission, type MissionEvent, type MissionMethodDraft, type MissionStep, type MissionSummary,
-} from '@platform/core';
+  type Mission, type MissionEvent, type MissionMethodDraft, type MissionStep, type MissionSummary, type NbMethod } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../store';
@@ -28,6 +27,9 @@ export default function Missions() {
   // AGT-093 复盘蒸馏出的方法草稿（154 号 spec）
   const [draft, setDraft] = useState<MissionMethodDraft | null>(null);
   const [form, setForm] = useState({ goal: '', detail: '', category: '跑腿', budget: '300', iters: 3, acceptance: '', allow_agents: false, allow_tools: true });
+  // AGT-094（164 号 spec）第一轮可以按自己的「我的方法」拆
+  const [methods, setMethods] = useState<NbMethod[]>([]);
+  const [methodId, setMethodId] = useState(0);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
@@ -40,6 +42,7 @@ export default function Missions() {
     } catch (e) { setError(apiErrorText(e)); }
   }, [client, id]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { client.notebookMethods().then(setMethods).catch(() => setMethods([])); }, [client]);
 
   async function act(fn: () => Promise<unknown>, done: string) {
     setError(''); setNotice('');
@@ -53,6 +56,7 @@ export default function Missions() {
         budget_cap_cents: Math.round(Number(form.budget) * 100), max_iterations: form.iters,
         acceptance_criteria: form.acceptance.split('\n').map((x) => x.trim()).filter(Boolean),
         allow_agents: form.allow_agents, allow_tools: form.allow_tools,
+        ...(methodId ? { method_id: methodId } : {}),
       });
       setNotice('已建好：点「推进一轮」开始规划和分发');
       setParams({ id: String(m.id) });
@@ -169,6 +173,12 @@ export default function Missions() {
             <textarea aria-label="验收要点" rows={2} placeholder="验收要点，一行一条（可不填）" value={form.acceptance} onChange={(e) => setForm({ ...form, acceptance: e.target.value })} />
             <label><input type="checkbox" aria-label="允许交给平台 AI 助理" checked={form.allow_agents} onChange={(e) => setForm({ ...form, allow_agents: e.target.checked })} /> 允许把步骤交给平台 AI 助理去做</label>
             <label><input type="checkbox" aria-label="新编排用经验工具" checked={form.allow_tools} onChange={(e) => setForm({ ...form, allow_tools: e.target.checked })} /> 允许用平台经验工具生成草稿（只出草稿，等你确认）</label>
+            {methods.length > 0 && (
+              <label>第一轮怎么拆 <select aria-label="第一轮怎么拆" value={methodId} onChange={(e) => setMethodId(Number(e.target.value))}>
+                <option value={0}>让 AI 拆</option>
+                {methods.map((m) => <option key={m.id} value={m.id}>按我的方法「{m.name}」（{m.steps.length} 步）</option>)}
+              </select></label>
+            )}
             <button disabled={form.goal.trim().length < 2 || !(Number(form.budget) > 0)} onClick={() => void create()}>建好，先不花钱</button>
           </div>
         </>

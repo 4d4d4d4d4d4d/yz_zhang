@@ -38,12 +38,14 @@ def plan(db: Session, mission: Mission) -> list[MissionStep]:
 
     # ORC-004 规划只用上限的一部分，其余留作重试预留金
     plan_budget = mission.budget_cap_cents * (10000 - settings.ORC_PLAN_RESERVE_BPS) // 10000
-    from app.core.sandbox import gateway_for
+    items = _items_from_method(db, mission, plan_budget)
+    if items is None:
+        from app.core.sandbox import gateway_for
 
-    # SBX-103 开着沙箱的人：已经建好的使命也不把他的目标交给云端模型
-    items = gateway_for(db, mission.owner_id).decompose(
-        db, mission.goal, mission.detail, mission.category, plan_budget
-    )
+        # SBX-103 开着沙箱的人：已经建好的使命也不把他的目标交给云端模型
+        items = gateway_for(db, mission.owner_id).decompose(
+            db, mission.goal, mission.detail, mission.category, plan_budget
+        )
     steps = []
     for item in items:
         # AIO-001/003 验收要点：优先用分解结果自带的，否则由 Mission 级要求
@@ -65,6 +67,39 @@ def plan(db: Session, mission: Mission) -> list[MissionStep]:
         steps.append(step)
     db.flush()
     return steps
+
+
+METHOD_MAX_STEPS = 10
+
+
+def _items_from_method(db: Session, mission: Mission, plan_budget: int) -> list[dict] | None:
+    """AGT-094（164 号 spec）第一轮按「我的方法」的步骤拆：每步一单、预算平分（零头给最后一步），不调模型。
+
+    方法已经删了（或不是他的）就返回 None，退回分解网关，并在 last_error 里写明——不能悄悄换了一种拆法。
+    """
+    if not mission.method_id:
+        return None
+    from app.modules.notebook.models import NbMethod
+
+    method = db.get(NbMethod, mission.method_id)
+    steps = [s for s in ((method.steps or []) if method and method.owner_id == mission.owner_id else [])
+             if str((s or {}).get("title", "")).strip()][:METHOD_MAX_STEPS]
+    if not steps:
+        mission.last_error = "选的方法已经删了或是空的：这一轮改由 AI 分解来拆"
+        db.add(mission)
+        return None
+    n = len(steps)
+    each = plan_budget // n
+    out = []
+    for i, s in enumerate(steps):
+        note = str(s.get("note", "")).strip()
+        out.append({
+            "title": str(s["title"]).strip()[:120],
+            "description": (note + "\n\n" if note else "") + f"（来自你的方法「{method.name}」第 {i + 1} 步，{mission.goal}）",
+            "budget_cents": each + (plan_budget - each * n if i == n - 1 else 0),
+            "required_skills": [],
+        })
+    return out
 
 
 def default_acceptance(mission: Mission) -> list[str]:

@@ -1,7 +1,7 @@
 // ORC-066 / AGT-084 AI 编排（131 号 spec）——App 端：说一个目标，平台在预算上限内拆成任务发出去、看结果、不达标就整改；
 // 授权后分发时用平台经验工具生成草稿，挂在步骤上等你「采用 / 丢弃」，不会替你发给任何人。
 import {
-  apiErrorText, fmtYuan, type Mission, type MissionEvent, type MissionMethodDraft, type MissionStep, type MissionSummary, type PlatformClient,
+  apiErrorText, fmtYuan, type Mission, type MissionEvent, type MissionMethodDraft, type MissionStep, type MissionSummary, type PlatformClient, type NbMethod
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -24,6 +24,9 @@ export function MissionsScreen({ client }: { client: PlatformClient }) {
   const [goal, setGoal] = useState('');
   const [budget, setBudget] = useState('300');
   const [tools, setTools] = useState(true);
+  // AGT-094（164 号 spec）第一轮可以按自己的「我的方法」拆
+  const [methods, setMethods] = useState<NbMethod[]>([]);
+  const [methodId, setMethodId] = useState<number | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
@@ -35,6 +38,7 @@ export function MissionsScreen({ client }: { client: PlatformClient }) {
     } catch (e) { setError(apiErrorText(e)); }
   }, [client, openId]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { client.notebookMethods().then(setMethods).catch(() => setMethods([])); }, [client]);
 
   async function act(fn: () => Promise<unknown>, done: string) {
     setError(''); setNotice('');
@@ -130,8 +134,14 @@ export function MissionsScreen({ client }: { client: PlatformClient }) {
           <Switch accessibilityLabel="新编排用经验工具" value={tools} onValueChange={setTools} />
           <Text style={{ flex: 1 }}>允许用平台经验工具生成草稿（只出草稿，等你确认）</Text>
         </View>
+        {methods.length > 0 && <Text>第一轮怎么拆：{methodId ? `按我的方法「${methods.find((x) => x.id === methodId)?.name ?? ''}」` : '让 AI 拆'}</Text>}
+        {methods.map((x) => (
+          <Button key={x.id} title={methodId === x.id ? `不用「${x.name}」了` : `按「${x.name}」拆（${x.steps.length} 步）`}
+                  onPress={() => setMethodId(methodId === x.id ? null : x.id)} />
+        ))}
         <Button title="建好，先不花钱" disabled={goal.trim().length < 2 || !(Number(budget) > 0)} onPress={() => void act(async () => {
-          const m = await client.createMission({ goal: goal.trim(), budget_cap_cents: Math.round(Number(budget) * 100), allow_tools: tools });
+          const m = await client.createMission({ goal: goal.trim(), budget_cap_cents: Math.round(Number(budget) * 100), allow_tools: tools,
+            ...(methodId ? { method_id: methodId } : {}) });
           setGoal(''); setOpenId(m.id);
         }, '已建好：点「推进一轮」开始规划和分发')} />
       </View>

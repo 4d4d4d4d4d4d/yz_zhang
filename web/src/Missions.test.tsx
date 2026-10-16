@@ -50,6 +50,18 @@ describe('ORC-066 AI 编排', () => {
     });
   });
 
+  it('AGT-094 第一轮可以按自己的方法拆：选了就带 method_id，不选照旧', async () => {
+    const calls: Call[] = [];
+    open('/missions', { 'GET /missions': [], '/notebook/methods': [{ id: 5, name: '我的搬家做法', description: '', steps: [{ title: '打包', note: '' }, { title: '搬运', note: '' }], source_note_ids: [], uses: 0, created_at: '2026-10-14T00:00:00Z', updated_at: '2026-10-14T00:00:00Z' }], 'POST /missions': { ...MISSION, method_id: 5 },
+      '/missions/7': { ...MISSION, method_id: 5, steps: [], timeline: [] } }, calls);
+    fireEvent.change(await screen.findByLabelText('目标'), { target: { value: '周六搬家' } });
+    fireEvent.change(await screen.findByLabelText('第一轮怎么拆'), { target: { value: '5' } });
+    expect(screen.getByText('按我的方法「我的搬家做法」（2 步）')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '建好，先不花钱' }));
+    await screen.findByText('已建好：点「推进一轮」开始规划和分发');
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/missions')?.body).toMatchObject({ goal: '周六搬家', method_id: 5 });
+  });
+
   it('详情：预算与步骤看得见；经验工具草稿采用只是标记；推进一轮；收回授权', async () => {
     const calls: Call[] = [];
     open('/missions?id=7', {

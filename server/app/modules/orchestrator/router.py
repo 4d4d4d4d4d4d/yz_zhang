@@ -31,6 +31,8 @@ class MissionIn(BaseModel):
     allow_agents: bool = False
     # AGT-084 默认关：允许分发时用平台经验工具生成草稿（只出草稿，等你确认）
     allow_tools: bool = False
+    # AGT-094（164 号 spec）按本人的「我的方法」拆第一轮；不填就照旧由分解网关拆
+    method_id: int | None = None
 
 
 class ToolsIn(BaseModel):
@@ -49,7 +51,7 @@ def _dump(m: Mission) -> dict:
         "iteration": m.iteration, "max_iterations": m.max_iterations,
         "completion_pct": m.completion_pct, "quality_pct": m.quality_pct,
         "model_calls": m.model_calls, "allow_agents": m.allow_agents, "allow_tools": m.allow_tools,
-        "acceptance_criteria": m.acceptance_criteria,
+        "acceptance_criteria": m.acceptance_criteria, "method_id": m.method_id,
         "last_error": m.last_error, "created_at": iso(m.created_at),
     }
 
@@ -67,8 +69,16 @@ def _get_mission(db: Session, mission_id: int, user: User) -> Mission:
 def create_mission(
     body: MissionIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
 ):
-    """ORC-001 创建编排目标（尚未分发，需 tick 推进）。"""
-    m = Mission(
+    """ORC-001 创建编排目标（尚未分发，需 tick 推进）。AGT-094 可指定本人的一个方法作第一轮计划。"""
+    if body.method_id is not None:
+        from app.modules.notebook.models import NbMethod
+
+        method = db.get(NbMethod, body.method_id)
+        if method is None or method.owner_id != user.id:
+            raise not_found("没有这个方法")
+        method.uses = (method.uses or 0) + 1
+        db.add(method)
+    m = Mission(method_id=body.method_id,
         owner_id=user.id, goal=body.goal, detail=body.detail, category=body.category,
         budget_cap_cents=body.budget_cap_cents, max_iterations=body.max_iterations,
         acceptance_criteria=body.acceptance_criteria, allow_agents=body.allow_agents,
