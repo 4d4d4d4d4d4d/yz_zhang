@@ -711,6 +711,12 @@ export interface TaskVisits {
   visits: TaskVisit[];
 }
 
+/** SCN-118 一次报多天的结果：报上了哪几天（各落在哪个名额），哪几天为什么没报 */
+export interface ApplyDaysResult {
+  applied: Array<{ date: string; task_id: number; application_id: number }>;
+  skipped: Array<{ date: string; reason: string }>;
+}
+
 /** SCN-116 一天的名额：招到 = 有人接且没取消（含做完）；还缺 = 仍在招募；取消的单独数 */
 export interface TaskDaySummary {
   date: string;

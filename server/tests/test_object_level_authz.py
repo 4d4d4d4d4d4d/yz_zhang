@@ -93,7 +93,7 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
      "party", "这些是执行方的动作：交付、打卡、求助、行程分享"),
     (r"^POST /tasks/.*/visits$", "party", "上门回报只有接单的人能交（176 号 spec；test_task_visits 行为验）"),
     (r"^GET /tasks/.*/visits$", "party", "上门回报（含照片）只给成交双方与管理员（176 号 spec；test_task_visits 行为验）"),
-    (r"^POST /tasks/.*/(applications|reviews|disputes|bookmark)$", "party",
+    (r"^POST /tasks/.*/(applications|reviews|disputes|bookmark|apply-days)$", "party",
      "报名与评价要满足身份条件（评价限当事人、报名限非发布方）"),
     (r"^DELETE /tasks/.*/bookmark$", "self", "取消的是自己的收藏：task_id 是收藏对象，收藏记录按调用者自己的 id 存"),
     (r"^PATCH /tasks/", "party", "改任务限发布方：标题、预算、验收标准都在这个接口里"),

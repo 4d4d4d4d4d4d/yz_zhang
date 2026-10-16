@@ -201,10 +201,14 @@ function Node(props: LevelProps & { node: DecompositionNode }) {
 }
 
 /** AI-DEC-021 子任务进度：确认之后，项目型任务的子步骤在这里看、点进去办；SCN-116 起多人、多天的名额也在这里。 */
-export function TaskTreeBlock({ client, task, onOpenTask }: {
+export function TaskTreeBlock({ client, task, onOpenTask, meId = null }: {
   client: PlatformClient; task: Task; onOpenTask: (t: Task) => void;
+  /** SCN-118 不是发单人时，多天的单上可以一次报多天 */
+  meId?: number | null;
 }) {
   const [tree, setTree] = useState<TaskTree | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [applyMsg, setApplyMsg] = useState('');
   useEffect(() => {
     void client.taskTree(task.id).then(setTree).catch(() => setTree(null));
   }, [client, task.id]);
@@ -220,6 +224,30 @@ export function TaskTreeBlock({ client, task, onOpenTask }: {
             {daysStillShort(tree.by_day).length ? `还有 ${daysStillShort(tree.by_day).length} 天缺人` : '每天的名额都招到人了'}
           </Text>
           {tree.by_day.map((d) => <Text key={d.date} style={styles.row}>{daySummaryLine(d)}</Text>)}
+          {/* SCN-118 一个人一次报多天（177 号 spec）：勾还缺人的那几天 */}
+          {meId !== null && meId !== task.creator_id && daysStillShort(tree.by_day).length > 0 && (
+            <View accessibilityLabel="一次报多天">
+              <Text style={styles.muted}>这几天你都能来？勾上一次报完（每天报一个名额，发单人逐天选人）：</Text>
+              {daysStillShort(tree.by_day).map((d) => (
+                <TouchableOpacity key={d.date} accessibilityRole="checkbox" accessibilityLabel={`报 ${d.date}`}
+                                  accessibilityState={{ checked: picked.includes(d.date) }}
+                                  onPress={() => setPicked((p) => p.includes(d.date) ? p.filter((x) => x !== d.date) : [...p, d.date])}>
+                  <Text style={styles.row}>{picked.includes(d.date) ? '☑ ' : '☐ '}{d.date.slice(5)}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity disabled={picked.length === 0} onPress={() => {
+                setApplyMsg('');
+                void client.applyDays(task.id, picked).then((r) => {
+                  setPicked([]);
+                  setApplyMsg(`已报：${r.applied.map((a) => a.date.slice(5)).join('、') || '无'}`
+                    + (r.skipped.length ? `；没报：${r.skipped.map((s) => `${s.date.slice(5)}（${s.reason}）`).join('、')}` : ''));
+                }).catch((e) => setApplyMsg(apiErrorText(e)));
+              }}>
+                <Text style={styles.link}>报这几天</Text>
+              </TouchableOpacity>
+              {!!applyMsg && <Text style={styles.muted}>{applyMsg}</Text>}
+            </View>
+          )}
         </View>
       )}
       {tree.children.map((c) => (

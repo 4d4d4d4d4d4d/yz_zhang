@@ -433,7 +433,13 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
         </TouchableOpacity>
       )}
       {/* SCN-116：多人、多天的母任务也有子任务（名额），与项目型同一块（判断在共享 SDK） */}
-      {hasChildTasks(task) && onOpenTask && <TaskTreeBlock client={client} task={task} onOpenTask={onOpenTask} />}
+      {hasChildTasks(task) && onOpenTask && <TaskTreeBlock client={client} task={task} onOpenTask={onOpenTask} meId={meId} />}
+      {/* SCN-118 名额是某一天的：回到整单，一次报多天 */}
+      {task.parent_id !== null && !!task.work_date && task.status === 'published' && onOpenTask && (
+        <TouchableOpacity onPress={() => void client.getTask(task.parent_id as number).then(onOpenTask).catch(() => {})}>
+          <Text style={styles.linkRow}>这单一共好几天：回到整单，一次报多天 →</Text>
+        </TouchableOpacity>
+      )}
       {/* SPACE-024 合作驾驶舱（移动简化版：进度、钱、预警、关键路径；APP-007）——只给发布方 */}
       {hasChildTasks(task) && meId === task.creator_id && <CockpitBlock client={client} taskId={task.id} />}
       {/* SCN-120 一单多次上门的逐次回报（176 号 spec）：成交双方 */}

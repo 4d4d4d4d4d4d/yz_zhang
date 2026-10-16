@@ -20,6 +20,7 @@ import type {
   FollowListItem,
   TaskCreateInput,
   TaskVisits,
+  ApplyDaysResult,
   RiskDisclosure,
   ShareRow,
   SpendRequestView,
@@ -624,6 +625,10 @@ export class PlatformClient {
       content_type: contentType,
       data_base64: dataBase64,
     });
+  }
+  /** SCN-118 一个人一次报多天：在多天母任务上选日期（YYYY-MM-DD），每天报一个还在招的名额 */
+  applyDays(taskId: number, dates: string[], message = '') {
+    return this.request<ApplyDaysResult>('POST', `/tasks/${taskId}/apply-days`, { dates, message });
   }
   /** SCN-120 一次上门回报（只有接单的人、只在执行中）：勾清单里做了的、备注、照片 */
   reportVisit(taskId: number, body: { done: string[]; note?: string; images?: string[] }) {

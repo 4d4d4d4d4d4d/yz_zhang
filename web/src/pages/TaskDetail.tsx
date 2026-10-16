@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, daySummaryLine, daysStillShort, describeChangeOrder, hasChildTasks, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, daySummaryLine, daysStillShort, describeChangeOrder, hasChildTasks, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -92,6 +92,10 @@ export default function TaskDetail() {
         </p>
         {task.description && <p style={{ marginTop: 8 }}>{task.description}</p>}
         {task.address_exact && <p className="muted">📍 详细地址（当事人可见）：{task.address_exact}</p>}
+        {/* SCN-118 名额是某一天的：回到整单，一次报多天 */}
+        {task.parent_id !== null && task.work_date && (task.status === 'published') && (
+          <p><Link to={`/tasks/${task.parent_id}`}>这单一共好几天：回到整单，一次报多天 →</Link></p>
+        )}
         {/* SCN-119 替别人发的单：谁都看得到是替别人发的；称呼与到场联系只给成交双方 */}
         {task.on_behalf && (
           <p className="muted" aria-label="服务对象">
@@ -197,6 +201,8 @@ export default function TaskDetail() {
               <ul>
                 {tree.by_day.map((d) => <li key={d.date}>{daySummaryLine(d)}</li>)}
               </ul>
+              {/* SCN-118 一个人一次报多天（177 号 spec）：不是发单人才有 */}
+              {me && !isCreator && <ApplyDaysBox taskId={taskId} days={daysStillShort(tree.by_day).map((d) => d.date)} />}
             </div>
           )}
           <div className="list" style={{ marginTop: 12 }}>
@@ -425,6 +431,39 @@ export default function TaskDetail() {
  *
  * 只在**进行中**的线下任务上出现：任务没开始或已结束时摆一个求助按钮，
  * 只会稀释它。 */
+/** SCN-118 一次报多天：勾还缺人的那几天，每天报一个名额；报不了的逐日说清。 */
+function ApplyDaysBox({ taskId, days }: { taskId: number; days: string[] }) {
+  const { client } = useApp();
+  const [picked, setPicked] = useState<string[]>([]);
+  const [result, setResult] = useState<ApplyDaysResult | null>(null);
+  const [error, setError] = useState('');
+  if (days.length === 0) return null;
+  async function submit() {
+    setError(''); setResult(null);
+    try { setResult(await client.applyDays(taskId, picked)); setPicked([]); } catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <div aria-label="一次报多天" style={{ marginTop: 8 }}>
+      <p className="muted">这几天你都能来？勾上一次报完（每天报一个名额，发单人逐天选人）：</p>
+      {days.map((d) => (
+        <label key={d} className="row">
+          <input type="checkbox" aria-label={`报 ${d}`} checked={picked.includes(d)}
+                 onChange={(e) => setPicked((p) => e.target.checked ? [...p, d] : p.filter((x) => x !== d))} />
+          {d.slice(5)}
+        </label>
+      ))}
+      <button disabled={picked.length === 0} onClick={() => void submit()}>报这几天</button>
+      {result && (
+        <p className="muted">
+          已报：{result.applied.map((a) => a.date.slice(5)).join('、') || '无'}
+          {result.skipped.length ? `；没报：${result.skipped.map((s) => `${s.date.slice(5)}（${s.reason}）`).join('、')}` : ''}
+        </p>
+      )}
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 /** SCN-120 上门回报：接单人每次勾清单、写备注、附照片；双方都看得到计划几次、回报几次、每次漏了什么。 */
 function VisitsPanel({ task, isExecutor }: { task: Task; isExecutor: boolean }) {
   const { client } = useApp();

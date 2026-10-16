@@ -624,7 +624,13 @@ def apply(
     from app.modules.legal import consent
 
     consent.require_current_agreement(db, user.id)  # LAW-030
-    task = _get_task(db, task_id)
+    app_row = _apply_one(db, _get_task(db, task_id), user, body)
+    return {"id": app_row.id, "status": app_row.status}
+
+
+def _apply_one(db: Session, task: Task, user: User, body: ApplyIn) -> Application:
+    """报名的全部规则（单个报名与 SCN-118 一次报多天共用一份，不各写各的）。"""
+    task_id = task.id
     if task.status != "published":
         raise conflict("任务不在招募中", "not_recruiting")
     if task.creator_id == user.id:
@@ -654,7 +660,54 @@ def apply(
     )
     db.add(app_row)
     db.flush()
-    return {"id": app_row.id, "status": app_row.status}
+    return app_row
+
+
+class ApplyDaysIn(BaseModel):
+    """SCN-118 一次报多天：在多天母任务上选几天，每天报一个还在招的名额。"""
+    model_config = ConfigDict(extra="forbid")
+    dates: list[date] = Field(min_length=1, max_length=14)
+    message: str = Field(default="", max_length=500)
+
+
+@router.post("/tasks/{task_id}/apply-days", status_code=201)
+def apply_days(task_id: int, body: ApplyDaysIn, user: User = Depends(require_verified),
+               db: Session = Depends(get_db, scope="function")):
+    """SCN-118（177 号 spec）一个人一次报多天：每个日期挑一个还在招、自己没报过的名额，按同一套报名规则报。
+
+    一天只报一个名额（一个人一天只能顶一个人的活）；哪天没名额了、哪天已经报过，逐日说清，其余照报。
+    每个名额仍是独立的报名：发单人逐个选人，选了谁就和谁签那一天的合约。"""
+    from app.modules.legal import consent
+
+    consent.require_current_agreement(db, user.id)  # LAW-030
+    parent = _get_task(db, task_id)
+    if parent.parent_id is not None or (parent.days or 1) <= 1:
+        raise bad_request("这不是一单多天的活：直接在名额上报名", "not_multi_day")
+    # 自己报自己的单由 _apply_one 拦（self_apply），与单个报名同一处
+    slots = (db.query(Task).filter(Task.parent_id == parent.id, Task.work_date.isnot(None))
+             .order_by(Task.work_date, Task.id).all())
+    mine = {a.task_id for a in db.query(Application).filter(
+        Application.applicant_id == user.id, Application.status != "withdrawn",
+        Application.task_id.in_([s.id for s in slots] or [0]))}
+    applied, skipped = [], []
+    for d in sorted(set(body.dates)):
+        today = [s for s in slots if s.work_date == d]
+        if not today:
+            skipped.append({"date": day(d), "reason": "这单没有这一天"})
+            continue
+        if any(s.id in mine for s in today):
+            skipped.append({"date": day(d), "reason": "这一天你已经报过了"})
+            continue
+        open_slot = next((s for s in today if s.status == "published"), None)
+        if open_slot is None:
+            skipped.append({"date": day(d), "reason": "这一天的名额已经招满或停招了"})
+            continue
+        row = _apply_one(db, open_slot, user, ApplyIn(message=body.message))
+        applied.append({"date": day(d), "task_id": open_slot.id, "application_id": row.id})
+    if not applied:
+        raise conflict("选的这几天都报不了：" + "；".join(f"{s['date']} {s['reason']}" for s in skipped),
+                       "no_day_available")
+    return {"applied": applied, "skipped": skipped}
 
 
 @router.get("/tasks/{task_id}/applications")

@@ -354,6 +354,9 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   visit_item_too_long: '每次要做的事，每项最多 20 个字：拆成几项，或写进说明',
   visit_item_unknown: '只勾发单人写的那几项，别的写进备注',
   visit_empty: '这次上门做了什么：勾清单、写一句备注或附一张照片',
+  // SCN-118 一次报多天（177 号 spec）
+  not_multi_day: '这不是一单多天的活：直接在名额上报名',
+  no_day_available: '选的这几天都报不了：换几天，或看看哪天还缺人',
   days_with_recurrence: '连续几天与「每周 / 每月重复」不能同时用：选一种',
   handover_to_self: '接手人不能是被移出的人自己',
   handover_not_member: '接手人必须是这个团队里的在职成员',
