@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import TabBar from './TabBar';
+import RouteBoundary from './RouteBoundary';
 import Admin from './pages/Admin';
 import Circles from './pages/Circles';
 import Community from './pages/Community';
@@ -78,6 +79,8 @@ export default function App() {
         </div> : <Link className="nav-mobile-keep nav-signin" to="/login">登录 / 注册 <span aria-hidden="true">→</span></Link>}
         <details className="mobile-menu"><summary>全部功能</summary><div>{[['/opportunities','合作机会'],['/community','社区'],['/circles','圈层'],['/ventures','合作体'],['/teams','团队'],['/wallet','钱包'],['/chain','链上协作'],['/records','企业档案'],['/rewards','优惠'],['/verify','核验台'],['/developer','开发者'],['/ask','不懂就问'],['/support','客服'],['/xapp','跨 App 助手']].map(([to,label])=><Link key={to} to={to}>{label}</Link>)}</div></details>
       </nav>
+      {/* APP-092 一页出错只坏这一页：导航在、换成说明卡（183 号 spec） */}
+      <RouteBoundary>
       <Routes>
         <Route path="/" element={<Discover />} />
         <Route path="/opportunities" element={<Square />} />
@@ -127,6 +130,7 @@ export default function App() {
         <Route path="/developer" element={hasToken ? <Developer /> : <Navigate to="/login" />} />
         <Route path="/admin" element={hasToken ? <Admin /> : <Navigate to="/login" />} />
       </Routes>
+      </RouteBoundary>
 
       {canInstall && (
         <div className="install-tip">

@@ -11,6 +11,7 @@ import { isSandbox, loadSandbox } from './sandboxState';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
 import { VisitsBlock, hasVisits } from './visits';
+import { ScreenBoundary } from './ScreenBoundary';
 import { DiscoverScreen } from './Discover';
 import { AgentBlock, RecommendationsBlock } from './collaborators';
 import { ExperienceToolsBlock } from './experience';
@@ -129,6 +130,9 @@ export default function App() {
         </TouchableOpacity>
       </View>
       <View style={styles.body}>
+        {/* APP-092 一屏出错只坏这一屏：顶栏、Tab 还在，换成说明（183 号 spec）；换一屏自动复位 */}
+        <ScreenBoundary key={activeTask ? `task-${activeTask.id}` : overlay ? `overlay-${overlay.kind}` : `tab-${tab}`}
+                        onBack={() => { setActiveTask(null); setOverlay(null); }}>
         {activeTask ? (
           <TaskDetailScreen client={client} me={me} task={activeTask}
                             onBack={() => setActiveTask(null)}
@@ -178,6 +182,7 @@ export default function App() {
             )}
           </>
         )}
+        </ScreenBoundary>
       </View>
       {!activeTask && !overlay && (
         <View style={styles.tabbar}>

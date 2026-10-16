@@ -550,6 +550,7 @@ app MachineMandate
 app MessagesAndInvites
 app OrganizationRecords
 app PayoutGovernance
+app ScreenBoundary
 app TeamCoopDev
 app VideoFeed
 app apiKeyUsage
