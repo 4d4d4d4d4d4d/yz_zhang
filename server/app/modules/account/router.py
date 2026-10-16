@@ -793,7 +793,11 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
         "xapp": _export_xapp(db, user.id),
         "real_name": user.real_name,
         "tasks": [{"id": t.id, "title": t.title, "status": t.status, "budget_cents": t.budget_cents,
-                   "role": "creator" if t.creator_id == user.id else "executor"} for t in tasks],
+                   "role": "creator" if t.creator_id == user.id else "executor",
+                   # SCN-119 替别人发的单：导出里写明替谁、何时确认问过本人（只给发单人自己；接单人导出不带第三人信息）
+                   **({"on_behalf": True, "recipient_label": t.recipient_label, "onsite_contact": t.onsite_contact,
+                       "recipient_consent_at": iso(t.recipient_consent_at)}
+                      if t.on_behalf and t.creator_id == user.id else {})} for t in tasks],
         "ledger": [{"kind": e.kind, "amount_cents": e.amount_cents,
                     "created_at": iso(e.created_at)} for e in ledger],
         "contents": [{"id": c.id, "kind": c.kind, "body": c.body,

@@ -12,6 +12,8 @@ COPY_FIELDS = [
     "creator_id", "title", "description", "category", "task_type", "required_skills",
     "budget_cents", "pricing", "is_remote", "city", "lat", "lng",
     "address_hint", "address_exact", "visibility", "circle_id", "recurrence",
+    # SCN-119 替别人发的周期单，下一期照样是替同一个人（同意是发单时问过的那一次）
+    "on_behalf", "recipient_label", "onsite_contact", "recipient_consent_at",
 ]
 
 

@@ -57,6 +57,11 @@ class TaskIn(BaseModel):
     # OUT-002 浮动对价的确定上限
     bonus_cents: int = Field(default=0, ge=0)
     publish_now: bool = True
+    # SCN-119（175 号 spec）替别人发单：服务对象怎么称呼、到场时联系谁、问过本人没有
+    on_behalf: bool = False
+    recipient_label: str = Field(default="", max_length=20)
+    onsite_contact: str = Field(default="", max_length=40)
+    recipient_consented: bool = False
 
 
 class DeliverIn(BaseModel):
@@ -131,6 +136,10 @@ def dump_task(task: Task, viewer: User | None = None) -> dict:
         "days": task.days or 1, "work_date": day(task.work_date) if task.work_date else None,
         # SCN-116（174 号 spec）：几个人（TASK-007 早就存了、没给出去）；客户端据此知道这是装名额的母任务
         "people_needed": task.people_needed or 1,
+        # SCN-119 替别人发单：谁都看得到「这是替别人发的」；服务对象的称呼与在场联系方式只给成交双方
+        "on_behalf": bool(task.on_behalf),
+        "recipient_label": task.recipient_label if is_party else "",
+        "onsite_contact": task.onsite_contact if is_party else "",
         "recurred_from_id": task.recurred_from_id,
         "status": task.status,
         "deadline": iso(task.deadline),
@@ -194,6 +203,20 @@ def _validate_ip_and_pricing(body: "TaskIn") -> None:
         raise bad_request("仅 outcome 计价支持浮动对价", "bonus_not_allowed")
 
 
+def _validate_on_behalf(body: TaskIn) -> None:
+    """SCN-119 替别人发单（175 号 spec）：说清替谁、问过本人。没勾「替别人发」时这几项一律不收，免得悄悄带上别人的信息。"""
+    body.recipient_label, body.onsite_contact = body.recipient_label.strip(), body.onsite_contact.strip()
+    if not body.on_behalf:
+        if body.recipient_label or body.onsite_contact or body.recipient_consented:
+            raise bad_request("只有替别人发单时才填服务对象：勾上「替别人发」，或把这几项清空", "recipient_without_on_behalf")
+        return
+    if not body.recipient_label:
+        raise bad_request("替别人发单要写服务对象怎么称呼（例如「我妈」「王阿姨」），接单的人到了才知道找谁",
+                          "recipient_label_required")
+    if not body.recipient_consented:
+        raise bad_request("替别人发单前要先问过本人：问过之后勾选「已经问过本人」再发", "recipient_consent_required")
+
+
 @router.post("/tasks", status_code=201)
 def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     # LAW-030 协议更新后，关键动作前必须重新同意（只拦关键动作，不拦全站）
@@ -220,6 +243,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
         if not body.circle_id or not active_member(db, body.circle_id, user.id):
             raise forbidden("需先加入该圈层", "not_circle_member")
     _validate_days(body)
+    _validate_on_behalf(body)
     multi = body.people_needed > 1 or body.days > 1
     publishing = body.publish_now or multi
     if publishing:
@@ -228,7 +252,9 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
 
         assert_no_finance_offer(f"{body.title} {body.description}")
         service.review_or_reject(db, body.title + " " + body.description)
-    task = Task(creator_id=user.id, **body.model_dump(exclude={"publish_now", "start_date"}))
+    task = Task(creator_id=user.id, **body.model_dump(exclude={"publish_now", "start_date", "recipient_consented"}))
+    if task.on_behalf:
+        task.recipient_consent_at = utcnow()
     if body.days > 1:
         task.work_date = body.start_date
         task.deadline = _day_end_utc(body.start_date + timedelta(days=body.days - 1))
@@ -260,6 +286,8 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
                     budget_cents=slot_budget, pricing=task.pricing, deposit_cents=task.deposit_cents,
                     is_remote=task.is_remote, city=task.city, lat=task.lat, lng=task.lng,
                     address_hint=task.address_hint, address_exact=task.address_exact,
+                    on_behalf=task.on_behalf, recipient_label=task.recipient_label,
+                    onsite_contact=task.onsite_contact, recipient_consent_at=task.recipient_consent_at,
                     visibility=task.visibility, circle_id=task.circle_id,
                     work_date=day_, deadline=_day_end_utc(day_) if day_ else None,
                 )
@@ -847,14 +875,20 @@ def purge_locations(db: Session = Depends(get_db, scope="function"), _=Depends(r
                 Task.completed_at <= cutoff)
         .all()
     ]
-    purged = 0
+    purged = contacts = 0
     if closed_ids:
         purged = (
             db.query(ProgressLog)
             .filter(ProgressLog.task_id.in_(closed_ids), ProgressLog.lat.isnot(None))
             .update({"lat": None, "lng": None}, synchronize_session=False)
         )
-    return {"purged_logs": purged}
+        # SCN-119（175 号 spec）：替别人发单的在场联系方式是第三人的个人信息，结束 30 天后同样清掉（称呼留着，账单与纠纷要认得是哪一单）
+        contacts = (
+            db.query(Task)
+            .filter(Task.id.in_(closed_ids), Task.onsite_contact != "")
+            .update({"onsite_contact": ""}, synchronize_session=False)
+        )
+    return {"purged_logs": purged, "purged_contacts": contacts}
 
 
 # ---------- 交付与验收（TASK-030/031/033）----------

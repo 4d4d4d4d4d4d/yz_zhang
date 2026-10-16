@@ -79,6 +79,12 @@ class Task(Base):
     lng: Mapped[float | None] = mapped_column(Float, nullable=True)
     address_hint: Mapped[str] = mapped_column(String(120), default="")  # 商圈级(GEO-004)
     address_exact: Mapped[str] = mapped_column(String(200), default="")
+    # SCN-119（175 号 spec）替别人发单：发单人与服务对象分开。服务对象的称呼与在场联系方式**只给成交双方**
+    # （与 address_exact 同一条 GEO-004）；发单前必须确认问过本人（记下时间）；结束 30 天后清掉联系方式
+    on_behalf: Mapped[bool] = mapped_column(Boolean, default=False)
+    recipient_label: Mapped[str] = mapped_column(String(20), default="")
+    onsite_contact: Mapped[str] = mapped_column(String(40), default="")
+    recipient_consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # TASK-008 可见范围：public 公开广场 / circle 仅圈层任务板
     visibility: Mapped[str] = mapped_column(String(12), default="public")

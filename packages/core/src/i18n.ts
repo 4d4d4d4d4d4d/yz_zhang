@@ -345,6 +345,11 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   start_date_in_past: '开始日期不能早于今天',
   start_date_too_far: '开始日期最多提前 60 天',
   too_many_slots: '人数 × 天数最多 50 个名额：请减少人数或天数，或分两次发',
+  // SCN-119 替别人发单（175 号 spec）
+  recipient_label_required: '替别人发单要写服务对象怎么称呼（例如「我妈」「王阿姨」），接单的人到了才知道找谁',
+  recipient_consent_required: '替别人发单前要先问过本人：问过之后勾选「已经问过本人」再发',
+  recipient_without_on_behalf: '只有替别人发单时才填服务对象：勾上「替别人发」，或把这几项清空',
+  on_behalf_needs_human: '替别人发单要本人在 App 或网页上发：问没问过服务对象，只能由你自己确认',
   days_with_recurrence: '连续几天与「每周 / 每月重复」不能同时用：选一种',
   handover_to_self: '接手人不能是被移出的人自己',
   handover_not_member: '接手人必须是这个团队里的在职成员',

@@ -154,6 +154,9 @@ def publish(body: task_api.TaskIn, principal=Depends(require_scope('tasks:write'
             db: Session = Depends(get_db, scope="function"), idempotency_key: str = Header(default='')):
     if body.people_needed != 1 or body.recurrence != 'none' or body.days != 1:
         raise bad_request('机器授权仅支持单次单名额任务，批量或周期任务需分别授权')
+    if body.on_behalf:
+        # SCN-119：问过服务对象本人这件事只能由人确认，机器不能代勾
+        raise bad_request('替别人发单要本人在 App 或网页上发：问没问过服务对象，只能由你自己确认', 'on_behalf_needs_human')
     if body.budget_cents <= 0 or body.deposit_cents < 0:
         raise bad_request('预算必须为正且保证金不能为负')
     if body.publish_now:

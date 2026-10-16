@@ -451,6 +451,13 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       </Text>
       {!!task.description && <Text>{task.description}</Text>}
       {!!task.address_exact && <Text style={styles.mutedLeft}>📍 {task.address_exact}</Text>}
+      {/* SCN-119 替别人发的单：谁都看得到；称呼与到场联系只给成交双方 */}
+      {!!task.on_behalf && (
+        <Text style={styles.mutedLeft} accessibilityLabel="服务对象">
+          替别人发的单{task.recipient_label ? `：服务对象「${task.recipient_label}」` : '（服务对象与到场联系方式成交后可见）'}
+          {task.onsite_contact ? ` · 到场联系 ${task.onsite_contact}` : ''}
+        </Text>
+      )}
       <ReportAndBlock client={client} task={task} meId={meId} />
       {contract && (
         <View style={styles.cardRow}>
@@ -917,6 +924,11 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
   const [people, setPeople] = useState('1');
   const [days, setDays] = useState('1');
   const [startDate, setStartDate] = useState('');
+  // SCN-119（175 号 spec）替别人发单：替谁、到场联系谁、问过本人没有
+  const [onBehalf, setOnBehalf] = useState(false);
+  const [recipient, setRecipient] = useState('');
+  const [onsite, setOnsite] = useState('');
+  const [consented, setConsented] = useState(false);
   const [error, setError] = useState('');
   const nDays = parseInt(days, 10) || 1;
   const nPeople = parseInt(people, 10) || 1;
@@ -947,6 +959,25 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
           )}
         </>
       )}
+      {/* SCN-119 替别人发单：称呼与到场联系只给成交双方；发之前先问过本人 */}
+      <TouchableOpacity onPress={() => setOnBehalf((v) => !v)} accessibilityRole="checkbox" accessibilityLabel="替别人发"
+                        accessibilityState={{ checked: onBehalf }}>
+        <Text style={onBehalf ? styles.optionActive : styles.option}>{onBehalf ? '☑ ' : '☐ '}替别人发（家人、朋友）</Text>
+      </TouchableOpacity>
+      {onBehalf && (
+        <>
+          <TextInput style={styles.input} accessibilityLabel="服务对象称呼" placeholder="服务对象怎么称呼（如：我妈）" maxLength={20}
+                     value={recipient} onChangeText={setRecipient} />
+          <TextInput style={styles.input} accessibilityLabel="到场联系" placeholder="到场联系谁（成交后才给对方）" maxLength={40}
+                     value={onsite} onChangeText={setOnsite} />
+          <TouchableOpacity onPress={() => setConsented((v) => !v)} accessibilityRole="checkbox" accessibilityLabel="已经问过本人"
+                            accessibilityState={{ checked: consented }}>
+            <Text style={consented ? styles.optionActive : styles.option}>
+              {consented ? '☑ ' : '☐ '}已经问过本人，他/她同意有人上门、同意把称呼和联系方式给接单的人
+            </Text>
+          </TouchableOpacity>
+        </>
+      )}
       <Text style={styles.mutedLeft}>交付成果归谁（必选）</Text>
       {(Object.keys(IP_ASSIGNMENT_LABEL) as IpAssignment[]).map((key) => (
         <TouchableOpacity key={key} onPress={() => setIp(key)}>
@@ -966,6 +997,7 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
             ip_assignment: ip,
             ...(!project && nPeople > 1 ? { people_needed: nPeople } : {}),
             ...(!project && nDays > 1 ? { days: nDays, start_date: startDate.trim() || null } : {}),
+            ...(onBehalf ? { on_behalf: true, recipient_label: recipient, onsite_contact: onsite, recipient_consented: consented } : {}),
             // 项目先存草稿：拆好、说清每一步谁来做之后，只有能开工的步骤发布出去
             is_remote: true, publish_now: !project,
           });

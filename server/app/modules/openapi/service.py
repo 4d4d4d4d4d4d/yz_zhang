@@ -158,7 +158,7 @@ def enqueue(db: Session, event_type: str, payload: dict) -> int:
 # HOOK-003 这些字段一律不出站。做成**黑名单兜底 + 调用方白名单**两层：
 # 调用方本来就只该传标识与状态，这里是防手滑。
 _SENSITIVE_KEYS = {
-    "phone", "real_name", "id_number", "id_masked", "address_exact",
+    "phone", "real_name", "id_number", "id_masked", "address_exact", "onsite_contact", "recipient_label",
     "lat", "lng", "password", "token", "secret", "email",
     "amount_cents", "budget_cents", "balance_cents", "available_cents",
 }

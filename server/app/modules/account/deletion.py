@@ -185,6 +185,11 @@ def erase_personal_data(db: Session, user: User) -> dict:
         db.query(XappStep).filter(XappStep.run_id.in_(run_ids)).delete(synchronize_session=False)
     db.query(XappRun).filter(XappRun.user_id == user.id).delete(synchronize_session=False)
     db.query(XappGrant).filter(XappGrant.user_id == user.id).delete(synchronize_session=False)
+    # SCN-119（175 号 spec）替别人发单时留下的第三人信息（服务对象的称呼与在场联系方式）：注销即清空。
+    # 「替别人发」这个事实留着——合约与纠纷要知道当时是替谁办事，只是不再认得出是谁
+    from app.modules.task.models import Task
+    db.query(Task).filter(Task.creator_id == user.id, Task.on_behalf.is_(True)).update(
+        {"recipient_label": "（已注销）", "onsite_contact": ""}, synchronize_session=False)
     # 分析事件只要聚合数：去掉与人的关联（法律问答答不上的主题等，153 号 spec）
     from app.modules.analytics.models import AnalyticsEvent
     db.query(AnalyticsEvent).filter(AnalyticsEvent.user_id == user.id).update(

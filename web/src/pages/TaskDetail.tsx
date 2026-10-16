@@ -92,6 +92,13 @@ export default function TaskDetail() {
         </p>
         {task.description && <p style={{ marginTop: 8 }}>{task.description}</p>}
         {task.address_exact && <p className="muted">📍 详细地址（当事人可见）：{task.address_exact}</p>}
+        {/* SCN-119 替别人发的单：谁都看得到是替别人发的；称呼与到场联系只给成交双方 */}
+        {task.on_behalf && (
+          <p className="muted" aria-label="服务对象">
+            替别人发的单{task.recipient_label ? `：服务对象「${task.recipient_label}」` : '（服务对象与到场联系方式成交后可见）'}
+            {task.onsite_contact ? ` · 到场联系 ${task.onsite_contact}` : ''}
+          </p>
+        )}
         {error && <p className="error">{error}</p>}
 
         {/* 状态驱动的操作区（TASK-021） */}

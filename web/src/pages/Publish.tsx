@@ -21,6 +21,8 @@ export default function Publish() {
     task_type: 'service', pricing: 'fixed', recurrence: 'none',
     people_needed: '1', days: '1', start_date: '', deposit_yuan: '0', is_remote: false, city: params.get('city') || '',
     lat: '31.2304', lng: '121.4737', address_hint: '', address_exact: '',
+    // SCN-119（175 号 spec）替别人发单：替谁、到场联系谁、问过本人没有
+    on_behalf: false, recipient_label: '', onsite_contact: '', recipient_consented: false,
     // TZ-064 截止时间此前**网页上根本没有地方填**：服务端有校验、有到期下架 job、
     // 有临期提醒，而线上所有任务的 deadline 都是空的，那个 job 从来没有活可干。
     deadline_local: '',
@@ -100,6 +102,9 @@ export default function Publish() {
         lng: form.is_remote ? null : parseFloat(form.lng),
         address_hint: form.address_hint,
         address_exact: form.address_exact,
+        // SCN-119 只有勾了「替别人发」才带这几项（服务端对没勾却带了的会拒）
+        ...(form.on_behalf ? { on_behalf: true, recipient_label: form.recipient_label, onsite_contact: form.onsite_contact,
+          recipient_consented: form.recipient_consented } : {}),
         // TZ-063 发出去的是**带偏移**的 ISO：datetime-local 给的是没有偏移的
         // 本地字符串，直发的话服务端会当 UTC，差一个时区
         ...(form.deadline_local ? { deadline: localInputToServerTime(form.deadline_local) } : {}),
@@ -241,6 +246,29 @@ export default function Publish() {
               <label>商圈（公开显示）<input value={form.address_hint} onChange={(e) => set('address_hint', e.target.value)} placeholder="如：静安寺商圈" /></label>
               <label>详细地址（仅成交后对执行者可见）<input value={form.address_exact} onChange={(e) => set('address_exact', e.target.value)} /></label>
             </>
+          )}
+          {/* SCN-119 替别人发单（175 号 spec）：替谁、到场联系谁只给成交双方；发之前先问过本人 */}
+          <label className="row">
+            <input type="checkbox" aria-label="替别人发" checked={form.on_behalf} onChange={(e) => set('on_behalf', e.target.checked)} />
+            替别人发（家人、朋友）
+          </label>
+          {form.on_behalf && (
+            <div aria-label="服务对象">
+              <label>服务对象怎么称呼（仅成交后对执行者可见）
+                <input aria-label="服务对象称呼" maxLength={20} value={form.recipient_label}
+                       onChange={(e) => set('recipient_label', e.target.value)} placeholder="如：我妈、王阿姨" />
+              </label>
+              <label>到场联系谁（仅成交后可见，结束 30 天后清除）
+                <input aria-label="到场联系" maxLength={40} value={form.onsite_contact}
+                       onChange={(e) => set('onsite_contact', e.target.value)} placeholder="如：王阿姨 139…" />
+              </label>
+              <label className="row">
+                <input type="checkbox" aria-label="已经问过本人" checked={form.recipient_consented}
+                       onChange={(e) => set('recipient_consented', e.target.checked)} />
+                已经问过本人，他/她同意有人上门、同意把称呼和联系方式给接单的人
+              </label>
+              <p className="muted">身份证号、银行卡、验证码不要写在任何地方；钱由你托管、你验收。</p>
+            </div>
           )}
           {error && <p className="error">{error}</p>}
           <button type="submit">{form.task_type === 'project' ? '创建并让 AI 分解' : '发布任务'}</button>

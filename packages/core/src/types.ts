@@ -268,6 +268,12 @@ export interface Task {
   work_date?: string | null;
   /** SCN-116（174 号 spec）几个人（TASK-007）；大于 1 或分天的根任务是装名额的母任务 */
   people_needed?: number;
+  /** SCN-119（175 号 spec）替别人发的单：谁都看得到这一项 */
+  on_behalf?: boolean;
+  /** 服务对象怎么称呼（「我妈」）：只给成交双方，别人是空串 */
+  recipient_label?: string;
+  /** 到场联系谁：只给成交双方，别人是空串；结束 30 天后清空 */
+  onsite_contact?: string;
   status: TaskStatus;
   deadline: string | null;
   reject_count: number;
@@ -336,6 +342,11 @@ export interface TaskCreateInput {
   /** SCN-107 连续几天（名额 = 人数 × 天数，最多 50）；大于 1 时必须给 start_date */
   days?: number;
   start_date?: string | null;
+  /** SCN-119 替别人发单：勾了就必须写称呼并确认问过本人；没勾时这几项不要带 */
+  on_behalf?: boolean;
+  recipient_label?: string;
+  onsite_contact?: string;
+  recipient_consented?: boolean;
   acceptance_criteria?: string[];
   bonus_cents?: number;
   publish_now?: boolean;
