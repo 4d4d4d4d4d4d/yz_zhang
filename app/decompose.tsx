@@ -5,8 +5,8 @@
 // 同一份文案（共享 SDK）：一层一层往下长、每层能改；每个叶子说清谁能做、依据是什么；
 // 「判不了」的步骤就地给去处，没说清之前不让确认。
 import {
-  LEAF_CRITERION_LABEL, TASK_STATUS_LABEL, apiErrorText, childrenOf, decompositionSourceLabel,
-  executorLabel, fmtYuan, isOpenEnd, type Decomposition, type DecompositionNode,
+  LEAF_CRITERION_LABEL, TASK_STATUS_LABEL, apiErrorText, childrenOf, daySummaryLine, daysStillShort,
+  decompositionSourceLabel, executorLabel, fmtYuan, isOpenEnd, type Decomposition, type DecompositionNode,
   type Cockpit, type DecompositionNodePatch, type PlatformClient, type Task, type TaskTree,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -200,7 +200,7 @@ function Node(props: LevelProps & { node: DecompositionNode }) {
   );
 }
 
-/** AI-DEC-021 子任务进度：确认之后，项目型任务的子步骤在这里看、点进去办。 */
+/** AI-DEC-021 子任务进度：确认之后，项目型任务的子步骤在这里看、点进去办；SCN-116 起多人、多天的名额也在这里。 */
 export function TaskTreeBlock({ client, task, onOpenTask }: {
   client: PlatformClient; task: Task; onOpenTask: (t: Task) => void;
 }) {
@@ -213,6 +213,15 @@ export function TaskTreeBlock({ client, task, onOpenTask }: {
   return (
     <View style={styles.card}>
       <Text style={styles.title}>子任务进度 {tree.progress_pct}%</Text>
+      {/* SCN-116 多天名额按天汇总（174 号 spec）：哪天还缺几个人 */}
+      {Array.isArray(tree.by_day) && tree.by_day.length > 0 && (
+        <View accessibilityLabel="按天看名额">
+          <Text style={daysStillShort(tree.by_day).length ? styles.warn : styles.muted}>
+            {daysStillShort(tree.by_day).length ? `还有 ${daysStillShort(tree.by_day).length} 天缺人` : '每天的名额都招到人了'}
+          </Text>
+          {tree.by_day.map((d) => <Text key={d.date} style={styles.row}>{daySummaryLine(d)}</Text>)}
+        </View>
+      )}
       {tree.children.map((c) => (
         <TouchableOpacity key={c.id} onPress={() => void client.getTask(c.id).then(onOpenTask).catch(() => {})}>
           <Text style={styles.row}>{c.title}  <Text style={styles.muted}>{fmtYuan(c.budget_cents)} · {TASK_STATUS_LABEL[c.status]}</Text></Text>

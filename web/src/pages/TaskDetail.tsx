@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, describeChangeOrder, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, daySummaryLine, daysStillShort, describeChangeOrder, hasChildTasks, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -37,7 +37,8 @@ export default function TaskDetail() {
       setApps(await client.listApplications(taskId));
       setRecs(await client.recommendations(taskId));
     }
-    if (t.parent_id === null && t.task_type === 'project') {
+    // SCN-116：多人、多天的母任务也拉（以前只有项目型，名额在详情页上看不到）
+    if (hasChildTasks(t)) {
       setTree(await client.taskTree(taskId).catch(() => null));
     }
     if (me && (t.creator_id === me.id || t.executor_id === me.id)) {
@@ -165,7 +166,7 @@ export default function TaskDetail() {
 
       {/* AI-DEC-041 项目型草稿还没拆完：回到拆解页接着拆（106 号 spec） */}
       {isCreator && task.task_type === 'project' && task.parent_id === null && task.status === 'draft'
-        && !(tree && tree.children.length > 0) && (
+        && !(tree && Array.isArray(tree.children) && tree.children.length > 0) && (
         <div className="card">
           <h3>还没拆完</h3>
           <p className="muted">这是一个项目型任务，拆成能开工的步骤并确认后，才会发布出去。</p>
@@ -174,10 +175,23 @@ export default function TaskDetail() {
       )}
 
       {/* 母任务驾驶舱（AI-DEC-021/TASK-036） */}
-      {tree && tree.children.length > 0 && (
+      {tree && Array.isArray(tree.children) && tree.children.length > 0 && (
         <div className="card">
           <h3>子任务进度 {tree.progress_pct}%</h3>
           <div className="progress-bar"><div style={{ width: `${tree.progress_pct}%` }} /></div>
+          {/* SCN-116 多天名额按天汇总（174 号 spec）：哪天还缺几个人 */}
+          {Array.isArray(tree.by_day) && tree.by_day.length > 0 && (
+            <div aria-label="按天看名额" style={{ marginTop: 12 }}>
+              <p className={daysStillShort(tree.by_day).length ? 'error' : 'muted'}>
+                {daysStillShort(tree.by_day).length
+                  ? `还有 ${daysStillShort(tree.by_day).length} 天缺人`
+                  : '每天的名额都招到人了'}
+              </p>
+              <ul>
+                {tree.by_day.map((d) => <li key={d.date}>{daySummaryLine(d)}</li>)}
+              </ul>
+            </div>
+          )}
           <div className="list" style={{ marginTop: 12 }}>
             {tree.children.map((c) => (
               <div className="task-item" key={c.id}>
@@ -193,7 +207,7 @@ export default function TaskDetail() {
       )}
 
       {/* SPACE-024 合作驾驶舱：只给发布方（公开的进度仍是上面那块） */}
-      {isCreator && tree && tree.children.length > 0 && <CockpitPanel taskId={taskId} />}
+      {isCreator && tree && Array.isArray(tree.children) && tree.children.length > 0 && <CockpitPanel taskId={taskId} />}
 
       {/* 发布者视图：AI 推荐 + 报名列表（MATCH-001/002） */}
       {isCreator && task.status === 'published' && (
@@ -619,7 +633,8 @@ function CockpitPanel({ taskId }: { taskId: number }) {
   const [error, setError] = useState('');
   useEffect(() => { client.cockpit(taskId).then(setData).catch((e) => setError(apiErrorText(e))); }, [client, taskId]);
   if (error) return <div className="card"><p className="error">{error}</p></div>;
-  if (!data) return null;
+  // 驾驶舱是详情页上的一块：响应不像预期时不画，不许把整页带崩（与 App 的 CockpitBlock 同一条）
+  if (!data || !Array.isArray(data.nodes) || !data.budget) return null;
   const title = (id: number) => data.nodes.find((n) => n.id === id)?.title ?? `#${id}`;
   const b = data.budget;
   return (

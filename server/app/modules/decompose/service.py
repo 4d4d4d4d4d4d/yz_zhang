@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import bad_request, conflict
 from app.core.events import subscribe
+from app.core.timefmt import day
 from app.modules.task import service as task_service
 from app.modules.task.models import Task
 
@@ -91,11 +92,37 @@ def tree_progress(db: Session, parent: Task) -> dict:
                 "id": c.id, "title": c.title, "status": c.status,
                 "budget_cents": c.budget_cents, "depends_on": c.depends_on,
                 "executor_id": c.executor_id,
+                # SCN-116（174 号 spec）：多天名额是哪一天的
+                "work_date": day(c.work_date) if c.work_date else None,
             }
             for c in children
         ],
         "all_children_completed": bool(children) and all(c.status == "completed" for c in children),
+        "by_day": by_day(children),
     }
+
+
+# 名额「还缺人」：仍在招募且没人接；「已招到」：有人接了且没取消；取消的（含到期没人接被下架的）单独数，不算缺也不算招到
+def by_day(children: list[Task]) -> list[dict]:
+    """SCN-116 多天名额按天汇总（174 号 spec）：哪天几个名额、招到几个、还缺几个、做完几个。
+
+    只看带日期的名额；没有日期的子任务（单天多人、项目拆解的步骤）不进来，返回空表——客户端照旧只画一排子任务。"""
+    days: dict = {}
+    for c in children:
+        if not c.work_date:
+            continue
+        d = days.setdefault(c.work_date, {"date": day(c.work_date), "slots": 0, "filled": 0, "open": 0,
+                                          "done": 0, "closed": 0})
+        d["slots"] += 1
+        if c.status == "completed":
+            d["done"] += 1
+        if c.executor_id is not None and c.status != "cancelled":
+            d["filled"] += 1
+        elif c.status == "published":
+            d["open"] += 1
+        else:
+            d["closed"] += 1
+    return [days[k] for k in sorted(days)]
 
 
 # ---------- 事件：子任务完成 → 自动发布后继（AI-DEC-020） ----------

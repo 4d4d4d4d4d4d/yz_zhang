@@ -266,6 +266,8 @@ export interface Task {
   days?: number;
   /** 母任务：第一天；名额：这一天（北京时间的日期 YYYY-MM-DD） */
   work_date?: string | null;
+  /** SCN-116（174 号 spec）几个人（TASK-007）；大于 1 或分天的根任务是装名额的母任务 */
+  people_needed?: number;
   status: TaskStatus;
   deadline: string | null;
   reject_count: number;
@@ -653,14 +655,31 @@ export interface TaskTree {
   parent_status: TaskStatus;
   progress_pct: number;
   all_children_completed: boolean;
-  children: Array<{
-    id: number;
-    title: string;
-    status: TaskStatus;
-    budget_cents: number;
-    depends_on: number[];
-    executor_id: number | null;
-  }>;
+  children: TaskTreeChild[];
+  /** SCN-116 多天名额按天汇总（174 号 spec）：没有日期的子任务不进来，没有就是空表 */
+  by_day?: TaskDaySummary[];
+}
+
+/** 母任务下的一个子任务（原先内联在 TaskTree 里，SCN-116 起单独命名，形状闸门能逐字段比） */
+export interface TaskTreeChild {
+  id: number;
+  title: string;
+  status: TaskStatus;
+  budget_cents: number;
+  depends_on: number[];
+  executor_id: number | null;
+  /** SCN-116 多天名额是哪一天的（YYYY-MM-DD）；单天多人与项目拆解的步骤为 null */
+  work_date?: string | null;
+}
+
+/** SCN-116 一天的名额：招到 = 有人接且没取消（含做完）；还缺 = 仍在招募；取消的单独数 */
+export interface TaskDaySummary {
+  date: string;
+  slots: number;
+  filled: number;
+  open: number;
+  done: number;
+  closed: number;
 }
 
 export interface Conversation {

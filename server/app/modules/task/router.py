@@ -129,6 +129,8 @@ def dump_task(task: Task, viewer: User | None = None) -> dict:
         "recurrence": task.recurrence,
         # SCN-107（167 号 spec）
         "days": task.days or 1, "work_date": day(task.work_date) if task.work_date else None,
+        # SCN-116（174 号 spec）：几个人（TASK-007 早就存了、没给出去）；客户端据此知道这是装名额的母任务
+        "people_needed": task.people_needed or 1,
         "recurred_from_id": task.recurred_from_id,
         "status": task.status,
         "deadline": iso(task.deadline),
