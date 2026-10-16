@@ -1409,6 +1409,10 @@ export interface AdminTicketRow {
   first_response_overdue: boolean;
   /** 往来条数 */
   replies_count: number;
+  /** ESCA-052（172 号 spec） */
+  category: TicketCategory;
+  priority: 'urgent' | 'normal';
+  priority_label: string;
   /** ESCA-056（166 号 spec）提单人追加的最新一句（没有就是空串） */
   last_user_reply: string;
   last_user_reply_at: string | null;
@@ -1462,6 +1466,26 @@ export interface MyTicket {
   first_response_overdue: boolean;
   /** 往来记录，早的在前 */
   replies: TicketReplyItem[];
+  /** ESCA-052（172 号 spec）类别与优先级：资金、账号类加急，时限更短 */
+  category: TicketCategory;
+  priority: 'urgent' | 'normal';
+  priority_label: string;
+}
+export type TicketCategory = 'funds' | 'account' | 'general';
+/** ESCA-052 客服调整优先级后的时限 */
+export interface TicketPriorityUpdated {
+  id: number;
+  escalation_level: number;
+  escalation_label: string;
+  waited_hours: number;
+  sla_hours: number;
+  overdue_hours: number;
+  first_responded: boolean;
+  first_response_hours: number;
+  first_response_overdue: boolean;
+  category: TicketCategory;
+  priority: 'urgent' | 'normal';
+  priority_label: string;
 }
 
 /** TEAM-054（170 号 spec）移出成员时的交接结果 */

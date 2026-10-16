@@ -60,6 +60,7 @@ ROUTE_ROLES = {
     "POST /admin/legal/faqs/{faq_id}/reject": ('compliance',),
     "POST /admin/legal/faqs/{faq_id}/retire": ('compliance',),
     "POST /admin/legal/faqs/{faq_id}/renew": ('compliance',),
+    "POST /admin/tickets/{ticket_id}/priority": ('support',),
     # SEC-061e（171 号 spec）临时授予与提前收回
     "POST /admin/admins/{user_id}/temporary-roles": ('super',),
     "POST /admin/admins/{user_id}/temporary-roles/{role}/revoke": ('super',),

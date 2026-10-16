@@ -103,7 +103,7 @@ import type {
   AnnouncementRevoked,
   AnnouncementRow,
   AnnouncementSent,
-  MyTicket, MyTicketReplied, TeamMemberRemoved,
+  MyTicket, MyTicketReplied, TeamMemberRemoved, TicketCategory, TicketPriorityUpdated,
   TicketClaimed,
   TicketReplied,
   SecurityBoardView,
@@ -1629,6 +1629,10 @@ export class PlatformClient {
     return this.request<TicketClaimed>('POST', `/admin/tickets/${ticketId}/assign`, { assignee_id: assigneeId });
   }
   /** ESCA-051 「我来处理」：接手后超时提醒只叫醒接手人；可以从别人手里接过来，进审计 */
+  /** ESCA-052（172 号 spec）客服调整优先级（写理由、进审计），时限随之变化 */
+  setTicketPriority(ticketId: number, priority: 'urgent' | 'normal', reason: string) {
+    return this.request<TicketPriorityUpdated>('POST', `/admin/tickets/${ticketId}/priority`, { priority, reason });
+  }
   claimTicket(ticketId: number) {
     return this.request<TicketClaimed>('POST', `/admin/tickets/${ticketId}/claim`);
   }
@@ -2150,8 +2154,10 @@ export class PlatformClient {
   userContents(userId: number) {
     return this.request<ContentItem[]>('GET', `/users/${userId}/contents`);
   }
-  createTicket(subject: string, body = '') {
-    return this.request<{ id: number; status: string; reply: string }>('POST', '/support/tickets', { subject, body });
+  /** ESCA-052 类别：资金 / 账号类加急（时限更短）；不填按一般 */
+  createTicket(subject: string, body = '', category?: TicketCategory) {
+    return this.request<{ id: number; status: string; reply: string; priority?: string }>('POST', '/support/tickets',
+      category ? { subject, body, category } : { subject, body });
   }
   myTickets() {
     return this.request<MyTicket[]>('GET', '/support/tickets');

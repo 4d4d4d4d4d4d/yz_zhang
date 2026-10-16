@@ -52,4 +52,33 @@ describe('ESCA-056 提单人追加回复', () => {
     expect((await screen.findByTestId('ticket-user-reply-7')).textContent).toContain('银行卡尾号 1234');
     expect(screen.getByText(/提单人补充了，等你回/)).toBeTruthy();
   });
+
+  it('ESCA-052 提单选「资金」带上类别，加急的工单写明；后台可改成加急并写理由', async () => {
+    const calls: Call[] = [];
+    vi.spyOn(window, 'prompt').mockReturnValue('其实是钱没到账');
+    open('/support', ME, { 'GET /support/tickets': [{ ...T, status: 'open', priority: 'urgent', category: 'funds', priority_label: '加急' }],
+      'POST /support/tickets': { id: 4, status: 'open', reply: '', priority: 'urgent' } }, calls);
+    expect(await screen.findByTestId('ticket-urgent-3')).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText('问题一句话概括'), { target: { value: '提现三天没到账' } });
+    fireEvent.change(screen.getByLabelText('工单类别'), { target: { value: 'funds' } });
+    fireEvent.click(screen.getByRole('button', { name: '提交工单' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/support/tickets')?.body)
+      .toEqual({ subject: '提现三天没到账', body: '', category: 'funds' }));
+  });
+
+  it('ESCA-052 后台：加急标出来，「改成加急」带理由', async () => {
+    const calls: Call[] = [];
+    vi.spyOn(window, 'prompt').mockReturnValue('其实是钱没到账');
+    const ADMIN = { ...ME, id: 1, is_admin: true, admin_roles: ['support'] };
+    const ROW = { id: 7, user_id: 9, subject: '钱一直没到', body: '', created_at: '2026-10-13T00:00:00Z', assignee_id: null,
+      assignee_nickname: '', escalation_level: 0, escalation_label: '', waited_hours: 1, sla_hours: 24, overdue_hours: 0,
+      first_responded: false, first_response_hours: 4, first_response_overdue: false, replies_count: 0,
+      last_user_reply: '', last_user_reply_at: null, awaiting_staff: false, category: 'general', priority: 'normal', priority_label: '一般' };
+    open('/admin', ADMIN, { '/admin/tickets': [ROW, { ...ROW, id: 8, priority: 'urgent', category: 'funds', priority_label: '加急' }],
+      'POST /admin/tickets/7/priority': { ...ROW, priority: 'urgent' } }, calls);
+    expect(await screen.findByTestId('ticket-priority-8')).toBeTruthy();
+    expect(screen.queryByTestId('ticket-priority-7')).toBeNull();
+    fireEvent.click(screen.getAllByRole('button', { name: '改成加急' })[0]);
+    await waitFor(() => expect(calls.find((c) => c.path === '/admin/tickets/7/priority')?.body).toEqual({ priority: 'urgent', reason: '其实是钱没到账' }));
+  });
 });

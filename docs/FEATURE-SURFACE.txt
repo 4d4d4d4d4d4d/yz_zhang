@@ -324,6 +324,7 @@ api POST /api/v1/admin/subsidy-pool/fund
 api POST /api/v1/admin/teams/{team_id}/verify
 api POST /api/v1/admin/tickets/{ticket_id}/assign
 api POST /api/v1/admin/tickets/{ticket_id}/claim
+api POST /api/v1/admin/tickets/{ticket_id}/priority
 api POST /api/v1/admin/tickets/{ticket_id}/reply
 api POST /api/v1/admin/tickets/{ticket_id}/resolve
 api POST /api/v1/admin/uploads/{name}/resolve
@@ -949,6 +950,7 @@ sdk setMissionTools
 sdk setNotificationPref
 sdk setSandbox
 sdk setTeamBudget
+sdk setTicketPriority
 sdk setTripShare
 sdk settlePlatform
 sdk settleRequests

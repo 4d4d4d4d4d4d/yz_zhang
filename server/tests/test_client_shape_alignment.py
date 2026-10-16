@@ -570,6 +570,9 @@ def _resolve_body_keys(expr: str) -> tuple[set[str], bool]:
 
 # 解析不了的请求体 -> 为什么（值是**理由**，不是布尔）
 DYNAMIC_BODY: dict[tuple[str, str], str] = {
+    ("POST", "/support/tickets"): (
+        "ESCA-052（172 号 spec）选了类别才带 category（不选按一般，请求体与以前一样）；服务端 TicketIn 认 subject / body / category"
+    ),
     ("PATCH", "/decompositions/{x}/nodes/{x}"): (
         "revision 加上 DecompositionNodePatch 里调用方给出的那几个字段（逐步编辑只发改了的）；"
         "服务端 NodePatchIn 是 extra=forbid，多发一个字段就 422，类型由 DecompositionNodePatch 约束"

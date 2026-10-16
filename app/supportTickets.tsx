@@ -1,6 +1,6 @@
 // CS-013 / ESCA-051 App 上的「我的工单」（150 号 spec）：此前 App 上提不了工单、也看不到客服回复；
 // 现在能提、能看回复，并且看得到有没有人接手、是否已超时升级（看不到接手的是哪位管理员）。
-import { apiErrorText, formatDateTime, type MyTicket, type PlatformClient } from '@platform/core';
+import { apiErrorText, formatDateTime, type MyTicket, type PlatformClient, type TicketCategory } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -20,6 +20,8 @@ export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [drafts, setDrafts] = useState<Record<number, string>>({});
+  // ESCA-052（172 号 spec）资金、账号类加急，时限更短
+  const [category, setCategory] = useState<TicketCategory>('general');
   const load = useCallback(async () => {
     try { setRows(await client.myTickets()); } catch (e) { setError(apiErrorText(e)); }
   }, [client]);
@@ -31,11 +33,16 @@ export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
         <Text style={s.title}>找客服</Text>
         <TextInput style={s.input} accessibilityLabel="问题概括" placeholder="问题一句话概括" value={subject} onChangeText={setSubject} />
         <TextInput style={s.input} accessibilityLabel="详细描述" placeholder="详细描述（越具体越快解决）" multiline value={body} onChangeText={setBody} />
+        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+          {([['general', '一般'], ['funds', '资金 · 加急'], ['account', '账号 · 加急']] as [TicketCategory, string][]).map(([k, label]) => (
+            <Button key={k} title={category === k ? `✓ ${label}` : label} onPress={() => setCategory(k)} />
+          ))}
+        </View>
         <Button title="提交工单" disabled={subject.trim().length < 2} onPress={() => void (async () => {
           setError(''); setNotice('');
           try {
-            await client.createTicket(subject.trim(), body.trim());
-            setSubject(''); setBody('');
+            await client.createTicket(subject.trim(), body.trim(), category === 'general' ? undefined : category);
+            setSubject(''); setBody(''); setCategory('general');
             setNotice('已提交。客服回复会发站内信，也会显示在下面。');
             await load();
           } catch (e) { setError(apiErrorText(e)); }
@@ -47,7 +54,7 @@ export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
       {rows.length === 0 && <Text style={s.muted}>还没有工单。</Text>}
       {rows.map((t) => (
         <View key={t.id} style={s.card} accessibilityLabel={`工单 ${t.id}`}>
-          <Text style={{ fontWeight: '600' }}>{t.subject} · {STATUS[t.status] || t.status}</Text>
+          <Text style={{ fontWeight: '600' }}>{t.subject} · {STATUS[t.status] || t.status}{t.priority === 'urgent' ? ' · 加急' : ''}</Text>
           {!!t.body && <Text style={s.muted}>{t.body}</Text>}
           <Text style={s.muted}>{formatDateTime(t.created_at)}</Text>
           {!!t.reply && <Text>客服回复：{t.reply}</Text>}

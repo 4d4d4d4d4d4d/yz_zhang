@@ -92,6 +92,7 @@ REACHED_BY: dict[str, str] = {
     "/admin/legal/faqs/{x}/reject": "adminRejectLegalFaq",
     "/admin/legal/faqs/{x}/retire": "adminRetireLegalFaq",
     "/admin/legal/faqs/{x}/renew": "adminRenewLegalFaq",
+    "/admin/tickets/{x}/priority": "setTicketPriority",
     "/admin/admins/{x}/temporary-roles": "grantTemporaryAdminRole",
     "/admin/admins/{x}/temporary-roles/{x}/revoke": "revokeTemporaryAdminRole",
     "/admin/packs/validate": "adminValidatePack",

@@ -47,18 +47,27 @@ def ask(body: AskIn, user: User = Depends(get_current_user), db: Session = Depen
 class TicketIn(BaseModel):
     subject: str = Field(min_length=2, max_length=120)
     body: str = Field(default="", max_length=2000)
+    # ESCA-052（172 号 spec）资金 / 账号类加急；不选按一般
+    category: str = Field(default="general", max_length=10)
 
 
 @router.post("/tickets", status_code=201)
 def create_ticket(body: TicketIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from .models import Ticket
 
-    ticket = Ticket(user_id=user.id, subject=body.subject, body=body.body)
+    from app.core.errors import bad_request
+
+    from .escalation import CATEGORIES, URGENT_CATEGORIES
+
+    if body.category not in CATEGORIES:
+        raise bad_request("类别只能是资金（funds）、账号（account）或一般（general）", "ticket_bad_category")
+    ticket = Ticket(user_id=user.id, subject=body.subject, body=body.body, category=body.category,
+                    priority="urgent" if body.category in URGENT_CATEGORIES else "normal")
     db.add(ticket)
     db.flush()
     # `reply` 一开始是空串。共享 SDK 的声明里有它，而这里以前不返回——
     # 「声明了却不给」（V64 那一类）
-    return {"id": ticket.id, "status": ticket.status, "reply": ticket.reply}
+    return {"id": ticket.id, "status": ticket.status, "reply": ticket.reply, "priority": ticket.priority}
 
 
 @router.get("/tickets")

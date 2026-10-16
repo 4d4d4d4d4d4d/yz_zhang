@@ -296,8 +296,9 @@ def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
         q = q.filter(Ticket.escalation_level > 0)
     if mine:
         q = q.filter(Ticket.assignee_id == admin.id)
-    q = (q.order_by(Ticket.escalation_level.desc(), Ticket.created_at, Ticket.id) if sort == "urgent"
-         else q.order_by(Ticket.id))
+    # ESCA-052（172 号 spec）「最急的在前」先看加急，再看升级级别与等待时长
+    q = (q.order_by((Ticket.priority == "urgent").desc(), Ticket.escalation_level.desc(), Ticket.created_at, Ticket.id)
+         if sort == "urgent" else q.order_by(Ticket.id))
     rows = q.offset(offset).limit(limit).all()
     ids = {t.assignee_id for t in rows if t.assignee_id}
     names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_(ids)).all()} if ids else {}
@@ -331,6 +332,33 @@ def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
 class TicketReplyIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     reply: str = Field(min_length=1, max_length=2000)
+
+
+class TicketPriorityIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    priority: str = Field(min_length=5, max_length=10)
+    reason: str = Field(min_length=2, max_length=200)
+
+
+@router.post("/admin/tickets/{ticket_id}/priority")
+def set_ticket_priority(ticket_id: int, body: TicketPriorityIn, admin: User = Depends(require_role("support")),
+                        db: Session = Depends(get_db, scope="function")):
+    """ESCA-052（172 号 spec）客服调整优先级：选错类别的（例如「一般」里其实是钱没到账）改成加急，时限随之变短。写审计。"""
+    from app.modules.support.escalation import PRIORITY_LABEL, sla_view
+    from app.modules.support.models import Ticket
+
+    t = db.get(Ticket, ticket_id)
+    if t is None:
+        raise not_found("工单不存在")
+    if body.priority not in PRIORITY_LABEL:
+        raise bad_request("优先级只能是加急（urgent）或一般（normal）", "ticket_bad_priority")
+    if t.status != "open":
+        raise conflict("已结的工单不用再调优先级", "ticket_not_open")
+    before, t.priority = t.priority, body.priority
+    db.add(t)
+    record_audit(db, admin.id, "ticket_priority", "ticket", t.id, f"{before} -> {body.priority}：{body.reason.strip()}")
+    db.flush()
+    return {"id": t.id, **sla_view(t)}
 
 
 class TicketAssignIn(BaseModel):

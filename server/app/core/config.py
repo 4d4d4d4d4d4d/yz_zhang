@@ -47,6 +47,10 @@ class Settings:
     SUPPORT_ESCALATE_L2_HOURS = int(os.environ.get("PLATFORM_SUPPORT_ESCALATE_L2_HOURS", "48"))
     # ESCA-053（157 号 spec）首次响应时限：多久之内要有客服回第一句话（与「多久解决」分开）
     SUPPORT_FIRST_RESPONSE_HOURS = int(os.environ.get("PLATFORM_SUPPORT_FIRST_RESPONSE_HOURS", "4"))
+    # ESCA-052（172 号 spec）加急工单（资金、账号类）的时限：首次响应 / 处理 / 升级主管，小时
+    SUPPORT_URGENT_FIRST_RESPONSE_HOURS = int(os.environ.get("PLATFORM_SUPPORT_URGENT_FIRST_RESPONSE_HOURS", "1"))
+    SUPPORT_URGENT_SLA_HOURS = int(os.environ.get("PLATFORM_SUPPORT_URGENT_SLA_HOURS", "8"))
+    SUPPORT_URGENT_ESCALATE_L2_HOURS = int(os.environ.get("PLATFORM_SUPPORT_URGENT_ESCALATE_L2_HOURS", "16"))
     # QUEUE-010 人审队列的 SLA（78 号 spec）。
     # SUPPORT_SLA_HOURS 此前**全仓只有定义、没有任何使用**——
     # 一条写下来却没人核对的承诺（V96/V99/V101 同一条规律的第四次）。
@@ -158,7 +162,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.187.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.188.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

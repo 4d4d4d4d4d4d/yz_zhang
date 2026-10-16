@@ -85,6 +85,7 @@ GUARDED: dict[str, dict[str, str]] = {
         "MemberIn": "团队成员角色由 owner 设定（require_role owner）",
         "MemberPatch": "改角色与额度同样仅 owner（TEAM-010 只有 owner 能改角色与额度）",
         "ReviewIn": "合同体检的视角（甲方 / 乙方）：只决定提示从谁的角度写，不授予任何权限（OPC-105）",
+        "TempRoleIn": "临时授予的管理员角色：只有超级管理员能给，不能临时给超级管理员，到点失效（SEC-061e，171 号）",
     },
     "user_id": {
         "DirectIn": "目标用户：和谁聊天",

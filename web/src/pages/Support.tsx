@@ -1,4 +1,4 @@
-import { apiErrorText, formatDateTime, type MyTicket } from '@platform/core';
+import { apiErrorText, formatDateTime, type MyTicket, type TicketCategory } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 
@@ -61,6 +61,8 @@ function MyTickets() {
   const [replied, setReplied] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  // ESCA-052（172 号 spec）资金、账号类加急，时限更短
+  const [category, setCategory] = useState<TicketCategory>('general');
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -71,8 +73,8 @@ function MyTickets() {
   async function create() {
     setError('');
     try {
-      await client.createTicket(subject, body);
-      setSubject(''); setBody('');
+      await client.createTicket(subject, body, category === 'general' ? undefined : category);
+      setSubject(''); setBody(''); setCategory('general');
       await load();
     } catch (err) { setError(apiErrorText(err)); }
   }
@@ -85,6 +87,13 @@ function MyTickets() {
                onChange={(e) => setSubject(e.target.value)} />
         <textarea placeholder="详细描述（越具体越快解决）" value={body}
                   onChange={(e) => setBody(e.target.value)} />
+        <label>什么类的问题
+          <select aria-label="工单类别" value={category} onChange={(e) => setCategory(e.target.value as TicketCategory)}>
+            <option value="general">一般</option>
+            <option value="funds">资金（提现、退款、到账）· 加急</option>
+            <option value="account">账号（登录、安全）· 加急</option>
+          </select>
+        </label>
         {error && <p className="error">{error}</p>}
         <button disabled={subject.trim().length < 2} onClick={() => void create()}>提交工单</button>
       </div>
@@ -95,6 +104,7 @@ function MyTickets() {
           <div className="task-item" key={t.id} data-testid={`ticket-${t.id}`}>
             <div>
               <strong>{t.subject}</strong> <span className="badge">{t.status}</span>
+              {t.priority === 'urgent' && <span className="badge warn" data-testid={`ticket-urgent-${t.id}`}> 加急</span>}
               <p className="muted">{t.body} · {formatDateTime(t.created_at)}</p>
               {/* 运营的回复原文——回复只发一条通知的话，
                   用户回到平台上就再也找不到它 */}

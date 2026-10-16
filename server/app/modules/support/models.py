@@ -29,6 +29,10 @@ class Ticket(Base):
     assignee_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     escalation_level: Mapped[int] = mapped_column(Integer, default=0)
+    # ESCA-052（172 号 spec）提单人选的类别（funds 资金 / account 账号 / general 一般）与优先级（urgent / normal）。
+    # 资金、账号类默认加急，时限更短；客服可以调整优先级
+    category: Mapped[str] = mapped_column(String(10), default="general")
+    priority: Mapped[str] = mapped_column(String(10), default="normal")
     escalated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # ESCA-053 首次响应（157 号 spec）：客服第一次回话的时间；超时提醒只发一次
     first_response_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

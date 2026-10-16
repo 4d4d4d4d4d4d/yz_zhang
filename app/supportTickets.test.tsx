@@ -17,7 +17,8 @@ function makeClient(routes: Record<string, unknown>, calls: Call[]) {
 
 const T: MyTicket = { id: 3, subject: '提现没到账', body: '三天了', status: 'open', reply: '', created_at: '2026-10-13T00:00:00Z',
   claimed: true, escalation_level: 2, escalation_label: '已升级给主管', waited_hours: 49, sla_hours: 24, overdue_hours: 25,
-  first_responded: false, first_response_hours: 4, first_response_overdue: true, replies: [] };
+  first_responded: false, first_response_hours: 4, first_response_overdue: true, replies: [],
+  category: 'general', priority: 'normal', priority_label: '一般' };
 
 describe('ESCA-051 App 上的我的工单', () => {
   it('处理进度：有没有人接手、等了多久、是否已升级；结了单的不显示进度', () => {
@@ -65,5 +66,17 @@ describe('ESCA-053 App 上的往来记录（157 号 spec）', () => {
     fireEvent.press(screen.getByText('补充'));
     await waitFor(() => expect(calls.find((c) => c.path === '/support/tickets/3/replies')?.body).toEqual({ body: '还是没到账' }));
     expect(await screen.findByText('已补充，工单 #3 重新打开')).toBeTruthy();
+  });
+
+  it('ESCA-052 选「资金 · 加急」提交带上类别；加急的工单写明', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({ 'GET /support/tickets': [{ ...T, priority: 'urgent', category: 'funds', priority_label: '加急' }],
+      'POST /support/tickets': { id: 4, status: 'open', reply: '', priority: 'urgent' } }, calls);
+    render(<SupportTicketsScreen client={client} />);
+    expect(await screen.findByText(/提现没到账 · .* · 加急/)).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('问题概括'), '钱没到');
+    fireEvent.press(screen.getByText('资金 · 加急'));
+    fireEvent.press(screen.getByText('提交工单'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/support/tickets')?.body).toEqual({ subject: '钱没到', body: '', category: 'funds' }));
   });
 });

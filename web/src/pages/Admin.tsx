@@ -985,6 +985,7 @@ function TicketQueue() {
             <div>
               <strong>{t.subject}</strong> · 用户 #{t.user_id}
               {t.escalation_level > 0 && <span className="badge" data-testid={`ticket-level-${t.id}`}> {t.escalation_label}</span>}
+              {t.priority === 'urgent' && <span className="badge warn" data-testid={`ticket-priority-${t.id}`}> 加急</span>}
               <p className="muted">{t.body} · {formatDateTime(t.created_at)}</p>
               <p className="muted" data-testid={`ticket-sla-${t.id}`}>
                 已等 {t.waited_hours} 小时（承诺 {t.sla_hours} 小时{t.overdue_hours > 0 ? `，已超 ${t.overdue_hours} 小时` : ''}）
@@ -997,6 +998,12 @@ function TicketQueue() {
               {t.first_response_overdue && <p className="error" data-testid={`ticket-fr-${t.id}`}>首次响应已超时：先回一句告诉对方在处理</p>}
             </div>
             <button className="ghost" onClick={() => void claim(t.id)}>{t.assignee_id ? '改由我处理' : '我来处理'}</button>
+            {/* ESCA-052（172 号 spec）选错类别的改优先级，时限随之变化 */}
+            <button className="ghost" onClick={() => {
+              const next = t.priority === 'urgent' ? 'normal' : 'urgent';
+              const reason = window.prompt(next === 'urgent' ? '改成加急的理由（例如：其实是钱没到账）' : '改回一般的理由');
+              if (reason && reason.trim().length >= 2) void client.setTicketPriority(t.id, next, reason.trim()).then(() => load()).catch((e) => setError(apiErrorText(e)));
+            }}>{t.priority === 'urgent' ? '改回一般' : '改成加急'}</button>
             <button className="ghost" onClick={() => void replyOnly(t.id)}>先回一句</button>
             {isSuper && agents.length > 0 && (
               <select aria-label={`指派工单 ${t.id}`} value="" onChange={(e) => { if (e.target.value) void assign(t.id, Number(e.target.value)); }}>
