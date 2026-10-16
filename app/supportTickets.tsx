@@ -19,6 +19,7 @@ export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
   const load = useCallback(async () => {
     try { setRows(await client.myTickets()); } catch (e) { setError(apiErrorText(e)); }
   }, [client]);
@@ -51,10 +52,27 @@ export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
           <Text style={s.muted}>{formatDateTime(t.created_at)}</Text>
           {!!t.reply && <Text>客服回复：{t.reply}</Text>}
           {/* ESCA-053（157 号 spec）往来记录：多于一条时把之前的也列出来 */}
-          {(t.replies?.length ?? 0) > 1 && t.replies.map((x, i) => (
+          {((t.replies?.length ?? 0) > 1 || (t.replies ?? []).some((x) => !x.is_staff)) && t.replies.map((x, i) => (
             <Text key={i} style={s.muted}>{x.is_staff ? '客服' : '我'}（{formatDateTime(x.created_at)}）：{x.body}</Text>
           ))}
           {!!ticketProgress(t) && <Text style={s.muted}>{ticketProgress(t)}</Text>}
+          {/* ESCA-056（166 号 spec）补充材料不用再开一张；已结的 7 天内补充会重新打开 */}
+          {(t.status === 'open' || t.status === 'resolved') && (
+            <>
+              <TextInput style={s.input} accessibilityLabel={`补充工单 ${t.id}`} multiline value={drafts[t.id] ?? ''}
+                         placeholder={t.status === 'resolved' ? '没解决？补充说明会重新打开这张工单' : '补充说明或材料'}
+                         onChangeText={(v) => setDrafts({ ...drafts, [t.id]: v })} />
+              <Button title="补充" disabled={!(drafts[t.id] ?? '').trim()} onPress={() => void (async () => {
+                setError(''); setNotice('');
+                try {
+                  const r = await client.replyMyTicket(t.id, (drafts[t.id] ?? '').trim());
+                  setDrafts({ ...drafts, [t.id]: '' });
+                  setNotice(r.reopened ? `已补充，工单 #${r.id} 重新打开` : `已补充到工单 #${r.id}`);
+                  await load();
+                } catch (e) { setError(apiErrorText(e)); }
+              })()} />
+            </>
+          )}
         </View>
       ))}
     </View>

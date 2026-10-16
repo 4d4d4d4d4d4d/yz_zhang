@@ -1400,6 +1400,11 @@ export interface AdminTicketRow {
   first_response_overdue: boolean;
   /** 往来条数 */
   replies_count: number;
+  /** ESCA-056（166 号 spec）提单人追加的最新一句（没有就是空串） */
+  last_user_reply: string;
+  last_user_reply_at: string | null;
+  /** 最后一句是提单人说的：在等客服回 */
+  awaiting_staff: boolean;
 }
 
 /** ESCA-053 工单里的一条往来（不含是哪位管理员） */
@@ -1448,6 +1453,11 @@ export interface MyTicket {
   first_response_overdue: boolean;
   /** 往来记录，早的在前 */
   replies: TicketReplyItem[];
+}
+
+/** ESCA-056（166 号 spec）提单人追加回复后的工单；已结 7 天内追加会重新打开 */
+export interface MyTicketReplied extends MyTicket {
+  reopened: boolean;
 }
 
 /** SECEV-030 安全看板。读 DB，所以任何副本看到的都一样。 */

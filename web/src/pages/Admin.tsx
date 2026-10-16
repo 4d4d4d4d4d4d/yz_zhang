@@ -991,6 +991,8 @@ function TicketQueue() {
                 · {t.assignee_id ? `接手人：${t.assignee_nickname || `#${t.assignee_id}`}` : '还没人接手'}
                 {/* ESCA-053（157 号 spec）首次响应 */}
                 {` · ${t.first_responded ? `已回复 ${t.replies_count} 次` : `还没回过（首次响应时限 ${t.first_response_hours} 小时）`}`}
+                {t.awaiting_staff && <span className="badge warn"> 提单人补充了，等你回</span>}
+                {t.last_user_reply && <span className="muted" style={{ display: 'block' }} data-testid={`ticket-user-reply-${t.id}`}>提单人补充（{t.last_user_reply_at ? formatDateTime(t.last_user_reply_at) : ''}）：{t.last_user_reply}</span>}
               </p>
               {t.first_response_overdue && <p className="error" data-testid={`ticket-fr-${t.id}`}>首次响应已超时：先回一句告诉对方在处理</p>}
             </div>

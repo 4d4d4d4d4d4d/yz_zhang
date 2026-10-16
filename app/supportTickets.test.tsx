@@ -54,4 +54,16 @@ describe('ESCA-053 App 上的往来记录（157 号 spec）', () => {
     expect(await screen.findByText(/客服（.*）：在查了/)).toBeTruthy();
     expect(screen.getByText(/客服（.*）：银行退回了，已重新打款/)).toBeTruthy();
   });
+
+  it('ESCA-056 在自己的工单里补充；已结的补充后重新打开', async () => {
+    const calls: Call[] = [];
+    const done = { ...T, status: 'resolved', escalation_level: 0 };
+    const after = { ...done, status: 'open', reopened: true, replies: [{ body: '还是没到账', is_staff: false, created_at: '2026-10-14T00:00:00Z' }] };
+    const client = makeClient({ 'GET /support/tickets': [done], 'POST /support/tickets/3/replies': after }, calls);
+    render(<SupportTicketsScreen client={client} />);
+    fireEvent.changeText(await screen.findByLabelText('补充工单 3'), '还是没到账');
+    fireEvent.press(screen.getByText('补充'));
+    await waitFor(() => expect(calls.find((c) => c.path === '/support/tickets/3/replies')?.body).toEqual({ body: '还是没到账' }));
+    expect(await screen.findByText('已补充，工单 #3 重新打开')).toBeTruthy();
+  });
 });

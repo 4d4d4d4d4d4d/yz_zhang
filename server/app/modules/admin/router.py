@@ -305,13 +305,25 @@ def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
 
     tids = [t.id for t in rows]
     counts = dict(db.query(TicketReply.ticket_id, func.count(TicketReply.id))
-                  .filter(TicketReply.ticket_id.in_(tids)).group_by(TicketReply.ticket_id).all()) if tids else {}
+                  .filter(TicketReply.ticket_id.in_(tids), TicketReply.is_staff.is_(True))
+                  .group_by(TicketReply.ticket_id).all()) if tids else {}
+    # ESCA-056（166 号 spec）提单人追加的最新一句，以及最后一句是不是他说的（= 在等客服回）
+    last_user: dict[int, TicketReply] = {}
+    last_any: dict[int, TicketReply] = {}
+    if tids:
+        for r in db.query(TicketReply).filter(TicketReply.ticket_id.in_(tids)).order_by(TicketReply.id):
+            last_any[r.ticket_id] = r
+            if not r.is_staff:
+                last_user[r.ticket_id] = r
     now = utcnow()
     return [
         {"id": t.id, "user_id": t.user_id, "subject": t.subject, "body": t.body,
          "created_at": iso(t.created_at), "assignee_id": t.assignee_id,
          "assignee_nickname": names.get(t.assignee_id, "") if t.assignee_id else "",
-         **sla_view(t, now), "replies_count": int(counts.get(t.id, 0))}
+         **sla_view(t, now), "replies_count": int(counts.get(t.id, 0)),
+         "last_user_reply": last_user[t.id].body[:300] if t.id in last_user else "",
+         "last_user_reply_at": iso(last_user[t.id].created_at) if t.id in last_user else None,
+         "awaiting_staff": bool(t.id in last_any and not last_any[t.id].is_staff)}
         for t in rows
     ]
 

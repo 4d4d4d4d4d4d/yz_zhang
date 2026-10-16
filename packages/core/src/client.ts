@@ -103,7 +103,7 @@ import type {
   AnnouncementRevoked,
   AnnouncementRow,
   AnnouncementSent,
-  MyTicket,
+  MyTicket, MyTicketReplied,
   TicketClaimed,
   TicketReplied,
   SecurityBoardView,
@@ -2144,6 +2144,10 @@ export class PlatformClient {
   }
   myTickets() {
     return this.request<MyTicket[]>('GET', '/support/tickets');
+  }
+  /** ESCA-056 在自己的工单里追加内容：已结 7 天内会重新打开；转了纠纷的请到纠纷里补 */
+  replyMyTicket(ticketId: number, body: string) {
+    return this.request<MyTicketReplied>('POST', `/support/tickets/${ticketId}/replies`, { body });
   }
   /** ESCA-001 工单转纠纷**带上下文**：不带的话用户要把刚说过的话重说一遍，
    *  而两次陈述不一致会在纠纷里被当成翻供。 */

@@ -65,10 +65,60 @@ def create_ticket(body: TicketIn, user: User = Depends(get_current_user), db: Se
 def my_tickets(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from .models import Ticket
 
+    rows = db.query(Ticket).filter(Ticket.user_id == user.id).order_by(Ticket.id.desc()).all()
+    return _ticket_rows(db, rows)
+
+
+# ESCA-056（166 号 spec）提单人追加回复：已结的 7 天内追加就重新打开；更早的请新开一张；转了纠纷的到纠纷里补
+REOPEN_DAYS = 7
+MAX_USER_REPLIES = 30
+
+
+class TicketReplyIn(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+
+@router.post("/tickets/{ticket_id}/replies")
+def reply_my_ticket(ticket_id: int, body: TicketReplyIn, user: User = Depends(get_current_user),
+                    db: Session = Depends(get_db, scope="function")):
+    from datetime import timedelta
+
+    from app.core.errors import conflict, not_found
+    from app.modules.notification.service import notify
+
+    from .models import Ticket, TicketReply
+
+    t = db.get(Ticket, ticket_id)
+    if t is None or t.user_id != user.id:
+        raise not_found("没有这张工单")
+    text = body.body.strip()
+    if not text:
+        raise conflict("补充的内容是空的", "ticket_reply_empty")
+    if t.escalated_to_dispute_id:
+        raise conflict(f"这张工单已经转成纠纷（#{t.escalated_to_dispute_id}）：补充材料请到纠纷里提交，仲裁员只看纠纷里的",
+                       "ticket_in_dispute")
+    now = utcnow()
+    reopened = False
+    if t.status == "resolved":
+        if t.resolved_at is not None and t.resolved_at < now - timedelta(days=REOPEN_DAYS):
+            raise conflict(f"这张工单已结超过 {REOPEN_DAYS} 天：请新开一张，写上原工单号 #{t.id}", "ticket_closed_too_long")
+        t.status, t.resolved_at, reopened = "open", None, True
+    mine = db.query(TicketReply).filter(TicketReply.ticket_id == t.id, TicketReply.is_staff.is_(False)).count()
+    if mine >= MAX_USER_REPLIES:
+        raise conflict(f"这张工单你已经补充了 {MAX_USER_REPLIES} 次：请等客服回复，或新开一张", "ticket_reply_limit")
+    db.add(TicketReply(ticket_id=t.id, author_id=user.id, is_staff=False, body=text, created_at=now))
+    db.add(t)
+    if t.assignee_id:
+        notify(db, t.assignee_id, "system", f"工单 #{t.id} 提单人{'重新打开并' if reopened else ''}补充了内容",
+               text[:100])
+    db.flush()
+    return {**_ticket_rows(db, [t])[0], "reopened": reopened}
+
+
+def _ticket_rows(db: Session, rows: list) -> list[dict]:
     from .escalation import sla_view
     from .models import TicketReply
 
-    rows = db.query(Ticket).filter(Ticket.user_id == user.id).order_by(Ticket.id.desc()).all()
     now = utcnow()
     # ESCA-053（157 号 spec）往来记录：只给回复内容与时间，不给是哪位管理员
     replies: dict[int, list[dict]] = {}

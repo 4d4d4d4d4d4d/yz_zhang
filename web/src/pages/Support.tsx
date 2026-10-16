@@ -57,6 +57,8 @@ export default function Support() {
 function MyTickets() {
   const { client } = useApp();
   const [rows, setRows] = useState<MyTicket[]>([]);
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const [replied, setReplied] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
@@ -86,6 +88,7 @@ function MyTickets() {
         {error && <p className="error">{error}</p>}
         <button disabled={subject.trim().length < 2} onClick={() => void create()}>提交工单</button>
       </div>
+      {replied && <p role="status">{replied}</p>}
       <div className="list" style={{ marginTop: 12 }}>
         {rows.length === 0 && <p className="muted">还没有工单。</p>}
         {rows.map((t) => (
@@ -97,7 +100,7 @@ function MyTickets() {
                   用户回到平台上就再也找不到它 */}
               {t.reply && <p data-testid={`ticket-reply-${t.id}`}>客服回复：{t.reply}</p>}
               {/* ESCA-053（157 号 spec）往来记录：多于一条时把之前的也列出来 */}
-              {(t.replies?.length ?? 0) > 1 && (
+              {((t.replies?.length ?? 0) > 1 || (t.replies ?? []).some((x) => !x.is_staff)) && (
                 <ol className="muted" data-testid={`ticket-replies-${t.id}`}>
                   {t.replies.map((x, i) => <li key={i}>{x.is_staff ? '客服' : '我'}（{formatDateTime(x.created_at)}）：{x.body}</li>)}
                 </ol>
@@ -108,6 +111,22 @@ function MyTickets() {
                   {t.claimed ? '已有客服接手' : '排队等待客服接手'}{t.first_responded ? ' · 客服已回复' : ''} · 已等 {t.waited_hours} 小时（承诺 {t.sla_hours} 小时内处理）
                   {t.escalation_level >= 2 ? ' · 已升级给客服主管跟进' : t.escalation_level === 1 ? ' · 已超时，已催办' : ''}
                 </p>
+              )}
+              {/* ESCA-056（166 号 spec）补充材料不用再开一张；已结的 7 天内补充会重新打开 */}
+              {(t.status === 'open' || t.status === 'resolved') && (
+                <div className="row">
+                  <input aria-label={`补充工单 ${t.id}`} className="grow" placeholder={t.status === 'resolved' ? '没解决？补充说明会重新打开这张工单' : '补充说明或材料'}
+                    value={drafts[t.id] ?? ''} onChange={(e) => setDrafts({ ...drafts, [t.id]: e.target.value })} />
+                  <button className="ghost" disabled={!(drafts[t.id] ?? '').trim()} onClick={() => void (async () => {
+                    setError('');
+                    try {
+                      const r = await client.replyMyTicket(t.id, (drafts[t.id] ?? '').trim());
+                      setDrafts({ ...drafts, [t.id]: '' });
+                      setRows(rows.map((x) => (x.id === r.id ? r : x)));
+                      setReplied(r.reopened ? `已补充，工单 #${r.id} 重新打开` : `已补充到工单 #${r.id}`);
+                    } catch (e) { setError(apiErrorText(e)); }
+                  })()}>补充</button>
+                </div>
               )}
             </div>
           </div>

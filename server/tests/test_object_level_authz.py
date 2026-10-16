@@ -192,6 +192,8 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
     (r"^DELETE /subscriptions/", "self", "退订的是自己的订阅：sub_id 属于调用者，别人的 id 必须拒"),
     (r"^POST /coupons/.*/claim$", "self", "领券是调用者自己的动作：券归领取人，coupon_id 只是券的种类"),
     (r"^\w+ /decompositions/", "party", "分解提案属于母任务的发布方：确认它会真的生成子任务并分走预算"),
+    (r"^POST /support/tickets/\{ticket_id\}/replies$", "self",
+     "ESCA-056（166 号 spec）只能往自己的工单里补充：别人的工单 404（test_ticket_user_reply.py 行为验）"),
     (r"^POST /support/tickets/.*/escalate-to-dispute$", "party",
      "工单升级为纠纷限提单人：替别人开纠纷会冻结他的合约"),
     # ---- 运营后台 ----
