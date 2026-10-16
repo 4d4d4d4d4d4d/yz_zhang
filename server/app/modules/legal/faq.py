@@ -18,7 +18,7 @@ from sqlalchemy.orm import Mapped, Session, mapped_column
 from app.core.admin_roles import require_role
 from app.core.db import Base, get_db
 from app.core.errors import bad_request, conflict, not_found
-from app.core.timefmt import iso
+from app.core.timefmt import day, iso
 from app.modules.account.models import User, utcnow
 from app.modules.packs.schema import PLACEHOLDER
 
@@ -76,7 +76,7 @@ def dump(f: LegalFaq) -> dict:
             "status": f.status, "origin": f.origin, "created_by": f.created_by, "reviewed_by": f.reviewed_by,
             "published_at": iso(f.published_at), "retired_reason": f.retired_reason,
             "placeholders": placeholders_left(f), "updated_at": iso(f.updated_at),
-            "valid_until": f.valid_until.isoformat() if f.valid_until else None, "expired": expired(f)}
+            "valid_until": day(f.valid_until) if f.valid_until else None, "expired": expired(f)}
 
 
 # ------------------------------------------------------------------ 接口（合规管理员）
@@ -243,7 +243,7 @@ def renew_faq(faq_id: int, body: RenewIn, admin: User = Depends(require_role(ROL
         raise conflict("只有已上线的条目能续期；草稿请走提交与审核", "legal_faq_not_published")
     f.valid_until, f.review_stage, f.updated_at = _check_valid_until(body.valid_until), 0, utcnow()
     db.add(f)
-    record_audit(db, admin.id, "legal_faq_renew", "legal_faq", f.id, f"复核后续期到 {body.valid_until.isoformat()}")
+    record_audit(db, admin.id, "legal_faq_renew", "legal_faq", f.id, f"复核后续期到 {day(body.valid_until)}")
     db.flush()
     return dump(f)
 
@@ -268,11 +268,11 @@ def remind_reviews(db: Session) -> dict:
     for f in due:
         for uid in to:
             notify(db, uid, "system", f"法律条目已过复核日期，问答已停用：{f.topic or '未分主题'} #{f.id}",
-                   f"复核日期 {f.valid_until.isoformat()}。内容仍然对就「复核后续期」，不对就下线重写。")
+                   f"复核日期 {day(f.valid_until)}。内容仍然对就「复核后续期」，不对就下线重写。")
     for f in soon:
         for uid in to:
             notify(db, uid, "system", f"法律条目 {REMIND_BEFORE_DAYS} 天内到复核日期：{f.topic or '未分主题'} #{f.id}",
-                   f"复核日期 {f.valid_until.isoformat()}。到期后问答会停用这一条。")
+                   f"复核日期 {day(f.valid_until)}。到期后问答会停用这一条。")
     db.flush()
     return {"reminded_soon": [f.id for f in soon], "reminded_due": [f.id for f in due], "notified": len(to)}
 
