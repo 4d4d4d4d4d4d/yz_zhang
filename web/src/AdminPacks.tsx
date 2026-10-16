@@ -16,6 +16,7 @@ export function PacksAdmin() {
   const { client, me } = useApp();
   const [rows, setRows] = useState<ScenarioPackAdminListRow[]>([]);
   const [radar, setRadar] = useState<RadarSignal[]>([]);
+  const [target, setTarget] = useState('');
   const [text, setText] = useState('');
   const [editing, setEditing] = useState<number | null>(null);
   const [check, setCheck] = useState<PackValidation | null>(null);
@@ -32,8 +33,9 @@ export function PacksAdmin() {
   }
   async function act(fn: () => Promise<unknown>, done: string) {
     setError(''); setNotice('');
-    try { await fn(); setNotice(done); await load(); } catch (e) { setError(apiErrorText(e)); }
+    try { await fn(); if (done) setNotice(done); await load(); } catch (e) { setError(apiErrorText(e)); }
   }
+  const keys = [...new Set(rows.map((r) => r.key))];
   async function validate() {
     const d = parsed();
     if (d) { try { setCheck(await client.adminValidatePack(d)); } catch (e) { setError(apiErrorText(e)); } }
@@ -105,12 +107,26 @@ export function PacksAdmin() {
 
       <h4>场景雷达</h4>
       <p className="muted">只看聚合信号：每条至少 3 个不同的人；不读任何人的笔记、私聊或提问原文。</p>
+      {/* SCN-112（162 号 spec）：一键起草知识条目进场景包草稿；回答与出处留「【待填写】」，填完才能提交审核 */}
+      <label className="row">起草进哪个服务包
+        <select aria-label="起草进哪个服务包" value={target || keys[0] || ''} onChange={(e) => setTarget(e.target.value)}>
+          {keys.map((k) => <option key={k} value={k}>{k}</option>)}
+        </select>
+      </label>
       <table>
-        <thead><tr><th>来源</th><th>信号</th><th>依据</th></tr></thead>
+        <thead><tr><th>来源</th><th>信号</th><th>依据</th><th></th></tr></thead>
         <tbody>
-          {radar.length === 0 && <tr><td colSpan={3} className="muted">暂时没有信号</td></tr>}
+          {radar.length === 0 && <tr><td colSpan={4} className="muted">暂时没有信号</td></tr>}
           {radar.map((x) => (
-            <tr key={`${x.source}:${x.key}`}><td>{SOURCE[x.source]}</td><td>{x.title}</td><td className="muted">{x.evidence}</td></tr>
+            <tr key={`${x.source}:${x.key}`}><td>{SOURCE[x.source]}</td><td>{x.title}</td><td className="muted">{x.evidence}</td>
+              <td>{keys.length > 0 && (
+                <button className="ghost" onClick={() => void act(async () => {
+                  const r = await client.adminDraftKnowledgeFromRadar({ source: x.source, key: x.key, pack_key: target || keys[0] });
+                  setEditing(r.pack.id); setText(JSON.stringify(r.pack.definition, null, 2)); setCheck(null);
+                  setNotice(`已起草进「${r.pack.key}」v${r.pack.version} 的草稿（${r.knowledge_key}）：把「【待填写】」的回答与出处写完再提交审核`);
+                }, '')}>起草知识条目</button>
+              )}</td>
+            </tr>
           ))}
         </tbody>
       </table>

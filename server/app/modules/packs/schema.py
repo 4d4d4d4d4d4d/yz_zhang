@@ -177,6 +177,20 @@ def rule_problems(p: PackDef) -> list[str]:
     return out
 
 
+# SCN-112：雷达一键起草的知识条目里留给人填的地方。草稿可以存，**留着它就不能提交审核、不能上线**
+PLACEHOLDER = "【待填写】"
+
+
+def placeholder_problems(p: PackDef) -> list[str]:
+    """提交审核与上线前查：起草出来的空位还有没填的，就不让往下走（AI / 模板只出草稿，内容要人写）。"""
+    out = []
+    for k in p.knowledge:
+        left = [name for name, v in (("正文", k.body), ("出处", k.source), ("标题", k.title)) if PLACEHOLDER in v]
+        if left:
+            out.append(f"知识「{k.title.replace(PLACEHOLDER, '').strip() or k.key}」的{'、'.join(left)}还有「{PLACEHOLDER}」没填")
+    return out
+
+
 def validate(data: dict) -> tuple[PackDef | None, list[str]]:
     """格式与规则一起校验。返回（定义, 问题）：有问题时定义可能为 None。"""
     from pydantic import ValidationError

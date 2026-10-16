@@ -1,6 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
-  AssistantContract, SkillConceptAdminView, SkillConceptList, SkillConceptRow, SkillNormalizeResult, Cockpit, CapabilityProfile, SandboxModelAdminRow, SandboxModelInput, SandboxModelList, SandboxState, InfluenceLeaderboard, InfluenceMine, InfluenceLatestSnapshot, InfluenceProof, InfluencePublic, InfluenceVouchInput, InfluenceVouchRow, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineHealth, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbRunStatus, WbStatus, WbStep,
+  AssistantContract, SkillConceptAdminView, SkillConceptList, SkillConceptRow, SkillNormalizeResult, Cockpit, CapabilityProfile, SandboxModelAdminRow, SandboxModelInput, SandboxModelList, SandboxState, InfluenceLeaderboard, InfluenceMine, InfluenceLatestSnapshot, InfluenceProof, InfluencePublic, InfluenceVouchInput, InfluenceVouchRow, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarKnowledgeDraft, RadarSignal, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineHealth, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbRunStatus, WbStatus, WbStep,
   CommercialReadiness,
   AgentProfileView,
   PayoutProposalView,
@@ -418,6 +418,10 @@ export class PlatformClient {
     return this.request<ScenarioPackAdminRow>('POST', `/admin/packs/${id}/retire`, { reason });
   }
   adminPackRadar() { return this.request<RadarSignal[]>('GET', '/admin/packs/radar'); }
+  /** SCN-112 雷达上的一条信号起草成目标场景包里的一条知识（只出草稿，空要人填，上线四眼） */
+  adminDraftKnowledgeFromRadar(input: { source: RadarSignal['source']; key: string; pack_key: string }) {
+    return this.request<RadarKnowledgeDraft>('POST', '/admin/packs/radar/draft-knowledge', input);
+  }
   adminImportPackSeeds() { return this.request<PackImportResult>('POST', '/admin/packs/import-seeds'); }
 
   // ---- OPC-100 一人公司（124 号 spec） ----

@@ -2321,6 +2321,13 @@ export interface RadarSignal {
   people: number;
   suggested: Record<string, number>;
 }
+/** SCN-112 雷达一键起草知识条目（162 号 spec）：进场景包草稿，「【待填写】」不填完不能提交审核 */
+export interface RadarKnowledgeDraft {
+  pack: ScenarioPackAdminRow;
+  knowledge_key: string;
+  new_version: boolean;
+  placeholders: number;
+}
 export interface PackImportResult {
   created: string[];
   skipped: string[];

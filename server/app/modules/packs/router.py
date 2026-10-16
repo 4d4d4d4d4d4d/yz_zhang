@@ -43,6 +43,12 @@ class PackIn(_In):
     definition: dict
 
 
+class RadarDraftIn(_In):
+    source: str = Field(min_length=2, max_length=20)
+    key: str = Field(min_length=1, max_length=200)
+    pack_key: str = Field(min_length=2, max_length=60)
+
+
 class RetireIn(_In):
     reason: str = Field(min_length=2, max_length=300)
 
@@ -190,6 +196,12 @@ def _checked(data: dict) -> schema.PackDef:
     return d
 
 
+def _no_placeholders(d: schema.PackDef) -> None:
+    left = schema.placeholder_problems(d)
+    if left:
+        raise conflict("还有起草时留的空没填：" + "；".join(left[:5]) + "。填完再提交", "pack_placeholder_left")
+
+
 def _check_categories(db: Session, d: schema.PackDef) -> None:
     """包里引用的类目（答不了时的去处、发单模板）必须是开着的类目：否则用户点过去就是一个发不出去的单。"""
     from app.modules.task.models import Category
@@ -262,7 +274,7 @@ def admin_submit(pack_id: int, admin: User = Depends(require_role("ops")), db: S
     p = _own_pack(db, pack_id)
     if p.status != "draft":
         raise conflict("只有草稿能提交审核", "pack_not_draft")
-    _checked(p.definition)     # 规则可能在草稿保存之后更新过：提交时再过一遍
+    _no_placeholders(_checked(p.definition))     # 规则可能在草稿保存之后更新过：提交时再过一遍；起草的空要填完
     p.status, p.updated_at = "review", utcnow()
     db.add(p)
     db.flush()
@@ -280,6 +292,7 @@ def admin_approve(pack_id: int, admin: User = Depends(require_role("ops")), db: 
     if p.created_by == admin.id:
         raise conflict("上线需要另一位管理员审核：写它的人不能自己批", "pack_four_eyes")
     d = _checked(p.definition)
+    _no_placeholders(d)
     _check_categories(db, d)
     now = utcnow()
     for old in db.query(ScenarioPack).filter(ScenarioPack.key == p.key, ScenarioPack.status == "published"):
@@ -322,6 +335,43 @@ def admin_retire(pack_id: int, body: RetireIn, admin: User = Depends(require_rol
 @router.get("/admin/packs/radar")
 def admin_radar(admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
     return svc.radar(db)
+
+
+@router.post("/admin/packs/radar/draft-knowledge", status_code=201)
+def admin_radar_draft(body: RadarDraftIn, admin: User = Depends(require_role("ops")),
+                      db: Session = Depends(get_db, scope="function")):
+    """SCN-112 雷达上的一条信号 → 目标场景包里一条知识条目的**草稿**（162 号 spec）。
+
+    只认雷达此刻真有的信号（至少 3 个不同的人，k-匿名）；正文与出处是留空的模板（「【待填写】」），
+    不编造答案——空不填完不能提交审核，上线照样要另一位管理员批。目标包有草稿就加进草稿，否则建一个新草稿版本。
+    """
+    from app.modules.admin.router import record_audit
+
+    signal = next((x for x in svc.radar(db) if x["source"] == body.source and x["key"] == body.key), None)
+    if signal is None:
+        raise not_found("雷达上没有这条信号了（人数不够或已经不再出现）：刷新雷达再选")
+    versions = db.query(ScenarioPack).filter(ScenarioPack.key == body.pack_key).order_by(ScenarioPack.version.desc()).all()
+    if not versions:
+        raise not_found("没有这个场景包：先建包，或换一个包")
+    last = versions[0]     # 有版本在审核时，下面 _new_version 会以 pack_draft_exists 拒绝：审核中的不往里加
+    definition = dict(last.definition)
+    knowledge = list(definition.get("knowledge") or [])
+    entry = svc.radar_knowledge_draft(signal, {k.get("key") for k in knowledge})
+    definition["knowledge"] = knowledge + [entry]
+    d = _checked(definition)
+    if last.status == "draft":
+        p = last
+        p.definition, p.score, p.updated_at = d.model_dump(mode="json"), d.score.total(), utcnow()
+        db.add(p)
+        db.flush()
+        created = False
+    else:
+        p = _new_version(db, d, admin)
+        created = True
+    record_audit(db, admin.id, "pack_radar_draft", "scenario_pack", p.id,
+                 f"{p.key} v{p.version} ← {signal['source']}:{signal['key']}（{signal['people']} 人）")
+    return {"pack": _admin_row(p), "knowledge_key": entry["key"], "new_version": created,
+            "placeholders": len(schema.placeholder_problems(d))}
 
 
 @router.post("/admin/packs/import-seeds")

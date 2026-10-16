@@ -330,6 +330,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   schedule_too_far: '定时最多提前 30 天；更远的请到时候再排',
   announcement_not_scheduled: '只有还没发出的定时公告能取消；已经发出的请用「撤回」',
   announcement_not_sent: '只有已发出的公告能撤回；还没发的定时公告请用「取消」',
+  pack_placeholder_left: '还有起草时留的「【待填写】」没填：把回答与出处写完再提交审核',
   xapp_grant_inactive: '这个授权已撤销或过期：请在「跨 App 助手」页重新授权',
   xapp_bad_app: '目标 App 要写包名或应用标识（例如 com.autonavi.minimap），至少一个',
   xapp_red_line_not_grantable: '付款、转账、签署、发布、对外发消息、改安全设置、删除数据不能授权给智能体，这些步骤只能由你亲手完成',

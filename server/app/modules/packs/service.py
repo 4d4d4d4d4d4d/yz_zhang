@@ -450,6 +450,27 @@ def radar(db: Session) -> list[dict]:
     return out
 
 
+def radar_knowledge_draft(signal: dict, taken: set) -> dict:
+    """SCN-112 把一条雷达信号起草成知识条目：只有骨架与依据，答案和出处留给人写（「【待填写】」）。"""
+    from .schema import PLACEHOLDER
+    from .topics import LEGAL_TOPICS, SUPPORT_TOPICS
+
+    src, key = signal["source"], signal["key"]
+    words = {"legal_gap": LEGAL_TOPICS, "support_gap": SUPPORT_TOPICS}.get(src, {}).get(key, ())
+    title = {"legal_gap": f"{key}：常见问题怎么答", "support_gap": f"{key}：客服常见问题",
+             "search_gap": f"想找「{key}」时怎么办", "stuck_demand": f"「{key}」的需求怎么写才有人接"}.get(src, f"复核：{key}")
+    n = 1
+    while f"radar-{src.replace('_', '-')}-{n}" in taken:
+        n += 1
+    body = (f"{PLACEHOLDER}这里写给用户看的回答：先说结论，再说依据和步骤。\n\n"
+            f"起草依据（场景雷达）：{signal['evidence']}\n"
+            + (f"这类问题常出现的词：{'、'.join(words)}\n" if words else "")
+            + "写的时候：碰钱、签署、申报的只给步骤，不替人做决定；拿不准的写明「建议找律师」或「转人工客服」。")
+    return {"key": f"radar-{src.replace('_', '-')}-{n}", "title": title[:200], "body": body[:5000],
+            "kind": "rule" if src == "legal_gap" else "howto",
+            "source": f"{PLACEHOLDER}出处：法规名与条号、官网链接或平台规则", "tags": [key[:20], "雷达起草"]}
+
+
 def _legal_gaps(db: Session, now) -> list[dict]:
     """SCN-108 法律问答答不上的问题，按粗主题聚合（原文从不落库，见 legal_ask）。"""
     from app.modules.analytics.models import AnalyticsEvent

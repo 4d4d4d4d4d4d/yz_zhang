@@ -83,6 +83,7 @@ REACHED_BY: dict[str, str] = {
     "/admin/sandbox/models/{x}/retire": "retireSandboxModel",
     "/admin/packs/import-seeds": "adminImportPackSeeds",
     "/admin/packs/radar": "adminPackRadar",
+    "/admin/packs/radar/draft-knowledge": "adminDraftKnowledgeFromRadar",
     "/admin/packs/validate": "adminValidatePack",
     "/admin/packs/{x}": "adminUpdatePack",
     "/admin/packs/{x}/submit": "adminSubmitPack",

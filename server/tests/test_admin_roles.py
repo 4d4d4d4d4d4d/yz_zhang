@@ -49,6 +49,7 @@ ROUTE_ROLES = {
     "GET /admin/north-star": ANY,
     "GET /admin/packs": ('ops',),
     "GET /admin/packs/radar": ('ops',),
+    "POST /admin/packs/radar/draft-knowledge": ('ops',),
     "GET /admin/platform-finance": ('finance',),
     "GET /admin/queues": ANY,
     "GET /admin/reports": ('support', 'compliance'),

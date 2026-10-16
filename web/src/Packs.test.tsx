@@ -105,4 +105,27 @@ describe('PACK-100 服务包', () => {
     expect((await screen.findByLabelText('校验问题')).textContent).toContain('钱、签署、申报都必须是人工关口');
     expect(panel.textContent).toContain('近 30 天 4 个不同的人搜过');
   });
+
+  it('雷达一键起草知识条目：进选中的服务包草稿，编辑器打开它并提示把「【待填写】」写完', async () => {
+    const calls: Call[] = [];
+    const row = (id: number, key: string, status: string) => ({ id, key, version: 1, title: key, segment: 'general', status,
+      score: 10, created_by: 9, reviewed_by: null, published_at: null, retired_reason: '', updated_at: '', definition: {},
+      metrics: { active: 0, enabled_total: 0, asks_30d: 0, unanswered_30d: 0, helpful_30d: 0, unhelpful_30d: 0, unanswered_rate: null, helpful_rate: null } });
+    const draft = { ...row(7, 'household-chores', 'draft'), version: 2,
+      definition: { key: 'household-chores', knowledge: [{ key: 'radar-legal-gap-1', title: '婚姻家庭：常见问题怎么答', body: '【待填写】这里写', source: '【待填写】出处' }] } };
+    open('/admin', {
+      '/users/me': { ...ME, is_admin: true },
+      'GET /admin/packs': [row(1, 'collab-basics', 'published'), row(3, 'household-chores', 'published')],
+      '/admin/packs/radar': [{ source: 'legal_gap', key: '婚姻家庭', title: '「婚姻家庭」类法律问题常答不上', evidence: '近 30 天 3 个不同的人', people: 3, suggested: {} }],
+      'POST /admin/packs/radar/draft-knowledge': { pack: draft, knowledge_key: 'radar-legal-gap-1', new_version: true, placeholders: 1 },
+    }, calls, { ...ME, is_admin: true });
+    await screen.findByText('「婚姻家庭」类法律问题常答不上');
+    fireEvent.change(screen.getByLabelText('起草进哪个服务包'), { target: { value: 'household-chores' } });
+    fireEvent.click(screen.getByRole('button', { name: '起草知识条目' }));
+    await waitFor(() => expect(calls.find((c) => c.path === '/admin/packs/radar/draft-knowledge')?.body)
+      .toEqual({ source: 'legal_gap', key: '婚姻家庭', pack_key: 'household-chores' }));
+    expect(await screen.findByText(/已起草进「household-chores」v2 的草稿.*【待填写】/)).toBeTruthy();
+    expect((screen.getByLabelText('服务包定义') as HTMLTextAreaElement).value).toContain('radar-legal-gap-1');
+    expect(screen.getByText('编辑草稿 #7')).toBeTruthy();
+  });
 });
