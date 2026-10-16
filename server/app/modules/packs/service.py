@@ -296,6 +296,9 @@ def _experience_citations(db: Session, q: str, k: int = 2) -> list[dict]:
              "valid_until": None, "expired": False, "note_id": None} for _, u, body in scored[:k]]
 
 
+CALENDAR_DAYS = 120
+
+
 def _tool_citations(db: Session, user_id: int, tools: list[str], q: str) -> list[dict]:
     """白名单里的一人公司工具：问到相关的事，就用本人的数据算一遍，作为一条「按你的数据推算」的出处。"""
     from app.modules.opc import service as osvc
@@ -308,10 +311,12 @@ def _tool_citations(db: Session, user_id: int, tools: list[str], q: str) -> list
     today = local(utcnow()).date()
     profile = db.get(OpcProfile, user_id)
     if "opc.calendar" in tools and _ASK_CALENDAR.search(q):
+        # 按季申报的两个节点最多隔 92 天、再加周末顺延：只看 90 天会在季度申报期刚过的那几天什么都看不到
+        # （10-16 起下一个是 1-15，差一天落在窗外）。用日历本身的默认 120 天，保证至少看得到下一次
         items = osvc.deadlines(profile or OpcProfile(user_id=user_id, entity="individual", vat="none",
-                                                     vat_period="quarter"), today, 90)[:4]
+                                                     vat_period="quarter"), today, CALENDAR_DAYS)[:4]
         if items:
-            out.append({"kind": "tool", "title": "你的申报日历（近 90 天）",
+            out.append({"kind": "tool", "title": f"你的申报日历（接下来 {CALENDAR_DAYS} 天）",
                         "snippet": "；".join(f"{i['date']} {i['title']}" for i in items),
                         "source": "按你在「一人公司」里填的主体与纳税人类型推算" + ("" if profile else "（还没填，按个人推算）"),
                         "valid_until": None, "expired": False, "note_id": None})

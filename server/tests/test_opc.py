@@ -293,3 +293,20 @@ def test_responses_match_sdk_types(client, requester):
     _assert_shape(first_item, "OpcDeadline")
     _assert_shape(review, "ContractReview")
     _assert_shape(first_finding, "ContractFinding")
+
+
+def test_calendar_tool_window_always_reaches_the_next_quarterly_deadline():
+    """10-16 起，按季申报的下一个节点是次年 1-15：只看 90 天就一条都没有（真出过：日期一过 10-15 测试就红）。
+    每一天都要看得到下一次申报——逐日扫一整年。"""
+    from datetime import date, timedelta
+
+    from app.modules.opc import service as osvc
+    from app.modules.opc.models import OpcProfile
+    from app.modules.packs.service import CALENDAR_DAYS
+
+    for entity, vat in (("sole_prop", "small_scale"), ("company", "small_scale"), ("individual", "small_scale")):
+        p = OpcProfile(user_id=1, entity=entity, vat=vat, vat_period="quarter")
+        d = date(2026, 1, 1)
+        while d < date(2027, 1, 1):
+            assert osvc.deadlines(p, d, CALENDAR_DAYS), (entity, d)
+            d += timedelta(days=1)
