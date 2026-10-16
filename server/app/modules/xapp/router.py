@@ -13,6 +13,7 @@ from app.core.deps import get_current_user
 from app.core.errors import not_found
 from app.modules.account.models import User
 
+from . import planner
 from . import service as svc
 from .models import XappGrant, XappRun, XappStep
 
@@ -46,6 +47,12 @@ class RunIn(BaseModel):
     steps: list[StepIn] = Field(min_length=1, max_length=100)
 
 
+class PlanIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    grant_id: int
+    goal: str = Field(min_length=2, max_length=200)
+
+
 class ResultIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ok: bool
@@ -77,6 +84,8 @@ def catalog():
     return {"actions": [{"key": k, "label": v} for k, v in svc.ACTIONS.items()],
             "red_line": [{"key": k, "label": v} for k, v in svc.RED_LINE.items()],
             "channels": list(svc.CHANNELS), "executors": list(svc.EXECUTORS),
+            # XAPP-015：出计划的规则表。开着隐私沙箱的手机按这张表在本机出计划（目标原文不上云）
+            "plan_rules": planner.rules(),
             "notice": "付款、转账、签署、发布、对外发消息、改密码、删除数据只能由你亲手完成；智能体只把你带到那个页面。"
                       "屏幕内容默认只在本机处理。"}
 
@@ -101,6 +110,14 @@ def revoke_grant(grant_id: int, user: User = Depends(get_current_user), db: Sess
         raise not_found("没有这个授权")
     stopped = svc.revoke_grant(db, g)
     return {**svc.dump_grant(g), "runs_stopped": stopped}
+
+
+@router.post("/xapp/plan")
+def plan(body: PlanIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """XAPP-015 一句目标 → 计划草稿：只出草稿、不发起；本人看过再用它发起执行。
+    配了模型就由模型出并按授权重新校验，否则按规则出；开着隐私沙箱的人这个接口被拦下，在本机按同一张规则表出。"""
+    g = svc.active_grant(db, body.grant_id, user.id)
+    return planner.make_plan(db, user.id, g, body.goal.strip())
 
 
 @router.post("/xapp/runs", status_code=201)

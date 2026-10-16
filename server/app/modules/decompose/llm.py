@@ -297,6 +297,24 @@ class AnthropicLLM:
         text = "".join(b.text for b in message.content if getattr(b, "type", "") == "text")
         return json.loads(text)["steps"]
 
+    def plan_xapp(self, db, goal: str, apps: list[str]) -> list[dict]:
+        """XAPP-015 跨 App 助手出计划（161 号 spec）。只出草稿；结果由 xapp.planner 按授权重新校验，
+        这里的任何异常都由调用方退回规则。"""
+        from anthropic import Anthropic
+
+        from app.modules.xapp.planner import XAPP_PLAN_PROMPT, XAPP_PLAN_SCHEMA
+
+        _before_model_call(db, "plan_xapp")
+        message = Anthropic().messages.create(
+            model=self.model,
+            max_tokens=2048,
+            system=XAPP_PLAN_PROMPT,
+            output_config={"format": {"type": "json_schema", "schema": XAPP_PLAN_SCHEMA}},
+            messages=[{"role": "user", "content": f"目标：{goal}\n授权的 App：{'、'.join(apps)}"}],
+        )
+        text = "".join(b.text for b in message.content if getattr(b, "type", "") == "text")
+        return json.loads(text)["steps"]
+
     def expand(self, db, ctx) -> dict:
         try:
             _before_model_call(db, "expand")

@@ -61,6 +61,7 @@ import type {
   MissionSummary,
   MissionMethodDraft,
   XappCatalog,
+  XappPlan,
   XappGrant,
   XappGrantRevoked,
   XappNext,
@@ -903,6 +904,8 @@ export class PlatformClient {
   // ---- XAPP 跨 App 助手（161 号 spec）----
   /** 能授权的动作、只能本人亲手做的红线动作、通道顺序 */
   xappCatalog() { return this.request<XappCatalog>('GET', '/xapp/catalog'); }
+  /** XAPP-015 一句目标 → 计划草稿（不发起）。隐私沙箱开着时被拦下：用 planXappLocally 在本机出 */
+  planXapp(grantId: number, goal: string) { return this.request<XappPlan>('POST', '/xapp/plan', { grant_id: grantId, goal }); }
   createXappGrant(input: { apps: string[]; actions: string[]; days: number; device_label?: string; allow_cloud_vision?: boolean }) {
     return this.request<XappGrant>('POST', '/xapp/grants', {
       apps: input.apps, actions: input.actions, days: input.days,

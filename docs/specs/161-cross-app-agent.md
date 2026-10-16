@@ -1,6 +1,6 @@
 # 161 多模态智能体操作其他 App（无 agent 接口时）
 
-> 状态：本批实现（V190）：平台侧 XAPP-001~010；端上执行器 XAPP-011~014 为「外」；计划生成 XAPP-015 排 V191；云端看屏幕 XAPP-016 欠（随执行器）。
+> 状态：本批实现（V190）：平台侧 XAPP-001~010；端上执行器 XAPP-011~014 为「外」；计划生成 XAPP-015 本批实现（V191）；云端看屏幕 XAPP-016 欠（随执行器）。
 > 来源：用户 2026-10-15「支持通过多模态智能体能够直接操作其他app吗，在其他app不提供agent的通信api的情况下」（VISION 1.12）；BACKLOG V190。
 > 只增不减：开放 API、Webhook、机器授权（MachineMandate）、端侧隐私沙箱都不变；这是新的一条能力线。
 
@@ -75,6 +75,22 @@ V190 实现（`server/app/modules/xapp/`，接口 `/api/v1/xapp/*` 共 10 个，
 | 对象级授权 | `test_object_level_authz.py`：`/xapp/` 归本人，别人的编号 404 | — |
 | 两端 | App `xapp.test.tsx`（3 条：授权、红线步亲手完成、叫停、示例执行、模拟执行器试跑）；Web `Xapp.test.tsx`；SDK `xapp.test.ts`（`driveXappRun` 执行器循环）；真浏览器 `e2e_web.py` 走 `/xapp` | 去掉红线提示（App、Web 各一处）→ 红 |
 
+V191 实现 XAPP-015（`server/app/modules/xapp/planner.py`，接口 `POST /xapp/plan`，只出草稿不发起）：
+
+| 闸门 | 测试 | 红验 |
+|---|---|---|
+| 规则计划与本机计划是同一个算法：两边读同一份例子文件 `packages/core/src/xapp-plan-cases.json`（8 个例子，规则表也在里面，必须等于服务端） | `test_shared_cases_match_the_server_rules_both_ways`；SDK `xapp.test.ts` | 服务端去掉长词优先 → 红；SDK 去掉 App 名占位 → 红 |
+| 通道按 API → 深链 → 控件树 → 屏幕识别的顺序挑；红线步自动标出，发起后要本人确认 | `test_rules_plan_follows_channel_order_and_marks_red_line` | 打开改挑最后一个通道 → 红 |
+| 「支付宝」里的「支付」不是付款；没授权的动作列出来、草稿标成不能直接发起 | `test_app_name_is_not_an_action_and_missing_actions_are_listed` | 去掉 App 名占位 → 红；不算缺的动作 → 红 |
+| 只能用自己的、生效中的授权 | `test_plan_needs_an_active_grant_of_my_own` | 不查授权归属 → 红 |
+| 隐私沙箱里这个接口被拦下（目标原文不上云），目录带规则表让手机在本机出 | `test_sandbox_blocks_the_plan_endpoint_and_the_catalog_carries_the_rules`；`test_sandbox.py` 两端清单一致 | 从云端 AI 清单里去掉 → 红 |
+| 模型出的计划不能越过授权：不在授权里的 App 丢掉、不认得的动作丢掉、红线由服务端判、乱写的通道按规则挑 | `test_model_plan_cannot_widen_the_grant` | 不查 App → 红；红线跟着模型走 → 红 |
+| 模型出错或给的全不能用：退回规则并写明 | `test_model_failure_falls_back_to_rules_visibly` | 不写明 → 红 |
+| 模型调用用结构化输出、调用前先还数据库连接（CONC-067） | `test_anthropic_plan_uses_structured_output_and_releases_the_connection` | — |
+| App：出计划、红线步写明「你亲手完成」、照草稿发起；沙箱开着就在本机出、不发请求 | `app/xapp.test.tsx` | — |
+
+改规则表时：改 `planner.py`，用它重新生成例子文件里的 `rules` 与每个 `expect`（161 号 spec 第 6 节），再让 SDK 的 `planXappSteps` 跟上——两边测试都过才算改完。
+
 执行器协议在共享 SDK：`driveXappRun(client, runId, {perform, handoff})` 循环「拿下一步 → 执行 → 回报」，遇到等确认、交还给人、叫停就停下。App 上「用模拟执行器试跑」就是用它，不碰任何 App。
 
 ## 7. 没做的
@@ -83,6 +99,6 @@ V190 实现（`server/app/modules/xapp/`，接口 `/api/v1/xapp/*` 共 10 个，
 - **XAPP-012 桌面执行器**：本机程序（Windows / macOS），需要签名与分发（外）。
 - **XAPP-013 iOS 快捷指令动作包**：需要真机与 App Store 审核（外）。
 - **XAPP-014 端侧屏幕理解模型**：能在手机上跑的界面理解小模型，接进端侧模型目录（与 SBX-110 一起，外）。
-- **XAPP-015 智能体出计划**：V190 的计划由客户端按授权给出（App 上是示例计划）；「说一句目标 → 智能体按 API → 深链 → 控件树 → 屏幕识别的顺序出步骤」还没做，排 **V191**。
+- ~~**XAPP-015 智能体出计划**~~ → **已做**（V191，本 spec 第 6 节）。规则表现在只认 8 个常见 App 的名字与通道；更多 App 的通道表（尤其哪些 App 有公开深链）要随真机执行器一起补（XAPP-017，随 XAPP-011）。
 - **XAPP-016 云端看屏幕接口与成本**：平台还没有「把屏幕摘要交给云端模型识别」的接口；做的时候必须进端侧沙箱的云端 AI 名单、每次提示、计入助手月度成本上限（REL-110）。依赖端上执行器，随 XAPP-011/012 一起做（欠）。
 - Web 上桌面执行器的下载与配对、iOS 上列出可用的快捷指令动作：随 XAPP-012 / XAPP-013（外）。

@@ -502,6 +502,7 @@ api POST /api/v1/workbench/projects
 api POST /api/v1/workbench/routines
 api POST /api/v1/workbench/routines/{routine_id}/run
 api POST /api/v1/xapp/grants
+api POST /api/v1/xapp/plan
 api POST /api/v1/xapp/runs
 api POST /api/v1/xapp/runs/{run_id}/next
 api POST /api/v1/xapp/runs/{run_id}/steps/{step_id}/confirm
@@ -845,6 +846,7 @@ sdk pendingCertifications
 sdk pendingTeams
 sdk pendingUploads
 sdk personalSpace
+sdk planXapp
 sdk platformFinance
 sdk platformFinancePeriods
 sdk previewAnnouncement

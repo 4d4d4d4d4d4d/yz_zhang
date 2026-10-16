@@ -25,6 +25,8 @@ export const CLOUD_AI_ENDPOINTS: ReadonlyArray<readonly ['POST', string]> = [
   ['POST', '/missions'],
   // AGT-093（154 号 spec）：蒸馏本身不调模型，但编排在沙箱里本来就建不了，同一类一起拦
   ['POST', '/missions/{mission_id}/summary/distill'],
+  // XAPP-015（161 号 spec）：一句目标出计划；沙箱里用 planXappLocally 在本机按目录里的规则表出
+  ['POST', '/xapp/plan'],
 ];
 const CLOUD_AI_RE = CLOUD_AI_ENDPOINTS.map(([m, p]) => [m, new RegExp(`^${p.replace(/\{[^}]+\}/g, '[^/]+')}$`)] as const);
 

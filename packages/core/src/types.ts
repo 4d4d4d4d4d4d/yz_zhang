@@ -2873,6 +2873,45 @@ export interface XappCatalog {
   channels: string[];
   executors: string[];
   notice: string;
+  plan_rules: XappPlanRules;
+}
+/** XAPP-015 出计划的规则表（服务端与本机共用一张） */
+export interface XappPlanRules {
+  apps: XappAppHint[];
+  default_channels: string[];
+  actions: XappActionWords[];
+  channel_order: string[];
+  max_steps: number;
+}
+export interface XappAppHint {
+  app: string;
+  names: string[];
+  channels: string[];
+}
+export interface XappActionWords {
+  action: string;
+  words: string[];
+  intent: string;
+}
+export interface XappPlanStep {
+  app: string;
+  action: string;
+  action_label: string;
+  intent: string;
+  channel: string;
+  vision_where: 'device' | 'cloud';
+  red_line: boolean;
+  why: string;
+}
+/** 计划草稿：只是草稿，本人看过再用它发起执行。source=device_rules 表示在本机按规则出的（隐私沙箱） */
+export interface XappPlan {
+  goal: string;
+  grant_id: number;
+  source: 'rules' | 'model' | 'device_rules';
+  steps: XappPlanStep[];
+  missing_actions: string[];
+  ready: boolean;
+  notes: string[];
 }
 export interface XappStepInput {
   app: string;

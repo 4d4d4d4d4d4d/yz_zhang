@@ -1,7 +1,8 @@
 // XAPP 跨 App 助手在 App 上（161 号 spec）：授权哪些 App、发起一次执行、逐步确认、一键叫停、看记录。
 // 真正去点别的 App 的原生执行器（Android 无障碍）需要开发构建与真机，暂缺；这里的「模拟执行器试跑」只走协议，不碰任何 App。
 import {
-  apiErrorText, driveXappRun, type PlatformClient, type XappCatalog, type XappGrant, type XappRun, type XappRunDetail,
+  ApiError, apiErrorText, driveXappRun, planXappLocally, type PlatformClient, type XappCatalog, type XappGrant, type XappPlan,
+  type XappRun, type XappRunDetail,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -15,6 +16,8 @@ export function XappScreen({ client }: { client: PlatformClient }) {
   const [runs, setRuns] = useState<XappRun[]>([]);
   const [open, setOpen] = useState<XappRunDetail | null>(null);
   const [apps, setApps] = useState('');
+  const [goal, setGoal] = useState('');
+  const [plan, setPlan] = useState<XappPlan | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
@@ -32,6 +35,17 @@ export function XappScreen({ client }: { client: PlatformClient }) {
     try { await fn(); if (done) setNotice(done); await load(); } catch (e) { setError(apiErrorText(e)); }
   }
   const refreshRun = async (id: number) => setOpen(await client.xappRun(id));
+  const active = grants.find((g) => g.active);
+
+  // XAPP-015：一句目标出计划草稿。隐私沙箱开着时服务端接口被拦下，在本机按同一张规则表出（目标原文不发出去）
+  async function makePlan(g: XappGrant) {
+    try {
+      setPlan(await client.planXapp(g.id, goal.trim()));
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'sandbox_cloud_ai_blocked' && cat) setPlan(planXappLocally(goal, g, cat));
+      else throw e;
+    }
+  }
 
   return (
     <View style={{ gap: 12 }}>
@@ -62,6 +76,31 @@ export function XappScreen({ client }: { client: PlatformClient }) {
           )}
         </View>
       ))}
+      {active && (
+        <View style={s.card} accessibilityLabel="出计划">
+          <Text style={s.title}>说一句要办的事，助手出计划</Text>
+          <TextInput style={s.input} accessibilityLabel="要办的事" placeholder="例如：用高德查去客户公司要多久，然后在微信里告诉客户"
+                     value={goal} onChangeText={setGoal} />
+          <Button title="出计划（只是草稿）" disabled={goal.trim().length < 2} onPress={() => void act(() => makePlan(active))} />
+          {plan && (
+            <View style={{ gap: 4 }} accessibilityLabel="计划草稿">
+              <Text style={s.muted}>{plan.source === 'model' ? '模型出的' : plan.source === 'device_rules' ? '本机按规则出的' : '按规则出的'}</Text>
+              {plan.steps.map((st, i) => (
+                <Text key={i} style={st.red_line ? s.warn : undefined}>
+                  {i + 1}. {st.intent}（{st.action_label} · {st.app} · {st.channel}）{st.red_line ? ' · 你亲手完成' : ''}
+                </Text>
+              ))}
+              {plan.notes.map((n) => <Text key={n} style={s.muted}>{n}</Text>)}
+              <Button title="照这个计划发起（模拟执行器）" disabled={!plan.ready} onPress={() => void act(async () => {
+                const run = await client.createXappRun({ grant_id: plan.grant_id, goal: plan.goal, executor: 'mock', confirm_mode: 'red_only',
+                  steps: plan.steps.map(({ app, action, intent, channel, vision_where }) => ({ app, action, intent, channel, vision_where })) });
+                setPlan(null); setGoal('');
+                await refreshRun(run.id);
+              }, '已发起，看下面的步骤')} />
+            </View>
+          )}
+        </View>
+      )}
       <Text style={s.title}>执行记录</Text>
       {runs.length === 0 && <Text style={s.muted}>还没有执行过。</Text>}
       {runs.map((r) => (
