@@ -912,7 +912,13 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
   // 对含第三方素材的交付物直接就是错的
   const [ip, setIp] = useState<IpAssignment | ''>('');
   const [project, setProject] = useState(false);
+  // TASK-007 / SCN-107（167 号 spec）几个人、连续几天：名额 = 人数 × 天数
+  const [people, setPeople] = useState('1');
+  const [days, setDays] = useState('1');
+  const [startDate, setStartDate] = useState('');
   const [error, setError] = useState('');
+  const nDays = parseInt(days, 10) || 1;
+  const nPeople = parseInt(people, 10) || 1;
   return (
     <ScrollView contentContainerStyle={styles.center}>
       <Text style={styles.title}>发布任务</Text>
@@ -928,6 +934,18 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
       <TextInput style={styles.input} placeholder="预算（元）" value={budget} onChangeText={setBudget} keyboardType="numeric" />
       {/* PROF-101 边写边提示还缺什么（126 号 spec） */}
       <DraftHints client={client} draft={{ title, category, budget_cents: Math.round(parseFloat(budget || '0') * 100), is_remote: true }} />
+      {!project && (
+        <>
+          <TextInput style={styles.input} accessibilityLabel="需要几个人" placeholder="需要几个人" value={people} onChangeText={setPeople} keyboardType="numeric" />
+          <TextInput style={styles.input} accessibilityLabel="连续几天" placeholder="连续几天" value={days} onChangeText={setDays} keyboardType="numeric" />
+          {nDays > 1 && (
+            <TextInput style={styles.input} accessibilityLabel="从哪天开始" placeholder="从哪天开始（如 2026-10-20）" value={startDate} onChangeText={setStartDate} />
+          )}
+          {(nPeople > 1 || nDays > 1) && (
+            <Text style={styles.mutedLeft}>会拆成 {nPeople * nDays} 个名额（{nPeople} 人 × {nDays} 天），预算平分，每个名额单独招人、单独验收</Text>
+          )}
+        </>
+      )}
       <Text style={styles.mutedLeft}>交付成果归谁（必选）</Text>
       {(Object.keys(IP_ASSIGNMENT_LABEL) as IpAssignment[]).map((key) => (
         <TouchableOpacity key={key} onPress={() => setIp(key)}>
@@ -945,6 +963,8 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
             title, category, task_type: project ? 'project' : 'event',
             budget_cents: Math.round(parseFloat(budget || '0') * 100),
             ip_assignment: ip,
+            ...(!project && nPeople > 1 ? { people_needed: nPeople } : {}),
+            ...(!project && nDays > 1 ? { days: nDays, start_date: startDate.trim() || null } : {}),
             // 项目先存草稿：拆好、说清每一步谁来做之后，只有能开工的步骤发布出去
             is_remote: true, publish_now: !project,
           });

@@ -19,7 +19,7 @@ export default function Publish() {
     // 默认值把它发成了「保洁 · 上海」。带着参数来的（补救入口、模板）照用参数
     category: params.get('category') || '', budget_yuan: '200',
     task_type: 'service', pricing: 'fixed', recurrence: 'none',
-    people_needed: '1', deposit_yuan: '0', is_remote: false, city: params.get('city') || '',
+    people_needed: '1', days: '1', start_date: '', deposit_yuan: '0', is_remote: false, city: params.get('city') || '',
     lat: '31.2304', lng: '121.4737', address_hint: '', address_exact: '',
     // TZ-064 截止时间此前**网页上根本没有地方填**：服务端有校验、有到期下架 job、
     // 有临期提醒，而线上所有任务的 deadline 都是空的，那个 job 从来没有活可干。
@@ -89,6 +89,8 @@ export default function Publish() {
         pricing: form.pricing,
         recurrence: form.recurrence,
         people_needed: parseInt(form.people_needed, 10) || 1,
+        // SCN-107（167 号 spec）连续几天：名额 = 人数 × 天数
+        ...((parseInt(form.days, 10) || 1) > 1 ? { days: parseInt(form.days, 10), start_date: form.start_date || null } : {}),
         deposit_cents: Math.round(parseFloat(form.deposit_yuan || '0') * 100),
         ip_assignment: form.ip_assignment as IpAssignment,
         budget_cents: Math.round(parseFloat(form.budget_yuan) * 100),
@@ -197,6 +199,14 @@ export default function Publish() {
             <label className="grow">需要人数（&gt;1 自动拆名额）
               <input type="number" min={1} max={50} value={form.people_needed} onChange={(e) => set('people_needed', e.target.value)} />
             </label>
+            <label className="grow">连续几天（&gt;1 按天拆名额）
+              <input type="number" aria-label="连续几天" min={1} max={14} value={form.days} onChange={(e) => set('days', e.target.value)} />
+            </label>
+            {(parseInt(form.days, 10) || 1) > 1 && (
+              <label className="grow">从哪天开始
+                <input type="date" aria-label="从哪天开始" value={form.start_date} onChange={(e) => set('start_date', e.target.value)} />
+              </label>
+            )}
             <label className="grow">执行者保证金（元，0=不要求）
               <input type="number" min={0} value={form.deposit_yuan} onChange={(e) => set('deposit_yuan', e.target.value)} />
             </label>

@@ -260,6 +260,10 @@ export interface Task {
   circle_id?: number | null;
   recurrence?: string;
   recurred_from_id?: number | null;
+  /** SCN-107（167 号 spec）连续几天（1 表示不分天） */
+  days?: number;
+  /** 母任务：第一天；名额：这一天（北京时间的日期 YYYY-MM-DD） */
+  work_date?: string | null;
   status: TaskStatus;
   deadline: string | null;
   reject_count: number;
@@ -325,6 +329,9 @@ export interface TaskCreateInput {
   circle_id?: number | null;
   recurrence?: string;
   people_needed?: number;
+  /** SCN-107 连续几天（名额 = 人数 × 天数，最多 50）；大于 1 时必须给 start_date */
+  days?: number;
+  start_date?: string | null;
   acceptance_criteria?: string[];
   bonus_cents?: number;
   publish_now?: boolean;

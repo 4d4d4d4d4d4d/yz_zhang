@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -19,7 +19,7 @@ from app.modules.matching import service as matching
 
 from . import service
 from .models import TASK_TYPES, Application, ProgressLog, Review, Task
-from app.core.timefmt import UtcDatetime, iso
+from app.core.timefmt import UtcDatetime, day, iso
 
 router = APIRouter(tags=["task"])
 
@@ -47,6 +47,9 @@ class TaskIn(BaseModel):
     circle_id: int | None = None
     recurrence: str = "none"
     people_needed: int = Field(default=1, ge=1, le=50)
+    # SCN-107（167 号 spec）连续几天、从哪天开始（北京时间的日期）。名额 = 人数 × 天数，最多 50 个
+    days: int = Field(default=1, ge=1, le=14)
+    start_date: date | None = None
     # AGT-030 结构化验收标准。auto 项由平台判定，不由执行方自报。
     acceptance_criteria: list[dict] = []
     # IPC-001 **无默认值**：不选不让发。替当事人猜归属是这条最容易犯的错。
@@ -124,6 +127,8 @@ def dump_task(task: Task, viewer: User | None = None) -> dict:
         "visibility": task.visibility,
         "circle_id": task.circle_id,
         "recurrence": task.recurrence,
+        # SCN-107（167 号 spec）
+        "days": task.days or 1, "work_date": day(task.work_date) if task.work_date else None,
         "recurred_from_id": task.recurred_from_id,
         "status": task.status,
         "deadline": iso(task.deadline),
@@ -212,39 +217,52 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
 
         if not body.circle_id or not active_member(db, body.circle_id, user.id):
             raise forbidden("需先加入该圈层", "not_circle_member")
-    publishing = body.publish_now or body.people_needed > 1
+    _validate_days(body)
+    multi = body.people_needed > 1 or body.days > 1
+    publishing = body.publish_now or multi
     if publishing:
         # CONC-067 先审后写：机审是一次外部调用，不能挂着刚写进去的任务行等它
         from app.modules.finance.compliance import assert_no_finance_offer
 
         assert_no_finance_offer(f"{body.title} {body.description}")
         service.review_or_reject(db, body.title + " " + body.description)
-    task = Task(creator_id=user.id, **body.model_dump(exclude={"publish_now"}))
+    task = Task(creator_id=user.id, **body.model_dump(exclude={"publish_now", "start_date"}))
+    if body.days > 1:
+        task.work_date = body.start_date
+        task.deadline = _day_end_utc(body.start_date + timedelta(days=body.days - 1))
     db.add(task)
     db.flush()
     # TASK-007 多人任务：母任务为容器（不进广场），生成 N 个名额子任务分别招募
-    if body.people_needed > 1:
+    # SCN-107 多天：每天每人一个名额，名额写明第几天、哪一天，截止到那天结束
+    if multi:
         service.validate_publishable(task, db, reviewed=True)
-        per_slot = body.budget_cents // body.people_needed
+        total = body.people_needed * body.days
+        per_slot = body.budget_cents // total
         if per_slot <= 0:
             raise bad_request("预算不足以拆分名额", "budget_too_small")
         # 预算守恒：整除余数并入末位名额，保证 Σ名额预算 == 母任务预算
-        remainder = body.budget_cents - per_slot * body.people_needed
+        remainder = body.budget_cents - per_slot * total
         slots = []
-        for i in range(body.people_needed):
-            slot_budget = per_slot + (remainder if i == body.people_needed - 1 else 0)
-            slot = Task(
-                creator_id=user.id, parent_id=task.id,
-                title=f"{task.title} · 名额{i + 1}/{body.people_needed}",
-                description=task.description, category=task.category,
-                task_type=task.task_type, required_skills=task.required_skills,
-                budget_cents=slot_budget, pricing=task.pricing, deposit_cents=task.deposit_cents,
-                is_remote=task.is_remote, city=task.city, lat=task.lat, lng=task.lng,
-                address_hint=task.address_hint, address_exact=task.address_exact,
-                visibility=task.visibility, circle_id=task.circle_id,
-            )
-            db.add(slot)
-            slots.append(slot)
+        for d in range(body.days):
+            day_ = body.start_date + timedelta(days=d) if body.days > 1 else None
+            for i in range(body.people_needed):
+                last = d == body.days - 1 and i == body.people_needed - 1
+                slot_budget = per_slot + (remainder if last else 0)
+                label = (f"第{d + 1}天（{day_.month:02d}-{day_.day:02d}）· 名额{i + 1}/{body.people_needed}" if day_
+                         else f"名额{i + 1}/{body.people_needed}")
+                slot = Task(
+                    creator_id=user.id, parent_id=task.id,
+                    title=f"{task.title} · {label}",
+                    description=task.description, category=task.category,
+                    task_type=task.task_type, required_skills=task.required_skills,
+                    budget_cents=slot_budget, pricing=task.pricing, deposit_cents=task.deposit_cents,
+                    is_remote=task.is_remote, city=task.city, lat=task.lat, lng=task.lng,
+                    address_hint=task.address_hint, address_exact=task.address_exact,
+                    visibility=task.visibility, circle_id=task.circle_id,
+                    work_date=day_, deadline=_day_end_utc(day_) if day_ else None,
+                )
+                db.add(slot)
+                slots.append(slot)
         db.flush()
         for slot in slots:
             service.transition(db, slot, "published")
@@ -255,6 +273,37 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
         service.validate_publishable(task, db, reviewed=True)
         service.transition(db, task, "published")
     return dump_task(task, user)
+
+
+MAX_SLOTS = 50
+START_WITHIN_DAYS = 60
+
+
+def _beijing_today() -> date:
+    return (utcnow() + timedelta(hours=8)).date()
+
+
+def _day_end_utc(d: date) -> datetime:
+    """北京时间那天 23:59:59 对应的 UTC（库里存 UTC）。"""
+    return datetime(d.year, d.month, d.day, 23, 59, 59) - timedelta(hours=8)
+
+
+def _validate_days(body: "TaskIn") -> None:
+    """SCN-107 多天的规则：要写从哪天开始、不能早于今天、不能太远；名额总数有上限；周期任务与多天不同时用。"""
+    if body.days == 1:
+        return
+    if body.start_date is None:
+        raise bad_request("连续几天的活要写从哪天开始（start_date）", "start_date_required")
+    today = _beijing_today()
+    if body.start_date < today:
+        raise bad_request("开始日期不能早于今天", "start_date_in_past")
+    if body.start_date > today + timedelta(days=START_WITHIN_DAYS):
+        raise bad_request(f"开始日期最多提前 {START_WITHIN_DAYS} 天", "start_date_too_far")
+    if body.people_needed * body.days > MAX_SLOTS:
+        raise bad_request(f"人数 × 天数最多 {MAX_SLOTS} 个名额：现在是 {body.people_needed} × {body.days}，"
+                          "请减少人数或天数，或分两次发", "too_many_slots")
+    if body.recurrence != "none":
+        raise bad_request("连续几天与「每周 / 每月重复」不能同时用：选一种", "days_with_recurrence")
 
 
 @router.post("/tasks/{task_id}/publish")

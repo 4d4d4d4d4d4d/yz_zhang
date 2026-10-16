@@ -173,6 +173,22 @@ describe('APP-077 入口', () => {
     expect(body.publish_now).toBe(false);
   });
 
+  it('SCN-107 几个人 × 连续几天：写明会拆成几个名额，请求带 people_needed / days / start_date', async () => {
+    const calls: Call[] = [];
+    const done = jest.fn();
+    render(<PublishScreen client={makeClient({ 'POST /tasks': TASK }, calls)} onDone={done} />);
+    fireEvent.changeText(screen.getByPlaceholderText(/标题/), '快闪店帮手');
+    fireEvent.changeText(screen.getByLabelText('需要几个人'), '5');
+    fireEvent.changeText(screen.getByLabelText('连续几天'), '3');
+    fireEvent.changeText(screen.getByLabelText('从哪天开始'), '2030-01-05');
+    expect(screen.getByText(/会拆成 15 个名额（5 人 × 3 天）/)).toBeTruthy();
+    fireEvent.press(screen.getAllByText(/^○ /)[0]);
+    fireEvent.press(screen.getByText('发布（线上任务）'));
+    await waitFor(() => expect(done).toHaveBeenCalled());
+    const body = calls.find((c) => c.method === 'POST' && c.path === '/tasks')!.body as Record<string, unknown>;
+    expect(body).toMatchObject({ people_needed: 5, days: 3, start_date: '2030-01-05' });
+  });
+
   it('从「不懂就问」来的发布页没有项目选项（那是一单具体的活）', () => {
     render(<PublishScreen client={makeClient({})} onDone={() => {}} category="法律咨询" />);
     expect(screen.queryByText(/要拆开做的项目/)).toBeNull();

@@ -152,7 +152,7 @@ def _run(db, principal, operation, request_key, params, category, exposure, run)
 @router.post('/open/v1/tasks', status_code=201)
 def publish(body: task_api.TaskIn, principal=Depends(require_scope('tasks:write')),
             db: Session = Depends(get_db, scope="function"), idempotency_key: str = Header(default='')):
-    if body.people_needed != 1 or body.recurrence != 'none':
+    if body.people_needed != 1 or body.recurrence != 'none' or body.days != 1:
         raise bad_request('机器授权仅支持单次单名额任务，批量或周期任务需分别授权')
     if body.budget_cents <= 0 or body.deposit_cents < 0:
         raise bad_request('预算必须为正且保证金不能为负')

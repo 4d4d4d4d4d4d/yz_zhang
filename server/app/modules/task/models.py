@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -65,6 +65,10 @@ class Task(Base):
     deposit_cents: Mapped[int] = mapped_column(Integer, default=0)
     # TASK-007 多人任务：>1 时发布生成 N 个名额子任务，本任务成为容器
     people_needed: Mapped[int] = mapped_column(Integer, default=1)
+    # SCN-107（167 号 spec）连续几天：名额 = 人数 × 天数，每个名额是某一天的一个人
+    days: Mapped[int] = mapped_column(Integer, default=1)
+    # 母任务：第一天；名额：这一天（北京时间的日期）
+    work_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     # GEO-021 行程共享（执行者开启后发布者可见最近打卡位置，任务结束即失效）
     trip_share_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
