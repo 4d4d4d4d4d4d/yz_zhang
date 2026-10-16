@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 179 | 验收前提醒上门回报的差距 | [179-visit-shortfall-before-accept.md](./179-visit-shortfall-before-accept.md) | P0 |
 | 178 | 多天名额的每天时段 | [178-daily-shift.md](./178-daily-shift.md) | P0 |
 | 177 | 一个人一次报多天 | [177-apply-several-days.md](./177-apply-several-days.md) | P0 |
 | 176 | 一单多次上门的逐次回报 | [176-visit-reports.md](./176-visit-reports.md) | P0 |

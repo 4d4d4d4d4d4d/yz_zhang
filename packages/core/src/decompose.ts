@@ -1,5 +1,5 @@
 // AI-DEC-040~048 逐层拆解树的共享文案与小工具（106 号 spec）。两端同一份，不各写各的。
-import type { Decomposition, DecompositionNode, ExecutorKind, LeafCriterion, Task, TaskDaySummary } from './types';
+import type { Decomposition, DecompositionNode, ExecutorKind, LeafCriterion, Task, TaskDaySummary, TaskVisits } from './types';
 
 export const EXECUTOR_KIND_LABEL: Record<ExecutorKind, string> = {
   ai_closable: 'AI 可闭环',
@@ -69,4 +69,14 @@ export function shiftLabel(t: Pick<Task, 'shift_start' | 'shift_end' | 'days' | 
   if (!t.shift_start || !t.shift_end) return '';
   const range = `${t.shift_start}–${t.shift_end}`;
   return (t.days ?? 1) > 1 ? `每天 ${range}` : `时段 ${range}`;
+}
+
+/** SCN-125 验收前的一句提醒（179 号 spec）：上门回报比计划少、或有没做的项时说清差多少；都齐了是空串。
+ *  只是提醒，不拦验收——钱的事由发单人自己定。两端同一句。 */
+export function visitShortfall(v: Pick<TaskVisits, 'planned' | 'reported' | 'missed_total'> | null | undefined): string {
+  if (!v) return '';
+  const parts: string[] = [];
+  if (v.reported < v.planned) parts.push(`计划上门 ${v.planned} 次，回报了 ${v.reported} 次`);
+  if (v.missed_total > 0) parts.push(`回报里一共有 ${v.missed_total} 项没做`);
+  return parts.length ? `${parts.join('；')}。验收前可以先问问接单的人。` : '';
 }

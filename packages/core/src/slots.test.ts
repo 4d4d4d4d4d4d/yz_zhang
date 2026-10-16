@@ -1,6 +1,6 @@
 // SCN-116 多天名额按天汇总的那句话（174 号 spec）：两端同一份。
 import { describe, expect, it } from 'vitest';
-import { daySummaryLine, daysStillShort, hasChildTasks, shiftLabel } from './decompose';
+import { daySummaryLine, daysStillShort, hasChildTasks, shiftLabel, visitShortfall } from './decompose';
 
 const d = (date: string, slots: number, filled: number, open: number, done = 0, closed = 0) =>
   ({ date, slots, filled, open, done, closed });
@@ -32,5 +32,15 @@ describe('SCN-116 多天名额按天汇总', () => {
     expect(shiftLabel({ shift_start: '09:00', shift_end: '18:30', days: 1, parent_id: 5 })).toBe('时段 09:00–18:30');
     expect(shiftLabel({ shift_start: '', shift_end: '', days: 3, parent_id: null })).toBe('');
     expect(shiftLabel({ parent_id: null })).toBe('');
+  });
+
+  it('SCN-125 验收前提醒：少回报、有漏项才说；都齐了或没计划是空串', () => {
+    expect(visitShortfall({ planned: 14, reported: 12, missed_total: 3 }))
+      .toBe('计划上门 14 次，回报了 12 次；回报里一共有 3 项没做。验收前可以先问问接单的人。');
+    expect(visitShortfall({ planned: 14, reported: 14, missed_total: 1 })).toBe('回报里一共有 1 项没做。验收前可以先问问接单的人。');
+    expect(visitShortfall({ planned: 14, reported: 14, missed_total: 0 })).toBe('');
+    expect(visitShortfall({ planned: 0, reported: 2, missed_total: 0 })).toBe('');
+    expect(visitShortfall({ planned: 3, reported: 5, missed_total: 0 })).toBe('');
+    expect(visitShortfall(null)).toBe('');
   });
 });

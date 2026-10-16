@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, daySummaryLine, daysStillShort, describeChangeOrder, hasChildTasks, shiftLabel, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, daySummaryLine, daysStillShort, describeChangeOrder, hasChildTasks, shiftLabel, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -118,7 +118,12 @@ export default function TaskDetail() {
           )}
           {task.status === 'pending_acceptance' && isCreator && (
             <>
-              <button onClick={() => {
+              <button onClick={async () => {
+                // SCN-125（179 号 spec）上门回报比计划少或有漏项：先说清差多少，不拦（钱的事由发单人定）
+                if ((task.visits_planned ?? 0) > 0 || (task.visit_checklist ?? []).length > 0) {
+                  const warn = visitShortfall(await client.taskVisits(taskId).catch(() => null));
+                  if (warn && !confirm(`${warn}\n\n仍然验收通过（放款）？`)) return;
+                }
                 // SC-013 整单验收会放掉**剩余全部**期（服务端如此设计，93 号 spec）。
                 // 发布方当初定分期，正是为了不一次付完——在一个只写
                 // 「验收通过（放款）」的按钮上一次放光，他失去的是自己设的那道保护。
@@ -489,6 +494,10 @@ function VisitsPanel({ task, isExecutor }: { task: Task; isExecutor: boolean }) 
     <div className="card" aria-label="上门回报">
       <h3>上门回报{data ? ` · ${data.reported}${data.planned ? `/${data.planned}` : ''} 次` : ''}</h3>
       {data && data.missed_total > 0 && <p className="error">一共有 {data.missed_total} 项没做（见下面每次的记录）</p>}
+      {/* SCN-125 发单人验收前看一眼差多少 */}
+      {!isExecutor && task.status === 'pending_acceptance' && visitShortfall(data) && (
+        <p className="error" aria-label="验收前提醒">{visitShortfall(data)}</p>
+      )}
       {data && Array.isArray(data.visits) && data.visits.map((v) => (
         <div key={v.id} className="task-item">
           <span>第 {v.n} 次 · {formatDateTime(v.created_at)}</span>

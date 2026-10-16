@@ -6,7 +6,7 @@ import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, shiftLabel, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, shiftLabel, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { isSandbox, loadSandbox } from './sandboxState';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
@@ -385,6 +385,8 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
   const [decomposing, setDecomposing] = useState(false);
   const [contract, setContract] = useState<Contract | null>(null);
   const [confirmRelease, setConfirmRelease] = useState(false);
+  // SCN-125（179 号 spec）验收前上门回报的差距：第一下拿差距摊开，第二下才验收
+  const [visitWarn, setVisitWarn] = useState('');
   const [apps, setApps] = useState<ApplicationRow[]>([]);
   const meId = me?.id ?? null;
 
@@ -558,8 +560,22 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
             </View>
           );
         }
-        return <Button title="验收通过（放款）"
-                       onPress={() => act(() => client.acceptDelivery(task.id))} />;
+        if (visitWarn) {
+          return (
+            <View style={{ gap: 6 }} accessibilityLabel="验收前提醒">
+              <Text style={styles.mutedLeft}>{visitWarn}</Text>
+              <Button title="仍然验收通过（放款）" onPress={() => act(() => client.acceptDelivery(task.id))} />
+            </View>
+          );
+        }
+        return <Button title="验收通过（放款）" onPress={async () => {
+          // SCN-125 上门回报比计划少或有漏项：先说清差多少，不拦（钱的事由发单人定）
+          if (hasVisits(task)) {
+            const warn = visitShortfall(await client.taskVisits(task.id).catch(() => null));
+            if (warn) { setVisitWarn(warn); return; }
+          }
+          await act(() => client.acceptDelivery(task.id));
+        }} />;
       })()}
       {actions.includes('reject_delivery') && (
         <Button title="驳回返工" onPress={() => act(() => client.rejectDelivery(task.id, '不符合要求，请修改'))} />
@@ -825,8 +841,11 @@ function DisputeBlock({ client, taskId, meId }: {
     try {
       // DSPR-012 被诉方只知道任务 id——他收到的通知就只说「任务 #N 有纠纷」
       const d = await client.disputeByTask(taskId);
+      // 响应不像一条纠纷时当作没有（与子任务进度、驾驶舱同一条：一块出错不许把详情页带崩）
+      if (!d || typeof d.id !== 'number') { setDispute(null); return; }
       setDispute(d);
-      setStatements(await client.disputeStatements(d.id));
+      const st = await client.disputeStatements(d.id);
+      setStatements(Array.isArray(st) ? st : []);
     } catch {
       setDispute(null);
     }
