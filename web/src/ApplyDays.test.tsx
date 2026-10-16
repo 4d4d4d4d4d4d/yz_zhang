@@ -11,7 +11,8 @@ const ME = { id: 2, phone: '138****0002', nickname: '帮手', bio: '', city: '�
 type Call = { method: string; path: string; body?: unknown };
 const BASE = { description: '', category: '跑腿', budget_cents: 10000, is_remote: false, city: '上海', address_hint: '', address_exact: '',
   task_type: 'service', pricing: 'fixed', bonus_cents: 0, ip_assignment: 'assign', deposit_status: 'none', executor_id: null };
-const PARENT = { ...BASE, id: 30, title: '快闪店帮手', status: 'published', creator_id: 9, parent_id: null, days: 3, people_needed: 2, work_date: '2030-01-05' };
+const PARENT = { ...BASE, id: 30, title: '快闪店帮手', status: 'published', creator_id: 9, parent_id: null, days: 3, people_needed: 2, work_date: '2030-01-05',
+  shift_start: '09:00', shift_end: '18:30' };
 const SLOT = { ...BASE, id: 31, title: '快闪店帮手 · 第1天', status: 'published', creator_id: 9, parent_id: 30, days: 1, work_date: '2030-01-05' };
 const TREE = { parent_id: 30, parent_status: 'published', progress_pct: 0, all_children_completed: false,
   children: [{ id: 31, title: '名额 31', status: 'published', budget_cents: 1666, depends_on: [], executor_id: null, work_date: '2030-01-05' }],
@@ -47,6 +48,8 @@ describe('SCN-118 一次报多天', () => {
     await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks/30/apply-days')?.body).toEqual(
       { dates: ['2030-01-06', '2030-01-07'], message: '' }));
     await waitFor(() => expect(box.textContent).toContain('已报：01-06；没报：01-07（这一天你已经报过了）'));
+    // SCN-117 每天的时段写在详情上
+    expect(screen.getByLabelText('时段').textContent).toContain('每天 09:00–18:30');
   });
 
   it('发单人自己看不到「一次报多天」', async () => {

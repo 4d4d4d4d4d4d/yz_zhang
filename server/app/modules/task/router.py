@@ -1,3 +1,4 @@
+import re
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
@@ -50,6 +51,9 @@ class TaskIn(BaseModel):
     # SCN-107（167 号 spec）连续几天、从哪天开始（北京时间的日期）。名额 = 人数 × 天数，最多 50 个
     days: int = Field(default=1, ge=1, le=14)
     start_date: date | None = None
+    # SCN-117（178 号 spec）每天几点到几点（北京时间 HH:MM）；两个一起写或都不写
+    shift_start: str = Field(default="", max_length=8)   # 可带首尾空白，去掉后存 HH:MM
+    shift_end: str = Field(default="", max_length=8)
     # AGT-030 结构化验收标准。auto 项由平台判定，不由执行方自报。
     acceptance_criteria: list[dict] = []
     # IPC-001 **无默认值**：不选不让发。替当事人猜归属是这条最容易犯的错。
@@ -145,6 +149,8 @@ def dump_task(task: Task, viewer: User | None = None) -> dict:
         "recurrence": task.recurrence,
         # SCN-107（167 号 spec）
         "days": task.days or 1, "work_date": day(task.work_date) if task.work_date else None,
+        # SCN-117 每天几点到几点（北京时间）
+        "shift_start": task.shift_start or "", "shift_end": task.shift_end or "",
         # SCN-116（174 号 spec）：几个人（TASK-007 早就存了、没给出去）；客户端据此知道这是装名额的母任务
         "people_needed": task.people_needed or 1,
         # SCN-119 替别人发单：谁都看得到「这是替别人发的」；服务对象的称呼与在场联系方式只给成交双方
@@ -271,6 +277,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
         if not body.circle_id or not active_member(db, body.circle_id, user.id):
             raise forbidden("需先加入该圈层", "not_circle_member")
     _validate_days(body)
+    _validate_shift(body)
     _validate_on_behalf(body)
     _validate_visits(body)
     multi = body.people_needed > 1 or body.days > 1
@@ -305,7 +312,8 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
             for i in range(body.people_needed):
                 last = d == body.days - 1 and i == body.people_needed - 1
                 slot_budget = per_slot + (remainder if last else 0)
-                label = (f"第{d + 1}天（{day_.month:02d}-{day_.day:02d}）· 名额{i + 1}/{body.people_needed}" if day_
+                shift = f" {task.shift_start}–{task.shift_end}" if task.shift_start else ""
+                label = (f"第{d + 1}天（{day_.month:02d}-{day_.day:02d}{shift}）· 名额{i + 1}/{body.people_needed}" if day_
                          else f"名额{i + 1}/{body.people_needed}")
                 slot = Task(
                     creator_id=user.id, parent_id=task.id,
@@ -320,6 +328,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
                     visits_planned=task.visits_planned, visit_checklist=task.visit_checklist,
                     visibility=task.visibility, circle_id=task.circle_id,
                     work_date=day_, deadline=_day_end_utc(day_) if day_ else None,
+                    shift_start=task.shift_start, shift_end=task.shift_end,
                 )
                 db.add(slot)
                 slots.append(slot)
@@ -346,6 +355,22 @@ def _beijing_today() -> date:
 def _day_end_utc(d: date) -> datetime:
     """北京时间那天 23:59:59 对应的 UTC（库里存 UTC）。"""
     return datetime(d.year, d.month, d.day, 23, 59, 59) - timedelta(hours=8)
+
+
+def _validate_shift(body: "TaskIn") -> None:
+    """SCN-117 每天的时段：两个一起写、格式 HH:MM、结束晚于开始（不跨夜：夜班拆成两天写）。"""
+    s, e = body.shift_start.strip(), body.shift_end.strip()
+    if not s and not e:
+        body.shift_start = body.shift_end = ""
+        return
+    if not s or not e:
+        raise bad_request("每天的时段要把开始和结束一起写（例如 09:00 到 18:00），或者都不写", "shift_incomplete")
+    pat = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
+    if not pat.fullmatch(s) or not pat.fullmatch(e):
+        raise bad_request("时间按 24 小时制写成 HH:MM（例如 09:00、18:30）", "shift_invalid")
+    if e <= s:
+        raise bad_request("结束时间要晚于开始时间；跨夜的班请拆成两天写", "shift_order")
+    body.shift_start, body.shift_end = s, e
 
 
 def _validate_days(body: "TaskIn") -> None:

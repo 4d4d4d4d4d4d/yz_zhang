@@ -69,6 +69,9 @@ class Task(Base):
     days: Mapped[int] = mapped_column(Integer, default=1)
     # 母任务：第一天；名额：这一天（北京时间的日期）
     work_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # SCN-117（178 号 spec）每天几点到几点（北京时间 HH:MM，不跨夜）；空表示没写
+    shift_start: Mapped[str] = mapped_column(String(5), default="")
+    shift_end: Mapped[str] = mapped_column(String(5), default="")
     # GEO-021 行程共享（执行者开启后发布者可见最近打卡位置，任务结束即失效）
     trip_share_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 

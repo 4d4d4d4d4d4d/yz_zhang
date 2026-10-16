@@ -63,3 +63,10 @@ export function hasChildTasks(t: Pick<Task, 'parent_id' | 'task_type' | 'days' |
   if (t.parent_id !== null) return false;
   return t.task_type === 'project' || (t.days ?? 1) > 1 || (t.people_needed ?? 1) > 1;
 }
+
+/** SCN-117 每天的时段一句话（178 号 spec）：多天的写「每天」，单天的只写时段；没写是空串。两端同一句。 */
+export function shiftLabel(t: Pick<Task, 'shift_start' | 'shift_end' | 'days' | 'parent_id' | 'work_date'>): string {
+  if (!t.shift_start || !t.shift_end) return '';
+  const range = `${t.shift_start}–${t.shift_end}`;
+  return (t.days ?? 1) > 1 ? `每天 ${range}` : `时段 ${range}`;
+}

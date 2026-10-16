@@ -266,6 +266,9 @@ export interface Task {
   days?: number;
   /** 母任务：第一天；名额：这一天（北京时间的日期 YYYY-MM-DD） */
   work_date?: string | null;
+  /** SCN-117（178 号 spec）每天几点到几点（北京时间 HH:MM；没写是空串） */
+  shift_start?: string;
+  shift_end?: string;
   /** SCN-116（174 号 spec）几个人（TASK-007）；大于 1 或分天的根任务是装名额的母任务 */
   people_needed?: number;
   /** SCN-119（175 号 spec）替别人发的单：谁都看得到这一项 */
@@ -346,6 +349,9 @@ export interface TaskCreateInput {
   /** SCN-107 连续几天（名额 = 人数 × 天数，最多 50）；大于 1 时必须给 start_date */
   days?: number;
   start_date?: string | null;
+  /** SCN-117 每天几点到几点（北京时间 HH:MM，两个一起写，不跨夜） */
+  shift_start?: string;
+  shift_end?: string;
   /** SCN-119 替别人发单：勾了就必须写称呼并确认问过本人；没勾时这几项不要带 */
   on_behalf?: boolean;
   recipient_label?: string;

@@ -19,7 +19,7 @@ export default function Publish() {
     // 默认值把它发成了「保洁 · 上海」。带着参数来的（补救入口、模板）照用参数
     category: params.get('category') || '', budget_yuan: '200',
     task_type: 'service', pricing: 'fixed', recurrence: 'none',
-    people_needed: '1', days: '1', start_date: '', deposit_yuan: '0', is_remote: false, city: params.get('city') || '',
+    people_needed: '1', days: '1', start_date: '', shift_start: '', shift_end: '', deposit_yuan: '0', is_remote: false, city: params.get('city') || '',
     lat: '31.2304', lng: '121.4737', address_hint: '', address_exact: '',
     // SCN-119（175 号 spec）替别人发单：替谁、到场联系谁、问过本人没有
     on_behalf: false, recipient_label: '', onsite_contact: '', recipient_consented: false,
@@ -95,6 +95,8 @@ export default function Publish() {
         people_needed: parseInt(form.people_needed, 10) || 1,
         // SCN-107（167 号 spec）连续几天：名额 = 人数 × 天数
         ...((parseInt(form.days, 10) || 1) > 1 ? { days: parseInt(form.days, 10), start_date: form.start_date || null } : {}),
+        // SCN-117（178 号 spec）每天几点到几点：写了才带（只写一头时服务端会说清）
+        ...(form.shift_start || form.shift_end ? { shift_start: form.shift_start, shift_end: form.shift_end } : {}),
         deposit_cents: Math.round(parseFloat(form.deposit_yuan || '0') * 100),
         ip_assignment: form.ip_assignment as IpAssignment,
         budget_cents: Math.round(parseFloat(form.budget_yuan) * 100),
@@ -211,6 +213,13 @@ export default function Publish() {
             </label>
             <label className="grow">连续几天（&gt;1 按天拆名额）
               <input type="number" aria-label="连续几天" min={1} max={14} value={form.days} onChange={(e) => set('days', e.target.value)} />
+            </label>
+            {/* SCN-117 每天几点到几点（北京时间） */}
+            <label className="grow">每天从
+              <input type="time" aria-label="每天几点开始" value={form.shift_start} onChange={(e) => set('shift_start', e.target.value)} />
+            </label>
+            <label className="grow">到
+              <input type="time" aria-label="每天几点结束" value={form.shift_end} onChange={(e) => set('shift_end', e.target.value)} />
             </label>
             {(parseInt(form.days, 10) || 1) > 1 && (
               <label className="grow">从哪天开始

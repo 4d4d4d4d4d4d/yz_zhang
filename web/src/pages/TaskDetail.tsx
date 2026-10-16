@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, daySummaryLine, daysStillShort, describeChangeOrder, hasChildTasks, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, daySummaryLine, daysStillShort, describeChangeOrder, hasChildTasks, shiftLabel, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -92,6 +92,8 @@ export default function TaskDetail() {
         </p>
         {task.description && <p style={{ marginTop: 8 }}>{task.description}</p>}
         {task.address_exact && <p className="muted">📍 详细地址（当事人可见）：{task.address_exact}</p>}
+        {/* SCN-117 每天几点到几点 */}
+        {shiftLabel(task) && <p className="muted" aria-label="时段">🕘 {shiftLabel(task)}（北京时间）</p>}
         {/* SCN-118 名额是某一天的：回到整单，一次报多天 */}
         {task.parent_id !== null && task.work_date && (task.status === 'published') && (
           <p><Link to={`/tasks/${task.parent_id}`}>这单一共好几天：回到整单，一次报多天 →</Link></p>

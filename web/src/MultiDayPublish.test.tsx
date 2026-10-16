@@ -47,4 +47,18 @@ describe('SCN-107 连续几天的活', () => {
     const body = calls.find((c) => c.method === 'POST' && c.path === '/tasks')!.body as Record<string, unknown>;
     expect('days' in body).toBe(false);
   });
+
+  it('SCN-117 每天几点到几点：写了就带进请求', async () => {
+    const calls: Call[] = [];
+    open(calls);
+    await screen.findByDisplayValue('快闪店帮手');
+    fireEvent.change(screen.getByLabelText('连续几天'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('从哪天开始'), { target: { value: '2030-01-05' } });
+    fireEvent.change(screen.getByLabelText('每天几点开始'), { target: { value: '09:00' } });
+    fireEvent.change(screen.getByLabelText('每天几点结束'), { target: { value: '18:30' } });
+    fireEvent.change(screen.getByDisplayValue('— 请选择 —'), { target: { value: 'assign' } });
+    fireEvent.submit(screen.getByLabelText('连续几天').closest('form')!);
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks')?.body).toMatchObject(
+      { days: 2, shift_start: '09:00', shift_end: '18:30' }));
+  });
 });

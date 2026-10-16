@@ -357,6 +357,10 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   // SCN-118 一次报多天（177 号 spec）
   not_multi_day: '这不是一单多天的活：直接在名额上报名',
   no_day_available: '选的这几天都报不了：换几天，或看看哪天还缺人',
+  // SCN-117 每天的时段（178 号 spec）
+  shift_incomplete: '每天的时段要把开始和结束一起写（例如 09:00 到 18:00），或者都不写',
+  shift_invalid: '时间按 24 小时制写成 HH:MM（例如 09:00、18:30）',
+  shift_order: '结束时间要晚于开始时间；跨夜的班请拆成两天写',
   days_with_recurrence: '连续几天与「每周 / 每月重复」不能同时用：选一种',
   handover_to_self: '接手人不能是被移出的人自己',
   handover_not_member: '接手人必须是这个团队里的在职成员',
