@@ -346,6 +346,8 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   start_date_too_far: '开始日期最多提前 60 天',
   too_many_slots: '人数 × 天数最多 50 个名额：请减少人数或天数，或分两次发',
   days_with_recurrence: '连续几天与「每周 / 每月重复」不能同时用：选一种',
+  handover_to_self: '接手人不能是被移出的人自己',
+  handover_not_member: '接手人必须是这个团队里的在职成员',
   pack_placeholder_left: '还有起草时留的「【待填写】」没填：把回答与出处写完再提交审核',
   xapp_grant_inactive: '这个授权已撤销或过期：请在「跨 App 助手」页重新授权',
   xapp_bad_app: '目标 App 要写包名或应用标识（例如 com.autonavi.minimap），至少一个',

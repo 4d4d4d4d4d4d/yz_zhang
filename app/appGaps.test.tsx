@@ -98,4 +98,15 @@ describe('APP-090 App 补齐', () => {
     expect(screen.getByText('只有团队所有者能管理成员。')).toBeTruthy();
     expect(screen.queryByText('加入团队')).toBeNull();
   });
+
+  it('TEAM-054 移出后交接说明单独一行：哪些在途任务要跟进', async () => {
+    const client = makeClient({ 'DELETE /teams/9/members/5': { removed: 5, closed_requests: [], handover_to: 2,
+      in_flight_tasks: [{ task_id: 11, spend_id: 6, title: '展会搭建', status: 'in_progress', amount_cents: 5000 }] } }, []);
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => { buttons?.[1]?.onPress?.(); });
+    render(<TeamMembersBlock client={client} teamId={9} team={TEAM} onChanged={() => {}} />);
+    fireEvent.press(screen.getByLabelText('移出：小林'));
+    expect(await screen.findByText('已移出')).toBeTruthy();
+    expect(screen.getByLabelText('移出交接').props.children).toBe('1 个在途任务要跟进（合约仍由原成员履行）：《展会搭建》');
+    alert.mockRestore();
+  });
 });

@@ -1462,6 +1462,30 @@ export interface MyTicket {
   replies: TicketReplyItem[];
 }
 
+/** TEAM-054（170 号 spec）移出成员时的交接结果 */
+export interface TeamHandoverTask {
+  task_id: number;
+  spend_id: number;
+  title: string;
+  status: string;
+  amount_cents: number;
+}
+export interface TeamMemberRemoved {
+  removed: number;
+  closed_requests: number[];
+  in_flight_tasks: TeamHandoverTask[];
+  handover_to: number;
+}
+
+/** 移出后给操作人看的交接说明（两端同一句）；老服务端没有这些字段时返回空串 */
+export function teamHandoverDetail(r: Partial<TeamMemberRemoved>): string {
+  const closed = r.closed_requests ?? [];
+  const tasks = r.in_flight_tasks ?? [];
+  if (!r.closed_requests && !r.in_flight_tasks) return '';
+  return (closed.length ? `关掉了 ${closed.length} 个没执行的支出申请；` : '')
+    + (tasks.length ? `${tasks.length} 个在途任务要跟进（合约仍由原成员履行）：${tasks.map((t) => `《${t.title}》`).join('、')}` : '没有在途任务');
+}
+
 /** ESCA-056（166 号 spec）提单人追加回复后的工单；已结 7 天内追加会重新打开 */
 export interface MyTicketReplied extends MyTicket {
   reopened: boolean;

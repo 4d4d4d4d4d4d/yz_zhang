@@ -178,18 +178,29 @@ def patch_member(team_id: int, member_user_id: int, body: MemberPatch,
 
 
 @router.delete("/{team_id}/members/{member_user_id}")
-def remove_member(team_id: int, member_user_id: int,
+def remove_member(team_id: int, member_user_id: int, handover_to: int | None = None,
                   user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
-    _get(db, team_id)
+    """移出成员。TEAM-054（170 号 spec）同时交接：他还没执行的支出申请当场关掉（移出后不能再用团队的钱）；
+    用团队的钱发的、还没做完的任务列成清单，交给接手人（默认操作的 owner），并告诉离开的人哪些仍要他收尾。
+
+    合约不转：签约的是他本人，换签约主体要双方重新签，不能由团队一方悄悄换掉（TEAM-069）。"""
+    team = _get(db, team_id)
     service.require_role(db, team_id, user.id, "owner")
     m = service.member_of(db, team_id, member_user_id)
     if not m:
         raise not_found("成员不存在")
     if m.role == "owner":
         raise bad_request("不能移出 owner", "owner_immutable")
+    taker_id = handover_to or user.id
+    if taker_id == member_user_id:
+        raise bad_request("接手人不能是被移出的人自己", "handover_to_self")
+    if handover_to is not None:
+        taker = service.member_of(db, team_id, handover_to)
+        if not taker or not taker.active:
+            raise bad_request("接手人必须是这个团队里的在职成员", "handover_not_member")
     m.active = False
     db.add(m)
-    return {"removed": member_user_id}
+    return {"removed": member_user_id, **service.hand_over(db, team, member_user_id, taker_id, user.id)}
 
 
 # ------------------------------------------------------------------- 支出与审批

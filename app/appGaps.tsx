@@ -1,6 +1,6 @@
 // APP-090 App 补齐（136 号 spec）：平台服务费发票、纠纷证据包导出、团队成员管理（TEAM-065）。
 // 三件事 Web 上早就有（或者两端都没有），App 上没有入口——用户在手机上做不完一件事。
-import { apiErrorText, fmtYuan, formatDate, type InvoiceRow, type PlatformClient, type TeamDetail } from '@platform/core';
+import { apiErrorText, fmtYuan, formatDate, teamHandoverDetail, type InvoiceRow, type PlatformClient, type TeamDetail } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { TeamInviteLinkBlock } from './teamInvites';
@@ -64,11 +64,13 @@ export function TeamMembersBlock({ client, teamId, team, onChanged }: { client: 
   const [userId, setUserId] = useState('');
   const [limit, setLimit] = useState('0');
   const [notice, setNotice] = useState('');
+  // TEAM-054（170 号 spec）移出后的交接说明（单独一行，「已移出」照旧）
+  const [handover, setHandover] = useState('');
   const [error, setError] = useState('');
   const owner = team.my_role === 'owner';
   async function act(fn: () => Promise<unknown>, done: string) {
     setError(''); setNotice('');
-    try { await fn(); setNotice(done); onChanged(); } catch (e) { setError(apiErrorText(e)); }
+    try { await fn(); if (done) setNotice(done); onChanged(); } catch (e) { setError(apiErrorText(e)); }
   }
   return (
     <View style={s.card} accessibilityLabel="团队成员">
@@ -84,7 +86,7 @@ export function TeamMembersBlock({ client, teamId, team, onChanged }: { client: 
               </TouchableOpacity>
               <TouchableOpacity accessibilityLabel={`移出：${m.nickname || m.user_id}`} onPress={() => Alert.alert('移出成员', '移出后对方不能再用团队的钱。', [
                 { text: '不移出', style: 'cancel' },
-                { text: '移出', style: 'destructive', onPress: () => void act(() => client.removeTeamMember(teamId, m.user_id), '已移出') },
+                { text: '移出', style: 'destructive', onPress: () => void act(async () => setHandover(teamHandoverDetail(await client.removeTeamMember(teamId, m.user_id))), '已移出') },
               ])}>
                 <Text style={s.error}>移出</Text>
               </TouchableOpacity>
@@ -105,6 +107,7 @@ export function TeamMembersBlock({ client, teamId, team, onChanged }: { client: 
       )}
       {!owner && <Text style={s.muted}>只有团队所有者能管理成员。</Text>}
       {!!notice && <Text accessibilityRole="alert">{notice}</Text>}
+      {!!handover && <Text style={s.muted} accessibilityLabel="移出交接">{handover}</Text>}
       {!!error && <Text style={s.error}>{error}</Text>}
     </View>
   );

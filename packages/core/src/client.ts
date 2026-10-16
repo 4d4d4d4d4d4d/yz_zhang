@@ -103,7 +103,7 @@ import type {
   AnnouncementRevoked,
   AnnouncementRow,
   AnnouncementSent,
-  MyTicket, MyTicketReplied,
+  MyTicket, MyTicketReplied, TeamMemberRemoved,
   TicketClaimed,
   TicketReplied,
   SecurityBoardView,
@@ -1973,8 +1973,10 @@ export class PlatformClient {
       'PATCH', `/teams/${teamId}/members/${memberUserId}`, patch,
     );
   }
-  removeTeamMember(teamId: number, memberUserId: number) {
-    return this.request<{ removed: number }>('DELETE', `/teams/${teamId}/members/${memberUserId}`);
+  /** TEAM-054（170 号 spec）移出时交接：没执行的申请关掉，在途任务清单交给接手人（不填就是操作的 owner） */
+  removeTeamMember(teamId: number, memberUserId: number, handoverTo?: number) {
+    const qs = handoverTo ? `?handover_to=${handoverTo}` : '';
+    return this.request<TeamMemberRemoved>('DELETE', `/teams/${teamId}/members/${memberUserId}${qs}`);
   }
   /** 超出个人额度时服务端返回 `needed_approval`，不是直接失败——
    *  申请已经建好了，等的是审批。 */

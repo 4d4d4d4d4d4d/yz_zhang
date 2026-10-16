@@ -15,12 +15,13 @@ const TEAM = (role: string) => ({
 });
 type Call = { method: string; path: string; body?: unknown };
 
-function open(role: string, calls: Call[] = []) {
+function open(role: string, calls: Call[] = [], extra: Record<string, unknown> = {}) {
   localStorage.setItem('token', 'tok');
   const routes: Record<string, unknown> = {
     '/users/me': ME, '/teams/mine': [{ ...TEAM(role), my_role: role, my_spend_limit_cents: 0 }], '/teams/9': TEAM(role), '/teams/9/spends': [],
     'POST /teams/9/members': { team_id: 9, user_id: 7, role: 'member', spend_limit_cents: 30000 },
     'DELETE /teams/9/members/5': { removed: 5 },
+    ...extra,
   };
   const fetchImpl = vi.fn(async (url: string, init?: { method?: string; body?: string }) => {
     const p = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
@@ -51,6 +52,17 @@ describe('TEAM-065 团队成员', () => {
       ['POST', '/teams/9/members', { user_id: 7, role: 'member', spend_limit_cents: 30000 }],
       ['DELETE', '/teams/9/members/5', undefined],
     ]));
+  });
+
+  it('TEAM-054 移出时把交接说清：关掉几个申请、哪些在途任务要跟进', async () => {
+    open('owner', [], { 'DELETE /teams/9/members/5': { removed: 5, closed_requests: [3, 4], handover_to: 2,
+      in_flight_tasks: [{ task_id: 11, spend_id: 6, title: '展会搭建', status: 'in_progress', amount_cents: 5000 }] } });
+    fireEvent.click(await screen.findByText('打开'));
+    await screen.findByLabelText('团队成员');
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: '移出' }));
+    await screen.findByText('已移出');
+    expect((await screen.findByTestId('team-handover')).textContent).toBe('关掉了 2 个没执行的支出申请；1 个在途任务要跟进（合约仍由原成员履行）：《展会搭建》');
   });
 
   it('不是所有者：只能看', async () => {

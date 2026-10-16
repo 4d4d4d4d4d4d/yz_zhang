@@ -358,3 +358,37 @@ def can_invoice(team: Team) -> str:
     if not team.company_name or not team.tax_number:
         return "缺少企业名称或税号"
     return ""
+
+
+# ------------------------------------------------------------------ TEAM-054 成员离开时的交接（170 号 spec）
+OPEN_TASK_STATUSES = ("draft", "published", "matched", "in_progress", "pending_acceptance", "disputed")
+
+
+def hand_over(db: Session, team: Team, member_id: int, taker_id: int, actor_id: int) -> dict:
+    """关掉他没执行的支出申请；列出用团队的钱发的、还没做完的任务；通知接手人与离开的人。"""
+    from app.modules.notification.service import notify
+    from app.modules.task.models import Task
+
+    now = utcnow()
+    closed = []
+    for r in (db.query(SpendRequest).filter(SpendRequest.team_id == team.user_id, SpendRequest.requester_id == member_id,
+                                            SpendRequest.status.in_(("pending", "approved"))).all()):
+        r.status, r.decided_at = "expired", now
+        r.decision_reason = (r.decision_reason + "；" if r.decision_reason else "") + "发起人已移出团队，申请自动关闭"
+        db.add(r)
+        closed.append(r.id)
+    spends = (db.query(SpendRequest).filter(SpendRequest.team_id == team.user_id, SpendRequest.requester_id == member_id,
+                                            SpendRequest.status == "executed", SpendRequest.task_id.isnot(None)).all())
+    tasks = {t.id: t for t in db.query(Task).filter(Task.id.in_([r.task_id for r in spends])).all()} if spends else {}
+    in_flight = [{"task_id": r.task_id, "spend_id": r.id, "title": tasks[r.task_id].title,
+                  "status": tasks[r.task_id].status, "amount_cents": r.amount_cents}
+                 for r in spends if r.task_id in tasks and tasks[r.task_id].status in OPEN_TASK_STATUSES]
+    lines = "；".join(f"#{x['task_id']}《{x['title']}》（{x['status']}）" for x in in_flight[:10])
+    if in_flight:
+        notify(db, taker_id, "system", f"团队「{team.name}」有成员离开，{len(in_flight)} 个在途任务交给你跟进",
+               lines + "。合约仍由原成员履行：请与他确认收尾，或在任务里协商取消。")
+    notify(db, member_id, "system", f"你已离开团队「{team.name}」",
+           ("以下用团队的钱发的任务仍由你负责完成或协商取消：" + lines) if in_flight
+           else "你不能再使用团队的钱；没执行的支出申请已自动关闭。")
+    db.flush()
+    return {"closed_requests": closed, "in_flight_tasks": in_flight, "handover_to": taker_id}

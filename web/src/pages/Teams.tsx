@@ -1,5 +1,5 @@
 import {
-  apiErrorText, fmtYuan,
+  apiErrorText, fmtYuan, teamHandoverDetail,
   type SpendRequestView, type TeamDetail, type TeamInviteLink, type TeamView,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -202,11 +202,13 @@ function TeamMembers({ teamId, team, onChanged }: { teamId: number; team: TeamDe
   const [userId, setUserId] = useState('');
   const [limit, setLimit] = useState('0');
   const [notice, setNotice] = useState('');
+  // TEAM-054（170 号 spec）移出后的交接说明（单独一行，「已移出」照旧）
+  const [handover, setHandover] = useState('');
   const [error, setError] = useState('');
   const owner = team.my_role === 'owner';
   async function act(fn: () => Promise<unknown>, done: string) {
-    setError(''); setNotice('');
-    try { await fn(); setNotice(done); onChanged(); } catch (e) { setError(apiErrorText(e)); }
+    setError(''); setNotice(''); setHandover('');
+    try { await fn(); if (done) setNotice(done); onChanged(); } catch (e) { setError(apiErrorText(e)); }
   }
   const ROLE: Record<string, string> = { owner: '所有者', admin: '管理员', member: '成员' };
   return (
@@ -228,7 +230,7 @@ function TeamMembers({ teamId, team, onChanged }: { teamId: number; team: TeamDe
                   if (yuan !== null) void act(() => client.updateTeamMember(teamId, m.user_id, { spend_limit_cents: Math.round(parseFloat(yuan || '0') * 100) }), '额度已更新');
                 }}>改额度</button>
                 {' '}<button className="text-link" onClick={() => {
-                  if (window.confirm(`把 ${m.nickname || m.user_id} 移出团队？移出后对方不能再用团队的钱。`)) void act(() => client.removeTeamMember(teamId, m.user_id), '已移出');
+                  if (window.confirm(`把 ${m.nickname || m.user_id} 移出团队？移出后对方不能再用团队的钱。`)) void act(async () => setHandover(teamHandoverDetail(await client.removeTeamMember(teamId, m.user_id))), '已移出');
                 }}>移出</button>
               </>}</td>}
             </tr>
@@ -246,6 +248,7 @@ function TeamMembers({ teamId, team, onChanged }: { teamId: number; team: TeamDe
         </div>
       ) : <p className="muted">只有团队所有者能管理成员。</p>}
       {notice && <p role="status">{notice}</p>}
+      {handover && <p className="muted" data-testid="team-handover">{handover}</p>}
       {error && <p className="error">{error}</p>}
       {owner && <InviteLinks teamId={teamId} />}
     </div>
