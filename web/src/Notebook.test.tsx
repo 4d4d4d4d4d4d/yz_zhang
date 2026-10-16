@@ -120,6 +120,19 @@ describe('KB-100 个人知识库', () => {
     await waitFor(() => expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ name: '月度报税流程' }));
   });
 
+  it('AGT-095 我的方法写明编排用得怎么样；做完的少就不给成功率', async () => {
+    const base = { description: '', steps: [{ title: '打包', note: '' }], source_note_ids: [], uses: 3, created_at: '', updated_at: '' };
+    const rows = [
+      { ...base, id: 7, name: '搬家做法', missions_total: 4, missions_succeeded: 3, missions_failed: 1, missions_spent_cents: 36000, success_rate: 0.75 },
+      { ...base, id: 8, name: '报税流程', missions_total: 1, missions_succeeded: 1, missions_failed: 0, missions_spent_cents: 5000, success_rate: null },
+      { ...base, id: 9, name: '没用过的', missions_total: 0, missions_succeeded: 0, missions_failed: 0, missions_spent_cents: 0, success_rate: null },
+    ];
+    open('/notebook?tab=methods', { '/users/me': ME, '/notebook/summary': SUMMARY, 'GET /notebook/methods': rows });
+    expect((await screen.findByTestId('method-stats-7')).textContent).toBe('编排用过 4 次：做成 3、没成 1，花了 ¥360.00；成功率 75%');
+    expect(screen.getByTestId('method-stats-8').textContent).toContain('做完的还少，先不算成功率');
+    expect(screen.queryByTestId('method-stats-9')).toBeNull();
+  });
+
   it('工作台任务里：相关笔记摆在眼前，能套用我的方法', async () => {
     const calls: Call[] = [];
     open('/workbench?tab=all&item=5', {

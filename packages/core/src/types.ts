@@ -2177,6 +2177,13 @@ export interface NbMethod {
   steps: WbStep[];
   source_note_ids: number[];
   uses: number;
+  /** AGT-095（168 号 spec）按这个方法拆过几个编排，做成 / 失败（含取消）几个，花了多少 */
+  missions_total: number;
+  missions_succeeded: number;
+  missions_failed: number;
+  missions_spent_cents: number;
+  /** 做完（成或败）的少于 3 个时为 null：小样本不给比率 */
+  success_rate: number | null;
   created_at: string;
   updated_at: string;
 }

@@ -2,7 +2,7 @@
 //
 // 手机上最常用的是：随手记一句、粘一个链接、会后把纪要里的待办抽进工作台、问一句「我以前记过什么」。
 import {
-  apiErrorText, formatDateTime,
+  apiErrorText, fmtYuan, formatDateTime,
   type NbAnswer, type NbMethod, type NbMethodDraft, type NbNote, type NbNoteBrief, type NbSummary, type NbTodoDraft, type PlatformClient,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -192,6 +192,13 @@ function Methods({ client }: { client: PlatformClient }) {
       {rows.map((m) => (
         <View key={m.id} style={s.card}>
           <Text style={s.itemTitle}>{m.name}（用过 {m.uses} 次）</Text>
+          {/* AGT-095（168 号 spec）按它拆过的编排做得怎么样 */}
+          {m.missions_total > 0 && (
+            <Text style={s.muted}>
+              编排用过 {m.missions_total} 次：做成 {m.missions_succeeded}、没成 {m.missions_failed}，花了 {fmtYuan(m.missions_spent_cents)}；
+              {m.success_rate === null ? '做完的还少，先不算成功率' : `成功率 ${Math.round(m.success_rate * 100)}%`}
+            </Text>
+          )}
           {m.steps.map((st, n) => <Text key={n}>{n + 1}. {st.title}{st.note ? ` · ${st.note}` : ''}</Text>)}
         </View>
       ))}

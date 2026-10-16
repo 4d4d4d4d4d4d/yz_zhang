@@ -158,9 +158,39 @@ def _full(n: NbNote) -> dict:
     return {**_brief(n), "body": n.body}
 
 
-def _dump_method(m: NbMethod) -> dict:
+# AGT-095（168 号 spec）方法的效果：按它拆过的编排做成了几个、失败几个、花了多少。做完的少于 3 个不给成功率
+MIN_FINISHED_FOR_RATE = 3
+
+
+def method_stats(db: Session, ids: list[int]) -> dict[int, dict]:
+    from sqlalchemy import func
+
+    from app.modules.orchestrator.models import Mission
+
+    out = {i: {"total": 0, "succeeded": 0, "failed": 0, "spent_cents": 0} for i in ids}
+    if not ids:
+        return out
+    rows = (db.query(Mission.method_id, Mission.status, func.count(Mission.id), func.coalesce(func.sum(Mission.spent_cents), 0))
+            .filter(Mission.method_id.in_(ids)).group_by(Mission.method_id, Mission.status).all())
+    for mid, status, n, spent in rows:
+        o = out[mid]
+        o["total"] += int(n)
+        o["spent_cents"] += int(spent)
+        if status == "succeeded":
+            o["succeeded"] += int(n)
+        elif status in ("failed", "cancelled"):
+            o["failed"] += int(n)
+    return out
+
+
+def _dump_method(m: NbMethod, stats: dict | None = None) -> dict:
+    st = stats if stats is not None else {"total": 0, "succeeded": 0, "failed": 0, "spent_cents": 0}
+    finished = st["succeeded"] + st["failed"]
     return {"id": m.id, "name": m.name, "description": m.description, "steps": m.steps or [],
             "source_note_ids": m.source_note_ids or [], "uses": m.uses,
+            "missions_total": st["total"], "missions_succeeded": st["succeeded"], "missions_failed": st["failed"],
+            "missions_spent_cents": st["spent_cents"],
+            "success_rate": round(st["succeeded"] / finished, 2) if finished >= MIN_FINISHED_FOR_RATE else None,
             "created_at": iso(m.created_at), "updated_at": iso(m.updated_at)}
 
 
@@ -313,7 +343,8 @@ def distill(body: DistillIn, user: User = Depends(get_current_user), db: Session
 @router.get("/notebook/methods")
 def list_methods(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     rows = db.query(NbMethod).filter(NbMethod.owner_id == user.id).order_by(NbMethod.uses.desc(), NbMethod.id).all()
-    return [_dump_method(m) for m in rows]
+    stats = method_stats(db, [m.id for m in rows])   # 一次查完，不按方法逐个查
+    return [_dump_method(m, stats[m.id]) for m in rows]
 
 
 @router.post("/notebook/methods", status_code=201)
@@ -329,7 +360,7 @@ def create_method(body: MethodIn, user: User = Depends(get_current_user),
                  created_at=now, updated_at=now)
     db.add(m)
     db.flush()
-    return _dump_method(m)
+    return _dump_method(m, method_stats(db, [m.id])[m.id])
 
 
 @router.patch("/notebook/methods/{method_id}")
@@ -345,7 +376,7 @@ def update_method(method_id: int, body: MethodPatch, user: User = Depends(get_cu
     m.updated_at = utcnow()
     db.add(m)
     db.flush()
-    return _dump_method(m)
+    return _dump_method(m, method_stats(db, [m.id])[m.id])
 
 
 @router.delete("/notebook/methods/{method_id}")

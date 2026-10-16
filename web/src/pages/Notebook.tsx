@@ -1,5 +1,5 @@
 import {
-  apiErrorText, formatDateTime,
+  apiErrorText, fmtYuan, formatDateTime,
   type NbAnswer, type NbMethod, type NbMethodDraft, type NbNote, type NbNoteBrief, type NbSummary, type NbTodoDraft,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -240,6 +240,11 @@ function NotePanel({ id, onClose, onChanged }: { id: number; onClose: () => void
   );
 }
 
+function methodStats(m: NbMethod): string {
+  const rate = m.success_rate === null ? '做完的还少，先不算成功率' : `成功率 ${Math.round(m.success_rate * 100)}%`;
+  return `编排用过 ${m.missions_total} 次：做成 ${m.missions_succeeded}、没成 ${m.missions_failed}，花了 ${fmtYuan(m.missions_spent_cents)}；${rate}`;
+}
+
 function Methods({ version }: { version: number }) {
   const { client } = useApp();
   const [rows, setRows] = useState<NbMethod[]>([]);
@@ -256,6 +261,8 @@ function Methods({ version }: { version: number }) {
           <div className="row"><input className="grow" aria-label={`方法名：${m.name}`} defaultValue={m.name}
             onBlur={(e) => e.target.value.trim() && e.target.value !== m.name && void client.updateMethod(m.id, { name: e.target.value }).then(() => setV(v + 1)).catch((err) => setError(apiErrorText(err)))} />
             <span className="muted">用过 {m.uses} 次</span>
+            {/* AGT-095（168 号 spec）按它拆过的编排做得怎么样 */}
+            {m.missions_total > 0 && <span className="muted" data-testid={`method-stats-${m.id}`}>{methodStats(m)}</span>}
             <button className="danger" onClick={() => void client.deleteMethod(m.id).then(() => setV(v + 1)).catch((e) => setError(apiErrorText(e)))}>删除</button></div>
           <ol>{m.steps.map((s, n) => <li key={n}>{s.title}{s.note && <span className="muted"> · {s.note}</span>}</li>)}</ol>
         </div>

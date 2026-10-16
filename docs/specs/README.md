@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 168 | 我的方法的效果统计 | [168-method-stats.md](./168-method-stats.md) | P2 |
 | 167 | 一单多人多天的临时帮手 | [167-multiday-slots.md](./167-multiday-slots.md) | P1 |
 | 166 | 提单人在工单里追加回复 | [166-ticket-user-reply.md](./166-ticket-user-reply.md) | P1 |
 | 165 | 后台按角色显示板块 | [165-admin-sections-by-role.md](./165-admin-sections-by-role.md) | P1 |

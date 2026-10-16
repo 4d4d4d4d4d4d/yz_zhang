@@ -73,6 +73,15 @@ describe('KB-100 App 上的个人知识库', () => {
     await waitFor(() => expect((calls.find((c) => c.method === 'POST' && c.path === '/notebook/methods')?.body as { steps: unknown[] }).steps).toEqual([{ title: '核对收入', note: '' }]));
   });
 
+  it('AGT-095 我的方法写明编排用得怎么样', async () => {
+    const m = { id: 7, name: '搬家做法', description: '', steps: [{ title: '打包', note: '' }], source_note_ids: [], uses: 3, created_at: '', updated_at: '',
+      missions_total: 4, missions_succeeded: 3, missions_failed: 1, missions_spent_cents: 36000, success_rate: 0.75 };
+    render(<NotebookScreen client={makeClient({ 'GET /notebook/methods': [m] }, [])} />);
+    fireEvent.press(await screen.findByText('我的方法'));
+    expect(await screen.findByText(/编排用过 4 次：做成 3、没成 1，花了 ¥360.00；/)).toBeTruthy();
+    expect(screen.getByText(/成功率 75%/)).toBeTruthy();
+  });
+
   it('笔记可以删除（知识库满了的补救）', async () => {
     const calls: Call[] = [];
     const client = makeClient({ '/notebook/summary': SUMMARY, 'GET /notebook/notes': [brief(4, '旧笔记')],
