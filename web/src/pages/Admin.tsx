@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, fmtYuan, formatDateTime, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketRow, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketRow, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -30,11 +30,13 @@ export default function Admin() {
   const [q, setQ] = useState('');
   const [banning, setBanning] = useState<number | null>(null);
 
+  // SEC-061d（165 号 spec）：只加载看得到的板块——以前财务一进后台，举报与用户两个请求就 403，整段加载跟着失败
+  const see = (k: AdminSectionKey) => canSeeAdminSection(me, k);
   const load = useCallback(async () => {
-    setMetrics(await client.adminMetrics());
-    setReports(await client.adminReports());
-    setUsers(await client.adminUsers(q));
-  }, [client, q]);
+    if (canSeeAdminSection(me, 'metrics')) setMetrics(await client.adminMetrics());
+    if (canSeeAdminSection(me, 'reports')) setReports(await client.adminReports());
+    if (canSeeAdminSection(me, 'users')) setUsers(await client.adminUsers(q));
+  }, [client, q, me]);
 
   useEffect(() => {
     if (me?.is_admin) void load();
@@ -45,7 +47,7 @@ export default function Admin() {
 
   return (
     <div className="page">
-      {metrics && (
+      {see('metrics') && metrics && (
         <div className="card">
           <h3>平台指标</h3>
           <div className="row" style={{ gap: 28, marginTop: 10, flexWrap: 'wrap' }}>
@@ -58,21 +60,21 @@ export default function Admin() {
           </div>
         </div>
       )}
-      <AdminRolesPanel />
-      <LaunchReadiness />
-      <QueueOverview />
-      <WithdrawReview />
-      <AmlQueue />
-      <KnowledgeAdmin />
-      <PacksAdmin />
-      <LegalFaqAdmin />
-      <SandboxModelsAdmin />
-      <SkillConceptsAdmin />
-      <TeamVerifyQueue />
-      <CertificationQueue />
-      <UploadQueue />
-      <TicketQueue />
-      <div className="card">
+      {see('roles') && <AdminRolesPanel />}
+      {see('launch') && <LaunchReadiness />}
+      {see('queues') && <QueueOverview />}
+      {see('withdraw') && <WithdrawReview />}
+      {see('aml') && <AmlQueue />}
+      {see('knowledge') && <KnowledgeAdmin />}
+      {see('packs') && <PacksAdmin />}
+      {see('legal') && <LegalFaqAdmin />}
+      {see('sandbox') && <SandboxModelsAdmin />}
+      {see('skills') && <SkillConceptsAdmin />}
+      {see('teams') && <TeamVerifyQueue />}
+      {see('certifications') && <CertificationQueue />}
+      {see('uploads') && <UploadQueue />}
+      {see('tickets') && <TicketQueue />}
+      {see('reports') && <div className="card" aria-label="举报处置">
         <h3>待处置举报（{reports.length}）</h3>
         <table style={{ marginTop: 8 }}>
           <thead><tr><th>#</th><th>对象</th><th>理由</th><th>处置</th></tr></thead>
@@ -95,8 +97,8 @@ export default function Admin() {
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="card">
+      </div>}
+      {see('users') && <div className="card" aria-label="用户管理">
         <div className="row">
           <h3 className="grow">用户管理</h3>
           <input style={{ width: 200 }} placeholder="搜昵称/手机号" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -127,12 +129,17 @@ export default function Admin() {
           <BanConfirm userId={banning} onClose={() => setBanning(null)}
                       onDone={async () => { setBanning(null); await load(); }} />
         )}
-      </div>
-      <SecurityBoard />
-      <CityAndCategory />
-      <AuditLog />
-      <PlatformFinance />
-      <Announcement />
+      </div>}
+      {see('security') && <SecurityBoard />}
+      {see('cities') && <CityAndCategory />}
+      {see('audit') && <AuditLog />}
+      {see('finance') && <PlatformFinance />}
+      {see('announcements') && <Announcement />}
+      {hiddenAdminSections(me).length > 0 && (
+        <p className="muted" aria-label="不在你职责里的板块">
+          这些板块不在你的职责里，所以没有显示：{hiddenAdminSections(me).join('、')}。需要的话请超级管理员在「管理员与角色」里给你加上对应角色。
+        </p>
+      )}
     </div>
   );
 }
