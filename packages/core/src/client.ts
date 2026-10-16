@@ -21,6 +21,8 @@ import type {
   TaskCreateInput,
   TaskVisits,
   ApplyDaysResult,
+  DayApplicant,
+  AcceptPersonResult,
   RiskDisclosure,
   ShareRow,
   SpendRequestView,
@@ -629,6 +631,14 @@ export class PlatformClient {
   /** SCN-118 一个人一次报多天：在多天母任务上选日期（YYYY-MM-DD），每天报一个还在招的名额 */
   applyDays(taskId: number, dates: string[], message = '') {
     return this.request<ApplyDaysResult>('POST', `/tasks/${taskId}/apply-days`, { dates, message });
+  }
+  /** SCN-126 多天母任务：按人看谁报了哪几天（只给发单人） */
+  dayApplicants(taskId: number) {
+    return this.request<DayApplicant[]>('GET', `/tasks/${taskId}/applicants`);
+  }
+  /** SCN-126 一次选同一个人的多天：每个名额各一份合约，签署与托管仍逐份确认 */
+  acceptPerson(taskId: number, applicantId: number) {
+    return this.request<AcceptPersonResult>('POST', `/tasks/${taskId}/accept-person`, { applicant_id: applicantId });
   }
   /** SCN-120 一次上门回报（只有接单的人、只在执行中）：勾清单里做了的、备注、照片 */
   reportVisit(taskId: number, body: { done: string[]; note?: string; images?: string[] }) {

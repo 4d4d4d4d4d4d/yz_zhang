@@ -177,6 +177,7 @@ api GET /api/v1/tasks
 api GET /api/v1/tasks/mine
 api GET /api/v1/tasks/{task_id}
 api GET /api/v1/tasks/{task_id}/agent-runs
+api GET /api/v1/tasks/{task_id}/applicants
 api GET /api/v1/tasks/{task_id}/applications
 api GET /api/v1/tasks/{task_id}/cockpit
 api GET /api/v1/tasks/{task_id}/decomposition
@@ -453,6 +454,7 @@ api POST /api/v1/tasks/jobs/purge-locations
 api POST /api/v1/tasks/jobs/remind-acceptance
 api POST /api/v1/tasks/jobs/settle-reviews
 api POST /api/v1/tasks/{task_id}/accept-delivery
+api POST /api/v1/tasks/{task_id}/accept-person
 api POST /api/v1/tasks/{task_id}/agent-apply
 api POST /api/v1/tasks/{task_id}/agent-run
 api POST /api/v1/tasks/{task_id}/applications
@@ -583,6 +585,7 @@ sdk acceptChange
 sdk acceptDelivery
 sdk acceptInvitation
 sdk acceptMilestone
+sdk acceptPerson
 sdk acceptSettlement
 sdk acceptTeamInvite
 sdk addDisputeStatement
@@ -715,6 +718,7 @@ sdk createWorkbenchRoutine
 sdk createXappGrant
 sdk createXappRun
 sdk currentDecomposition
+sdk dayApplicants
 sdk deactivateAccount
 sdk decideCertification
 sdk decideFriendRequest

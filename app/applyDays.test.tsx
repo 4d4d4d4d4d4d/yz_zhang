@@ -36,7 +36,8 @@ describe('SCN-118 App 一次报多天', () => {
   });
 
   it('发单人自己、或没登录时没有这一块', async () => {
-    const client = makeClient({ 'GET /tasks/30/tree': TREE });
+    const client = makeClient({ 'GET /tasks/30/tree': TREE,
+      'GET /tasks/30/applicants': [{ applicant_id: 5, nickname: '小王', days: [{ date: '2030-01-06', task_id: 33, application_id: 1 }] }] });
     const { unmount } = render(<TaskTreeBlock client={client} task={TASK} onOpenTask={() => {}} meId={9} />);
     await screen.findByLabelText('按天看名额');
     expect(screen.queryByLabelText('一次报多天')).toBeNull();
@@ -44,6 +45,7 @@ describe('SCN-118 App 一次报多天', () => {
     render(<TaskTreeBlock client={client} task={TASK} onOpenTask={() => {}} />);
     await screen.findByLabelText('按天看名额');
     expect(screen.queryByLabelText('一次报多天')).toBeNull();
+    expect(screen.queryByLabelText('按人选')).toBeNull();   // 没登录也看不到别人报了什么
   });
 
   it('名额页能回到整单', async () => {
@@ -57,5 +59,17 @@ describe('SCN-118 App 一次报多天', () => {
                              onBack={() => {}} onChanged={async () => {}} onOpenTask={opened} />);
     fireEvent.press(await screen.findByText('这单一共好几天：回到整单，一次报多天 →'));
     await waitFor(() => expect(opened).toHaveBeenCalledWith(expect.objectContaining({ id: 30 })));
+  });
+
+  it('SCN-126 发单人按人选：一次选同一个人的多天', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({ 'GET /tasks/30/tree': TREE,
+      'GET /tasks/30/applicants': [{ applicant_id: 5, nickname: '小王', days: [{ date: '2030-01-06', task_id: 33, application_id: 1 }] }],
+      'POST /tasks/30/accept-person': { accepted: [{ date: '2030-01-06', task_id: 33, contract_id: 8 }], skipped: [] } }, calls);
+    render(<TaskTreeBlock client={client} task={TASK} onOpenTask={() => {}} meId={9} />);
+    fireEvent.press(await screen.findByText('小王 · 01-06 → 选 TA 的这 1 天'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks/30/accept-person')?.body).toEqual({ applicant_id: 5 }));
+    expect(await screen.findByText('已选 小王：01-06（每天一份合约，去各名额签署、托管）')).toBeTruthy();
+    expect(screen.queryByLabelText('一次报多天')).toBeNull();
   });
 });

@@ -782,6 +782,12 @@ def accept_application(
     task = _get_task(db, app_row.task_id)
     if task.creator_id != user.id:
         raise forbidden()
+    contract = _accept_one(db, task, app_row)
+    return {"contract_id": contract.id, "task": dump_task(task, user)}
+
+
+def _accept_one(db: Session, task: Task, app_row: Application):
+    """选人的全部规则（单个选人与 SCN-126 一次选一个人的多天共用一份）。"""
     if task.status != "published":
         raise conflict("任务不在招募中", "not_recruiting")
     if app_row.status != "pending":  # TASK-012 已撤回/已拒的报名不可成交（防替人签约）
@@ -792,10 +798,84 @@ def accept_application(
     db.add_all([app_row, task])
     contract = contract_service.generate(db, task, app_row.applicant_id, app_row.bid_cents)
     service.transition(db, task, "matched", {"executor_id": app_row.applicant_id})
+    if task.parent_id and task.work_date:
+        _move_to_same_day_slots(db, task, app_row)
     db.query(Application).filter(
         Application.task_id == task.id, Application.id != app_row.id
     ).update({"status": "rejected"})
-    return {"contract_id": contract.id, "task": dump_task(task, user)}
+    return contract
+
+
+def _move_to_same_day_slots(db: Session, task: Task, chosen: Application) -> None:
+    """SCN-126（181 号 spec）多天名额选了一个人后，同一天还有空名额时，这个名额上其他人的报名挪到那天下一个还在招的名额，
+    不拒——一次报多天的人都先落在那天第一个名额上（177 号），拒掉就等于让后报的人白报。挪不了的照旧拒。"""
+    pending = db.query(Application).filter(Application.task_id == task.id, Application.id != chosen.id,
+                                           Application.status == "pending").all()
+    if not pending:
+        return
+    siblings = (db.query(Task).filter(Task.parent_id == task.parent_id, Task.work_date == task.work_date,
+                                      Task.id != task.id, Task.status == "published").order_by(Task.id).all())
+    for a in pending:
+        taken = {x.task_id for x in db.query(Application.task_id).filter(
+            Application.applicant_id == a.applicant_id, Application.status != "withdrawn")}
+        nxt = next((s for s in siblings if s.id not in taken), None)
+        if nxt is not None:
+            a.task_id = nxt.id
+    db.flush()
+
+
+class AcceptPersonIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    applicant_id: int
+
+
+@router.get("/tasks/{task_id}/applicants")
+def applicants_by_person(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """SCN-126 多天母任务：按人看谁报了哪几天（只给发单人）。"""
+    parent = _get_task(db, task_id)
+    if parent.creator_id != user.id:
+        raise forbidden()
+    slots = {s.id: s for s in db.query(Task).filter(Task.parent_id == parent.id, Task.work_date.isnot(None))}
+    rows = (db.query(Application).filter(Application.task_id.in_(list(slots) or [0]), Application.status == "pending")
+            .order_by(Application.id).all())
+    people: dict[int, list] = {}
+    for a in rows:
+        people.setdefault(a.applicant_id, []).append(
+            {"date": day(slots[a.task_id].work_date), "task_id": a.task_id, "application_id": a.id})
+    names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_(list(people) or [0]))}
+    return [{"applicant_id": uid, "nickname": names.get(uid, ""), "days": sorted(ds, key=lambda x: x["date"])}
+            for uid, ds in sorted(people.items(), key=lambda kv: (-len(kv[1]), kv[0]))]
+
+
+@router.post("/tasks/{task_id}/accept-person")
+def accept_person(task_id: int, body: AcceptPersonIn, user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db, scope="function")):
+    """SCN-126（181 号 spec）一次选同一个人的多天：把他在这单各天的报名逐个按同一套规则选上。
+    每个名额各生成一份合约（签署、托管照旧逐份由人确认）；选不上的那天（例如他的在途单到了上限）逐日说清。"""
+    from fastapi import HTTPException
+
+    parent = _get_task(db, task_id)
+    if parent.creator_id != user.id:
+        raise forbidden()
+    slots = {s.id: s for s in db.query(Task).filter(Task.parent_id == parent.id, Task.work_date.isnot(None))}
+    apps = sorted(db.query(Application).filter(Application.task_id.in_(list(slots) or [0]),
+                                               Application.applicant_id == body.applicant_id,
+                                               Application.status == "pending").all(),
+                  key=lambda a: (slots[a.task_id].work_date, a.id))
+    accepted, skipped = [], []
+    for a in apps:
+        slot = slots[a.task_id]
+        try:
+            contract = _accept_one(db, slot, a)
+        except HTTPException as e:
+            detail = e.detail if isinstance(e.detail, dict) else {"message": str(e.detail)}
+            skipped.append({"date": day(slot.work_date), "reason": detail.get("message", "")})
+            continue
+        accepted.append({"date": day(slot.work_date), "task_id": slot.id, "contract_id": contract.id})
+    if not accepted:
+        raise conflict("这个人没有可以选的那几天：" + ("；".join(f"{s['date']} {s['reason']}" for s in skipped) or "他没有在等你选的报名"),
+                       "nothing_to_accept")
+    return {"accepted": accepted, "skipped": skipped}
 
 
 # ---------- TASK-013 收藏 ----------

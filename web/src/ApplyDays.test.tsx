@@ -62,4 +62,25 @@ describe('SCN-118 一次报多天', () => {
     open('/tasks/31', [], { 'GET /tasks/31': SLOT });
     expect(await screen.findByText('这单一共好几天：回到整单，一次报多天 →')).toBeTruthy();
   });
+
+  it('SCN-126 发单人按人选：一次选同一个人的多天', async () => {
+    const calls: Call[] = [];
+    open('/tasks/30', calls, { 'GET /tasks/30': { ...PARENT, creator_id: 2 }, 'GET /tasks/30/tree': TREE,
+      'GET /tasks/30/applicants': [{ applicant_id: 5, nickname: '小王', days: [
+        { date: '2030-01-06', task_id: 33, application_id: 1 }, { date: '2030-01-07', task_id: 35, application_id: 2 }] }],
+      'POST /tasks/30/accept-person': { accepted: [{ date: '2030-01-06', task_id: 33, contract_id: 8 }],
+        skipped: [{ date: '2030-01-07', reason: '在途任务已达上限' }] } });
+    const box = await screen.findByLabelText('按人选');
+    expect(box.textContent).toContain('小王 · 01-06、01-07');
+    fireEvent.click(screen.getByText('选 TA 的这 2 天'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks/30/accept-person')?.body).toEqual({ applicant_id: 5 }));
+    await waitFor(() => expect(box.textContent).toContain('已选 小王：01-06（每天一份合约，去各名额签署、托管）；没选上：01-07（在途任务已达上限）'));
+  });
+
+  it('不是发单人看不到「按人选」', async () => {
+    open('/tasks/30', [], { 'GET /tasks/30': PARENT, 'GET /tasks/30/tree': TREE,
+      'GET /tasks/30/applicants': [{ applicant_id: 5, nickname: '小王', days: [{ date: '2030-01-06', task_id: 33, application_id: 1 }] }] });
+    await screen.findByLabelText('一次报多天');
+    expect(screen.queryByLabelText('按人选')).toBeNull();
+  });
 });

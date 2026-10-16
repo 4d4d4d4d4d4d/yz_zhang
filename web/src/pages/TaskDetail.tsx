@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, daySummaryLine, daysStillShort, describeChangeOrder, hasChildTasks, shiftLabel, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, daySummaryLine, daysStillShort, describeChangeOrder, hasChildTasks, shiftLabel, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -210,6 +210,8 @@ export default function TaskDetail() {
               </ul>
               {/* SCN-118 一个人一次报多天（177 号 spec）：不是发单人才有 */}
               {me && !isCreator && <ApplyDaysBox taskId={taskId} days={daysStillShort(tree.by_day).map((d) => d.date)} />}
+              {/* SCN-126 发单人按人选：一次选同一个人的多天（181 号 spec） */}
+              {isCreator && <PersonPicker taskId={taskId} onDone={() => void load()} />}
             </div>
           )}
           <div className="list" style={{ marginTop: 12 }}>
@@ -438,6 +440,40 @@ export default function TaskDetail() {
  *
  * 只在**进行中**的线下任务上出现：任务没开始或已结束时摆一个求助按钮，
  * 只会稀释它。 */
+/** SCN-126 按人选：谁报了哪几天，一次选上这几天（每个名额各一份合约，签署与托管仍逐份确认）。 */
+function PersonPicker({ taskId, onDone }: { taskId: number; onDone: () => void }) {
+  const { client } = useApp();
+  const [people, setPeople] = useState<DayApplicant[]>([]);
+  const [msg, setMsg] = useState('');
+  const load = useCallback(() => {
+    client.dayApplicants(taskId).then((r) => setPeople(Array.isArray(r) ? r : [])).catch(() => setPeople([]));
+  }, [client, taskId]);
+  useEffect(() => { load(); }, [load]);
+  if (people.length === 0 && !msg) return null;
+  async function pick(p: DayApplicant) {
+    setMsg('');
+    try {
+      const r = await client.acceptPerson(taskId, p.applicant_id);
+      setMsg(`已选 ${p.nickname}：${r.accepted.map((a) => a.date.slice(5)).join('、')}（每天一份合约，去各名额签署、托管）`
+        + (r.skipped.length ? `；没选上：${r.skipped.map((s) => `${s.date.slice(5)}（${s.reason}）`).join('、')}` : ''));
+      load();
+      onDone();
+    } catch (e) { setMsg(apiErrorText(e)); }
+  }
+  return (
+    <div aria-label="按人选" style={{ marginTop: 8 }}>
+      <p className="muted">谁报了哪几天：</p>
+      {people.map((p) => (
+        <div key={p.applicant_id} className="task-item">
+          <span>{p.nickname} · {p.days.map((d) => d.date.slice(5)).join('、')}</span>
+          <button onClick={() => void pick(p)}>选 TA 的这 {p.days.length} 天</button>
+        </div>
+      ))}
+      {msg && <p className="muted">{msg}</p>}
+    </div>
+  );
+}
+
 /** SCN-118 一次报多天：勾还缺人的那几天，每天报一个名额；报不了的逐日说清。 */
 function ApplyDaysBox({ taskId, days }: { taskId: number; days: string[] }) {
   const { client } = useApp();

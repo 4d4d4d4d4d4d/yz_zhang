@@ -7,7 +7,7 @@
 import {
   LEAF_CRITERION_LABEL, TASK_STATUS_LABEL, apiErrorText, childrenOf, daySummaryLine, daysStillShort,
   decompositionSourceLabel, executorLabel, fmtYuan, isOpenEnd, type Decomposition, type DecompositionNode,
-  type Cockpit, type DecompositionNodePatch, type PlatformClient, type Task, type TaskTree,
+  type Cockpit, type DayApplicant, type DecompositionNodePatch, type PlatformClient, type Task, type TaskTree,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -209,6 +209,15 @@ export function TaskTreeBlock({ client, task, onOpenTask, meId = null }: {
   const [tree, setTree] = useState<TaskTree | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [applyMsg, setApplyMsg] = useState('');
+  // SCN-126 发单人按人选
+  const [people, setPeople] = useState<DayApplicant[]>([]);
+  const [pickMsg, setPickMsg] = useState('');
+  const isPoster = meId !== null && meId === task.creator_id && (task.days ?? 1) > 1;
+  const loadPeople = useCallback(() => {
+    if (!isPoster) return;
+    client.dayApplicants(task.id).then((r) => setPeople(Array.isArray(r) ? r : [])).catch(() => setPeople([]));
+  }, [client, task.id, isPoster]);
+  useEffect(() => { loadPeople(); }, [loadPeople]);
   useEffect(() => {
     void client.taskTree(task.id).then(setTree).catch(() => setTree(null));
   }, [client, task.id]);
@@ -246,6 +255,25 @@ export function TaskTreeBlock({ client, task, onOpenTask, meId = null }: {
                 <Text style={styles.link}>报这几天</Text>
               </TouchableOpacity>
               {!!applyMsg && <Text style={styles.muted}>{applyMsg}</Text>}
+            </View>
+          )}
+          {/* SCN-126 发单人按人选：一次选同一个人的多天（181 号 spec） */}
+          {isPoster && (people.length > 0 || !!pickMsg) && (
+            <View accessibilityLabel="按人选">
+              <Text style={styles.muted}>谁报了哪几天：</Text>
+              {people.map((p) => (
+                <TouchableOpacity key={p.applicant_id} onPress={() => {
+                  setPickMsg('');
+                  void client.acceptPerson(task.id, p.applicant_id).then((r) => {
+                    setPickMsg(`已选 ${p.nickname}：${r.accepted.map((a) => a.date.slice(5)).join('、')}（每天一份合约，去各名额签署、托管）`
+                      + (r.skipped.length ? `；没选上：${r.skipped.map((s) => `${s.date.slice(5)}（${s.reason}）`).join('、')}` : ''));
+                    loadPeople();
+                  }).catch((e) => setPickMsg(apiErrorText(e)));
+                }}>
+                  <Text style={styles.link}>{p.nickname} · {p.days.map((d) => d.date.slice(5)).join('、')} → 选 TA 的这 {p.days.length} 天</Text>
+                </TouchableOpacity>
+              ))}
+              {!!pickMsg && <Text style={styles.muted}>{pickMsg}</Text>}
             </View>
           )}
         </View>

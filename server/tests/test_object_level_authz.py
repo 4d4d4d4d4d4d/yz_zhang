@@ -91,6 +91,8 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
      "party", "这些是发布方的动作，执行方与第三方都不得代为执行"),
     (r"^POST /tasks/.*/(deliver|checkin|progress|sos|trip-share|experience-post)$",
      "party", "这些是执行方的动作：交付、打卡、求助、行程分享"),
+    (r"^GET /tasks/.*/applicants$", "party", "按人看谁报了哪几天只给发单人（181 号 spec；test_accept_person 行为验）"),
+    (r"^POST /tasks/.*/accept-person$", "party", "一次选一个人的多天是发单人的动作（181 号 spec；test_accept_person 行为验）"),
     (r"^POST /tasks/.*/visits$", "party", "上门回报只有接单的人能交（176 号 spec；test_task_visits 行为验）"),
     (r"^GET /tasks/.*/visits$", "party", "上门回报（含照片）只给成交双方与管理员（176 号 spec；test_task_visits 行为验）"),
     (r"^POST /tasks/.*/(applications|reviews|disputes|bookmark|apply-days)$", "party",

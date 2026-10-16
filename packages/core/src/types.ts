@@ -723,6 +723,19 @@ export interface ApplyDaysResult {
   skipped: Array<{ date: string; reason: string }>;
 }
 
+/** SCN-126 多天母任务上的一个报名人：他报了哪几天（每天落在哪个名额） */
+export interface DayApplicant {
+  applicant_id: number;
+  nickname: string;
+  days: Array<{ date: string; task_id: number; application_id: number }>;
+}
+
+/** SCN-126 一次选一个人的多天：选上了哪几天（各一份合约），哪几天为什么没选上 */
+export interface AcceptPersonResult {
+  accepted: Array<{ date: string; task_id: number; contract_id: number }>;
+  skipped: Array<{ date: string; reason: string }>;
+}
+
 /** SCN-116 一天的名额：招到 = 有人接且没取消（含做完）；还缺 = 仍在招募；取消的单独数 */
 export interface TaskDaySummary {
   date: string;

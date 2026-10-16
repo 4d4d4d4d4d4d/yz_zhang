@@ -361,6 +361,8 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   shift_incomplete: '每天的时段要把开始和结束一起写（例如 09:00 到 18:00），或者都不写',
   shift_invalid: '时间按 24 小时制写成 HH:MM（例如 09:00、18:30）',
   shift_order: '结束时间要晚于开始时间；跨夜的班请拆成两天写',
+  // SCN-126 一次选一个人的多天（181 号 spec）
+  nothing_to_accept: '这个人没有可以选的那几天：看看是不是已经选过，或他的在途单到了上限',
   days_with_recurrence: '连续几天与「每周 / 每月重复」不能同时用：选一种',
   handover_to_self: '接手人不能是被移出的人自己',
   handover_not_member: '接手人必须是这个团队里的在职成员',
