@@ -10,6 +10,7 @@ import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient
 import { isSandbox, loadSandbox } from './sandboxState';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
+import { VisitsBlock, hasVisits } from './visits';
 import { DiscoverScreen } from './Discover';
 import { AgentBlock, RecommendationsBlock } from './collaborators';
 import { ExperienceToolsBlock } from './experience';
@@ -435,6 +436,11 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       {hasChildTasks(task) && onOpenTask && <TaskTreeBlock client={client} task={task} onOpenTask={onOpenTask} />}
       {/* SPACE-024 合作驾驶舱（移动简化版：进度、钱、预警、关键路径；APP-007）——只给发布方 */}
       {hasChildTasks(task) && meId === task.creator_id && <CockpitBlock client={client} taskId={task.id} />}
+      {/* SCN-120 一单多次上门的逐次回报（176 号 spec）：成交双方 */}
+      {hasVisits(task) && meId !== null && (meId === task.creator_id || meId === task.executor_id)
+        && !['draft', 'published'].includes(task.status) && (
+        <VisitsBlock client={client} task={task} isExecutor={meId === task.executor_id} />
+      )}
       {/* PROF-103 这单的画像（126 号 spec） */}
       {task.status !== 'draft' && <TaskProfileBlock client={client} taskId={task.id} />}
       {/* AGT-080~083 经验工具：双方都能用，只出草稿（109 号 spec） */}
@@ -929,6 +935,9 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
   const [recipient, setRecipient] = useState('');
   const [onsite, setOnsite] = useState('');
   const [consented, setConsented] = useState(false);
+  // SCN-120（176 号 spec）一单多次上门：上门几次、每次要做的事
+  const [visits, setVisits] = useState('');
+  const [checklist, setChecklist] = useState('');
   const [error, setError] = useState('');
   const nDays = parseInt(days, 10) || 1;
   const nPeople = parseInt(people, 10) || 1;
@@ -957,6 +966,15 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
           {(nPeople > 1 || nDays > 1) && (
             <Text style={styles.mutedLeft}>会拆成 {nPeople * nDays} 个名额（{nPeople} 人 × {nDays} 天），预算平分，每个名额单独招人、单独验收</Text>
           )}
+        </>
+      )}
+      {/* SCN-120 一单多次上门：接单人每次按清单回报 */}
+      {!project && (
+        <>
+          <TextInput style={styles.input} accessibilityLabel="要上门几次" placeholder="要上门几次（可不填）" value={visits}
+                     onChangeText={setVisits} keyboardType="numeric" />
+          <TextInput style={styles.input} accessibilityLabel="每次要做的事" placeholder="每次要做的事，用顿号分开（如：喂食、换水、铲屎）"
+                     value={checklist} onChangeText={setChecklist} />
         </>
       )}
       {/* SCN-119 替别人发单：称呼与到场联系只给成交双方；发之前先问过本人 */}
@@ -997,6 +1015,8 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
             ip_assignment: ip,
             ...(!project && nPeople > 1 ? { people_needed: nPeople } : {}),
             ...(!project && nDays > 1 ? { days: nDays, start_date: startDate.trim() || null } : {}),
+            ...(!project && (parseInt(visits, 10) || 0) > 0 ? { visits_planned: parseInt(visits, 10) } : {}),
+            ...(!project && checklist.trim() ? { visit_checklist: checklist.split(/[、,，]/).map((x) => x.trim()).filter(Boolean) } : {}),
             ...(onBehalf ? { on_behalf: true, recipient_label: recipient, onsite_contact: onsite, recipient_consented: consented } : {}),
             // 项目先存草稿：拆好、说清每一步谁来做之后，只有能开工的步骤发布出去
             is_remote: true, publish_now: !project,

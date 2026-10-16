@@ -189,6 +189,7 @@ api GET /api/v1/tasks/{task_id}/recommendations
 api GET /api/v1/tasks/{task_id}/reviews
 api GET /api/v1/tasks/{task_id}/tree
 api GET /api/v1/tasks/{task_id}/trip
+api GET /api/v1/tasks/{task_id}/visits
 api GET /api/v1/team-invites/{token}
 api GET /api/v1/teams/mine
 api GET /api/v1/teams/{team_id}
@@ -470,6 +471,7 @@ api POST /api/v1/tasks/{task_id}/reviews
 api POST /api/v1/tasks/{task_id}/sos
 api POST /api/v1/tasks/{task_id}/trip-share
 api POST /api/v1/tasks/{task_id}/verification
+api POST /api/v1/tasks/{task_id}/visits
 api POST /api/v1/team-invites/{token}/accept
 api POST /api/v1/teams
 api POST /api/v1/teams/jobs/remind-approvals
@@ -571,6 +573,7 @@ app spaces
 app supportTickets
 app teamInvites
 app ventureInvites
+app visits
 app workbench
 app xapp
 sdk acceptAgreements
@@ -903,6 +906,7 @@ sdk renameKnowledgeCluster
 sdk replyMyTicket
 sdk replyTicket
 sdk report
+sdk reportVisit
 sdk requestInvoice
 sdk requestTeamSpend
 sdk requestVerification
@@ -972,6 +976,7 @@ sdk taskDraftProfile
 sdk taskProfile
 sdk taskTemplate
 sdk taskTree
+sdk taskVisits
 sdk team
 sdk teamInviteLinks
 sdk teamInvitePreview

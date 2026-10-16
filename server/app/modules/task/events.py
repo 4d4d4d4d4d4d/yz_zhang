@@ -14,6 +14,8 @@ COPY_FIELDS = [
     "address_hint", "address_exact", "visibility", "circle_id", "recurrence",
     # SCN-119 替别人发的周期单，下一期照样是替同一个人（同意是发单时问过的那一次）
     "on_behalf", "recipient_label", "onsite_contact", "recipient_consent_at",
+    # SCN-120 下一期照样按次回报
+    "visits_planned", "visit_checklist",
 ]
 
 

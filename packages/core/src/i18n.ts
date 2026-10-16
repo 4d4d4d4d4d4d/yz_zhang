@@ -350,6 +350,10 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   recipient_consent_required: '替别人发单前要先问过本人：问过之后勾选「已经问过本人」再发',
   recipient_without_on_behalf: '只有替别人发单时才填服务对象：勾上「替别人发」，或把这几项清空',
   on_behalf_needs_human: '替别人发单要本人在 App 或网页上发：问没问过服务对象，只能由你自己确认',
+  // SCN-120 一单多次上门（176 号 spec）
+  visit_item_too_long: '每次要做的事，每项最多 20 个字：拆成几项，或写进说明',
+  visit_item_unknown: '只勾发单人写的那几项，别的写进备注',
+  visit_empty: '这次上门做了什么：勾清单、写一句备注或附一张照片',
   days_with_recurrence: '连续几天与「每周 / 每月重复」不能同时用：选一种',
   handover_to_self: '接手人不能是被移出的人自己',
   handover_not_member: '接手人必须是这个团队里的在职成员',

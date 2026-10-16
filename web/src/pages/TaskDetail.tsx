@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, daySummaryLine, daysStillShort, describeChangeOrder, hasChildTasks, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type Task, type TaskTree } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, daySummaryLine, daysStillShort, describeChangeOrder, hasChildTasks, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -399,6 +399,11 @@ export default function TaskDetail() {
           )}
         </div>
       )}
+      {/* SCN-120 一单多次上门的逐次回报（176 号 spec）：写了上门次数或清单的单才有 */}
+      {(isCreator || isExecutor) && task && ((task.visits_planned ?? 0) > 0 || (task.visit_checklist ?? []).length > 0)
+        && !['draft', 'published'].includes(task.status) && (
+        <VisitsPanel task={task} isExecutor={!!isExecutor} />
+      )}
       {/* GEO-023/022 安全区块。服务端两条都早就实现了——`sos` 的注释甚至
           为了让按钮**不被合规弹窗挡住**特意去查了 PIPL 第十三条第(四)项——
           而这个按钮在任何一个端上都不存在。 */}
@@ -420,6 +425,57 @@ export default function TaskDetail() {
  *
  * 只在**进行中**的线下任务上出现：任务没开始或已结束时摆一个求助按钮，
  * 只会稀释它。 */
+/** SCN-120 上门回报：接单人每次勾清单、写备注、附照片；双方都看得到计划几次、回报几次、每次漏了什么。 */
+function VisitsPanel({ task, isExecutor }: { task: Task; isExecutor: boolean }) {
+  const { client } = useApp();
+  const [data, setData] = useState<TaskVisits | null>(null);
+  const [done, setDone] = useState<string[]>([]);
+  const [note, setNote] = useState('');
+  const [shots, setShots] = useState<string[]>([]);
+  const [error, setError] = useState('');
+  const load = useCallback(() => { client.taskVisits(task.id).then(setData).catch(() => setData(null)); }, [client, task.id]);
+  useEffect(() => { load(); }, [load]);
+  const checklist = task.visit_checklist ?? [];
+  async function submit() {
+    setError('');
+    try {
+      await client.reportVisit(task.id, { done, note, images: shots });
+      setDone([]); setNote(''); setShots([]);
+      load();
+    } catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <div className="card" aria-label="上门回报">
+      <h3>上门回报{data ? ` · ${data.reported}${data.planned ? `/${data.planned}` : ''} 次` : ''}</h3>
+      {data && data.missed_total > 0 && <p className="error">一共有 {data.missed_total} 项没做（见下面每次的记录）</p>}
+      {data && Array.isArray(data.visits) && data.visits.map((v) => (
+        <div key={v.id} className="task-item">
+          <span>第 {v.n} 次 · {formatDateTime(v.created_at)}</span>
+          <span className="muted">
+            {v.done.length ? `已做：${v.done.join('、')}` : '清单没勾'}{v.missed.length ? `；没做：${v.missed.join('、')}` : ''}
+            {v.note ? ` · ${v.note}` : ''}{v.images.length ? ` · ${v.images.length} 张照片` : ''}
+          </span>
+        </div>
+      ))}
+      {isExecutor && task.status === 'in_progress' && (
+        <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
+          {checklist.map((item) => (
+            <label key={item} className="row">
+              <input type="checkbox" aria-label={`做了：${item}`} checked={done.includes(item)}
+                     onChange={(e) => setDone((d) => e.target.checked ? [...d, item] : d.filter((x) => x !== item))} />
+              {item}
+            </label>
+          ))}
+          <input aria-label="这次的备注" placeholder="这次的备注（宠物状态、异常情况…）" value={note} onChange={(e) => setNote(e.target.value)} />
+          <PhotoPicker urls={shots} onChange={setShots} />
+          {error && <p className="error">{error}</p>}
+          <button onClick={() => void submit()}>交这次的上门回报</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SafetyPanel({ taskId, isExecutor }: { taskId: number; isExecutor: boolean }) {
   const { client } = useApp();
   const [guidance, setGuidance] = useState('');

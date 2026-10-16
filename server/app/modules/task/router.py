@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -62,6 +62,9 @@ class TaskIn(BaseModel):
     recipient_label: str = Field(default="", max_length=20)
     onsite_contact: str = Field(default="", max_length=40)
     recipient_consented: bool = False
+    # SCN-120（176 号 spec）一单多次上门：要上门几次、每次要做的事（最多 8 项，每项最多 20 字）
+    visits_planned: int = Field(default=0, ge=0, le=60)
+    visit_checklist: list[str] = Field(default_factory=list, max_length=8)
 
 
 class DeliverIn(BaseModel):
@@ -73,6 +76,14 @@ class DeliverIn(BaseModel):
 class ApplyIn(BaseModel):
     bid_cents: int = 0
     message: str = ""
+
+
+class VisitIn(BaseModel):
+    """SCN-120 一次上门回报：清单里做了哪几项、备注、照片。"""
+    model_config = ConfigDict(extra="forbid")
+    done: list[str] = Field(default_factory=list, max_length=8)
+    note: str = Field(default="", max_length=500)
+    images: list[str] = Field(default_factory=list, max_length=9)
 
 
 class ProgressIn(BaseModel):
@@ -140,6 +151,9 @@ def dump_task(task: Task, viewer: User | None = None) -> dict:
         "on_behalf": bool(task.on_behalf),
         "recipient_label": task.recipient_label if is_party else "",
         "onsite_contact": task.onsite_contact if is_party else "",
+        # SCN-120 一单多次上门：要上门几次、每次要做的事（公开：这是活的一部分）
+        "visits_planned": task.visits_planned or 0,
+        "visit_checklist": list(task.visit_checklist or []),
         "recurred_from_id": task.recurred_from_id,
         "status": task.status,
         "deadline": iso(task.deadline),
@@ -203,6 +217,20 @@ def _validate_ip_and_pricing(body: "TaskIn") -> None:
         raise bad_request("仅 outcome 计价支持浮动对价", "bonus_not_allowed")
 
 
+def _validate_visits(body: TaskIn) -> None:
+    """SCN-120 每次要做的事：去空白、去重、每项最多 20 字（太长的不是一项，是一段说明）。"""
+    items: list[str] = []
+    for raw in body.visit_checklist:
+        item = raw.strip()
+        if not item or item in items:
+            continue
+        if len(item) > 20:
+            raise bad_request(f"每次要做的事，每项最多 20 个字：「{item[:20]}…」太长了，拆成几项或写进说明",
+                              "visit_item_too_long")
+        items.append(item)
+    body.visit_checklist = items
+
+
 def _validate_on_behalf(body: TaskIn) -> None:
     """SCN-119 替别人发单（175 号 spec）：说清替谁、问过本人。没勾「替别人发」时这几项一律不收，免得悄悄带上别人的信息。"""
     body.recipient_label, body.onsite_contact = body.recipient_label.strip(), body.onsite_contact.strip()
@@ -244,6 +272,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
             raise forbidden("需先加入该圈层", "not_circle_member")
     _validate_days(body)
     _validate_on_behalf(body)
+    _validate_visits(body)
     multi = body.people_needed > 1 or body.days > 1
     publishing = body.publish_now or multi
     if publishing:
@@ -288,6 +317,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
                     address_hint=task.address_hint, address_exact=task.address_exact,
                     on_behalf=task.on_behalf, recipient_label=task.recipient_label,
                     onsite_contact=task.onsite_contact, recipient_consent_at=task.recipient_consent_at,
+                    visits_planned=task.visits_planned, visit_checklist=task.visit_checklist,
                     visibility=task.visibility, circle_id=task.circle_id,
                     work_date=day_, deadline=_day_end_utc(day_) if day_ else None,
                 )
@@ -789,6 +819,63 @@ def checkin(
         )
     )
     return {"ok": True, "distance_m": round(distance)}
+
+
+def _visit_view(task: Task, logs: list[ProgressLog]) -> dict:
+    checklist = list(task.visit_checklist or [])
+    visits = []
+    for n, r in enumerate(logs, start=1):
+        done = [i for i in checklist if i in (r.checked or [])]
+        visits.append({"n": n, "id": r.id, "created_at": iso(r.created_at), "done": done,
+                       "missed": [i for i in checklist if i not in done], "note": r.content, "images": r.images or []})
+    return {"task_id": task.id, "planned": task.visits_planned or 0, "checklist": checklist, "reported": len(visits),
+            "missed_total": sum(len(v["missed"]) for v in visits), "visits": visits}
+
+
+@router.post("/tasks/{task_id}/visits", status_code=201)
+def report_visit(task_id: int, body: VisitIn, user: User = Depends(get_current_user),
+                 db: Session = Depends(get_db, scope="function")):
+    """SCN-120 一次上门回报（176 号 spec）：接单人每上门一次交一条，勾做了清单里的哪几项，可附照片。
+    发单人收到通知：第几次、做了什么、哪几项没做。不碰钱，不替发单人验收。"""
+    task = _get_task(db, task_id)
+    if user.id != task.executor_id:
+        raise forbidden("只有接单的人能交上门回报")
+    if task.status != "in_progress":
+        raise conflict("任务不在执行中", "not_in_progress")
+    checklist = list(task.visit_checklist or [])
+    unknown = [i for i in body.done if i not in checklist]
+    if unknown:
+        raise bad_request(f"「{unknown[0]}」不在这单的清单里：只勾发单人写的那几项，别的写进备注", "visit_item_unknown")
+    for url in body.images:
+        if not url.startswith("/api/v1/files/"):
+            raise bad_request("图片地址不合法，请通过上传接口获取", "invalid_image_url")
+    if not body.done and not body.note.strip() and not body.images:
+        raise bad_request("这次上门做了什么：勾清单、写一句备注或附一张照片", "visit_empty")
+    n = db.query(ProgressLog).filter(ProgressLog.task_id == task_id, ProgressLog.kind == "visit").count() + 1
+    done = [i for i in checklist if i in body.done]
+    missed = [i for i in checklist if i not in done]
+    log = ProgressLog(task_id=task_id, user_id=user.id, kind="visit", content=body.note.strip(),
+                      images=body.images, checked=done)
+    db.add(log)
+    db.flush()
+    from app.modules.notification.service import notify
+
+    planned = f"/{task.visits_planned}" if task.visits_planned else ""
+    text = (f"已做：{'、'.join(done)}" if done else "清单一项都没勾") + (f"；没做：{'、'.join(missed)}" if missed else "")
+    notify(db, task.creator_id, "task", f"第 {n}{planned} 次上门回报", f"《{task.title}》{text}" +
+           (f"。备注：{body.note.strip()[:60]}" if body.note.strip() else ""))
+    return {"n": n, "id": log.id, "done": done, "missed": missed}
+
+
+@router.get("/tasks/{task_id}/visits")
+def list_visits(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """SCN-120 计划几次、回报了几次、每次做了什么和漏了什么（只给成交双方与管理员）。"""
+    task = _get_task(db, task_id)
+    if user.id not in (task.creator_id, task.executor_id) and not user.is_admin:
+        raise forbidden()
+    logs = (db.query(ProgressLog).filter(ProgressLog.task_id == task_id, ProgressLog.kind == "visit")
+            .order_by(ProgressLog.id).all())
+    return _visit_view(task, logs)
 
 
 @router.get("/tasks/{task_id}/progress")

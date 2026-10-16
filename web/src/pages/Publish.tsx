@@ -23,6 +23,8 @@ export default function Publish() {
     lat: '31.2304', lng: '121.4737', address_hint: '', address_exact: '',
     // SCN-119（175 号 spec）替别人发单：替谁、到场联系谁、问过本人没有
     on_behalf: false, recipient_label: '', onsite_contact: '', recipient_consented: false,
+    // SCN-120（176 号 spec）一单多次上门：上门几次、每次要做的事（顿号或逗号分开）
+    visits_planned: '', visit_checklist: '',
     // TZ-064 截止时间此前**网页上根本没有地方填**：服务端有校验、有到期下架 job、
     // 有临期提醒，而线上所有任务的 deadline 都是空的，那个 job 从来没有活可干。
     deadline_local: '',
@@ -102,6 +104,9 @@ export default function Publish() {
         lng: form.is_remote ? null : parseFloat(form.lng),
         address_hint: form.address_hint,
         address_exact: form.address_exact,
+        // SCN-120 写了才带：上门几次、每次要做的事
+        ...((parseInt(form.visits_planned, 10) || 0) > 0 ? { visits_planned: parseInt(form.visits_planned, 10) } : {}),
+        ...(form.visit_checklist.trim() ? { visit_checklist: form.visit_checklist.split(/[、,，]/).map((x) => x.trim()).filter(Boolean) } : {}),
         // SCN-119 只有勾了「替别人发」才带这几项（服务端对没勾却带了的会拒）
         ...(form.on_behalf ? { on_behalf: true, recipient_label: form.recipient_label, onsite_contact: form.onsite_contact,
           recipient_consented: form.recipient_consented } : {}),
@@ -247,6 +252,17 @@ export default function Publish() {
               <label>详细地址（仅成交后对执行者可见）<input value={form.address_exact} onChange={(e) => set('address_exact', e.target.value)} /></label>
             </>
           )}
+          {/* SCN-120 一单多次上门（176 号 spec）：接单人每次按清单回报 */}
+          <div className="row">
+            <label className="grow">要上门几次（可不填）
+              <input type="number" aria-label="要上门几次" min={0} max={60} value={form.visits_planned}
+                     onChange={(e) => set('visits_planned', e.target.value)} />
+            </label>
+            <label className="grow">每次要做的事（用顿号分开，可不填）
+              <input aria-label="每次要做的事" value={form.visit_checklist} placeholder="如：喂食、换水、铲屎"
+                     onChange={(e) => set('visit_checklist', e.target.value)} />
+            </label>
+          </div>
           {/* SCN-119 替别人发单（175 号 spec）：替谁、到场联系谁只给成交双方；发之前先问过本人 */}
           <label className="row">
             <input type="checkbox" aria-label="替别人发" checked={form.on_behalf} onChange={(e) => set('on_behalf', e.target.checked)} />

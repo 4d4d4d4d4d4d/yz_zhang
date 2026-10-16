@@ -274,6 +274,10 @@ export interface Task {
   recipient_label?: string;
   /** 到场联系谁：只给成交双方，别人是空串；结束 30 天后清空 */
   onsite_contact?: string;
+  /** SCN-120（176 号 spec）要上门几次（0 表示不按次回报） */
+  visits_planned?: number;
+  /** 每次上门要做的事（清单） */
+  visit_checklist?: string[];
   status: TaskStatus;
   deadline: string | null;
   reject_count: number;
@@ -347,6 +351,9 @@ export interface TaskCreateInput {
   recipient_label?: string;
   onsite_contact?: string;
   recipient_consented?: boolean;
+  /** SCN-120 要上门几次（0~60）与每次要做的事（最多 8 项，每项最多 20 字） */
+  visits_planned?: number;
+  visit_checklist?: string[];
   acceptance_criteria?: string[];
   bonus_cents?: number;
   publish_now?: boolean;
@@ -681,6 +688,27 @@ export interface TaskTreeChild {
   executor_id: number | null;
   /** SCN-116 多天名额是哪一天的（YYYY-MM-DD）；单天多人与项目拆解的步骤为 null */
   work_date?: string | null;
+}
+
+/** SCN-120 一次上门回报：按清单顺序列出做了的和没做的 */
+export interface TaskVisit {
+  n: number;
+  id: number;
+  created_at: string;
+  done: string[];
+  missed: string[];
+  note: string;
+  images: string[];
+}
+
+/** SCN-120 这单的上门回报：计划几次、回报了几次、一共漏了几项 */
+export interface TaskVisits {
+  task_id: number;
+  planned: number;
+  checklist: string[];
+  reported: number;
+  missed_total: number;
+  visits: TaskVisit[];
 }
 
 /** SCN-116 一天的名额：招到 = 有人接且没取消（含做完）；还缺 = 仍在招募；取消的单独数 */

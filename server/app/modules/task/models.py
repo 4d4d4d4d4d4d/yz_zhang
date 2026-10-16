@@ -85,6 +85,9 @@ class Task(Base):
     recipient_label: Mapped[str] = mapped_column(String(20), default="")
     onsite_contact: Mapped[str] = mapped_column(String(40), default="")
     recipient_consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # SCN-120（176 号 spec）一单多次上门：要上门几次、每次要做的事（清单）。0 / 空表示不按次回报
+    visits_planned: Mapped[int] = mapped_column(Integer, default=0)
+    visit_checklist: Mapped[list] = mapped_column(JSON, default=list)
 
     # TASK-008 可见范围：public 公开广场 / circle 仅圈层任务板
     visibility: Mapped[str] = mapped_column(String(12), default="public")
@@ -155,6 +158,8 @@ class ProgressLog(Base):
     lng: Mapped[float | None] = mapped_column(Float, nullable=True)
     # MOB-021 图片凭证（上传后的相对 URL 列表）：纠纷时最有力的证据往往是照片
     images: Mapped[list] = mapped_column(JSON, default=list)
+    # SCN-120 上门回报（kind=visit）这一次做了清单里的哪几项
+    checked: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

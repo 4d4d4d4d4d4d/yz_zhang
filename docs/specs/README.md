@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 176 | 一单多次上门的逐次回报 | [176-visit-reports.md](./176-visit-reports.md) | P0 |
 | 175 | 替别人发单：发单人与服务对象分开 | [175-post-on-behalf.md](./175-post-on-behalf.md) | P0 |
 | 174 | 多天名额按天汇总：哪天还缺几个人 | [174-slots-by-day.md](./174-slots-by-day.md) | P0 |
 | 173 | 第四轮场景发掘：宠物上门照看与给爸妈办事 | [173-scenario-round4.md](./173-scenario-round4.md) | P0 |

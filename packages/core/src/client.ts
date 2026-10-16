@@ -19,6 +19,7 @@ import type {
   EligibleAgent,
   FollowListItem,
   TaskCreateInput,
+  TaskVisits,
   RiskDisclosure,
   ShareRow,
   SpendRequestView,
@@ -623,6 +624,14 @@ export class PlatformClient {
       content_type: contentType,
       data_base64: dataBase64,
     });
+  }
+  /** SCN-120 一次上门回报（只有接单的人、只在执行中）：勾清单里做了的、备注、照片 */
+  reportVisit(taskId: number, body: { done: string[]; note?: string; images?: string[] }) {
+    return this.request<{ n: number; id: number; done: string[]; missed: string[] }>('POST', `/tasks/${taskId}/visits`, body);
+  }
+  /** SCN-120 计划几次、回报了几次、每次做了什么和漏了什么（成交双方） */
+  taskVisits(taskId: number) {
+    return this.request<TaskVisits>('GET', `/tasks/${taskId}/visits`);
   }
   checkin(taskId: number, lat: number, lng: number) {
     return this.request<{ ok: boolean; distance_m: number }>('POST', `/tasks/${taskId}/checkin`, { lat, lng });
