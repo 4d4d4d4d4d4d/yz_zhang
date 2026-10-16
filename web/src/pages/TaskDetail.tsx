@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, daySummaryLine, daysStillShort, describeChangeOrder, hasChildTasks, shiftLabel, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, describeChangeOrder, hasChildTasks, shiftLabel, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -34,8 +34,9 @@ export default function TaskDetail() {
     const t = await client.getTask(taskId);
     setTask(t);
     if (me && t.creator_id === me.id && t.status === 'published') {
-      setApps(await client.listApplications(taskId));
-      setRecs(await client.recommendations(taskId));
+      // APP-090 列表响应不是数组时当作空表（不把详情页带崩）
+      setApps(asList(await client.listApplications(taskId)));
+      setRecs(asList(await client.recommendations(taskId)));
     }
     // SCN-116：多人、多天的母任务也拉（以前只有项目型，名额在详情页上看不到）
     if (hasChildTasks(t)) {
@@ -43,7 +44,7 @@ export default function TaskDetail() {
     }
     if (me && (t.creator_id === me.id || t.executor_id === me.id)) {
       if (!['draft', 'published'].includes(t.status)) {
-        setProgress(await client.listProgress(taskId).catch(() => []));
+        setProgress(asList(await client.listProgress(taskId).catch(() => [])));
       }
     }
   }, [client, me, taskId]);
@@ -621,7 +622,7 @@ function ChangeOrders({ contractId, amountCents, onChanged }: {
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    setRows(await client.changeOrders(contractId).catch(() => []));
+    setRows(asList(await client.changeOrders(contractId).catch(() => [])));
   }, [client, contractId]);
   useEffect(() => { void load(); }, [load]);
 

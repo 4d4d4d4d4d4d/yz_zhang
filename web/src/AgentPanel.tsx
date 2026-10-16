@@ -1,6 +1,6 @@
 import {
   apiErrorText, fmtYuan,
-  type AgentProfileView, type AgentRunView, type EligibleAgent, type Task,
+  type AgentProfileView, type AgentRunView, type EligibleAgent, type Task, asList,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from './store';
@@ -28,13 +28,14 @@ export function AgentPanel({ task, onChanged }: { task: Task; onChanged: () => v
     && agents.some((a) => a.user_id === task.executor_id);
 
   const load = useCallback(async () => {
-    setAgents(await client.agents().catch(() => []));
+    // APP-090 列表响应不是数组时当作空表（不把详情页带崩）
+    setAgents(asList(await client.agents().catch(() => [])));
     if (task.status === 'published') {
-      setCandidates(await client.eligibleAgents(task.id).catch(() => []));
+      setCandidates(asList(await client.eligibleAgents(task.id).catch(() => [])));
     }
     if (task.executor_id) {
       const r = await client.agentRuns(task.id).catch(() => null);
-      if (r) { setRuns(r.runs); setDeliveryBlock(r.delivery_block); }
+      if (r && typeof r === 'object') { setRuns(asList(r.runs)); setDeliveryBlock(r.delivery_block ?? ''); }
     }
   }, [client, task.id, task.status, task.executor_id]);
 

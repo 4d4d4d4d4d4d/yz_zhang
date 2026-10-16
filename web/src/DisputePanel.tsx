@@ -6,7 +6,7 @@
 // 写入陈述——那道前置永远只能靠等答辩期超时来满足，也就是说平台上线后的
 // 每一份处理决定都会是缺席裁决。
 import { useCallback, useEffect, useState } from 'react';
-import { ApiError, apiErrorText, millisUntil, type Dispute, type DisputeStatement, type PlatformClient } from '@platform/core';
+import { ApiError, apiErrorText, asList, millisUntil, type Dispute, type DisputeStatement, type PlatformClient } from '@platform/core';
 
 const STATUS_LABEL: Record<string, string> = {
   open: '处理中',
@@ -37,8 +37,10 @@ export function DisputePanel({ client, taskId, meId }: {
     try {
       // DSPC-010 被诉方只知道任务 id——他收到的通知就只说「任务 #N 有纠纷」
       const d = await client.disputeByTask(taskId);
+      // APP-090 响应不像一条纠纷时当作没有（与 App 同一条）
+      if (!d || typeof d.id !== 'number') { setDispute(null); return; }
       setDispute(d);
-      setStatements(await client.disputeStatements(d.id));
+      setStatements(asList(await client.disputeStatements(d.id)));
     } catch {
       setDispute(null);   // 该任务没有纠纷，面板不渲染
     }

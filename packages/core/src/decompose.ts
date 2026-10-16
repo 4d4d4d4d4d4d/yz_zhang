@@ -80,3 +80,8 @@ export function visitShortfall(v: Pick<TaskVisits, 'planned' | 'reported' | 'mis
   if (v.missed_total > 0) parts.push(`回报里一共有 ${v.missed_total} 项没做`);
   return parts.length ? `${parts.join('；')}。验收前可以先问问接单的人。` : '';
 }
+
+/** APP-090（182 号 spec）列表响应不是数组时当作空表：详情页的一块拿到 {} / null 不许把整页带崩。两端同一个。 */
+export function asList<T>(x: unknown): T[] {
+  return Array.isArray(x) ? (x as T[]) : [];
+}

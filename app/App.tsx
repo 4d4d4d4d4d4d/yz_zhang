@@ -398,7 +398,8 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       client.getContractByTask(task.id).then(setContract).catch(() => setContract(null));
     } else setContract(null);
     if (task.status === 'published' && meId === task.creator_id) {
-      client.listApplications(task.id).then(setApps).catch(() => setApps([]));
+      // APP-090：响应不是数组时当作没人报名，不把详情页带崩
+      client.listApplications(task.id).then((r) => setApps(Array.isArray(r) ? r : [])).catch(() => setApps([]));
     }
   }, [client, task, meId]);
   useEffect(() => { void reload(); }, [reload]);
@@ -641,7 +642,9 @@ export function ChangeOrderBlock({ client, contract, onChanged }: {
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    setRows(await client.changeOrders(contract.id).catch(() => []));
+    // APP-090：响应不是数组时当作没有变更单
+    const r = await client.changeOrders(contract.id).catch(() => []);
+    setRows(Array.isArray(r) ? r : []);
   }, [client, contract.id]);
   useEffect(() => { void load(); }, [load]);
 
