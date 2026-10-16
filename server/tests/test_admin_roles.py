@@ -60,6 +60,9 @@ ROUTE_ROLES = {
     "POST /admin/legal/faqs/{faq_id}/reject": ('compliance',),
     "POST /admin/legal/faqs/{faq_id}/retire": ('compliance',),
     "POST /admin/legal/faqs/{faq_id}/renew": ('compliance',),
+    # SEC-061e（171 号 spec）临时授予与提前收回
+    "POST /admin/admins/{user_id}/temporary-roles": ('super',),
+    "POST /admin/admins/{user_id}/temporary-roles/{role}/revoke": ('super',),
     "GET /admin/platform-finance": ('finance',),
     "GET /admin/queues": ANY,
     "GET /admin/reports": ('support', 'compliance'),
@@ -176,7 +179,8 @@ def test_money_and_verdicts_are_not_open_to_everyone():
     """红线：动钱的、裁决的、看证件与私聊的，都不是「任何管理员」。"""
     for key in ("POST /wallet/withdraw-requests/{request_id}/approve", "POST /admin/platform-finance/settle",
                 "POST /admin/subsidy-pool/fund", "POST /disputes/{dispute_id}/verdict",
-                "POST /admin/certifications/{application_id}/decide", "PUT /admin/admins/{user_id}/roles"):
+                "POST /admin/certifications/{application_id}/decide", "PUT /admin/admins/{user_id}/roles",
+                "POST /admin/admins/{user_id}/temporary-roles"):
         assert ROUTE_ROLES[key] != ANY and "support" not in ROUTE_ROLES[key] and "ops" not in ROUTE_ROLES[key], key
 
 

@@ -201,6 +201,8 @@ export interface AdminRow {
   roles: AdminRoleKey[];
   /** 没分配过角色：按超级管理员对待，上线前应当分好 */
   unclassified: boolean;
+  /** SEC-061e（171 号 spec）还没到期的临时角色（UTC 时间） */
+  temporary: Array<{ role: AdminRoleKey; until: string }>;
 }
 export interface AdminList {
   admins: AdminRow[];

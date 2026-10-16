@@ -60,6 +60,8 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     # SEC-061b 管理员角色（141 号 spec，app/core/admin_roles.py）：空 = 未分级，按超级管理员对待
     admin_roles: Mapped[list] = mapped_column(JSON, default=list)
+    # SEC-061e 临时授予的角色到期时间（171 号 spec）：{角色: UTC ISO 时间}。不在这里的角色是长期的
+    admin_role_until: Mapped[dict] = mapped_column(JSON, default=dict)
     # RISK-006 封禁（封禁后所有需登录操作被拒）
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
     # ACC-006 注销（脱敏保留，登录与被检索均拒绝）

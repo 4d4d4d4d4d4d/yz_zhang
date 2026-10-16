@@ -29,12 +29,30 @@ ROLES: dict[str, str] = {
 ANY = tuple(ROLES)
 
 
+def temporary_expired(user: User, role: str, now=None) -> bool:
+    """SEC-061e（171 号 spec）这个角色是临时授予的、并且已经过了到期时间。"""
+    until = (user.admin_role_until or {}).get(role)
+    if not until:
+        return False
+    from datetime import datetime
+
+    from app.modules.account.models import utcnow
+
+    return datetime.fromisoformat(until.replace("Z", "+00:00")).replace(tzinfo=None) <= (now or utcnow())
+
+
 def roles_of(user: User) -> set[str]:
-    """生效的角色。没分配过角色的管理员按 super 对待（见模块说明）。"""
+    """生效的角色。没分配过角色的管理员按 super 对待（见模块说明）。
+
+    SEC-061e 临时角色到期就不算。**分配过角色、但全部到期了的，是「没有角色」，不是「未分级」**——
+    否则临时角色一到期，人就变成了超级管理员（临时授予本来就只能加在有长期角色的人身上，这里再兜一层）。"""
     if not user.is_admin:
         return set()
-    granted = {r for r in (user.admin_roles or []) if r in ROLES}
-    return granted or {"super"}
+    assigned = {r for r in (user.admin_roles or []) if r in ROLES}
+    live = {r for r in assigned if not temporary_expired(user, r)}
+    if assigned and not live:
+        return set()
+    return live or {"super"}
 
 
 def has_role(user: User, *roles: str) -> bool:

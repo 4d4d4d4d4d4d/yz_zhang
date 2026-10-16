@@ -1,4 +1,4 @@
-import { apiErrorText, type AdminList, type AdminRoleCatalog, type AdminRoleKey } from '@platform/core';
+import { apiErrorText, formatDateTime, type AdminList, type AdminRoleCatalog, type AdminRoleKey } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from './store';
 
@@ -24,6 +24,10 @@ export function AdminRolesPanel() {
   useEffect(() => { void load(); }, [load]);
   if (!catalog) return error ? <p className="error">{error}</p> : null;
   const label = (k: string) => catalog.roles.find((r) => r.key === k)?.label ?? k;
+  async function act(fn: () => Promise<unknown>, done: string) {
+    setError(''); setNotice('');
+    try { await fn(); setNotice(done); await load(); } catch (e) { setError(apiErrorText(e)); }
+  }
   const toggle = (uid: number, cur: AdminRoleKey[], k: AdminRoleKey) => {
     const base = draft[uid] ?? cur;
     setDraft({ ...draft, [uid]: base.includes(k) ? base.filter((x) => x !== k) : [...base, k] });
@@ -47,7 +51,22 @@ export function AdminRolesPanel() {
                 const cur = draft[a.user_id] ?? (a.unclassified ? [] : a.roles);
                 return (
                   <tr key={a.user_id}>
-                    <td>{a.nickname || `#${a.user_id}`}{a.unclassified && <span className="badge">未分级</span>}</td>
+                    <td>{a.nickname || `#${a.user_id}`}{a.unclassified && <span className="badge">未分级</span>}
+                      {/* SEC-061e（171 号 spec）临时角色：到点自动失效，可提前收回 */}
+                      {(a.temporary ?? []).map((t) => (
+                        <div key={t.role} className="muted" data-testid={`temp-role-${a.user_id}-${t.role}`}>
+                          {label(t.role)}（临时，到 {formatDateTime(t.until)}）
+                          <button className="text-link" onClick={() => void act(() => client.revokeTemporaryAdminRole(a.user_id, t.role), `已收回「${label(t.role)}」`)}>提前收回</button>
+                        </div>
+                      ))}
+                      {!a.unclassified && (
+                        <button className="text-link" onClick={() => {
+                          const role = window.prompt(`临时给哪个角色？（${catalog.roles.filter((r) => r.key !== 'super').map((r) => r.key).join(' / ')}）`);
+                          const hours = role ? window.prompt('多少小时后自动失效？（1~720）', '48') : null;
+                          const reason = hours ? window.prompt('理由（会进审计，也会告诉他）') : null;
+                          if (role && hours && reason) void act(() => client.grantTemporaryAdminRole(a.user_id, role.trim() as AdminRoleKey, parseInt(hours, 10), reason.trim()), `已临时授予「${label(role.trim())}」`);
+                        }}>临时授予</button>
+                      )}</td>
                     {catalog.roles.map((r) => (
                       <td key={r.key}>
                         <input type="checkbox" aria-label={`${a.nickname || a.user_id} ${r.label}`} checked={cur.includes(r.key)}

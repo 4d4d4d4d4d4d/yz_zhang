@@ -269,6 +269,8 @@ api PATCH /api/v1/users/me
 api PATCH /api/v1/workbench/items/{item_id}
 api PATCH /api/v1/workbench/projects/{project_id}
 api PATCH /api/v1/workbench/routines/{routine_id}
+api POST /api/v1/admin/admins/{user_id}/temporary-roles
+api POST /api/v1/admin/admins/{user_id}/temporary-roles/{role}/revoke
 api POST /api/v1/admin/agents
 api POST /api/v1/admin/aml/activities/{activity_id}/review
 api POST /api/v1/admin/announcements
@@ -779,6 +781,7 @@ sdk gigPlaces
 sdk gigQuote
 sdk grantConsent
 sdk grantMachineMandate
+sdk grantTemporaryAdminRole
 sdk imUnreadCount
 sdk importPlatformIncome
 sdk influenceLeaderboard
@@ -919,6 +922,7 @@ sdk revokeCertification
 sdk revokeConsent
 sdk revokeSession
 sdk revokeTeamInviteLink
+sdk revokeTemporaryAdminRole
 sdk revokeXappGrant
 sdk rotateApiKey
 sdk runAgent

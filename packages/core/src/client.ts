@@ -1499,6 +1499,13 @@ export class PlatformClient {
   setAdminRoles(userId: number, roles: AdminRoleKey[]) {
     return this.request<AdminRow>('PUT', `/admin/admins/${userId}/roles`, { roles });
   }
+  /** SEC-061e 临时授予一个角色（最长 720 小时，写理由，到点自动失效）；只能给已有长期角色的管理员 */
+  grantTemporaryAdminRole(userId: number, role: AdminRoleKey, hours: number, reason: string) {
+    return this.request<AdminRow>('POST', `/admin/admins/${userId}/temporary-roles`, { role, hours, reason });
+  }
+  revokeTemporaryAdminRole(userId: number, role: AdminRoleKey) {
+    return this.request<AdminRow>('POST', `/admin/admins/${userId}/temporary-roles/${role}/revoke`);
+  }
   /** FIN-061 按期间的平台财务（144 号 spec） */
   platformFinancePeriods(params: PeriodQuery = {}) {
     return this.request<PlatformFinancePeriods>('GET', `/admin/platform-finance/periods${qs(params)}`);

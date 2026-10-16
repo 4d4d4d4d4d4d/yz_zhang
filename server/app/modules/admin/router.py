@@ -1300,8 +1300,14 @@ class AdminRolesIn(BaseModel):
 def _admin_row(u: User) -> dict:
     from app.core.admin_roles import roles_of
 
+    from app.core.admin_roles import temporary_expired
+
+    until = u.admin_role_until or {}
     return {"user_id": u.id, "nickname": u.nickname, "roles": sorted(roles_of(u)),
-            "unclassified": not [r for r in (u.admin_roles or []) if r]}
+            "unclassified": not [r for r in (u.admin_roles or []) if r],
+            # SEC-061e（171 号 spec）还没到期的临时角色
+            "temporary": [{"role": r, "until": until[r]} for r in sorted(until)
+                          if r in (u.admin_roles or []) and not temporary_expired(u, r)]}
 
 
 @router.get("/admin/roles")
@@ -1340,7 +1346,79 @@ def set_admin_roles(user_id: int, body: AdminRolesIn, admin: User = Depends(requ
                        "admin_last_super")
     before = sorted(roles_of(target))
     target.admin_roles = new
+    target.admin_role_until = {}     # SEC-061e 在这里整组设的角色都是长期的；临时的走单独接口
     record_audit(db, admin.id, "set_admin_roles", "user", target.id, f"{before} -> {new}")
+    db.commit()
+    return _admin_row(target)
+
+
+# ------------------------------------------------------------------ SEC-061e 临时授予角色（171 号 spec）
+TEMP_MAX_HOURS = 720
+
+
+class TempRoleIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    role: str = Field(min_length=2, max_length=20)
+    hours: int = Field(ge=1, le=TEMP_MAX_HOURS)
+    reason: str = Field(min_length=2, max_length=200)
+
+
+@router.post("/admin/admins/{user_id}/temporary-roles")
+def grant_temporary_role(user_id: int, body: TempRoleIn, admin: User = Depends(require_role("super")),
+                         db: Session = Depends(get_db, scope="function")):
+    """值班、休假顶岗：给一位已经分好级的管理员临时加一个角色，到点自动失效。只有超级管理员能给，要写理由，进审计。
+
+    不能临时给「超级管理员」（那是能再分配角色的权限，要长期、明确地给）；只能加在至少有一个长期角色的人身上——
+    否则到期后他的角色列表变空，会被当成「未分级」。"""
+    from datetime import timedelta
+
+    from app.core.admin_roles import ROLES, temporary_expired
+    from app.core.timefmt import iso
+    from app.modules.notification.service import notify
+
+    target = db.get(User, user_id)
+    if target is None or not target.is_admin or target.is_deleted:
+        raise not_found("这个用户不是管理员：管理员身份由运维开通，这里只分配角色", "admin_target_not_admin")
+    if body.role not in ROLES:
+        raise bad_request(f"不认识的角色：{body.role}", "admin_role_unknown")
+    if body.role == "super":
+        raise bad_request("超级管理员不能临时给：它能再分配角色，要长期、明确地给", "admin_temp_super_forbidden")
+    until = dict(target.admin_role_until or {})
+    permanent = [r for r in (target.admin_roles or []) if r in ROLES and r not in until]
+    if not permanent:
+        raise conflict("临时角色只能加在已经分好级的管理员身上（至少一个长期角色），否则到期后他会被当成未分级",
+                       "admin_temp_needs_permanent")
+    if body.role in permanent:
+        raise conflict("他已经长期有这个角色了", "admin_role_already_permanent")
+    expires = utcnow() + timedelta(hours=body.hours)
+    roles = [r for r in (target.admin_roles or []) if not (r in until and temporary_expired(target, r))]
+    if body.role not in roles:
+        roles.append(body.role)
+    until = {r: v for r, v in until.items() if r in roles and not temporary_expired(target, r)}
+    until[body.role] = iso(expires)
+    target.admin_roles, target.admin_role_until = sorted(roles), until
+    record_audit(db, admin.id, "grant_temporary_role", "user", target.id,
+                 f"{body.role} 到 {iso(expires)}：{body.reason.strip()}")
+    notify(db, target.id, "system", f"你被临时授予「{ROLES[body.role].split('：')[0]}」角色",
+           f"到 {iso(expires)} 自动失效。理由：{body.reason.strip()}")
+    db.commit()
+    return _admin_row(target)
+
+
+@router.post("/admin/admins/{user_id}/temporary-roles/{role}/revoke")
+def revoke_temporary_role(user_id: int, role: str, admin: User = Depends(require_role("super")),
+                          db: Session = Depends(get_db, scope="function")):
+    """提前收回临时角色（长期角色不在这里收，请用整组设置）。"""
+    target = db.get(User, user_id)
+    if target is None or not target.is_admin or target.is_deleted:
+        raise not_found("这个用户不是管理员", "admin_target_not_admin")
+    until = dict(target.admin_role_until or {})
+    if role not in until:
+        raise conflict("这不是一个临时角色：长期角色请在「管理员与角色」里整组设置", "admin_role_not_temporary")
+    until.pop(role)
+    target.admin_roles = sorted(r for r in (target.admin_roles or []) if r != role)
+    target.admin_role_until = until
+    record_audit(db, admin.id, "revoke_temporary_role", "user", target.id, role)
     db.commit()
     return _admin_row(target)
 
