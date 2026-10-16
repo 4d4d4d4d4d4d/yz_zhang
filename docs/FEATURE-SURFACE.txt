@@ -285,6 +285,7 @@ api POST /api/v1/admin/coupons/{coupon_id}/pause
 api POST /api/v1/admin/jobs/anchor-audit-head
 api POST /api/v1/admin/jobs/escalate-tickets
 api POST /api/v1/admin/jobs/reconcile
+api POST /api/v1/admin/jobs/remind-legal-reviews
 api POST /api/v1/admin/jobs/remind-review-queues
 api POST /api/v1/admin/jobs/send-scheduled-announcements
 api POST /api/v1/admin/knowledge/cards/{card_id}/assign
@@ -296,6 +297,7 @@ api POST /api/v1/admin/legal/faqs
 api POST /api/v1/admin/legal/faqs/radar-draft
 api POST /api/v1/admin/legal/faqs/{faq_id}/approve
 api POST /api/v1/admin/legal/faqs/{faq_id}/reject
+api POST /api/v1/admin/legal/faqs/{faq_id}/renew
 api POST /api/v1/admin/legal/faqs/{faq_id}/retire
 api POST /api/v1/admin/legal/faqs/{faq_id}/submit
 api POST /api/v1/admin/packs
@@ -603,6 +605,7 @@ sdk adminPackRadar
 sdk adminPacks
 sdk adminRejectLegalFaq
 sdk adminRejectPack
+sdk adminRenewLegalFaq
 sdk adminReports
 sdk adminRetireLegalFaq
 sdk adminRetirePack

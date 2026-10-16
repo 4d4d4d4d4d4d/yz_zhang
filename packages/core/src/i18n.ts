@@ -334,6 +334,8 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   legal_faq_not_draft: '只有草稿能改或提交；已上线的要改，先下线再起一条新的',
   legal_faq_not_in_review: '只有待审核的能上线或退回',
   legal_faq_four_eyes: '上线需要另一位合规管理员审核：写它的人不能自己批',
+  legal_faq_not_published: '只有已上线的条目能续期；草稿请走提交与审核',
+  legal_faq_bad_valid_until: '复核日期要晚于今天、最多 2 年后',
   legal_faq_retired: '这一条已经下线了',
   ticket_reply_empty: '补充的内容是空的',
   ticket_in_dispute: '这张工单已经转成纠纷：补充材料请到纠纷里提交',

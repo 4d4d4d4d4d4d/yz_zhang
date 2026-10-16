@@ -58,6 +58,18 @@ describe('LAW-060 法律知识运营', () => {
     expect(approves[1].disabled).toBe(false);
   });
 
+  it('LAW-062 过了复核日期标出「问答已停用」，复核后续期带上新日期', async () => {
+    const calls: Call[] = [];
+    vi.spyOn(window, 'prompt').mockReturnValue('2027-06-30');
+    open({ 'GET /admin/legal/faqs': [FAQ(6, { status: 'published', placeholders: [], answer: '已写好', source: '《民法典》', valid_until: '2026-01-01', expired: true }),
+      FAQ(7, { status: 'published', placeholders: [], answer: '已写好', source: '《民法典》', valid_until: '2027-01-01', expired: false })],
+      'POST /admin/legal/faqs/6/renew': FAQ(6, { status: 'published', valid_until: '2027-06-30', expired: false }) }, calls);
+    expect((await screen.findByTestId('legal-valid-6')).textContent).toBe('已过复核日期（2026-01-01），问答已停用');
+    expect(screen.getByTestId('legal-valid-7').textContent).toBe('复核日期 2027-01-01');
+    fireEvent.click(screen.getAllByRole('button', { name: '复核后续期' })[0]);
+    await waitFor(() => expect(calls.find((c) => c.path === '/admin/legal/faqs/6/renew')?.body).toEqual({ valid_until: '2027-06-30' }));
+  });
+
   it('手写一条：关键词按逗号拆开', async () => {
     const calls: Call[] = [];
     open({ 'GET /admin/legal/faqs': [], 'POST /admin/legal/faqs': FAQ(5) }, calls);

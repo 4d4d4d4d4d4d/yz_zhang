@@ -59,6 +59,7 @@ ROUTE_ROLES = {
     "POST /admin/legal/faqs/{faq_id}/approve": ('compliance',),
     "POST /admin/legal/faqs/{faq_id}/reject": ('compliance',),
     "POST /admin/legal/faqs/{faq_id}/retire": ('compliance',),
+    "POST /admin/legal/faqs/{faq_id}/renew": ('compliance',),
     "GET /admin/platform-finance": ('finance',),
     "GET /admin/queues": ANY,
     "GET /admin/reports": ('support', 'compliance'),

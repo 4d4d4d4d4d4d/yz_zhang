@@ -2362,12 +2362,16 @@ export interface LegalFaqRow {
   retired_reason: string;
   placeholders: string[];
   updated_at: string | null;
+  /** LAW-062（169 号 spec）复核日期（YYYY-MM-DD）；过了这天问答就停用，直到复核后续期 */
+  valid_until: string | null;
+  expired: boolean;
 }
 export interface LegalFaqInput {
   topic?: string;
   keywords: string[];
   answer: string;
   source: string;
+  valid_until?: string | null;
 }
 /** SCN-112 雷达一键起草知识条目（162 号 spec）：进场景包草稿，「【待填写】」不填完不能提交审核 */
 export interface RadarKnowledgeDraft {

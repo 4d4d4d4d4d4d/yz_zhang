@@ -98,6 +98,9 @@ JOBS: tuple[ScheduledJob, ...] = (
                  "锚点在存证链上（再由公证背书），重算过的链对不上锚点（156 号 spec）"),
     ScheduledJob("/admin/jobs/send-scheduled-announcements", 300, "scheduled_announcements",
                  "NTF-064 定时公告到点发出——不跑的话「定时」就是一个永远不会到来的时间（151 号 spec）"),
+    ScheduledJob("/admin/jobs/remind-legal-reviews", 86400, "legal_reviews",
+                 "LAW-062 法律条目复核提醒——法规会改，过了复核日期问答就停用这一条；到期前 30 天、到期当天"
+                 "各叫一次合规，不跑的话条目会悄悄停用而没人知道（169 号 spec）"),
     ScheduledJob("/admin/jobs/escalate-tickets", 3600, "ticket_escalations",
                  "ESCA-051 工单超时逐级升级——汇总通知发给全体管理员等于谁都没被点名；"
                  "到时限叫醒接手的客服，到升级线叫醒主管并告诉提单人（150 号 spec）"),

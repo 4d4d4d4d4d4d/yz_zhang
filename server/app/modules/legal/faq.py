@@ -8,11 +8,11 @@
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import JSON, DateTime, Integer, String, Text
+from sqlalchemy import JSON, Date, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from app.core.admin_roles import require_role
@@ -39,12 +39,32 @@ class LegalFaq(Base):
     reviewed_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     retired_reason: Mapped[str] = mapped_column(String(300), default="")
+    # LAW-062（169 号 spec）复核日期：法规会改，过了这天问答就不再用它，直到合规复核后续期
+    valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # 复核提醒到了第几步：0 没提醒 / 1 到期前 30 天提醒过 / 2 到期当天提醒过
+    review_stage: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+DEFAULT_VALID_DAYS = 365
+MAX_VALID_DAYS = 730
+REMIND_BEFORE_DAYS = 30
+
+
+def beijing_today() -> date:
+    return (utcnow() + timedelta(hours=8)).date()
+
+
+def expired(f: LegalFaq, today: date | None = None) -> bool:
+    return f.valid_until is not None and f.valid_until < (today or beijing_today())
+
+
 def published(db: Session) -> list[LegalFaq]:
-    return db.query(LegalFaq).filter(LegalFaq.status == "published").order_by(LegalFaq.id).all()
+    """问答用的条目：已上线、且没过复核日期（过了就当没有，问题回到「找律师」并进雷达）。"""
+    today = beijing_today()
+    rows = db.query(LegalFaq).filter(LegalFaq.status == "published").order_by(LegalFaq.id).all()
+    return [f for f in rows if not expired(f, today)]
 
 
 def placeholders_left(f: LegalFaq) -> list[str]:
@@ -55,7 +75,8 @@ def dump(f: LegalFaq) -> dict:
     return {"id": f.id, "topic": f.topic, "keywords": list(f.keywords or []), "answer": f.answer, "source": f.source,
             "status": f.status, "origin": f.origin, "created_by": f.created_by, "reviewed_by": f.reviewed_by,
             "published_at": iso(f.published_at), "retired_reason": f.retired_reason,
-            "placeholders": placeholders_left(f), "updated_at": iso(f.updated_at)}
+            "placeholders": placeholders_left(f), "updated_at": iso(f.updated_at),
+            "valid_until": f.valid_until.isoformat() if f.valid_until else None, "expired": expired(f)}
 
 
 # ------------------------------------------------------------------ 接口（合规管理员）
@@ -72,6 +93,21 @@ class FaqIn(_In):
     keywords: list[str] = Field(min_length=1, max_length=20)
     answer: str = Field(min_length=10, max_length=3000)
     source: str = Field(min_length=2, max_length=300)
+    # LAW-062 复核日期，可不填（上线时默认一年后）
+    valid_until: date | None = None
+
+
+def _check_valid_until(d: date | None) -> date | None:
+    if d is None:
+        return None
+    today = beijing_today()
+    if not (today < d <= today + timedelta(days=MAX_VALID_DAYS)):
+        raise bad_request(f"复核日期要晚于今天、最多 {MAX_VALID_DAYS // 365} 年后", "legal_faq_bad_valid_until")
+    return d
+
+
+class RenewIn(_In):
+    valid_until: date
 
 
 class RadarFaqIn(_In):
@@ -116,7 +152,7 @@ def create_faq(body: FaqIn, admin: User = Depends(require_role(ROLE)), db: Sessi
     now = utcnow()
     f = LegalFaq(topic=body.topic.strip(), keywords=_clean_keywords(body.keywords), answer=body.answer.strip(),
                  source=body.source.strip(), status="draft", origin="manual", created_by=admin.id,
-                 created_at=now, updated_at=now)
+                 valid_until=_check_valid_until(body.valid_until), created_at=now, updated_at=now)
     db.add(f)
     db.flush()
     return dump(f)
@@ -130,6 +166,7 @@ def update_faq(faq_id: int, body: FaqIn, admin: User = Depends(require_role(ROLE
         raise conflict("只有草稿能改：已上线的要改，先下线再起一条新的", "legal_faq_not_draft")
     f.topic, f.keywords = body.topic.strip(), _clean_keywords(body.keywords)
     f.answer, f.source, f.updated_at = body.answer.strip(), body.source.strip(), utcnow()
+    f.valid_until = _check_valid_until(body.valid_until)
     db.add(f)
     db.flush()
     return dump(f)
@@ -186,10 +223,58 @@ def approve_faq(faq_id: int, admin: User = Depends(require_role(ROLE)), db: Sess
         raise conflict("上线需要另一位合规管理员审核：写它的人不能自己批", "legal_faq_four_eyes")
     _no_placeholders(f)
     f.status, f.reviewed_by, f.published_at, f.updated_at = "published", admin.id, utcnow(), utcnow()
+    if f.valid_until is None or f.valid_until < beijing_today():
+        f.valid_until = beijing_today() + timedelta(days=DEFAULT_VALID_DAYS)   # 没写就一年后复核
+    f.review_stage = 0
     db.add(f)
     record_audit(db, admin.id, "legal_faq_publish", "legal_faq", f.id, f"{f.topic} {'、'.join(f.keywords[:5])}")
     db.flush()
     return dump(f)
+
+
+@router.post("/admin/legal/faqs/{faq_id}/renew")
+def renew_faq(faq_id: int, body: RenewIn, admin: User = Depends(require_role(ROLE)),
+              db: Session = Depends(get_db, scope="function")):
+    """LAW-062 复核后续期：合规看过、内容仍然对，就把复核日期往后挪（最长 2 年），过期的也能续回来。写审计。"""
+    from app.modules.admin.router import record_audit
+
+    f = _own(db, faq_id)
+    if f.status != "published":
+        raise conflict("只有已上线的条目能续期；草稿请走提交与审核", "legal_faq_not_published")
+    f.valid_until, f.review_stage, f.updated_at = _check_valid_until(body.valid_until), 0, utcnow()
+    db.add(f)
+    record_audit(db, admin.id, "legal_faq_renew", "legal_faq", f.id, f"复核后续期到 {body.valid_until.isoformat()}")
+    db.flush()
+    return dump(f)
+
+
+def remind_reviews(db: Session) -> dict:
+    """LAW-062 每天一次：到期前 30 天提醒一次、到期当天再提醒一次，发给合规管理员（每条每步只发一次）。"""
+    from app.core.admin_roles import has_role, roles_of
+    from app.modules.notification.service import notify
+
+    today = beijing_today()
+    admins = db.query(User).filter(User.is_admin.is_(True), User.is_banned.is_(False)).order_by(User.id).all()
+    to = [u.id for u in admins if "compliance" in roles_of(u)] or [u.id for u in admins if has_role(u, "compliance")]
+    soon, due = [], []
+    for f in db.query(LegalFaq).filter(LegalFaq.status == "published", LegalFaq.valid_until.isnot(None)).all():
+        if f.valid_until < today and f.review_stage < 2:
+            f.review_stage = 2
+            due.append(f)
+        elif f.valid_until <= today + timedelta(days=REMIND_BEFORE_DAYS) and f.review_stage < 1:
+            f.review_stage = 1
+            soon.append(f)
+        db.add(f)
+    for f in due:
+        for uid in to:
+            notify(db, uid, "system", f"法律条目已过复核日期，问答已停用：{f.topic or '未分主题'} #{f.id}",
+                   f"复核日期 {f.valid_until.isoformat()}。内容仍然对就「复核后续期」，不对就下线重写。")
+    for f in soon:
+        for uid in to:
+            notify(db, uid, "system", f"法律条目 {REMIND_BEFORE_DAYS} 天内到复核日期：{f.topic or '未分主题'} #{f.id}",
+                   f"复核日期 {f.valid_until.isoformat()}。到期后问答会停用这一条。")
+    db.flush()
+    return {"reminded_soon": [f.id for f in soon], "reminded_due": [f.id for f in due], "notified": len(to)}
 
 
 @router.post("/admin/legal/faqs/{faq_id}/reject")

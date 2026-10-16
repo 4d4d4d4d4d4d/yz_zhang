@@ -50,7 +50,10 @@ export function LegalFaqAdmin() {
               <td>{r.keywords.join('、')}</td>
               <td>{STATUS[r.status]}{r.published_at && <div className="muted">{formatDateTime(r.published_at)}</div>}
                 {r.retired_reason && <div className="muted">{r.retired_reason}</div>}
-                {r.placeholders.length > 0 && <div className="error">{r.placeholders.join('、')}还没填</div>}</td>
+                {r.placeholders.length > 0 && <div className="error">{r.placeholders.join('、')}还没填</div>}
+                {/* LAW-062（169 号 spec）复核日期；过期的问答已停用 */}
+                {r.valid_until && <div className={r.expired ? 'error' : 'muted'} data-testid={`legal-valid-${r.id}`}>
+                  {r.expired ? `已过复核日期（${r.valid_until}），问答已停用` : `复核日期 ${r.valid_until}`}</div>}</td>
               <td className="muted">{r.source}</td>
               <td className="row">
                 {r.status === 'draft' && <>
@@ -62,6 +65,12 @@ export function LegalFaqAdmin() {
                     onClick={() => void act(() => client.adminApproveLegalFaq(r.id), '已上线')}>上线</button>
                   <button className="ghost" onClick={() => void act(() => client.adminRejectLegalFaq(r.id), '已退回草稿')}>退回</button>
                 </>}
+                {r.status === 'published' && (
+                  <button className="ghost" onClick={() => {
+                    const d = window.prompt('复核过、内容仍然对：新的复核日期（YYYY-MM-DD，最长 2 年后）');
+                    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d.trim())) void act(() => client.adminRenewLegalFaq(r.id, d.trim()), '已续期');
+                  }}>复核后续期</button>
+                )}
                 {r.status !== 'retired' && (
                   <button className="danger" onClick={() => {
                     const reason = window.prompt('下线理由（会留在记录里）');

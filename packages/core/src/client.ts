@@ -1391,6 +1391,8 @@ export class PlatformClient {
   adminSubmitLegalFaq(id: number) { return this.request<LegalFaqRow>('POST', `/admin/legal/faqs/${id}/submit`); }
   adminApproveLegalFaq(id: number) { return this.request<LegalFaqRow>('POST', `/admin/legal/faqs/${id}/approve`); }
   adminRejectLegalFaq(id: number) { return this.request<LegalFaqRow>('POST', `/admin/legal/faqs/${id}/reject`); }
+  /** LAW-062 复核后续期（最长 2 年），过期的也能续回来 */
+  adminRenewLegalFaq(id: number, validUntil: string) { return this.request<LegalFaqRow>('POST', `/admin/legal/faqs/${id}/renew`, { valid_until: validUntil }); }
   adminRetireLegalFaq(id: number, reason: string) { return this.request<LegalFaqRow>('POST', `/admin/legal/faqs/${id}/retire`, { reason }); }
   exportEvidence(disputeId: number) {
     /* `evidentiary_notice` 是这份证据包**证明力边界**的说明——尤其那句

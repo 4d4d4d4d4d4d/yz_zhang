@@ -1271,6 +1271,16 @@ def run_send_scheduled_announcements(_triggered_by: int = Depends(_job_or_admin)
     return {"sent": sent}
 
 
+@router.post("/admin/jobs/remind-legal-reviews")
+def run_remind_legal_reviews(_triggered_by: int = Depends(_job_or_admin),
+                             db: Session = Depends(get_db, scope="function"),
+                             __=Depends(job_slot("legal_reviews"), scope="function")):
+    """LAW-062 法律条目复核提醒（169 号 spec）：每天一次；到期前 30 天、到期当天各提醒一次。"""
+    from app.modules.legal.faq import remind_reviews
+
+    return remind_reviews(db)
+
+
 @router.post("/admin/jobs/escalate-tickets")
 def run_escalate_tickets(_triggered_by: int = Depends(_job_or_admin),
                          db: Session = Depends(get_db, scope="function"),
