@@ -4,6 +4,7 @@ import MachineMandate from './MachineMandate';
 import { DistributionHistoryBlock, InviteMemberBlock, VentureInvitesBlock } from './ventureInvites';
 import { JoinTeamByCode } from './teamInvites';
 import { SupportTicketsScreen } from './supportTickets';
+import { XappScreen } from './xapp';
 import { KeyUsageBlock } from './apiKeyUsage';
 // APP-069 三条线的 App 界面：团队 / 合作体 / 开发者（67 号 spec）。
 //
@@ -38,7 +39,7 @@ import { ApplicationsScreen, InvitationsScreen, MessagesScreen } from './Message
 import { Button, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export type SubScreen = 'messages' | 'invitations' | 'applications' | 'certifications'
-  | 'rights' | 'ask' | 'teams' | 'ventures' | 'developer' | 'workbench' | 'availability' | 'notebook' | 'packs' | 'opc' | 'gig' | 'capability' | 'influence' | 'sandbox' | 'missions' | 'skills' | 'support';
+  | 'rights' | 'ask' | 'teams' | 'ventures' | 'developer' | 'workbench' | 'availability' | 'notebook' | 'packs' | 'opc' | 'gig' | 'capability' | 'influence' | 'sandbox' | 'missions' | 'skills' | 'support' | 'xapp';
 
 export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   messages: '消息',
@@ -62,6 +63,7 @@ export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   skills: '我的技能（按平台技能概念匹配）',
   availability: '我的可用时间（时段 / 少量接单）',
   support: '客服与工单（提交 / 回复 / 处理进度）',
+  xapp: '跨 App 助手（授权 / 逐步确认 / 叫停）',
 };
 
 export function SubScreenHost({ client, screen, onBack, onPublish }: {
@@ -94,6 +96,7 @@ export function SubScreenHost({ client, screen, onBack, onPublish }: {
       {screen === 'skills' && <SkillsScreen client={client} />}
       {screen === 'availability' && <AvailabilityScreen client={client} />}
       {screen === 'support' && <SupportTicketsScreen client={client} />}
+      {screen === 'xapp' && <XappScreen client={client} />}
     </ScrollView>
   );
 }

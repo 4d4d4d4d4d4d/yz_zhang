@@ -1,6 +1,6 @@
 # 161 多模态智能体操作其他 App（无 agent 接口时）
 
-> 状态：设计（V190 平台侧待实现；端上执行器为「外」）。编号 XAPP-001~010。
+> 状态：本批实现（V190）：平台侧 XAPP-001~010；端上执行器 XAPP-011~014 为「外」；计划生成 XAPP-015 排 V191；云端看屏幕 XAPP-016 欠（随执行器）。
 > 来源：用户 2026-10-15「支持通过多模态智能体能够直接操作其他app吗，在其他app不提供agent的通信api的情况下」（VISION 1.12）；BACKLOG V190。
 > 只增不减：开放 API、Webhook、机器授权（MachineMandate）、端侧隐私沙箱都不变；这是新的一条能力线。
 
@@ -58,7 +58,24 @@
 
 ## 6. 闸门与红验
 
-实现 V190 时补：授权白名单外的 App 被拒、红线步不确认不能执行、叫停后不再派发下一步、云端看屏幕默认关闭、记录进导出与注销处置；每条做变异红验。
+V190 实现（`server/app/modules/xapp/`，接口 `/api/v1/xapp/*` 共 10 个，表 `xapp_grants` / `xapp_runs` / `xapp_steps`，迁移 `c1d220260033`）：
+
+| 闸门 | 测试 | 红验（故意改坏 → 变红） |
+|---|---|---|
+| 红线动作不能授权（XAPP-001/003） | `test_grant_rejects_red_line_actions_and_bad_apps` | 去掉红线判断 → 红 |
+| 计划只能用授权里的 App 与动作，云端看屏幕默认关（XAPP-001/005） | `test_plan_must_stay_inside_the_grant` | 去掉白名单判断 → 红；去掉云端看屏幕判断 → 红 |
+| 红线步只「带人到那个页面」，执行器不能代点；确认后算「你已亲手完成」（XAPP-003） | `test_executor_walks_the_plan_and_red_line_steps_go_back_to_the_person`、`test_red_line_step_after_confirm_is_a_handoff_not_an_execution` | 红线标记恒为假 → 红；红线步改成派发 → 红 |
+| 每步确认模式等每一步（XAPP-004） | `test_each_mode_waits_for_every_step` | 去掉待确认判断 → 红 |
+| 连续失败两次交还给人；回报当场脱敏（手机号、6 位以上数字）（XAPP-005/009） | `test_two_failures_hand_the_run_back_and_results_are_scrubbed` | 去掉失败计数 → 红；跳过脱敏 → 红（本批把测试加强成「当场」检查，原先被第二次回报盖掉而漏网） |
+| 叫停、撤销授权当场停，此后不再派发（XAPP-001/004） | `test_stop_and_revoke_stop_everything` | 去掉非执行中的拦截 → 红；撤销时不停正在跑的 → 红（本批加强：撤销后立刻查记录，不靠下一次拿步骤） |
+| 授权过期，下一步就停 | `test_expired_grant_stops_the_run_at_the_next_step` | 去掉过期判断 → 红 |
+| 步数上限与每天次数上限（XAPP-010） | `test_limits` | — |
+| 记录进数据导出、随注销删除（XAPP-006） | `test_records_are_in_export_and_erased_on_deletion` | 注销时不删授权 → 红 |
+| 响应形状与 SDK 类型一致 | `test_every_xapp_response_matches_the_sdk_types` | — |
+| 对象级授权 | `test_object_level_authz.py`：`/xapp/` 归本人，别人的编号 404 | — |
+| 两端 | App `xapp.test.tsx`（3 条：授权、红线步亲手完成、叫停、示例执行、模拟执行器试跑）；Web `Xapp.test.tsx`；SDK `xapp.test.ts`（`driveXappRun` 执行器循环）；真浏览器 `e2e_web.py` 走 `/xapp` | 去掉红线提示（App、Web 各一处）→ 红 |
+
+执行器协议在共享 SDK：`driveXappRun(client, runId, {perform, handoff})` 循环「拿下一步 → 执行 → 回报」，遇到等确认、交还给人、叫停就停下。App 上「用模拟执行器试跑」就是用它，不碰任何 App。
 
 ## 7. 没做的
 
@@ -66,3 +83,6 @@
 - **XAPP-012 桌面执行器**：本机程序（Windows / macOS），需要签名与分发（外）。
 - **XAPP-013 iOS 快捷指令动作包**：需要真机与 App Store 审核（外）。
 - **XAPP-014 端侧屏幕理解模型**：能在手机上跑的界面理解小模型，接进端侧模型目录（与 SBX-110 一起，外）。
+- **XAPP-015 智能体出计划**：V190 的计划由客户端按授权给出（App 上是示例计划）；「说一句目标 → 智能体按 API → 深链 → 控件树 → 屏幕识别的顺序出步骤」还没做，排 **V191**。
+- **XAPP-016 云端看屏幕接口与成本**：平台还没有「把屏幕摘要交给云端模型识别」的接口；做的时候必须进端侧沙箱的云端 AI 名单、每次提示、计入助手月度成本上限（REL-110）。依赖端上执行器，随 XAPP-011/012 一起做（欠）。
+- Web 上桌面执行器的下载与配对、iOS 上列出可用的快捷指令动作：随 XAPP-012 / XAPP-013（外）。

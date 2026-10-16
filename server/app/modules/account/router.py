@@ -741,6 +741,15 @@ def _export_influence(db: Session, user_id: int) -> dict:
     }
 
 
+def _export_xapp(db: Session, user_id: int) -> dict:
+    from app.modules.xapp import service as xsvc
+    from app.modules.xapp.models import XappGrant, XappRun
+
+    grants = db.query(XappGrant).filter(XappGrant.user_id == user_id).order_by(XappGrant.id).all()
+    runs = db.query(XappRun).filter(XappRun.user_id == user_id).order_by(XappRun.id).all()
+    return {"grants": [xsvc.dump_grant(g) for g in grants], "runs": [xsvc.dump_run(db, r, with_steps=True) for r in runs]}
+
+
 def _export_tickets(db: Session, user_id: int) -> list[dict]:
     from app.modules.support.models import Ticket, TicketReply
 
@@ -780,6 +789,8 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
         "influence": _export_influence(db, user.id),
         # ESCA-055（160 号 spec）客服工单与往来也是本人的数据
         "tickets": _export_tickets(db, user.id),
+        # XAPP-006（161 号 spec）跨 App 助手的授权与执行记录
+        "xapp": _export_xapp(db, user.id),
         "real_name": user.real_name,
         "tasks": [{"id": t.id, "title": t.title, "status": t.status, "budget_cents": t.budget_cents,
                    "role": "creator" if t.creator_id == user.id else "executor"} for t in tasks],

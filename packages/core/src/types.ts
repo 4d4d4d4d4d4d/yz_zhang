@@ -2802,3 +2802,82 @@ export interface SkillConceptAdminView {
   effective: SkillConceptView[];
   overrides: SkillConceptRow[];
 }
+
+/** XAPP 跨 App 助手（161 号 spec）：用户给自己的设备开的操作授权 */
+export interface XappGrant {
+  id: number;
+  device_label: string;
+  /** 允许操作的 App（包名 / 应用标识） */
+  apps: string[];
+  /** 允许的动作：open / read / fill / tap / navigate（红线类不能授权） */
+  actions: string[];
+  /** 是否允许云端模型看屏幕（默认否：屏幕内容只在本机处理） */
+  allow_cloud_vision: boolean;
+  expires_at: string;
+  revoked_at: string | null;
+  active: boolean;
+  created_at: string;
+}
+export interface XappGrantRevoked extends XappGrant {
+  /** 撤销时一起叫停的执行数 */
+  runs_stopped: number;
+}
+export interface XappStep {
+  id: number;
+  seq: number;
+  app: string;
+  action: string;
+  action_label: string;
+  intent: string;
+  /** api / deeplink / a11y / vision：越往后越容易因为对方改版失效 */
+  channel: string;
+  vision_where: string;
+  /** 红线步（付款、签署、发布、对外发消息……）只能本人亲手做 */
+  red_line: boolean;
+  needs_confirm: boolean;
+  confirmed: boolean;
+  /** pending / dispatched / done / done_by_user / failed / skipped */
+  status: string;
+  attempts: number;
+  /** 脱敏后的结果摘要 */
+  result: string;
+}
+export interface XappRun {
+  id: number;
+  grant_id: number;
+  goal: string;
+  executor: string;
+  confirm_mode: string;
+  /** running / needs_human / stopped / done / failed */
+  status: string;
+  stop_reason: string;
+  created_at: string;
+  finished_at: string | null;
+}
+export interface XappRunDetail extends XappRun {
+  steps: XappStep[];
+}
+/** 执行器拿下一步：execute 去做 / handoff 红线步带人到页面 / awaiting_confirm 等本人确认 / 其余为结束状态 */
+export interface XappNext {
+  state: 'execute' | 'handoff' | 'awaiting_confirm' | 'done' | 'stopped' | 'needs_human' | 'running' | 'failed';
+  step?: XappStep;
+  reason?: string;
+}
+export interface XappStepOutcome {
+  run_status: string;
+  step: XappStep;
+}
+export interface XappCatalog {
+  actions: Array<{ key: string; label: string }>;
+  red_line: Array<{ key: string; label: string }>;
+  channels: string[];
+  executors: string[];
+  notice: string;
+}
+export interface XappStepInput {
+  app: string;
+  action: string;
+  intent: string;
+  channel: string;
+  vision_where?: 'device' | 'cloud';
+}

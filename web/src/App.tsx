@@ -17,6 +17,7 @@ import Cooperate from './pages/Cooperate';
 import Ask from './pages/Ask';
 import Search from './pages/Search';
 import Support from './pages/Support';
+import Xapp from './pages/Xapp';
 import TaskDetail from './pages/TaskDetail';
 import Developer from './pages/Developer';
 import Teams from './pages/Teams';
@@ -75,7 +76,7 @@ export default function App() {
           <Link className="nav-mobile-keep" to="/notifications" aria-label="通知">🔔</Link>
           <Link className="nav-mobile-keep" to="/profile">{me.nickname}<small>账户</small></Link>
         </div> : <Link className="nav-mobile-keep nav-signin" to="/login">登录 / 注册 <span aria-hidden="true">→</span></Link>}
-        <details className="mobile-menu"><summary>全部功能</summary><div>{[['/opportunities','合作机会'],['/community','社区'],['/circles','圈层'],['/ventures','合作体'],['/teams','团队'],['/wallet','钱包'],['/chain','链上协作'],['/records','企业档案'],['/rewards','优惠'],['/verify','核验台'],['/developer','开发者'],['/ask','不懂就问'],['/support','客服']].map(([to,label])=><Link key={to} to={to}>{label}</Link>)}</div></details>
+        <details className="mobile-menu"><summary>全部功能</summary><div>{[['/opportunities','合作机会'],['/community','社区'],['/circles','圈层'],['/ventures','合作体'],['/teams','团队'],['/wallet','钱包'],['/chain','链上协作'],['/records','企业档案'],['/rewards','优惠'],['/verify','核验台'],['/developer','开发者'],['/ask','不懂就问'],['/support','客服'],['/xapp','跨 App 助手']].map(([to,label])=><Link key={to} to={to}>{label}</Link>)}</div></details>
       </nav>
       <Routes>
         <Route path="/" element={<Discover />} />
@@ -118,6 +119,7 @@ export default function App() {
         {/* SRCH-001 全站搜索（V127）。结果接口要登录（搜索记录按人去重），热词与联想不要 */}
         <Route path="/search" element={hasToken ? <Search /> : <Navigate to="/login?next=/search" />} />
         <Route path="/support" element={hasToken ? <Support /> : <Navigate to="/login" />} />
+        <Route path="/xapp" element={hasToken ? <Xapp /> : <Navigate to="/login" />} />
         <Route path="/verify" element={hasToken ? <Verify /> : <Navigate to="/login" />} />
         <Route path="/ventures" element={hasToken ? <Ventures /> : <Navigate to="/login" />} />
         <Route path="/teams" element={hasToken ? <Teams /> : <Navigate to="/login" />} />

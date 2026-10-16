@@ -20,6 +20,7 @@ api DELETE /api/v1/workbench/items/{item_id}
 api DELETE /api/v1/workbench/memories/{memory_id}
 api DELETE /api/v1/workbench/projects/{project_id}
 api DELETE /api/v1/workbench/routines/{routine_id}
+api DELETE /api/v1/xapp/grants/{grant_id}
 api GET /api/v1/admin/admins
 api GET /api/v1/admin/agents
 api GET /api/v1/admin/aml/activities
@@ -234,6 +235,10 @@ api GET /api/v1/workbench/projects
 api GET /api/v1/workbench/routines
 api GET /api/v1/workbench/routines/{routine_id}/health
 api GET /api/v1/workbench/routines/{routine_id}/runs
+api GET /api/v1/xapp/catalog
+api GET /api/v1/xapp/grants
+api GET /api/v1/xapp/runs
+api GET /api/v1/xapp/runs/{run_id}
 api GET /docs
 api GET /docs/oauth2-redirect
 api GET /healthz
@@ -496,6 +501,12 @@ api POST /api/v1/workbench/memories
 api POST /api/v1/workbench/projects
 api POST /api/v1/workbench/routines
 api POST /api/v1/workbench/routines/{routine_id}/run
+api POST /api/v1/xapp/grants
+api POST /api/v1/xapp/runs
+api POST /api/v1/xapp/runs/{run_id}/next
+api POST /api/v1/xapp/runs/{run_id}/steps/{step_id}/confirm
+api POST /api/v1/xapp/runs/{run_id}/steps/{step_id}/result
+api POST /api/v1/xapp/runs/{run_id}/stop
 api PUT /api/v1/admin/admins/{user_id}/roles
 api PUT /api/v1/admin/matching-config
 api PUT /api/v1/admin/packs/{pack_id}
@@ -545,6 +556,7 @@ app supportTickets
 app teamInvites
 app ventureInvites
 app workbench
+app xapp
 sdk acceptAgreements
 sdk acceptApplication
 sdk acceptChange
@@ -640,6 +652,7 @@ sdk cockpit
 sdk commentContent
 sdk confirmContribution
 sdk confirmDecomposition
+sdk confirmXappStep
 sdk contentComments
 sdk contentFeed
 sdk contractAnchors
@@ -668,6 +681,8 @@ sdk createWebhook
 sdk createWorkbenchItem
 sdk createWorkbenchProject
 sdk createWorkbenchRoutine
+sdk createXappGrant
+sdk createXappRun
 sdk currentDecomposition
 sdk deactivateAccount
 sdk decideCertification
@@ -879,6 +894,7 @@ sdk revokeCertification
 sdk revokeConsent
 sdk revokeSession
 sdk revokeTeamInviteLink
+sdk revokeXappGrant
 sdk rotateApiKey
 sdk runAgent
 sdk runWorkbenchRoutine
@@ -914,6 +930,7 @@ sdk smsLogin
 sdk sos
 sdk stepReviews
 sdk stopGigAvailable
+sdk stopXappRun
 sdk submitCertification
 sdk submitContribution
 sdk submitTeamCompany
@@ -990,6 +1007,12 @@ sdk workbenchRoutineHealth
 sdk workbenchRoutineRuns
 sdk workbenchRoutines
 sdk workedWith
+sdk xappCatalog
+sdk xappGrants
+sdk xappNext
+sdk xappReport
+sdk xappRun
+sdk xappRuns
 web /
 web /admin
 web /ask
@@ -1026,3 +1049,4 @@ web /ventures
 web /verify
 web /wallet
 web /workbench
+web /xapp

@@ -158,7 +158,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.175.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.176.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")
@@ -179,6 +179,9 @@ class Settings:
     # API-052（152 号 spec）每把 Key 每天（北京时间）最多多少次请求；Key 自己可以设得更低
     API_KEY_DAILY_QUOTA = int(os.environ.get("PLATFORM_API_KEY_DAILY_QUOTA", "20000"))
     # API-054（158 号 spec）同一个账号所有 Key 当天（北京时间）合计最多多少次：多建几把 Key 不能叠加配额
+    # XAPP（161 号 spec）跨 App 助手：一次执行最多几步、每人每天最多发起几次
+    XAPP_MAX_STEPS = int(os.environ.get("PLATFORM_XAPP_MAX_STEPS", "30"))
+    XAPP_DAILY_RUNS = int(os.environ.get("PLATFORM_XAPP_DAILY_RUNS", "20"))
     API_ACCOUNT_DAILY_QUOTA = int(os.environ.get("PLATFORM_API_ACCOUNT_DAILY_QUOTA", "50000"))
     # SEC-020 认证失败自动封禁：窗口内失败达阈值即临时封禁该 IP
     AUTH_FAIL_WINDOW_SECONDS = int(os.environ.get("PLATFORM_AUTH_FAIL_WINDOW_SECONDS", "300"))

@@ -60,6 +60,14 @@ import type {
   MissionDraftDecision,
   MissionSummary,
   MissionMethodDraft,
+  XappCatalog,
+  XappGrant,
+  XappGrantRevoked,
+  XappNext,
+  XappRun,
+  XappRunDetail,
+  XappStepInput,
+  XappStepOutcome,
   MissionSummarySaved,
   AssistantCosts,
   MissionStep,
@@ -892,6 +900,38 @@ export class PlatformClient {
   missionSummary(id: number) { return this.request<MissionSummary>('GET', `/missions/${id}/summary`); }
   /** AGT-092 把复盘存进个人知识库（标签「编排复盘」；再存一次更新同一条） */
   saveMissionSummary(id: number) { return this.request<MissionSummarySaved>('POST', `/missions/${id}/summary/save`); }
+  // ---- XAPP 跨 App 助手（161 号 spec）----
+  /** 能授权的动作、只能本人亲手做的红线动作、通道顺序 */
+  xappCatalog() { return this.request<XappCatalog>('GET', '/xapp/catalog'); }
+  createXappGrant(input: { apps: string[]; actions: string[]; days: number; device_label?: string; allow_cloud_vision?: boolean }) {
+    return this.request<XappGrant>('POST', '/xapp/grants', {
+      apps: input.apps, actions: input.actions, days: input.days,
+      device_label: input.device_label ?? '', allow_cloud_vision: input.allow_cloud_vision ?? false,
+    });
+  }
+  xappGrants() { return this.request<XappGrant[]>('GET', '/xapp/grants'); }
+  /** 撤销即停：用这个授权还在跑的执行全部叫停 */
+  revokeXappGrant(id: number) { return this.request<XappGrantRevoked>('DELETE', `/xapp/grants/${id}`); }
+  createXappRun(input: { grant_id: number; goal: string; executor: string; confirm_mode: 'each' | 'red_only'; steps: XappStepInput[] }) {
+    return this.request<XappRunDetail>('POST', '/xapp/runs', {
+      grant_id: input.grant_id, goal: input.goal, executor: input.executor,
+      confirm_mode: input.confirm_mode, steps: input.steps,
+    });
+  }
+  xappRuns() { return this.request<XappRun[]>('GET', '/xapp/runs'); }
+  xappRun(id: number) { return this.request<XappRunDetail>('GET', `/xapp/runs/${id}`); }
+  /** 执行器：拿下一步 */
+  xappNext(runId: number) { return this.request<XappNext>('POST', `/xapp/runs/${runId}/next`); }
+  /** 执行器：回报一步的结果 */
+  xappReport(runId: number, stepId: number, ok: boolean, summary: string) {
+    return this.request<XappStepOutcome>('POST', `/xapp/runs/${runId}/steps/${stepId}/result`, { ok, summary });
+  }
+  /** 本人确认：普通步确认后才派发；红线步确认表示「我自己做完了」 */
+  confirmXappStep(runId: number, stepId: number) {
+    return this.request<XappStepOutcome>('POST', `/xapp/runs/${runId}/steps/${stepId}/confirm`);
+  }
+  /** 一键叫停 */
+  stopXappRun(runId: number, reason = '') { return this.request<XappRun>('POST', `/xapp/runs/${runId}/stop`, { reason }); }
   /** AGT-093 复盘一步蒸馏成「我的方法」草稿（154 号 spec）：先存复盘笔记作出处，只收做成了的步骤；确认后调 createMethod */
   distillMissionMethod(id: number) { return this.request<MissionMethodDraft>('POST', `/missions/${id}/summary/distill`); }
   /** REL-110 本月助手花了多少、上限多少 */

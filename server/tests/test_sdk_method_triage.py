@@ -44,6 +44,9 @@ def _unused(method: str) -> bool:
 # 判定标准：**这个方法本来就不该由用户侧界面调用**，
 # 不是「还没做」。后者属于第 3 类。
 INTENTIONAL: dict[str, str] = {
+    # XAPP（161 号 spec）执行器协议：由设备上的执行器经共享 SDK 的 driveXappRun 调用，不是界面按钮
+    "xappNext": "执行器协议：设备上的执行器（Android 无障碍 / 桌面 / 模拟执行器）经 driveXappRun 拿下一步，App 的模拟试跑在用",
+    "xappReport": "执行器协议：执行器经 driveXappRun 回报结果，App 的模拟试跑在用",
     # V171（143 号 spec）后台改用带总条数的分页版本；旧方法只返回数组，保留给旧客户端与脚本（只增不减，FEAT-001）
     "adminAuditLog": "兼容保留：V171 起后台改用 adminAuditLogPage（带总条数与更多筛选）",
     "withdrawRequests": "兼容保留：V171 起提现复核台改用 withdrawRequestsPage（带总条数与筛选）",

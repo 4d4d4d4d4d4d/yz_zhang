@@ -1243,7 +1243,7 @@ function MeScreen({ client, me, refresh, onLogout }: {
           而 V92 刚给团队审批加了通知——通知把人叫来、他点进去无路可走，
           比没有通知更糟（APP-066 同一条教训）。 */}
       {(['workbench', 'notebook', 'packs', 'opc', 'gig', 'capability', 'availability', 'messages', 'invitations', 'applications', 'certifications', 'rights',
-         'ask', 'support', 'teams', 'ventures', 'developer'] as SubScreen[]).map((key) => (
+         'ask', 'support', 'xapp', 'teams', 'ventures', 'developer'] as SubScreen[]).map((key) => (
         <TouchableOpacity key={key} onPress={() => setSub(key)}>
           <Text style={styles.linkRow}>{SUB_SCREEN_LABEL[key]} ›</Text>
         </TouchableOpacity>

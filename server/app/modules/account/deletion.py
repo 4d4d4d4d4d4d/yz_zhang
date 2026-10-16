@@ -177,6 +177,13 @@ def erase_personal_data(db: Session, user: User) -> dict:
     if plain:
         db.query(TicketReply).filter(TicketReply.ticket_id.in_([t.id for t in plain])).update(
             {"body": ""}, synchronize_session=False)
+    # XAPP-006（161 号 spec）跨 App 助手的授权、执行与步骤记录：本人私有，注销即物理删除
+    from app.modules.xapp.models import XappGrant, XappRun, XappStep
+    run_ids = [r.id for r in db.query(XappRun.id).filter(XappRun.user_id == user.id)]
+    if run_ids:
+        db.query(XappStep).filter(XappStep.run_id.in_(run_ids)).delete(synchronize_session=False)
+    db.query(XappRun).filter(XappRun.user_id == user.id).delete(synchronize_session=False)
+    db.query(XappGrant).filter(XappGrant.user_id == user.id).delete(synchronize_session=False)
     # 分析事件只要聚合数：去掉与人的关联（法律问答答不上的主题等，153 号 spec）
     from app.modules.analytics.models import AnalyticsEvent
     db.query(AnalyticsEvent).filter(AnalyticsEvent.user_id == user.id).update(

@@ -7,3 +7,4 @@ export * from './actions';
 export * from './idempotency';
 export * from './decompose';
 export * from './sandbox';
+export * from './xapp';

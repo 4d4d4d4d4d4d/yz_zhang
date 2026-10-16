@@ -378,6 +378,24 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
          "E2E 周六搬家" in mission and "上限 ¥300.00" in mission and "已付 ¥0.00" in mission
          and page.locator("input[aria-label='允许用经验工具生成草稿']").is_checked())
 
+    # XAPP（V190，161 号 spec）跨 App 助手：真服务端建授权与一次执行，网页能看到授权、执行与红线步「要你亲手完成」
+    page.evaluate("""async () => {
+        const h = {Authorization: 'Bearer ' + localStorage.getItem('token'), 'Content-Type': 'application/json'};
+        const g = await (await fetch('/api/v1/xapp/grants', {method: 'POST', headers: h,
+            body: JSON.stringify({apps: ['com.tencent.mm'], actions: ['open'], days: 7, device_label: 'E2E 手机'})})).json();
+        await fetch('/api/v1/xapp/runs', {method: 'POST', headers: h, body: JSON.stringify({grant_id: g.id, goal: 'E2E 回复客户',
+            executor: 'mock', confirm_mode: 'red_only', steps: [
+              {app: 'com.tencent.mm', action: 'open', intent: '打开聊天', channel: 'deeplink'},
+              {app: 'com.tencent.mm', action: 'send_message', intent: '发出预计到达时间', channel: 'a11y'}]})});
+    }""")
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/xapp", wait_until="networkidle")
+    page.wait_for_selector("[aria-label='授权'] >> text=E2E 手机", timeout=10000)
+    page.get_by_role("button", name="看步骤").first.click()
+    page.wait_for_selector("[aria-label='执行详情']", timeout=10000)
+    xapp = page.locator("[aria-label='执行详情']").inner_text()
+    step("跨 App 助手：真服务端的授权与执行在网页上可见，红线步写明要你亲手完成",
+         "E2E 回复客户" in xapp and "要你亲手完成" in xapp)
+
     # 客服工单：V102 才补上的自助入口，而且它是**没有前置条件的写路径**——
     # 正好适合用真浏览器验一遍（服务端队列由 V101/V103 的测试盯着）
     page.goto(f"http://127.0.0.1:{WEB_PORT}/support", wait_until="networkidle")
