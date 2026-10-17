@@ -159,3 +159,20 @@ describe('SCN-137 补招时顺带邀请', () => {
     expect(await screen.findByText('已补招 01-06：2 个还在招的名额再推了一次；邀请了 1 个那天有空、做过这类活的人（小王）。6 小时后可以再补一次。')).toBeTruthy();
   });
 });
+
+describe('SCN-139 改时段时顺带发变更单', () => {
+  const POSTER = { ...ME, id: 9, nickname: '店主' };
+  it('勾上：请求带 propose_change，结果写明对方同意后生效', async () => {
+    const calls: Call[] = [];
+    open('/tasks/30', calls, { 'GET /tasks/30': PARENT, 'GET /tasks/30/tree': TREE,
+      'PATCH /tasks/30/days/2030-01-05/shift': { date: '2030-01-05', changed: [], kept: [{ task_id: 31, reason: 'x', change_order_id: 7 }],
+        shift_start: '10:00', shift_end: '16:00' } }, POSTER);
+    await screen.findByLabelText('改某天的时段');
+    fireEvent.change(screen.getByLabelText('这天几点开始'), { target: { value: '10:00' } });
+    fireEvent.change(screen.getByLabelText('这天几点结束'), { target: { value: '16:00' } });
+    fireEvent.click(screen.getByLabelText('已经有人接的，顺带给对方发变更单'));
+    fireEvent.click(screen.getByText('改这天的时段'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ shift_start: '10:00', shift_end: '16:00', propose_change: true }));
+    expect(await screen.findByText('01-05 改成 10:00–16:00：改了 0 个还在招的名额；1 个已经有人接了，已给对方发了变更单，对方同意后生效。')).toBeTruthy();
+  });
+});

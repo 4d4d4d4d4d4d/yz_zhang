@@ -570,6 +570,9 @@ def _resolve_body_keys(expr: str) -> tuple[set[str], bool]:
 
 # 解析不了的请求体 -> 为什么（值是**理由**，不是布尔）
 DYNAMIC_BODY: dict[tuple[str, str], str] = {
+    ("PATCH", "/tasks/{x}/days/{x}/shift"): (
+        "SCN-139（207 号 spec）勾了顺带发变更单才带 propose_change（不勾请求体与 V234 一样）；服务端 DayShiftChangeIn 认 shift_start / shift_end / propose_change，extra=forbid"
+    ),
     ("POST", "/tasks/{x}/days/{x}/reboost"): (
         "SCN-137（206 号 spec）勾了顺带邀请才带 invite（不勾请求体与 V224 一样）；服务端 ReboostIn 认 raise_cents / invite，extra=forbid"
     ),

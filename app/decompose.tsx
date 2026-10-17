@@ -222,6 +222,7 @@ export function TaskTreeBlock({ client, task, onOpenTask, meId = null }: {
   const [shiftFrom, setShiftFrom] = useState('');
   const [shiftTo, setShiftTo] = useState('');
   const [shiftMsg, setShiftMsg] = useState('');
+  const [shiftPropose, setShiftPropose] = useState(false);   // SCN-139 有人接的名额顺带发变更单
   const isPoster = meId !== null && meId === task.creator_id && (task.days ?? 1) > 1;
   const loadPeople = useCallback(() => {
     if (!isPoster) return;
@@ -333,10 +334,14 @@ export function TaskTreeBlock({ client, task, onOpenTask, meId = null }: {
                          value={shiftFrom} onChangeText={setShiftFrom} />
               <TextInput style={styles.input} accessibilityLabel="这天几点结束" placeholder="几点结束（如 16:00）"
                          value={shiftTo} onChangeText={setShiftTo} />
+              <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: shiftPropose }}
+                                onPress={() => setShiftPropose(!shiftPropose)}>
+                <Text style={styles.row}>{shiftPropose ? '☑ ' : '☐ '}已经有人接的，顺带给对方发变更单</Text>
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => {
                 setShiftMsg('');
                 const all = shiftEditableDays(tree.by_day);
-                void client.changeDayShift(task.id, all.includes(shiftDay) ? shiftDay : all[0], shiftFrom.trim(), shiftTo.trim()).then((r) => {
+                void client.changeDayShift(task.id, all.includes(shiftDay) ? shiftDay : all[0], shiftFrom.trim(), shiftTo.trim(), shiftPropose).then((r) => {
                   setShiftMsg(dayShiftChangeLine(r));
                   void client.taskTree(task.id).then(setTree).catch(() => {});
                 }).catch((e) => setShiftMsg(apiErrorText(e)));

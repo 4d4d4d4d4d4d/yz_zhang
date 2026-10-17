@@ -130,3 +130,17 @@ describe('SCN-137 App 补招时顺带邀请', () => {
     expect(await screen.findByText('已补招 01-06：1 个还在招的名额再推了一次；这天没找到做过这类活、又正好有空的人可邀。6 小时后可以再补一次。')).toBeTruthy();
   });
 });
+
+describe('SCN-139 App 改时段时顺带发变更单', () => {
+  it('勾上：请求带 propose_change', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({ 'GET /tasks/30/tree': TREE, 'GET /tasks/30/applicants': [],
+      'PATCH /tasks/30/days/2030-01-05/shift': { date: '2030-01-05', changed: [], kept: [{ task_id: 31, reason: 'x', change_order_id: 7 }], shift_start: '', shift_end: '' } }, calls);
+    render(<TaskTreeBlock client={client} task={TASK} onOpenTask={() => {}} meId={9} />);
+    await screen.findByLabelText('改某天的时段');
+    fireEvent.press(screen.getByText('☐ 已经有人接的，顺带给对方发变更单'));
+    fireEvent.press(screen.getByText('改这天的时段'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ shift_start: '', shift_end: '', propose_change: true }));
+    expect(await screen.findByText('01-05 改成 不限时段：改了 0 个还在招的名额；1 个已经有人接了，已给对方发了变更单，对方同意后生效。')).toBeTruthy();
+  });
+});

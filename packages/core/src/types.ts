@@ -740,6 +740,8 @@ export interface DayShiftChangeResult {
 export interface DayShiftKept {
   task_id: number;
   reason: string;
+  /** SCN-139 勾了「顺带发变更单」且发出去了：变更单编号（对方同意后生效）；没发是 null */
+  change_order_id?: number | null;
 }
 
 /** SCN-121 一天的补招结果：哪几个名额再推了一次、加价后各自的预算 */

@@ -20,10 +20,14 @@ export function dayLabel(startDate: string, i: number): string {
 /** SCN-138（202 号 spec）改了某一天的时段之后的一句话：改了几个、几个有人接了要走变更单。两端同一句。 */
 export function dayShiftChangeLine(r: Pick<DayShiftChangeResult, 'date' | 'changed' | 'kept' | 'shift_start' | 'shift_end'>): string {
   const n = Array.isArray(r.changed) ? r.changed.length : 0;
-  const k = Array.isArray(r.kept) ? r.kept.length : 0;
+  const kept = Array.isArray(r.kept) ? r.kept : [];
+  // SCN-139 有人接的名额：发出了变更单的说「对方同意后生效」，没发出的照旧说要走变更单
+  const sent = kept.filter((x) => typeof x?.change_order_id === 'number').length;
+  const rest = kept.length - sent;
   const when = r.shift_start ? `${r.shift_start}–${r.shift_end}` : '不限时段';
   return `${String(r.date).slice(5)} 改成 ${when}：改了 ${n} 个还在招的名额`
-    + (k ? `；${k} 个已经有人接了，改时间要和对方走合约变更单` : '') + '。';
+    + (sent ? `；${sent} 个已经有人接了，已给对方发了变更单，对方同意后生效` : '')
+    + (rest ? `；${rest} 个已经有人接了，改时间要和对方走合约变更单` : '') + '。';
 }
 
 /** SCN-138 哪些天还能改时段：还有在招的名额，或有人接了还没做完（后者服务端会写明要走变更单）。两端同一条判断。 */

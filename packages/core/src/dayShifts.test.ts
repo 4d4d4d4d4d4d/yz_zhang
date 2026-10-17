@@ -49,3 +49,12 @@ describe('SCN-138 shiftEditableDays', () => {
     expect(shiftEditableDays(undefined)).toEqual([]);
   });
 });
+
+describe('SCN-139 改时段时给有人接的名额发变更单', () => {
+  it('发出去的说对方同意后生效，没发出的照旧说要走变更单', () => {
+    expect(dayShiftChangeLine({ date: '2030-01-06', changed: [], kept: [
+      { task_id: 4, reason: 'x', change_order_id: 9 }, { task_id: 5, reason: 'y', change_order_id: null }],
+    shift_start: '10:00', shift_end: '16:00' }))
+      .toBe('01-06 改成 10:00–16:00：改了 0 个还在招的名额；1 个已经有人接了，已给对方发了变更单，对方同意后生效；1 个已经有人接了，改时间要和对方走合约变更单。');
+  });
+});

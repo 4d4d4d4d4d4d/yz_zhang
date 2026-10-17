@@ -525,13 +525,14 @@ function DayShiftEditor({ taskId, days, onDone }: { taskId: number; days: string
   const [day, setDay] = useState('');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  const [propose, setPropose] = useState(false);   // SCN-139 有人接的名额顺带发变更单
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
   if (days.length === 0) return null;
   const target = days.includes(day) ? day : days[0];
   async function submit() {
     setError(''); setMsg('');
-    try { setMsg(dayShiftChangeLine(await client.changeDayShift(taskId, target, start, end))); onDone(); }
+    try { setMsg(dayShiftChangeLine(await client.changeDayShift(taskId, target, start, end, propose))); onDone(); }
     catch (e) { setError(apiErrorText(e)); }
   }
   return (
@@ -543,6 +544,7 @@ function DayShiftEditor({ taskId, days, onDone }: { taskId: number; days: string
         </select>
         <input type="time" aria-label="这天几点开始" value={start} onChange={(e) => setStart(e.target.value)} />
         <input type="time" aria-label="这天几点结束" value={end} onChange={(e) => setEnd(e.target.value)} />
+        <label><input type="checkbox" checked={propose} onChange={(e) => setPropose(e.target.checked)} /> 已经有人接的，顺带给对方发变更单</label>
         <button onClick={() => void submit()}>改这天的时段</button>
       </div>
       {msg && <p className="muted">{msg}</p>}

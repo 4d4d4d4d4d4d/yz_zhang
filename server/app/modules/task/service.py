@@ -185,3 +185,13 @@ def validate_publishable(task: Task, db: Session | None = None, reviewed: bool =
             deadline = deadline.replace(tzinfo=None)
         if deadline <= utcnow():
             raise bad_request("截止时间必须晚于当前时间", "deadline_in_past")
+
+
+def retime_slot(task: Task, start: str, end: str) -> None:
+    """SCN-138 / SCN-139 名额改时段：时段与标题里的「（MM-DD 时段）」一起改。没有日期的任务只改时段。"""
+    if task.work_date:
+        md = f"{task.work_date.month:02d}-{task.work_date.day:02d}"
+        old = f" {task.shift_start}–{task.shift_end}" if task.shift_start else ""
+        new = f" {start}–{end}" if start else ""
+        task.title = task.title.replace(f"（{md}{old}）", f"（{md}{new}）", 1)
+    task.shift_start, task.shift_end = start, end

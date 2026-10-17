@@ -82,6 +82,9 @@ class ChangeOrder(Base):
     # SC-007b 真实的「加了两个房间」通常同时要改期、改范围。不改价时 new_amount_cents 记原金额
     new_deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     scope_change: Mapped[str] = mapped_column(String(1000), default="")
+    # SCN-139（207 号 spec）多天名额改时段：对方接受后名额的时段跟着改。None = 这张变更单不改时段，"" = 改成不限时段
+    new_shift_start: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    new_shift_end: Mapped[str | None] = mapped_column(String(5), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending/accepted/rejected
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 

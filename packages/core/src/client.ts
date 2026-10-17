@@ -646,8 +646,10 @@ export class PlatformClient {
     return this.request<Task>('PATCH', `/tasks/${taskId}/recipient`, body);
   }
   /** SCN-138 发布后改某一天的时段：只改还在招的名额；有人接的要走变更单（返回里写明）。两个都空 = 那天不写时段 */
-  changeDayShift(taskId: number, date: string, shiftStart: string, shiftEnd: string) {
-    return this.request<DayShiftChangeResult>('PATCH', `/tasks/${taskId}/days/${date}/shift`, { shift_start: shiftStart, shift_end: shiftEnd });
+  changeDayShift(taskId: number, date: string, shiftStart: string, shiftEnd: string, proposeChange = false) {
+    // SCN-139 proposeChange：已经有人接的名额顺带给对方发改时段的变更单（不勾时请求体与 V234 一样）
+    return this.request<DayShiftChangeResult>('PATCH', `/tasks/${taskId}/days/${date}/shift`,
+      { shift_start: shiftStart, shift_end: shiftEnd, ...(proposeChange ? { propose_change: true } : {}) });
   }
   /** SCN-121 缺人的那天一键补招：还在招的名额再推一次，可选每个加价（分，只许上调）；同一天 6 小时内一次 */
   reboostDay(taskId: number, date: string, raiseCents = 0, invite = 0) {

@@ -826,6 +826,8 @@ class DayShiftChangeIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     shift_start: str = Field(default="", max_length=8)
     shift_end: str = Field(default="", max_length=8)
+    # SCN-139（207 号 spec）已经有人接的名额：顺带给对方发一张改时段的变更单（对方同意才生效）
+    propose_change: bool = False
 
 
 @router.patch("/tasks/{task_id}/days/{work_date}/shift")
@@ -856,22 +858,45 @@ def change_day_shift(task_id: int, work_date: date, body: DayShiftChangeIn, user
                                    Task.status.notin_(["completed", "cancelled"])).order_by(Task.id).all())
     if not slots:
         raise conflict("这单没有这一天，或者这一天的名额都结束了", "day_full")
-    old_shift = f" {slots[0].shift_start}–{slots[0].shift_end}" if slots[0].shift_start else ""
-    new_shift = f" {s}–{e}" if s else ""
+    from app.modules.task.service import retime_slot
+
     changed, kept = [], []
     for slot in slots:
         if slot.executor_id is not None or slot.status != "published":
-            kept.append({"task_id": slot.id, "reason": "已经有人接了：改时间要和对方走合约变更单"})
+            kept.append(_kept_slot(db, slot, user, s, e, body.propose_change))
             continue
-        md = f"{work_date.month:02d}-{work_date.day:02d}"
-        slot.title = slot.title.replace(f"（{md}{old_shift}）", f"（{md}{new_shift}）", 1)
-        slot.shift_start, slot.shift_end = s, e
+        retime_slot(slot, s, e)
         db.add(slot)
         changed.append(slot.id)
         for a in db.query(Application).filter(Application.task_id == slot.id, Application.status == "pending"):
             notify(db, a.applicant_id, "task", "报名的任务有更新",
                    f"《{slot.title}》发布方改了时段：{(s + '–' + e) if s else '不限时段'}，请看看还来不来得了。")
     return {"date": day(work_date), "changed": changed, "kept": kept, "shift_start": s, "shift_end": e}
+
+
+def _kept_slot(db: Session, slot: Task, user: User, s: str, e: str, propose: bool) -> dict:
+    """SCN-139 有人接的名额不单方面改：写明为什么；发单人勾了「顺带发变更单」且合约能变更时，替他发一张，对方同意才生效。"""
+    from app.modules.contract import service as contract_service
+    from app.modules.contract.models import ChangeOrder, Contract
+
+    out = {"task_id": slot.id, "reason": "已经有人接了：改时间要和对方走合约变更单", "change_order_id": None}
+    if not propose:
+        return out
+    c = db.query(Contract).filter(Contract.task_id == slot.id).order_by(Contract.id.desc()).first()
+    if c is None or c.status not in ("signed", "funded") or c.frozen:
+        out["reason"] = "已经有人接了、还没签好合约：先和对方商量好，签约后再发变更单"
+        return out
+    if db.query(ChangeOrder).filter(ChangeOrder.contract_id == c.id, ChangeOrder.status == "pending").first():
+        out["reason"] = "这份合约已经有一张待对方处理的变更单：等对方处理完再发"
+        return out
+    when = f"{s}–{e}" if s else "不限时段"
+    was = f"{slot.shift_start}–{slot.shift_end}" if slot.shift_start else "不限时段"
+    order = contract_service.propose_change(db, c, user.id, None, "发单人改了这一天的时段",
+                                            scope_change=f"{day(slot.work_date)} 的时段由 {was} 改为 {when}")
+    order.new_shift_start, order.new_shift_end = s, e
+    db.add(order)
+    out.update(reason="已经有人接了：已给对方发了改时段的变更单，对方同意后生效", change_order_id=order.id)
+    return out
 
 
 # 补招时一次最多邀请几个人：邀约会直接推到对方手机上，多了就是群发

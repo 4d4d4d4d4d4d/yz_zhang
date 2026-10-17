@@ -643,6 +643,10 @@ def accept_change(db: Session, contract: Contract, user_id: int, order: ChangeOr
             task.deadline = order.new_deadline
         if order.scope_change:                  # SC-007b 改范围：任务说明后面追加，原文不删
             task.description = f"{task.description}\n【变更 v{contract.version}】{order.scope_change}".strip()
+        if order.new_shift_start is not None:   # SCN-139 多天名额改时段：对方同意了才改
+            from app.modules.task.service import retime_slot
+
+            retime_slot(task, order.new_shift_start, order.new_shift_end or "")
         db.add(task)
     _notify_change(db, contract, order, proposed=False)
     return contract
