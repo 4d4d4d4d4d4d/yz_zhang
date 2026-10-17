@@ -21,21 +21,28 @@ echo "回归 $SHA 于 $W"
 ( cd "$W/server" && PLATFORM_DATABASE_URL="sqlite:///$W/reg.db" python -m pytest -q -p no:cacheprovider 2>&1 | tail -3 > "$W/be.txt" )
 J="$W/counts"; mkdir -p "$J"
 ( cd "$W" && {
-  npm test -w packages/core -- --reporter=default --reporter=json --outputFile.json="$J/core.json" 2>&1 | grep -E "Tests |FAIL"
-  npm test -w web -- --reporter=default --reporter=json --outputFile.json="$J/web.json" 2>&1 | grep -E "Tests |FAIL"
-  ( cd app && npx jest --json --outputFile="$J/app.json" 2>&1 | grep -E "^Tests:|FAIL" )
+  # CI-002：只 grep「Tests」那行会漏掉 vitest 的「Errors  3 errors」（未处理的异步错误：测试全过、退出码却是 1，
+  # GitHub CI 红了而本地回归是绿的）。现在每一步都看退出码，非 0 就写一行「步骤失败」。
+  npm test -w packages/core -- --reporter=default --reporter=json --outputFile.json="$J/core.json" 2>&1 | grep -E "Tests |Errors |FAIL"
+  rc=${PIPESTATUS[0]}; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：SDK 单元测试"
+  npm test -w web -- --reporter=default --reporter=json --outputFile.json="$J/web.json" 2>&1 | grep -E "Tests |Errors |FAIL"
+  rc=${PIPESTATUS[0]}; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：Web 单元测试"
+  ( cd app && npx jest --json --outputFile="$J/app.json" 2>&1 | grep -E "^Tests:|FAIL"; exit "${PIPESTATUS[0]}" )
+  rc=$?; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：App 单元测试"
   npx eslint packages/core/src web/src app 2>&1 | tail -3
   npx tsc -p web --noEmit 2>&1 | tail -3
+  rc=${PIPESTATUS[0]}; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：Web 类型检查"
   ( cd server && python3 -m scripts.check_frontend_counts --dir "$J" core web && python3 -m scripts.check_frontend_counts --dir "$J" app )
   ( cd server && python3 -m scripts.harness check )
   npm run build:web 2>&1 | tail -1
+  rc=${PIPESTATUS[0]}; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：Web 构建"
   ( cd server && timeout 600 python -m scripts.e2e_web 2>&1 | tail -4 )
 } > "$W/fe.txt" )
 echo done >> "$W/fe.txt"
 cat "$W/be.txt" "$W/fe.txt"
 # REG-001（V171 回归误推之后补）：此前这个脚本无论测试红没红都以 0 退出，
 # 看输出的人只看了最后几行就推送了一个后端有 3 条失败的提交。现在任何一处失败都以非 0 退出，并在最后一行写明。
-if grep -qE "[0-9]+ failed|[0-9]+ error|FAIL|×|error TS|problems|计数不一致|联调失败" "$W/be.txt" "$W/fe.txt" \
+if grep -qE "[0-9]+ failed|[0-9]+ error|FAIL|×|error TS|problems|计数不一致|联调失败|步骤失败" "$W/be.txt" "$W/fe.txt" \
    || ! grep -q "harness 检查通过" "$W/fe.txt" || ! grep -q "联调通过" "$W/fe.txt"; then
   echo "回归失败：见上面的输出，不要推送"
   exit 1

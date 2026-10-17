@@ -952,7 +952,8 @@ function TicketQueue() {
     { escalated_only: false, mine: false, sort: 'urgent' });
 
   const load = useCallback(async (limit = PAGE) => {
-    const r = await client.adminTickets('open', limit + 1, 0, view).catch(() => []);
+    // CI-002：响应不是数组时当作空表（此前 r.slice 在异步里抛错，没人接住）
+    const r = asList<AdminTicketRow>(await client.adminTickets('open', limit + 1, 0, view).catch(() => []));
     // 多取一条来判断「还有没有」——这样「加载更多」不会在最后一页还挂着
     setMore(r.length > limit);
     setRows(r.slice(0, limit));

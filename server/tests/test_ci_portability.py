@@ -37,3 +37,14 @@ def test_esbuild_parse_tests_skip_without_frontend_deps_instead_of_failing():
     for name in ("test_app_parallax.py", "test_app_video_feed.py"):
         src = open(os.path.join(ROOT, "server", "tests", name), encoding="utf-8").read()
         assert 'os.path.join(ROOT, "node_modules", ".bin", "esbuild")' in src, name
+
+
+def test_local_regression_checks_frontend_exit_codes_not_just_the_tests_line():
+    """CI-002：vitest 测试全过但有「未处理的异步错误」时退出码是 1、CI 红；本地回归只 grep「Tests」那行，看到的是绿。"""
+    src = open(os.path.join(ROOT, "tools", "regress.sh"), encoding="utf-8").read()
+    for step in ("SDK 单元测试", "Web 单元测试", "App 单元测试", "Web 类型检查", "Web 构建"):
+        assert f"步骤失败（退出码 $rc）：{step}" in src, step
+    assert src.count("rc=${PIPESTATUS[0]}") >= 4, "管道里要取测试命令自己的退出码，不是 grep 的"
+    assert "Errors |FAIL" in src, "vitest 的「Errors  N errors」那行要留在输出里"
+    fail_regex = re.search(r'grep -qE "([^"]+)" "\$W/be.txt"', src).group(1)
+    assert "步骤失败" in fail_regex.split("|"), "写了「步骤失败」却不算失败，等于没写"

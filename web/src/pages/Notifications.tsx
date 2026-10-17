@@ -1,4 +1,4 @@
-import { apiErrorText, formatDateTime, type Notice, type NotificationPrefsView } from '@platform/core';
+import { apiErrorText, asList, formatDateTime, type Notice, type NotificationPrefsView } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 
@@ -13,8 +13,9 @@ export default function Notifications() {
   const [unread, setUnread] = useState(0);
 
   const load = useCallback(async () => {
-    setNotes(await client.notifications());
-    setUnread((await client.unreadCount().catch(() => ({ unread: 0 }))).unread);
+    // CI-002：响应畸形时当作空表 / 0 条未读，不在异步里抛错
+    setNotes(asList<Notice>(await client.notifications().catch(() => [])));
+    setUnread(Number((await client.unreadCount().catch(() => null))?.unread) || 0);
   }, [client]);
   useEffect(() => { void load(); }, [load]);
 
