@@ -17,3 +17,15 @@ describe('SCN-121 raiseToCents', () => {
   it.each([['', 0], [' ', 0], ['10', 1000], ['10.5', 1050], ['0.01', 1], ['-1', null], ['abc', null], ['1.234', null]] as Array<[string, number | null]>)(
     '%j → %s', (y, want) => { expect(raiseToCents(y)).toBe(want); });
 });
+
+describe('SCN-137 补招时顺带邀请', () => {
+  const base = { date: '2030-01-07', slot_ids: [35], raise_cents: 0 };
+  it('邀请了谁写人数与昵称', () => {
+    expect(reboostLine({ ...base, invited: [{ user_id: 3, nickname: '小王', task_id: 35 }, { user_id: 4, nickname: '小李', task_id: 35 }] }, true))
+      .toBe('已补招 01-07：1 个还在招的名额再推了一次；邀请了 2 个那天有空、做过这类活的人（小王、小李）。6 小时后可以再补一次。');
+  });
+  it('勾了却没找到人也说一声；没勾不提', () => {
+    expect(reboostLine({ ...base, invited: [] }, true)).toBe('已补招 01-07：1 个还在招的名额再推了一次；这天没找到做过这类活、又正好有空的人可邀。6 小时后可以再补一次。');
+    expect(reboostLine({ ...base, invited: [] })).toBe('已补招 01-07：1 个还在招的名额再推了一次。6 小时后可以再补一次。');
+  });
+});

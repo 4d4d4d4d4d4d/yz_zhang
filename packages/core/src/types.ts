@@ -748,6 +748,13 @@ export interface ReboostDayResult {
   slot_ids: number[];
   raise_cents: number;
   budget_cents: number[];
+  /** SCN-137 顺带邀请了谁（没勾邀请是空表） */
+  invited?: ReboostInvite[];
+}
+export interface ReboostInvite {
+  user_id: number;
+  nickname: string;
+  task_id: number;
 }
 
 /** SCN-118 一次报多天的结果：报上了哪几天（各落在哪个名额），哪几天为什么没报 */

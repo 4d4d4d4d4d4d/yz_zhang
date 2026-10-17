@@ -5,7 +5,7 @@
 // 同一份文案（共享 SDK）：一层一层往下长、每层能改；每个叶子说清谁能做、依据是什么；
 // 「判不了」的步骤就地给去处，没说清之前不让确认。
 import {
-  LEAF_CRITERION_LABEL, TASK_STATUS_LABEL, apiErrorText, childrenOf, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, reboostLine,
+  LEAF_CRITERION_LABEL, TASK_STATUS_LABEL, apiErrorText, childrenOf, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine,
   decompositionSourceLabel, executorLabel, fmtYuan, isOpenEnd, type Decomposition, type DecompositionNode,
   type Cockpit, type DayApplicant, type DecompositionNodePatch, type PlatformClient, type Task, type TaskTree,
 } from '@platform/core';
@@ -216,6 +216,7 @@ export function TaskTreeBlock({ client, task, onOpenTask, meId = null }: {
   const [boostDay, setBoostDay] = useState('');
   const [boostYuan, setBoostYuan] = useState('');
   const [boostMsg, setBoostMsg] = useState('');
+  const [boostInvite, setBoostInvite] = useState(false);   // SCN-137 顺带邀请
   // SCN-138 发单人改某一天的时段
   const [shiftDay, setShiftDay] = useState('');
   const [shiftFrom, setShiftFrom] = useState('');
@@ -298,13 +299,17 @@ export function TaskTreeBlock({ client, task, onOpenTask, meId = null }: {
               ))}
               <TextInput style={styles.input} accessibilityLabel="每个名额加价（元）" placeholder="每个名额加价（元，可不填）"
                          keyboardType="decimal-pad" value={boostYuan} onChangeText={setBoostYuan} />
+              <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{ checked: boostInvite }}
+                                onPress={() => setBoostInvite(!boostInvite)}>
+                <Text style={styles.row}>{boostInvite ? '☑ ' : '☐ '}顺带邀请 {REBOOST_INVITE_COUNT} 个做过这类活、那天有空的人</Text>
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => {
                 const cents = raiseToCents(boostYuan);
                 if (cents === null) { setBoostMsg('加价写一个正数（元），最多两位小数；不加价就空着'); return; }
                 const target = boostDay || daysStillShort(tree.by_day)[0].date;
                 setBoostMsg('');
-                void client.reboostDay(task.id, target, cents).then((r) => {
-                  setBoostMsg(reboostLine(r)); setBoostYuan('');
+                void client.reboostDay(task.id, target, cents, boostInvite ? REBOOST_INVITE_COUNT : 0).then((r) => {
+                  setBoostMsg(reboostLine(r, boostInvite)); setBoostYuan('');
                   void client.taskTree(task.id).then(setTree).catch(() => {});
                 }).catch((e) => setBoostMsg(apiErrorText(e)));
               }}>

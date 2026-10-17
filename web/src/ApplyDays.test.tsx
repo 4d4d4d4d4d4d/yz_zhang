@@ -144,3 +144,18 @@ describe('SCN-138 发单人改某一天的时段', () => {
     expect(screen.queryByLabelText('改某天的时段')).toBeNull();
   });
 });
+
+describe('SCN-137 补招时顺带邀请', () => {
+  const POSTER = { ...ME, id: 9, nickname: '店主' };
+  it('勾上邀请：请求带 invite，结果写明邀了谁', async () => {
+    const calls: Call[] = [];
+    open('/tasks/30', calls, { 'GET /tasks/30': PARENT, 'GET /tasks/30/tree': TREE,
+      'POST /tasks/30/days/2030-01-06/reboost': { date: '2030-01-06', slot_ids: [33, 34], raise_cents: 0, budget_cents: [1666, 1666],
+        invited: [{ user_id: 5, nickname: '小王', task_id: 33 }] } }, POSTER);
+    await screen.findByLabelText('补招');
+    fireEvent.click(screen.getByLabelText('顺带邀请 3 个做过这类活、那天有空的人'));
+    fireEvent.click(screen.getByText('补招这天'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path.endsWith('/reboost'))?.body).toEqual({ raise_cents: 0, invite: 3 }));
+    expect(await screen.findByText('已补招 01-06：2 个还在招的名额再推了一次；邀请了 1 个那天有空、做过这类活的人（小王）。6 小时后可以再补一次。')).toBeTruthy();
+  });
+});

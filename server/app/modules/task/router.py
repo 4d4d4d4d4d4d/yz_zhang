@@ -874,10 +874,16 @@ def change_day_shift(task_id: int, work_date: date, body: DayShiftChangeIn, user
     return {"date": day(work_date), "changed": changed, "kept": kept, "shift_start": s, "shift_end": e}
 
 
+# 补招时一次最多邀请几个人：邀约会直接推到对方手机上，多了就是群发
+REBOOST_INVITE_MAX = 5
+
+
 class ReboostIn(BaseModel):
     """SCN-121 缺人的那天补招：每个还在招的名额加多少（分）；0 = 只再推一次。"""
     model_config = ConfigDict(extra="forbid")
     raise_cents: int = Field(default=0, ge=0, le=100000)
+    # SCN-137（206 号 spec）顺带邀请几个那天有空、做过这类活的人；0 = 不邀请
+    invite: int = Field(default=0, ge=0, le=REBOOST_INVITE_MAX)
 
 
 # 同一天两次补招至少隔这么久：再推一次会叫醒「现在有空」的人，推得太勤就是骚扰
@@ -926,10 +932,44 @@ def reboost_day(task_id: int, work_date: date, body: ReboostIn, user: User = Dep
         parent.budget_cents += body.raise_cents * len(slots)
         db.add(parent)
     extra = f"，每个名额加价 {body.raise_cents / 100:.2f} 元" if body.raise_cents else ""
+    invited = _reboost_invites(db, parent, slots, work_date, user, body.invite) if body.invite else []
+    if invited:
+        extra += f"，邀请了 {len(invited)} 个那天有空、做过这类活的人"
     db.add(ProgressLog(task_id=parent.id, user_id=user.id, kind="reboost",
                        content=f"{marker}：{len(slots)} 个名额再推一次{extra}"))
     return {"date": day(work_date), "slot_ids": [s.id for s in slots], "raise_cents": body.raise_cents,
-            "budget_cents": [s.budget_cents for s in slots]}
+            "budget_cents": [s.budget_cents for s in slots], "invited": invited}
+
+
+def _reboost_invites(db: Session, parent: Task, slots: list[Task], work_date: date, user: User, limit: int) -> list[dict]:
+    """SCN-137 补招时挑人发邀约：按推荐排序（已排除黑名单、没实名、暂停接单的人），只要
+    ① 本人设的每周时段盖住那天的时段（没写时段的名额：那天有空就行）② 做完过这个类目的单；
+    那天已经报过名、或已经被邀过的人不再打扰。邀约落在那天第一个还在招的名额上，理由里不写对方的日程。"""
+    from app.modules.matching.models import Invitation
+    from app.modules.matching.service import recommend, shift_fit
+    from app.modules.notification.service import notify
+
+    first = slots[0]
+    day_ids = [t.id for t in db.query(Task.id).filter(Task.parent_id == parent.id, Task.work_date == work_date)]
+    touched = {a.applicant_id for a in db.query(Application.applicant_id).filter(Application.task_id.in_(day_ids))}
+    touched |= {i.invitee_id for i in db.query(Invitation.invitee_id).filter(Invitation.task_id.in_(day_ids))}
+    ranked = [r for r in recommend(db, first, limit=50) if r["user_id"] not in touched]
+    done_here = {uid for (uid,) in db.query(Task.executor_id).filter(
+        Task.executor_id.in_([r["user_id"] for r in ranked] or [-1]), Task.status == "completed",
+        Task.category == parent.category).distinct()}
+    out: list[dict] = []
+    for r in ranked:
+        if len(out) >= limit:
+            break
+        u = db.get(User, r["user_id"])
+        fit = shift_fit(u.weekly_slots or [], work_date, first.shift_start or "00:00", first.shift_end or "24:00")
+        if u.id not in done_here or fit == "none" or (first.shift_start and fit != "covers"):
+            continue
+        db.add(Invitation(task_id=first.id, inviter_id=user.id, invitee_id=u.id, message="补招：那天还缺人"))
+        notify(db, u.id, "task", "收到任务邀约",
+               f"《{first.title}》还缺人，邀请你接单，报酬 {first.budget_cents / 100:.2f} 元")
+        out.append({"user_id": u.id, "nickname": u.nickname, "task_id": first.id})
+    return out
 
 
 @router.get("/tasks/{task_id}/applications")

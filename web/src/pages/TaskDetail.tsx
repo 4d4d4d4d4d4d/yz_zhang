@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, reboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -556,6 +556,7 @@ function ReboostBox({ taskId, days, onDone }: { taskId: number; days: string[]; 
   const { client } = useApp();
   const [day, setDay] = useState('');
   const [yuan, setYuan] = useState('');
+  const [invite, setInvite] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
   if (days.length === 0) return null;
@@ -564,7 +565,10 @@ function ReboostBox({ taskId, days, onDone }: { taskId: number; days: string[]; 
     setError(''); setMsg('');
     const cents = raiseToCents(yuan);
     if (cents === null) { setError('加价写一个正数（元），最多两位小数；不加价就空着'); return; }
-    try { setMsg(reboostLine(await client.reboostDay(taskId, target, cents))); setYuan(''); onDone(); }
+    try {
+      setMsg(reboostLine(await client.reboostDay(taskId, target, cents, invite ? REBOOST_INVITE_COUNT : 0), invite));
+      setYuan(''); onDone();
+    }
     catch (e) { setError(apiErrorText(e)); }
   }
   return (
@@ -575,6 +579,8 @@ function ReboostBox({ taskId, days, onDone }: { taskId: number; days: string[]; 
           {days.map((d) => <option key={d} value={d}>{d.slice(5)}</option>)}
         </select>
         <input aria-label="每个名额加价（元）" placeholder="每个名额加价（元，可不填）" value={yuan} onChange={(e) => setYuan(e.target.value)} />
+        {/* SCN-137（206 号 spec）顺带邀请几个做过这类活、那天正好有空的人 */}
+        <label><input type="checkbox" checked={invite} onChange={(e) => setInvite(e.target.checked)} /> 顺带邀请 {REBOOST_INVITE_COUNT} 个做过这类活、那天有空的人</label>
         <button onClick={() => void submit()}>补招这天</button>
       </div>
       {msg && <p className="muted">{msg}</p>}
