@@ -93,3 +93,26 @@ describe('SCN-121 App 发单人补招缺人的那天', () => {
     expect(screen.queryByLabelText('补招')).toBeNull();
   });
 });
+
+describe('SCN-138 App 发单人改某一天的时段', () => {
+  it('选第二天、填新时段，改完写明结果', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({ 'GET /tasks/30/tree': TREE, 'GET /tasks/30/applicants': [],
+      'PATCH /tasks/30/days/2030-01-06/shift': { date: '2030-01-06', changed: [33, 34], kept: [], shift_start: '10:00', shift_end: '16:00' } }, calls);
+    render(<TaskTreeBlock client={client} task={TASK} onOpenTask={() => {}} meId={9} />);
+    await screen.findByLabelText('改某天的时段');
+    fireEvent.press(screen.getByLabelText('改 2030-01-06 的时段'));
+    fireEvent.changeText(screen.getByLabelText('这天几点开始'), ' 10:00');
+    fireEvent.changeText(screen.getByLabelText('这天几点结束'), '16:00 ');
+    fireEvent.press(screen.getByText('改这天的时段'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'PATCH' && c.path === '/tasks/30/days/2030-01-06/shift')?.body)
+      .toEqual({ shift_start: '10:00', shift_end: '16:00' }));
+    expect(await screen.findByText('01-06 改成 10:00–16:00：改了 2 个还在招的名额。')).toBeTruthy();
+  });
+
+  it('帮手看不到改时段', async () => {
+    render(<TaskTreeBlock client={makeClient({ 'GET /tasks/30/tree': TREE })} task={TASK} onOpenTask={() => {}} meId={2} />);
+    await screen.findByLabelText('按天看名额');
+    expect(screen.queryByLabelText('改某天的时段')).toBeNull();
+  });
+});

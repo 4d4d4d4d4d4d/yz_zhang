@@ -821,6 +821,59 @@ def apply_days(task_id: int, body: ApplyDaysIn, user: User = Depends(require_ver
     return {"applied": applied, "skipped": skipped}
 
 
+class DayShiftChangeIn(BaseModel):
+    """SCN-138 发布后改某一天的时段；两个都空 = 那天不写时段。"""
+    model_config = ConfigDict(extra="forbid")
+    shift_start: str = Field(default="", max_length=8)
+    shift_end: str = Field(default="", max_length=8)
+
+
+@router.patch("/tasks/{task_id}/days/{work_date}/shift")
+def change_day_shift(task_id: int, work_date: date, body: DayShiftChangeIn, user: User = Depends(get_current_user),
+                     db: Session = Depends(get_db, scope="function")):
+    """SCN-138（202 号 spec）发布后改某一天的时段：只改那天还在招的名额（时段与标题一起改，通知已报名的人）。
+
+    已经有人接的名额不动——时间是双方签过的条款，单方面改不了，要走合约变更单；返回里逐个写明。"""
+    from app.modules.notification.service import notify
+
+    parent = _get_task(db, task_id)
+    if parent.creator_id != user.id:
+        raise forbidden("只有发单的人能改时段")
+    if parent.parent_id is not None or (parent.days or 1) <= 1:
+        raise bad_request("这不是一单多天的活：直接在任务上改", "not_multi_day")
+    if work_date < _beijing_today():
+        raise conflict("这一天已经过去了", "day_passed")
+    s, e = body.shift_start.strip(), body.shift_end.strip()
+    if s or e:
+        if not s or not e:
+            raise bad_request("时段要把开始和结束一起写（例如 09:00 到 18:00），或者都不写", "shift_incomplete")
+        pat = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
+        if not pat.fullmatch(s) or not pat.fullmatch(e):
+            raise bad_request("时间按 24 小时制写成 HH:MM（例如 09:00、18:30）", "shift_invalid")
+        if e <= s:
+            raise bad_request("结束时间要晚于开始时间；跨夜的班请拆成两天写", "shift_order")
+    slots = (db.query(Task).filter(Task.parent_id == parent.id, Task.work_date == work_date,
+                                   Task.status.notin_(["completed", "cancelled"])).order_by(Task.id).all())
+    if not slots:
+        raise conflict("这单没有这一天，或者这一天的名额都结束了", "day_full")
+    old_shift = f" {slots[0].shift_start}–{slots[0].shift_end}" if slots[0].shift_start else ""
+    new_shift = f" {s}–{e}" if s else ""
+    changed, kept = [], []
+    for slot in slots:
+        if slot.executor_id is not None or slot.status != "published":
+            kept.append({"task_id": slot.id, "reason": "已经有人接了：改时间要和对方走合约变更单"})
+            continue
+        md = f"{work_date.month:02d}-{work_date.day:02d}"
+        slot.title = slot.title.replace(f"（{md}{old_shift}）", f"（{md}{new_shift}）", 1)
+        slot.shift_start, slot.shift_end = s, e
+        db.add(slot)
+        changed.append(slot.id)
+        for a in db.query(Application).filter(Application.task_id == slot.id, Application.status == "pending"):
+            notify(db, a.applicant_id, "task", "报名的任务有更新",
+                   f"《{slot.title}》发布方改了时段：{(s + '–' + e) if s else '不限时段'}，请看看还来不来得了。")
+    return {"date": day(work_date), "changed": changed, "kept": kept, "shift_start": s, "shift_end": e}
+
+
 class ReboostIn(BaseModel):
     """SCN-121 缺人的那天补招：每个还在招的名额加多少（分）；0 = 只再推一次。"""
     model_config = ConfigDict(extra="forbid")

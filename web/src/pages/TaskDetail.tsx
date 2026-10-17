@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, raiseToCents, reboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, reboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -219,6 +219,8 @@ export default function TaskDetail() {
               {isCreator && <PersonPicker taskId={taskId} onDone={() => void load()} />}
               {/* SCN-121 缺人的那天一键补招（196 号 spec） */}
               {isCreator && <ReboostBox taskId={taskId} days={daysStillShort(tree.by_day).map((d) => d.date)} onDone={() => void load()} />}
+              {/* SCN-138 发布后改某一天的时段（202 号 spec） */}
+              {isCreator && <DayShiftEditor taskId={taskId} days={shiftEditableDays(tree.by_day)} onDone={() => void load()} />}
             </div>
           )}
           <div className="list" style={{ marginTop: 12 }}>
@@ -510,6 +512,38 @@ function RecipientEditor({ taskId, label, contact, onSaved }: {
       <label className="row"><input type="checkbox" aria-label="已经问过本人" checked={consented}
                                     onChange={(e) => setConsented(e.target.checked)} />已经问过本人（换了人或改了联系方式，要再问一次）</label>
       <button onClick={() => void save()}>保存</button> <button className="ghost" onClick={() => setOpen(false)}>取消</button>
+      {msg && <p className="muted">{msg}</p>}
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
+/** SCN-138 发单人：改某一天的时段（只改还在招的名额；有人接的要走变更单） */
+function DayShiftEditor({ taskId, days, onDone }: { taskId: number; days: string[]; onDone: () => void }) {
+  const { client } = useApp();
+  const [day, setDay] = useState('');
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+  if (days.length === 0) return null;
+  const target = days.includes(day) ? day : days[0];
+  async function submit() {
+    setError(''); setMsg('');
+    try { setMsg(dayShiftChangeLine(await client.changeDayShift(taskId, target, start, end))); onDone(); }
+    catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <div aria-label="改某天的时段" style={{ marginTop: 8 }}>
+      <p className="muted">某一天的时间变了？只改还在招的名额；已经有人接的要和对方走合约变更单。</p>
+      <div className="row">
+        <select aria-label="改哪天的时段" value={target} onChange={(e) => setDay(e.target.value)}>
+          {days.map((d) => <option key={d} value={d}>{d.slice(5)}</option>)}
+        </select>
+        <input type="time" aria-label="这天几点开始" value={start} onChange={(e) => setStart(e.target.value)} />
+        <input type="time" aria-label="这天几点结束" value={end} onChange={(e) => setEnd(e.target.value)} />
+        <button onClick={() => void submit()}>改这天的时段</button>
+      </div>
       {msg && <p className="muted">{msg}</p>}
       {error && <p className="error">{error}</p>}
     </div>

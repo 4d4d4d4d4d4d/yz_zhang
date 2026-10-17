@@ -5,7 +5,7 @@
 // 同一份文案（共享 SDK）：一层一层往下长、每层能改；每个叶子说清谁能做、依据是什么；
 // 「判不了」的步骤就地给去处，没说清之前不让确认。
 import {
-  LEAF_CRITERION_LABEL, TASK_STATUS_LABEL, apiErrorText, childrenOf, daySummaryLine, daysStillShort, raiseToCents, reboostLine,
+  LEAF_CRITERION_LABEL, TASK_STATUS_LABEL, apiErrorText, childrenOf, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, reboostLine,
   decompositionSourceLabel, executorLabel, fmtYuan, isOpenEnd, type Decomposition, type DecompositionNode,
   type Cockpit, type DayApplicant, type DecompositionNodePatch, type PlatformClient, type Task, type TaskTree,
 } from '@platform/core';
@@ -216,6 +216,11 @@ export function TaskTreeBlock({ client, task, onOpenTask, meId = null }: {
   const [boostDay, setBoostDay] = useState('');
   const [boostYuan, setBoostYuan] = useState('');
   const [boostMsg, setBoostMsg] = useState('');
+  // SCN-138 发单人改某一天的时段
+  const [shiftDay, setShiftDay] = useState('');
+  const [shiftFrom, setShiftFrom] = useState('');
+  const [shiftTo, setShiftTo] = useState('');
+  const [shiftMsg, setShiftMsg] = useState('');
   const isPoster = meId !== null && meId === task.creator_id && (task.days ?? 1) > 1;
   const loadPeople = useCallback(() => {
     if (!isPoster) return;
@@ -306,6 +311,34 @@ export function TaskTreeBlock({ client, task, onOpenTask, meId = null }: {
                 <Text style={styles.link}>补招这天</Text>
               </TouchableOpacity>
               {!!boostMsg && <Text style={styles.muted}>{boostMsg}</Text>}
+            </View>
+          )}
+          {/* SCN-138 发布后改某一天的时段（202 号 spec）：只改还在招的名额 */}
+          {isPoster && shiftEditableDays(tree.by_day).length > 0 && (
+            <View accessibilityLabel="改某天的时段">
+              <Text style={styles.muted}>某一天的时间变了？只改还在招的名额；已经有人接的要走合约变更单：</Text>
+              {shiftEditableDays(tree.by_day).map((date, _i, all) => (
+                <TouchableOpacity key={date} accessibilityRole="radio" accessibilityLabel={`改 ${date} 的时段`}
+                                  accessibilityState={{ selected: (all.includes(shiftDay) ? shiftDay : all[0]) === date }}
+                                  onPress={() => setShiftDay(date)}>
+                  <Text style={styles.row}>{(all.includes(shiftDay) ? shiftDay : all[0]) === date ? '◉ ' : '○ '}{date.slice(5)}</Text>
+                </TouchableOpacity>
+              ))}
+              <TextInput style={styles.input} accessibilityLabel="这天几点开始" placeholder="几点开始（如 10:00，都空 = 不限时段）"
+                         value={shiftFrom} onChangeText={setShiftFrom} />
+              <TextInput style={styles.input} accessibilityLabel="这天几点结束" placeholder="几点结束（如 16:00）"
+                         value={shiftTo} onChangeText={setShiftTo} />
+              <TouchableOpacity onPress={() => {
+                setShiftMsg('');
+                const all = shiftEditableDays(tree.by_day);
+                void client.changeDayShift(task.id, all.includes(shiftDay) ? shiftDay : all[0], shiftFrom.trim(), shiftTo.trim()).then((r) => {
+                  setShiftMsg(dayShiftChangeLine(r));
+                  void client.taskTree(task.id).then(setTree).catch(() => {});
+                }).catch((e) => setShiftMsg(apiErrorText(e)));
+              }}>
+                <Text style={styles.link}>改这天的时段</Text>
+              </TouchableOpacity>
+              {!!shiftMsg && <Text style={styles.muted}>{shiftMsg}</Text>}
             </View>
           )}
         </View>

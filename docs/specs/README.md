@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 202 | 发布后改某一天的时段 | [202-change-day-shift.md](./202-change-day-shift.md) | P0 |
 | 201 | 多天单每天不同时段 | [201-day-shifts.md](./201-day-shifts.md) | P0 |
 | 200 | 本地回归与 CI 检查项自动比对 | [200-ci-parity.md](./200-ci-parity.md) | P0 |
 | 199 | 检索里的单字降权 | [199-single-char-terms.md](./199-single-char-terms.md) | P0 |

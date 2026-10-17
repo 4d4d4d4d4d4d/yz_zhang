@@ -728,6 +728,19 @@ export interface TaskVisits {
 }
 
 /** SCN-118 一次报多天的结果：报上了哪几天（各落在哪个名额），哪几天为什么没报 */
+/** SCN-138 改了某一天的时段：哪些名额改了、哪些有人接了没改（要走变更单） */
+export interface DayShiftChangeResult {
+  date: string;
+  changed: number[];
+  kept: DayShiftKept[];
+  shift_start: string;
+  shift_end: string;
+}
+export interface DayShiftKept {
+  task_id: number;
+  reason: string;
+}
+
 /** SCN-121 一天的补招结果：哪几个名额再推了一次、加价后各自的预算 */
 export interface ReboostDayResult {
   date: string;

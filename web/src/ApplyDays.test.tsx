@@ -118,3 +118,29 @@ describe('SCN-121 发单人补招缺人的那天', () => {
     expect(screen.queryByLabelText('补招')).toBeNull();
   });
 });
+
+describe('SCN-138 发单人改某一天的时段', () => {
+  const POSTER = { ...ME, id: 9, nickname: '店主' };
+  it('只列还能改的日子；填新时段，改完写明几个改了、几个要走变更单', async () => {
+    const calls: Call[] = [];
+    const tree = { ...TREE, by_day: [...TREE.by_day, { date: '2030-01-08', slots: 2, filled: 2, open: 0, done: 2, closed: 0 }] };
+    open('/tasks/30', calls, { 'GET /tasks/30': PARENT, 'GET /tasks/30/tree': tree,
+      'PATCH /tasks/30/days/2030-01-07/shift': { date: '2030-01-07', changed: [36], kept: [{ task_id: 35, reason: '已经有人接了' }], shift_start: '10:00', shift_end: '16:00' } }, POSTER);
+    await screen.findByLabelText('改某天的时段');
+    const select = screen.getByLabelText('改哪天的时段') as HTMLSelectElement;
+    expect([...select.options].map((o) => o.value)).toEqual(['2030-01-05', '2030-01-06', '2030-01-07']);
+    fireEvent.change(select, { target: { value: '2030-01-07' } });
+    fireEvent.change(screen.getByLabelText('这天几点开始'), { target: { value: '10:00' } });
+    fireEvent.change(screen.getByLabelText('这天几点结束'), { target: { value: '16:00' } });
+    fireEvent.click(screen.getByText('改这天的时段'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'PATCH' && c.path === '/tasks/30/days/2030-01-07/shift')?.body)
+      .toEqual({ shift_start: '10:00', shift_end: '16:00' }));
+    expect(await screen.findByText('01-07 改成 10:00–16:00：改了 1 个还在招的名额；1 个已经有人接了，改时间要和对方走合约变更单。')).toBeTruthy();
+  });
+
+  it('帮手看不到改时段', async () => {
+    open('/tasks/30', [], { 'GET /tasks/30': PARENT, 'GET /tasks/30/tree': TREE });
+    await screen.findByLabelText('按天看名额');
+    expect(screen.queryByLabelText('改某天的时段')).toBeNull();
+  });
+});

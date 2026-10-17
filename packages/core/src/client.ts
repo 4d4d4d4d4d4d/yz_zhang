@@ -22,6 +22,7 @@ import type {
   TaskVisits,
   ApplyDaysResult,
   ReboostDayResult,
+  DayShiftChangeResult,
   DayApplicant,
   AcceptPersonResult,
   ClientErrorRow,
@@ -639,6 +640,10 @@ export class PlatformClient {
   /** SCN-123 替别人发的单，发单后改服务对象或到场联系方式（要重新确认问过本人）；多天单同步到没结束的名额 */
   changeRecipient(taskId: number, body: { recipient_label: string; onsite_contact?: string; recipient_consented: boolean }) {
     return this.request<Task>('PATCH', `/tasks/${taskId}/recipient`, body);
+  }
+  /** SCN-138 发布后改某一天的时段：只改还在招的名额；有人接的要走变更单（返回里写明）。两个都空 = 那天不写时段 */
+  changeDayShift(taskId: number, date: string, shiftStart: string, shiftEnd: string) {
+    return this.request<DayShiftChangeResult>('PATCH', `/tasks/${taskId}/days/${date}/shift`, { shift_start: shiftStart, shift_end: shiftEnd });
   }
   /** SCN-121 缺人的那天一键补招：还在招的名额再推一次，可选每个加价（分，只许上调）；同一天 6 小时内一次 */
   reboostDay(taskId: number, date: string, raiseCents = 0) {
