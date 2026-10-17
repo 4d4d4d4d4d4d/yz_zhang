@@ -186,9 +186,37 @@ def check() -> list[str]:
         if not re.match(r"^---\nname: [a-z0-9-]+\ndescription: .{40,}\n---\n", text):
             problems.append(f"skill 缺 frontmatter（name / description）：{d.name}")
     problems += _closeout_problems(rows)
+    problems += _ledger_id_problems()
     if not CLAUDE.exists() or "BACKLOG" not in CLAUDE.read_text(encoding="utf-8"):
         problems.append("根目录 CLAUDE.md 缺失或没有指向 docs/BACKLOG.md")
     return problems
+
+
+def _ledger_id_problems() -> list[str]:
+    """DOC-020（V215）台账里同一段内编号不许出现两次。
+
+    同一件事在详情段（2.1 / 2.2）一行、「2.4 逐条索引」一行是有意的；同一段里两行同号是撞号——
+    V213 查出 APP-095（开票入口 / 页面坏了提醒运营）、V215 查出 PAY-044（提现催办 / 批量操作），各自是两件事。
+    """
+    ledger = SPECS / LEDGER_NAME
+    if not ledger.exists():
+        return []
+    seen: dict[tuple[str, str], int] = {}
+    out = []
+    section = ""
+    for n, line in enumerate(ledger.read_text(encoding="utf-8").splitlines(), 1):
+        if line.startswith("#"):
+            section = line.lstrip("# ").strip()
+            continue
+        m = re.match(r"\| ([A-Z][A-Z0-9-]*-\d+[a-z]?) \|", line)
+        if not m:
+            continue
+        key = (section, m.group(1))
+        if key in seen:
+            out.append(f"台账编号撞号：{m.group(1)} 在「{section}」里出现两次（第 {seen[key]} 行与第 {n} 行），给后加的那条换个没用过的号")
+        else:
+            seen[key] = n
+    return out
 
 
 def new_spec(title: str, batch: str, ids: str, slug: str = "") -> Path:

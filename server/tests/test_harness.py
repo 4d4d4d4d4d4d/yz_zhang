@@ -139,3 +139,13 @@ def test_red_closeout_vision_row_for_ui_and_no_ui_batches(sandbox, monkeypatch):
     _add_spec(sandbox, 9982, "\n# 9982 x\n\n> 状态：本批实现（V9982）。\n\n## 4. 两端\n\n- Web：一个新页面\n\n## 7. 没做的\n\n- 无\n")
     _add_row(sandbox, "| V9982 | 有界面 | 9982 | done | x |")
     assert dict((t, ok) for ok, t in harness.closeout("V9982"))[key] is False, "有界面却只写了「部分」，不能算收尾"
+
+
+def test_red_a_ledger_id_used_twice_in_the_same_section_is_caught(sandbox):
+    """DOC-020（V215）同一段两行同号是撞号；详情段与逐条索引各一行是有意的，不报。"""
+    ledger = sandbox / "specs" / harness.LEDGER_NAME
+    text = ledger.read_text(encoding="utf-8")
+    assert "| CONC-062 |" in text and text.count("| CONC-062 |") == 2, "详情段与逐条索引各一行：不算撞号"
+    ledger.write_text(text.replace("| PAY-047 |", "| PAY-044 |"), encoding="utf-8")
+    problems = harness.check()
+    assert any("PAY-044" in p and "撞号" in p and "逐条索引" in p for p in problems), problems
