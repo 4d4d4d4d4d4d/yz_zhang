@@ -355,6 +355,9 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   visit_item_unknown: '只勾发单人写的那几项，别的写进备注',
   visit_empty: '这次上门做了什么：勾清单、写一句备注或附一张照片',
   visit_location_incomplete: '位置要经度、纬度一起给；不想带位置就都不填',
+  day_passed: '这一天已经过去了，补招也来不及了',
+  day_full: '这一天没有还在招的名额：都招到人了，或者已经停招',
+  reboost_too_soon: '这一天刚补招过，过几个小时再推；想让更多人看到，可以先加价',
   // SCN-118 一次报多天（177 号 spec）
   not_multi_day: '这不是一单多天的活：直接在名额上报名',
   no_day_available: '选的这几天都报不了：换几天，或看看哪天还缺人',

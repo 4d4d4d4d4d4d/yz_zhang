@@ -738,6 +738,64 @@ def apply_days(task_id: int, body: ApplyDaysIn, user: User = Depends(require_ver
     return {"applied": applied, "skipped": skipped}
 
 
+class ReboostIn(BaseModel):
+    """SCN-121 缺人的那天补招：每个还在招的名额加多少（分）；0 = 只再推一次。"""
+    model_config = ConfigDict(extra="forbid")
+    raise_cents: int = Field(default=0, ge=0, le=100000)
+
+
+# 同一天两次补招至少隔这么久：再推一次会叫醒「现在有空」的人，推得太勤就是骚扰
+REBOOST_COOLDOWN_HOURS = 6
+
+
+@router.post("/tasks/{task_id}/days/{work_date}/reboost")
+def reboost_day(task_id: int, work_date: date, body: ReboostIn, user: User = Depends(get_current_user),
+                db: Session = Depends(get_db, scope="function")):
+    """SCN-121（196 号 spec）缺人的那天一键补招：把那天还在招的名额再推一次，可选一起加价。
+
+    加价走的是已发布任务本来就有的规则（只许上调、通知已报名的人）——钱在签约托管时才冻结，这里不碰钱。
+    同一天 6 小时内只补招一次。"""
+    from app.core.events import publish
+    from app.modules.notification.service import notify
+
+    parent = _get_task(db, task_id)
+    if parent.creator_id != user.id:
+        raise forbidden("只有发单的人能补招")
+    if parent.parent_id is not None or (parent.days or 1) <= 1:
+        raise bad_request("这不是一单多天的活：在任务页上直接改预算或重新发布", "not_multi_day")
+    if work_date < _beijing_today():
+        raise conflict("这一天已经过去了，补招也来不及了", "day_passed")
+    slots = (db.query(Task).filter(Task.parent_id == parent.id, Task.work_date == work_date,
+                                   Task.status == "published", Task.executor_id.is_(None))
+             .order_by(Task.id).all())
+    if not slots:
+        raise conflict("这一天没有还在招的名额：都招到人了，或者已经停招", "day_full")
+    marker = f"补招 {day(work_date)}"
+    last = (db.query(ProgressLog).filter(ProgressLog.task_id == parent.id, ProgressLog.kind == "reboost",
+                                         ProgressLog.content.startswith(marker))
+            .order_by(ProgressLog.id.desc()).first())
+    if last is not None and last.created_at > utcnow() - timedelta(hours=REBOOST_COOLDOWN_HOURS):
+        nxt = last.created_at + timedelta(hours=REBOOST_COOLDOWN_HOURS)
+        raise conflict(f"这一天 {REBOOST_COOLDOWN_HOURS} 小时内刚补招过，{iso(nxt)} 之后可以再推；"
+                       "想让更多人看到，可以先加价", "reboost_too_soon")
+    for s in slots:
+        if body.raise_cents:
+            s.budget_cents += body.raise_cents
+            for a in db.query(Application).filter(Application.task_id == s.id, Application.status == "pending"):
+                notify(db, a.applicant_id, "task", "报名的任务有更新",
+                       f"《{s.title}》发布方上调了预算至 {s.budget_cents / 100:.2f} 元，请留意。")
+        db.add(s)
+        publish(db, "task.published", {"task_id": s.id, "reboost": True})
+    if body.raise_cents:
+        parent.budget_cents += body.raise_cents * len(slots)
+        db.add(parent)
+    extra = f"，每个名额加价 {body.raise_cents / 100:.2f} 元" if body.raise_cents else ""
+    db.add(ProgressLog(task_id=parent.id, user_id=user.id, kind="reboost",
+                       content=f"{marker}：{len(slots)} 个名额再推一次{extra}"))
+    return {"date": day(work_date), "slot_ids": [s.id for s in slots], "raise_cents": body.raise_cents,
+            "budget_cents": [s.budget_cents for s in slots]}
+
+
 @router.get("/tasks/{task_id}/applications")
 def list_applications(
     task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")

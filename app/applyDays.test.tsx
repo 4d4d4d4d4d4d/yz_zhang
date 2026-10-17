@@ -73,3 +73,23 @@ describe('SCN-118 App 一次报多天', () => {
     expect(screen.queryByLabelText('一次报多天')).toBeNull();
   });
 });
+
+describe('SCN-121 App 发单人补招缺人的那天', () => {
+  it('默认选第一个缺人的日子，只再推一次；结果写明', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({ 'GET /tasks/30/tree': TREE, 'GET /tasks/30/applicants': [],
+      'POST /tasks/30/days/2030-01-06/reboost': { date: '2030-01-06', slot_ids: [33, 34], raise_cents: 0, budget_cents: [1666, 1666] } }, calls);
+    render(<TaskTreeBlock client={client} task={TASK} onOpenTask={() => {}} meId={9} />);
+    await screen.findByLabelText('补招');
+    expect(screen.queryByLabelText('补招 2030-01-05')).toBeNull();
+    fireEvent.press(screen.getByText('补招这天'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path.endsWith('/reboost'))?.body).toEqual({ raise_cents: 0 }));
+    expect(await screen.findByText('已补招 01-06：2 个还在招的名额再推了一次。6 小时后可以再补一次。')).toBeTruthy();
+  });
+
+  it('帮手看不到补招', async () => {
+    render(<TaskTreeBlock client={makeClient({ 'GET /tasks/30/tree': TREE })} task={TASK} onOpenTask={() => {}} meId={2} />);
+    await screen.findByLabelText('按天看名额');
+    expect(screen.queryByLabelText('补招')).toBeNull();
+  });
+});

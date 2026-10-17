@@ -5,7 +5,7 @@
 // 同一份文案（共享 SDK）：一层一层往下长、每层能改；每个叶子说清谁能做、依据是什么；
 // 「判不了」的步骤就地给去处，没说清之前不让确认。
 import {
-  LEAF_CRITERION_LABEL, TASK_STATUS_LABEL, apiErrorText, childrenOf, daySummaryLine, daysStillShort,
+  LEAF_CRITERION_LABEL, TASK_STATUS_LABEL, apiErrorText, childrenOf, daySummaryLine, daysStillShort, raiseToCents, reboostLine,
   decompositionSourceLabel, executorLabel, fmtYuan, isOpenEnd, type Decomposition, type DecompositionNode,
   type Cockpit, type DayApplicant, type DecompositionNodePatch, type PlatformClient, type Task, type TaskTree,
 } from '@platform/core';
@@ -212,6 +212,10 @@ export function TaskTreeBlock({ client, task, onOpenTask, meId = null }: {
   // SCN-126 发单人按人选
   const [people, setPeople] = useState<DayApplicant[]>([]);
   const [pickMsg, setPickMsg] = useState('');
+  // SCN-121 发单人补招缺人的那天
+  const [boostDay, setBoostDay] = useState('');
+  const [boostYuan, setBoostYuan] = useState('');
+  const [boostMsg, setBoostMsg] = useState('');
   const isPoster = meId !== null && meId === task.creator_id && (task.days ?? 1) > 1;
   const loadPeople = useCallback(() => {
     if (!isPoster) return;
@@ -274,6 +278,34 @@ export function TaskTreeBlock({ client, task, onOpenTask, meId = null }: {
                 </TouchableOpacity>
               ))}
               {!!pickMsg && <Text style={styles.muted}>{pickMsg}</Text>}
+            </View>
+          )}
+          {/* SCN-121 缺人的那天一键补招（196 号 spec）：再推一次，可选每个名额加价 */}
+          {isPoster && daysStillShort(tree.by_day).length > 0 && (
+            <View accessibilityLabel="补招">
+              <Text style={styles.muted}>缺人的那天再推一次（推给附近有空、订阅了这个类目的人）：</Text>
+              {daysStillShort(tree.by_day).map((d) => (
+                <TouchableOpacity key={d.date} accessibilityRole="radio" accessibilityLabel={`补招 ${d.date}`}
+                                  accessibilityState={{ selected: (boostDay || daysStillShort(tree.by_day)[0].date) === d.date }}
+                                  onPress={() => setBoostDay(d.date)}>
+                  <Text style={styles.row}>{(boostDay || daysStillShort(tree.by_day)[0].date) === d.date ? '◉ ' : '○ '}{d.date.slice(5)}</Text>
+                </TouchableOpacity>
+              ))}
+              <TextInput style={styles.input} accessibilityLabel="每个名额加价（元）" placeholder="每个名额加价（元，可不填）"
+                         keyboardType="decimal-pad" value={boostYuan} onChangeText={setBoostYuan} />
+              <TouchableOpacity onPress={() => {
+                const cents = raiseToCents(boostYuan);
+                if (cents === null) { setBoostMsg('加价写一个正数（元），最多两位小数；不加价就空着'); return; }
+                const target = boostDay || daysStillShort(tree.by_day)[0].date;
+                setBoostMsg('');
+                void client.reboostDay(task.id, target, cents).then((r) => {
+                  setBoostMsg(reboostLine(r)); setBoostYuan('');
+                  void client.taskTree(task.id).then(setTree).catch(() => {});
+                }).catch((e) => setBoostMsg(apiErrorText(e)));
+              }}>
+                <Text style={styles.link}>补招这天</Text>
+              </TouchableOpacity>
+              {!!boostMsg && <Text style={styles.muted}>{boostMsg}</Text>}
             </View>
           )}
         </View>

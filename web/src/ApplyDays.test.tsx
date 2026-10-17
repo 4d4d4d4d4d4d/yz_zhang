@@ -84,3 +84,37 @@ describe('SCN-118 一次报多天', () => {
     expect(screen.queryByLabelText('按人选')).toBeNull();
   });
 });
+
+describe('SCN-121 发单人补招缺人的那天', () => {
+  const POSTER = { ...ME, id: 9, nickname: '店主' };
+  it('只列还缺人的日子；选一天、填加价，补招后写明结果', async () => {
+    const calls: Call[] = [];
+    open('/tasks/30', calls, { 'GET /tasks/30': PARENT, 'GET /tasks/30/tree': TREE,
+      'POST /tasks/30/days/2030-01-07/reboost': { date: '2030-01-07', slot_ids: [35], raise_cents: 1050, budget_cents: [2716] } }, POSTER);
+    const box = await screen.findByLabelText('补招');
+    const select = screen.getByLabelText('补招哪天') as HTMLSelectElement;
+    expect([...select.options].map((o) => o.value)).toEqual(['2030-01-06', '2030-01-07']);
+    fireEvent.change(select, { target: { value: '2030-01-07' } });
+    fireEvent.change(screen.getByLabelText('每个名额加价（元）'), { target: { value: '10.5' } });
+    fireEvent.click(screen.getByText('补招这天'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path.endsWith('/reboost'))?.body).toEqual({ raise_cents: 1050 }));
+    expect(await screen.findByText('已补招 01-07：1 个还在招的名额再推了一次，每个名额加价 ¥10.50。6 小时后可以再补一次。')).toBeTruthy();
+    expect(box).toBeTruthy();
+  });
+
+  it('加价写错了不发请求；不是发单人看不到补招', async () => {
+    const calls: Call[] = [];
+    open('/tasks/30', calls, { 'GET /tasks/30': PARENT, 'GET /tasks/30/tree': TREE }, POSTER);
+    await screen.findByLabelText('补招');
+    fireEvent.change(screen.getByLabelText('每个名额加价（元）'), { target: { value: '-3' } });
+    fireEvent.click(screen.getByText('补招这天'));
+    expect(await screen.findByText('加价写一个正数（元），最多两位小数；不加价就空着')).toBeTruthy();
+    expect(calls.some((c) => c.path.endsWith('/reboost'))).toBe(false);
+  });
+
+  it('帮手看不到补招', async () => {
+    open('/tasks/30', [], { 'GET /tasks/30': PARENT, 'GET /tasks/30/tree': TREE });
+    await screen.findByLabelText('按天看名额');
+    expect(screen.queryByLabelText('补招')).toBeNull();
+  });
+});

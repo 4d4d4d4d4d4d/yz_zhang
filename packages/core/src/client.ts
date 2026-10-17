@@ -21,6 +21,7 @@ import type {
   TaskCreateInput,
   TaskVisits,
   ApplyDaysResult,
+  ReboostDayResult,
   DayApplicant,
   AcceptPersonResult,
   ClientErrorRow,
@@ -635,6 +636,10 @@ export class PlatformClient {
     });
   }
   /** SCN-118 一个人一次报多天：在多天母任务上选日期（YYYY-MM-DD），每天报一个还在招的名额 */
+  /** SCN-121 缺人的那天一键补招：还在招的名额再推一次，可选每个加价（分，只许上调）；同一天 6 小时内一次 */
+  reboostDay(taskId: number, date: string, raiseCents = 0) {
+    return this.request<ReboostDayResult>('POST', `/tasks/${taskId}/days/${date}/reboost`, { raise_cents: raiseCents });
+  }
   applyDays(taskId: number, dates: string[], message = '') {
     return this.request<ApplyDaysResult>('POST', `/tasks/${taskId}/apply-days`, { dates, message });
   }

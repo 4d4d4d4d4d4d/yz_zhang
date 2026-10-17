@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, describeChangeOrder, hasChildTasks, shiftLabel, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, raiseToCents, reboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -213,6 +213,8 @@ export default function TaskDetail() {
               {me && !isCreator && <ApplyDaysBox taskId={taskId} days={daysStillShort(tree.by_day).map((d) => d.date)} />}
               {/* SCN-126 发单人按人选：一次选同一个人的多天（181 号 spec） */}
               {isCreator && <PersonPicker taskId={taskId} onDone={() => void load()} />}
+              {/* SCN-121 缺人的那天一键补招（196 号 spec） */}
+              {isCreator && <ReboostBox taskId={taskId} days={daysStillShort(tree.by_day).map((d) => d.date)} onDone={() => void load()} />}
             </div>
           )}
           <div className="list" style={{ marginTop: 12 }}>
@@ -476,6 +478,38 @@ function PersonPicker({ taskId, onDone }: { taskId: number; onDone: () => void }
 }
 
 /** SCN-118 一次报多天：勾还缺人的那几天，每天报一个名额；报不了的逐日说清。 */
+/** SCN-121 发单人：缺人的那天再推一次，可选每个名额加价（只许上调；钱在签约托管时才冻结） */
+function ReboostBox({ taskId, days, onDone }: { taskId: number; days: string[]; onDone: () => void }) {
+  const { client } = useApp();
+  const [day, setDay] = useState('');
+  const [yuan, setYuan] = useState('');
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+  if (days.length === 0) return null;
+  const target = days.includes(day) ? day : days[0];
+  async function submit() {
+    setError(''); setMsg('');
+    const cents = raiseToCents(yuan);
+    if (cents === null) { setError('加价写一个正数（元），最多两位小数；不加价就空着'); return; }
+    try { setMsg(reboostLine(await client.reboostDay(taskId, target, cents))); setYuan(''); onDone(); }
+    catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <div aria-label="补招" style={{ marginTop: 8 }}>
+      <p className="muted">缺人的那天再推一次：还在招的名额会推给附近有空、订阅了这个类目的人。</p>
+      <div className="row">
+        <select aria-label="补招哪天" value={target} onChange={(e) => setDay(e.target.value)}>
+          {days.map((d) => <option key={d} value={d}>{d.slice(5)}</option>)}
+        </select>
+        <input aria-label="每个名额加价（元）" placeholder="每个名额加价（元，可不填）" value={yuan} onChange={(e) => setYuan(e.target.value)} />
+        <button onClick={() => void submit()}>补招这天</button>
+      </div>
+      {msg && <p className="muted">{msg}</p>}
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 function ApplyDaysBox({ taskId, days }: { taskId: number; days: string[] }) {
   const { client } = useApp();
   const [picked, setPicked] = useState<string[]>([]);

@@ -720,6 +720,14 @@ export interface TaskVisits {
 }
 
 /** SCN-118 一次报多天的结果：报上了哪几天（各落在哪个名额），哪几天为什么没报 */
+/** SCN-121 一天的补招结果：哪几个名额再推了一次、加价后各自的预算 */
+export interface ReboostDayResult {
+  date: string;
+  slot_ids: number[];
+  raise_cents: number;
+  budget_cents: number[];
+}
+
 export interface ApplyDaysResult {
   applied: Array<{ date: string; task_id: number; application_id: number }>;
   skipped: Array<{ date: string; reason: string }>;

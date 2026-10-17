@@ -465,6 +465,7 @@ api POST /api/v1/tasks/{task_id}/apply-days
 api POST /api/v1/tasks/{task_id}/bookmark
 api POST /api/v1/tasks/{task_id}/cancel
 api POST /api/v1/tasks/{task_id}/checkin
+api POST /api/v1/tasks/{task_id}/days/{work_date}/reboost
 api POST /api/v1/tasks/{task_id}/decompositions
 api POST /api/v1/tasks/{task_id}/deliver
 api POST /api/v1/tasks/{task_id}/disputes
@@ -900,6 +901,7 @@ sdk publicProfile
 sdk publishContent
 sdk publishSandboxModel
 sdk publishTask
+sdk reboostDay
 sdk recallMessage
 sdk recommendations
 sdk register

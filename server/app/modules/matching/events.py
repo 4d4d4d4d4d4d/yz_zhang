@@ -39,7 +39,9 @@ def _on_task_published(db: Session, payload: dict) -> None:
         notified.add(sub.user_id)
         notify(
             db, sub.user_id, "task", "订阅类目有新任务",
-            f"《{task.title}》（{task.category}·{task.budget_cents / 100:.2f} 元）刚刚发布",
+            # SCN-121 发单人补招时再推一次：不是新单，写「还在招人」
+            f"《{task.title}》（{task.category}·{task.budget_cents / 100:.2f} 元）"
+            + ("还在招人" if payload.get("reboost") else "刚刚发布"),
         )
 
 
