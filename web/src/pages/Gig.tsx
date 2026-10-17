@@ -1,5 +1,5 @@
 import {
-  apiErrorText, fmtYuan, formatDateTime,
+  apiErrorText, departAt, departLine, DEPART_HINT, fmtYuan, formatDateTime,
   gigWhenLabel, type GigAlong, type GigAvailabilityView, type GigNearby, type GigPlaceRow, type GigQuote, type GigTaskCard,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -30,6 +30,8 @@ export default function Gig() {
   const [places, setPlaces] = useState<GigPlaceRow[]>([]);
   const [along, setAlong] = useState<GigAlong | null>(null);
   const [route, setRoute] = useState<{ from: string; to: string; detour: number }>({ from: 'here', to: '', detour: 2 });
+  // SCN-134 出发时间：现在（按「现在有空」）/ 今天 / 明天几点
+  const [depart, setDepart] = useState<{ day: string; hm: string; hours: number }>({ day: '', hm: '', hours: 3 });
   const [quote, setQuote] = useState<GigQuote | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -50,13 +52,16 @@ export default function Gig() {
   }
   async function findAlong() {
     setError('');
+    const at = depart.day === '' ? undefined : departAt(Number(depart.day), depart.hm);
+    if (at === null || (depart.day !== '' && at === undefined)) { setError(DEPART_HINT); return; }
+    const when = at ? { depart_at: at, within_hours: depart.hours } : {};
     try {
       const to = Number(route.to);
       if (route.from === 'here') {
         const here = await locate();
-        setAlong(await client.gigAlong({ to_place: to, from_lat: here.lat, from_lng: here.lng, max_detour_km: route.detour }));
+        setAlong(await client.gigAlong({ to_place: to, from_lat: here.lat, from_lng: here.lng, max_detour_km: route.detour, ...when }));
       } else {
-        setAlong(await client.gigAlong({ to_place: to, from_place: Number(route.from), max_detour_km: route.detour }));
+        setAlong(await client.gigAlong({ to_place: to, from_place: Number(route.from), max_detour_km: route.detour, ...when }));
       }
     } catch (e) { setError(e instanceof Error && !('code' in e) ? e.message : apiErrorText(e)); }
   }
@@ -116,9 +121,17 @@ export default function Gig() {
               <option value="">选一个</option>{places.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
             <label>最多多走 <select aria-label="最多多走" value={route.detour} onChange={(e) => setRoute({ ...route, detour: Number(e.target.value) })}>
               {[1, 2, 3, 5].map((n) => <option key={n} value={n}>{n} 公里</option>)}</select></label>
+            <label>出发 <select aria-label="什么时候出发" value={depart.day} onChange={(e) => setDepart({ ...depart, day: e.target.value })}>
+              <option value="">现在</option><option value="0">今天</option><option value="1">明天</option></select></label>
+            {depart.day !== '' && <>
+              <input type="time" aria-label="几点出发" value={depart.hm} onChange={(e) => setDepart({ ...depart, hm: e.target.value })} />
+              <label>之后 <select aria-label="出发后几小时内" value={depart.hours} onChange={(e) => setDepart({ ...depart, hours: Number(e.target.value) })}>
+                {[1, 2, 3, 4, 6].map((n) => <option key={n} value={n}>{n} 小时</option>)}</select></label>
+            </>}
             <button disabled={!route.to} onClick={() => void findAlong()}>看看顺路的单</button>
           </div>
         )}
+        {along && departLine(along) && <p className="muted">{departLine(along)}</p>}
         {along && <TaskList items={along.items} empty={`去「${along.to}」的路上，多走 ${along.max_detour_km} 公里以内暂时没有单`}
           onQuote={(id) => void client.gigQuote({ task_id: id }).then(setQuote).catch((e) => setError(apiErrorText(e)))} />}
       </div>

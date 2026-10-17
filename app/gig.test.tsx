@@ -1,6 +1,6 @@
 // GIG-100 接单在 App 上的行为（125 号 spec）。
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { PlatformClient } from '@platform/core';
+import { DEPART_HINT, departAt, PlatformClient } from '@platform/core';
 import { GigScreen } from './gig';
 
 type Call = { method: string; path: string; query: string; body?: unknown };
@@ -67,5 +67,38 @@ describe('SCN-129 App 接单卡片写明名额哪天几点', () => {
       '/gig/nearby': { radius_km: 3, notice: '', items: [{ ...CARD, work_date: '2026-10-24', shift_start: '09:00', shift_end: '18:00' }] } }, calls);
     render(<GigScreen client={client} locate={here} />);
     expect(await screen.findByText(/人民广场 · 10-24 09:00–18:00 · 约 0.8 公里/)).toBeTruthy();
+  });
+});
+
+describe('SCN-134 App 顺路单可以设出发时间', () => {
+  const places = [{ id: 2, name: '公司', lat: 31.23, lng: 121.53 }];
+  it('明天 08:30 出发：带上出发时间（之后 3 小时），结果上写明', async () => {
+    const calls: Call[] = [];
+    const at = departAt(1, '08:30') as string;
+    const client = makeClient({ 'GET /gig/available': OFF, '/gig/places': places,
+      '/gig/along': { to: '公司', max_detour_km: 2, notice: '', depart_at: at, within_hours: 3, items: [] } }, calls);
+    render(<GigScreen client={client} locate={here} />);
+    fireEvent.press(await screen.findByText('到公司'));
+    fireEvent.press(screen.getByText('明天'));
+    fireEvent.changeText(screen.getByLabelText('几点出发'), '08:30');
+    fireEvent.press(screen.getByText('从这里出发，看顺路的单'));
+    expect(await screen.findByText(`按 ${at.slice(5, 10)} 08:30 出发、之后 3 小时内的名额筛`)).toBeTruthy();
+    const q = new URLSearchParams(calls.find((c) => c.path === '/gig/along')?.query ?? '');
+    expect([q.get('depart_at'), q.get('within_hours')]).toEqual([at, '3']);
+  });
+
+  it('时间写错不发请求，就地说明；空着就按现在', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({ 'GET /gig/available': OFF, '/gig/places': places,
+      '/gig/along': { to: '公司', max_detour_km: 2, notice: '', items: [] } }, calls);
+    render(<GigScreen client={client} locate={here} />);
+    fireEvent.press(await screen.findByText('到公司'));
+    fireEvent.changeText(screen.getByLabelText('几点出发'), '8点半');
+    fireEvent.press(screen.getByText('从这里出发，看顺路的单'));
+    expect(await screen.findByText(DEPART_HINT)).toBeTruthy();
+    expect(calls.some((c) => c.path === '/gig/along')).toBe(false);
+    fireEvent.changeText(screen.getByLabelText('几点出发'), '');
+    fireEvent.press(screen.getByText('从这里出发，看顺路的单'));
+    await waitFor(() => expect(calls.find((c) => c.path === '/gig/along')?.query).not.toContain('depart_at'));
   });
 });

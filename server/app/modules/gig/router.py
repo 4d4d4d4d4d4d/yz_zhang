@@ -1,7 +1,7 @@
 """GIG-100 接单者工具接口（125 号 spec）。全部只作用于调用者本人；坐标入库前粗化到约 1 公里。"""
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -113,8 +113,13 @@ def get_along(from_place: int | None = None, to_place: int | None = None,
               from_lat: float | None = Query(default=None, ge=-90, le=90),
               from_lng: float | None = Query(default=None, ge=-180, le=180),
               max_detour_km: float = Query(default=2, gt=0, le=20),
+              depart_at: str | None = Query(default=None, max_length=32),
+              within_hours: int = Query(default=3, ge=1, le=12),
               user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
-    """顺路单：从当前位置（或一个常用地点）到另一个常用地点，顺路能接哪些单。"""
+    """顺路单：从当前位置（或一个常用地点）到另一个常用地点，顺路能接哪些单。
+
+    SCN-134（203 号 spec）可带出发时间（北京时间，如 2026-10-18T08:30）：只看出发后 within_hours 小时内对得上的名额，
+    不再按「现在有空」那一段——明早上班顺路带一单，今晚就能先看。"""
     if to_place is None:
         raise bad_request("选一个目的地（常用地点）", "gig_need_destination")
     dst = _own_place(db, to_place, user)
@@ -126,10 +131,37 @@ def get_along(from_place: int | None = None, to_place: int | None = None,
     else:
         raise bad_request("起点用当前位置或一个常用地点", "gig_need_location")
     a = svc.active(db, user.id)
+    window = (utcnow(), a.until) if a else None
+    if depart_at:
+        start = _depart_utc(depart_at)
+        window = (start, start + timedelta(hours=within_hours))
     return {"to": dst.name, "max_detour_km": max_detour_km,
             "items": svc.along(db, user.id, src, (dst.lat, dst.lng), max_detour_km, a.categories if a else None,
-                               window=(utcnow(), a.until) if a else None),
+                               window=window),
+            "depart_at": depart_at.strip() if depart_at else None, "within_hours": within_hours if depart_at else None,
             "notice": "多走的路是直线估算（起点→任务点→终点 比 起点→终点 多出的距离）"}
+
+
+# 出发时间最早可以写成一刻钟前（刚出门才想起来看），最晚一周后：再往后的名额还会变，看了也不准
+DEPART_GRACE_MINUTES = 15
+DEPART_MAX_DAYS = 7
+
+
+def _depart_utc(raw: str) -> datetime:
+    """出发时间换成 UTC（无时区，与库里一致）。没写时区的按北京时间。"""
+    try:
+        t = datetime.fromisoformat(raw.strip())
+    except ValueError:
+        raise bad_request("出发时间写成 2026-10-18T08:30 这样（北京时间）", "gig_depart_invalid") from None
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=svc._CN)
+    t = t.astimezone(timezone.utc).replace(tzinfo=None)
+    now = utcnow()
+    if t < now - timedelta(minutes=DEPART_GRACE_MINUTES):
+        raise bad_request("出发时间已经过去了：改成现在以后的时间，或者不填（按「现在有空」）", "gig_depart_past")
+    if t > now + timedelta(days=DEPART_MAX_DAYS):
+        raise bad_request(f"出发时间最多看 {DEPART_MAX_DAYS} 天以内的：再往后的名额还会变", "gig_depart_too_far")
+    return t
 
 
 # ------------------------------------------------------------------ 常用地点

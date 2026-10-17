@@ -1,5 +1,5 @@
 // GIG-100 接单（125 号 spec）：现在有空（拿定位）、附近的单与行情、顺路单、存常用地点。
-import { PlatformClient } from '@platform/core';
+import { DEPART_HINT, departAt, PlatformClient } from '@platform/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -97,5 +97,35 @@ describe('SCN-129 接单卡片写明名额哪天几点', () => {
     expect(screen.getByText(/人民广场 · 10-25 全天 · 约 0.8 公里/)).toBeTruthy();
     const plain = screen.getByRole('link', { name: '不按天' }).parentElement!;
     expect(plain.textContent).toContain('人民广场 · 约 0.8 公里');
+  });
+});
+
+describe('SCN-134 顺路单可以设出发时间', () => {
+  const places = [{ id: 2, name: '公司', lat: 31.23, lng: 121.53 }];
+  it('明天 08:30 出发、之后 2 小时：带上出发时间，结果上写明按什么筛的', async () => {
+    mockGeo();
+    const calls: Call[] = [];
+    const at = departAt(1, '08:30') as string;
+    open('/gig', { 'GET /gig/available': OFF, 'GET /gig/places': places,
+      '/gig/along': { to: '公司', max_detour_km: 2, notice: '', depart_at: at, within_hours: 2, items: [{ ...CARD, distance_m: undefined, detour_m: 270 }] } }, calls);
+    fireEvent.change(await screen.findByLabelText('终点'), { target: { value: '2' } });
+    expect(screen.queryByLabelText('几点出发')).toBeNull();
+    fireEvent.change(screen.getByLabelText('什么时候出发'), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('几点出发'), { target: { value: '08:30' } });
+    fireEvent.change(screen.getByLabelText('出发后几小时内'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: '看看顺路的单' }));
+    expect(await screen.findByText(`按 ${at.slice(5, 10)} 08:30 出发、之后 2 小时内的名额筛`)).toBeTruthy();
+    const q = new URLSearchParams(calls.find((c) => c.path === '/gig/along')?.query ?? '');
+    expect([q.get('depart_at'), q.get('within_hours')]).toEqual([at, '2']);
+  });
+
+  it('选了今天却没写几点：不发请求，就地说明', async () => {
+    const calls: Call[] = [];
+    open('/gig', { 'GET /gig/available': OFF, 'GET /gig/places': places }, calls);
+    fireEvent.change(await screen.findByLabelText('终点'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('什么时候出发'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: '看看顺路的单' }));
+    expect(await screen.findByText(DEPART_HINT)).toBeTruthy();
+    expect(calls.some((c) => c.path === '/gig/along')).toBe(false);
   });
 });

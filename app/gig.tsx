@@ -1,11 +1,11 @@
 // GIG-100 接单（125 号 spec）——App 端：现在有空（附近新单推给我）、附近的单与行情、常用地点与顺路单。
 // 位置只用到约 1 公里；「现在有空」到点自动关掉、位置随之删除；距离都是直线估算。
 import {
-  apiErrorText, fmtYuan, formatDateTime,
+  apiErrorText, departAt, departLine, DEPART_HINT, fmtYuan, formatDateTime,
   gigWhenLabel, type GigAlong, type GigAvailabilityView, type GigNearby, type GigPlaceRow, type GigQuote, type GigTaskCard, type PlatformClient,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
-import { Button, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Button, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export type Locate = () => Promise<{ lat: number; lng: number } | null>;
 
@@ -31,6 +31,9 @@ export function GigScreen({ client, locate = deviceLocate, onOpenTask }: {
   const [places, setPlaces] = useState<GigPlaceRow[]>([]);
   const [to, setTo] = useState<number | null>(null);
   const [along, setAlong] = useState<GigAlong | null>(null);
+  // SCN-134 出发时间：今天 / 明天几点；空着按「现在有空」
+  const [departDay, setDepartDay] = useState(0);
+  const [departHm, setDepartHm] = useState('');
   const [quote, setQuote] = useState<GigQuote | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -92,12 +95,29 @@ export function GigScreen({ client, locate = deviceLocate, onOpenTask }: {
         ))}
       </View>
       {to !== null && (
-        <Button title="从这里出发，看顺路的单" onPress={() => void withHere(async (here) => {
-          const r = await client.gigAlong({ to_place: to, from_lat: here.lat, from_lng: here.lng, max_detour_km: 2 });
-          setAlong(r);
-          return '';
-        })} />
+        <View>
+          <View style={s.row}>
+            {['今天', '明天'].map((label, i) => (
+              <TouchableOpacity key={label} onPress={() => setDepartDay(i)} accessibilityState={{ selected: departDay === i }}>
+                <Text style={departDay === i ? s.tabOn : s.tab}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+            <TextInput style={s.input} accessibilityLabel="几点出发" placeholder="几点出发（如 08:30，空着 = 现在）"
+                       value={departHm} onChangeText={setDepartHm} />
+          </View>
+          <Button title="从这里出发，看顺路的单" onPress={() => {
+            const at = departAt(departDay, departHm);
+            if (at === null) { setError(DEPART_HINT); return; }
+            void withHere(async (here) => {
+              const r = await client.gigAlong({ to_place: to, from_lat: here.lat, from_lng: here.lng, max_detour_km: 2,
+                ...(at ? { depart_at: at, within_hours: 3 } : {}) });
+              setAlong(r);
+              return '';
+            });
+          }} />
+        </View>
       )}
+      {along && !!departLine(along) && <Text style={s.muted}>{departLine(along)}</Text>}
       {along && <Cards items={along.items} empty={`去「${along.to}」的路上暂时没有顺路的单`} onQuote={showQuote} onOpen={onOpenTask} />}
       {quote && (
         <View style={s.card}>
@@ -143,6 +163,7 @@ const s = StyleSheet.create({
   title: { fontSize: 15, fontWeight: '600' },
   h: { fontSize: 16, fontWeight: '600', marginTop: 6 },
   muted: { color: '#777' },
+  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, minWidth: 160 },
   error: { color: '#c0392b' },
   link: { color: '#b5532f' },
 });

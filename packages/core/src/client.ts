@@ -550,11 +550,15 @@ export class PlatformClient {
     return this.request<GigNearby>('GET', `/gig/nearby${qs ? `?${qs}` : ''}`);
   }
   /** 顺路单：起点是一个常用地点或当前位置，终点是一个常用地点 */
-  gigAlong(input: { to_place: number; from_place?: number; from_lat?: number; from_lng?: number; max_detour_km?: number }) {
+  gigAlong(input: { to_place: number; from_place?: number; from_lat?: number; from_lng?: number; max_detour_km?: number;
+    depart_at?: string; within_hours?: number }) {
     const p = new URLSearchParams({ to_place: String(input.to_place) });
     if (input.from_place !== undefined) p.set('from_place', String(input.from_place));
     if (input.from_lat !== undefined && input.from_lng !== undefined) { p.set('from_lat', String(input.from_lat)); p.set('from_lng', String(input.from_lng)); }
     if (input.max_detour_km) p.set('max_detour_km', String(input.max_detour_km));
+    // SCN-134 出发时间（北京时间 YYYY-MM-DDTHH:MM）：只看出发后几小时内对得上的名额
+    if (input.depart_at) p.set('depart_at', input.depart_at);
+    if (input.depart_at && input.within_hours) p.set('within_hours', String(input.within_hours));
     return this.request<GigAlong>('GET', `/gig/along?${p.toString()}`);
   }
   gigPlaces() { return this.request<GigPlaceRow[]>('GET', '/gig/places').then(listOf); }

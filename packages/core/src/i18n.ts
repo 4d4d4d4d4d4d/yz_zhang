@@ -103,6 +103,9 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   influence_vouch_locked: '他已经开工了：为这一单的担保要等这一单结束才释放',
   gig_need_location: '先打开「现在有空」，或者带上当前位置',
   gig_need_destination: '选一个目的地（常用地点）',
+  gig_depart_invalid: '出发时间写成 2026-10-18T08:30 这样（北京时间）',
+  gig_depart_past: '出发时间已经过去了：改成现在以后的时间，或者不填（按「现在有空」）',
+  gig_depart_too_far: '出发时间最多看 7 天以内的：再往后的名额还会变',
   gig_places_full: '常用地点最多 10 个，先删掉不用的',
   gig_quote_needs_subject: '给一个任务，或者一个类目',
   nb_limit_reached: '知识库数量已达上限，请先导出后删除不用的',
@@ -367,6 +370,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   shift_incomplete: '每天的时段要把开始和结束一起写（例如 09:00 到 18:00），或者都不写',
   shift_invalid: '时间按 24 小时制写成 HH:MM（例如 09:00、18:30）',
   shift_order: '结束时间要晚于开始时间；跨夜的班请拆成两天写',
+  day_shifts_without_days: '只有连续几天的活才分天写时段；一天的活写上面的时段就行',
   // SCN-126 一次选一个人的多天（181 号 spec）
   nothing_to_accept: '这个人没有可以选的那几天：看看是不是已经选过，或他的在途单到了上限',
   days_with_recurrence: '连续几天与「每周 / 每月重复」不能同时用：选一种',
@@ -446,6 +450,8 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
  * 这件事可数、可查——一个说不清自己覆盖了多少的翻译表，等于没有覆盖率。
  */
 export const SERVER_WORDED_CODES: string[] = [
+  // SCN-127 消息里写明一共几天，客户端编不出等价文案
+  'day_shifts_length',
   // AI-DEC-044 消息里点名是哪几步、各差什么，客户端编不出等价文案
   'tree_incomplete',
   // AI-DEC-045 总任务本身拆不下去时，消息说的是停在哪条保险上

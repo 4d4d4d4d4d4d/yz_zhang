@@ -2715,6 +2715,8 @@ export interface GigAlong {
   to: string;
   max_detour_km: number;
   items: GigTaskCard[];
+  depart_at?: string | null;
+  within_hours?: number | null;
   notice: string;
 }
 export interface GigQuote {

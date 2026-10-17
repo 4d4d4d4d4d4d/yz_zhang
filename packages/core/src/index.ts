@@ -12,3 +12,4 @@ export * from './adminSections';
 export * from './brief';
 export * from './reboost';
 export * from './dayShifts';
+export * from './depart';
