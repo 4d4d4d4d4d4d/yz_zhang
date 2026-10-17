@@ -7,6 +7,7 @@ api DELETE /api/v1/developer/webhooks/{webhook_id}
 api DELETE /api/v1/friends/{user_id}
 api DELETE /api/v1/gig/available
 api DELETE /api/v1/gig/places/{place_id}
+api DELETE /api/v1/gig/routes/{route_id}
 api DELETE /api/v1/influence/vouches/{vouch_id}
 api DELETE /api/v1/notebook/methods/{method_id}
 api DELETE /api/v1/notebook/notes/{note_id}
@@ -117,6 +118,7 @@ api GET /api/v1/gig/along
 api GET /api/v1/gig/available
 api GET /api/v1/gig/nearby
 api GET /api/v1/gig/places
+api GET /api/v1/gig/routes
 api GET /api/v1/influence/leaderboard
 api GET /api/v1/influence/me
 api GET /api/v1/influence/me/proof
@@ -402,8 +404,10 @@ api POST /api/v1/finance/jobs/remit-tax
 api POST /api/v1/friends/requests
 api POST /api/v1/friends/requests/{req_id}/decide
 api POST /api/v1/gig/jobs/purge-expired
+api POST /api/v1/gig/jobs/route-push
 api POST /api/v1/gig/places
 api POST /api/v1/gig/quote
+api POST /api/v1/gig/routes
 api POST /api/v1/influence/jobs/snapshot
 api POST /api/v1/influence/vouches
 api POST /api/v1/invitations/{invitation_id}/accept
@@ -598,6 +602,7 @@ sdk acceptSettlement
 sdk acceptTeamInvite
 sdk addDisputeStatement
 sdk addGigPlace
+sdk addGigRoute
 sdk addNoteTodos
 sdk addOpcEntry
 sdk addOrganizationRecord
@@ -741,6 +746,7 @@ sdk decompositionTemplate
 sdk defineMilestones
 sdk deleteDecompositionNode
 sdk deleteGigPlace
+sdk deleteGigRoute
 sdk deleteMethod
 sdk deleteNote
 sdk deleteOpcEntry
@@ -800,6 +806,7 @@ sdk gigAvailability
 sdk gigNearby
 sdk gigPlaces
 sdk gigQuote
+sdk gigRoutes
 sdk grantConsent
 sdk grantMachineMandate
 sdk grantTemporaryAdminRole

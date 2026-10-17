@@ -129,3 +129,38 @@ describe('SCN-134 顺路单可以设出发时间', () => {
     expect(calls.some((c) => c.path === '/gig/along')).toBe(false);
   });
 });
+
+describe('SCN-140 常用路线', () => {
+  const places = [{ id: 1, name: '家', lat: 31.23, lng: 121.47 }, { id: 2, name: '公司', lat: 31.23, lng: 121.53 }];
+  it('从家到公司、工作日 08:30 存为常用路线；列表里能删', async () => {
+    const calls: Call[] = [];
+    open('/gig', { 'GET /gig/available': OFF, 'GET /gig/places': places,
+      'GET /gig/routes': [{ id: 7, from_place: 2, to_place: 1, from_name: '公司', to_name: '家', weekdays: [0, 1, 2, 3, 4], depart_hm: '18:00', within_hours: 3 }],
+      'POST /gig/routes': { id: 8 }, 'DELETE /gig/routes/7': { deleted: true } }, calls);
+    expect(await screen.findByText('工作日 18:00 公司 → 家')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('起点'), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('终点'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('路线几点出发'), { target: { value: '08:30' } });
+    fireEvent.click(screen.getByRole('button', { name: '存为常用路线' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/gig/routes')?.body)
+      .toEqual({ from_place: 1, to_place: 2, depart_hm: '08:30', weekdays: [0, 1, 2, 3, 4] }));
+    fireEvent.click(screen.getByRole('button', { name: '删掉路线：工作日 18:00 公司 → 家' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.path === '/gig/routes/7')).toBe(true));
+  });
+
+  it('没写几点不发请求，就地说明；起点是当前位置时不能存', async () => {
+    const calls: Call[] = [];
+    open('/gig', { 'GET /gig/available': OFF, 'GET /gig/places': places }, calls);
+    fireEvent.change(await screen.findByLabelText('终点'), { target: { value: '2' } });
+    expect((screen.getByRole('button', { name: '存为常用路线' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('起点'), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('哪几天'), { target: { value: 'weekend' } });
+    fireEvent.click(screen.getByRole('button', { name: '存为常用路线' }));
+    expect(await screen.findByText(DEPART_HINT)).toBeTruthy();
+    expect(calls.some((c) => c.method === 'POST' && c.path === '/gig/routes')).toBe(false);
+    fireEvent.change(screen.getByLabelText('路线几点出发'), { target: { value: '10:00' } });
+    fireEvent.click(screen.getByRole('button', { name: '存为常用路线' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/gig/routes')?.body)
+      .toEqual({ from_place: 1, to_place: 2, depart_hm: '10:00', weekdays: [5, 6] }));
+  });
+});

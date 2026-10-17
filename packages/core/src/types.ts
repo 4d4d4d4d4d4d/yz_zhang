@@ -2696,6 +2696,24 @@ export interface GigPlaceRow {
   lat: number;
   lng: number;
 }
+/** SCN-140 常用路线：哪几天（0 = 星期一）、几点（北京时间）从哪个常用地点去哪个；出发前一小时内推一次顺路的名额 */
+export interface GigRouteView {
+  id: number;
+  from_place: number;
+  to_place: number;
+  from_name: string;
+  to_name: string;
+  weekdays: number[];
+  depart_hm: string;
+  within_hours: number;
+}
+export interface GigRouteInput {
+  from_place: number;
+  to_place: number;
+  weekdays?: number[];
+  depart_hm: string;
+  within_hours?: number;
+}
 export interface GigTaskCard {
   task_id: number;
   title: string;

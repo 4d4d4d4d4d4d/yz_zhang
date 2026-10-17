@@ -82,6 +82,8 @@ JOBS: tuple[ScheduledJob, ...] = (
                  "INF-106 影响力快照：Merkle 根锚定进存证哈希链；到期的类目担保释放"),
     ScheduledJob("/gig/jobs/purge-expired", 3600, "gig_purge",
                  "GIG-101 过期的「现在有空」连同粗化位置一起删：位置不留着过夜（读的时候也会顺手删）"),
+    ScheduledJob("/gig/jobs/route-push", 600, "gig_route_push",
+                 "SCN-140 常用路线到点前推顺路的名额：出发前一小时内推一次，十分钟一轮足够早"),
     ScheduledJob("/workbench/jobs/run-routines", 60, "wb_routines",
                  "PWB-007 个人工作台的例行任务与到点提醒：用户设的是「9:00」，跑得慢一分钟就晚一分钟"),
     ScheduledJob("/tasks/jobs/remind-acceptance", 3600, "remind_acceptance",

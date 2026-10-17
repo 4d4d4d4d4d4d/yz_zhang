@@ -2,7 +2,7 @@
 // 位置只用到约 1 公里；「现在有空」到点自动关掉、位置随之删除；距离都是直线估算。
 import {
   apiErrorText, departAt, departLine, DEPART_HINT, fmtYuan, formatDateTime,
-  gigWhenLabel, type GigAlong, type GigAvailabilityView, type GigNearby, type GigPlaceRow, type GigQuote, type GigTaskCard, type PlatformClient,
+  gigRouteLabel, gigWhenLabel, type GigAlong, type GigRouteView, type GigAvailabilityView, type GigNearby, type GigPlaceRow, type GigQuote, type GigTaskCard, type PlatformClient,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -34,6 +34,11 @@ export function GigScreen({ client, locate = deviceLocate, onOpenTask }: {
   // SCN-134 出发时间：今天 / 明天几点；空着按「现在有空」
   const [departDay, setDepartDay] = useState(0);
   const [departHm, setDepartHm] = useState('');
+  // SCN-140 常用路线：从哪个常用地点出发（终点用上面选的「到哪」）、几点、工作日 / 每天 / 周末
+  const [routes, setRoutes] = useState<GigRouteView[]>([]);
+  const [fromPlace, setFromPlace] = useState<number | null>(null);
+  const [routeHm, setRouteHm] = useState('');
+  const [routeDays, setRouteDays] = useState<keyof typeof ROUTE_DAYS>('workdays');
   const [quote, setQuote] = useState<GigQuote | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -42,6 +47,7 @@ export function GigScreen({ client, locate = deviceLocate, onOpenTask }: {
       const a = await client.gigAvailability();
       setAvail(a);
       setPlaces(await client.gigPlaces());
+      setRoutes(await client.gigRoutes().catch(() => []));
       setNear(a.available ? await client.gigNearby() : null);
     } catch (e) { setError(apiErrorText(e)); }
   }, [client]);
@@ -118,6 +124,45 @@ export function GigScreen({ client, locate = deviceLocate, onOpenTask }: {
         </View>
       )}
       {along && !!departLine(along) && <Text style={s.muted}>{departLine(along)}</Text>}
+
+      {places.length > 1 && (
+        <View style={s.card} accessibilityLabel="常用路线">
+          <Text style={s.title}>常用路线</Text>
+          <Text style={s.muted}>固定要走的路存一次：出发前一小时内推一次顺路的名额，一天一次，没有就不打扰。</Text>
+          {routes.map((r) => (
+            <View key={r.id} style={s.row}>
+              <Text>{gigRouteLabel(r)}</Text>
+              <TouchableOpacity accessibilityLabel={`删掉路线：${gigRouteLabel(r)}`}
+                                onPress={() => void client.deleteGigRoute(r.id).then(() => load()).catch((e) => setError(apiErrorText(e)))}>
+                <Text style={s.link}>删除</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+          <View style={s.row}>
+            {places.filter((p) => p.id !== to).map((p) => (
+              <TouchableOpacity key={p.id} onPress={() => setFromPlace(p.id)} accessibilityState={{ selected: fromPlace === p.id }}>
+                <Text style={fromPlace === p.id ? s.tabOn : s.tab}>从{p.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={s.row}>
+            {(Object.keys(ROUTE_DAYS) as Array<keyof typeof ROUTE_DAYS>).map((k) => (
+              <TouchableOpacity key={k} onPress={() => setRouteDays(k)} accessibilityState={{ selected: routeDays === k }}>
+                <Text style={routeDays === k ? s.tabOn : s.tab}>{ROUTE_DAYS[k].label}</Text>
+              </TouchableOpacity>
+            ))}
+            <TextInput style={s.input} accessibilityLabel="路线几点出发" placeholder="几点出发（如 08:30）" value={routeHm} onChangeText={setRouteHm} />
+          </View>
+          <Button title="存为常用路线" disabled={fromPlace === null || to === null || fromPlace === to} onPress={() => {
+            const hm = routeHm.trim();
+            if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(hm)) { setError(DEPART_HINT); return; }
+            setError('');
+            void client.addGigRoute({ from_place: fromPlace as number, to_place: to as number, depart_hm: hm, weekdays: ROUTE_DAYS[routeDays].days })
+              .then(() => { setNotice('已存为常用路线：出发前一小时内会推顺路的名额'); return load(); })
+              .catch((e) => setError(apiErrorText(e)));
+          }} />
+        </View>
+      )}
       {along && <Cards items={along.items} empty={`去「${along.to}」的路上暂时没有顺路的单`} onQuote={showQuote} onOpen={onOpenTask} />}
       {quote && (
         <View style={s.card}>
@@ -153,6 +198,12 @@ function Cards({ items, empty, onQuote, onOpen }: {
     </View>
   );
 }
+
+const ROUTE_DAYS = {
+  workdays: { label: '工作日', days: [0, 1, 2, 3, 4] },
+  everyday: { label: '每天', days: [0, 1, 2, 3, 4, 5, 6] },
+  weekend: { label: '周末', days: [5, 6] },
+};
 
 const s = StyleSheet.create({
   box: { gap: 8 },

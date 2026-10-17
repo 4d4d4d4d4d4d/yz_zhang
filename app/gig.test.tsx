@@ -102,3 +102,24 @@ describe('SCN-134 App 顺路单可以设出发时间', () => {
     await waitFor(() => expect(calls.find((c) => c.path === '/gig/along')?.query).not.toContain('depart_at'));
   });
 });
+
+describe('SCN-140 App 常用路线', () => {
+  const places = [{ id: 1, name: '家', lat: 31.23, lng: 121.47 }, { id: 2, name: '公司', lat: 31.23, lng: 121.53 }];
+  it('到公司、从家、周末 09:00 存为常用路线；列表里能删', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({ 'GET /gig/available': OFF, '/gig/places': places,
+      'GET /gig/routes': [{ id: 7, from_place: 2, to_place: 1, from_name: '公司', to_name: '家', weekdays: [0, 1, 2, 3, 4, 5, 6], depart_hm: '18:00', within_hours: 3 }],
+      'POST /gig/routes': { id: 8 }, 'DELETE /gig/routes/7': { deleted: true } }, calls);
+    render(<GigScreen client={client} locate={here} />);
+    expect(await screen.findByText('每天 18:00 公司 → 家')).toBeTruthy();
+    fireEvent.press(screen.getByText('到公司'));
+    fireEvent.press(screen.getByText('从家'));
+    fireEvent.press(screen.getByText('周末'));
+    fireEvent.changeText(screen.getByLabelText('路线几点出发'), '09:00');
+    fireEvent.press(screen.getByText('存为常用路线'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/gig/routes')?.body)
+      .toEqual({ from_place: 1, to_place: 2, depart_hm: '09:00', weekdays: [5, 6] }));
+    fireEvent.press(screen.getByLabelText('删掉路线：每天 18:00 公司 → 家'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.path === '/gig/routes/7')).toBe(true));
+  });
+});

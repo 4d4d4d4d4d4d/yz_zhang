@@ -160,9 +160,10 @@ def erase_personal_data(db: Session, user: User) -> dict:
     db.query(OpcEntry).filter(OpcEntry.owner_id == user.id).delete(synchronize_session=False)
     db.query(OpcProfile).filter(OpcProfile.user_id == user.id).delete(synchronize_session=False)
     # GIG-109 位置类数据（「现在有空」的粗化位置、常用地点）：注销即删
-    from app.modules.gig.models import GigAvailability, GigPlace
+    from app.modules.gig.models import GigAvailability, GigPlace, GigRoute
     db.query(GigAvailability).filter(GigAvailability.user_id == user.id).delete(synchronize_session=False)
     db.query(GigPlace).filter(GigPlace.owner_id == user.id).delete(synchronize_session=False)
+    db.query(GigRoute).filter(GigRoute.owner_id == user.id).delete(synchronize_session=False)   # SCN-140
     # INF-109 影响力账本与担保：本人的删掉；别人为他作的担保一并释放（不罚没、不奖励）
     from app.modules.influence.models import InfluenceEvent, InfluenceVouch
     db.query(InfluenceEvent).filter(InfluenceEvent.user_id == user.id).delete(synchronize_session=False)

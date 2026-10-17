@@ -764,6 +764,18 @@ def _export_tickets(db: Session, user_id: int) -> list[dict]:
              "replies": replies.get(t.id, [])} for t in rows]
 
 
+def _export_gig(db: Session, user_id: int) -> dict:
+    from app.modules.gig.models import GigPlace, GigRoute
+
+    return {
+        "places": [{"id": p.id, "name": p.name, "lat": p.lat, "lng": p.lng}
+                   for p in db.query(GigPlace).filter(GigPlace.owner_id == user_id).order_by(GigPlace.id)],
+        "routes": [{"id": r.id, "from_place": r.from_place_id, "to_place": r.to_place_id, "weekdays": r.weekdays,
+                    "depart_hm": r.depart_hm, "within_hours": r.within_hours}
+                   for r in db.query(GigRoute).filter(GigRoute.owner_id == user_id).order_by(GigRoute.id)],
+    }
+
+
 @router.get("/users/me/export")
 def export_my_data(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from app.modules.content.models import Content
@@ -791,6 +803,8 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
         "tickets": _export_tickets(db, user.id),
         # XAPP-006（161 号 spec）跨 App 助手的授权与执行记录
         "xapp": _export_xapp(db, user.id),
+        # SCN-140（208 号 spec）接单的常用地点（粗化坐标）与常用路线
+        "gig": _export_gig(db, user.id),
         "real_name": user.real_name,
         "tasks": [{"id": t.id, "title": t.title, "status": t.status, "budget_cents": t.budget_cents,
                    "role": "creator" if t.creator_id == user.id else "executor",

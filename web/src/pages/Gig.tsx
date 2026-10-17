@@ -1,6 +1,6 @@
 import {
   apiErrorText, departAt, departLine, DEPART_HINT, fmtYuan, formatDateTime,
-  gigWhenLabel, type GigAlong, type GigAvailabilityView, type GigNearby, type GigPlaceRow, type GigQuote, type GigTaskCard,
+  gigRouteLabel, gigWhenLabel, type GigAlong, type GigRouteView, type GigAvailabilityView, type GigNearby, type GigPlaceRow, type GigQuote, type GigTaskCard,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -20,6 +20,8 @@ function locate(): Promise<Here> {
   });
 }
 
+const ROUTE_DAYS: Record<string, number[]> = { workdays: [0, 1, 2, 3, 4], everyday: [0, 1, 2, 3, 4, 5, 6], weekend: [5, 6] };
+
 export default function Gig() {
   const { client } = useApp();
   const [avail, setAvail] = useState<GigAvailabilityView | null>(null);
@@ -32,6 +34,10 @@ export default function Gig() {
   const [route, setRoute] = useState<{ from: string; to: string; detour: number }>({ from: 'here', to: '', detour: 2 });
   // SCN-134 出发时间：现在（按「现在有空」）/ 今天 / 明天几点
   const [depart, setDepart] = useState<{ day: string; hm: string; hours: number }>({ day: '', hm: '', hours: 3 });
+  // SCN-140 常用路线：存下「哪几天几点从哪到哪」，出发前一小时内推一次顺路的名额
+  const [routes, setRoutes] = useState<GigRouteView[]>([]);
+  const [routeDays, setRouteDays] = useState('workdays');
+  const [routeHm, setRouteHm] = useState('');
   const [quote, setQuote] = useState<GigQuote | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -42,6 +48,7 @@ export default function Gig() {
       setAvail(a);
       setPlaces(await client.gigPlaces());
       setNear(a.available ? await client.gigNearby() : null);
+      setRoutes(await client.gigRoutes().catch(() => []));
     } catch (e) { setError(apiErrorText(e)); }
   }, [client]);
   useEffect(() => { void load(); }, [load]);
@@ -132,6 +139,32 @@ export default function Gig() {
           </div>
         )}
         {along && departLine(along) && <p className="muted">{departLine(along)}</p>}
+        {places.length > 1 && (
+          <div aria-label="常用路线">
+            <h5>常用路线</h5>
+            <p className="muted">固定要走的路（比如上下班）存一次：出发前一小时内推一次顺路的名额，一天一次，没有就不打扰。</p>
+            {routes.map((r) => (
+              <div key={r.id} className="row">
+                <span>{gigRouteLabel(r)}</span>
+                <button className="text-link" aria-label={`删掉路线：${gigRouteLabel(r)}`}
+                  onClick={() => void act(async () => { await client.deleteGigRoute(r.id); return '已删除'; })}>×</button>
+              </div>
+            ))}
+            <div className="row">
+              <select aria-label="哪几天" value={routeDays} onChange={(e) => setRouteDays(e.target.value)}>
+                <option value="workdays">工作日</option><option value="everyday">每天</option><option value="weekend">周末</option></select>
+              <input type="time" aria-label="路线几点出发" value={routeHm} onChange={(e) => setRouteHm(e.target.value)} />
+              <button disabled={route.from === 'here' || !route.to} title="起点选一个常用地点、终点选好，再填几点出发"
+                onClick={() => void act(async () => {
+                  const hm = routeHm.trim();
+                  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(hm)) throw new Error(DEPART_HINT);
+                  await client.addGigRoute({ from_place: Number(route.from), to_place: Number(route.to), depart_hm: hm,
+                    weekdays: ROUTE_DAYS[routeDays] });
+                  return '已存为常用路线：出发前一小时内会推顺路的名额';
+                })}>存为常用路线</button>
+            </div>
+          </div>
+        )}
         {along && <TaskList items={along.items} empty={`去「${along.to}」的路上，多走 ${along.max_detour_km} 公里以内暂时没有单`}
           onQuote={(id) => void client.gigQuote({ task_id: id }).then(setQuote).catch((e) => setError(apiErrorText(e)))} />}
       </div>

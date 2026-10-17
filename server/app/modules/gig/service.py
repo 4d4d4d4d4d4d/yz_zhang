@@ -183,6 +183,49 @@ def purge_expired(db: Session) -> int:
     return int(n or 0)
 
 
+# SCN-140（208 号 spec）常用路线：出发前一小时内推一次，一天一次，最多列 3 单——推多了就是骚扰
+ROUTE_LEAD_MINUTES = 60
+ROUTE_PUSH_ITEMS = 3
+ROUTE_DETOUR_KM = 2
+ROUTE_PUSH_TITLE = "顺路单"
+
+
+def push_routes(db: Session, now: datetime | None = None) -> dict:
+    """到点前推顺路的名额：今天是路线设的星期几、离出发不到一小时、今天还没推过，就按「出发 → 之后几小时」
+    算一次顺路单（与 `/gig/along` 带出发时间同一条规则）。没有单就不打扰，但今天也算看过了。"""
+    from sqlalchemy import or_
+
+    from app.modules.notification.service import notify
+
+    from .models import GigPlace, GigRoute
+
+    now = now or utcnow()
+    local = now.replace(tzinfo=timezone.utc).astimezone(_CN)
+    today = local.date()
+    checked = pushed = 0
+    for r in db.query(GigRoute).filter(or_(GigRoute.last_pushed_on.is_(None), GigRoute.last_pushed_on != today)):
+        if today.weekday() not in (r.weekdays or []):
+            continue
+        h, m = (int(x) for x in r.depart_hm.split(":"))
+        depart = datetime.combine(today, time(h, m), tzinfo=_CN)
+        if not timedelta(0) < depart - local <= timedelta(minutes=ROUTE_LEAD_MINUTES):
+            continue
+        r.last_pushed_on = today
+        checked += 1
+        src, dst = db.get(GigPlace, r.from_place_id), db.get(GigPlace, r.to_place_id)
+        if src is None or dst is None:
+            continue
+        start = depart.astimezone(timezone.utc).replace(tzinfo=None)
+        items = along(db, r.owner_id, (src.lat, src.lng), (dst.lat, dst.lng), ROUTE_DETOUR_KM, None,
+                      limit=ROUTE_PUSH_ITEMS, window=(start, start + timedelta(hours=r.within_hours)))
+        if items:
+            notify(db, r.owner_id, "task", ROUTE_PUSH_TITLE,
+                   f"{r.depart_hm} 从「{src.name}」去「{dst.name}」，顺路有 {len(items)} 单："
+                   + "、".join(i["title"] for i in items))
+            pushed += 1
+    return {"checked": checked, "pushed": pushed}
+
+
 def register_event_handlers() -> None:
     from app.core.events import subscribe
 

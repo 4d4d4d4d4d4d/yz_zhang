@@ -16,10 +16,11 @@ from app.core.timefmt import iso
 from app.modules.account.models import User, utcnow
 
 from . import service as svc
-from .models import GigAvailability, GigPlace
+from .models import GigAvailability, GigPlace, GigRoute
 
 router = APIRouter(tags=["gig"])
 MAX_PLACES = 10
+MAX_ROUTES = 5      # SCN-140 常用路线最多 5 条：每条每天最多推一次
 
 
 class _In(BaseModel):
@@ -38,6 +39,15 @@ class PlaceIn(_In):
     name: str = Field(min_length=1, max_length=20)
     lat: float = Field(ge=-90, le=90)
     lng: float = Field(ge=-180, le=180)
+
+
+class RouteIn(_In):
+    """SCN-140 常用路线：从哪个常用地点、到哪个、哪几天（0 = 星期一）、几点出发（北京时间）、之后几小时内的名额。"""
+    from_place: int
+    to_place: int
+    weekdays: list[int] = Field(default_factory=lambda: [0, 1, 2, 3, 4], max_length=7)
+    depart_hm: str = Field(max_length=8)
+    within_hours: int = Field(default=3, ge=1, le=12)
 
 
 class QuoteIn(_In):
@@ -183,6 +193,56 @@ def add_place(body: PlaceIn, user: User = Depends(get_current_user), db: Session
 @router.delete("/gig/places/{place_id}")
 def delete_place(place_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     db.delete(_own_place(db, place_id, user))
+    # SCN-140 用到这个地点的常用路线一起删：起点终点都没了，路线没有意义
+    db.query(GigRoute).filter(GigRoute.owner_id == user.id,
+                              (GigRoute.from_place_id == place_id) | (GigRoute.to_place_id == place_id)).delete(
+        synchronize_session=False)
+    return {"deleted": True}
+
+
+# ------------------------------------------------------------------ 常用路线（SCN-140）
+def _dump_route(db: Session, r: GigRoute) -> dict:
+    names = {p.id: p.name for p in db.query(GigPlace).filter(GigPlace.id.in_([r.from_place_id, r.to_place_id]))}
+    return {"id": r.id, "from_place": r.from_place_id, "to_place": r.to_place_id,
+            "from_name": names.get(r.from_place_id, ""), "to_name": names.get(r.to_place_id, ""),
+            "weekdays": list(r.weekdays or []), "depart_hm": r.depart_hm, "within_hours": r.within_hours}
+
+
+@router.get("/gig/routes")
+def list_routes(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    return [_dump_route(db, r) for r in db.query(GigRoute).filter(GigRoute.owner_id == user.id).order_by(GigRoute.id)]
+
+
+@router.post("/gig/routes", status_code=201)
+def add_route(body: RouteIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """存一条常用路线：出发前一小时内推一次顺路的名额（一天一次）。"""
+    import re
+
+    _own_place(db, body.from_place, user)
+    _own_place(db, body.to_place, user)
+    if body.from_place == body.to_place:
+        raise bad_request("起点和终点要是两个不同的常用地点", "gig_route_same_place")
+    days = sorted({d for d in body.weekdays if 0 <= d <= 6})
+    if not days or len(days) != len(set(body.weekdays)):
+        raise bad_request("选上哪几天走这条路（星期一到星期日）", "gig_route_no_days")
+    hm = body.depart_hm.strip()
+    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", hm):
+        raise bad_request("出发时间按 24 小时制写成 HH:MM（例如 08:30）", "gig_route_time_invalid")
+    if (db.query(func.count(GigRoute.id)).filter(GigRoute.owner_id == user.id).scalar() or 0) >= MAX_ROUTES:
+        raise conflict(f"常用路线最多 {MAX_ROUTES} 条，先删掉不走的", "gig_routes_full")
+    r = GigRoute(owner_id=user.id, from_place_id=body.from_place, to_place_id=body.to_place, weekdays=days,
+                 depart_hm=hm, within_hours=body.within_hours)
+    db.add(r)
+    db.flush()
+    return _dump_route(db, r)
+
+
+@router.delete("/gig/routes/{route_id}")
+def delete_route(route_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    r = db.get(GigRoute, route_id)
+    if r is None or r.owner_id != user.id:
+        raise not_found("这条路线不存在")
+    db.delete(r)
     return {"deleted": True}
 
 
@@ -200,6 +260,12 @@ def post_quote(body: QuoteIn, user: User = Depends(get_current_user), db: Sessio
     if not body.category.strip():
         raise bad_request("给一个任务，或者一个类目", "gig_quote_needs_subject")
     return {"task_id": None, **svc.quote(db, body.category.strip(), body.city.strip() or None, None)}
+
+
+@router.post("/gig/jobs/route-push")
+def job_route_push(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                   __=Depends(job_slot("gig_route_push"), scope="function")):
+    return svc.push_routes(db)
 
 
 @router.post("/gig/jobs/purge-expired")
