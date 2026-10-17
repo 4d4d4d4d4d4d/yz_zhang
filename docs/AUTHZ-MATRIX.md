@@ -45,6 +45,7 @@
 | `dispute/router.py::list_statements` | 读双方陈述 | 仲裁 |
 | `legal/router.py::evidence_export` | 导出证据包 | 仲裁与司法协助 |
 | `task/router.py::list_progress` | 读任务进度记录 | 纠纷核实 |
+| `task/router.py::list_visits` | 读上门回报（含照片） | 纠纷核实（与进度记录同一口径，176 号 spec） |
 | `task/router.py::list_reviews` | 读未揭晓的双盲评价 | 处理恶意差评的申诉；揭晓前双方仍互相看不见 |
 | `agent/router.py::list_runs` | 读 AI 助理运行记录 | 平台是 AI 履约的责任主体 |
 | `verify/router.py::get_order` | 读核验单 | 核验争议 |
