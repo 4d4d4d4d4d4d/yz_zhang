@@ -636,6 +636,10 @@ export class PlatformClient {
     });
   }
   /** SCN-118 一个人一次报多天：在多天母任务上选日期（YYYY-MM-DD），每天报一个还在招的名额 */
+  /** SCN-123 替别人发的单，发单后改服务对象或到场联系方式（要重新确认问过本人）；多天单同步到没结束的名额 */
+  changeRecipient(taskId: number, body: { recipient_label: string; onsite_contact?: string; recipient_consented: boolean }) {
+    return this.request<Task>('PATCH', `/tasks/${taskId}/recipient`, body);
+  }
   /** SCN-121 缺人的那天一键补招：还在招的名额再推一次，可选每个加价（分，只许上调）；同一天 6 小时内一次 */
   reboostDay(taskId: number, date: string, raiseCents = 0) {
     return this.request<ReboostDayResult>('POST', `/tasks/${taskId}/days/${date}/reboost`, { raise_cents: raiseCents });

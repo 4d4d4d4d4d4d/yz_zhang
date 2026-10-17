@@ -68,3 +68,46 @@ describe('SCN-119 替别人发单', () => {
     expect(p.textContent).toContain('到场联系 王阿姨 139');
   });
 });
+
+describe('SCN-123 发单后改服务对象', () => {
+  const POSTER = { ...ME, id: 9 };
+  function openAs(me: typeof ME, calls: Call[], task: Record<string, unknown>, patched?: Record<string, unknown>) {
+    localStorage.setItem('token', 'tok');
+    const fetchImpl = vi.fn(async (url: string, init?: { method?: string; body?: string }) => {
+      const p = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+      const method = init?.method ?? 'GET';
+      calls.push({ method, path: p, body: init?.body ? JSON.parse(init.body) : undefined });
+      const body = method === 'PATCH' && p === '/tasks/60/recipient' ? patched : p === '/tasks/60' ? task : p === '/users/me' ? me : [];
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    }) as unknown as typeof fetch;
+    render(<MemoryRouter initialEntries={['/tasks/60']}>
+      <AppProvider client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })}><App /></AppProvider></MemoryRouter>);
+  }
+
+  it('发单人改称呼与联系方式，要勾「已经问过本人」；保存后详情页显示新的', async () => {
+    const calls: Call[] = [];
+    const task = TASK({ on_behalf: true, recipient_label: '我妈', onsite_contact: '王阿姨 139' });
+    openAs(POSTER, calls, task, { ...task, recipient_label: '我爸', onsite_contact: '李叔 138' });
+    fireEvent.click(await screen.findByText('改服务对象'));
+    fireEvent.change(screen.getByLabelText('服务对象怎么称呼'), { target: { value: '我爸' } });
+    fireEvent.change(screen.getByLabelText('到场联系方式'), { target: { value: '李叔 138' } });
+    fireEvent.click(screen.getByLabelText('已经问过本人'));
+    fireEvent.click(screen.getByText('保存'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual(
+      { recipient_label: '我爸', onsite_contact: '李叔 138', recipient_consented: true }));
+    expect(await screen.findByText(/服务对象「我爸」/)).toBeTruthy();
+    expect(screen.getByText(/已改好，接单的人会收到通知/)).toBeTruthy();
+  });
+
+  it('不是发单人、或单已结束：没有这个入口', async () => {
+    openAs(ME, [], TASK({ on_behalf: true, recipient_label: '我妈', onsite_contact: '', executor_id: 2 }));
+    await screen.findByLabelText('服务对象');
+    expect(screen.queryByText('改服务对象')).toBeNull();
+  });
+
+  it('单已结束：没有这个入口', async () => {
+    openAs(POSTER, [], TASK({ on_behalf: true, recipient_label: '我妈', onsite_contact: '', status: 'completed' }));
+    await screen.findByLabelText('服务对象');
+    expect(screen.queryByText('改服务对象')).toBeNull();
+  });
+});

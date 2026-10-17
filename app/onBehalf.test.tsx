@@ -2,6 +2,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { PlatformClient, type Task } from '@platform/core';
 import { PublishScreen, TaskDetailScreen } from './App';
+import { RecipientEditorBlock, canChangeRecipient } from './recipient';
 
 type Call = { method: string; path: string; body: unknown };
 function makeClient(routes: Record<string, unknown>, calls: Call[] = []) {
@@ -59,5 +60,28 @@ describe('SCN-119 App 替别人发单', () => {
     const text = screen.getByLabelText('服务对象').props.children.join('');
     expect(text).toContain('服务对象「我妈」');
     expect(text).toContain('到场联系 王阿姨 139');
+  });
+});
+
+describe('SCN-123 App 发单后改服务对象', () => {
+  it('发单人勾「已经问过本人」后保存，请求带上新称呼与联系方式；保存后刷新', async () => {
+    const calls: Call[] = [];
+    const changed = jest.fn();
+    render(<RecipientEditorBlock client={makeClient({ 'PATCH /tasks/60/recipient': TASK({}) }, calls)}
+                                 task={TASK({ on_behalf: true, recipient_label: '我妈', onsite_contact: '王阿姨' })} onChanged={changed} />);
+    fireEvent.press(screen.getByText('改服务对象'));
+    fireEvent.changeText(screen.getByLabelText('服务对象怎么称呼'), '我爸');
+    fireEvent.press(screen.getByLabelText('已经问过本人'));
+    fireEvent.press(screen.getByText('保存'));
+    await waitFor(() => expect(changed).toHaveBeenCalled());
+    expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({ recipient_label: '我爸', onsite_contact: '王阿姨', recipient_consented: true });
+    expect(screen.getByText('已改好，接单的人会收到通知')).toBeTruthy();
+  });
+
+  it('入口只给发单人、只在单没结束时', () => {
+    expect(canChangeRecipient(TASK({ on_behalf: true }), 9)).toBe(true);
+    expect(canChangeRecipient(TASK({ on_behalf: true }), 2)).toBe(false);
+    expect(canChangeRecipient(TASK({ on_behalf: false }), 9)).toBe(false);
+    for (const status of ['completed', 'cancelled', 'disputed'] as const) expect(canChangeRecipient(TASK({ on_behalf: true, status }), 9)).toBe(false);
   });
 });

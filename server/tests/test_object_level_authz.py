@@ -94,6 +94,7 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
     (r"^GET /tasks/.*/applicants$", "party", "按人看谁报了哪几天只给发单人（181 号 spec；test_accept_person 行为验）"),
     (r"^POST /tasks/.*/accept-person$", "party", "一次选一个人的多天是发单人的动作（181 号 spec；test_accept_person 行为验）"),
     (r"^POST /tasks/.*/days/.*/reboost$", "party", "补招缺人的那天是发单人的动作（196 号 spec；test_reboost_day 行为验，非发单人 403）"),
+    (r"^PATCH /tasks/.*/recipient$", "party", "改服务对象是发单人的动作（197 号 spec；test_change_recipient 行为验，非发单人 403）"),
     (r"^POST /tasks/.*/visits$", "party", "上门回报只有接单的人能交（176 号 spec；test_task_visits 行为验）"),
     (r"^GET /tasks/.*/visits$", "party", "上门回报（含照片）只给成交双方与管理员（176 号 spec；test_task_visits 行为验）"),
     (r"^POST /tasks/.*/(applications|reviews|disputes|bookmark|apply-days)$", "party",

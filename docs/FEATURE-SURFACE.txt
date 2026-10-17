@@ -267,6 +267,7 @@ api PATCH /api/v1/notebook/methods/{method_id}
 api PATCH /api/v1/notebook/notes/{note_id}
 api PATCH /api/v1/opc/entries/{entry_id}
 api PATCH /api/v1/tasks/{task_id}
+api PATCH /api/v1/tasks/{task_id}/recipient
 api PATCH /api/v1/teams/{team_id}/members/{member_user_id}
 api PATCH /api/v1/users/me
 api PATCH /api/v1/workbench/items/{item_id}
@@ -574,6 +575,7 @@ app notebook
 app opc
 app packs
 app profiles
+app recipient
 app rights
 app sandbox
 app search
@@ -677,6 +679,7 @@ sdk categoryDemand
 sdk changeOrders
 sdk changePassword
 sdk changePhone
+sdk changeRecipient
 sdk checkin
 sdk circleFeed
 sdk circleMembers

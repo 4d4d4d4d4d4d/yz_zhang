@@ -468,6 +468,53 @@ def edit_task(
     return dump_task(task, user)
 
 
+class RecipientIn(BaseModel):
+    """SCN-123 发单后改服务对象：换了人、换了联系方式，都要重新问过本人。"""
+    model_config = ConfigDict(extra="forbid")
+    recipient_label: str = Field(min_length=1, max_length=20)
+    onsite_contact: str = Field(default="", max_length=40)
+    recipient_consented: bool = False
+
+
+@router.patch("/tasks/{task_id}/recipient")
+def change_recipient(task_id: int, body: RecipientIn, user: User = Depends(get_current_user),
+                     db: Session = Depends(get_db, scope="function")):
+    """SCN-123（197 号 spec）替别人发的单，发单后改服务对象或到场联系方式：不用取消重发。
+
+    换人、改联系方式都要重新勾「已经问过本人」（与发单时同一条规则，PIPL 第十三条），同意时间刷新；
+    多天单同步到所有没结束的名额；接单的人收到通知（只写称呼，联系方式在任务详情里看）。"""
+    from app.modules.notification.service import notify
+
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden("只有发单的人能改服务对象")
+    if not task.on_behalf:
+        raise bad_request("这单不是替别人发的，没有服务对象可改", "not_on_behalf")
+    if task.status in ("completed", "cancelled", "disputed"):
+        raise conflict("这单已经结束或在纠纷中，服务对象不能再改", "recipient_locked")
+    label, contact = body.recipient_label.strip(), body.onsite_contact.strip()
+    if not label:
+        raise bad_request("替别人发单要写服务对象怎么称呼（例如「我妈」「王阿姨」），接单的人到了才知道找谁",
+                          "recipient_label_required")
+    if not body.recipient_consented:
+        raise bad_request("改了服务对象或联系方式，要先问过本人：问过之后勾选「已经问过本人」再改", "recipient_consent_required")
+    targets = [task] + (db.query(Task).filter(Task.parent_id == task.id,
+                                              Task.status.notin_(["completed", "cancelled", "disputed"])).all()
+                        if task.parent_id is None else [])
+    now = utcnow()
+    told = set()
+    for t in targets:
+        t.recipient_label, t.onsite_contact, t.recipient_consent_at = label, contact, now
+        db.add(t)
+        if t.executor_id and t.executor_id not in told:
+            told.add(t.executor_id)
+            notify(db, t.executor_id, "task", "服务对象有变化",
+                   f"《{t.title}》发单人改了服务对象：现在找「{label}」。到场联系方式在任务详情里看。")
+    db.add(ProgressLog(task_id=task.id, user_id=user.id, kind="note",
+                       content=f"发单人改了服务对象：「{label}」（已确认问过本人）"))
+    return dump_task(task, user)
+
+
 @router.get("/tasks/mine")
 def my_tasks(
     role: str = Query(default="all", pattern="^(all|posted|working)$"),

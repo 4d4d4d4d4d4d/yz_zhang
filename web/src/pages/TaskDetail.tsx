@@ -106,6 +106,10 @@ export default function TaskDetail() {
             {task.onsite_contact ? ` · 到场联系 ${task.onsite_contact}` : ''}
           </p>
         )}
+        {/* SCN-123 发单后改服务对象（197 号 spec）：不用取消重发 */}
+        {task.on_behalf && isCreator && !['completed', 'cancelled', 'disputed'].includes(task.status) && (
+          <RecipientEditor taskId={taskId} label={task.recipient_label ?? ''} contact={task.onsite_contact ?? ''} onSaved={setTask} />
+        )}
         {error && <p className="error">{error}</p>}
 
         {/* 状态驱动的操作区（TASK-021） */}
@@ -478,6 +482,40 @@ function PersonPicker({ taskId, onDone }: { taskId: number; onDone: () => void }
 }
 
 /** SCN-118 一次报多天：勾还缺人的那几天，每天报一个名额；报不了的逐日说清。 */
+/** SCN-123 改服务对象：换人、改联系方式都要重新确认问过本人 */
+function RecipientEditor({ taskId, label, contact, onSaved }: {
+  taskId: number; label: string; contact: string; onSaved: (t: Task) => void;
+}) {
+  const { client } = useApp();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(label);
+  const [phone, setPhone] = useState(contact);
+  const [consented, setConsented] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+  if (!open) return (
+    <p><button className="text-link" onClick={() => { setOpen(true); setMsg(''); }}>改服务对象</button>{msg && <span className="muted"> {msg}</span>}</p>
+  );
+  async function save() {
+    setError('');
+    try {
+      onSaved(await client.changeRecipient(taskId, { recipient_label: name, onsite_contact: phone, recipient_consented: consented }));
+      setOpen(false); setConsented(false); setMsg('已改好，接单的人会收到通知');
+    } catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <div aria-label="改服务对象" className="card">
+      <input aria-label="服务对象怎么称呼" value={name} onChange={(e) => setName(e.target.value)} />
+      <input aria-label="到场联系方式" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      <label className="row"><input type="checkbox" aria-label="已经问过本人" checked={consented}
+                                    onChange={(e) => setConsented(e.target.checked)} />已经问过本人（换了人或改了联系方式，要再问一次）</label>
+      <button onClick={() => void save()}>保存</button> <button className="ghost" onClick={() => setOpen(false)}>取消</button>
+      {msg && <p className="muted">{msg}</p>}
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 /** SCN-121 发单人：缺人的那天再推一次，可选每个名额加价（只许上调；钱在签约托管时才冻结） */
 function ReboostBox({ taskId, days, onDone }: { taskId: number; days: string[]; onDone: () => void }) {
   const { client } = useApp();
