@@ -107,6 +107,18 @@ def _pg_conn_args(url: str) -> list[str]:
     return args
 
 
+def _pg_env(url: str) -> dict:
+    """CI-001：URL 里带了密码就经 PGPASSWORD 交给 pg_dump / psql（不进命令行参数、不打印）。
+    以前只传了用户名：本地 Postgres 免密能过，CI 的库有密码，pg_dump 报 no password supplied。"""
+    from urllib.parse import unquote, urlparse
+
+    env = dict(os.environ)
+    password = urlparse(url.replace("postgresql+psycopg://", "postgresql://")).password
+    if password:
+        env["PGPASSWORD"] = unquote(password)
+    return env
+
+
 def _run_pg(cmd: list[str], **kw):
     import subprocess
 
@@ -118,27 +130,28 @@ def _pg_drill(url: str, before: dict) -> int:
     import subprocess
 
     conn = _pg_conn_args(url)
+    env = _pg_env(url)
     backup_dir = tempfile.mkdtemp(prefix="drill-backup-")
     dump = os.path.join(backup_dir, "snapshot.sql")
 
     print("② 备份（pg_dump --clean --if-exists，与 backup.sh 同参数）…")
     with open(dump, "w") as f:
         subprocess.run(["pg_dump", *conn, "--no-owner", "--clean", "--if-exists"],
-                       check=True, stdout=f, text=True)
+                       check=True, stdout=f, text=True, env=env)
     print(f"   → {dump}（{os.path.getsize(dump)} 字节）")
 
     print("③ 删库（DROP SCHEMA public CASCADE——不是清表）…")
     _run_pg(["psql", *conn, "-v", "ON_ERROR_STOP=1", "-c",
-             "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"])
+             "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"], env=env)
     left = _run_pg(["psql", *conn, "-tAc",
                     "select count(*) from information_schema.tables "
-                    "where table_schema='public'"]).stdout.strip()
+                    "where table_schema='public'"], env=env).stdout.strip()
     assert left == "0", f"库没删干净，还剩 {left} 张表"
 
     print("④ 恢复（psql -v ON_ERROR_STOP=1，与 restore.sh 同参数）…")
     with open(dump) as f:
         subprocess.run(["psql", *conn, "-v", "ON_ERROR_STOP=1"],
-                       check=True, stdin=f, stdout=subprocess.DEVNULL, text=True)
+                       check=True, stdin=f, stdout=subprocess.DEVNULL, text=True, env=env)
 
     ok = _verify(before)
     shutil.rmtree(backup_dir, ignore_errors=True)

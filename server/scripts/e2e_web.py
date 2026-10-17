@@ -457,8 +457,11 @@ def main() -> int:
         from playwright.sync_api import sync_playwright
 
         with sync_playwright() as pw:
+            # CI-001：以前写死了开发容器里的浏览器路径，CI 机器上没有这个文件，联调一步就失败。
+            # 有这份就用它（开发容器里 Playwright 版本与预装浏览器对不上时要靠它）；没有就用 Playwright 自己装的
+            local_chrome = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"
             browser = pw.chromium.launch(
-                executable_path="/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+                **({"executable_path": local_chrome} if os.path.exists(local_chrome) else {}),
                 args=["--no-sandbox"])
             page = browser.new_page()
             page.on("console", lambda m: console_errors.append(m.text)

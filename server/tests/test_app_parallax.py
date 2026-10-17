@@ -42,6 +42,10 @@ def esbuild_ok(path: str) -> tuple[bool, str]:
     exe = shutil.which("npx")
     if not exe:
         pytest.skip("环境里没有 npx")
+    # CI-001：后端的 CI job 不装前端依赖（esbuild 在根 node_modules 里）。那里跳过、写明谁在管：
+    # 前端 job 的「App 源码解析检查」逐个解析 app/*.tsx；本地回归装了依赖，这条照常跑
+    if not os.path.exists(os.path.join(ROOT, "node_modules", ".bin", "esbuild")):
+        pytest.skip("没装前端依赖（node_modules/.bin/esbuild）：由 CI 前端 job 的 App 源码解析检查负责")
     proc = subprocess.run(
         [exe, "--no-install", "esbuild", path, "--jsx=automatic", "--outfile=/dev/null"],
         cwd=ROOT, capture_output=True, text=True, timeout=180,
