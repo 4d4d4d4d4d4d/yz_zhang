@@ -63,3 +63,19 @@ describe('PROF-100 App 上的画像', () => {
     expect(screen.getByText(/准时交付 样本不足/)).toBeTruthy();
   });
 });
+
+describe('SCN-110 App 任务详情上的需求九项', () => {
+  const profile = (brief: unknown) => ({ '/tasks/7/profile': { task_id: 7, category: '设计', mode: 'remote', declared_skills: [], inferred_skills: [],
+    size: 'medium', price: { sample_size: 0, p50_cents: null, min_cents: null, max_cents: null, position: 'unknown' }, risks: [], completeness: 0.6,
+    checks: [], brief } });
+  const BRIEF = { missing: 1, items: [{ name: '用途', ok: true, ask: '用在哪儿？' }, { name: '版权授权', ok: false, ask: '版权怎么约定？' }] };
+
+  it('接单的人看到报名前该问的话，发单人看到还可以补', async () => {
+    const { unmount } = render(<TaskProfileBlock client={makeClient(profile(BRIEF), [])} taskId={7} />);
+    expect(await screen.findByText('说明里没写的 1 项，报名前可以先问问发单人：')).toBeTruthy();
+    expect(screen.getByText('· 版权授权：版权怎么约定？')).toBeTruthy();
+    unmount();
+    render(<TaskProfileBlock client={makeClient(profile(BRIEF), [])} taskId={7} isCreator />);
+    expect(await screen.findByText('创作类需求一般写清九项，已写 1/2。还可以补：')).toBeTruthy();
+  });
+});

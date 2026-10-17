@@ -461,7 +461,7 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
         <VisitsBlock client={client} task={task} isExecutor={meId === task.executor_id} />
       )}
       {/* PROF-103 这单的画像（126 号 spec） */}
-      {task.status !== 'draft' && <TaskProfileBlock client={client} taskId={task.id} />}
+      {task.status !== 'draft' && <TaskProfileBlock client={client} taskId={task.id} isCreator={task.creator_id === me?.id} />}
       {/* AGT-080~083 经验工具：双方都能用，只出草稿（109 号 spec） */}
       {meId !== null && (meId === task.creator_id || meId === task.executor_id) && (
         <ExperienceToolsBlock client={client} task={task} />

@@ -1,5 +1,5 @@
 // PROF-100 任务画像与能力画像（126 号 spec）——App 端：发布时边写边提示、我的能力画像。
-import {
+import { briefHint,
   hasLists, MALFORMED_TEXT,
   apiErrorText, fmtYuan, type CapabilityProfile, type PlatformClient, type SkillNormalized, type TaskDraftInput, type TaskProfile,
 } from '@platform/core';
@@ -42,7 +42,7 @@ export function DraftHints({ client, draft, delayMs = 500 }: { client: PlatformC
 }
 
 /** 任务详情上的一块：报名前看一眼风险、技能、价格位置。取不到就不显示。 */
-export function TaskProfileBlock({ client, taskId }: { client: PlatformClient; taskId: number }) {
+export function TaskProfileBlock({ client, taskId, isCreator = false }: { client: PlatformClient; taskId: number; isCreator?: boolean }) {
   const [p, setP] = useState<TaskProfile | null>(null);
   useEffect(() => {
     Promise.resolve().then(() => client.taskProfile(taskId))
@@ -50,11 +50,15 @@ export function TaskProfileBlock({ client, taskId }: { client: PlatformClient; t
   }, [client, taskId]);
   if (!p) return null;
   const skills = [...p.declared_skills, ...p.inferred_skills];
+  const hint = briefHint(p.brief, isCreator);
   return (
     <View style={s.card} accessibilityLabel="这单的画像">
       <Text style={s.muted}>{p.mode === 'remote' ? '线上' : '线下'}{skills.length ? ` · 技能：${skills.join('、')}` : ''}
         {p.price.sample_size > 0 ? ` · 预算${POSITION[p.price.position]}` : ''} · 说明完整度 {Math.round(p.completeness * 100)}%</Text>
       {p.risks.map((r) => <Text key={r.kind}>⚠ {r.text}</Text>)}
+      {/* SCN-110 创作类的单：没写的几项该问什么（发单人自己看是「还可以补」） */}
+      {hint && <Text style={s.muted}>{hint.title}</Text>}
+      {hint?.lines.map((l) => <Text key={l}>· {l}</Text>)}
     </View>
   );
 }

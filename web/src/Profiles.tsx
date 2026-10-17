@@ -1,4 +1,4 @@
-import {
+import { briefHint,
   apiErrorText, fmtYuan,
   type CapabilityProfile, type InfluencePublic, type SkillNormalized, type TaskDraftInput, type TaskProfile, type TaskProfileView,
 } from '@platform/core';
@@ -43,20 +43,27 @@ export function DraftHints({ draft }: { draft: TaskDraftInput }) {
   );
 }
 
-/** 任务详情：报名前看一眼这单的画像（风险、技能、价格位置）。 */
-export function TaskProfilePanel({ taskId }: { taskId: number }) {
+/** 任务详情：报名前看一眼这单的画像（风险、技能、价格位置）；SCN-110 创作类的单再列出没写的几项该问什么。 */
+export function TaskProfilePanel({ taskId, isCreator = false }: { taskId: number; isCreator?: boolean }) {
   const { client } = useApp();
   const [p, setP] = useState<TaskProfileView | null>(null);
   // 画像是附加信息：取不到（或老服务端没有这个接口）就不显示，不影响任务详情本身
   useEffect(() => { client.taskProfile(taskId).then((x) => setP(Array.isArray(x?.risks) ? x : null)).catch(() => setP(null)); }, [client, taskId]);
   if (!p) return null;
   const skills = [...p.declared_skills, ...p.inferred_skills];
+  const hint = briefHint(p.brief, isCreator);
   return (
     <div className="card" aria-label="任务画像">
       <h4>这单的画像</h4>
       <p className="muted">{p.mode === 'remote' ? '线上' : '线下'} · {p.category || '未分类'}{skills.length ? ` · 技能：${skills.join('、')}` : ''}
         {p.price.sample_size > 0 ? ` · 预算${POSITION[p.price.position]}` : ''} · 说明完整度 {Math.round(p.completeness * 100)}%</p>
       {p.risks.length > 0 && <ul>{p.risks.map((r) => <li key={r.kind}>⚠ {r.text}</li>)}</ul>}
+      {hint && (
+        <div aria-label="需求九项">
+          <p className="muted">{hint.title}</p>
+          <ul>{hint.lines.map((l) => <li key={l}>{l}</li>)}</ul>
+        </div>
+      )}
     </div>
   );
 }

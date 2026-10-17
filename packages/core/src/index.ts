@@ -9,3 +9,4 @@ export * from './decompose';
 export * from './sandbox';
 export * from './xapp';
 export * from './adminSections';
+export * from './brief';

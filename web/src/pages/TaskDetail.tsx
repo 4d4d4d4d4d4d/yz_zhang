@@ -176,7 +176,7 @@ export default function TaskDetail() {
       {/* CLI-063 AI 助理面板：邀请、执行、交付闸门与人工核验入口。
           V73/V74 把服务端做完了，网页上此前一个入口都没有。 */}
       {/* PROF-103 报名前看一眼这单的画像：风险、技能、价格位置（126 号 spec） */}
-      {task.status !== 'draft' && <TaskProfilePanel taskId={taskId} />}
+      {task.status !== 'draft' && <TaskProfilePanel taskId={taskId} isCreator={task.creator_id === me?.id} />}
 
       {isCreator && <AgentPanel task={task} onChanged={() => void load()} />}
 
