@@ -207,7 +207,10 @@ def test_due_routine_runs_notifies_and_reschedules(client, requester):
 
 def test_missed_runs_are_caught_up_once_not_replayed(client, requester):
     h = auth(requester)
-    ro = client.post(f"{API}/routines", json={"name": "早报", "kind": "digest", "freq": "daily"}, headers=h).json()
+    # 每天的时间点放在离现在 12 小时处：默认 09:00 时，北京时间 09:00~09:05 跑这条会真的错过 4 次（不是 3 次），测试就变成看钟点
+    far = (utcnow() + timedelta(hours=20)).strftime("%H:%M")
+    ro = client.post(f"{API}/routines", json={"name": "早报", "kind": "digest", "freq": "daily", "time_of_day": far},
+                     headers=h).json()
     with SessionLocal() as db:
         r = db.get(WbRoutine, ro["id"])
         r.next_run_at = utcnow() - timedelta(days=3, minutes=5)    # 停机三天

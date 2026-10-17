@@ -21,6 +21,9 @@ API = "/api/v1/workbench"
 
 
 def _routine(client, user, **kw):
+    # 时间点放在离现在 12 小时处（UTC+20h = 北京时间 +12h）：默认 09:00 时，在北京时间 08:00~09:00 跑会让
+    # 「下一次在一小时之后」这类断言看钟点
+    kw.setdefault("time_of_day", (utcnow() + timedelta(hours=20)).strftime("%H:%M"))
     r = client.post(f"{API}/routines", json={"name": "早报", "kind": "digest", "freq": "daily", **kw}, headers=auth(user))
     assert r.status_code == 201, r.text
     return r.json()
