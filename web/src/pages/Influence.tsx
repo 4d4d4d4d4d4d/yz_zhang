@@ -1,4 +1,5 @@
 import {
+  hasLists, MALFORMED_TEXT,
   apiErrorText, formatDateTime, influenceLeaf, verifyInfluenceProof,
   type InfluenceLatestSnapshot, type InfluenceLeaderboard, type InfluenceMine, type InfluenceProof, type InfluenceVouchRow,
 } from '@platform/core';
@@ -33,6 +34,8 @@ export default function Influence() {
   const load = useCallback(async () => {
     try {
       const m = await client.myInfluence();
+      // APP-093：不像样就只说明原因，排行榜、快照两块照常
+      if (!hasLists(m, 'categories', 'vouches_given', 'vouches_received', 'events')) { setError(MALFORMED_TEXT); return; }
       setMine(m);
       setCat((c) => c || m.categories[0]?.category || '');
     } catch (e) { setError(apiErrorText(e)); }

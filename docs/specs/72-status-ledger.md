@@ -346,9 +346,12 @@
 | APP-090 | App 详情页各块对畸形响应的防护不一致 | 已做（V209：共享 `asList`，Web 与 App 任务详情各 98 条渲染闸门，182 号） |
 | APP-091 | 畸形响应闸门扩到其他页面 | 已做（V210：Web 全路由闸门 + 路由表对照，183 号） |
 | APP-092 | 两端错误边界 | 已做（V210：Web `RouteBoundary`、App `ScreenBoundary`，183 号） |
-| APP-093 | 页面内块级防护扩到其他页面 | 欠 |
+| APP-093 | 页面内块级防护扩到其他页面 | 已做（V213：SDK 列表接口收成空表、`hasLists` / `MALFORMED_TEXT`，Web 全路由不落整页兜底、App 105 条逐屏探针，185 号） |
+| APP-098 | 对象响应的完整运行时校验（按 types.ts 生成校验器） | 欠 |
+| APP-099 | App 任务详情以外的二级块逐块探针 | 欠 |
+| DOC-020 | 台账编号唯一：63 个编号出现两次（多数是「欠 → 已做」前后两行，APP-095 撞号已改为 APP-097） | 欠 |
 | APP-094 | 渲染错误上报 | 已做（V212：`POST /client-errors`、`GET /admin/client-errors`，两端边界上报，后台「页面出错」，184 号） |
-| APP-095 | 页面坏的人数超阈值时提醒运营 | 欠 |
+| APP-097 | 页面坏的人数超阈值时提醒运营（原记作 APP-095，与 136 号的开票入口撞号，V213 改号） | 欠 |
 | CI-001 | GitHub CI 自 9 月 7 日起一直红（App 单测找不到共享 SDK 的依赖、后端 job 没有 esbuild、浏览器路径写死、PG 备份演练没传密码），本地回归碰不到 | 已做（四处修复 + `tests/test_ci_portability.py` 钉住；App 单测在模拟 CI 依赖布局下 296 条全过） |
 | CI-002 | 本地回归模拟 CI 的依赖布局（只装 app 依赖、无根 node_modules）跑一遍 App 单测 | 欠 |
 | CI-003 | Web 单测全过、但 vitest 抓到 3 个未处理的异步错误（工单列表、通知页拿到畸形响应时在异步里抛错）→ 退出码 1、GitHub CI 红；本地回归只 grep「Tests」那行、不看退出码，显示全绿 | 已做（两页按空表处理；`tools/regress.sh` 每个前端步骤看退出码、保留「Errors」行；`test_ci_portability.py` 钉住，红验过） |

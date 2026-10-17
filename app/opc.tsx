@@ -1,6 +1,7 @@
 // OPC-100 一人公司（124 号 spec）——App 端：导入平台收入、记一笔、本季汇总、申报日历（放进工作台）、合同体检、主体设置。
 // 只出底稿与提醒：报税、开票、签字由本人在官方渠道完成。
 import {
+  hasLists, MALFORMED_TEXT,
   apiErrorText, chinaDateAt, chinaQuarter, chinaToday, fmtYuan,
   type ContractReview, type OpcCalendar, type OpcProfileView, type OpcSummary, type PlatformClient,
 } from '@platform/core';
@@ -38,7 +39,10 @@ function Books({ client }: { client: PlatformClient }) {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const load = useCallback(async () => {
-    try { setSum(await client.opcSummary(chinaQuarter())); } catch (e) { setError(apiErrorText(e)); }
+    try {
+      const got = await client.opcSummary(chinaQuarter());
+      if (hasLists(got, 'notes')) setSum(got); else setError(MALFORMED_TEXT);   // APP-093
+    } catch (e) { setError(apiErrorText(e)); }
   }, [client]);
   useEffect(() => { void load(); }, [load]);
   async function act(fn: () => Promise<string>) {

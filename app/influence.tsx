@@ -1,6 +1,7 @@
 // INF-100 影响力与专家等级（127 号 spec）——App 端：我的等级与还差什么、担保与撤回、类目排行、快照证明；
 // 别人空间里的影响力与「为他担保」。影响力只能靠做成事挣，不能转让——这里也没有任何转让入口。
 import {
+  hasLists, MALFORMED_TEXT,
   apiErrorText, formatDateTime, influenceLeaf, verifyInfluenceProof,
   type InfluenceLatestSnapshot, type InfluenceLeaderboard, type InfluenceMine, type InfluenceProof, type InfluencePublic, type InfluenceVouchRow,
   type PlatformClient,
@@ -31,6 +32,8 @@ export function InfluenceScreen({ client, meId }: { client: PlatformClient; meId
   const load = useCallback(async () => {
     try {
       const m = await client.myInfluence();
+      // APP-093：不像样就只说明原因，快照一块照常
+      if (!hasLists(m, 'categories', 'vouches_given', 'vouches_received', 'events')) { setError(MALFORMED_TEXT); return; }
       setMine(m);
       const top = m.categories[0]?.category;
       if (top) setBoard(await client.influenceLeaderboard(top).catch(() => null));

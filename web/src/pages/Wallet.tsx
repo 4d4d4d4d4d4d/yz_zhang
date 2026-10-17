@@ -1,4 +1,4 @@
-import { apiErrorText, OperationKey, fmtYuan, formatDate, formatDateTime, ledgerKindLabel, type InvoiceRow, type LedgerRow, type PayoutAccountView, type TaxSummary, type Wallet } from '@platform/core';
+import { hasLists, apiErrorText, OperationKey, fmtYuan, formatDate, formatDateTime, ledgerKindLabel, type InvoiceRow, type LedgerRow, type PayoutAccountView, type TaxSummary, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../store';
 
@@ -146,7 +146,7 @@ function TaxDetail() {
   const { client } = useApp();
   const [tax, setTax] = useState<TaxSummary | null>(null);
   useEffect(() => { void client.myTax().then(setTax).catch(() => {}); }, [client]);
-  if (!tax || tax.items.length === 0) return null;
+  if (!tax || !hasLists(tax, 'items') || tax.items.length === 0) return null;
   return (
     <div className="card">
       <h3>个人所得税代扣明细</h3>

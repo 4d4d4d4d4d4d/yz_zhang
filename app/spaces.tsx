@@ -12,6 +12,7 @@
 // 点开用系统浏览器。平台不代理、不嵌入、不抓取——那是 SPACE-020 的事，
 // 需要单独的授权与运营评估。
 import {
+  hasLists, MALFORMED_TEXT,
   apiErrorText,
   type FollowListItem, type Me, type OwnSpace, type PersonalSpace, type PlatformClient,
   type SpaceItem, type SpaceSummary,
@@ -131,7 +132,7 @@ export function PublicSpaceScreen({ client, userId, onBack, onOpenConversation }
     let live = true;
     setSpace(null); setError(''); setStats(null);
     void client.personalSpace(userId)
-      .then((s) => { if (live) setSpace(s); })
+      .then((s) => { if (!live) return; if (hasLists(s, 'items')) setSpace(s); else setError(MALFORMED_TEXT); })
       .catch((e) => { if (live) setError(apiErrorText(e)); });
     // 关注数读不到不该让整页报错：它是页面上的一个小角落
     void client.followStats(userId)
@@ -260,7 +261,9 @@ export function MySpaceScreen({ client, me, onPreview, refreshMe }: {
   const load = useCallback(async () => {
     setError('');
     try {
-      setSpace(await client.ownSpace());
+      const own = await client.ownSpace();
+      // APP-093：不像样就说明原因，不让整屏落到兜底
+      if (hasLists(own, 'items')) setSpace(own); else setError(MALFORMED_TEXT);
     } catch (e) {
       setError(apiErrorText(e));
     }

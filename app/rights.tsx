@@ -14,6 +14,7 @@
 // 与 V113 的资质提交同一条规矩（66 号 spec）：平台有这个能力、而用户在他的
 // 设备上够不到，等于没有。
 import {
+  hasLists,
   apiErrorText, fmtYuan,
   type AgreementStatus, type PlatformClient, type SensitiveScope, type TaxSummary,
 } from '@platform/core';
@@ -35,8 +36,9 @@ export function RightsScreen({ client }: { client: PlatformClient }) {
     // 两段各自成立：代扣明细读不到不该让同意项也看不见（反过来同理）。
     // 合成一次 Promise.all + 一个 catch 会让一侧的故障把另一侧一起带走。
     await Promise.all([
-      client.myTax().then(setTax).catch((e) => setError(apiErrorText(e))),
-      client.myAgreements().then(setAgreements).catch((e) => setError(apiErrorText(e))),
+      // APP-093：不像样的那一段不画，另一段照常
+      client.myTax().then((t) => setTax(hasLists(t, 'items', 'yearly') ? t : null)).catch((e) => setError(apiErrorText(e))),
+      client.myAgreements().then((a) => setAgreements(hasLists(a, 'documents', 'sensitive_scopes') ? a : null)).catch((e) => setError(apiErrorText(e))),
     ]);
   }, [client]);
   useEffect(() => { void load(); }, [load]);

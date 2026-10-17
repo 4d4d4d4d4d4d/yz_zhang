@@ -2,6 +2,7 @@
 // 每个路由 × 四种畸形响应（{}、null、[]、字符串）：顶部导航必须还在。首次跑时 140 个组合里 91 个整页白屏
 // （约 30 个页面组件拿到非数组就 .map 崩掉）；按路由加错误边界后，坏的那一页换成说明卡，导航与其他页不受影响。
 // 新加的页面要加进 ROUTES（与 App.tsx 的路由表对照）。
+// V213（APP-093）再收紧：连整页兜底卡片也不许出现（那时还有 32 个页面组件会落到兜底）。
 import { PlatformClient } from '@platform/core';
 import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -31,6 +32,8 @@ describe('APP-091 Web 每一页：响应畸形时都不白屏（导航还在）'
         const { container } = render(<MemoryRouter initialEntries={[route]}><AppProvider client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })}><App /></AppProvider></MemoryRouter>);
         await new Promise((r) => setTimeout(r, 60));
         expect(container.textContent).toContain('工作台');   // 顶部导航还在：没有白屏
+        // APP-093（V213）：也不许落到整页兜底——列表响应在 SDK 里收成空表，对象响应不像样时只那一块说明原因
+        expect(container.querySelector('[aria-label="这一页没加载出来"]')).toBeNull();
       });
 
   it('路由表里的每一页都在探针里（新加的页面别漏）', () => {

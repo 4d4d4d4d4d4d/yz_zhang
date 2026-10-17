@@ -1,5 +1,6 @@
 // PROF-100 任务画像与能力画像（126 号 spec）——App 端：发布时边写边提示、我的能力画像。
 import {
+  hasLists, MALFORMED_TEXT,
   apiErrorText, fmtYuan, type CapabilityProfile, type PlatformClient, type SkillNormalized, type TaskDraftInput, type TaskProfile,
 } from '@platform/core';
 import { useEffect, useState } from 'react';
@@ -61,7 +62,10 @@ export function TaskProfileBlock({ client, taskId }: { client: PlatformClient; t
 export function CapabilityScreen({ client }: { client: PlatformClient }) {
   const [c, setC] = useState<CapabilityProfile | null>(null);
   const [error, setError] = useState('');
-  useEffect(() => { client.myCapability().then(setC).catch((e) => setError(apiErrorText(e))); }, [client]);
+  useEffect(() => {
+    client.myCapability().then((got) => { if (hasLists(got, 'categories', 'skills')) setC(got); else setError(MALFORMED_TEXT); })   // APP-093
+      .catch((e) => setError(apiErrorText(e)));
+  }, [client]);
   if (!c) return <Text style={s.muted}>{error || '正在加载…'}</Text>;
   const pct = (x: number | null) => (x === null ? '样本不足' : `${Math.round(x * 100)}%`);
   return (

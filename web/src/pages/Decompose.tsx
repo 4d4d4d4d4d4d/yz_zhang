@@ -5,6 +5,7 @@
 // 一层一层往下长、每层都能改；每个叶子说清谁能做、依据是什么；
 // 「判不了」的步骤不让确认，而是给出能点的去处。
 import {
+  hasLists, MALFORMED_TEXT,
   LEAF_CRITERION_LABEL, apiErrorText, childrenOf, decompositionSourceLabel, executorLabel,
   fmtYuan, isOpenEnd, type Decomposition, type DecompositionNode, type DecompositionNodePatch,
   type Task,
@@ -24,24 +25,31 @@ export default function Decompose() {
   const [busy, setBusy] = useState(false);
   const [certCategories, setCertCategories] = useState<Array<{ name: string; required_cert: string }>>([]);
 
+  // APP-093：拆解方案不像样（{}、没有 nodes）时说明原因，不把整页带崩
+  const wellFormed = useCallback((d: Decomposition): Decomposition | null => {
+    if (hasLists(d, 'nodes')) return d;
+    setError(MALFORMED_TEXT);
+    return null;
+  }, []);
+
   const load = useCallback(async () => {
     setError('');
     const t = await client.getTask(taskId);
     setTask(t);
     try {
-      setDec(await client.currentDecomposition(taskId));
+      setDec(wellFormed(await client.currentDecomposition(taskId)));
     } catch (e) {
       const code = (e as { code?: string }).code;
       if (code !== 'no_decomposition_in_progress') throw e;
       // 还没拆过：总任务还是草稿、也还没有子任务，就开始拆；已经确认过的回任务页
       const tree = await client.taskTree(taskId).catch(() => null);
       if (t.status === 'draft' && !(tree && tree.children.length)) {
-        setDec(await client.propose(taskId));
+        setDec(wellFormed(await client.propose(taskId)));
       } else {
         setDec(null);
       }
     }
-  }, [client, taskId]);
+  }, [client, taskId, wellFormed]);
 
   useEffect(() => {
     void load().catch((e) => setError(apiErrorText(e)));
@@ -55,7 +63,8 @@ export default function Decompose() {
     setNotice('');
     setBusy(true);
     try {
-      const next = await fn();
+      const next = wellFormed(await fn());
+      if (!next) return;
       setDec(next);
       if (okNote) setNotice(okNote);
     } catch (e) {

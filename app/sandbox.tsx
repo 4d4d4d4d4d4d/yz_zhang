@@ -1,6 +1,7 @@
 // SBX-100 隐私沙箱（128 号 spec）——App 端：开关、本机助手（端侧模型或本机规则）、本机笔记、同步前脱敏、端侧模型目录。
 // 开着时：助手的活在手机上本机做，原文不发到云端；把原文交给云端 AI 的请求在发出之前就被拦下。
 import {
+  hasLists,
   LOCAL_SKILL_NAMES, REDACT_NAMES, apiErrorText, askLocal, redact, runLocal,
   type LocalResult, type LocalSkill, type PlatformClient, type SandboxModelList, type SandboxModelRow, type SandboxState,
 } from '@platform/core';
@@ -39,7 +40,7 @@ export function SandboxScreen({ client, fs }: { client: PlatformClient; fs?: Mod
       setState(s);
       if (s.enabled && !isSandbox()) { await setSandboxLocal(true); setOn(true); }   // 服务端记着开着：以开着为准
     }).catch((e) => setError(apiErrorText(e)));
-    client.sandboxModels().then(setCatalog).catch(() => setCatalog(null));
+    client.sandboxModels().then((c) => setCatalog(hasLists(c, 'items') ? c : null)).catch(() => setCatalog(null));   // APP-093
     void installedModels().then(setInstalled);
   }, [client]);
 

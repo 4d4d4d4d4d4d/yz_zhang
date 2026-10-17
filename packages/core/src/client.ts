@@ -164,6 +164,11 @@ function qs(params: object): string {
   return pairs.length ? `?${pairs.join('&')}` : '';
 }
 
+/** APP-093（V213）列表接口的响应不是数组（{}、null、代理返回的错误页对象）时当作空表。
+ *  以前每一页各自 `rows.map(...)`，一个列表接口回了畸形响应，整页就被换成「这一页出错了」——
+ *  钱包、工作台、个人空间等 30 多页都是这样。数组原样返回，类型照旧。 */
+const listOf = <T,>(x: T[]): T[] => (Array.isArray(x) ? x : []);
+
 export class PlatformClient {
   constructor(private opts: ClientOptions) {}
 
@@ -267,7 +272,7 @@ export class PlatformClient {
   // ---- PWB 个人工作台（116 号 spec）：我的任务、进度与助手 ----
   workbenchOverview() { return this.request<WbOverview>('GET', '/workbench/overview'); }
   workbenchProjects(includeArchived = false) {
-    return this.request<WbProject[]>('GET', `/workbench/projects${includeArchived ? '?include_archived=true' : ''}`);
+    return this.request<WbProject[]>('GET', `/workbench/projects${includeArchived ? '?include_archived=true' : ''}`).then(listOf);
   }
   createWorkbenchProject(name: string, color: WbProject['color'] = 'clay') {
     return this.request<WbProject>('POST', '/workbench/projects', { name, color });
@@ -279,7 +284,7 @@ export class PlatformClient {
   workbenchItems(filter: { project_id?: number; status?: WbStatus; view?: 'all' | 'today' | 'overdue' | 'week' | 'open'; q?: string } = {}) {
     const qs = Object.entries(filter).filter(([, v]) => v !== undefined && v !== '')
       .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
-    return this.request<WbItem[]>('GET', `/workbench/items${qs ? `?${qs}` : ''}`);
+    return this.request<WbItem[]>('GET', `/workbench/items${qs ? `?${qs}` : ''}`).then(listOf);
   }
   createWorkbenchItem(input: WbItemInput) {
     return this.request<WbItem>('POST', '/workbench/items', input);
@@ -289,7 +294,7 @@ export class PlatformClient {
     return this.request<WbItem>('PATCH', `/workbench/items/${id}`, patch);
   }
   deleteWorkbenchItem(id: number) { return this.request<{ deleted: boolean }>('DELETE', `/workbench/items/${id}`); }
-  workbenchLogs(id: number) { return this.request<WbLog[]>('GET', `/workbench/items/${id}/logs`); }
+  workbenchLogs(id: number) { return this.request<WbLog[]>('GET', `/workbench/items/${id}/logs`).then(listOf); }
   addWorkbenchLog(id: number, body: string) {
     return this.request<WbLog>('POST', `/workbench/items/${id}/logs`, { body });
   }
@@ -307,7 +312,7 @@ export class PlatformClient {
     return this.request<WbMemory>('POST', '/workbench/memories', { content });
   }
   deleteWorkbenchMemory(id: number) { return this.request<{ deleted: boolean }>('DELETE', `/workbench/memories/${id}`); }
-  workbenchRoutines() { return this.request<WbRoutine[]>('GET', '/workbench/routines'); }
+  workbenchRoutines() { return this.request<WbRoutine[]>('GET', '/workbench/routines').then(listOf); }
   createWorkbenchRoutine(input: WbRoutineInput) {
     return this.request<WbRoutine>('POST', '/workbench/routines', input);
   }
@@ -321,7 +326,7 @@ export class PlatformClient {
   /** REL-105 最近 30 次运行的健康度（130 号 spec） */
   workbenchRoutineHealth(id: number) { return this.request<WbRoutineHealth>('GET', `/workbench/routines/${id}/health`); }
   workbenchRoutineRuns(id: number) {
-    return this.request<WbRoutineRun[]>('GET', `/workbench/routines/${id}/runs`);
+    return this.request<WbRoutineRun[]>('GET', `/workbench/routines/${id}/runs`).then(listOf);
   }
 
   // ---- KB-100 个人知识库（122 号 spec） ----
@@ -333,7 +338,7 @@ export class PlatformClient {
     if (filter.kind) p.set('kind', filter.kind);
     if (filter.limit) p.set('limit', String(filter.limit));
     const qs = p.toString();
-    return this.request<NbNoteBrief[]>('GET', `/notebook/notes${qs ? `?${qs}` : ''}`);
+    return this.request<NbNoteBrief[]>('GET', `/notebook/notes${qs ? `?${qs}` : ''}`).then(listOf);
   }
   /** 随手记：一句话、一段纪要或一个链接（服务端不抓取链接内容） */
   createNote(input: NbNoteInput) {
@@ -353,19 +358,19 @@ export class PlatformClient {
   notebookSummary() { return this.request<NbSummary>('GET', '/notebook/summary'); }
   /** 从自己的笔记里找答案：摘录式、带出处 */
   askNotebook(q: string) { return this.request<NbAnswer>('POST', '/notebook/ask', { q }); }
-  relatedNotes(itemId: number) { return this.request<NbReference[]>('GET', `/notebook/related?item_id=${itemId}`); }
+  relatedNotes(itemId: number) { return this.request<NbReference[]>('GET', `/notebook/related?item_id=${itemId}`).then(listOf); }
   /** 纪要抽待办：只返回草稿，确认后调 `addNoteTodos` */
   extractNoteTodos(id: number) {
     return this.request<{ note_id: number; items: NbTodoDraft[] }>('POST', `/notebook/notes/${id}/extract-todos`);
   }
   addNoteTodos(id: number, items: NbTodoInput[], projectId?: number | null) {
-    return this.request<WbItem[]>('POST', `/notebook/notes/${id}/todos`, { items, project_id: projectId });
+    return this.request<WbItem[]>('POST', `/notebook/notes/${id}/todos`, { items, project_id: projectId }).then(listOf);
   }
   /** 把几条笔记里的步骤收成方法草稿（不写库），确认后调 `createMethod` */
   distillMethod(noteIds: number[]) {
     return this.request<NbMethodDraft>('POST', '/notebook/methods/distill', { note_ids: noteIds });
   }
-  notebookMethods() { return this.request<NbMethod[]>('GET', '/notebook/methods'); }
+  notebookMethods() { return this.request<NbMethod[]>('GET', '/notebook/methods').then(listOf); }
   createMethod(input: { name: string; description?: string; steps: WbStep[]; source_note_ids?: number[] }) {
     return this.request<NbMethod>('POST', '/notebook/methods', {
       name: input.name, description: input.description, steps: input.steps, source_note_ids: input.source_note_ids,
@@ -384,7 +389,7 @@ export class PlatformClient {
   exportNotebook() { return this.request<NbExport>('GET', '/notebook/export'); }
 
   // ---- PACK-100 场景包（123 号 spec） ----
-  scenarioPacks() { return this.request<ScenarioPackCard[]>('GET', '/packs'); }
+  scenarioPacks() { return this.request<ScenarioPackCard[]>('GET', '/packs').then(listOf); }
   scenarioPack(key: string) { return this.request<ScenarioPackCard>('GET', `/packs/${encodeURIComponent(key)}`); }
   /** 启用＝把包里的方法、知识、例行任务复制进我的知识库与工作台；已启用时再调＝升级（只补新增的） */
   enablePack(key: string, withRoutines = true) {
@@ -405,7 +410,7 @@ export class PlatformClient {
   packFeedback(key: string, helpful: boolean) {
     return this.request<{ recorded: boolean }>('POST', `/packs/${encodeURIComponent(key)}/feedback`, { helpful });
   }
-  adminPacks() { return this.request<ScenarioPackAdminListRow[]>('GET', '/admin/packs'); }
+  adminPacks() { return this.request<ScenarioPackAdminListRow[]>('GET', '/admin/packs').then(listOf); }
   adminValidatePack(definition: Record<string, unknown>) {
     return this.request<PackValidation>('POST', '/admin/packs/validate', { definition });
   }
@@ -422,7 +427,7 @@ export class PlatformClient {
   adminRetirePack(id: number, reason: string) {
     return this.request<ScenarioPackAdminRow>('POST', `/admin/packs/${id}/retire`, { reason });
   }
-  adminPackRadar() { return this.request<RadarSignal[]>('GET', '/admin/packs/radar'); }
+  adminPackRadar() { return this.request<RadarSignal[]>('GET', '/admin/packs/radar').then(listOf); }
   /** SCN-112 雷达上的一条信号起草成目标场景包里的一条知识（只出草稿，空要人填，上线四眼） */
   adminDraftKnowledgeFromRadar(input: { source: RadarSignal['source']; key: string; pack_key: string }) {
     return this.request<RadarKnowledgeDraft>('POST', '/admin/packs/radar/draft-knowledge', input);
@@ -442,7 +447,7 @@ export class PlatformClient {
     if (filter.period) p.set('period', filter.period);
     if (filter.kind) p.set('kind', filter.kind);
     const qs = p.toString();
-    return this.request<OpcEntryRow[]>('GET', `/opc/entries${qs ? `?${qs}` : ''}`);
+    return this.request<OpcEntryRow[]>('GET', `/opc/entries${qs ? `?${qs}` : ''}`).then(listOf);
   }
   addOpcEntry(input: OpcEntryInput) {
     return this.request<OpcEntryRow>('POST', '/opc/entries', {
@@ -504,7 +509,7 @@ export class PlatformClient {
   mySandbox() { return this.request<SandboxState>('GET', '/users/me/sandbox'); }
   setSandbox(enabled: boolean) { return this.request<SandboxState>('PUT', '/users/me/sandbox', { enabled }); }
   sandboxModels() { return this.request<SandboxModelList>('GET', '/sandbox/models'); }
-  adminSandboxModels() { return this.request<SandboxModelAdminRow[]>('GET', '/admin/sandbox/models'); }
+  adminSandboxModels() { return this.request<SandboxModelAdminRow[]>('GET', '/admin/sandbox/models').then(listOf); }
   createSandboxModel(input: SandboxModelInput) { return this.request<SandboxModelAdminRow>('POST', '/admin/sandbox/models', input); }
   updateSandboxModel(id: number, input: SandboxModelInput) {
     return this.request<SandboxModelAdminRow>('PATCH', `/admin/sandbox/models/${id}`, input);
@@ -550,7 +555,7 @@ export class PlatformClient {
     if (input.max_detour_km) p.set('max_detour_km', String(input.max_detour_km));
     return this.request<GigAlong>('GET', `/gig/along?${p.toString()}`);
   }
-  gigPlaces() { return this.request<GigPlaceRow[]>('GET', '/gig/places'); }
+  gigPlaces() { return this.request<GigPlaceRow[]>('GET', '/gig/places').then(listOf); }
   addGigPlace(name: string, lat: number, lng: number) {
     return this.request<GigPlaceRow>('POST', '/gig/places', { name, lat, lng });
   }
@@ -580,7 +585,7 @@ export class PlatformClient {
       .filter(([, v]) => v !== undefined && v !== '')
       .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
       .join('&');
-    return this.request<Task[]>('GET', `/tasks${qs ? `?${qs}` : ''}`);
+    return this.request<Task[]>('GET', `/tasks${qs ? `?${qs}` : ''}`).then(listOf);
   }
   getTask(id: number) {
     return this.request<Task>('GET', `/tasks/${id}`);
@@ -590,7 +595,7 @@ export class PlatformClient {
       .filter(([, v]) => v !== undefined && v !== '')
       .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
       .join('&');
-    return this.request<Task[]>('GET', `/tasks/mine${qs ? `?${qs}` : ''}`);
+    return this.request<Task[]>('GET', `/tasks/mine${qs ? `?${qs}` : ''}`).then(listOf);
   }
   expireTasks() {
     return this.request<{ expired: number }>('POST', '/tasks/jobs/expire-tasks');
@@ -609,10 +614,10 @@ export class PlatformClient {
   listApplications(taskId: number) {
     return this.request<Array<{ id: number; applicant_id: number; nickname: string; credit_score: number; rating_avg: number; bid_cents: number; message: string; status: string }>>(
       'GET', `/tasks/${taskId}/applications`,
-    );
+    ).then(listOf);
   }
   recommendations(taskId: number) {
-    return this.request<Recommendation[]>('GET', `/tasks/${taskId}/recommendations`);
+    return this.request<Recommendation[]>('GET', `/tasks/${taskId}/recommendations`).then(listOf);
   }
   acceptApplication(applicationId: number) {
     return this.request<{ contract_id: number; task: Task }>('POST', `/applications/${applicationId}/accept`);
@@ -635,7 +640,7 @@ export class PlatformClient {
   }
   /** SCN-126 多天母任务：按人看谁报了哪几天（只给发单人） */
   dayApplicants(taskId: number) {
-    return this.request<DayApplicant[]>('GET', `/tasks/${taskId}/applicants`);
+    return this.request<DayApplicant[]>('GET', `/tasks/${taskId}/applicants`).then(listOf);
   }
   /** SCN-126 一次选同一个人的多天：每个名额各一份合约，签署与托管仍逐份确认 */
   acceptPerson(taskId: number, applicantId: number) {
@@ -647,7 +652,7 @@ export class PlatformClient {
   }
   /** APP-094 运营看哪一页常坏 */
   adminClientErrors(days = 7) {
-    return this.request<ClientErrorRow[]>('GET', `/admin/client-errors?days=${days}`);
+    return this.request<ClientErrorRow[]>('GET', `/admin/client-errors?days=${days}`).then(listOf);
   }
   /** SCN-120 一次上门回报（只有接单的人、只在执行中）：勾清单里做了的、备注、照片 */
   reportVisit(taskId: number, body: { done: string[]; note?: string; images?: string[] }) {
@@ -663,7 +668,7 @@ export class PlatformClient {
   listProgress(taskId: number) {
     return this.request<Array<{ id: number; user_id: number; kind: string; content: string; images: string[]; created_at: string }>>(
       'GET', `/tasks/${taskId}/progress`,
-    );
+    ).then(listOf);
   }
   deliver(taskId: number) {
     return this.request<Task>('POST', `/tasks/${taskId}/deliver`);
@@ -683,7 +688,7 @@ export class PlatformClient {
   listReviews(taskId: number) {
     return this.request<Array<{ reviewer_id: number; target_id: number; stars: number; tags: string[]; comment: string }>>(
       'GET', `/tasks/${taskId}/reviews`,
-    );
+    ).then(listOf);
   }
   userReviews(userId: number, params: { limit?: number; offset?: number } = {}) {
     const qs = Object.entries(params)
@@ -763,7 +768,7 @@ export class PlatformClient {
   withdrawRequests(status = 'pending') {
     return this.request<WithdrawRequestRow[]>(
       'GET', `/wallet/withdraw-requests?status=${status}`,
-    );
+    ).then(listOf);
   }
   decideWithdraw(requestId: number, approve: boolean) {
     return this.request<{ status: string; amount_cents: number }>(
@@ -803,7 +808,7 @@ export class PlatformClient {
   }
   /** NTF-064 公告记录（最新的在前） */
   announcements(status = '') {
-    return this.request<AnnouncementRow[]>('GET', `/admin/announcements${qs({ status })}`);
+    return this.request<AnnouncementRow[]>('GET', `/admin/announcements${qs({ status })}`).then(listOf);
   }
   /** NTF-064 取消还没发出的定时公告 */
   cancelAnnouncement(id: number, reason = '') {
@@ -842,7 +847,7 @@ export class PlatformClient {
     );
   }
   settleRequests(status: 'awaiting_second' | 'settled' | 'rejected' = 'awaiting_second') {
-    return this.request<PlatformSettleRequestRow[]>('GET', `/admin/platform-finance/settle-requests?status=${status}`);
+    return this.request<PlatformSettleRequestRow[]>('GET', `/admin/platform-finance/settle-requests?status=${status}`).then(listOf);
   }
   approveSettle(requestId: number) {
     return this.request<PlatformSettleApproved>('POST', `/admin/platform-finance/settle-requests/${requestId}/approve`);
@@ -860,7 +865,7 @@ export class PlatformClient {
       .join('&');
     return this.request<Array<{ application_id: number; task_id: number; status: string; bid_cents: number; message: string; created_at: string; task_title: string | null; task_status: string | null; task_budget_cents: number | null }>>(
       'GET', `/users/me/applications${qs ? `?${qs}` : ''}`,
-    );
+    ).then(listOf);
   }
   bookmark(taskId: number) {
     return this.request<{ ok: boolean; already?: boolean }>('POST', `/tasks/${taskId}/bookmark`);
@@ -869,10 +874,10 @@ export class PlatformClient {
     return this.request<{ ok: boolean }>('DELETE', `/tasks/${taskId}/bookmark`);
   }
   myBookmarks() {
-    return this.request<Task[]>('GET', '/users/me/bookmarks');
+    return this.request<Task[]>('GET', '/users/me/bookmarks').then(listOf);
   }
   ledger() {
-    return this.request<LedgerRow[]>('GET', '/wallet/ledger');
+    return this.request<LedgerRow[]>('GET', '/wallet/ledger').then(listOf);
   }
 
   // ---- orchestrator（Agent Harness：发任务给人=工具调用）----
@@ -883,7 +888,7 @@ export class PlatformClient {
   myMissions(params: { status?: string; limit?: number; offset?: number } = {}) {
     const qs = Object.entries(params).filter(([, v]) => v !== undefined)
       .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
-    return this.request<Mission[]>('GET', `/missions${qs ? `?${qs}` : ''}`);
+    return this.request<Mission[]>('GET', `/missions${qs ? `?${qs}` : ''}`).then(listOf);
   }
   /** LAW-002/040 合约签署留痕与校验：签署后改条款 → 哈希对不上，篡改自证。 */
   contractSignatures(contractId: number) {
@@ -949,7 +954,7 @@ export class PlatformClient {
       device_label: input.device_label ?? '', allow_cloud_vision: input.allow_cloud_vision ?? false,
     });
   }
-  xappGrants() { return this.request<XappGrant[]>('GET', '/xapp/grants'); }
+  xappGrants() { return this.request<XappGrant[]>('GET', '/xapp/grants').then(listOf); }
   /** 撤销即停：用这个授权还在跑的执行全部叫停 */
   revokeXappGrant(id: number) { return this.request<XappGrantRevoked>('DELETE', `/xapp/grants/${id}`); }
   createXappRun(input: { grant_id: number; goal: string; executor: string; confirm_mode: 'each' | 'red_only'; steps: XappStepInput[] }) {
@@ -958,7 +963,7 @@ export class PlatformClient {
       confirm_mode: input.confirm_mode, steps: input.steps,
     });
   }
-  xappRuns() { return this.request<XappRun[]>('GET', '/xapp/runs'); }
+  xappRuns() { return this.request<XappRun[]>('GET', '/xapp/runs').then(listOf); }
   xappRun(id: number) { return this.request<XappRunDetail>('GET', `/xapp/runs/${id}`); }
   /** 执行器：拿下一步 */
   xappNext(runId: number) { return this.request<XappNext>('POST', `/xapp/runs/${runId}/next`); }
@@ -1026,7 +1031,7 @@ export class PlatformClient {
       title: string;
       unread_count: number;
       last_message: { id: number; sender_id: number; kind: string; content: string; created_at: string } | null;
-    }>>('GET', '/conversations');
+    }>>('GET', '/conversations').then(listOf);
   }
   // ── GRW 增长运营（22 号 spec）────────────────────────────────
   /** 可领取的券（已领满/已领完的不返回）。 */
@@ -1091,7 +1096,7 @@ export class PlatformClient {
     return this.request<Conversation>('POST', '/conversations/direct', { user_id: userId });
   }
   messages(convId: number) {
-    return this.request<Message[]>('GET', `/conversations/${convId}/messages`);
+    return this.request<Message[]>('GET', `/conversations/${convId}/messages`).then(listOf);
   }
   sendMessage(convId: number, content: string) {
     return this.request<{ id: number; risk_flagged: boolean; warning: string | null }>(
@@ -1099,7 +1104,7 @@ export class PlatformClient {
     );
   }
   notifications(unreadOnly = false) {
-    return this.request<Notice[]>('GET', `/notifications${unreadOnly ? '?unread_only=true' : ''}`);
+    return this.request<Notice[]>('GET', `/notifications${unreadOnly ? '?unread_only=true' : ''}`).then(listOf);
   }
   markRead(id: number) {
     return this.request<{ ok: boolean }>('POST', `/notifications/${id}/read`);
@@ -1148,7 +1153,7 @@ export class PlatformClient {
   /** SC-007 列出变更单。改造前**服务端根本没有这个接口**：
    *  提案建得出来，而对方拿不到 `order_id`，界面上就算有按钮也点不了。 */
   changeOrders(contractId: number) {
-    return this.request<ChangeOrderView[]>('GET', `/contracts/${contractId}/change-orders`);
+    return this.request<ChangeOrderView[]>('GET', `/contracts/${contractId}/change-orders`).then(listOf);
   }
   acceptChange(contractId: number, orderId: number) {
     return this.request<Contract>('POST', `/contracts/${contractId}/change-orders/${orderId}/accept`);
@@ -1164,7 +1169,7 @@ export class PlatformClient {
   }
   contentFeed(scope: 'latest' | 'following' = 'latest', params: { tag?: string; kind?: string } = {}) {
     const extra = Object.entries(params).filter(([, v]) => v).map(([k, v]) => `&${k}=${encodeURIComponent(v!)}`).join('');
-    return this.request<ContentItem[]>('GET', `/feed?scope=${scope}${extra}`);
+    return this.request<ContentItem[]>('GET', `/feed?scope=${scope}${extra}`).then(listOf);
   }
   editContent(contentId: number, patch: {
     title?: string; body?: string; tags?: string[]; media_urls?: string[]; linked_category?: string;
@@ -1178,7 +1183,7 @@ export class PlatformClient {
   myDrafts(limit = 20) {
     return this.request<Array<{ id: number; title: string; created_at: string }>>(
       'GET', `/contents/mine?status=draft&limit=${limit}`,
-    );
+    ).then(listOf);
   }
   getContent(contentId: number) {
     return this.request<ContentItem>('GET', `/contents/${contentId}`);
@@ -1202,7 +1207,7 @@ export class PlatformClient {
   contentComments(contentId: number) {
     return this.request<Array<{ id: number; author_id: number; author_nickname: string; body: string; reply_to_id: number | null; created_at: string }>>(
       'GET', `/contents/${contentId}/comments`,
-    );
+    ).then(listOf);
   }
   /** CNT-022 关注。**幂等**——重复调用仍然是「已关注」。
    *
@@ -1245,7 +1250,7 @@ export class PlatformClient {
   }
   circles(params: { q?: string; kind?: string; recommended?: boolean } = {}) {
     const qs = Object.entries(params).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
-    return this.request<CircleInfo[]>('GET', `/circles${qs ? `?${qs}` : ''}`);
+    return this.request<CircleInfo[]>('GET', `/circles${qs ? `?${qs}` : ''}`).then(listOf);
   }
   getCircle(id: number) {
     return this.request<CircleInfo>('GET', `/circles/${id}`);
@@ -1257,10 +1262,10 @@ export class PlatformClient {
     return this.request<{ status: string }>('POST', `/circles/${circleId}/members/${userId}/approve`);
   }
   circleFeed(circleId: number) {
-    return this.request<ContentItem[]>('GET', `/circles/${circleId}/feed`);
+    return this.request<ContentItem[]>('GET', `/circles/${circleId}/feed`).then(listOf);
   }
   circleTasks(circleId: number) {
-    return this.request<Task[]>('GET', `/circles/${circleId}/tasks`);
+    return this.request<Task[]>('GET', `/circles/${circleId}/tasks`).then(listOf);
   }
 
   // ---- invitations / subscriptions ----
@@ -1270,7 +1275,7 @@ export class PlatformClient {
     });
   }
   myInvitations() {
-    return this.request<InvitationItem[]>('GET', '/invitations');
+    return this.request<InvitationItem[]>('GET', '/invitations').then(listOf);
   }
   acceptInvitation(id: number) {
     return this.request<{ contract_id: number; task_id: number }>('POST', `/invitations/${id}/accept`);
@@ -1282,7 +1287,7 @@ export class PlatformClient {
     return this.request<{ id: number }>('POST', '/subscriptions', { category, city });
   }
   mySubscriptions() {
-    return this.request<Array<{ id: number; category: string; city: string }>>('GET', '/subscriptions');
+    return this.request<Array<{ id: number; category: string; city: string }>>('GET', '/subscriptions').then(listOf);
   }
   unsubscribe(id: number) {
     return this.request<{ ok: boolean }>('DELETE', `/subscriptions/${id}`);
@@ -1302,10 +1307,10 @@ export class PlatformClient {
     );
   }
   categories() {
-    return this.request<Array<{ id: number; name: string; required_cert: string }>>('GET', '/categories');
+    return this.request<Array<{ id: number; name: string; required_cert: string }>>('GET', '/categories').then(listOf);
   }
   cities() {
-    return this.request<Array<{ id: number; name: string }>>('GET', '/cities');
+    return this.request<Array<{ id: number; name: string }>>('GET', '/cities').then(listOf);
   }
   finalReport(taskId: number) {
     return this.request<{
@@ -1321,7 +1326,7 @@ export class PlatformClient {
     );
   }
   mySessions() {
-    return this.request<Array<{ id: number; device: string; created_at: string }>>('GET', '/auth/sessions');
+    return this.request<Array<{ id: number; device: string; created_at: string }>>('GET', '/auth/sessions').then(listOf);
   }
   revokeSession(id: number) {
     return this.request<{ ok: boolean }>('POST', `/auth/sessions/${id}/revoke`);
@@ -1353,7 +1358,7 @@ export class PlatformClient {
     return this.request<{ blocked: boolean }>('POST', `/users/${userId}/block`);
   }
   myBlocks() {
-    return this.request<Array<{ user_id: number; nickname: string }>>('GET', '/users/me/blocks');
+    return this.request<Array<{ user_id: number; nickname: string }>>('GET', '/users/me/blocks').then(listOf);
   }
   recallMessage(messageId: number) {
     return this.request<{ ok: boolean }>('POST', `/messages/${messageId}/recall`);
@@ -1391,7 +1396,7 @@ export class PlatformClient {
   contractAnchors(contractId: number) {
     return this.request<Array<{ seq: number; event_type: string; chain_hash: string; payload_hash: string; created_at: string }>>(
       'GET', `/anchors/contracts/${contractId}`,
-    );
+    ).then(listOf);
   }
   verifyAnchorChain() {
     return this.request<{ valid: boolean; total: number; broken_at_seq?: number }>('GET', '/anchors/verify');
@@ -1416,7 +1421,7 @@ export class PlatformClient {
     }>('POST', '/legal/ask', { question });
   }
   // ---- LAW-060 / SCN-114 法律常识库的运营草稿流（163 号 spec，合规管理员） ----
-  adminLegalFaqs() { return this.request<LegalFaqRow[]>('GET', '/admin/legal/faqs'); }
+  adminLegalFaqs() { return this.request<LegalFaqRow[]>('GET', '/admin/legal/faqs').then(listOf); }
   adminCreateLegalFaq(input: LegalFaqInput) { return this.request<LegalFaqRow>('POST', '/admin/legal/faqs', input); }
   adminUpdateLegalFaq(id: number, input: LegalFaqInput) { return this.request<LegalFaqRow>('PUT', `/admin/legal/faqs/${id}`, input); }
   /** 雷达上「法律问答答不上」的主题起草成一条草稿：回答与出处留「【待填写】」，填完才能提交 */
@@ -1510,7 +1515,7 @@ export class PlatformClient {
   adminReports(status = 'pending') {
     return this.request<Array<{ id: number; reporter_id: number; target_type: string; target_id: number; reason: string; created_at: string }>>(
       'GET', `/admin/reports?status=${status}`,
-    );
+    ).then(listOf);
   }
   /** MOD-060 封禁影响面。**封禁前**调它——`banUser` 是不可逆的处置，
    *  而这个人手上可能有几笔在途合约和一笔托管资金。
@@ -1569,7 +1574,7 @@ export class PlatformClient {
       .join('&');
     return this.request<AdminAuditRow[]>(
       'GET', `/admin/audit-log${qs ? `?${qs}` : ''}`,
-    );
+    ).then(listOf);
   }
   resolveReport(reportId: number, action: 'dismiss' | 'remove_content' | 'ban_user') {
     return this.request<{ id: number; status: string; action: string; effect: string }>(
@@ -1579,7 +1584,7 @@ export class PlatformClient {
   adminUsers(q = '') {
     return this.request<Array<{ id: number; phone: string; nickname: string; is_verified: boolean; is_banned: boolean; credit_score: number; tasks_completed: number }>>(
       'GET', `/admin/users${q ? `?q=${encodeURIComponent(q)}` : ''}`,
-    );
+    ).then(listOf);
   }
   banUser(userId: number) {
     return this.request<{ id: number; is_banned: boolean }>('POST', `/admin/users/${userId}/ban`);
@@ -1601,7 +1606,7 @@ export class PlatformClient {
   }
   /** TEAM-031 待核验的团队企业信息（执照影像是鉴权 URL，不是能力 URL）。 */
   pendingTeams(limit = 50, offset = 0) {
-    return this.request<PendingTeamRow[]>('GET', `/admin/teams/pending?limit=${limit}&offset=${offset}`);
+    return this.request<PendingTeamRow[]>('GET', `/admin/teams/pending?limit=${limit}&offset=${offset}`).then(listOf);
   }
   /** TEAM-031 核过或驳回。驳回必须写理由——它会被送到 owner 面前。 */
   verifyTeam(teamId: number, approve: boolean, reason = '') {
@@ -1613,14 +1618,14 @@ export class PlatformClient {
   pendingCertifications(limit = 50, offset = 0) {
     return this.request<PendingCertificationRow[]>(
       'GET', `/admin/certifications/pending?limit=${limit}&offset=${offset}`,
-    );
+    ).then(listOf);
   }
   /** CERT-031 按状态列资质。撤销的对象是**已核准**的那些——
    *  一张已经核过的假证件撤不下来，持证人会继续接受限类目的单。 */
   adminCertifications(status: 'pending' | 'approved' | 'rejected' | 'revoked' = 'approved', limit = 50) {
     return this.request<PendingCertificationRow[]>(
       'GET', `/admin/certifications?status=${status}&limit=${limit}`,
-    );
+    ).then(listOf);
   }
   decideCertification(applicationId: number, approve: boolean, reason = '') {
     return this.request<{ id: number; status: string }>(
@@ -1636,7 +1641,7 @@ export class PlatformClient {
   pendingUploads(limit = 50, offset = 0) {
     return this.request<PendingUploadRow[]>(
       'GET', `/admin/uploads/pending?limit=${limit}&offset=${offset}`,
-    );
+    ).then(listOf);
   }
   /** UMOD-030 处置：通过，或删除并**告知上传者**（悄悄删掉是最差的处理）。 */
   resolveUpload(name: string, action: 'pass' | 'reject', reason = '') {
@@ -1651,7 +1656,7 @@ export class PlatformClient {
     const extra = qs(opts);
     return this.request<AdminTicketRow[]>(
       'GET', `/admin/tickets?status=${status}&limit=${limit}&offset=${offset}${extra ? `&${extra.slice(1)}` : ''}`,
-    );
+    ).then(listOf);
   }
   /** ESCA-053 先回一句、不结单（157 号 spec）；第一次回复记为首次响应 */
   replyTicket(ticketId: number, reply: string) {
@@ -1735,7 +1740,7 @@ export class PlatformClient {
   friendRequests() {
     return this.request<Array<{ id: number; from_user_id: number; created_at: string }>>(
       'GET', '/friends/requests',
-    );
+    ).then(listOf);
   }
   decideFriendRequest(requestId: number, accept: boolean) {
     return this.request<{ id: number; status: string }>(
@@ -1745,7 +1750,7 @@ export class PlatformClient {
   friends() {
     return this.request<Array<{ user_id: number; nickname: string; remark: string; credit_score: number }>>(
       'GET', '/friends',
-    );
+    ).then(listOf);
   }
   setFriendRemark(userId: number, remark: string) {
     return this.request<{ user_id: number; remark: string }>('PATCH', `/friends/${userId}`, { remark });
@@ -1757,7 +1762,7 @@ export class PlatformClient {
   workedWith() {
     return this.request<Array<{ user_id: number; nickname: string; times: number; credit_score: number }>>(
       'GET', '/friends/worked-with',
-    );
+    ).then(listOf);
   }
 
   // ---- IM-003 群聊 ----
@@ -1813,7 +1818,7 @@ export class PlatformClient {
     return this.request<Dispute>('GET', `/tasks/${taskId}/dispute`);
   }
   disputeStatements(disputeId: number) {
-    return this.request<DisputeStatement[]>('GET', `/disputes/${disputeId}/statements`);
+    return this.request<DisputeStatement[]>('GET', `/disputes/${disputeId}/statements`).then(listOf);
   }
   // DSPC-001 答辩。服务端把「两造兼听」当作裁决的硬性前置，
   // 而在此之前没有任何客户端能写入这张表——那道前置永远只能靠等答辩期超时满足。
@@ -1844,13 +1849,13 @@ export class PlatformClient {
   // ---- AGT 平台自有 AI 助理 ----
   /** 平台在售的 AI 助理目录。不含 prompt 与成本——那是平台的实现细节与经营数据。 */
   agents() {
-    return this.request<AgentProfileView[]>('GET', '/agents');
+    return this.request<AgentProfileView[]>('GET', '/agents').then(listOf);
   }
   /** AGT-018 这个任务哪些助理能接，以及**不能接的逐条理由**。
    *  只回一个空列表没有意义：发布方不知道是因为要到场、还是金额超限，
    *  也就不知道该改什么。 */
   eligibleAgents(taskId: number) {
-    return this.request<EligibleAgent[]>('GET', `/tasks/${taskId}/eligible-agents`);
+    return this.request<EligibleAgent[]>('GET', `/tasks/${taskId}/eligible-agents`).then(listOf);
   }
   /** 由发布方主动邀请，平台不自动派单——让 AI 接自己的活是一个需要知情的选择。 */
   inviteAgent(taskId: number, agentUserId: number) {
@@ -1881,7 +1886,7 @@ export class PlatformClient {
   openVerificationOrders() {
     return this.request<Array<VerificationOrderView & {
       category: string; task_title: string; claimable: boolean; reason: string;
-    }>>('GET', '/verification-orders');
+    }>>('GET', '/verification-orders').then(listOf);
   }
   claimVerificationOrder(orderId: number) {
     return this.request<VerificationOrderView>('POST', `/verification-orders/${orderId}/claim`);
@@ -1911,7 +1916,7 @@ export class PlatformClient {
     });
   }
   myVentures() {
-    return this.request<Array<VentureView & { role: string }>>('GET', '/ventures/mine');
+    return this.request<Array<VentureView & { role: string }>>('GET', '/ventures/mine').then(listOf);
   }
   venture(ventureId: number) {
     return this.request<VentureDetail>('GET', `/ventures/${ventureId}`);
@@ -1935,7 +1940,7 @@ export class PlatformClient {
     );
   }
   ventureContributions(ventureId: number) {
-    return this.request<ContributionView[]>('GET', `/ventures/${ventureId}/contributions`);
+    return this.request<ContributionView[]>('GET', `/ventures/${ventureId}/contributions`).then(listOf);
   }
   /** 提交时不计价：贡献人说「我做了什么」，确认人说「这值多少」。 */
   confirmContribution(ventureId: number, contributionId: number, valuedCents: number, note = '', accept = true) {
@@ -1955,7 +1960,7 @@ export class PlatformClient {
     );
   }
   payoutProposals(ventureId: number) {
-    return this.request<PayoutProposalView[]>('GET', `/ventures/${ventureId}/payout-proposals`);
+    return this.request<PayoutProposalView[]>('GET', `/ventures/${ventureId}/payout-proposals`).then(listOf);
   }
   proposePayout(ventureId: number, amountCents: number, memo: string) {
     return this.request<PayoutProposalView>('POST', `/ventures/${ventureId}/payout-proposals`, {amount_cents:amountCents,memo});
@@ -1968,7 +1973,7 @@ export class PlatformClient {
     return this.request<TeamInviteCreated>('POST', `/teams/${teamId}/invite-links`, input);
   }
   teamInviteLinks(teamId: number) {
-    return this.request<TeamInviteLink[]>('GET', `/teams/${teamId}/invite-links`);
+    return this.request<TeamInviteLink[]>('GET', `/teams/${teamId}/invite-links`).then(listOf);
   }
   revokeTeamInviteLink(teamId: number, linkId: number) {
     return this.request<TeamInviteLink>('POST', `/teams/${teamId}/invite-links/${linkId}/revoke`);
@@ -1982,7 +1987,7 @@ export class PlatformClient {
   }
   /** COOP-060 我收到的、还没过期的合作体邀请（142 号 spec） */
   myVentureInvitations() {
-    return this.request<VentureInvitationView[]>('GET', '/ventures/invitations');
+    return this.request<VentureInvitationView[]>('GET', '/ventures/invitations').then(listOf);
   }
   declineVentureInvitation(ventureId: number) {
     return this.request<{ venture_id: number; status: string }>('POST', `/ventures/${ventureId}/invitations/decline`);
@@ -1990,7 +1995,7 @@ export class PlatformClient {
   ventureDistributions(ventureId: number) {
     return this.request<Array<{ id: number; total_cents: number; memo: string; share_snapshot: ShareRow[]; created_at: string }>>(
       'GET', `/ventures/${ventureId}/distributions`,
-    );
+    ).then(listOf);
   }
   /** COOP-040 **告诉你需要什么，不拦住你**：结构化清单 + 每项理由 + 当前状态。 */
   ventureCompliancePath(ventureId: number) {
@@ -2002,7 +2007,7 @@ export class PlatformClient {
     return this.request<TeamView>('POST', '/teams', { name });
   }
   myTeams() {
-    return this.request<Array<TeamView & { my_role: string; my_spend_limit_cents: number }>>('GET', '/teams/mine');
+    return this.request<Array<TeamView & { my_role: string; my_spend_limit_cents: number }>>('GET', '/teams/mine').then(listOf);
   }
   team(teamId: number) {
     return this.request<TeamDetail>('GET', `/teams/${teamId}`);
@@ -2030,7 +2035,7 @@ export class PlatformClient {
     );
   }
   teamSpends(teamId: number) {
-    return this.request<SpendRequestView[]>('GET', `/teams/${teamId}/spends`);
+    return this.request<SpendRequestView[]>('GET', `/teams/${teamId}/spends`).then(listOf);
   }
   /** TEAM-061 驳回时 `reason` 是**服务端强制**的（`reason_required`）。
    *  响应里带回 `decision_reason`，界面当场就能显示——不必再拉一次列表。
@@ -2061,7 +2066,7 @@ export class PlatformClient {
   }
 
   organizationRecords(ventureId: number) {
-    return this.request<OrganizationRecordView[]>('GET', `/ventures/${ventureId}/organization-records`);
+    return this.request<OrganizationRecordView[]>('GET', `/ventures/${ventureId}/organization-records`).then(listOf);
   }
   addOrganizationRecord(ventureId: number, body: OrganizationRecordInput) {
     return this.request<OrganizationRecordView>('POST', `/ventures/${ventureId}/organization-records`, body);
@@ -2084,7 +2089,7 @@ export class PlatformClient {
     return this.request<MachineMandateView | null>('GET', `/developer/api-keys/${keyId}/mandate`);
   }
   machineActions(keyId: number) {
-    return this.request<MachineActionView[]>('GET', `/developer/api-keys/${keyId}/actions`);
+    return this.request<MachineActionView[]>('GET', `/developer/api-keys/${keyId}/actions`).then(listOf);
   }
   /** API-001 明文 key **只在这个响应里出现一次**，库里只存哈希。 */
   createApiKey(name: string, scopes: string[]) {
@@ -2093,7 +2098,7 @@ export class PlatformClient {
     );
   }
   apiKeys() {
-    return this.request<ApiKeyView[]>('GET', '/developer/api-keys');
+    return this.request<ApiKeyView[]>('GET', '/developer/api-keys').then(listOf);
   }
   revokeApiKey(keyId: number) {
     return this.request<{ id: number; active: boolean }>('DELETE', `/developer/api-keys/${keyId}`);
@@ -2122,11 +2127,11 @@ export class PlatformClient {
     );
   }
   webhooks() {
-    return this.request<WebhookView[]>('GET', '/developer/webhooks');
+    return this.request<WebhookView[]>('GET', '/developer/webhooks').then(listOf);
   }
   /** HOOK-002 投递记录。没有它，集成方报「我没收到」时两边都无法证明。 */
   webhookDeliveries(webhookId: number) {
-    return this.request<WebhookDeliveryView[]>('GET', `/developer/webhooks/${webhookId}/deliveries`);
+    return this.request<WebhookDeliveryView[]>('GET', `/developer/webhooks/${webhookId}/deliveries`).then(listOf);
   }
   deleteWebhook(webhookId: number) {
     return this.request<{ deleted: number }>('DELETE', `/developer/webhooks/${webhookId}`);
@@ -2174,7 +2179,7 @@ export class PlatformClient {
   circleMembers(circleId: number) {
     return this.request<Array<{ user_id: number; nickname: string; credit_score: number }>>(
       'GET', `/circles/${circleId}/members`,
-    );
+    ).then(listOf);
   }
   removeCircleMember(circleId: number, userId: number) {
     return this.request<{ ok: boolean }>('POST', `/circles/${circleId}/members/${userId}/remove`);
@@ -2185,7 +2190,7 @@ export class PlatformClient {
     );
   }
   userContents(userId: number) {
-    return this.request<ContentItem[]>('GET', `/users/${userId}/contents`);
+    return this.request<ContentItem[]>('GET', `/users/${userId}/contents`).then(listOf);
   }
   /** ESCA-052 类别：资金 / 账号类加急（时限更短）；不填按一般 */
   createTicket(subject: string, body = '', category?: TicketCategory) {
@@ -2193,7 +2198,7 @@ export class PlatformClient {
       category ? { subject, body, category } : { subject, body });
   }
   myTickets() {
-    return this.request<MyTicket[]>('GET', '/support/tickets');
+    return this.request<MyTicket[]>('GET', '/support/tickets').then(listOf);
   }
   /** ESCA-056 在自己的工单里追加内容：已结 7 天内会重新打开；转了纠纷的请到纠纷里补 */
   replyMyTicket(ticketId: number, body: string) {
@@ -2222,10 +2227,10 @@ export class PlatformClient {
     );
   }
   trendingTerms(limit = 10) {
-    return this.request<Array<{ term: string; count: number }>>('GET', `/search/trending?limit=${limit}`);
+    return this.request<Array<{ term: string; count: number }>>('GET', `/search/trending?limit=${limit}`).then(listOf);
   }
   searchSuggest(q: string) {
-    return this.request<string[]>('GET', `/search/suggest?q=${encodeURIComponent(q)}`);
+    return this.request<string[]>('GET', `/search/suggest?q=${encodeURIComponent(q)}`).then(listOf);
   }
   /** 13.C 客户端漏斗埋点。 */
   trackEvent(name: string, refType = '', refId = 0) {
@@ -2255,7 +2260,7 @@ export class PlatformClient {
     return this.request<KnowledgeAdminOverview>('GET', '/admin/knowledge/overview');
   }
   knowledgeUndecided() {
-    return this.request<KnowledgeUndecidedRow[]>('GET', '/admin/knowledge/undecided');
+    return this.request<KnowledgeUndecidedRow[]>('GET', '/admin/knowledge/undecided').then(listOf);
   }
   /** 待定区样本：并进某个子类，或以它为第一个样本新建子类（二选一）。 */
   assignKnowledgeCard(cardId: number, clusterId: number | null, newLabel = '') {
@@ -2264,7 +2269,7 @@ export class PlatformClient {
   }
   knowledgeCalibrationPairs(category: string, n = 12) {
     return this.request<KnowledgeCalibrationPair[]>('GET',
-      `/admin/knowledge/thresholds/${encodeURIComponent(category)}/pairs?n=${n}`);
+      `/admin/knowledge/thresholds/${encodeURIComponent(category)}/pairs?n=${n}`).then(listOf);
   }
   calibrateKnowledge(category: string, pairs: Array<{ a: number; b: number; same: boolean }>) {
     return this.request<KnowledgeThresholdView>('POST',
@@ -2290,7 +2295,7 @@ export class PlatformClient {
     if (filter.cluster_id) qs.set('cluster_id', String(filter.cluster_id));
     if (filter.q) qs.set('q', filter.q);
     const tail = qs.toString();
-    return this.request<ReusableUnit[]>('GET', `/knowledge/units${tail ? `?${tail}` : ''}`);
+    return this.request<ReusableUnit[]>('GET', `/knowledge/units${tail ? `?${tail}` : ''}`).then(listOf);
   }
   /** 单元详情：内容、权限清单、贡献者（只列同意了复用的人）。 */
   knowledgeUnit(unitId: number) {
@@ -2302,7 +2307,7 @@ export class PlatformClient {
   }
   /** 运营：按状态列单元（默认待复核）。 */
   adminKnowledgeUnits(status: 'active' | 'needs_review' | 'retired' = 'needs_review') {
-    return this.request<ReusableUnit[]>('GET', `/admin/knowledge/units?status=${status}`);
+    return this.request<ReusableUnit[]>('GET', `/admin/knowledge/units?status=${status}`).then(listOf);
   }
   /** 运营：复核后重新启用（版本 +1、验证从头算）或下线。 */
   setKnowledgeUnitStatus(unitId: number, status: 'active' | 'retired', note: string) {
@@ -2326,7 +2331,7 @@ export class PlatformClient {
        *  所以读到的不一定是成功案例，界面必须把它显示出来。 */
       outcome: string;
       has_decomposition: boolean;
-    }>>('GET', `/knowledge/cards${q}`);
+    }>>('GET', `/knowledge/cards${q}`).then(listOf);
   }
   decompositionTemplate(category: string, q = '') {
     return this.request<{ found: boolean; items: DecompositionItem[] }>(
@@ -2336,7 +2341,7 @@ export class PlatformClient {
   categoryDemand() {
     return this.request<Array<{ category: string; open_tasks: number; completed: number; gmv_cents: number; suppliers: number }>>(
       'GET', '/knowledge/category-demand',
-    );
+    ).then(listOf);
   }
   /** TAX-022 只开**平台服务费**那部分：执行者的劳务报酬平台没有开票资格，
    *  含糊其辞地「帮你开全额发票」是虚开，不是服务。 */
@@ -2349,7 +2354,7 @@ export class PlatformClient {
     }>('POST', '/finance/invoices', { contract_id: contractId, title, tax_no: taxNo });
   }
   myInvoices() {
-    return this.request<InvoiceRow[]>('GET', '/finance/invoices');
+    return this.request<InvoiceRow[]>('GET', '/finance/invoices').then(listOf);
   }
 }
 

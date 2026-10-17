@@ -1,4 +1,4 @@
-import { apiErrorText, formatDate, type FollowListItem, type PersonalSpace, type OwnSpace, type SpaceTrackRecord, type SpaceItem, type SpaceSummary } from '@platform/core';
+import { hasLists, MALFORMED_TEXT, apiErrorText, formatDate, type FollowListItem, type PersonalSpace, type OwnSpace, type SpaceTrackRecord, type SpaceItem, type SpaceSummary } from '@platform/core';
 import { CapabilityCard, InfluenceCard } from '../Profiles';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -55,7 +55,7 @@ export function PublicSpace() {
   // CNT-022 关注状态**从服务端读**。`viewer_following` 为 null 表示「没登录所以不知道」，
   // 与「登录了但没关注」是两件事——合成一个 false 会给游客画一个点下去才发现要登录的按钮。
   const [stats, setStats] = useState<{ followers: number; viewer_following: boolean | null } | null>(null);
-  useEffect(() => { let live = true; setSpace(null); setError(''); setStats(null); void client.personalSpace(Number(id)).then(s => { if (live) setSpace(s); }).catch(e => { if (live) setError(apiErrorText(e)); }); void client.followStats(Number(id)).then(r => { if (live) setStats({ followers: r.followers, viewer_following: r.viewer_following }); }).catch(() => {}); return () => { live = false; }; }, [client, id]);
+  useEffect(() => { let live = true; setSpace(null); setError(''); setStats(null); void client.personalSpace(Number(id)).then(s => { if (!live) return; if (hasLists(s, 'items')) setSpace(s); else setError(MALFORMED_TEXT); }).catch(e => { if (live) setError(apiErrorText(e)); }); void client.followStats(Number(id)).then(r => { if (live) setStats({ followers: r.followers, viewer_following: r.viewer_following }); }).catch(() => {}); return () => { live = false; }; }, [client, id]);
   async function toggleFollow() {
     if (!hasToken) { nav(`/login?next=${encodeURIComponent(`/people/${id}`)}`); return; }
     if (!stats) return;
@@ -94,7 +94,7 @@ function TrackRecord({ record }: { record: SpaceTrackRecord }) {
 
 export function EditSpace() {
   const { client } = useApp(); const [space, setSpace] = useState<OwnSpace | null>(null); const [error, setError] = useState(''); const [saved, setSaved] = useState(''); const [busy, setBusy] = useState(false); const [dirty, setDirty] = useState(false);
-  useEffect(() => { let alive = true; void client.ownSpace().then(s => { if (alive) setSpace(s); }).catch(e => { if (alive) setError(apiErrorText(e)); }); return () => { alive = false; }; }, [client]);
+  useEffect(() => { let alive = true; void client.ownSpace().then(s => { if (!alive) return; if (hasLists(s, 'items')) setSpace(s); else setError(MALFORMED_TEXT); }).catch(e => { if (alive) setError(apiErrorText(e)); }); return () => { alive = false; }; }, [client]);
   useEffect(() => { function warn(e: BeforeUnloadEvent) { if (dirty) { e.preventDefault(); e.returnValue = ''; } } window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn); }, [dirty]);
   function change(patch: Partial<OwnSpace>) { setSpace(s => s ? { ...s, ...patch } : s); setDirty(true); setSaved(''); }
   function itemChange(i: number, patch: Partial<SpaceItem>) { if (space) change({ items: space.items.map((item, n) => n === i ? { ...item, ...patch } : item) }); }
@@ -129,6 +129,7 @@ export function FollowList() {
       const r = tab === 'followers'
         ? await client.followers(Number(id), after)
         : await client.following(Number(id), after);
+      if (!hasLists(r, 'items')) { setError(MALFORMED_TEXT); return; }
       setItems((old) => (after ? [...old, ...r.items] : r.items));
       setCursor(r.next_cursor);
     } catch (e) {

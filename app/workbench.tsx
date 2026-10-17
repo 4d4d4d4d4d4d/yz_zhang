@@ -3,6 +3,7 @@
 // 个人门户不只对外展示，也要能管自己的事。手机上这一页最常用的是：
 // 看今天要做什么、勾掉一项清单、记一笔进展、让助手把一件事拆开。
 import {
+  hasLists, MALFORMED_TEXT,
   apiErrorText, fmtYuan, formatDateTime, millisUntil,
   type PlatformClient, type WbItem, type WbItemDetail, type WbLog, type WbMemory, type WbOverview,
   type AssistantCosts, type WbRoutine, type WbRoutineHealth, type WbRunStatus, type WbStatus, type WbStep, type NbMethod, type NbReference,
@@ -80,6 +81,10 @@ function Today({ client, version, open }: { client: PlatformClient; version: num
   useEffect(() => { client.workbenchOverview().then(setOv).catch((e) => setError(apiErrorText(e))); }, [client, version]);
   if (error) return <Text style={s.error}>{error}</Text>;
   if (!ov) return <Text style={s.muted}>正在加载…</Text>;
+  // APP-093：概览不像样时这一块说明原因，工作台的其他标签照常能用
+  if (!hasLists(ov, 'overdue', 'today', 'doing', 'blocked') || !hasLists(ov.platform, 'to_choose', 'to_accept', 'executing')) {
+    return <Text style={s.error}>{MALFORMED_TEXT}</Text>;
+  }
   const p = ov.platform;
   const sections: [string, WbItem[]][] = [['已逾期', ov.overdue], ['今天到期', ov.today], ['进行中', ov.doing], ['卡住了', ov.blocked]];
   return (
@@ -94,7 +99,7 @@ function Today({ client, version, open }: { client: PlatformClient; version: num
           {rows.map((i) => <Row key={i.id} item={i} open={open} />)}
         </View>
       ))}
-      {ov.counts.open === 0 && <Text style={s.muted}>手上没有未完成的事。</Text>}
+      {ov.counts?.open === 0 && <Text style={s.muted}>手上没有未完成的事。</Text>}
     </View>
   );
 }

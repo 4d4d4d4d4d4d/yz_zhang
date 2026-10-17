@@ -1,4 +1,4 @@
-import { apiErrorText, fmtYuan, formatDateTime, type AgreementStatus, type CertificationApplicationView, type InvitationItem, type SensitiveScope, type WeeklySlot } from '@platform/core';
+import { hasLists, apiErrorText, fmtYuan, formatDateTime, type AgreementStatus, type CertificationApplicationView, type InvitationItem, type SensitiveScope, type WeeklySlot } from '@platform/core';
 import { CapabilityCard, SkillHints, SkillSuggestions } from '../Profiles';
 import { compressToBase64 } from '../PhotoPicker';
 import { useCallback, useEffect, useState } from 'react';
@@ -204,6 +204,7 @@ function PrivacyConsents() {
   );
   useEffect(() => { void load(); }, [load]);
   if (!status) return null;
+  if (!hasLists(status, 'documents', 'sensitive_scopes')) return null;   // APP-093：不像样就不画这一块
 
   const stale = status.documents.filter((d) => d.needs_reconsent);
   const row = (s: SensitiveScope) => (

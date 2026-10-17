@@ -1,4 +1,5 @@
 import {
+  hasLists, MALFORMED_TEXT,
   apiErrorText, fmtYuan, formatDateTime, localInputToServerTime, millisUntil, serverTimeToLocalInput,
   type WbItem, type WbItemDetail, type WbLog, type WbMemory, type WbOverview, type WbProject,
   type AssistantCosts, type WbRoutine, type WbRoutineHealth, type WbRoutineInput, type WbRoutineRun, type WbRunStatus, type WbStatus, type WbStep,
@@ -142,6 +143,9 @@ function Today({ version, open }: { version: number; open: (id: number) => void 
   useEffect(() => { client.workbenchOverview().then(setOv).catch((e) => setError(apiErrorText(e))); }, [client, version]);
   if (error) return <p className="error">{error}</p>;
   if (!ov) return <p className="muted">正在加载…</p>;
+  // APP-093：概览不像样（{}、少了列表）时这一块说明原因，工作台的其他标签照常能用
+  if (!hasLists(ov, 'overdue', 'today', 'doing', 'blocked', 'stale', 'projects')
+      || !hasLists(ov.platform, 'to_choose', 'to_accept', 'executing')) return <p className="error">{MALFORMED_TEXT}</p>;
   const sections: [string, WbItem[]][] = [['已逾期', ov.overdue], ['今天到期', ov.today], ['进行中', ov.doing], ['卡住了', ov.blocked],
     ['超过 7 天没动静', ov.stale]];
   const p = ov.platform;
@@ -161,7 +165,7 @@ function Today({ version, open }: { version: number; open: (id: number) => void 
       {sections.filter(([, rows]) => rows.length).map(([label, rows]) => (
         <div className="card" key={label}><h3>{label}（{rows.length}）</h3><ul className="list">{rows.map((i) => <ItemRow key={i.id} item={i} open={open} />)}</ul></div>
       ))}
-      {ov.counts.open === 0 && <div className="card"><p className="muted">手上没有未完成的事。上面加一条，或者去「助手」里设一个每天早上的概览。</p></div>}
+      {ov.counts?.open === 0 && <div className="card"><p className="muted">手上没有未完成的事。上面加一条，或者去「助手」里设一个每天早上的概览。</p></div>}
       {ov.projects.length > 0 && (
         <div className="card">
           <h3>项目进度</h3>

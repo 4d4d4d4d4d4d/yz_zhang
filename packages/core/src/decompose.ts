@@ -85,3 +85,14 @@ export function visitShortfall(v: Pick<TaskVisits, 'planned' | 'reported' | 'mis
 export function asList<T>(x: unknown): T[] {
   return Array.isArray(x) ? (x as T[]) : [];
 }
+
+/** APP-093（V213）对象响应像不像样：是对象，且点名的字段都是数组。
+ *  列表接口的畸形响应已在 SDK 里收成空表；对象响应（钱包代扣、工作台概览、个人空间……）里套的列表要页面自己看一眼，
+ *  不像样就只让这一块说明原因，而不是整页换成「这一页出错了」。 */
+export function hasLists(x: unknown, ...keys: string[]): boolean {
+  if (!x || typeof x !== 'object' || Array.isArray(x)) return false;
+  return keys.every((k) => Array.isArray((x as Record<string, unknown>)[k]));
+}
+
+/** 对象响应不像样时这一块显示的话：说清为什么、怎么办。两端同一句。 */
+export const MALFORMED_TEXT = '这一块的数据格式不对，暂时显示不了。刷新一下试试；一直这样请联系客服。';

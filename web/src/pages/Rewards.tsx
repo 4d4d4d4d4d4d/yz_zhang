@@ -1,5 +1,5 @@
 // GRW 用户侧运营页：新人任务进度 / 我的券 / 领券 / 邀请战绩。
-import { fmtYuan, formatDate, type CouponTemplate, type MyCoupon } from '@platform/core';
+import { asList, hasLists, fmtYuan, formatDate, type CouponTemplate, type MyCoupon } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 
@@ -40,9 +40,9 @@ export default function Rewards() {
         client.availableCoupons(),
         client.myReferrals(),
       ]);
-      setNewcomer(n);
-      setMine(m.coupons);
-      setOffers(o.coupons);
+      setNewcomer(hasLists(n, 'steps') ? n : null);
+      setMine(asList<MyCoupon>(m?.coupons));
+      setOffers(asList<CouponTemplate>(o?.coupons));
       setRef(r);
     } catch (e) {
       setError(e instanceof Error ? e.message : '加载失败');

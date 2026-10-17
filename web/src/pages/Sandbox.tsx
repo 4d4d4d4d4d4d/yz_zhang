@@ -1,4 +1,5 @@
 import {
+  hasLists,
   LOCAL_SKILL_NAMES, REDACT_NAMES, apiErrorText, askLocal, redact, runLocal,
   type LocalResult, type LocalSkill, type SandboxModelList, type SandboxState,
 } from '@platform/core';
@@ -34,7 +35,7 @@ export default function Sandbox() {
       // 服务端记着开着而这台设备没开：以开着为准（更保守）
       if (s.enabled && !readSandbox()) { writeSandbox(true); setLocal(true); }
     }).catch((e) => setError(apiErrorText(e)));
-    client.sandboxModels().then(setCatalog).catch(() => setCatalog(null));
+    client.sandboxModels().then((c) => setCatalog(hasLists(c, 'items') ? c : null)).catch(() => setCatalog(null));
   }, [client]);
 
   async function toggle() {

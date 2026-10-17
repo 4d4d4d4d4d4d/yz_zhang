@@ -1,4 +1,5 @@
 import {
+  asList,
   apiErrorText, fmtYuan, formatDateTime,
   type NbAnswer, type NbMethod, type NbMethodDraft, type NbNote, type NbNoteBrief, type NbSummary, type NbTodoDraft,
 } from '@platform/core';
@@ -58,7 +59,7 @@ export default function Notebook() {
       {error && <p className="error">{error}</p>}
       {(tab === 'inbox' || tab === 'all') && <Capture onAdded={refresh} />}
       {(tab === 'inbox' || tab === 'all') && (
-        <Notes key={tab} inbox={tab === 'inbox'} tags={summary?.tags.map((t) => t.tag) ?? []} version={version}
+        <Notes key={tab} inbox={tab === 'inbox'} tags={asList<{ tag: string }>(summary?.tags).map((t) => t.tag)} version={version}
           open={(id) => go({ note: id })} onDistilled={() => { refresh(); go({ tab: 'methods' }); }} />
       )}
       {tab === 'methods' && <Methods version={version} />}

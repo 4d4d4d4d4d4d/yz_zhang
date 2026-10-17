@@ -53,4 +53,4 @@ SDK：`reportRenderError`、`adminClientErrors`、`ClientErrorRow`；后台板�
 
 | 编号 | 内容 | 去向 |
 |---|---|---|
-| APP-095 | 某一页一天内坏的人数超过阈值时提醒运营（接入已有告警） | 欠 |
+| APP-097 | 某一页一天内坏的人数超过阈值时提醒运营（接入已有告警；原记作 APP-095，撞号后改） | 欠 |
