@@ -269,6 +269,7 @@ _ASK_CONTRACT = re.compile(r"合同|条款|协议")
 _ASK_NEARBY = re.compile(r"附近|有什么单|接单|有活|顺路")
 _ASK_QUOTE = re.compile(r"报价|多少钱|价格|报多少|行情")
 _ASK_BRIEF = re.compile(r"需求|甲方|客户|brief|要求|帮我看看|缺什么", re.I)
+_ASK_SCRIPT = re.compile(r"话术|文案|台词|口播|能不能说|这样说|帮我看看|帮我查")
 
 
 def _experience_citations(db: Session, q: str, k: int = 2) -> list[dict]:
@@ -363,6 +364,14 @@ def _tool_citations(db: Session, user_id: int, tools: list[str], q: str) -> list
                     "snippet": ("没写：" + "、".join(r["missing"]) + "。先问甲方：" + "".join(r["questions"][:3]))
                     if r["missing"] else "九项都写到了：可以按这份需求报价、写进验收标准",
                     "source": "需求单九项清单（只看你贴的这段文字）", "valid_until": None, "expired": False, "note_id": None})
+    if "live.script_check" in tools and len(q) >= 15 and _ASK_SCRIPT.search(q):
+        from app.modules.packs.live import script_check
+
+        hits = script_check(q)["hits"]
+        out.append({"kind": "tool", "title": f"话术自查（标出 {len(hits)} 处）",
+                    "snippet": "；".join(f"「{h['word']}」：{h['kind']}，{h['why']}（{h['source']}）" for h in hits[:5])
+                    if hits else "没发现词表里的词；词表只是常见的那几类，具体算不算违规以市场监管部门认定为准",
+                    "source": "话术自查词表（只看你贴的这段文字，不断定违规）", "valid_until": None, "expired": False, "note_id": None})
     return out
 
 

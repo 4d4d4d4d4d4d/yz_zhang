@@ -24,7 +24,7 @@
       "inputs": ["你要找人干的活", "你准备的直播话术或视频文案", "你的问题", "你的笔记（只读你自己的）"],
       "outputs": ["写清楚的任务说明与验收标准草稿", "话术自查清单（指出要改的词与出处）", "同类目成交价参考", "带出处的直播营销常识"],
       "forbidden": ["替你开播、发布视频或发布任务", "替你付款、收款或确认验收", "替你签署任何合作协议", "断定某句话一定合规或商品一定有某种功效", "索要或保管你的店铺账号密码", "给出法律意见"],
-      "tools": ["pack.knowledge", "gig.quote", "workbench.method", "experience.search", "legal.faq", "notebook.search"],
+      "tools": ["pack.knowledge", "live.script_check", "gig.quote", "workbench.method", "experience.search", "legal.faq", "notebook.search"],
       "human_gates": ["money", "publish", "share_personal"],
       "methods": ["post-live-helper", "pre-live-self-check", "account-handover"],
       "knowledge": ["absolute-terms", "live-truthful", "live-age", "price-original", "portrait-consent", "account-permission", "material-license"],
