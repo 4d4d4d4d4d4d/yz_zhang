@@ -348,7 +348,7 @@
 | APP-092 | 两端错误边界 | 已做（V210：Web `RouteBoundary`、App `ScreenBoundary`，183 号） |
 | APP-093 | 页面内块级防护扩到其他页面 | 已做（V213：SDK 列表接口收成空表、`hasLists` / `MALFORMED_TEXT`，Web 全路由不落整页兜底、App 105 条逐屏探针，185 号） |
 | APP-098 | 对象响应的完整运行时校验（按 types.ts 生成校验器） | 欠 |
-| APP-099 | App 任务详情以外的二级块逐块探针 | 欠 |
+| APP-099 | App 任务详情以外的二级块逐块探针 | 已做（V216：App 探针扩到主框架每一屏共 133 条，修了空间发现与 useReduceMotion 两处，189 号） |
 | DOC-020 | 台账编号唯一：63 个编号出现两次（62 个是详情段与逐条索引各一行，APP-095、PAY-044 是撞号） | 已做（V215：harness 检查同一段内同号；APP-095 → APP-097、PAY-044 → PAY-047，188 号） |
 | APP-094 | 渲染错误上报 | 已做（V212：`POST /client-errors`、`GET /admin/client-errors`，两端边界上报，后台「页面出错」，184 号） |
 | APP-097 | 页面坏的人数超阈值时提醒运营（原记作 APP-095，与 136 号的开票入口撞号，V213 改号） | 已做（V214：`POST /analytics/jobs/render-alerts` 每小时，到 `PLATFORM_RENDER_ALERT_PEOPLE` 人给运营站内信，186 号） |

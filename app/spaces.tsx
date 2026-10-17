@@ -52,6 +52,8 @@ export function SpacesDiscoverScreen({ client, onOpen }: {
     setBusy(true); setError('');
     try {
       const r = await client.discoverSpaces(query, after);
+      // APP-099：不像样就说明原因（setRows 的更新函数在渲染时才执行，那时再读 r.items 会把整屏带崩）
+      if (!hasLists(r, 'items')) { setError(MALFORMED_TEXT); return; }
       setRows((old) => (after ? [...old, ...r.items] : r.items));
       setCursor(r.next_cursor);
       setApplied(query);

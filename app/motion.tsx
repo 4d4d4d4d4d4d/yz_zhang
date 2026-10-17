@@ -20,7 +20,8 @@ export function useReduceMotion(): boolean {
   const [reduce, setReduce] = useState(false);
   useEffect(() => {
     let alive = true;
-    AccessibilityInfo.isReduceMotionEnabled?.()
+    // 有的平台（老版本 RN、Web 垫片）这个函数在但不返回 Promise：包一层，取不到照样按 false
+    Promise.resolve(AccessibilityInfo.isReduceMotionEnabled?.())
       .then((v) => { if (alive) setReduce(!!v); })
       .catch(() => { /* 取不到就按 false */ });
     const sub = AccessibilityInfo.addEventListener?.('reduceMotionChanged', setReduce);

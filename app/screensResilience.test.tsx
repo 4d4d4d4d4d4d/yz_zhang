@@ -6,9 +6,12 @@
 import { Component, type ReactNode } from 'react';
 import { render } from '@testing-library/react-native';
 import { PlatformClient, type Me } from '@platform/core';
-import { WalletScreen } from './App';
+import { CooperateHost, DiscoverHost, PublishScreen, WalletScreen } from './App';
+import { DiscoverScreen } from './Discover';
+import { SearchScreen } from './search';
+import { VideoFeedScreen } from './VideoFeed';
 import { MessagesScreen } from './MessagesAndInvites';
-import { MySpaceScreen, PublicSpaceScreen } from './spaces';
+import { MySpaceScreen, PublicSpaceScreen, SpacesDiscoverScreen } from './spaces';
 import { SUB_SCREEN_LABEL, SubScreenHost, type SubScreen } from './TeamCoopDev';
 
 /** 与 ScreenBoundary 一样接住渲染错误；接住了就记下哪一处，断言时报出来（失败信息直接指到出错的组件）。 */
@@ -34,6 +37,14 @@ const SCREENS: Array<[string, (c: PlatformClient) => JSX.Element]> = [
   ['我的空间', (c) => <MySpaceScreen client={c} me={ME} refreshMe={() => {}} onPreview={() => {}} />],
   ['别人的空间', (c) => <PublicSpaceScreen client={c} userId={9} onBack={() => {}} onOpenConversation={() => {}} />],
   ['消息', (c) => <MessagesScreen client={c} initialConversationId={null} />],
+  // APP-099（V216）主框架的另外几屏：发现、合作（含任务列表与发布入口）、发布、搜索、空间发现、视频流
+  ['发现', (c) => <DiscoverHost client={c} baseUrl="" onOpenSpace={() => {}} onOpenTask={() => {}} />],
+  ['合作', (c) => <CooperateHost client={c} onOpen={() => {}} />],
+  ['发布', (c) => <PublishScreen client={c} onDone={() => {}} allowProject />],
+  ['内容流', (c) => <DiscoverScreen client={c} baseUrl="" />],
+  ['搜索', (c) => <SearchScreen client={c} onOpenSpace={() => {}} onOpenTask={() => {}} />],
+  ['空间发现', (c) => <SpacesDiscoverScreen client={c} onOpen={() => {}} />],
+  ['视频流', (c) => <VideoFeedScreen client={c} baseUrl="" />],
   ...(Object.keys(SUB_SCREEN_LABEL) as SubScreen[]).map((k): [string, (c: PlatformClient) => JSX.Element] =>
     [`子页 ${k}`, (c) => <SubScreenHost client={c} screen={k} onBack={() => {}} />]),
 ];

@@ -208,7 +208,7 @@ export default function App() {
  * 新定位里发现的主体是人与作品，而内容消费是其中一种形式。
  * 分段切换比塞进「我的」合理——它们本来就是「发现」这件事。
  */
-function DiscoverHost({ client, baseUrl, onOpenSpace, onOpenTask }: {
+export function DiscoverHost({ client, baseUrl, onOpenSpace, onOpenTask }: {
   client: PlatformClient; baseUrl: string; onOpenSpace: (userId: number) => void;
   onOpenTask: (taskId: number) => void;
 }) {
@@ -239,7 +239,7 @@ function DiscoverHost({ client, baseUrl, onOpenSpace, onOpenTask }: {
  * 发布从 Tab 挪到这里顶部——它是「合作」的一个动作，而不是与合作并列的
  * 一个地方。任务列表与发布表单都没有改。
  */
-function CooperateHost({ client, onOpen }: {
+export function CooperateHost({ client, onOpen }: {
   client: PlatformClient; onOpen: (t: Task) => void;
 }) {
   const [publishing, setPublishing] = useState(false);
