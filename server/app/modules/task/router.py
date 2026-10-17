@@ -1184,8 +1184,10 @@ def _visit_view(task: Task, logs: list[ProgressLog]) -> dict:
         visits.append({"n": n, "id": r.id, "created_at": iso(r.created_at), "done": done,
                        "missed": [i for i in checklist if i not in done], "note": r.content, "images": r.images or [],
                        "at_site_m": r.distance_m})
+    # SCN-136（204 号 spec）几次回报带了到场打卡；线上单或没有任务坐标时打不了卡，是 null（不是 0 次）
+    at_site = None if task.is_remote or task.lat is None else sum(1 for v in visits if v["at_site_m"] is not None)
     return {"task_id": task.id, "planned": task.visits_planned or 0, "checklist": checklist, "reported": len(visits),
-            "missed_total": sum(len(v["missed"]) for v in visits), "visits": visits}
+            "missed_total": sum(len(v["missed"]) for v in visits), "at_site": at_site, "visits": visits}
 
 
 @router.post("/tasks/{task_id}/visits", status_code=201)

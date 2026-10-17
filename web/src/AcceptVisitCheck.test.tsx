@@ -62,3 +62,22 @@ describe('SCN-125 验收前提醒', () => {
     expect(confirmSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('SCN-136 验收确认里写明到场次数', () => {
+  it('回报都齐了但只有一次带了到场打卡：面板写明，确认框也说', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const calls: Call[] = [];
+    open(calls, { ...visits(14, 0), at_site: 1 });
+    expect((await screen.findByLabelText('到场次数')).textContent).toBe('14 次回报里有 1 次带了到场打卡');
+    fireEvent.click(screen.getByText('验收通过（放款）'));
+    await waitFor(() => expect(confirmSpy).toHaveBeenCalled());
+    expect(confirmSpy.mock.calls[0][0]).toContain('14 次回报里有 1 次带了到场打卡');
+    expect(calls.some((c) => c.path === '/tasks/70/accept-delivery')).toBe(false);
+  });
+
+  it('打不了卡的单（at_site 为 null）不写到场次数', async () => {
+    open([], { ...visits(14, 0), at_site: null });
+    await screen.findByText('上门回报 · 14/14 次');
+    expect(screen.queryByLabelText('到场次数')).toBeNull();
+  });
+});

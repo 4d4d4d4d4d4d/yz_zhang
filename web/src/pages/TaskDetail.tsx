@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, reboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, reboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -637,6 +637,8 @@ function VisitsPanel({ task, isExecutor }: { task: Task; isExecutor: boolean }) 
     <div className="card" aria-label="上门回报">
       <h3>上门回报{data ? ` · ${data.reported}${data.planned ? `/${data.planned}` : ''} 次` : ''}</h3>
       {data && data.missed_total > 0 && <p className="error">一共有 {data.missed_total} 项没做（见下面每次的记录）</p>}
+      {/* SCN-136（204 号 spec）几次回报带了到场打卡 */}
+      {visitPresence(data) && <p className="muted" aria-label="到场次数">{visitPresence(data)}</p>}
       {/* SCN-125 发单人验收前看一眼差多少 */}
       {!isExecutor && task.status === 'pending_acceptance' && visitShortfall(data) && (
         <p className="error" aria-label="验收前提醒">{visitShortfall(data)}</p>

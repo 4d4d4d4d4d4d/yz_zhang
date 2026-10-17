@@ -1,6 +1,6 @@
 // SCN-116 多天名额按天汇总的那句话（174 号 spec）：两端同一份。
 import { describe, expect, it } from 'vitest';
-import { daySummaryLine, daysStillShort, hasChildTasks, shiftLabel, visitShortfall } from './decompose';
+import { daySummaryLine, daysStillShort, hasChildTasks, shiftLabel, visitPresence, visitShortfall } from './decompose';
 
 const d = (date: string, slots: number, filled: number, open: number, done = 0, closed = 0) =>
   ({ date, slots, filled, open, done, closed });
@@ -42,5 +42,23 @@ describe('SCN-116 多天名额按天汇总', () => {
     expect(visitShortfall({ planned: 0, reported: 2, missed_total: 0 })).toBe('');
     expect(visitShortfall({ planned: 3, reported: 5, missed_total: 0 })).toBe('');
     expect(visitShortfall(null)).toBe('');
+  });
+});
+
+describe('SCN-136 到场次数', () => {
+  it('一句话：N 次回报里有 M 次带了到场打卡；打不了卡或还没回报是空串', () => {
+    expect(visitPresence({ reported: 3, at_site: 2 })).toBe('3 次回报里有 2 次带了到场打卡');
+    expect(visitPresence({ reported: 3, at_site: null })).toBe('');
+    expect(visitPresence({ reported: 0, at_site: 0 })).toBe('');
+    expect(visitPresence({ reported: 3 })).toBe('');
+    expect(visitPresence(null)).toBe('');
+  });
+  it('验收前提醒：有回报没带到场打卡时说一句；都到场了、打不了卡的不说', () => {
+    expect(visitShortfall({ planned: 3, reported: 3, missed_total: 0, at_site: 1 }))
+      .toBe('3 次回报里有 1 次带了到场打卡。验收前可以先问问接单的人。');
+    expect(visitShortfall({ planned: 3, reported: 3, missed_total: 0, at_site: 3 })).toBe('');
+    expect(visitShortfall({ planned: 3, reported: 3, missed_total: 0, at_site: null })).toBe('');
+    expect(visitShortfall({ planned: 4, reported: 3, missed_total: 1, at_site: 3 }))
+      .toBe('计划上门 4 次，回报了 3 次；回报里一共有 1 项没做。验收前可以先问问接单的人。');
   });
 });

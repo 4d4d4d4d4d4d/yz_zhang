@@ -81,12 +81,21 @@ export function gigWhenLabel(c: { work_date?: string | null; shift_start?: strin
 
 /** SCN-125 验收前的一句提醒（179 号 spec）：上门回报比计划少、或有没做的项时说清差多少；都齐了是空串。
  *  只是提醒，不拦验收——钱的事由发单人自己定。两端同一句。 */
-export function visitShortfall(v: Pick<TaskVisits, 'planned' | 'reported' | 'missed_total'> | null | undefined): string {
+export function visitShortfall(v: Pick<TaskVisits, 'planned' | 'reported' | 'missed_total' | 'at_site'> | null | undefined): string {
   if (!v) return '';
   const parts: string[] = [];
   if (v.reported < v.planned) parts.push(`计划上门 ${v.planned} 次，回报了 ${v.reported} 次`);
   if (v.missed_total > 0) parts.push(`回报里一共有 ${v.missed_total} 项没做`);
+  // SCN-136（204 号 spec）有几次回报没带到场打卡：只说事实，不说他没去（可能只是没开定位）
+  const presence = visitPresence(v);
+  if (presence && (v.at_site ?? 0) < v.reported) parts.push(presence);
   return parts.length ? `${parts.join('；')}。验收前可以先问问接单的人。` : '';
+}
+
+/** SCN-136 「N 次回报里有 M 次带了到场打卡」；打不了卡的单（线上、没有坐标）或还没回报时是空串。两端同一句。 */
+export function visitPresence(v: Pick<TaskVisits, 'reported' | 'at_site'> | null | undefined): string {
+  if (!v || typeof v.at_site !== 'number' || !(v.reported > 0)) return '';
+  return `${v.reported} 次回报里有 ${v.at_site} 次带了到场打卡`;
 }
 
 /** APP-090（182 号 spec）列表响应不是数组时当作空表：详情页的一块拿到 {} / null 不许把整页带崩。两端同一个。 */

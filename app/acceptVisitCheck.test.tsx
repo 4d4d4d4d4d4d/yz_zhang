@@ -44,3 +44,15 @@ describe('SCN-125 App 验收前提醒', () => {
     await waitFor(() => expect(calls.some((c) => c.path === '/tasks/7/accept-delivery')).toBe(true));
   });
 });
+
+describe('SCN-136 App 验收确认里写明到场次数', () => {
+  it('回报都齐了但只有一次到场：第一下摊开，回报块里也写明', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({ '/contracts/by-task/7': CONTRACT, '/tasks/7/visits': { ...visits(14, 0), at_site: 1 } }, calls);
+    render(<TaskDetailScreen client={client} me={REQUESTER} task={TASK} onBack={() => {}} onChanged={async () => {}} />);
+    expect(await screen.findByLabelText('到场次数')).toBeTruthy();
+    fireEvent.press(screen.getByText('验收通过（放款）'));
+    expect(await screen.findByText('14 次回报里有 1 次带了到场打卡。验收前可以先问问接单的人。')).toBeTruthy();
+    expect(calls.some((c) => c.path === '/tasks/7/accept-delivery')).toBe(false);
+  });
+});

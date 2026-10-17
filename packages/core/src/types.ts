@@ -724,10 +724,11 @@ export interface TaskVisits {
   checklist: string[];
   reported: number;
   missed_total: number;
+  /** SCN-136 几次回报带了到场打卡；线上单或没有任务坐标时是 null */
+  at_site?: number | null;
   visits: TaskVisit[];
 }
 
-/** SCN-118 一次报多天的结果：报上了哪几天（各落在哪个名额），哪几天为什么没报 */
 /** SCN-138 改了某一天的时段：哪些名额改了、哪些有人接了没改（要走变更单） */
 export interface DayShiftChangeResult {
   date: string;
@@ -749,6 +750,7 @@ export interface ReboostDayResult {
   budget_cents: number[];
 }
 
+/** SCN-118 一次报多天的结果：报上了哪几天（各落在哪个名额），哪几天为什么没报 */
 export interface ApplyDaysResult {
   applied: Array<{ date: string; task_id: number; application_id: number }>;
   skipped: Array<{ date: string; reason: string }>;

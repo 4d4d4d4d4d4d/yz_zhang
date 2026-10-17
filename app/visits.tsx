@@ -1,6 +1,6 @@
 // SCN-120 App 上的上门回报（176 号 spec）：接单人每次上门勾清单、写备注、拍一张；双方看得到计划几次、回报几次、每次漏了什么。
 // 与 web 的 VisitsPanel 同一份接口与同一句话；拍照沿用资质页的取图方式（压到 0.5 质量、超过 2MB 不传）。
-import { apiErrorText, formatDateTime, type PlatformClient, type Task, type TaskVisits } from '@platform/core';
+import { apiErrorText, formatDateTime, visitPresence, type PlatformClient, type Task, type TaskVisits } from '@platform/core';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -57,6 +57,8 @@ export function VisitsBlock({ client, task, isExecutor, locate }: {
     <View style={styles.card} accessibilityLabel="上门回报">
       <Text style={styles.title}>上门回报{data ? ` · ${data.reported}${data.planned ? `/${data.planned}` : ''} 次` : ''}</Text>
       {!!data && data.missed_total > 0 && <Text style={styles.warn}>一共有 {data.missed_total} 项没做（见下面每次的记录）</Text>}
+      {/* SCN-136 几次回报带了到场打卡 */}
+      {!!visitPresence(data) && <Text accessibilityLabel="到场次数">{visitPresence(data)}</Text>}
       {!!data && Array.isArray(data.visits) && data.visits.map((v) => (
         <Text key={v.id} style={styles.row}>
           第 {v.n} 次 · {formatDateTime(v.created_at)}：{v.done.length ? `已做：${v.done.join('、')}` : '清单没勾'}
