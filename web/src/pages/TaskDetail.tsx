@@ -541,6 +541,7 @@ function VisitsPanel({ task, isExecutor }: { task: Task; isExecutor: boolean }) 
           <span className="muted">
             {v.done.length ? `已做：${v.done.join('、')}` : '清单没勾'}{v.missed.length ? `；没做：${v.missed.join('、')}` : ''}
             {v.note ? ` · ${v.note}` : ''}{v.images.length ? ` · ${v.images.length} 张照片` : ''}
+            {typeof v.at_site_m === 'number' ? ` · 到场（距 ${v.at_site_m} 米）` : ''}
           </span>
         </div>
       ))}

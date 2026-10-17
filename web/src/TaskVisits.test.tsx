@@ -71,3 +71,14 @@ describe('SCN-120 上门回报', () => {
     expect(screen.queryByLabelText('上门回报')).toBeNull();
   });
 });
+
+describe('SCN-124 网页上看得到哪次回报是到场交的', () => {
+  it('带了位置的回报写明到场与距离，没带的不写', async () => {
+    const v = { ...VISITS, reported: 2, visits: [{ ...VISITS.visits[0], at_site_m: 35 },
+      { n: 2, id: 6, created_at: '2030-01-05T10:00:00Z', done: ['喂食'], missed: [], note: '', images: [], at_site_m: null }] };
+    open('/tasks/70', [], { 'GET /tasks/70': TASK, 'GET /tasks/70/visits': v });
+    const panel = await screen.findByLabelText('上门回报');
+    await waitFor(() => expect(panel.textContent).toContain('猫很精神 · 到场（距 35 米）'));
+    expect(panel.textContent!.match(/到场（距/g)).toHaveLength(1);
+  });
+});

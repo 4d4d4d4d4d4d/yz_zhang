@@ -35,7 +35,7 @@ def test_each_visit_report_tells_the_poster_what_was_done_and_missed(client, req
     t = _visit_task(client, requester, worker)
     r = client.post(f"{API}/{t['id']}/visits", json={"done": ["铲屎", "喂食"], "note": "猫很精神"}, headers=auth(worker))
     assert r.status_code == 201, r.text
-    assert r.json() == {"n": 1, "id": r.json()["id"], "done": ["喂食", "铲屎"], "missed": ["换水"]}, "按清单顺序"
+    assert r.json() == {"n": 1, "id": r.json()["id"], "done": ["喂食", "铲屎"], "missed": ["换水"], "at_site_m": None}, "按清单顺序；没带位置不算到场"
     client.post(f"{API}/{t['id']}/visits", json={"done": CHECK}, headers=auth(worker))
     notes = client.get("/api/v1/notifications", headers=auth(requester)).json()
     first = next(n for n in notes if n["title"] == "第 1/14 次上门回报")

@@ -655,8 +655,9 @@ export class PlatformClient {
     return this.request<ClientErrorRow[]>('GET', `/admin/client-errors?days=${days}`).then(listOf);
   }
   /** SCN-120 一次上门回报（只有接单的人、只在执行中）：勾清单里做了的、备注、照片 */
-  reportVisit(taskId: number, body: { done: string[]; note?: string; images?: string[] }) {
-    return this.request<{ n: number; id: number; done: string[]; missed: string[] }>('POST', `/tasks/${taskId}/visits`, body);
+  /** SCN-124 带上 lat / lng 就顺带到场打卡（与打卡同一套规则：位置同意、打卡半径）；不带照旧 */
+  reportVisit(taskId: number, body: { done: string[]; note?: string; images?: string[]; lat?: number; lng?: number }) {
+    return this.request<{ n: number; id: number; done: string[]; missed: string[]; at_site_m: number | null }>('POST', `/tasks/${taskId}/visits`, body);
   }
   /** SCN-120 计划几次、回报了几次、每次做了什么和漏了什么（成交双方） */
   taskVisits(taskId: number) {

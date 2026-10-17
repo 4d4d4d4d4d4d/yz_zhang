@@ -705,6 +705,8 @@ export interface TaskVisit {
   missed: string[];
   note: string;
   images: string[];
+  /** SCN-124 这次回报带了位置时离任务地点多远（米）；没带是 null */
+  at_site_m: number | null;
 }
 
 /** SCN-120 这单的上门回报：计划几次、回报了几次、一共漏了几项 */

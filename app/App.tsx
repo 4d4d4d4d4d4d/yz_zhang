@@ -458,7 +458,7 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       {/* SCN-120 一单多次上门的逐次回报（176 号 spec）：成交双方 */}
       {hasVisits(task) && meId !== null && (meId === task.creator_id || meId === task.executor_id)
         && !['draft', 'published'].includes(task.status) && (
-        <VisitsBlock client={client} task={task} isExecutor={meId === task.executor_id} />
+        <VisitsBlock client={client} task={task} isExecutor={meId === task.executor_id} locate={currentPosition} />
       )}
       {/* PROF-103 这单的画像（126 号 spec） */}
       {task.status !== 'draft' && <TaskProfileBlock client={client} taskId={task.id} isCreator={task.creator_id === me?.id} />}

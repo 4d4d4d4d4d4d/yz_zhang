@@ -163,6 +163,8 @@ class ProgressLog(Base):
     images: Mapped[list] = mapped_column(JSON, default=list)
     # SCN-120 上门回报（kind=visit）这一次做了清单里的哪几项
     checked: Mapped[list] = mapped_column(JSON, default=list)
+    # SCN-124 打卡 / 带位置的上门回报离任务地点多远（米）。坐标在任务结束后清掉（GEO），距离留着当履约证据
+    distance_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

@@ -12,8 +12,13 @@ export function hasVisits(task: Pick<Task, 'visits_planned' | 'visit_checklist'>
   return (task.visits_planned ?? 0) > 0 || (task.visit_checklist ?? []).length > 0;
 }
 
-export function VisitsBlock({ client, task, isExecutor }: { client: PlatformClient; task: Task; isExecutor: boolean }) {
+export function VisitsBlock({ client, task, isExecutor, locate }: {
+  client: PlatformClient; task: Task; isExecutor: boolean;
+  /** SCN-124 取当前位置（App 主框架传进来；拿不到抛错）。没有就不显示「带上位置」 */
+  locate?: () => Promise<{ lat: number; lng: number }>;
+}) {
   const [data, setData] = useState<TaskVisits | null>(null);
+  const [withLocation, setWithLocation] = useState(false);
   const [done, setDone] = useState<string[]>([]);
   const [note, setNote] = useState('');
   const [images, setImages] = useState<string[]>([]);
@@ -40,7 +45,9 @@ export function VisitsBlock({ client, task, isExecutor }: { client: PlatformClie
   async function submit() {
     setError('');
     try {
-      await client.reportVisit(task.id, { done, note, images });
+      // SCN-124 勾了「带上位置」才取定位：与到场打卡同一套规则，超出范围时服务端会写明差多远
+      const pos = withLocation && locate ? await locate() : null;
+      await client.reportVisit(task.id, { done, note, images, ...(pos ? { lat: pos.lat, lng: pos.lng } : {}) });
       setDone([]); setNote(''); setImages([]);
       load();
     } catch (e) { setError(apiErrorText(e)); }
@@ -54,6 +61,7 @@ export function VisitsBlock({ client, task, isExecutor }: { client: PlatformClie
         <Text key={v.id} style={styles.row}>
           第 {v.n} 次 · {formatDateTime(v.created_at)}：{v.done.length ? `已做：${v.done.join('、')}` : '清单没勾'}
           {v.missed.length ? `；没做：${v.missed.join('、')}` : ''}{v.note ? ` · ${v.note}` : ''}{v.images.length ? ` · ${v.images.length} 张照片` : ''}
+          {typeof v.at_site_m === 'number' ? ` · 到场（距 ${v.at_site_m} 米）` : ''}
         </Text>
       ))}
       {isExecutor && task.status === 'in_progress' && (
@@ -68,6 +76,12 @@ export function VisitsBlock({ client, task, isExecutor }: { client: PlatformClie
           <TextInput style={styles.input} accessibilityLabel="这次的备注" placeholder="这次的备注（宠物状态、异常情况…）"
                      value={note} onChangeText={setNote} />
           <TouchableOpacity onPress={() => void shoot()}><Text style={styles.link}>拍一张（已 {images.length} 张）</Text></TouchableOpacity>
+          {!!locate && !task.is_remote && (
+            <TouchableOpacity accessibilityRole="checkbox" accessibilityLabel="带上当前位置" accessibilityState={{ checked: withLocation }}
+                              onPress={() => setWithLocation((x) => !x)}>
+              <Text style={styles.row}>{withLocation ? '☑ ' : '☐ '}带上当前位置（证明到场，和到场打卡一样）</Text>
+            </TouchableOpacity>
+          )}
           {!!error && <Text style={styles.error}>{error}</Text>}
           <TouchableOpacity style={styles.button} onPress={() => void submit()}><Text style={styles.buttonText}>交这次的上门回报</Text></TouchableOpacity>
         </>

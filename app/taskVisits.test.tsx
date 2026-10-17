@@ -2,7 +2,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { PlatformClient, type Task } from '@platform/core';
 import { PublishScreen, TaskDetailScreen } from './App';
-import { hasVisits } from './visits';
+import { VisitsBlock, hasVisits } from './visits';
 
 type Call = { method: string; path: string; body: unknown };
 function makeClient(routes: Record<string, unknown>, calls: Call[] = []) {
@@ -60,5 +60,37 @@ describe('SCN-120 App 上门回报', () => {
     expect(hasVisits({ visits_planned: 0, visit_checklist: [] })).toBe(false);
     expect(hasVisits({ visits_planned: 3 })).toBe(true);
     expect(hasVisits({ visit_checklist: ['喂食'] })).toBe(true);
+  });
+});
+
+describe('SCN-124 App 上门回报带上到场打卡', () => {
+  it('勾了「带上当前位置」才取定位并随回报交上去；列表写明到场与距离', async () => {
+    const calls: Call[] = [];
+    const v = { ...VISITS, visits: [{ ...VISITS.visits[0], at_site_m: 35 }] };
+    const client = makeClient({ 'GET /tasks/70/visits': v, 'POST /tasks/70/visits': { n: 2, id: 6, done: [], missed: [], at_site_m: 12 } }, calls);
+    const locate = jest.fn(async () => ({ lat: 31.23, lng: 121.47 }));
+    render(<VisitsBlock client={client} task={TASK({ lat: 31.23, lng: 121.47 })} isExecutor locate={locate} />);
+    expect(await screen.findByText(/· 到场（距 35 米）/)).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('这次的备注'), '到了');
+    fireEvent.press(screen.getByText('交这次的上门回报'));
+    await waitFor(() => expect(calls.filter((c) => c.method === 'POST').length).toBe(1));
+    expect(locate).not.toHaveBeenCalled();
+    expect(calls.find((c) => c.method === 'POST')!.body).toEqual({ done: [], note: '到了', images: [] });
+    fireEvent.press(screen.getByLabelText('带上当前位置'));
+    fireEvent.changeText(screen.getByLabelText('这次的备注'), '又到了');
+    fireEvent.press(screen.getByText('交这次的上门回报'));
+    await waitFor(() => expect(calls.filter((c) => c.method === 'POST').length).toBe(2));
+    expect(calls.filter((c) => c.method === 'POST')[1].body).toEqual({ done: [], note: '又到了', images: [], lat: 31.23, lng: 121.47 });
+  });
+
+  it('线上任务或没有定位能力时不显示这一项', async () => {
+    const client = makeClient({ 'GET /tasks/70/visits': VISITS });
+    const { unmount } = render(<VisitsBlock client={client} task={TASK({ is_remote: true })} isExecutor locate={async () => ({ lat: 1, lng: 1 })} />);
+    expect(await screen.findByText('交这次的上门回报')).toBeTruthy();
+    expect(screen.queryByLabelText('带上当前位置')).toBeNull();
+    unmount();
+    render(<VisitsBlock client={client} task={TASK()} isExecutor />);
+    expect(await screen.findByText('交这次的上门回报')).toBeTruthy();
+    expect(screen.queryByLabelText('带上当前位置')).toBeNull();
   });
 });

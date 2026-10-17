@@ -88,6 +88,9 @@ class VisitIn(BaseModel):
     done: list[str] = Field(default_factory=list, max_length=8)
     note: str = Field(default="", max_length=500)
     images: list[str] = Field(default_factory=list, max_length=9)
+    # SCN-124（195 号 spec）顺带到场打卡：给了就按打卡的规则校验（位置同意、打卡半径），不给照旧
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
 
 
 class ProgressIn(BaseModel):
@@ -973,7 +976,7 @@ def checkin(
     db.add(
         ProgressLog(
             task_id=task_id, user_id=user.id, kind="checkin",
-            content=f"到场打卡（距离 {distance:.0f} 米）", lat=body.lat, lng=body.lng,
+            content=f"到场打卡（距离 {distance:.0f} 米）", lat=body.lat, lng=body.lng, distance_m=round(distance),
         )
     )
     return {"ok": True, "distance_m": round(distance)}
@@ -985,7 +988,8 @@ def _visit_view(task: Task, logs: list[ProgressLog]) -> dict:
     for n, r in enumerate(logs, start=1):
         done = [i for i in checklist if i in (r.checked or [])]
         visits.append({"n": n, "id": r.id, "created_at": iso(r.created_at), "done": done,
-                       "missed": [i for i in checklist if i not in done], "note": r.content, "images": r.images or []})
+                       "missed": [i for i in checklist if i not in done], "note": r.content, "images": r.images or [],
+                       "at_site_m": r.distance_m})
     return {"task_id": task.id, "planned": task.visits_planned or 0, "checklist": checklist, "reported": len(visits),
             "missed_total": sum(len(v["missed"]) for v in visits), "visits": visits}
 
@@ -1009,20 +1013,42 @@ def report_visit(task_id: int, body: VisitIn, user: User = Depends(get_current_u
             raise bad_request("图片地址不合法，请通过上传接口获取", "invalid_image_url")
     if not body.done and not body.note.strip() and not body.images:
         raise bad_request("这次上门做了什么：勾清单、写一句备注或附一张照片", "visit_empty")
+    distance = _visit_distance(db, task, user, body)
     n = db.query(ProgressLog).filter(ProgressLog.task_id == task_id, ProgressLog.kind == "visit").count() + 1
     done = [i for i in checklist if i in body.done]
     missed = [i for i in checklist if i not in done]
     log = ProgressLog(task_id=task_id, user_id=user.id, kind="visit", content=body.note.strip(),
-                      images=body.images, checked=done)
+                      images=body.images, checked=done, lat=body.lat, lng=body.lng,
+                      distance_m=round(distance) if distance is not None else None)
     db.add(log)
     db.flush()
     from app.modules.notification.service import notify
 
     planned = f"/{task.visits_planned}" if task.visits_planned else ""
     text = (f"已做：{'、'.join(done)}" if done else "清单一项都没勾") + (f"；没做：{'、'.join(missed)}" if missed else "")
+    if distance is not None:
+        text += f"；到场打卡（距任务地点 {distance:.0f} 米）"
     notify(db, task.creator_id, "task", f"第 {n}{planned} 次上门回报", f"《{task.title}》{text}" +
            (f"。备注：{body.note.strip()[:60]}" if body.note.strip() else ""))
-    return {"n": n, "id": log.id, "done": done, "missed": missed}
+    return {"n": n, "id": log.id, "done": done, "missed": missed,
+            "at_site_m": round(distance) if distance is not None else None}
+
+
+def _visit_distance(db: Session, task: Task, user: User, body: VisitIn) -> float | None:
+    """SCN-124 回报带了位置：与打卡同一套规则。没带返回 None（照旧只是回报，不算到场）。"""
+    if body.lat is None and body.lng is None:
+        return None
+    if body.lat is None or body.lng is None:
+        raise bad_request("位置要经度、纬度一起给；不想带位置就都不填", "visit_location_incomplete")
+    if task.is_remote or task.lat is None:
+        raise bad_request("线上任务无需到场打卡", "no_checkin_needed")
+    from app.modules.legal import consent
+
+    consent.ensure(db, user.id, "location")
+    distance = haversine_m(task.lat, task.lng, body.lat, body.lng)
+    if distance > settings.CHECKIN_RADIUS_M:
+        raise bad_request(f"距任务地点 {distance:.0f} 米，超出打卡范围：到了再交，或者先不带位置交回报", "too_far")
+    return distance
 
 
 @router.get("/tasks/{task_id}/visits")
