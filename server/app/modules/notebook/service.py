@@ -81,6 +81,10 @@ def terms(q: str) -> list[tuple[str, int, int]]:
                 out.extend((tok[i:i + 2], 1, g) for i in range(len(tok) - 1))
         elif len(tok) >= 2:
             out.append((tok, 3, g))
+    # SCN-109（199 号 spec）切完虚词剩下的单个汉字（「和」「事」「样」）几乎哪条笔记里都有：
+    # 查询里还有别的多字词时，单字只算 1 分，免得它们把不相干的笔记顶上来；整个查询只有单字（搜「税」）时照旧
+    if any(len(t) >= 2 for t, _, _ in out):
+        out = [(t, 1 if len(t) == 1 else w, g) for t, w, g in out]   # 非汉字的单字符上面已经丢掉了
     seen, uniq = set(), []
     for t, w, g in out:
         if t not in seen:
