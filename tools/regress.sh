@@ -44,6 +44,12 @@ J="$W/counts"; mkdir -p "$J"
   rc=$?; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：App 类型检查"
   ( cd server && python3 -m scripts.check_frontend_counts --dir "$J" core web && python3 -m scripts.check_frontend_counts --dir "$J" app )
   ( cd server && python3 -m scripts.harness check )
+  # CI-006：CI 上便宜、不要外部依赖的两项本地也跑——沙箱合规态闭环、迁移与模型一致性（SQLite 路径）
+  ( cd server && PLATFORM_DATABASE_URL="sqlite:///$W/sbx.db" python -m scripts.sandbox_check 2>&1 | tail -1; exit "${PIPESTATUS[0]}" )
+  rc=$?; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：沙箱合规态闭环"
+  ( cd server && rm -f "$W/mig.db" && PLATFORM_DATABASE_URL="sqlite:///$W/mig.db" alembic upgrade head >/dev/null 2>&1 \
+    && PLATFORM_DATABASE_URL="sqlite:///$W/mig.db" alembic check 2>&1 | tail -1; exit "${PIPESTATUS[0]}" )
+  rc=$?; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：迁移与模型一致性（SQLite）"
   npm run build:web 2>&1 | tail -1
   rc=${PIPESTATUS[0]}; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：Web 构建"
   ( cd server && timeout 600 python -m scripts.e2e_web 2>&1 | tail -4 )
