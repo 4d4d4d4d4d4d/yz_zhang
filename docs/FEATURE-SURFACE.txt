@@ -1,0 +1,1105 @@
+# 功能面清单（FEAT-001）：只增不减。下线须进 scripts/feature_surface.py 的 RETIRED 并写理由
+api DELETE /api/v1/contents/{content_id}
+api DELETE /api/v1/conversations/{conv_id}/members/{member_id}
+api DELETE /api/v1/decompositions/{dec_id}/nodes/{node_id}
+api DELETE /api/v1/developer/api-keys/{key_id}
+api DELETE /api/v1/developer/webhooks/{webhook_id}
+api DELETE /api/v1/friends/{user_id}
+api DELETE /api/v1/gig/available
+api DELETE /api/v1/gig/places/{place_id}
+api DELETE /api/v1/influence/vouches/{vouch_id}
+api DELETE /api/v1/notebook/methods/{method_id}
+api DELETE /api/v1/notebook/notes/{note_id}
+api DELETE /api/v1/notifications/devices/{token}
+api DELETE /api/v1/opc/entries/{entry_id}
+api DELETE /api/v1/subscriptions/{sub_id}
+api DELETE /api/v1/tasks/{task_id}/bookmark
+api DELETE /api/v1/teams/{team_id}/members/{member_user_id}
+api DELETE /api/v1/users/{user_id}/follow
+api DELETE /api/v1/workbench/items/{item_id}
+api DELETE /api/v1/workbench/memories/{memory_id}
+api DELETE /api/v1/workbench/projects/{project_id}
+api DELETE /api/v1/workbench/routines/{routine_id}
+api DELETE /api/v1/xapp/grants/{grant_id}
+api GET /api/v1/admin/admins
+api GET /api/v1/admin/agents
+api GET /api/v1/admin/aml/activities
+api GET /api/v1/admin/aml/stats
+api GET /api/v1/admin/announcements
+api GET /api/v1/admin/audit-log
+api GET /api/v1/admin/audit-log/export
+api GET /api/v1/admin/audit-log/verify
+api GET /api/v1/admin/campaigns
+api GET /api/v1/admin/certifications
+api GET /api/v1/admin/certifications/pending
+api GET /api/v1/admin/client-errors
+api GET /api/v1/admin/coupons
+api GET /api/v1/admin/funnels
+api GET /api/v1/admin/knowledge/overview
+api GET /api/v1/admin/knowledge/thresholds/{category}/pairs
+api GET /api/v1/admin/knowledge/undecided
+api GET /api/v1/admin/knowledge/units
+api GET /api/v1/admin/legal/faqs
+api GET /api/v1/admin/market-health
+api GET /api/v1/admin/matching-config
+api GET /api/v1/admin/metrics
+api GET /api/v1/admin/north-star
+api GET /api/v1/admin/packs
+api GET /api/v1/admin/packs/radar
+api GET /api/v1/admin/platform-finance
+api GET /api/v1/admin/platform-finance/periods
+api GET /api/v1/admin/platform-finance/periods/export
+api GET /api/v1/admin/platform-finance/settle-requests
+api GET /api/v1/admin/queues
+api GET /api/v1/admin/reports
+api GET /api/v1/admin/roles
+api GET /api/v1/admin/sandbox/models
+api GET /api/v1/admin/security
+api GET /api/v1/admin/settlements/verify
+api GET /api/v1/admin/skill-concepts
+api GET /api/v1/admin/teams/pending
+api GET /api/v1/admin/tickets
+api GET /api/v1/admin/uploads/pending
+api GET /api/v1/admin/users
+api GET /api/v1/admin/users/{user_id}/ban-impact
+api GET /api/v1/admin/vendors
+api GET /api/v1/agents
+api GET /api/v1/anchors/blockchain
+api GET /api/v1/anchors/contracts/{contract_id}
+api GET /api/v1/anchors/coverage
+api GET /api/v1/anchors/verify
+api GET /api/v1/auth/captcha-config
+api GET /api/v1/auth/oauth/providers
+api GET /api/v1/auth/sessions
+api GET /api/v1/categories
+api GET /api/v1/circles
+api GET /api/v1/circles/{circle_id}
+api GET /api/v1/circles/{circle_id}/feed
+api GET /api/v1/circles/{circle_id}/members
+api GET /api/v1/circles/{circle_id}/stats
+api GET /api/v1/circles/{circle_id}/tasks
+api GET /api/v1/cities
+api GET /api/v1/contents/mine
+api GET /api/v1/contents/{content_id}
+api GET /api/v1/contents/{content_id}/comments
+api GET /api/v1/contracts/by-task/{task_id}
+api GET /api/v1/contracts/{contract_id}
+api GET /api/v1/contracts/{contract_id}/change-orders
+api GET /api/v1/contracts/{contract_id}/coupons
+api GET /api/v1/contracts/{contract_id}/export
+api GET /api/v1/contracts/{contract_id}/settlements
+api GET /api/v1/contracts/{contract_id}/signatures
+api GET /api/v1/conversations
+api GET /api/v1/conversations/unread-count
+api GET /api/v1/conversations/{conv_id}/messages
+api GET /api/v1/coupons
+api GET /api/v1/developer/api-keys
+api GET /api/v1/developer/api-keys/{key_id}/actions
+api GET /api/v1/developer/api-keys/{key_id}/mandate
+api GET /api/v1/developer/api-keys/{key_id}/usage
+api GET /api/v1/developer/scopes
+api GET /api/v1/developer/webhooks
+api GET /api/v1/developer/webhooks/{webhook_id}/deliveries
+api GET /api/v1/disputes/{dispute_id}
+api GET /api/v1/disputes/{dispute_id}/statements
+api GET /api/v1/events/dead-letters
+api GET /api/v1/events/health
+api GET /api/v1/feed
+api GET /api/v1/files/{name}
+api GET /api/v1/files/{name}/secure
+api GET /api/v1/finance/invoices
+api GET /api/v1/finance/my-tax
+api GET /api/v1/finance/tax-ledger
+api GET /api/v1/friends
+api GET /api/v1/friends/requests
+api GET /api/v1/friends/worked-with
+api GET /api/v1/gig/along
+api GET /api/v1/gig/available
+api GET /api/v1/gig/nearby
+api GET /api/v1/gig/places
+api GET /api/v1/influence/leaderboard
+api GET /api/v1/influence/me
+api GET /api/v1/influence/me/proof
+api GET /api/v1/influence/snapshots/latest
+api GET /api/v1/invitations
+api GET /api/v1/knowledge/cards
+api GET /api/v1/knowledge/category-demand
+api GET /api/v1/knowledge/clusters
+api GET /api/v1/knowledge/clusters/{cluster_id}
+api GET /api/v1/knowledge/price-reference
+api GET /api/v1/knowledge/search
+api GET /api/v1/knowledge/templates
+api GET /api/v1/knowledge/units
+api GET /api/v1/knowledge/units/{unit_id}
+api GET /api/v1/legal/agreements
+api GET /api/v1/legal/disputes/{dispute_id}/evidence-export
+api GET /api/v1/market/supply-hint
+api GET /api/v1/me/coupons
+api GET /api/v1/me/newcomer
+api GET /api/v1/me/referrals
+api GET /api/v1/missions
+api GET /api/v1/missions/{mission_id}
+api GET /api/v1/missions/{mission_id}/steps/{step_id}/reviews
+api GET /api/v1/missions/{mission_id}/summary
+api GET /api/v1/notebook/export
+api GET /api/v1/notebook/methods
+api GET /api/v1/notebook/notes
+api GET /api/v1/notebook/notes/{note_id}
+api GET /api/v1/notebook/related
+api GET /api/v1/notebook/summary
+api GET /api/v1/notifications
+api GET /api/v1/notifications/devices
+api GET /api/v1/notifications/prefs
+api GET /api/v1/notifications/unread-count
+api GET /api/v1/opc/calendar
+api GET /api/v1/opc/entries
+api GET /api/v1/opc/export
+api GET /api/v1/opc/profile
+api GET /api/v1/opc/summary
+api GET /api/v1/open/v1/tasks
+api GET /api/v1/open/v1/tasks/{task_id}
+api GET /api/v1/open/v1/wallet
+api GET /api/v1/packs
+api GET /api/v1/packs/{key}
+api GET /api/v1/packs/{key}/assistants/{akey}/contract
+api GET /api/v1/sandbox/models
+api GET /api/v1/search
+api GET /api/v1/search/suggest
+api GET /api/v1/search/trending
+api GET /api/v1/skills/concepts
+api GET /api/v1/skills/normalize
+api GET /api/v1/spaces
+api GET /api/v1/spaces/me
+api GET /api/v1/spaces/{user_id}
+api GET /api/v1/subscriptions
+api GET /api/v1/support/tickets
+api GET /api/v1/task-templates
+api GET /api/v1/tasks
+api GET /api/v1/tasks/mine
+api GET /api/v1/tasks/{task_id}
+api GET /api/v1/tasks/{task_id}/agent-runs
+api GET /api/v1/tasks/{task_id}/applicants
+api GET /api/v1/tasks/{task_id}/applications
+api GET /api/v1/tasks/{task_id}/cockpit
+api GET /api/v1/tasks/{task_id}/decomposition
+api GET /api/v1/tasks/{task_id}/dispute
+api GET /api/v1/tasks/{task_id}/eligible-agents
+api GET /api/v1/tasks/{task_id}/final-report
+api GET /api/v1/tasks/{task_id}/profile
+api GET /api/v1/tasks/{task_id}/progress
+api GET /api/v1/tasks/{task_id}/recommendations
+api GET /api/v1/tasks/{task_id}/reviews
+api GET /api/v1/tasks/{task_id}/tree
+api GET /api/v1/tasks/{task_id}/trip
+api GET /api/v1/tasks/{task_id}/visits
+api GET /api/v1/team-invites/{token}
+api GET /api/v1/teams/mine
+api GET /api/v1/teams/{team_id}
+api GET /api/v1/teams/{team_id}/invite-links
+api GET /api/v1/teams/{team_id}/spends
+api GET /api/v1/users/me
+api GET /api/v1/users/me/applications
+api GET /api/v1/users/me/assistant-costs
+api GET /api/v1/users/me/blocks
+api GET /api/v1/users/me/bookmarks
+api GET /api/v1/users/me/capability
+api GET /api/v1/users/me/certifications
+api GET /api/v1/users/me/export
+api GET /api/v1/users/me/sandbox
+api GET /api/v1/users/{user_id}
+api GET /api/v1/users/{user_id}/capability
+api GET /api/v1/users/{user_id}/contents
+api GET /api/v1/users/{user_id}/follow-stats
+api GET /api/v1/users/{user_id}/followers
+api GET /api/v1/users/{user_id}/following
+api GET /api/v1/users/{user_id}/influence
+api GET /api/v1/users/{user_id}/reviews
+api GET /api/v1/ventures/invitations
+api GET /api/v1/ventures/mine
+api GET /api/v1/ventures/risk-disclosure
+api GET /api/v1/ventures/{venture_id}
+api GET /api/v1/ventures/{venture_id}/compliance-path
+api GET /api/v1/ventures/{venture_id}/contributions
+api GET /api/v1/ventures/{venture_id}/distributions
+api GET /api/v1/ventures/{venture_id}/organization-records
+api GET /api/v1/ventures/{venture_id}/payout-proposals
+api GET /api/v1/ventures/{venture_id}/shares
+api GET /api/v1/verification-orders
+api GET /api/v1/verification-orders/{order_id}
+api GET /api/v1/wallet
+api GET /api/v1/wallet/ledger
+api GET /api/v1/wallet/payout-account
+api GET /api/v1/wallet/withdraw-requests
+api GET /api/v1/workbench/items
+api GET /api/v1/workbench/items/{item_id}
+api GET /api/v1/workbench/items/{item_id}/logs
+api GET /api/v1/workbench/memories
+api GET /api/v1/workbench/overview
+api GET /api/v1/workbench/projects
+api GET /api/v1/workbench/routines
+api GET /api/v1/workbench/routines/{routine_id}/health
+api GET /api/v1/workbench/routines/{routine_id}/runs
+api GET /api/v1/xapp/catalog
+api GET /api/v1/xapp/grants
+api GET /api/v1/xapp/runs
+api GET /api/v1/xapp/runs/{run_id}
+api GET /docs
+api GET /docs/oauth2-redirect
+api GET /healthz
+api GET /jobz
+api GET /metrics
+api GET /openapi.json
+api GET /readyz
+api GET /redoc
+api GET /version
+api PATCH /api/v1/admin/agents/{agent_user_id}
+api PATCH /api/v1/admin/categories/{category_id}
+api PATCH /api/v1/admin/cities/{city_id}
+api PATCH /api/v1/admin/knowledge/clusters/{cluster_id}
+api PATCH /api/v1/admin/knowledge/units/{unit_id}
+api PATCH /api/v1/admin/sandbox/models/{model_id}
+api PATCH /api/v1/contents/{content_id}
+api PATCH /api/v1/conversations/{conv_id}
+api PATCH /api/v1/decompositions/{dec_id}
+api PATCH /api/v1/decompositions/{dec_id}/nodes/{node_id}
+api PATCH /api/v1/friends/{user_id}
+api PATCH /api/v1/notebook/methods/{method_id}
+api PATCH /api/v1/notebook/notes/{note_id}
+api PATCH /api/v1/opc/entries/{entry_id}
+api PATCH /api/v1/tasks/{task_id}
+api PATCH /api/v1/tasks/{task_id}/recipient
+api PATCH /api/v1/teams/{team_id}/members/{member_user_id}
+api PATCH /api/v1/users/me
+api PATCH /api/v1/workbench/items/{item_id}
+api PATCH /api/v1/workbench/projects/{project_id}
+api PATCH /api/v1/workbench/routines/{routine_id}
+api POST /api/v1/admin/admins/{user_id}/temporary-roles
+api POST /api/v1/admin/admins/{user_id}/temporary-roles/{role}/revoke
+api POST /api/v1/admin/agents
+api POST /api/v1/admin/aml/activities/{activity_id}/review
+api POST /api/v1/admin/announcements
+api POST /api/v1/admin/announcements/preview
+api POST /api/v1/admin/announcements/{announcement_id}/cancel
+api POST /api/v1/admin/announcements/{announcement_id}/revoke
+api POST /api/v1/admin/campaigns
+api POST /api/v1/admin/categories
+api POST /api/v1/admin/certifications/{application_id}/decide
+api POST /api/v1/admin/certifications/{application_id}/revoke
+api POST /api/v1/admin/cities
+api POST /api/v1/admin/coupons
+api POST /api/v1/admin/coupons/{coupon_id}/pause
+api POST /api/v1/admin/jobs/anchor-audit-head
+api POST /api/v1/admin/jobs/escalate-tickets
+api POST /api/v1/admin/jobs/reconcile
+api POST /api/v1/admin/jobs/remind-legal-reviews
+api POST /api/v1/admin/jobs/remind-review-queues
+api POST /api/v1/admin/jobs/send-scheduled-announcements
+api POST /api/v1/admin/knowledge/cards/{card_id}/assign
+api POST /api/v1/admin/knowledge/clusters/{cluster_id}/merge
+api POST /api/v1/admin/knowledge/clusters/{cluster_id}/units
+api POST /api/v1/admin/knowledge/tasks/{task_id}/retract
+api POST /api/v1/admin/knowledge/thresholds/{category}/calibrate
+api POST /api/v1/admin/legal/faqs
+api POST /api/v1/admin/legal/faqs/radar-draft
+api POST /api/v1/admin/legal/faqs/{faq_id}/approve
+api POST /api/v1/admin/legal/faqs/{faq_id}/reject
+api POST /api/v1/admin/legal/faqs/{faq_id}/renew
+api POST /api/v1/admin/legal/faqs/{faq_id}/retire
+api POST /api/v1/admin/legal/faqs/{faq_id}/submit
+api POST /api/v1/admin/packs
+api POST /api/v1/admin/packs/import-seeds
+api POST /api/v1/admin/packs/radar/draft-knowledge
+api POST /api/v1/admin/packs/validate
+api POST /api/v1/admin/packs/{pack_id}/approve
+api POST /api/v1/admin/packs/{pack_id}/reject
+api POST /api/v1/admin/packs/{pack_id}/retire
+api POST /api/v1/admin/packs/{pack_id}/submit
+api POST /api/v1/admin/platform-finance/settle
+api POST /api/v1/admin/platform-finance/settle-requests/{request_id}/approve
+api POST /api/v1/admin/platform-finance/settle-requests/{request_id}/reject
+api POST /api/v1/admin/reports/{report_id}/resolve
+api POST /api/v1/admin/sandbox/models
+api POST /api/v1/admin/sandbox/models/{model_id}/publish
+api POST /api/v1/admin/sandbox/models/{model_id}/retire
+api POST /api/v1/admin/security/unban
+api POST /api/v1/admin/skill-concepts
+api POST /api/v1/admin/skill-concepts/{concept_id}/retire
+api POST /api/v1/admin/subsidy-pool/fund
+api POST /api/v1/admin/teams/{team_id}/verify
+api POST /api/v1/admin/tickets/{ticket_id}/assign
+api POST /api/v1/admin/tickets/{ticket_id}/claim
+api POST /api/v1/admin/tickets/{ticket_id}/priority
+api POST /api/v1/admin/tickets/{ticket_id}/reply
+api POST /api/v1/admin/tickets/{ticket_id}/resolve
+api POST /api/v1/admin/uploads/{name}/resolve
+api POST /api/v1/admin/users/{user_id}/ban
+api POST /api/v1/admin/users/{user_id}/unban
+api POST /api/v1/agent/tools/invocations/{invocation_id}/discard
+api POST /api/v1/agent/tools/{unit_id}/invoke
+api POST /api/v1/ai/clarify
+api POST /api/v1/analytics/jobs/render-alerts
+api POST /api/v1/anchors/jobs/notarize
+api POST /api/v1/applications/{application_id}/accept
+api POST /api/v1/applications/{application_id}/withdraw
+api POST /api/v1/auth/change-password
+api POST /api/v1/auth/change-phone
+api POST /api/v1/auth/login
+api POST /api/v1/auth/login-sms
+api POST /api/v1/auth/oauth/{provider}
+api POST /api/v1/auth/register
+api POST /api/v1/auth/reset-password
+api POST /api/v1/auth/send-code
+api POST /api/v1/auth/sessions/{session_id}/revoke
+api POST /api/v1/circles
+api POST /api/v1/circles/{circle_id}/join
+api POST /api/v1/circles/{circle_id}/members/{user_id}/approve
+api POST /api/v1/circles/{circle_id}/members/{user_id}/remove
+api POST /api/v1/client-errors
+api POST /api/v1/contents
+api POST /api/v1/contents/{content_id}/comments
+api POST /api/v1/contents/{content_id}/like
+api POST /api/v1/contents/{content_id}/publish
+api POST /api/v1/contracts/jobs/expire-unsigned
+api POST /api/v1/contracts/{contract_id}/change-orders
+api POST /api/v1/contracts/{contract_id}/change-orders/{order_id}/accept
+api POST /api/v1/contracts/{contract_id}/change-orders/{order_id}/reject
+api POST /api/v1/contracts/{contract_id}/fund
+api POST /api/v1/contracts/{contract_id}/milestones
+api POST /api/v1/contracts/{contract_id}/milestones/release-delivered
+api POST /api/v1/contracts/{contract_id}/milestones/{idx}/accept
+api POST /api/v1/contracts/{contract_id}/milestones/{idx}/deliver
+api POST /api/v1/contracts/{contract_id}/sign
+api POST /api/v1/conversations/direct
+api POST /api/v1/conversations/groups
+api POST /api/v1/conversations/{conv_id}/members
+api POST /api/v1/conversations/{conv_id}/messages
+api POST /api/v1/conversations/{conv_id}/quote-cards
+api POST /api/v1/conversations/{conv_id}/read
+api POST /api/v1/coupons/{coupon_id}/claim
+api POST /api/v1/decompositions/{dec_id}/confirm
+api POST /api/v1/decompositions/{dec_id}/expand
+api POST /api/v1/developer/api-keys
+api POST /api/v1/developer/api-keys/{key_id}/mandate
+api POST /api/v1/developer/api-keys/{key_id}/rotate
+api POST /api/v1/developer/webhooks
+api POST /api/v1/disputes/jobs/escalate-overdue
+api POST /api/v1/disputes/jobs/remind-response
+api POST /api/v1/disputes/{dispute_id}/appeal
+api POST /api/v1/disputes/{dispute_id}/appeal-verdict
+api POST /api/v1/disputes/{dispute_id}/settlement
+api POST /api/v1/disputes/{dispute_id}/settlement/accept
+api POST /api/v1/disputes/{dispute_id}/statements
+api POST /api/v1/disputes/{dispute_id}/verdict
+api POST /api/v1/events
+api POST /api/v1/events/jobs/drain
+api POST /api/v1/events/jobs/purge
+api POST /api/v1/events/jobs/purge-security
+api POST /api/v1/files
+api POST /api/v1/files/sign-upload
+api POST /api/v1/finance/invoices
+api POST /api/v1/finance/jobs/remit-tax
+api POST /api/v1/friends/requests
+api POST /api/v1/friends/requests/{req_id}/decide
+api POST /api/v1/gig/jobs/purge-expired
+api POST /api/v1/gig/places
+api POST /api/v1/gig/quote
+api POST /api/v1/influence/jobs/snapshot
+api POST /api/v1/influence/vouches
+api POST /api/v1/invitations/{invitation_id}/accept
+api POST /api/v1/invitations/{invitation_id}/decline
+api POST /api/v1/knowledge/jobs/cluster
+api POST /api/v1/knowledge/jobs/reindex
+api POST /api/v1/legal/agreements/accept
+api POST /api/v1/legal/ask
+api POST /api/v1/legal/consents/{scope}/grant
+api POST /api/v1/legal/consents/{scope}/revoke
+api POST /api/v1/legal/documents
+api POST /api/v1/messages/{message_id}/recall
+api POST /api/v1/missions
+api POST /api/v1/missions/jobs/tick-all
+api POST /api/v1/missions/{mission_id}/cancel
+api POST /api/v1/missions/{mission_id}/steps/{step_id}/drafts/{invocation_id}/adopt
+api POST /api/v1/missions/{mission_id}/steps/{step_id}/drafts/{invocation_id}/discard
+api POST /api/v1/missions/{mission_id}/summary/distill
+api POST /api/v1/missions/{mission_id}/summary/save
+api POST /api/v1/missions/{mission_id}/tick
+api POST /api/v1/notebook/ask
+api POST /api/v1/notebook/methods
+api POST /api/v1/notebook/methods/distill
+api POST /api/v1/notebook/methods/{method_id}/apply
+api POST /api/v1/notebook/notes
+api POST /api/v1/notebook/notes/{note_id}/extract-todos
+api POST /api/v1/notebook/notes/{note_id}/todos
+api POST /api/v1/notifications/read-all
+api POST /api/v1/notifications/{notification_id}/read
+api POST /api/v1/opc/contract-review
+api POST /api/v1/opc/entries
+api POST /api/v1/opc/entries/import-platform
+api POST /api/v1/open/v1/tasks
+api POST /api/v1/open/v1/tasks/{task_id}/applications
+api POST /api/v1/open/v1/tasks/{task_id}/deliver
+api POST /api/v1/openapi/jobs/deliver-webhooks
+api POST /api/v1/packs/{key}/assistants/{akey}/ask
+api POST /api/v1/packs/{key}/disable
+api POST /api/v1/packs/{key}/enable
+api POST /api/v1/packs/{key}/feedback
+api POST /api/v1/profiles/task-draft
+api POST /api/v1/reports
+api POST /api/v1/subscriptions
+api POST /api/v1/support/ask
+api POST /api/v1/support/tickets
+api POST /api/v1/support/tickets/{ticket_id}/escalate-to-dispute
+api POST /api/v1/support/tickets/{ticket_id}/replies
+api POST /api/v1/tasks
+api POST /api/v1/tasks/jobs/auto-accept
+api POST /api/v1/tasks/jobs/deadline-alerts
+api POST /api/v1/tasks/jobs/expire-tasks
+api POST /api/v1/tasks/jobs/purge-locations
+api POST /api/v1/tasks/jobs/remind-acceptance
+api POST /api/v1/tasks/jobs/settle-reviews
+api POST /api/v1/tasks/{task_id}/accept-delivery
+api POST /api/v1/tasks/{task_id}/accept-person
+api POST /api/v1/tasks/{task_id}/agent-apply
+api POST /api/v1/tasks/{task_id}/agent-run
+api POST /api/v1/tasks/{task_id}/applications
+api POST /api/v1/tasks/{task_id}/apply-days
+api POST /api/v1/tasks/{task_id}/bookmark
+api POST /api/v1/tasks/{task_id}/cancel
+api POST /api/v1/tasks/{task_id}/checkin
+api POST /api/v1/tasks/{task_id}/days/{work_date}/reboost
+api POST /api/v1/tasks/{task_id}/decompositions
+api POST /api/v1/tasks/{task_id}/deliver
+api POST /api/v1/tasks/{task_id}/disputes
+api POST /api/v1/tasks/{task_id}/experience-post
+api POST /api/v1/tasks/{task_id}/invitations
+api POST /api/v1/tasks/{task_id}/progress
+api POST /api/v1/tasks/{task_id}/publish
+api POST /api/v1/tasks/{task_id}/reject-delivery
+api POST /api/v1/tasks/{task_id}/reviews
+api POST /api/v1/tasks/{task_id}/sos
+api POST /api/v1/tasks/{task_id}/trip-share
+api POST /api/v1/tasks/{task_id}/verification
+api POST /api/v1/tasks/{task_id}/visits
+api POST /api/v1/team-invites/{token}/accept
+api POST /api/v1/teams
+api POST /api/v1/teams/jobs/remind-approvals
+api POST /api/v1/teams/{team_id}/budget
+api POST /api/v1/teams/{team_id}/company
+api POST /api/v1/teams/{team_id}/invite-links
+api POST /api/v1/teams/{team_id}/invite-links/{link_id}/revoke
+api POST /api/v1/teams/{team_id}/members
+api POST /api/v1/teams/{team_id}/spends
+api POST /api/v1/teams/{team_id}/spends/{request_id}/decide
+api POST /api/v1/teams/{team_id}/spends/{request_id}/execute
+api POST /api/v1/users/me/certifications
+api POST /api/v1/users/me/deactivate
+api POST /api/v1/users/me/verify
+api POST /api/v1/users/{user_id}/block
+api POST /api/v1/ventures
+api POST /api/v1/ventures/{venture_id}/contributions
+api POST /api/v1/ventures/{venture_id}/contributions/{contribution_id}/confirm
+api POST /api/v1/ventures/{venture_id}/distributions
+api POST /api/v1/ventures/{venture_id}/invitations
+api POST /api/v1/ventures/{venture_id}/invitations/decline
+api POST /api/v1/ventures/{venture_id}/members
+api POST /api/v1/ventures/{venture_id}/organization-records
+api POST /api/v1/ventures/{venture_id}/payout-proposals
+api POST /api/v1/ventures/{venture_id}/payout-proposals/{proposal_id}/vote
+api POST /api/v1/verification-orders/{order_id}/claim
+api POST /api/v1/verification-orders/{order_id}/outcome
+api POST /api/v1/verify/jobs/expire-orders
+api POST /api/v1/wallet/jobs/purge-idempotency
+api POST /api/v1/wallet/jobs/remind-second-approval
+api POST /api/v1/wallet/jobs/resolve-payouts
+api POST /api/v1/wallet/pay/callback
+api POST /api/v1/wallet/topup
+api POST /api/v1/wallet/withdraw
+api POST /api/v1/wallet/withdraw-requests/{request_id}/approve
+api POST /api/v1/wallet/withdraw-requests/{request_id}/reject
+api POST /api/v1/workbench/items
+api POST /api/v1/workbench/items/{item_id}/breakdown
+api POST /api/v1/workbench/items/{item_id}/children
+api POST /api/v1/workbench/items/{item_id}/logs
+api POST /api/v1/workbench/jobs/run-routines
+api POST /api/v1/workbench/memories
+api POST /api/v1/workbench/projects
+api POST /api/v1/workbench/routines
+api POST /api/v1/workbench/routines/{routine_id}/run
+api POST /api/v1/xapp/grants
+api POST /api/v1/xapp/plan
+api POST /api/v1/xapp/runs
+api POST /api/v1/xapp/runs/{run_id}/next
+api POST /api/v1/xapp/runs/{run_id}/steps/{step_id}/confirm
+api POST /api/v1/xapp/runs/{run_id}/steps/{step_id}/result
+api POST /api/v1/xapp/runs/{run_id}/stop
+api PUT /api/v1/admin/admins/{user_id}/roles
+api PUT /api/v1/admin/legal/faqs/{faq_id}
+api PUT /api/v1/admin/matching-config
+api PUT /api/v1/admin/packs/{pack_id}
+api PUT /api/v1/developer/api-keys/{key_id}/quota
+api PUT /api/v1/developer/api-keys/{key_id}/rate-limit
+api PUT /api/v1/gig/available
+api PUT /api/v1/missions/{mission_id}/tools
+api PUT /api/v1/notifications/devices
+api PUT /api/v1/notifications/prefs
+api PUT /api/v1/opc/profile
+api PUT /api/v1/spaces/me
+api PUT /api/v1/users/me/sandbox
+api PUT /api/v1/users/{user_id}/follow
+api PUT /api/v1/wallet/payout-account
+app App
+app ChainEntry
+app ContractEvidence
+app Discover
+app MachineMandate
+app MessagesAndInvites
+app OrganizationRecords
+app PayoutGovernance
+app ScreenBoundary
+app TeamCoopDev
+app VideoFeed
+app apiKeyUsage
+app appGaps
+app ask
+app availability
+app certifications
+app collaborators
+app decompose
+app experience
+app gig
+app influence
+app milestones
+app missions
+app motion
+app notebook
+app opc
+app packs
+app profiles
+app recipient
+app rights
+app sandbox
+app search
+app spaces
+app supportTickets
+app teamInvites
+app ventureInvites
+app visits
+app workbench
+app xapp
+sdk acceptAgreements
+sdk acceptApplication
+sdk acceptChange
+sdk acceptDelivery
+sdk acceptInvitation
+sdk acceptMilestone
+sdk acceptPerson
+sdk acceptSettlement
+sdk acceptTeamInvite
+sdk addDisputeStatement
+sdk addGigPlace
+sdk addNoteTodos
+sdk addOpcEntry
+sdk addOrganizationRecord
+sdk addProgress
+sdk addTeamMember
+sdk addWorkbenchChildren
+sdk addWorkbenchLog
+sdk addWorkbenchMemory
+sdk adminApproveLegalFaq
+sdk adminApprovePack
+sdk adminAuditLog
+sdk adminAuditLogPage
+sdk adminCertifications
+sdk adminClientErrors
+sdk adminCreateLegalFaq
+sdk adminCreatePack
+sdk adminDraftKnowledgeFromRadar
+sdk adminImportPackSeeds
+sdk adminKnowledgeUnits
+sdk adminLegalFaqFromRadar
+sdk adminLegalFaqs
+sdk adminMetrics
+sdk adminPackRadar
+sdk adminPacks
+sdk adminRejectLegalFaq
+sdk adminRejectPack
+sdk adminRenewLegalFaq
+sdk adminReports
+sdk adminRetireLegalFaq
+sdk adminRetirePack
+sdk adminRoleCatalog
+sdk adminSandboxModels
+sdk adminSecurity
+sdk adminSkillConcepts
+sdk adminSubmitLegalFaq
+sdk adminSubmitPack
+sdk adminTickets
+sdk adminUpdateLegalFaq
+sdk adminUpdatePack
+sdk adminUsers
+sdk adminValidatePack
+sdk adminVendors
+sdk adoptMissionDraft
+sdk agentRuns
+sdk agents
+sdk amlActivities
+sdk amlStats
+sdk anchorCoverage
+sdk announcements
+sdk apiKeyUsage
+sdk apiKeys
+sdk apiScopes
+sdk appealDispute
+sdk apply
+sdk applyDays
+sdk applyMethod
+sdk approveCircleMember
+sdk approveSettle
+sdk askNotebook
+sdk askPackAssistant
+sdk askSupport
+sdk assignKnowledgeCard
+sdk assignTicket
+sdk assistantContract
+sdk assistantCosts
+sdk availableCoupons
+sdk banImpact
+sdk banUser
+sdk bindPayoutAccount
+sdk blockchainStatus
+sdk bookmark
+sdk broadcastAnnouncement
+sdk calibrateKnowledge
+sdk cancelAnnouncement
+sdk cancelMission
+sdk cancelTask
+sdk captchaConfig
+sdk categories
+sdk categoryDemand
+sdk changeOrders
+sdk changePassword
+sdk changePhone
+sdk changeRecipient
+sdk checkin
+sdk circleFeed
+sdk circleMembers
+sdk circleStats
+sdk circleTasks
+sdk circles
+sdk cities
+sdk claimCoupon
+sdk claimTicket
+sdk claimVerificationOrder
+sdk clarify
+sdk cockpit
+sdk commentContent
+sdk confirmContribution
+sdk confirmDecomposition
+sdk confirmXappStep
+sdk contentComments
+sdk contentFeed
+sdk contractAnchors
+sdk contractSettlements
+sdk contractSignatures
+sdk conversations
+sdk couponsForContract
+sdk createApiKey
+sdk createCategory
+sdk createCircle
+sdk createCity
+sdk createContent
+sdk createExperiencePost
+sdk createGroup
+sdk createMethod
+sdk createMission
+sdk createNote
+sdk createSandboxModel
+sdk createTask
+sdk createTeam
+sdk createTeamInviteLink
+sdk createTicket
+sdk createVenture
+sdk createVouch
+sdk createWebhook
+sdk createWorkbenchItem
+sdk createWorkbenchProject
+sdk createWorkbenchRoutine
+sdk createXappGrant
+sdk createXappRun
+sdk currentDecomposition
+sdk dayApplicants
+sdk deactivateAccount
+sdk decideCertification
+sdk decideFriendRequest
+sdk decideTeamSpend
+sdk decideWithdraw
+sdk declineInvitation
+sdk declineVentureInvitation
+sdk decompositionTemplate
+sdk defineMilestones
+sdk deleteDecompositionNode
+sdk deleteGigPlace
+sdk deleteMethod
+sdk deleteNote
+sdk deleteOpcEntry
+sdk deleteWebhook
+sdk deleteWorkbenchItem
+sdk deleteWorkbenchMemory
+sdk deleteWorkbenchProject
+sdk deleteWorkbenchRoutine
+sdk deliver
+sdk deliverMilestone
+sdk disablePack
+sdk discardMissionDraft
+sdk discardToolDraft
+sdk discoverSpaces
+sdk dispute
+sdk disputeByTask
+sdk disputeStatements
+sdk distillKnowledgeUnit
+sdk distillMethod
+sdk distillMissionMethod
+sdk distributeVenture
+sdk editContent
+sdk editDecomposition
+sdk editDecompositionNode
+sdk editTask
+sdk eligibleAgents
+sdk enablePack
+sdk escalateTicket
+sdk executeTeamSpend
+sdk expandDecomposition
+sdk expireTasks
+sdk exportAuditLog
+sdk exportContract
+sdk exportEvidence
+sdk exportMyData
+sdk exportNotebook
+sdk exportOpcBooks
+sdk exportPlatformFinancePeriods
+sdk extractNoteTodos
+sdk finalReport
+sdk followStats
+sdk followUser
+sdk followers
+sdk following
+sdk friendRequests
+sdk friends
+sdk fundContract
+sdk getCircle
+sdk getContent
+sdk getContract
+sdk getContractByTask
+sdk getMission
+sdk getPayoutAccount
+sdk getTask
+sdk gigAlong
+sdk gigAvailability
+sdk gigNearby
+sdk gigPlaces
+sdk gigQuote
+sdk grantConsent
+sdk grantMachineMandate
+sdk grantTemporaryAdminRole
+sdk imUnreadCount
+sdk importPlatformIncome
+sdk influenceLeaderboard
+sdk inviteAgent
+sdk inviteToGroup
+sdk inviteToTask
+sdk inviteToVenture
+sdk invokeExperienceTool
+sdk joinCircle
+sdk joinVenture
+sdk knowledgeAdminOverview
+sdk knowledgeCalibrationPairs
+sdk knowledgeCards
+sdk knowledgeCluster
+sdk knowledgeClusters
+sdk knowledgeSearch
+sdk knowledgeUndecided
+sdk knowledgeUnit
+sdk knowledgeUnits
+sdk latestInfluenceSnapshot
+sdk ledger
+sdk legalAsk
+sdk legalDocument
+sdk likeContent
+sdk listAdmins
+sdk listApplications
+sdk listProgress
+sdk listReviews
+sdk listTasks
+sdk login
+sdk machineActions
+sdk machineMandate
+sdk markAllRead
+sdk markConversationRead
+sdk markRead
+sdk marketHealth
+sdk me
+sdk mergeKnowledgeCluster
+sdk messages
+sdk missionSummary
+sdk myAgreements
+sdk myApplications
+sdk myBlocks
+sdk myBookmarks
+sdk myCapability
+sdk myCertifications
+sdk myCoupons
+sdk myDrafts
+sdk myInfluence
+sdk myInfluenceProof
+sdk myInvitations
+sdk myInvoices
+sdk myMissions
+sdk myReferrals
+sdk mySandbox
+sdk mySessions
+sdk mySubscriptions
+sdk myTasks
+sdk myTax
+sdk myTeams
+sdk myTickets
+sdk myVentureInvitations
+sdk myVentures
+sdk newcomerProgress
+sdk normalizeSkills
+sdk northStar
+sdk note
+sdk notebookMethods
+sdk notebookNotes
+sdk notebookSummary
+sdk notificationPrefs
+sdk notifications
+sdk oauthLogin
+sdk oauthProviders
+sdk opcCalendar
+sdk opcEntries
+sdk opcProfile
+sdk opcSummary
+sdk openDirect
+sdk openDispute
+sdk openVerificationOrders
+sdk organizationRecords
+sdk ownSpace
+sdk packFeedback
+sdk payoutProposals
+sdk pendingCertifications
+sdk pendingTeams
+sdk pendingUploads
+sdk personalSpace
+sdk planXapp
+sdk platformFinance
+sdk platformFinancePeriods
+sdk previewAnnouncement
+sdk priceReference
+sdk propose
+sdk proposeChange
+sdk proposeChangeOrder
+sdk proposePayout
+sdk proposeSettlement
+sdk publicProfile
+sdk publishContent
+sdk publishSandboxModel
+sdk publishTask
+sdk reboostDay
+sdk recallMessage
+sdk recommendations
+sdk register
+sdk registerDevice
+sdk rejectChangeOrder
+sdk rejectDelivery
+sdk rejectSettle
+sdk relatedNotes
+sdk releaseDelivered
+sdk removeCircleMember
+sdk removeFriend
+sdk removeFromGroup
+sdk removeTeamMember
+sdk renameKnowledgeCluster
+sdk replyMyTicket
+sdk replyTicket
+sdk report
+sdk reportRenderError
+sdk reportVisit
+sdk requestInvoice
+sdk requestTeamSpend
+sdk requestVerification
+sdk resetPassword
+sdk resolveReport
+sdk resolveTicket
+sdk resolveUpload
+sdk retireSandboxModel
+sdk retireSkillConcept
+sdk retractKnowledgeTask
+sdk review
+sdk reviewAmlActivity
+sdk reviewContract
+sdk reviewQueues
+sdk revokeAnnouncement
+sdk revokeApiKey
+sdk revokeCertification
+sdk revokeConsent
+sdk revokeSession
+sdk revokeTeamInviteLink
+sdk revokeTemporaryAdminRole
+sdk revokeXappGrant
+sdk rotateApiKey
+sdk runAgent
+sdk runWorkbenchRoutine
+sdk sandboxModels
+sdk saveMissionSummary
+sdk saveOpcProfile
+sdk saveSpace
+sdk scenarioPack
+sdk scenarioPacks
+sdk search
+sdk searchSuggest
+sdk sendFriendRequest
+sdk sendMessage
+sdk sendQuoteCard
+sdk sendSmsCode
+sdk setAdminRoles
+sdk setApiKeyQuota
+sdk setApiKeyRate
+sdk setFriendRemark
+sdk setGigAvailable
+sdk setKnowledgeUnitStatus
+sdk setMissionTools
+sdk setNotificationPref
+sdk setSandbox
+sdk setTeamBudget
+sdk setTicketPriority
+sdk setTripShare
+sdk settlePlatform
+sdk settleRequests
+sdk signContract
+sdk signVideoUpload
+sdk skillConcepts
+sdk smsLogin
+sdk sos
+sdk stepReviews
+sdk stopGigAvailable
+sdk stopXappRun
+sdk submitCertification
+sdk submitContribution
+sdk submitTeamCompany
+sdk submitVerificationOutcome
+sdk subscribeCategory
+sdk supplyHint
+sdk taskDraftProfile
+sdk taskProfile
+sdk taskTemplate
+sdk taskTree
+sdk taskVisits
+sdk team
+sdk teamInviteLinks
+sdk teamInvitePreview
+sdk teamSpends
+sdk tickMission
+sdk toggleBlock
+sdk topup
+sdk trackEvent
+sdk trendingTerms
+sdk trip
+sdk unbanIp
+sdk unbanUser
+sdk unbookmark
+sdk unfollowUser
+sdk unreadCount
+sdk unregisterDevice
+sdk unsubscribe
+sdk updateCategory
+sdk updateCity
+sdk updateGroup
+sdk updateMe
+sdk updateMethod
+sdk updateNote
+sdk updateOpcEntry
+sdk updateSandboxModel
+sdk updateTeamMember
+sdk updateWorkbenchItem
+sdk updateWorkbenchProject
+sdk updateWorkbenchRoutine
+sdk uploadImage
+sdk upsertSkillConcept
+sdk userCapability
+sdk userContents
+sdk userInfluence
+sdk userReviews
+sdk venture
+sdk ventureCompliancePath
+sdk ventureContributions
+sdk ventureDistributions
+sdk ventureRiskDisclosure
+sdk ventureShares
+sdk verificationOrder
+sdk verifyAnchorChain
+sdk verifyAuditChain
+sdk verifyIdentity
+sdk verifyTeam
+sdk votePayout
+sdk wallet
+sdk webhookDeliveries
+sdk webhooks
+sdk withdraw
+sdk withdrawApplication
+sdk withdrawRequests
+sdk withdrawRequestsPage
+sdk withdrawVouch
+sdk workbenchBreakdown
+sdk workbenchItem
+sdk workbenchItems
+sdk workbenchLogs
+sdk workbenchMemories
+sdk workbenchOverview
+sdk workbenchProjects
+sdk workbenchRoutineHealth
+sdk workbenchRoutineRuns
+sdk workbenchRoutines
+sdk workedWith
+sdk xappCatalog
+sdk xappGrants
+sdk xappNext
+sdk xappReport
+sdk xappRun
+sdk xappRuns
+web /
+web /admin
+web /ask
+web /chain
+web /circles
+web /community
+web /cooperate
+web /developer
+web /gig
+web /influence
+web /login
+web /messages
+web /missions
+web /notebook
+web /notifications
+web /opc
+web /opportunities
+web /packs
+web /people/:id
+web /people/:id/follows
+web /profile
+web /publish
+web /records
+web /rewards
+web /sandbox
+web /search
+web /space/edit
+web /support
+web /tasks/:id
+web /tasks/:id/decompose
+web /teams
+web /teams/join/:token
+web /ventures
+web /verify
+web /wallet
+web /workbench
+web /xapp

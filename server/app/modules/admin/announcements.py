@@ -1,0 +1,170 @@
+"""NTF-064 全站公告：预览、定时与撤回（151 号 spec）。
+
+公告是平台对全体用户说的话，而此前它只是一个循环：按下就发、发给谁事后查不到、发错了收不回来，
+只能再发一条更正——两条互相矛盾的通知并排躺在每个人的通知中心里。
+"""
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+
+from sqlalchemy.orm import Session
+
+from app.core.errors import bad_request, conflict, not_found
+from app.core.timefmt import iso
+from app.modules.account.models import User, utcnow
+
+from .models import Announcement
+
+SCHEDULE_MAX_DAYS = 30
+# 锁屏推送标题大约显示这么多字；更长的会被截断（只是提醒，不拦）
+PUSH_TITLE_HINT = 20
+REVOKED_PREFIX = "【已撤回】"
+
+
+AUDIENCES = {"all": "全体用户", "publishers": "近 180 天发过单的人", "workers": "近 180 天报过名接单的人"}
+ACTIVE_DAYS = 180
+
+
+def audience_query(db: Session, verified_only: bool, city: str = "", audience: str = "all"):
+    """NTF-066（159 号 spec）定向：仅已实名、城市、人群（发单的 / 接单的）可以叠加。"""
+    q = db.query(User).filter(User.is_deleted.is_(False), User.is_banned.is_(False))
+    if verified_only:
+        q = q.filter(User.is_verified.is_(True))
+    if city:
+        q = q.filter(User.city == city)
+    if audience != "all":
+        from app.modules.task.models import Application, Task
+
+        since = utcnow() - timedelta(days=ACTIVE_DAYS)
+        if audience == "publishers":
+            ids = db.query(Task.creator_id).filter(Task.created_at >= since)
+        else:
+            ids = db.query(Application.applicant_id).filter(Application.created_at >= since)
+        q = q.filter(User.id.in_(ids))
+    return q
+
+
+def check_audience(audience: str) -> None:
+    if audience not in AUDIENCES:
+        raise bad_request(f"人群只能是：{'、'.join(f'{k}（{v}）' for k, v in AUDIENCES.items())}", "bad_audience")
+
+
+def preview(db: Session, title: str, body: str, verified_only: bool, city: str = "", audience: str = "all") -> dict:
+    """发之前说清：会送给多少人、用户看到的样子、有没有要留意的地方。不落库、不发。
+    公告这一类用户关不掉（通知偏好里没有它），所以受众人数就是会收到的人数。"""
+    check_audience(audience)
+    n = audience_query(db, verified_only, city, audience).count()
+    warnings = []
+    if n == 0:
+        warnings.append("按这个条件一个人都发不到：检查城市名是否写对")
+    if len(title) > PUSH_TITLE_HINT:
+        warnings.append(f"标题超过 {PUSH_TITLE_HINT} 个字，手机锁屏推送会被截断")
+    if not body.strip():
+        warnings.append("正文是空的：用户点开只看到标题")
+    if not verified_only and any(w in title + body for w in ("资金", "提现", "税", "实名")):
+        warnings.append("看起来是资金或合规类公告，是否只发给已实名用户？")
+    return {"audience": n, "verified_only": verified_only, "city": city, "audience_kind": audience, "title": title, "body": body, "warnings": warnings}
+
+
+def deliver(db: Session, ann: Announcement) -> int:
+    from app.modules.notification.service import notify
+
+    count = 0
+    for (uid,) in audience_query(db, ann.verified_only, ann.city or "", ann.audience or "all").with_entities(User.id):
+        notify(db, uid, "announcement", ann.title, ann.body, announcement_id=ann.id)
+        count += 1
+    ann.status, ann.sent_at, ann.delivered = "sent", utcnow(), count
+    return count
+
+
+def create(db: Session, admin_id: int, title: str, body: str, verified_only: bool,
+           scheduled_at: datetime | None, city: str = "", audience: str = "all") -> Announcement:
+    check_audience(audience)
+    now = utcnow()
+    ann = Announcement(title=title, body=body, verified_only=verified_only, created_by=admin_id, created_at=now,
+                       city=city, audience=audience)
+    if scheduled_at is not None:
+        if scheduled_at <= now + timedelta(minutes=1):
+            raise bad_request("定时发送的时间要晚于现在至少 1 分钟；要马上发就不填时间", "schedule_in_past")
+        if scheduled_at > now + timedelta(days=SCHEDULE_MAX_DAYS):
+            raise bad_request(f"最多提前 {SCHEDULE_MAX_DAYS} 天定时；更远的请到时候再排", "schedule_too_far")
+        ann.status, ann.scheduled_at = "scheduled", scheduled_at
+    db.add(ann)
+    db.flush()
+    if ann.status != "scheduled":
+        deliver(db, ann)
+    return ann
+
+
+def send_due(db: Session, now: datetime | None = None) -> list[int]:
+    now = now or utcnow()
+    due = (db.query(Announcement).filter(Announcement.status == "scheduled", Announcement.scheduled_at <= now)
+           .order_by(Announcement.scheduled_at, Announcement.id).with_for_update().all())
+    for ann in due:
+        deliver(db, ann)
+    return [a.id for a in due]
+
+
+def _get(db: Session, ann_id: int) -> Announcement:
+    ann = db.query(Announcement).filter(Announcement.id == ann_id).with_for_update().first()
+    if ann is None:
+        raise not_found("没有这条公告")
+    return ann
+
+
+def cancel(db: Session, ann_id: int, admin_id: int, reason: str) -> Announcement:
+    ann = _get(db, ann_id)
+    if ann.status != "scheduled":
+        raise conflict("只有还没发出的定时公告能取消；已经发出的请用「撤回」", "announcement_not_scheduled")
+    ann.status, ann.closed_by, ann.closed_at, ann.close_reason = "cancelled", admin_id, utcnow(), reason or "取消定时"
+    return ann
+
+
+def revoke(db: Session, ann_id: int, admin_id: int, reason: str) -> tuple[Announcement, int]:
+    """把已送达的通知改成「已撤回」并写明理由：用户的通知中心里不会再留着一条错的公告。
+    已经推到手机上的推送收不回来——这一点在界面上说清楚。"""
+    from app.modules.notification.models import Notification
+
+    ann = _get(db, ann_id)
+    if ann.status != "sent":
+        raise conflict("只有已发出的公告能撤回；还没发的定时公告请用「取消」", "announcement_not_sent")
+    if len(reason.strip()) < 2:
+        raise bad_request("撤回要写明理由：用户会看到这句话", "revoke_reason_required")
+    note = f"这条公告已撤回：{reason.strip()}"[:500]
+    n = 0
+    for row in db.query(Notification).filter(Notification.announcement_id == ann.id):
+        row.title = (REVOKED_PREFIX + ann.title)[:120]
+        row.body = note
+        n += 1
+    ann.status, ann.closed_by, ann.closed_at, ann.close_reason = "revoked", admin_id, utcnow(), reason.strip()
+    return ann, n
+
+
+def read_counts(db: Session, ids: list[int]) -> dict[int, int]:
+    """NTF-067 每条公告有多少人点开过（通知的已读位）。"""
+    from sqlalchemy import func
+
+    from app.modules.notification.models import Notification
+
+    if not ids:
+        return {}
+    rows = (db.query(Notification.announcement_id, func.count(Notification.id))
+            .filter(Notification.announcement_id.in_(ids), Notification.is_read.is_(True))
+            .group_by(Notification.announcement_id).all())
+    return {k: int(v) for k, v in rows}
+
+
+def row(a: Announcement, read: int | None = None) -> dict:
+    out = _row(a)
+    # NTF-067（159 号 spec）阅读率：已读人数 / 送达人数
+    r = read or 0
+    out.update({"read": r, "read_rate": round(r / a.delivered, 3) if a.delivered else None})
+    return out
+
+
+def _row(a: Announcement) -> dict:
+    return {"id": a.id, "title": a.title, "body": a.body, "verified_only": a.verified_only, "status": a.status,
+            "city": a.city or "", "audience": a.audience or "all",
+            "scheduled_at": iso(a.scheduled_at), "created_by": a.created_by, "created_at": iso(a.created_at),
+            "sent_at": iso(a.sent_at), "delivered": a.delivered, "closed_by": a.closed_by,
+            "closed_at": iso(a.closed_at), "close_reason": a.close_reason}
