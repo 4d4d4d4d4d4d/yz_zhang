@@ -22,7 +22,7 @@
 > 现在两个数字都由闸门钉着（`test_doc_counts.py` / `test_sdk_method_triage.py`）。
 
 - **闭环是通的**：发布 → 分解 → 匹配 → 合约 → 双签 → 托管 → 执行 → 交付 →
-  验收 → 放款抽佣 → 互评 → 经验入库，有 2109 个后端测试与**三条**闭环自检钉着
+  验收 → 放款抽佣 → 互评 → 经验入库，有 2110 个后端测试与**三条**闭环自检钉着
   （主链路 / 存管合规态 / 真浏览器联调，见 `docs/OPERATIONS.md` 4.3b）。
 - **不能上线**：不是功能问题，是**资金存管、个税方案、可靠电子签名、
   司法存证、实名/支付/短信/内容安全供应商**这几项需要持牌机构与账号。
@@ -363,6 +363,8 @@
 | APP-101 | 后台「页面出错」标出已提醒的页与阈值 | 已做（V217：`alerted_at` / `alert_people`，后台「提醒运营」列，187 号） |
 | CI-001 | GitHub CI 自 9 月 7 日起一直红（App 单测找不到共享 SDK 的依赖、后端 job 没有 esbuild、浏览器路径写死、PG 备份演练没传密码），本地回归碰不到 | 已做（四处修复 + `tests/test_ci_portability.py` 钉住；App 单测在模拟 CI 依赖布局下 296 条全过） |
 | CI-002 | 本地回归模拟 CI 的依赖布局（只装 app 依赖、无根 node_modules）跑一遍 App 单测 | 已做（V228：`tools/regress.sh` 新一步，193 号） |
+| CI-005 | 本地回归不做 App 类型检查（GitHub CI 做） | 已做（V232：regress.sh 加 App tsc，198 号） |
+| CI-006 | 从 CI 工作流自动比对本地回归的检查项 | 欠 |
 | CI-004 | CI-001 把绝对路径写进 jest 的 moduleDirectories：App 断言一失败 jest 就崩（pretty-format 版本被抢）、看不到哪条失败、负载高时挂住 | 已做（V228：改用 modulePaths；模拟 CI 布局下验过，193 号） |
 | CI-003 | Web 单测全过、但 vitest 抓到 3 个未处理的异步错误（工单列表、通知页拿到畸形响应时在异步里抛错）→ 退出码 1、GitHub CI 红；本地回归只 grep「Tests」那行、不看退出码，显示全绿 | 已做（两页按空表处理；`tools/regress.sh` 每个前端步骤看退出码、保留「Errors」行；`test_ci_portability.py` 钉住，红验过） |
 | SCN-111 | 雷达主题按语义聚类（现在是关键词粗分） | 欠 |

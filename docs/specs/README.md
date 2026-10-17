@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 198 | 本地回归补上 App 类型检查 | [198-app-typecheck-in-regression.md](./198-app-typecheck-in-regression.md) | P0 |
 | 197 | 发单后改服务对象 | [197-change-recipient.md](./197-change-recipient.md) | P0 |
 | 196 | 缺人的那天一键补招 | [196-reboost-day.md](./196-reboost-day.md) | P0 |
 | 195 | 上门回报时带上到场打卡 | [195-visit-checkin.md](./195-visit-checkin.md) | P0 |

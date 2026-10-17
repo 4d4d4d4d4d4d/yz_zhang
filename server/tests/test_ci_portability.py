@@ -64,3 +64,10 @@ def test_local_regression_checks_frontend_exit_codes_not_just_the_tests_line():
     assert "Errors |FAIL" in src, "vitest 的「Errors  N errors」那行要留在输出里"
     fail_regex = re.search(r'grep -qE "([^"]+)" "\$W/be.txt"', src).group(1)
     assert "步骤失败" in fail_regex.split("|"), "写了「步骤失败」却不算失败，等于没写"
+
+
+def test_local_regression_typechecks_the_app_like_ci_does():
+    """CI-005：GitHub CI 的 App job 会做类型检查；本地回归以前只查 Web，App 测试文件里的类型错误本地放得过去。"""
+    src = open(os.path.join(ROOT, "tools", "regress.sh"), encoding="utf-8").read()
+    assert "( cd app && npx tsc --noEmit" in src
+    assert "步骤失败（退出码 $rc）：App 类型检查" in src

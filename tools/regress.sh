@@ -39,6 +39,9 @@ J="$W/counts"; mkdir -p "$J"
   npx eslint packages/core/src web/src app 2>&1 | tail -3
   npx tsc -p web --noEmit 2>&1 | tail -3
   rc=${PIPESTATUS[0]}; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：Web 类型检查"
+  # CI-005：App 也做类型检查（GitHub CI 的 App job 有这一步，本地以前没有——测试文件里的类型错误本地回归放得过去）
+  ( cd app && npx tsc --noEmit 2>&1 | tail -3; exit "${PIPESTATUS[0]}" )
+  rc=$?; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：App 类型检查"
   ( cd server && python3 -m scripts.check_frontend_counts --dir "$J" core web && python3 -m scripts.check_frontend_counts --dir "$J" app )
   ( cd server && python3 -m scripts.harness check )
   npm run build:web 2>&1 | tail -1
