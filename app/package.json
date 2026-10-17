@@ -40,8 +40,7 @@
     "setupFilesAfterEnv": [
       "<rootDir>/jest.setup.js"
     ],
-    "moduleDirectories": [
-      "node_modules",
+    "modulePaths": [
       "<rootDir>/node_modules"
     ]
   }

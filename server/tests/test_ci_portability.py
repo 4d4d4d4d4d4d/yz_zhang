@@ -28,9 +28,25 @@ def test_e2e_does_not_require_the_dev_container_browser():
 
 
 def test_app_jest_falls_back_to_app_node_modules_for_shared_sdk_sources():
+    """CI-001 要的兜底仍在；CI-004 起换了写法。
+
+    CI-001 把 `<rootDir>/node_modules` 写进 `moduleDirectories`：绝对路径会在**每一层**目录的查找里都插一次，
+    jest 自己的内部模块（jest-circus 的 pretty-format 29）于是先找到 app 顶层那份 24.9——任何一条 App 断言失败时，
+    jest 格式化错误信息就崩（`_prettyFormat.format is not a function`），看不到哪条失败，负载高时还会挂住。
+    改成 `modulePaths`（等同 NODE_PATH：正常的逐层查找都找不到才兜底）。原断言「在 moduleDirectories 里」随之退役，
+    换成下面更严的三条（193 号 spec 第 6 节写明）。"""
     cfg = json.load(open(os.path.join(ROOT, "app", "package.json"), encoding="utf-8"))["jest"]
-    assert "<rootDir>/node_modules" in cfg.get("moduleDirectories", []), \
+    assert "<rootDir>/node_modules" in cfg.get("modulePaths", []), \
         "packages/core 的源码在 CI 上向上找不到根 node_modules（App job 只装 app 的依赖）"
+    assert not [d for d in cfg.get("moduleDirectories", []) if "/" in d or d.startswith("<")], \
+        "moduleDirectories 里不许放绝对路径：会抢在 jest 自己的依赖前面"
+
+
+def test_local_regression_runs_app_tests_in_the_ci_dependency_layout():
+    """CI-002：本地回归里有一步按 CI 的布局（只有 app 的依赖、没有根 node_modules）跑引用共享 SDK 的单测。"""
+    src = open(os.path.join(ROOT, "tools", "regress.sh"), encoding="utf-8").read()
+    assert "--exclude='./app/node_modules'" in src and 'cd "$C/app"' in src
+    assert "步骤失败（退出码 $rc）：CI 依赖布局下的 App 单测" in src
 
 
 def test_esbuild_parse_tests_skip_without_frontend_deps_instead_of_failing():

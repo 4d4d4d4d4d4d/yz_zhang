@@ -29,6 +29,13 @@ J="$W/counts"; mkdir -p "$J"
   rc=${PIPESTATUS[0]}; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：Web 单元测试"
   ( cd app && npx jest --json --outputFile="$J/app.json" 2>&1 | grep -E "^Tests:|FAIL"; exit "${PIPESTATUS[0]}" )
   rc=$?; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：App 单元测试"
+  # CI-002 / CI-004：模拟 GitHub CI 的 App job 依赖布局——只装 app 的依赖、没有根 node_modules，
+  # 跑几条引用共享 SDK 源码的单测。本机根目录什么都装着，CI-001 那种「CI 上找不到依赖」本地永远碰不到。
+  ( C="$W/cisim"; rm -rf "$C"; mkdir -p "$C" \
+    && tar --exclude='./app/node_modules' --exclude='./packages/core/node_modules' -C "$W" -cf - ./app ./packages/core ./package.json | tar -xf - -C "$C" \
+    && cp -a "$REPO/app/node_modules" "$C/app/node_modules" \
+    && cd "$C/app" && timeout 600 npx jest gig.test profiles.test screenBoundary --forceExit 2>&1 | grep -E "^Tests:|Cannot find module"; exit "${PIPESTATUS[0]}" )
+  rc=$?; rm -rf "$W/cisim"; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：CI 依赖布局下的 App 单测"
   npx eslint packages/core/src web/src app 2>&1 | tail -3
   npx tsc -p web --noEmit 2>&1 | tail -3
   rc=${PIPESTATUS[0]}; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：Web 类型检查"
