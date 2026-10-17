@@ -34,4 +34,17 @@ describe('APP-092 App 屏幕错误边界', () => {
     expect(body).toContain('<TaskDetailScreen');
     expect(body).toContain("tab === 'messages'");
   });
+
+  it('APP-094 出错时把错误类型交给上报回调；上报自己出错也不影响说明', () => {
+    const report = jest.fn(() => { throw new Error('网络断了'); });
+    render(<ScreenBoundary onBack={() => {}} onError={report}><Boom /></ScreenBoundary>);
+    expect(report).toHaveBeenCalledWith('TypeError');
+    expect(screen.getByLabelText('这一页没加载出来')).toBeTruthy();
+  });
+
+  it('APP-094 主框架上报的屏名不带任务 id', () => {
+    const src = readFileSync(join(__dirname, 'App.tsx'), 'utf8');
+    expect(src).toContain("const screenName = activeTask ? 'task' : overlay ? `overlay-${overlay.kind}` : `tab-${tab}`;");
+    expect(src).toContain("client.reportRenderError('app', screenName, kind)");
+  });
 });

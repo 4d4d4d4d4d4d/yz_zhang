@@ -736,6 +736,16 @@ export interface AcceptPersonResult {
   skipped: Array<{ date: string; reason: string }>;
 }
 
+/** APP-094（184 号 spec）哪一页常坏：平台 × 页面 × 错误类型 */
+export interface ClientErrorRow {
+  platform: 'web' | 'app';
+  page: string;
+  kind: string;
+  count: number;
+  people: number;
+  last_at: string;
+}
+
 /** SCN-116 一天的名额：招到 = 有人接且没取消（含做完）；还缺 = 仍在招募；取消的单独数 */
 export interface TaskDaySummary {
   date: string;

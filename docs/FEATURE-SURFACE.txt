@@ -32,6 +32,7 @@ api GET /api/v1/admin/audit-log/verify
 api GET /api/v1/admin/campaigns
 api GET /api/v1/admin/certifications
 api GET /api/v1/admin/certifications/pending
+api GET /api/v1/admin/client-errors
 api GET /api/v1/admin/coupons
 api GET /api/v1/admin/funnels
 api GET /api/v1/admin/knowledge/overview
@@ -351,6 +352,7 @@ api POST /api/v1/circles
 api POST /api/v1/circles/{circle_id}/join
 api POST /api/v1/circles/{circle_id}/members/{user_id}/approve
 api POST /api/v1/circles/{circle_id}/members/{user_id}/remove
+api POST /api/v1/client-errors
 api POST /api/v1/contents
 api POST /api/v1/contents/{content_id}/comments
 api POST /api/v1/contents/{content_id}/like
@@ -604,6 +606,7 @@ sdk adminApprovePack
 sdk adminAuditLog
 sdk adminAuditLogPage
 sdk adminCertifications
+sdk adminClientErrors
 sdk adminCreateLegalFaq
 sdk adminCreatePack
 sdk adminDraftKnowledgeFromRadar
@@ -913,6 +916,7 @@ sdk renameKnowledgeCluster
 sdk replyMyTicket
 sdk replyTicket
 sdk report
+sdk reportRenderError
 sdk reportVisit
 sdk requestInvoice
 sdk requestTeamSpend

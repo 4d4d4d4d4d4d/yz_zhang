@@ -39,6 +39,7 @@ ROUTE_ROLES = {
     "GET /admin/certifications/pending": ('compliance',),
     "GET /admin/coupons": ('ops', 'finance'),
     "GET /admin/funnels": ('ops',),
+    "GET /admin/client-errors": ('ops',),   # APP-094 哪一页常坏（184 号 spec）
     "GET /admin/knowledge/overview": ('ops',),
     "GET /admin/knowledge/thresholds/{category}/pairs": ('ops',),
     "GET /admin/knowledge/undecided": ('ops',),

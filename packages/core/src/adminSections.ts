@@ -16,6 +16,8 @@ export interface AdminSection {
 
 export const ADMIN_SECTIONS = {
   metrics: { label: '平台指标', probe: 'GET /admin/metrics', roles: ALL_ADMIN_ROLES },
+  // APP-094（184 号 spec）
+  clientErrors: { label: '页面出错', probe: 'GET /admin/client-errors', roles: ['ops'] },
   roles: { label: '管理员与角色', probe: 'GET /admin/roles', roles: ALL_ADMIN_ROLES },
   launch: { label: '上线准备', probe: 'GET /admin/vendors', roles: ALL_ADMIN_ROLES },
   queues: { label: '人审队列总览', probe: 'GET /admin/queues', roles: ALL_ADMIN_ROLES },

@@ -132,7 +132,12 @@ export default function App() {
       <View style={styles.body}>
         {/* APP-092 一屏出错只坏这一屏：顶栏、Tab 还在，换成说明（183 号 spec）；换一屏自动复位 */}
         <ScreenBoundary key={activeTask ? `task-${activeTask.id}` : overlay ? `overlay-${overlay.kind}` : `tab-${tab}`}
-                        onBack={() => { setActiveTask(null); setOverlay(null); }}>
+                        onBack={() => { setActiveTask(null); setOverlay(null); }}
+                        onError={(kind) => {
+                          // APP-094 屏名不带任务 id
+                          const screenName = activeTask ? 'task' : overlay ? `overlay-${overlay.kind}` : `tab-${tab}`;
+                          void client.reportRenderError('app', screenName, kind).catch(() => {});
+                        }}>
         {activeTask ? (
           <TaskDetailScreen client={client} me={me} task={activeTask}
                             onBack={() => setActiveTask(null)}

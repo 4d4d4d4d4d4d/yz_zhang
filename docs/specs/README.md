@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 184 | 页面渲染出错的上报 | [184-render-error-reports.md](./184-render-error-reports.md) | P0 |
 | 183 | 每一页都不白屏：错误边界与全路由闸门 | [183-no-white-screen.md](./183-no-white-screen.md) | P0 |
 | 182 | 详情页每一块都扛得住畸形响应 | [182-detail-page-resilience.md](./182-detail-page-resilience.md) | P0 |
 | 181 | 发单人一次选同一个人的多天 | [181-accept-a-person-for-days.md](./181-accept-a-person-for-days.md) | P0 |

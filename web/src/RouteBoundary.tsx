@@ -4,8 +4,9 @@
 // 只能关掉标签页。按路由加边界后：导航在、这一页换成一张说明卡；换一页（路径变了）边界自动复位。
 import { Component, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useApp } from './store';
 
-class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+class Boundary extends Component<{ children: ReactNode; onError?: (kind: string) => void }, { failed: boolean }> {
   state = { failed: false };
 
   static getDerivedStateFromError() {
@@ -14,7 +15,10 @@ class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
 
   componentDidCatch(error: unknown) {
     // 只记错误类型，不记内容：页面上的数据可能有个人信息（SEC-065）
-    console.error('page_render_failed', error instanceof Error ? error.name : 'unknown');
+    const kind = error instanceof Error ? error.name : 'unknown';
+    console.error('page_render_failed', kind);
+    // APP-094（184 号 spec）报给运营：只有页面与错误类型；报不上就算了，不能让上报再出一次错
+    try { this.props.onError?.(kind); } catch { /* 忽略 */ }
   }
 
   render() {
@@ -37,5 +41,16 @@ class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
 /** 按路径复位：从出错的页面点到别的页，新页面正常显示。 */
 export default function RouteBoundary({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
-  return <Boundary key={pathname}>{children}</Boundary>;
+  const { client } = useApp();
+  const page = pageKey(pathname);
+  return (
+    <Boundary key={pathname} onError={(kind) => { void client.reportRenderError('web', page, kind).catch(() => {}); }}>
+      {children}
+    </Boundary>
+  );
+}
+
+/** APP-094 上报用的页面名：数字换成 :id，邀请链接里的 token 换成 :token（不把 id、口令报上去）。 */
+export function pageKey(pathname: string): string {
+  return pathname.replace(/^\/teams\/join\/[^/]+/, '/teams/join/:token').replace(/\d+/g, ':id').slice(0, 20);
 }

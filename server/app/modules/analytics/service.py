@@ -158,3 +158,57 @@ def _on_task_completed(db: Session, payload: dict) -> None:
 
 def register_event_handlers() -> None:
     subscribe("task.completed", _on_task_completed, retry=True)
+
+
+# ---------- APP-094 页面渲染出错的上报（184 号 spec） ----------
+# 两端的错误边界接住一页 / 一屏的渲染错误后报一条：只有平台、页面（归一化的路径或屏名）、错误类型，
+# 不带错误内容、不带页面数据（那里面可能有个人信息，SEC-065）。同一人同一页同类错误一分钟内只记一次。
+RENDER_PREFIX = "render_failed"
+_PAGE = re.compile(r"^[a-z0-9/:_-]{1,20}$")
+_KIND = re.compile(r"^[A-Za-z]{1,30}$")
+RENDER_DEDUP_SECONDS = 60
+# 没登录的上报全站每分钟最多记这么多条：页面名可以随便编，不设顶就能把表灌满
+RENDER_ANON_PER_MINUTE = 100
+
+
+def report_render_error(db: Session, user_id, platform: str, page: str, kind: str) -> bool:
+    from datetime import timedelta
+
+    from app.modules.account.models import utcnow
+
+    # 路径里的数字一律换成 :id——id、手机号、订单号都不进库（客户端也会这样归一，服务端再兜一次）
+    page = re.sub(r"\d+", ":id", page or "")
+    page = page if _PAGE.fullmatch(page) else "other"
+    kind = kind if _KIND.fullmatch(kind or "") else "Error"
+    name = f"{RENDER_PREFIX}:{platform}:{kind}"
+    since = utcnow() - timedelta(seconds=RENDER_DEDUP_SECONDS)
+    q = db.query(AnalyticsEvent.id).filter(AnalyticsEvent.name == name, AnalyticsEvent.ref_type == page,
+                                           AnalyticsEvent.created_at >= since)
+    q = q.filter(AnalyticsEvent.user_id == user_id) if user_id is not None else q.filter(AnalyticsEvent.user_id.is_(None))
+    if q.first():
+        return False
+    if user_id is None and db.query(func.count(AnalyticsEvent.id)).filter(
+            AnalyticsEvent.name.like(f"{RENDER_PREFIX}:%"), AnalyticsEvent.user_id.is_(None),
+            AnalyticsEvent.created_at >= since).scalar() >= RENDER_ANON_PER_MINUTE:
+        return False
+    track(db, name, user_id, page)
+    return True
+
+
+def render_errors(db: Session, days: int) -> list[dict]:
+    """近 N 天哪一页常坏：按平台 × 页面 × 错误类型数次数、不同的人数、最近一次（只给运营看聚合）。"""
+    from datetime import timedelta
+
+    from app.core.timefmt import iso
+    from app.modules.account.models import utcnow
+
+    since = utcnow() - timedelta(days=days)
+    rows = (db.query(AnalyticsEvent.name, AnalyticsEvent.ref_type, func.count(AnalyticsEvent.id),
+                     func.count(distinct(AnalyticsEvent.user_id)), func.max(AnalyticsEvent.created_at))
+            .filter(AnalyticsEvent.name.like(f"{RENDER_PREFIX}:%"), AnalyticsEvent.created_at >= since)
+            .group_by(AnalyticsEvent.name, AnalyticsEvent.ref_type).all())
+    out = []
+    for name, page, n, people, last in rows:
+        _, platform, kind = name.split(":", 2)
+        out.append({"platform": platform, "page": page, "kind": kind, "count": n, "people": people, "last_at": iso(last)})
+    return sorted(out, key=lambda r: (-r["count"], r["platform"], r["page"]))

@@ -5,7 +5,7 @@
 import { Component, type ReactNode } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-type Props = { children: ReactNode; onBack: () => void };
+type Props = { children: ReactNode; onBack: () => void; onError?: (kind: string) => void };
 
 export class ScreenBoundary extends Component<Props, { failed: boolean }> {
   state = { failed: false };
@@ -16,7 +16,10 @@ export class ScreenBoundary extends Component<Props, { failed: boolean }> {
 
   componentDidCatch(error: unknown) {
     // 只记错误类型，不记内容：屏幕上的数据可能有个人信息（SEC-065）
-    console.error('screen_render_failed', error instanceof Error ? error.name : 'unknown');
+    const kind = error instanceof Error ? error.name : 'unknown';
+    console.error('screen_render_failed', kind);
+    // APP-094（184 号 spec）报给运营：只有屏名与错误类型；报不上就算了
+    try { this.props.onError?.(kind); } catch { /* 忽略 */ }
   }
 
   render() {

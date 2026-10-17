@@ -49,6 +49,8 @@ def _admin_paths() -> set[str]:
 #
 # 判定标准（沿用 V98）：**只有运营/风控能做，而不做就有人的钱或权利卡住。**
 REACHED_BY: dict[str, str] = {
+    # APP-094 页面渲染出错的聚合（184 号 spec）：后台「页面出错」一块
+    "/admin/client-errors": "adminClientErrors",
     # KB-070~076（V134）经验子类的运营面：待定区不判，经验就永远堆在那里
     "/admin/knowledge/overview": "knowledgeAdminOverview",
     # PACK-102/103/107 场景包运营（123 号 spec）：管理后台「服务包（场景包）」一节

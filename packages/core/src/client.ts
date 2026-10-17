@@ -23,6 +23,7 @@ import type {
   ApplyDaysResult,
   DayApplicant,
   AcceptPersonResult,
+  ClientErrorRow,
   RiskDisclosure,
   ShareRow,
   SpendRequestView,
@@ -639,6 +640,14 @@ export class PlatformClient {
   /** SCN-126 一次选同一个人的多天：每个名额各一份合约，签署与托管仍逐份确认 */
   acceptPerson(taskId: number, applicantId: number) {
     return this.request<AcceptPersonResult>('POST', `/tasks/${taskId}/accept-person`, { applicant_id: applicantId });
+  }
+  /** APP-094 错误边界接住渲染错误后上报：只有平台、页面（归一化路径或屏名）、错误类型 */
+  reportRenderError(platform: 'web' | 'app', page: string, kind: string) {
+    return this.request<{ ok: boolean; recorded: boolean }>('POST', '/client-errors', { platform, page, kind });
+  }
+  /** APP-094 运营看哪一页常坏 */
+  adminClientErrors(days = 7) {
+    return this.request<ClientErrorRow[]>('GET', `/admin/client-errors?days=${days}`);
   }
   /** SCN-120 一次上门回报（只有接单的人、只在执行中）：勾清单里做了的、备注、照片 */
   reportVisit(taskId: number, body: { done: string[]; note?: string; images?: string[] }) {

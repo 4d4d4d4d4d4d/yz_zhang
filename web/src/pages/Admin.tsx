@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketRow, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketRow, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -29,6 +29,7 @@ export default function Admin() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [q, setQ] = useState('');
   const [banning, setBanning] = useState<number | null>(null);
+  const [clientErrors, setClientErrors] = useState<ClientErrorRow[]>([]);
 
   // SEC-061d（165 号 spec）：只加载看得到的板块——以前财务一进后台，举报与用户两个请求就 403，整段加载跟着失败
   const see = (k: AdminSectionKey) => canSeeAdminSection(me, k);
@@ -36,6 +37,8 @@ export default function Admin() {
     if (canSeeAdminSection(me, 'metrics')) setMetrics(await client.adminMetrics());
     if (canSeeAdminSection(me, 'reports')) setReports(await client.adminReports());
     if (canSeeAdminSection(me, 'users')) setUsers(await client.adminUsers(q));
+    // APP-094（184 号 spec）哪一页常坏
+    if (canSeeAdminSection(me, 'clientErrors')) setClientErrors(asList(await client.adminClientErrors().catch(() => [])));
   }, [client, q, me]);
 
   useEffect(() => {
@@ -47,6 +50,24 @@ export default function Admin() {
 
   return (
     <div className="page">
+      {see('clientErrors') && (
+        <div className="card" aria-label="页面出错">
+          <h3>页面出错（近 7 天）</h3>
+          {clientErrors.length === 0 ? <p className="muted">近 7 天没有页面渲染出错的上报。</p> : (
+            <table>
+              <thead><tr><th>端</th><th>页面</th><th>错误类型</th><th>次数</th><th>人数</th><th>最近一次</th></tr></thead>
+              <tbody>
+                {clientErrors.map((r) => (
+                  <tr key={`${r.platform}${r.page}${r.kind}`}>
+                    <td>{r.platform === 'web' ? '网页' : 'App'}</td><td>{r.page}</td><td>{r.kind}</td>
+                    <td>{r.count}</td><td>{r.people}</td><td>{formatDateTime(r.last_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
       {see('metrics') && metrics && (
         <div className="card">
           <h3>平台指标</h3>
