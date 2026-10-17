@@ -1,4 +1,4 @@
-import { briefHint,
+import { briefApplyMessage, briefHint,
   apiErrorText, fmtYuan,
   type CapabilityProfile, type InfluencePublic, type SkillNormalized, type TaskDraftInput, type TaskProfile, type TaskProfileView,
 } from '@platform/core';
@@ -44,7 +44,11 @@ export function DraftHints({ draft }: { draft: TaskDraftInput }) {
 }
 
 /** 任务详情：报名前看一眼这单的画像（风险、技能、价格位置）；SCN-110 创作类的单再列出没写的几项该问什么。 */
-export function TaskProfilePanel({ taskId, isCreator = false }: { taskId: number; isCreator?: boolean }) {
+export function TaskProfilePanel({ taskId, isCreator = false, onApplyWithQuestions }: {
+  taskId: number; isCreator?: boolean;
+  /** SCN-135 能报名时由任务详情传入：带着没写的几项去报名 */
+  onApplyWithQuestions?: (message: string) => void;
+}) {
   const { client } = useApp();
   const [p, setP] = useState<TaskProfileView | null>(null);
   // 画像是附加信息：取不到（或老服务端没有这个接口）就不显示，不影响任务详情本身
@@ -62,6 +66,9 @@ export function TaskProfilePanel({ taskId, isCreator = false }: { taskId: number
         <div aria-label="需求九项">
           <p className="muted">{hint.title}</p>
           <ul>{hint.lines.map((l) => <li key={l}>{l}</li>)}</ul>
+          {!isCreator && onApplyWithQuestions && briefApplyMessage(p.brief) && (
+            <button className="ghost" onClick={() => onApplyWithQuestions(briefApplyMessage(p.brief) ?? '')}>带着这些问题报名</button>
+          )}
         </div>
       )}
     </div>

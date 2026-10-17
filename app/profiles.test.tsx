@@ -1,6 +1,7 @@
 // PROF-100 任务画像与能力画像在 App 上的行为（126 号 spec）。
-import { render, screen, waitFor } from '@testing-library/react-native';
-import { PlatformClient } from '@platform/core';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { PlatformClient, type Me, type Task } from '@platform/core';
+import { TaskDetailScreen } from './App';
 import { CapabilityScreen, DraftHints, TaskProfileBlock } from './profiles';
 
 type Call = { method: string; path: string; body?: unknown };
@@ -77,5 +78,44 @@ describe('SCN-110 App 任务详情上的需求九项', () => {
     unmount();
     render(<TaskProfileBlock client={makeClient(profile(BRIEF), [])} taskId={7} isCreator />);
     expect(await screen.findByText('创作类需求一般写清九项，已写 1/2。还可以补：')).toBeTruthy();
+  });
+});
+
+describe('SCN-135 App 带着这些问题报名', () => {
+  const BRIEF = { missing: 1, items: [{ name: '用途', ok: true, ask: '用在哪儿？' }, { name: '版权授权', ok: false, ask: '版权怎么约定？' }] };
+  const profile = { '/tasks/7/profile': { task_id: 7, category: '设计', mode: 'remote', declared_skills: [], inferred_skills: [], size: 'medium',
+    price: { sample_size: 0, p50_cents: null, min_cents: null, max_cents: null, position: 'unknown' }, risks: [], completeness: 0.5, checks: [], brief: BRIEF } };
+  it('能报名时有按钮，按下把问题交给报名', async () => {
+    const onApply = jest.fn();
+    render(<TaskProfileBlock client={makeClient(profile, [])} taskId={7} onApplyWithQuestions={onApply} />);
+    fireEvent.press(await screen.findByText('带着这些问题报名'));
+    expect(onApply).toHaveBeenCalledWith('我可以做。报名前想先确认几件事：\n1. 版权授权：版权怎么约定？');
+  });
+  it('发单人自己、或不能报名时没有按钮', async () => {
+    const { unmount } = render(<TaskProfileBlock client={makeClient(profile, [])} taskId={7} isCreator onApplyWithQuestions={jest.fn()} />);
+    await screen.findByText('创作类需求一般写清九项，已写 1/2。还可以补：');
+    expect(screen.queryByText('带着这些问题报名')).toBeNull();
+    unmount();
+    render(<TaskProfileBlock client={makeClient(profile, [])} taskId={7} />);
+    await screen.findByText('说明里没写的 1 项，报名前可以先问问发单人：');
+    expect(screen.queryByText('带着这些问题报名')).toBeNull();
+  });
+});
+
+describe('SCN-135 App 任务详情里接上报名', () => {
+  it('在招的单、不是发单人：按下就带着问题报名', async () => {
+    const calls: Call[] = [];
+    const BRIEF = { missing: 1, items: [{ name: '版权授权', ok: false, ask: '版权怎么约定？' }] };
+    const client = makeClient({ '/tasks/7/profile': { task_id: 7, category: '设计', mode: 'remote', declared_skills: [], inferred_skills: [],
+      size: 'medium', price: { sample_size: 0, p50_cents: null, min_cents: null, max_cents: null, position: 'unknown' }, risks: [],
+      completeness: 0.5, checks: [], brief: BRIEF }, 'POST /tasks/7/applications': { id: 5, status: 'pending' } }, calls);
+    const task = { id: 7, creator_id: 1, executor_id: null, parent_id: null, depends_on: [], title: '海报', description: '', category: '设计',
+      task_type: 'service', required_skills: [], budget_cents: 20000, pricing: 'fixed', ip_assignment: 'assign', bonus_cents: 0,
+      is_remote: true, city: '上海', lat: null, lng: null, address_hint: '', address_exact: '', status: 'published', deadline: null,
+      reject_count: 0, created_at: '2026-10-16T00:00:00Z' } as Task;
+    render(<TaskDetailScreen client={client} me={{ id: 2, nickname: '我' } as unknown as Me} task={task} onBack={() => {}} onChanged={async () => {}} />);
+    fireEvent.press(await screen.findByText('带着这些问题报名'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks/7/applications')?.body)
+      .toEqual({ message: '我可以做。报名前想先确认几件事：\n1. 版权授权：版权怎么约定？' }));
   });
 });

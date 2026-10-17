@@ -1,5 +1,5 @@
 // PROF-100 任务画像与能力画像（126 号 spec）——App 端：发布时边写边提示、我的能力画像。
-import { briefHint,
+import { briefApplyMessage, briefHint,
   hasLists, MALFORMED_TEXT,
   apiErrorText, fmtYuan, type CapabilityProfile, type PlatformClient, type SkillNormalized, type TaskDraftInput, type TaskProfile,
 } from '@platform/core';
@@ -42,7 +42,11 @@ export function DraftHints({ client, draft, delayMs = 500 }: { client: PlatformC
 }
 
 /** 任务详情上的一块：报名前看一眼风险、技能、价格位置。取不到就不显示。 */
-export function TaskProfileBlock({ client, taskId, isCreator = false }: { client: PlatformClient; taskId: number; isCreator?: boolean }) {
+export function TaskProfileBlock({ client, taskId, isCreator = false, onApplyWithQuestions }: {
+  client: PlatformClient; taskId: number; isCreator?: boolean;
+  /** SCN-135 能报名时由任务详情传入：带着没写的几项去报名 */
+  onApplyWithQuestions?: (message: string) => void;
+}) {
   const [p, setP] = useState<TaskProfile | null>(null);
   useEffect(() => {
     Promise.resolve().then(() => client.taskProfile(taskId))
@@ -59,6 +63,9 @@ export function TaskProfileBlock({ client, taskId, isCreator = false }: { client
       {/* SCN-110 创作类的单：没写的几项该问什么（发单人自己看是「还可以补」） */}
       {hint && <Text style={s.muted}>{hint.title}</Text>}
       {hint?.lines.map((l) => <Text key={l}>· {l}</Text>)}
+      {!isCreator && onApplyWithQuestions && !!briefApplyMessage(p.brief) && (
+        <Button title="带着这些问题报名" onPress={() => onApplyWithQuestions(briefApplyMessage(p.brief) ?? '')} />
+      )}
     </View>
   );
 }

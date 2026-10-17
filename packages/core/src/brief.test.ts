@@ -1,6 +1,6 @@
 // SCN-110（194 号 spec）任务详情上的需求九项：同一份数据，对发单人与接单的人换个说法。
 import { describe, expect, it } from 'vitest';
-import { briefHint } from './brief';
+import { briefApplyMessage, briefHint } from './brief';
 
 const BRIEF = { missing: 2, items: [
   { name: '用途', ok: true, ask: '用在哪儿？' }, { name: '改稿次数', ok: false, ask: '包含几次修改？' }, { name: '版权授权', ok: false, ask: '版权怎么约定？' }] };
@@ -20,5 +20,16 @@ describe('SCN-110 briefHint', () => {
   });
   it('按 items 数，不信 missing 字段', () => {
     expect(briefHint({ ...BRIEF, missing: 0 }, false)?.lines).toHaveLength(2);
+  });
+});
+
+describe('SCN-135 briefApplyMessage', () => {
+  it('没写的几项按顺序编号写进报名留言', () => {
+    expect(briefApplyMessage(BRIEF)).toBe('我可以做。报名前想先确认几件事：\n1. 改稿次数：包含几次修改？\n2. 版权授权：版权怎么约定？');
+  });
+  it('都写了、不是创作类、畸形数据：没有这个入口', () => {
+    expect(briefApplyMessage({ missing: 0, items: [{ name: '用途', ok: true, ask: '用在哪儿？' }] })).toBeNull();
+    expect(briefApplyMessage(null)).toBeNull();
+    expect(briefApplyMessage({ missing: 0 } as never)).toBeNull();
   });
 });

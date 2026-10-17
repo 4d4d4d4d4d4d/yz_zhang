@@ -1,9 +1,10 @@
 // SCN-110 任务详情上的创作类需求九项（194 号 spec）：接单的人看到「报名前可以先问问发单人」，发单人自己看到「还可以补」。
 import { PlatformClient } from '@platform/core';
-import { render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { TaskProfilePanel } from './Profiles';
 import { AppProvider } from './store';
 
 const ME = (id: number) => ({ id, phone: '138', nickname: '我', bio: '', city: '上海', lat: null, lng: null, skills: [], interests: [],
@@ -49,5 +50,51 @@ describe('SCN-110 任务详情上的需求九项', () => {
     open(2, null);
     await screen.findByLabelText('任务画像');
     expect(screen.queryByLabelText('需求九项')).toBeNull();
+  });
+});
+
+describe('SCN-135 带着这些问题报名', () => {
+  function openWithCalls(meId: number, task: unknown, calls: Array<{ method: string; path: string; body?: unknown }>) {
+    localStorage.setItem('token', 'tok');
+    const routes: Record<string, unknown> = { '/users/me': ME(meId), '/tasks/71': task, '/tasks/71/profile': { ...PROFILE, brief: BRIEF },
+      '/tasks/71/applications': { id: 5, status: 'pending' } };
+    const fetchImpl = vi.fn(async (url: string, init?: { method?: string; body?: string }) => {
+      const p = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+      calls.push({ method: init?.method ?? 'GET', path: p, body: init?.body ? JSON.parse(init.body) : undefined });
+      return { ok: true, status: 200, text: async () => JSON.stringify(routes[p] ?? []) };
+    }) as unknown as typeof fetch;
+    render(<MemoryRouter initialEntries={['/tasks/71']}>
+      <AppProvider client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })}><App /></AppProvider></MemoryRouter>);
+  }
+
+  it('接单的人一键报名，留言里写着没写的几项', async () => {
+    const calls: Array<{ method: string; path: string; body?: unknown }> = [];
+    openWithCalls(2, TASK, calls);
+    fireEvent.click(await screen.findByRole('button', { name: '带着这些问题报名' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks/71/applications')?.body).toEqual({
+      message: '我可以做。报名前想先确认几件事：\n1. 改稿次数：包含几次修改？超出的怎么算（建议走变更单）？\n2. 版权授权：版权怎么约定？' }));
+  });
+
+  it('发单人自己、或单已不在招：没有这个按钮', async () => {
+    openWithCalls(9, TASK, []);
+    await screen.findByLabelText('需求九项');
+    expect(screen.queryByRole('button', { name: '带着这些问题报名' })).toBeNull();
+    cleanup();
+    openWithCalls(2, { ...TASK, status: 'in_progress' }, []);
+    await screen.findByLabelText('需求九项');
+    expect(screen.queryByRole('button', { name: '带着这些问题报名' })).toBeNull();
+  });
+});
+
+describe('SCN-135 画像面板自己也守住：发单人看不到报名按钮', () => {
+  it('就算传了回调，发单人那一侧也不给按钮', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      const p = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+      return { ok: true, status: 200, text: async () => JSON.stringify(p === '/tasks/71/profile' ? { ...PROFILE, brief: BRIEF } : []) };
+    }) as unknown as typeof fetch;
+    render(<MemoryRouter><AppProvider client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })}>
+      <TaskProfilePanel taskId={71} isCreator onApplyWithQuestions={() => {}} /></AppProvider></MemoryRouter>);
+    await screen.findByLabelText('需求九项');
+    expect(screen.queryByRole('button', { name: '带着这些问题报名' })).toBeNull();
   });
 });
