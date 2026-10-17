@@ -2664,6 +2664,11 @@ export interface GigTaskCard {
   address_hint: string;
   city: string;
   deadline: string | null;
+  /** SCN-129 按天的名额：哪天（北京时间）；不按天的单是 null */
+  work_date: string | null;
+  /** SCN-129 名额每天几点到几点；没写是空串 */
+  shift_start: string;
+  shift_end: string;
   /** 附近：直线距离；顺路：没有 */
   distance_m?: number;
   /** 顺路：多走的路（直线估算） */

@@ -59,3 +59,13 @@ describe('GIG-100 App 上的接单', () => {
     expect(calls.find((c) => c.path === '/gig/along')?.query).toContain('to_place=2');
   });
 });
+
+describe('SCN-129 App 接单卡片写明名额哪天几点', () => {
+  it('按天的名额写日期与时段', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({ 'GET /gig/available': ON, '/gig/places': [],
+      '/gig/nearby': { radius_km: 3, notice: '', items: [{ ...CARD, work_date: '2026-10-24', shift_start: '09:00', shift_end: '18:00' }] } }, calls);
+    render(<GigScreen client={client} locate={here} />);
+    expect(await screen.findByText(/人民广场 · 10-24 09:00–18:00 · 约 0.8 公里/)).toBeTruthy();
+  });
+});

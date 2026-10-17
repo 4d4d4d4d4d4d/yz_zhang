@@ -103,7 +103,8 @@ def get_nearby(lat: float | None = Query(default=None, ge=-90, le=90), lng: floa
             raise bad_request("先打开「现在有空」，或者带上当前位置", "gig_need_location")
         lat, lng = a.lat, a.lng
     r = radius_km or (a.radius_km if a else 5)
-    return {"radius_km": r, "items": svc.nearby(db, user.id, lat, lng, r, a.categories if a else None),
+    window = (utcnow(), a.until) if a else None      # SCN-129 开着「现在有空」：只看这段时间对得上的名额
+    return {"radius_km": r, "items": svc.nearby(db, user.id, lat, lng, r, a.categories if a else None, window=window),
             "notice": "距离是直线估算，不是道路距离"}
 
 
@@ -126,7 +127,8 @@ def get_along(from_place: int | None = None, to_place: int | None = None,
         raise bad_request("起点用当前位置或一个常用地点", "gig_need_location")
     a = svc.active(db, user.id)
     return {"to": dst.name, "max_detour_km": max_detour_km,
-            "items": svc.along(db, user.id, src, (dst.lat, dst.lng), max_detour_km, a.categories if a else None),
+            "items": svc.along(db, user.id, src, (dst.lat, dst.lng), max_detour_km, a.categories if a else None,
+                               window=(utcnow(), a.until) if a else None),
             "notice": "多走的路是直线估算（起点→任务点→终点 比 起点→终点 多出的距离）"}
 
 

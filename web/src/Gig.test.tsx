@@ -86,3 +86,16 @@ describe('GIG-100 接单', () => {
     expect((await screen.findByText(/拿不到位置/))).toBeTruthy();
   });
 });
+
+describe('SCN-129 接单卡片写明名额哪天几点', () => {
+  it('按天的名额写日期与时段，没写时段写全天，不按天的单不写', async () => {
+    const slots = [{ ...CARD, task_id: 21, title: '周末快闪店帮手 · 第1天', work_date: '2026-10-24', shift_start: '09:00', shift_end: '18:00' },
+      { ...CARD, task_id: 22, title: '展会帮手', work_date: '2026-10-25', shift_start: '', shift_end: '' },
+      { ...CARD, task_id: 23, title: '不按天', work_date: null, shift_start: '', shift_end: '' }];
+    open('/gig', { 'GET /gig/available': ON, '/gig/places': [], '/gig/nearby': { radius_km: 3, items: slots, notice: '' } });
+    expect(await screen.findByText(/人民广场 · 10-24 09:00–18:00 · 约 0.8 公里/)).toBeTruthy();
+    expect(screen.getByText(/人民广场 · 10-25 全天 · 约 0.8 公里/)).toBeTruthy();
+    const plain = screen.getByRole('link', { name: '不按天' }).parentElement!;
+    expect(plain.textContent).toContain('人民广场 · 约 0.8 公里');
+  });
+});

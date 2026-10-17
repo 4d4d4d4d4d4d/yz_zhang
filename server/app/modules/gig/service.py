@@ -4,7 +4,8 @@
 """
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
@@ -40,7 +41,35 @@ def active(db: Session, user_id: int) -> GigAvailability | None:
     return a
 
 
-def _open_tasks(db: Session, user_id: int, categories: list[str] | None = None):
+# SCN-129（192 号 spec）名额写着「哪天几点到几点」（北京时间）。时段已经过去的不推；开着「现在有空」时，
+# 只推与「现在 → 有空截止」对得上的名额——推一个下周三的名额给「接下来两小时有空」的人，等于白跑一趟。
+_CN = ZoneInfo("Asia/Shanghai")
+
+
+def slot_window(t) -> tuple[datetime, datetime] | None:
+    """名额那天的时段换成 UTC（无时区，与库里一致）；不是按天的名额返回 None。没写时段按整天。"""
+    if not getattr(t, "work_date", None):
+        return None
+
+    def at(hm: str) -> datetime:
+        h, m = (int(x) for x in hm.split(":"))
+        local = datetime.combine(t.work_date, time(0, 0), tzinfo=_CN) + timedelta(hours=h, minutes=m)
+        return local.astimezone(timezone.utc).replace(tzinfo=None)
+
+    return at(t.shift_start or "00:00"), at(t.shift_end or "24:00")
+
+
+def fits_window(t, window: tuple[datetime, datetime] | None, now: datetime) -> bool:
+    w = slot_window(t)
+    if w is None:
+        return True
+    if w[1] <= now:
+        return False
+    return window is None or (w[0] < window[1] and w[1] > window[0])
+
+
+def _open_tasks(db: Session, user_id: int, categories: list[str] | None = None,
+                window: tuple[datetime, datetime] | None = None):
     from app.modules.task.models import Task
 
     now = utcnow()
@@ -49,22 +78,23 @@ def _open_tasks(db: Session, user_id: int, categories: list[str] | None = None):
                               (Task.deadline.is_(None)) | (Task.deadline > now))
     if categories:
         q = q.filter(Task.category.in_(categories))
-    return q.order_by(Task.id.desc()).limit(CANDIDATES).all()
+    return [t for t in q.order_by(Task.id.desc()).limit(CANDIDATES).all() if fits_window(t, window, now)]
 
 
 def _card(t, **extra) -> dict:
-    from app.core.timefmt import iso
+    from app.core.timefmt import day, iso
 
     return {"task_id": t.id, "title": t.title, "category": t.category, "budget_cents": t.budget_cents,
             "net_cents": net_cents(t.budget_cents), "address_hint": t.address_hint, "city": t.city,
-            "deadline": iso(t.deadline), **extra}
+            "deadline": iso(t.deadline), "work_date": day(t.work_date), "shift_start": t.shift_start or "",
+            "shift_end": t.shift_end or "", **extra}
 
 
 def nearby(db: Session, user_id: int, lat: float, lng: float, radius_km: int, categories: list[str] | None,
-           limit: int = 20) -> list[dict]:
+           limit: int = 20, window: tuple[datetime, datetime] | None = None) -> list[dict]:
     """半径内、按距离排序；同距离档（500 米一档）里报酬高的在前。"""
     out = []
-    for t in _open_tasks(db, user_id, categories):
+    for t in _open_tasks(db, user_id, categories, window):
         d = haversine_m(lat, lng, t.lat, t.lng)
         if d <= radius_km * 1000:
             out.append((round(d / 500), -t.budget_cents, t.id, t, round(d)))
@@ -73,7 +103,7 @@ def nearby(db: Session, user_id: int, lat: float, lng: float, radius_km: int, ca
 
 
 def along(db: Session, user_id: int, src: tuple[float, float], dst: tuple[float, float], max_detour_km: float,
-          categories: list[str] | None, limit: int = 20) -> list[dict]:
+          categories: list[str] | None, limit: int = 20, window: tuple[datetime, datetime] | None = None) -> list[dict]:
     """顺路单：任务点 T 让「起点 → 终点」多走的路 = d(O,T) + d(T,D) − d(O,D)。按多走的少排序。
 
     业界的同一思路：即时配送派单看的是「插进这一单之后路线增加了多少」，不是离骑手多近
@@ -81,7 +111,7 @@ def along(db: Session, user_id: int, src: tuple[float, float], dst: tuple[float,
     """
     base = haversine_m(*src, *dst)
     out = []
-    for t in _open_tasks(db, user_id, categories):
+    for t in _open_tasks(db, user_id, categories, window):
         detour = haversine_m(*src, t.lat, t.lng) + haversine_m(t.lat, t.lng, *dst) - base
         if detour <= max_detour_km * 1000:
             out.append((round(detour), -t.budget_cents, t.id, t, round(haversine_m(*src, t.lat, t.lng))))
@@ -134,6 +164,8 @@ def on_task_published(db: Session, payload: dict) -> None:
             .limit(5000).all())
     for a in rows:
         if a.categories and t.category not in a.categories:
+            continue
+        if not fits_window(t, (now, a.until), now):      # SCN-129 名额的时段与这段「有空」对不上
             continue
         d = haversine_m(a.lat, a.lng, t.lat, t.lng)
         if d > a.radius_km * 1000:

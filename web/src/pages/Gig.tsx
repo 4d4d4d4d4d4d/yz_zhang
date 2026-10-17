@@ -1,6 +1,6 @@
 import {
   apiErrorText, fmtYuan, formatDateTime,
-  type GigAlong, type GigAvailabilityView, type GigNearby, type GigPlaceRow, type GigQuote, type GigTaskCard,
+  gigWhenLabel, type GigAlong, type GigAvailabilityView, type GigNearby, type GigPlaceRow, type GigQuote, type GigTaskCard,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -142,6 +142,7 @@ function TaskList({ items, empty, onQuote }: { items: GigTaskCard[]; empty: stri
         <li key={t.task_id}>
           <Link to={`/tasks/${t.task_id}`}>{t.title}</Link>
           <span className="muted"> · {t.category} · {t.address_hint}
+            {gigWhenLabel(t) && ` · ${gigWhenLabel(t)}`}
             {t.distance_m !== undefined && ` · 约 ${(t.distance_m / 1000).toFixed(1)} 公里`}
             {t.detour_m !== undefined && ` · 多走约 ${(t.detour_m / 1000).toFixed(1)} 公里`}
             {' · '}预算 {fmtYuan(t.budget_cents)}，到手约 {fmtYuan(t.net_cents)}</span>

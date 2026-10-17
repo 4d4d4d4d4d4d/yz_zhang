@@ -2,7 +2,7 @@
 // 位置只用到约 1 公里；「现在有空」到点自动关掉、位置随之删除；距离都是直线估算。
 import {
   apiErrorText, fmtYuan, formatDateTime,
-  type GigAlong, type GigAvailabilityView, type GigNearby, type GigPlaceRow, type GigQuote, type GigTaskCard, type PlatformClient,
+  gigWhenLabel, type GigAlong, type GigAvailabilityView, type GigNearby, type GigPlaceRow, type GigQuote, type GigTaskCard, type PlatformClient,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -123,6 +123,7 @@ function Cards({ items, empty, onQuote, onOpen }: {
           <TouchableOpacity onPress={() => onOpen?.(t.task_id)}><Text style={s.title}>{t.title}</Text></TouchableOpacity>
           <Text style={s.muted}>
             {t.category} · {t.address_hint}
+            {gigWhenLabel(t) ? ` · ${gigWhenLabel(t)}` : ''}
             {t.distance_m !== undefined ? ` · 约 ${(t.distance_m / 1000).toFixed(1)} 公里` : ''}
             {t.detour_m !== undefined ? ` · 多走约 ${(t.detour_m / 1000).toFixed(1)} 公里` : ''} · 到手约 {fmtYuan(t.net_cents)}
           </Text>

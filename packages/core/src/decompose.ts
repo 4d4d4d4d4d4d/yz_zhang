@@ -71,6 +71,14 @@ export function shiftLabel(t: Pick<Task, 'shift_start' | 'shift_end' | 'days' | 
   return (t.days ?? 1) > 1 ? `每天 ${range}` : `时段 ${range}`;
 }
 
+/** SCN-129（192 号 spec）接单者卡片上「哪天几点」：按天的名额写「10-20 09:00–18:00」，没写时段写「10-20 全天」；
+ *  不按天的单是空串。日期是北京时间，原样取月-日。两端同一个。 */
+export function gigWhenLabel(c: { work_date?: string | null; shift_start?: string; shift_end?: string }): string {
+  if (!c.work_date || !/^\d{4}-\d{2}-\d{2}$/.test(c.work_date)) return '';
+  const md = c.work_date.slice(5);
+  return c.shift_start && c.shift_end ? `${md} ${c.shift_start}–${c.shift_end}` : `${md} 全天`;
+}
+
 /** SCN-125 验收前的一句提醒（179 号 spec）：上门回报比计划少、或有没做的项时说清差多少；都齐了是空串。
  *  只是提醒，不拦验收——钱的事由发单人自己定。两端同一句。 */
 export function visitShortfall(v: Pick<TaskVisits, 'planned' | 'reported' | 'missed_total'> | null | undefined): string {
