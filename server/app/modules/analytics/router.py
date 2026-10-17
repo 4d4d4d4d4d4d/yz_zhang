@@ -5,7 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, get_optional_user
+from app.core.deps import get_current_user, get_optional_user, require_job_auth
+from app.core.locks import job_slot
 from app.core.admin_roles import require_role
 from app.modules.account.models import User
 
@@ -49,6 +50,13 @@ def client_errors(days: int = Query(default=7, ge=1, le=90), admin: User = Depen
                   db: Session = Depends(get_db, scope="function")):
     """APP-094 哪一页常坏（运营）：平台 × 页面 × 错误类型的次数、人数、最近一次。"""
     return service.render_errors(db, days)
+
+
+@router.post("/analytics/jobs/render-alerts")
+def job_render_alerts(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                      __=Depends(job_slot("render_alerts"), scope="function")):
+    """APP-097 每小时：同一页 24 小时内坏过的人到阈值就提醒运营（同一页 24 小时内只一次）。"""
+    return {"alerted": service.render_alerts(db)}
 
 
 @router.get("/admin/funnels")

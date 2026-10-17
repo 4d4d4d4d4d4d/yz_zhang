@@ -212,3 +212,59 @@ def render_errors(db: Session, days: int) -> list[dict]:
         _, platform, kind = name.split(":", 2)
         out.append({"platform": platform, "page": page, "kind": kind, "count": n, "people": people, "last_at": iso(last)})
     return sorted(out, key=lambda r: (-r["count"], r["platform"], r["page"]))
+
+
+# ---------- APP-097 页面坏的人多了提醒运营（186 号 spec） ----------
+# 184 号让运营能在后台看到哪页常坏，但得有人去看。这里每小时数一次：同一端同一页近 24 小时坏过的不同登录用户
+# 到 RENDER_ALERT_PEOPLE 就给运营发站内信，同一页 24 小时内只提醒一次。没登录的上报不算人数（页面名可以编造）。
+RENDER_ALERTED = "render_alerted"
+RENDER_ALERT_WINDOW_HOURS = 24
+_PLATFORM_LABEL = {"web": "网页", "app": "App"}
+
+
+def render_alert_recipients(db: Session) -> list[int]:
+    from app.core.admin_roles import has_role, roles_of
+    from app.modules.account.models import User
+
+    admins = db.query(User).filter(User.is_admin.is_(True), User.is_banned.is_(False)).order_by(User.id).all()
+    ops = [u.id for u in admins if "ops" in roles_of(u)]
+    # 没有专职运营时退到「能看这块的人」（超级管理员）
+    return ops or [u.id for u in admins if has_role(u, "ops")]
+
+
+def render_alerts(db: Session) -> list[dict]:
+    from collections import defaultdict
+    from datetime import timedelta
+
+    from app.modules.account.models import utcnow
+    from app.modules.notification.service import notify
+
+    since = utcnow() - timedelta(hours=RENDER_ALERT_WINDOW_HOURS)
+    people: dict[tuple[str, str], set[int]] = defaultdict(set)
+    kinds: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for name, page, uid in (db.query(AnalyticsEvent.name, AnalyticsEvent.ref_type, AnalyticsEvent.user_id)
+                            .filter(AnalyticsEvent.name.like(f"{RENDER_PREFIX}:%"), AnalyticsEvent.created_at >= since)
+                            .distinct().all()):
+        _, platform, kind = name.split(":", 2)
+        kinds[(platform, page)].add(kind)
+        if uid is not None:
+            people[(platform, page)].add(uid)
+    out = []
+    recipients = None
+    for (platform, page), who in sorted(people.items()):
+        if len(who) < settings.RENDER_ALERT_PEOPLE:
+            continue
+        marker = f"{RENDER_ALERTED}:{platform}"
+        if db.query(AnalyticsEvent.id).filter(AnalyticsEvent.name == marker, AnalyticsEvent.ref_type == page,
+                                              AnalyticsEvent.created_at >= since).first():
+            continue
+        recipients = render_alert_recipients(db) if recipients is None else recipients
+        label = _PLATFORM_LABEL.get(platform, platform)
+        for uid in recipients:
+            notify(db, uid, "system", "有一页坏的人多了",
+                   f"{label}「{page}」近 {RENDER_ALERT_WINDOW_HOURS} 小时有 {len(who)} 位用户遇到页面出错"
+                   f"（{'、'.join(sorted(kinds[(platform, page)]))}）。去管理后台「页面出错」看是哪类错误；"
+                   f"多半是接口返回与页面预期对不上，或刚发的版本有问题。同一页 {RENDER_ALERT_WINDOW_HOURS} 小时内只提醒一次。")
+        track(db, marker, None, page)
+        out.append({"platform": platform, "page": page, "people": len(who), "notified": len(recipients)})
+    return out

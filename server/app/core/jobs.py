@@ -75,6 +75,9 @@ JOBS: tuple[ScheduledJob, ...] = (
     ScheduledJob("/knowledge/jobs/cluster", 3600, "kb_cluster",
                  "KB-070 新经验归进子类：串行跑（并发更新同一子类的质心是静默错误的温床），"
                  "没标定阈值的大类原样等着，标定后下一轮重试"),
+    ScheduledJob("/analytics/jobs/render-alerts", 3600, "render_alerts",
+                 "APP-097 页面坏的人多了提醒运营：一小时一次足够——窗口是 24 小时、同一页只提醒一次，"
+                 "跑得再勤也只是早几十分钟知道"),
     ScheduledJob("/influence/jobs/snapshot", 86400, "influence_snapshot",
                  "INF-106 影响力快照：Merkle 根锚定进存证哈希链；到期的类目担保释放"),
     ScheduledJob("/gig/jobs/purge-expired", 3600, "gig_purge",

@@ -336,6 +336,7 @@ api POST /api/v1/admin/users/{user_id}/unban
 api POST /api/v1/agent/tools/invocations/{invocation_id}/discard
 api POST /api/v1/agent/tools/{unit_id}/invoke
 api POST /api/v1/ai/clarify
+api POST /api/v1/analytics/jobs/render-alerts
 api POST /api/v1/anchors/jobs/notarize
 api POST /api/v1/applications/{application_id}/accept
 api POST /api/v1/applications/{application_id}/withdraw

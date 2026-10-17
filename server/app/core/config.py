@@ -45,6 +45,9 @@ class Settings:
     # ESCA-051（150 号 spec）超时自动升级只在**平台内部**逐级叫人（不转纠纷、不动钱）：
     # 到 SUPPORT_SLA_HOURS 叫醒接手的客服（没人接手就叫全体客服），到这个时长叫醒超级管理员（主管）
     SUPPORT_ESCALATE_L2_HOURS = int(os.environ.get("PLATFORM_SUPPORT_ESCALATE_L2_HOURS", "48"))
+    # APP-097（186 号 spec）同一端同一页 24 小时内坏过的不同登录用户数到这个数，提醒运营一次。
+    # 5 人：一两个人可能是自己的网络或旧版本，五个不同的人撞上同一页基本是页面或接口的问题
+    RENDER_ALERT_PEOPLE = int(os.environ.get("PLATFORM_RENDER_ALERT_PEOPLE", "5"))
     # ESCA-053（157 号 spec）首次响应时限：多久之内要有客服回第一句话（与「多久解决」分开）
     SUPPORT_FIRST_RESPONSE_HOURS = int(os.environ.get("PLATFORM_SUPPORT_FIRST_RESPONSE_HOURS", "4"))
     # ESCA-052（172 号 spec）加急工单（资金、账号类）的时限：首次响应 / 处理 / 升级主管，小时
@@ -162,7 +165,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.201.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.202.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")
