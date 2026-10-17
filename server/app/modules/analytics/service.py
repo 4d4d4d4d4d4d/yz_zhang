@@ -207,10 +207,16 @@ def render_errors(db: Session, days: int) -> list[dict]:
                      func.count(distinct(AnalyticsEvent.user_id)), func.max(AnalyticsEvent.created_at))
             .filter(AnalyticsEvent.name.like(f"{RENDER_PREFIX}:%"), AnalyticsEvent.created_at >= since)
             .group_by(AnalyticsEvent.name, AnalyticsEvent.ref_type).all())
+    # APP-101（V217）这一页在窗口内提醒过运营没有、什么时候；阈值一并给出，后台照着说「到几个人会提醒」
+    alerted = {(name.split(":", 1)[1], page): iso(last) for name, page, last in (
+        db.query(AnalyticsEvent.name, AnalyticsEvent.ref_type, func.max(AnalyticsEvent.created_at))
+        .filter(AnalyticsEvent.name.like(f"{RENDER_ALERTED}:%"), AnalyticsEvent.created_at >= since)
+        .group_by(AnalyticsEvent.name, AnalyticsEvent.ref_type).all())}
     out = []
     for name, page, n, people, last in rows:
         _, platform, kind = name.split(":", 2)
-        out.append({"platform": platform, "page": page, "kind": kind, "count": n, "people": people, "last_at": iso(last)})
+        out.append({"platform": platform, "page": page, "kind": kind, "count": n, "people": people, "last_at": iso(last),
+                    "alerted_at": alerted.get((platform, page)), "alert_people": settings.RENDER_ALERT_PEOPLE})
     return sorted(out, key=lambda r: (-r["count"], r["platform"], r["page"]))
 
 

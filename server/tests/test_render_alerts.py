@@ -109,3 +109,24 @@ def test_the_job_needs_the_job_token_and_does_not_show_up_in_the_render_error_su
     client.post(JOB, headers=JOB_HEADERS)
     rows = client.get(f"{API}/admin/client-errors", headers=auth(ops)).json()
     assert [(r["page"], r["count"]) for r in rows] == [("/wallet", 1)], "「已提醒」的记号不算一次页面出错"
+
+
+def test_the_summary_says_which_pages_ops_was_told_about_and_the_threshold(client, monkeypatch):
+    """APP-101（V217）后台表上标出这一页提醒过运营没有，并给出阈值。"""
+    monkeypatch.setattr(settings, "RENDER_ALERT_PEOPLE", 2)
+    ops = _admin(client, "13900031909", "运营", ["ops"])
+    _break(client, _people(client, 2), page="/wallet")
+    _break(client, _people(client, 1, start=2), page="/workbench")
+    client.post(JOB, headers=JOB_HEADERS)
+    rows = {r["page"]: r for r in client.get(f"{API}/admin/client-errors", headers=auth(ops)).json()}
+    from tests.test_client_shape_alignment import _assert_shape
+
+    _assert_shape(rows["/wallet"], "ClientErrorRow")
+    assert rows["/wallet"]["alerted_at"] is not None and rows["/workbench"]["alerted_at"] is None
+    assert {r["alert_people"] for r in rows.values()} == {2}
+    with SessionLocal() as db:   # 提醒在查询窗口之外：不再标
+        for row in db.query(AnalyticsEvent).filter(AnalyticsEvent.name.like("render_alerted:%")):
+            row.created_at = utcnow() - timedelta(days=8)
+        db.commit()
+    rows = {r["page"]: r for r in client.get(f"{API}/admin/client-errors", headers=auth(ops)).json()}
+    assert rows["/wallet"]["alerted_at"] is None

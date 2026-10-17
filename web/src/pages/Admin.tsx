@@ -53,14 +53,18 @@ export default function Admin() {
       {see('clientErrors') && (
         <div className="card" aria-label="页面出错">
           <h3>页面出错（近 7 天）</h3>
+          {typeof clientErrors[0]?.alert_people === 'number' && (
+            <p className="muted">同一端同一页 24 小时内坏过的不同用户到 {clientErrors[0].alert_people} 人，会给运营发站内信（每页 24 小时一次）。</p>
+          )}
           {clientErrors.length === 0 ? <p className="muted">近 7 天没有页面渲染出错的上报。</p> : (
             <table>
-              <thead><tr><th>端</th><th>页面</th><th>错误类型</th><th>次数</th><th>人数</th><th>最近一次</th></tr></thead>
+              <thead><tr><th>端</th><th>页面</th><th>错误类型</th><th>次数</th><th>人数</th><th>最近一次</th><th>提醒运营</th></tr></thead>
               <tbody>
                 {clientErrors.map((r) => (
                   <tr key={`${r.platform}${r.page}${r.kind}`}>
                     <td>{r.platform === 'web' ? '网页' : 'App'}</td><td>{r.page}</td><td>{r.kind}</td>
                     <td>{r.count}</td><td>{r.people}</td><td>{formatDateTime(r.last_at)}</td>
+                    <td>{r.alerted_at ? `已提醒 ${formatDateTime(r.alerted_at)}` : '—'}</td>
                   </tr>
                 ))}
               </tbody>

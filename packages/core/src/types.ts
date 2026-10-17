@@ -744,6 +744,10 @@ export interface ClientErrorRow {
   count: number;
   people: number;
   last_at: string;
+  /** APP-101 这一页在查询窗口内最近一次提醒运营的时间；没提醒过是 null */
+  alerted_at: string | null;
+  /** APP-101 同一端同一页 24 小时内坏过的不同用户到几个人会提醒运营 */
+  alert_people: number;
 }
 
 /** SCN-116 一天的名额：招到 = 有人接且没取消（含做完）；还缺 = 仍在招募；取消的单独数 */

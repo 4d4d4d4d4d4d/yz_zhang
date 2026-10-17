@@ -37,3 +37,18 @@ describe('APP-094 后台页面出错', () => {
     expect(screen.queryByLabelText('页面出错')).toBeNull();
   });
 });
+
+describe('APP-101 后台页面出错：标出已提醒运营的页与阈值', () => {
+  it('提醒过的页写「已提醒」和时间，没提醒的写「—」；说明到几个人会提醒', async () => {
+    ROWS.splice(0, ROWS.length,
+      { platform: 'web', page: '/wallet', kind: 'TypeError', count: 9, people: 6, last_at: '2026-10-16T02:00:00Z', alerted_at: '2026-10-16T03:00:00Z', alert_people: 5 } as never,
+      { platform: 'app', page: 'tab-cooperate', kind: 'RangeError', count: 1, people: 1, last_at: '2026-10-15T02:00:00Z', alerted_at: null, alert_people: 5 } as never);
+    open(['ops']);
+    const box = await screen.findByLabelText('页面出错');
+    await waitFor(() => expect(box.textContent).toContain('已提醒'));
+    expect(box.textContent).toContain('不同用户到 5 人，会给运营发站内信');
+    const rows = box.querySelectorAll('tbody tr');
+    expect(rows[0].textContent).toMatch(/已提醒 \d/);
+    expect(rows[1].textContent?.endsWith('—')).toBe(true);
+  });
+});
