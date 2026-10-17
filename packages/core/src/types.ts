@@ -314,6 +314,12 @@ export interface FollowListItem {
   viewer_following: boolean | null;
 }
 
+/** SCN-127 某一天单独的时段（北京时间 HH:MM） */
+export interface DayShiftInput {
+  start: string;
+  end: string;
+}
+
 /** SYNC-050b / SEC-067 创建任务的请求体——**与服务端 `TaskIn` 逐字段对应**。
  *
  * 此前 `createTask` 的参数是 `Partial<Task> & {...}`，比创建 schema 宽得多：
@@ -352,6 +358,8 @@ export interface TaskCreateInput {
   /** SCN-117 每天几点到几点（北京时间 HH:MM，两个一起写，不跨夜） */
   shift_start?: string;
   shift_end?: string;
+  /** SCN-127 多天单每天不同时段：长度等于天数，某天 null 沿用上面的统一时段 */
+  day_shifts?: Array<DayShiftInput | null>;
   /** SCN-119 替别人发单：勾了就必须写称呼并确认问过本人；没勾时这几项不要带 */
   on_behalf?: boolean;
   recipient_label?: string;

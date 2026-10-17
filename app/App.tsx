@@ -6,7 +6,7 @@ import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, shiftLabel, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, dayLabel, dayShiftsPayload, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, shiftLabel, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type DayShiftInput, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { isSandbox, loadSandbox } from './sandboxState';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
@@ -976,6 +976,9 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
   // SCN-117（178 号 spec）每天几点到几点
   const [shiftStart, setShiftStart] = useState('');
   const [shiftEnd, setShiftEnd] = useState('');
+  // SCN-127（201 号 spec）每天时段不一样
+  const [perDay, setPerDay] = useState(false);
+  const [dayRows, setDayRows] = useState<DayShiftInput[]>([]);
   // SCN-119（175 号 spec）替别人发单：替谁、到场联系谁、问过本人没有
   const [onBehalf, setOnBehalf] = useState(false);
   const [recipient, setRecipient] = useState('');
@@ -1011,6 +1014,23 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
           )}
           <TextInput style={styles.input} accessibilityLabel="每天几点开始" placeholder="每天几点开始（如 09:00，可不填）" value={shiftStart} onChangeText={setShiftStart} />
           <TextInput style={styles.input} accessibilityLabel="每天几点结束" placeholder="每天几点结束（如 18:00，可不填）" value={shiftEnd} onChangeText={setShiftEnd} />
+          {nDays > 1 && (
+            <TouchableOpacity accessibilityRole="checkbox" accessibilityLabel="每天时段不一样" accessibilityState={{ checked: perDay }}
+                              onPress={() => setPerDay((x) => !x)}>
+              <Text style={styles.mutedLeft}>{perDay ? '☑ ' : '☐ '}每天时段不一样（某天空着就用上面的时段）</Text>
+            </TouchableOpacity>
+          )}
+          {perDay && nDays > 1 && Array.from({ length: Math.min(nDays, 14) }, (_, i) => (
+            <View key={i}>
+              <Text style={styles.mutedLeft}>{dayLabel(startDate, i)}</Text>
+              <TextInput style={styles.input} accessibilityLabel={`第 ${i + 1} 天几点开始`} placeholder="几点开始（如 10:00）"
+                         value={dayRows[i]?.start ?? ''}
+                         onChangeText={(v) => setDayRows((rs) => { const n = [...rs]; n[i] = { start: v, end: n[i]?.end ?? '' }; return n; })} />
+              <TextInput style={styles.input} accessibilityLabel={`第 ${i + 1} 天几点结束`} placeholder="几点结束（如 16:00）"
+                         value={dayRows[i]?.end ?? ''}
+                         onChangeText={(v) => setDayRows((rs) => { const n = [...rs]; n[i] = { start: n[i]?.start ?? '', end: v }; return n; })} />
+            </View>
+          ))}
           {(nPeople > 1 || nDays > 1) && (
             <Text style={styles.mutedLeft}>会拆成 {nPeople * nDays} 个名额（{nPeople} 人 × {nDays} 天），预算平分，每个名额单独招人、单独验收</Text>
           )}
@@ -1064,6 +1084,7 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
             ...(!project && nPeople > 1 ? { people_needed: nPeople } : {}),
             ...(!project && nDays > 1 ? { days: nDays, start_date: startDate.trim() || null } : {}),
             ...(!project && (shiftStart.trim() || shiftEnd.trim()) ? { shift_start: shiftStart.trim(), shift_end: shiftEnd.trim() } : {}),
+            ...(!project && perDay && nDays > 1 && dayShiftsPayload(dayRows, nDays) ? { day_shifts: dayShiftsPayload(dayRows, nDays) } : {}),
             ...(!project && (parseInt(visits, 10) || 0) > 0 ? { visits_planned: parseInt(visits, 10) } : {}),
             ...(!project && checklist.trim() ? { visit_checklist: checklist.split(/[、,，]/).map((x) => x.trim()).filter(Boolean) } : {}),
             ...(onBehalf ? { on_behalf: true, recipient_label: recipient, onsite_contact: onsite, recipient_consented: consented } : {}),

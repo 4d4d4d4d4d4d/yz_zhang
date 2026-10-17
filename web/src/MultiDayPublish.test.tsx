@@ -62,3 +62,50 @@ describe('SCN-107 连续几天的活', () => {
       { days: 2, shift_start: '09:00', shift_end: '18:30' }));
   });
 });
+
+describe('SCN-127 每天时段不一样', () => {
+  it('勾上后每天一行，标出日期；空着的那天传 null', async () => {
+    const calls: Call[] = [];
+    open(calls);
+    fireEvent.change(await screen.findByLabelText('连续几天'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('从哪天开始'), { target: { value: '2030-01-05' } });
+    fireEvent.click(screen.getByLabelText('每天时段不一样'));
+    expect(screen.getByLabelText('每天的时段').textContent).toContain('第 2 天（01-06）');
+    fireEvent.change(screen.getByLabelText('第 2 天几点开始'), { target: { value: '10:00' } });
+    fireEvent.change(screen.getByLabelText('第 2 天几点结束'), { target: { value: '16:00' } });
+    fireEvent.change(screen.getByDisplayValue('— 请选择 —'), { target: { value: 'assign' } });
+    fireEvent.submit(screen.getByLabelText('连续几天').closest('form')!);
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks')?.body).toMatchObject(
+      { days: 2, day_shifts: [null, { start: '10:00', end: '16:00' }] }));
+  });
+
+  it('没勾或一天的单：不带 day_shifts', async () => {
+    const calls: Call[] = [];
+    open(calls);
+    await screen.findByLabelText('连续几天');
+    expect(screen.queryByLabelText('每天时段不一样')).toBeNull();   // 一天的单没有这一项
+    fireEvent.change(screen.getByLabelText('连续几天'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('从哪天开始'), { target: { value: '2030-01-05' } });
+    fireEvent.change(screen.getByDisplayValue('— 请选择 —'), { target: { value: 'assign' } });
+    fireEvent.submit(screen.getByLabelText('连续几天').closest('form')!);
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/tasks')).toBe(true));
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks')!.body).not.toHaveProperty('day_shifts');
+  });
+});
+
+describe('SCN-127 填了又取消勾选', () => {
+  it('取消「每天时段不一样」后，填过的每天时段不再带上', async () => {
+    const calls: Call[] = [];
+    open(calls);
+    fireEvent.change(await screen.findByLabelText('连续几天'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('从哪天开始'), { target: { value: '2030-01-05' } });
+    fireEvent.click(screen.getByLabelText('每天时段不一样'));
+    fireEvent.change(screen.getByLabelText('第 1 天几点开始'), { target: { value: '08:00' } });
+    fireEvent.change(screen.getByLabelText('第 1 天几点结束'), { target: { value: '12:00' } });
+    fireEvent.click(screen.getByLabelText('每天时段不一样'));
+    fireEvent.change(screen.getByDisplayValue('— 请选择 —'), { target: { value: 'assign' } });
+    fireEvent.submit(screen.getByLabelText('连续几天').closest('form')!);
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/tasks')).toBe(true));
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks')!.body).not.toHaveProperty('day_shifts');
+  });
+});

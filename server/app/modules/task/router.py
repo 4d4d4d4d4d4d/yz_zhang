@@ -26,6 +26,13 @@ router = APIRouter(tags=["task"])
 
 
 # ---------- schemas ----------
+class DayShiftIn(BaseModel):
+    """SCN-127 某一天单独的时段（北京时间 HH:MM）。"""
+    model_config = ConfigDict(extra="forbid")
+    start: str = Field(max_length=8)
+    end: str = Field(max_length=8)
+
+
 class TaskIn(BaseModel):
     title: str = Field(min_length=2, max_length=120)
     description: str = ""
@@ -54,6 +61,8 @@ class TaskIn(BaseModel):
     # SCN-117（178 号 spec）每天几点到几点（北京时间 HH:MM）；两个一起写或都不写
     shift_start: str = Field(default="", max_length=8)   # 可带首尾空白，去掉后存 HH:MM
     shift_end: str = Field(default="", max_length=8)
+    # SCN-127（201 号 spec）多天单每天不同时段：按天给，长度等于天数；某天给 null 就沿用上面统一的时段
+    day_shifts: list[DayShiftIn | None] = Field(default_factory=list, max_length=14)
     # AGT-030 结构化验收标准。auto 项由平台判定，不由执行方自报。
     acceptance_criteria: list[dict] = []
     # IPC-001 **无默认值**：不选不让发。替当事人猜归属是这条最容易犯的错。
@@ -281,6 +290,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
             raise forbidden("需先加入该圈层", "not_circle_member")
     _validate_days(body)
     _validate_shift(body)
+    _validate_day_shifts(body)
     _validate_on_behalf(body)
     _validate_visits(body)
     multi = body.people_needed > 1 or body.days > 1
@@ -291,7 +301,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
 
         assert_no_finance_offer(f"{body.title} {body.description}")
         service.review_or_reject(db, body.title + " " + body.description)
-    task = Task(creator_id=user.id, **body.model_dump(exclude={"publish_now", "start_date", "recipient_consented"}))
+    task = Task(creator_id=user.id, **body.model_dump(exclude={"publish_now", "start_date", "recipient_consented", "day_shifts"}))
     if task.on_behalf:
         task.recipient_consent_at = utcnow()
     if body.days > 1:
@@ -315,7 +325,9 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
             for i in range(body.people_needed):
                 last = d == body.days - 1 and i == body.people_needed - 1
                 slot_budget = per_slot + (remainder if last else 0)
-                shift = f" {task.shift_start}–{task.shift_end}" if task.shift_start else ""
+                own = body.day_shifts[d] if body.day_shifts else None   # SCN-127 这一天单独的时段
+                s_start, s_end = (own.start, own.end) if own else (task.shift_start, task.shift_end)
+                shift = f" {s_start}–{s_end}" if s_start else ""
                 label = (f"第{d + 1}天（{day_.month:02d}-{day_.day:02d}{shift}）· 名额{i + 1}/{body.people_needed}" if day_
                          else f"名额{i + 1}/{body.people_needed}")
                 slot = Task(
@@ -331,7 +343,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
                     visits_planned=task.visits_planned, visit_checklist=task.visit_checklist,
                     visibility=task.visibility, circle_id=task.circle_id,
                     work_date=day_, deadline=_day_end_utc(day_) if day_ else None,
-                    shift_start=task.shift_start, shift_end=task.shift_end,
+                    shift_start=s_start, shift_end=s_end,
                 )
                 db.add(slot)
                 slots.append(slot)
@@ -374,6 +386,30 @@ def _validate_shift(body: "TaskIn") -> None:
     if e <= s:
         raise bad_request("结束时间要晚于开始时间；跨夜的班请拆成两天写", "shift_order")
     body.shift_start, body.shift_end = s, e
+
+
+def _validate_day_shifts(body: "TaskIn") -> None:
+    """SCN-127 每天不同时段：只给多天单；长度等于天数；每天的规则与统一时段相同（成对、HH:MM、结束晚于开始）。"""
+    if not body.day_shifts:
+        return
+    if body.days <= 1:
+        raise bad_request("只有连续几天的活才分天写时段；一天的活写上面的时段就行", "day_shifts_without_days")
+    if len(body.day_shifts) != body.days:
+        raise bad_request(f"分天的时段要每天一项（一共 {body.days} 天）；哪天沿用统一时段就留空", "day_shifts_length")
+    pat = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
+    for n, ds in enumerate(body.day_shifts, start=1):
+        if ds is None:
+            continue
+        ds.start, ds.end = ds.start.strip(), ds.end.strip()
+        if not ds.start and not ds.end:
+            body.day_shifts[n - 1] = None
+            continue
+        if not ds.start or not ds.end:
+            raise bad_request(f"第 {n} 天的时段要把开始和结束一起写，或者都不写（沿用统一时段）", "shift_incomplete")
+        if not pat.fullmatch(ds.start) or not pat.fullmatch(ds.end):
+            raise bad_request(f"第 {n} 天的时间按 24 小时制写成 HH:MM（例如 09:00、18:30）", "shift_invalid")
+        if ds.end <= ds.start:
+            raise bad_request(f"第 {n} 天的结束时间要晚于开始时间；跨夜的班请拆成两天写", "shift_order")
 
 
 def _validate_days(body: "TaskIn") -> None:

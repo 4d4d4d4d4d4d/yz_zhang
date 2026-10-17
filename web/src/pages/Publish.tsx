@@ -1,6 +1,7 @@
-import { apiErrorText, IP_ASSIGNMENT_LABEL, fmtYuan, localInputToServerTime, type IpAssignment, type PriceReference, type Task } from '@platform/core';
+import { apiErrorText, IP_ASSIGNMENT_LABEL, dayLabel, dayShiftsPayload, fmtYuan, localInputToServerTime, type IpAssignment, type PriceReference, type Task } from '@platform/core';
 import { DraftHints } from '../Profiles';
 import { useEffect, useState, type FormEvent } from 'react';
+import type { DayShiftInput } from '@platform/core';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../store';
 
@@ -13,6 +14,9 @@ export default function Publish() {
   // 不读这个参数的话，那个补救入口就是**假的**：它看起来把人送到了发布页，
   // 而人到了之后类目仍停在默认的「保洁」上——他得自己想起来再去下拉里找一遍。
   const [params] = useSearchParams();
+  // SCN-127（201 号 spec）多天单每天不同时段：勾上才出现每天一行
+  const [perDay, setPerDay] = useState(false);
+  const [dayRows, setDayRows] = useState<DayShiftInput[]>([]);
   const [form, setForm] = useState({
     // PWB-008 从个人工作台「找人一起做」过来时带着标题和说明
     title: params.get('title') || '', description: params.get('description') || '', // TASK-090 类目与城市**不替人选**：V140 真浏览器演示里，发一个「咖啡店品牌升级」项目，
@@ -97,6 +101,8 @@ export default function Publish() {
         ...((parseInt(form.days, 10) || 1) > 1 ? { days: parseInt(form.days, 10), start_date: form.start_date || null } : {}),
         // SCN-117（178 号 spec）每天几点到几点：写了才带（只写一头时服务端会说清）
         ...(form.shift_start || form.shift_end ? { shift_start: form.shift_start, shift_end: form.shift_end } : {}),
+        ...(perDay && (parseInt(form.days, 10) || 1) > 1 && dayShiftsPayload(dayRows, parseInt(form.days, 10))
+          ? { day_shifts: dayShiftsPayload(dayRows, parseInt(form.days, 10)) } : {}),
         deposit_cents: Math.round(parseFloat(form.deposit_yuan || '0') * 100),
         ip_assignment: form.ip_assignment as IpAssignment,
         budget_cents: Math.round(parseFloat(form.budget_yuan) * 100),
@@ -225,6 +231,23 @@ export default function Publish() {
               <label className="grow">从哪天开始
                 <input type="date" aria-label="从哪天开始" value={form.start_date} onChange={(e) => set('start_date', e.target.value)} />
               </label>
+            )}
+            {(parseInt(form.days, 10) || 1) > 1 && (
+              <label className="row"><input type="checkbox" aria-label="每天时段不一样" checked={perDay} onChange={(e) => setPerDay(e.target.checked)} />
+                每天时段不一样（某天空着就用上面的时段）</label>
+            )}
+            {perDay && (parseInt(form.days, 10) || 1) > 1 && (
+              <div aria-label="每天的时段">
+                {Array.from({ length: Math.min(parseInt(form.days, 10) || 1, 14) }, (_, i) => (
+                  <div className="row" key={i}>
+                    <span className="muted">{dayLabel(form.start_date, i)}</span>
+                    <input type="time" aria-label={`第 ${i + 1} 天几点开始`} value={dayRows[i]?.start ?? ''}
+                           onChange={(e) => setDayRows((rs) => { const n = [...rs]; n[i] = { start: e.target.value, end: n[i]?.end ?? '' }; return n; })} />
+                    <input type="time" aria-label={`第 ${i + 1} 天几点结束`} value={dayRows[i]?.end ?? ''}
+                           onChange={(e) => setDayRows((rs) => { const n = [...rs]; n[i] = { start: n[i]?.start ?? '', end: e.target.value }; return n; })} />
+                  </div>
+                ))}
+              </div>
             )}
             <label className="grow">执行者保证金（元，0=不要求）
               <input type="number" min={0} value={form.deposit_yuan} onChange={(e) => set('deposit_yuan', e.target.value)} />
