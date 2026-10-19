@@ -62,3 +62,27 @@ describe('充值与提现带上 Idempotency-Key', () => {
     expect(headers[0]['Authorization']).toBe('Bearer t');
   });
 });
+
+describe('SC-016 OperationKey.run 与批量放款带键', () => {
+  it('成功或被明确拒绝后换新键；网络断了保留同一个键（下次点击是重试）', async () => {
+    const op = new OperationKey();
+    const seen: string[] = [];
+    await expect(op.run('a', async (k) => { seen.push(k); throw new TypeError('network'); })).rejects.toThrow('network');
+    await op.run('a', async (k) => { seen.push(k); return 1; });
+    expect(seen[1]).toBe(seen[0]);
+    await expect(op.run('a', async (k) => { seen.push(k); throw new ApiError(409, 'invalid_milestone_state', 'x'); })).rejects.toBeTruthy();
+    expect(seen[2]).not.toBe(seen[1]);
+    await op.run('a', async (k) => { seen.push(k); return 1; });
+    expect(seen[3]).not.toBe(seen[2]);
+  });
+
+  it('releaseDelivered 带键时放进请求头，不带时不发这个头', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200, text: async () => '{}' }));
+    const client = new PlatformClient({ baseUrl: '', getToken: () => 't', fetchImpl: fetchImpl as unknown as typeof fetch });
+    await client.releaseDelivered(3, [1, 2], 500, 'k-rel');
+    await client.releaseDelivered(3, [1, 2], 500);
+    const headers = fetchImpl.mock.calls.map((c) => (c as unknown as [string, { headers: Record<string, string> }])[1].headers);
+    expect(headers[0]['Idempotency-Key']).toBe('k-rel');
+    expect('Idempotency-Key' in headers[1]).toBe(false);
+  });
+});

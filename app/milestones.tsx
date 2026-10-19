@@ -1,8 +1,8 @@
 // SC-004 / SC-014 分期在 App 上（146 号 spec）。
 // 此前 App 的整单验收提示写着「请用下面分期列表里的『验收本期』」——而 App 上**根本没有分期列表**。
 // 这里补上：执行方逐期交付；发布方逐期验收，或一次只放已交付的那几期（没交付的不动）。
-import { apiErrorText, fmtYuan, type Contract, type PlatformClient } from '@platform/core';
-import { useState } from 'react';
+import { OperationKey, apiErrorText, fmtYuan, type Contract, type PlatformClient } from '@platform/core';
+import { useRef, useState } from 'react';
 import { Button, StyleSheet, Text, View } from 'react-native';
 
 const STATUS: Record<string, string> = { pending: '进行中', delivered: '待验收', released: '已放款' };
@@ -12,6 +12,8 @@ export function MilestonesBlock({ client, contract, isCreator, isExecutor, onCha
 }) {
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState('');
+  // SC-016（225 号 spec）批量放款的幂等键：信号断了再点一次是重试，钱只放一次
+  const releaseKey = useRef(new OperationKey());
   const ms = contract.milestones ?? [];
   if (ms.length < 2) return null;
   const live = contract.status === 'funded' && !contract.frozen;
@@ -40,7 +42,8 @@ export function MilestonesBlock({ client, contract, isCreator, isExecutor, onCha
           <Text style={s.title}>只放这 {delivered.length} 期已交付的，合计 {fmtYuan(sum)}</Text>
           {delivered.map((m) => <Text key={m.idx}>· 第 {m.idx} 期 {m.title} {fmtYuan(m.amount_cents)}</Text>)}
           <Text style={s.muted}>还没交付的期不会动。</Text>
-          <Button title="确认放款" onPress={() => void act(() => client.releaseDelivered(contract.id, delivered.map((m) => m.idx), sum))} />
+          <Button title="确认放款" onPress={() => void act(() => releaseKey.current.run(`${contract.id}:${delivered.map((m) => m.idx).join(',')}:${sum}`,
+            (key) => client.releaseDelivered(contract.id, delivered.map((m) => m.idx), sum, key)))} />
           <Button title="再想想" color="#6b7280" onPress={() => setConfirming(false)} />
         </View>
       ) : (

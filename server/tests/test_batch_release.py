@@ -71,3 +71,39 @@ def test_frozen_contract_releases_nothing(client, requester, worker):
     r = client.post(URL.format(cid=cid), json={"idxs": [1, 2], "expected_total_cents": 50000}, headers=auth(requester))
     assert r.status_code == 409 and r.json()["detail"]["code"] == "contract_frozen"
     assert client.get(f"/api/v1/contracts/{cid}", headers=auth(requester)).json()["released_cents"] == 0
+
+
+# --------------------------------- SC-016 批量放款接入通用幂等键（225 号 spec，V252）
+def test_same_key_retry_replays_first_result_and_moves_money_once(client, requester, worker):
+    """网络断了用同一个键重试：拿到第一次的结果（已放款），而不是一句「第 1 期不是待验收」。"""
+    cid, _ = _three_stage(client, requester, worker)
+    _deliver(client, worker, cid, 1, 2)
+    h = {**auth(requester), "Idempotency-Key": "rel-1"}
+    body = {"idxs": [1, 2], "expected_total_cents": 50000}
+    first = client.post(URL.format(cid=cid), json=body, headers=h)
+    again = client.post(URL.format(cid=cid), json={"idxs": [2, 1], "expected_total_cents": 50000}, headers=h)
+    assert first.status_code == again.status_code == 200, again.text
+    assert again.json() == first.json(), "期号顺序不同也是同一次操作"
+    with SessionLocal() as db:
+        n = db.query(LedgerEntry).filter(LedgerEntry.contract_id == cid, LedgerEntry.kind == "fee").count()
+    assert n == 2, "钱只放了一次"
+    # 同一个键换了内容：写给开发者的冲突，不会被当成重试静默吞掉
+    r = client.post(URL.format(cid=cid), json={"idxs": [1], "expected_total_cents": 20000}, headers=h)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "idempotency_key_conflict"
+    r = client.post(URL.format(cid=cid), json={"idxs": [1, 2], "expected_total_cents": 49999}, headers=h)
+    assert r.json()["detail"]["code"] == "idempotency_key_conflict", "界面上给人看的合计变了，也是另一次操作"
+    # 不带键：照旧（放过的期第二次被拒）
+    r = client.post(URL.format(cid=cid), json=body, headers=auth(requester))
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "invalid_milestone_state"
+
+
+def test_failed_attempt_is_not_cached(client, requester, worker):
+    """失败不缓存：合计对不上被拒后，同一个键改对了再提交会真的再试一次（104 号的约定）。"""
+    cid, _ = _three_stage(client, requester, worker)
+    _deliver(client, worker, cid, 1)
+    h = {**auth(requester), "Idempotency-Key": "rel-2"}
+    r = client.post(URL.format(cid=cid), json={"idxs": [1], "expected_total_cents": 19999}, headers=h)
+    assert r.json()["detail"]["code"] == "batch_total_mismatch"
+    _deliver(client, worker, cid, 2)
+    r = client.post(URL.format(cid=cid), json={"idxs": [1, 2], "expected_total_cents": 50000}, headers=h)
+    assert r.status_code == 200 and r.json()["released_cents"] == 50000

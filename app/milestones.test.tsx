@@ -47,3 +47,27 @@ describe('SC-014 App 上的分期', () => {
     expect(screen.queryByText(/放款已交付的/)).toBeNull();
   });
 });
+
+describe('SC-016 App 批量放款带幂等键', () => {
+  it('信号断了再点一次用同一个键，服务端才能回放第一次的结果', async () => {
+    const keys: string[] = [];
+    let n = 0;
+    const fetchImpl = (async (_url: string, init?: { headers?: Record<string, string> }) => {
+      keys.push(init?.headers?.['Idempotency-Key'] ?? '');
+      n += 1;
+      if (n === 1) throw new TypeError('Network request failed');
+      return { ok: true, status: 200, text: async () => JSON.stringify(C(['released', 'released', 'pending'])) };
+    }) as unknown as typeof fetch;
+    const client = new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl });
+    const onChanged = jest.fn();
+    render(<MilestonesBlock client={client} contract={C(['delivered', 'delivered', 'pending'])} isCreator isExecutor={false} onChanged={onChanged} />);
+    fireEvent.press(screen.getByText('放款已交付的 2 期（共 ¥500.00）'));
+    fireEvent.press(screen.getByText('确认放款'));
+    await waitFor(() => expect(keys).toHaveLength(1));
+    await waitFor(() => expect(screen.getByText('确认放款')).toBeTruthy());
+    fireEvent.press(screen.getByText('确认放款'));
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    expect(keys[0]).toMatch(/^[0-9a-f]{32}$/);
+    expect(keys[1]).toBe(keys[0]);
+  });
+});

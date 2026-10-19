@@ -1,7 +1,7 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { minorTaskLine, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
-import { useCallback, useEffect, useState } from 'react';
+import { OperationKey, minorTaskLine, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
 import { DisputePanel } from '../DisputePanel';
@@ -58,6 +58,8 @@ export default function TaskDetail() {
     client.getContractByTask(taskId).then(setContract).catch(() => setContract(null));
   }, [task, me, client, taskId]);
 
+  // SC-016（225 号 spec）批量放款的幂等键：网络断了再点一次是重试，服务端回放第一次的结果
+  const releaseKey = useRef(new OperationKey());
   async function act(fn: () => Promise<unknown>) {
     setError('');
     try {
@@ -351,7 +353,9 @@ export default function TaskDetail() {
             return (
               <button style={{ marginTop: 10 }} onClick={() => {
                 if (!confirm(`只放这 ${delivered.length} 期已交付的：\n${delivered.map((m) => `第 ${m.idx} 期 ${m.title} ${fmtYuan(m.amount_cents)}`).join('\n')}\n合计 ${fmtYuan(sum)}。\n\n还没交付的期不会动。确认放款？`)) return;
-                void act(async () => setContract(await client.releaseDelivered(contract.id, delivered.map((m) => m.idx), sum)));
+                const idxs = delivered.map((m) => m.idx);
+                void act(async () => setContract(await releaseKey.current.run(`${contract.id}:${idxs.join(',')}:${sum}`,
+                  (key) => client.releaseDelivered(contract.id, idxs, sum, key))));
               }}>放款已交付的 {delivered.length} 期（共 {fmtYuan(sum)}）</button>
             );
           })()}

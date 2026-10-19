@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -216,13 +216,25 @@ class BatchReleaseIn(BaseModel):
 @router.post("/{contract_id}/milestones/release-delivered")
 def release_delivered(
     contract_id: int, body: BatchReleaseIn, user: User = Depends(get_current_user),
-    db: Session = Depends(get_db, scope="function"),
+    db: Session = Depends(get_db, scope="function"), idempotency_key: str = Header(default=""),
 ):
-    """SC-014 只放已交付的那几期（146 号 spec）：一次放掉点名的已交付期，不动没交付的。"""
+    """SC-014 只放已交付的那几期（146 号 spec）：一次放掉点名的已交付期，不动没交付的。
+
+    SC-016（225 号 spec）带 `Idempotency-Key` 时走通用幂等（104 号）：网络断了用同一个键重试，
+    回放第一次的结果，而不是收到一句「这几期不是待验收」——那句话会让人以为钱没放出去。
+    不带键照旧（已经在用的旧版 App 不带）：放过的期状态已变，第二次请求仍会被拒，钱不会放两次。"""
+    from app.core.idempotency import replay_or_run
+
     contract = _get(db, contract_id, user)
-    service.release_delivered(db, contract, user.id, body.idxs, body.expected_total_cents)
-    _close_task_if_released(db, contract)
-    return _dump(contract, db)
+
+    def run():
+        service.release_delivered(db, contract, user.id, body.idxs, body.expected_total_cents)
+        _close_task_if_released(db, contract)
+        return _dump(contract, db)
+
+    return replay_or_run(db, user.id, idempotency_key, "contract.release_delivered", run,
+                         {"contract_id": contract_id, "idxs": sorted(body.idxs),
+                          "expected_total_cents": body.expected_total_cents})
 
 
 def _close_task_if_released(db: Session, contract) -> None:

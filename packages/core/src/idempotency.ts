@@ -41,6 +41,19 @@ export class OperationKey {
     return this.key;
   }
 
+  /** SC-016（225 号 spec）取键 → 执行 → 按结果决定换不换键，一步做完（两端的按钮都这样用）。 */
+  async run<T>(intent: string, fn: (key: string) => Promise<T>): Promise<T> {
+    const key = this.for(intent);
+    try {
+      const out = await fn(key);
+      this.settle();
+      return out;
+    } catch (err) {
+      this.settle(err);
+      throw err;
+    }
+  }
+
   /** 操作有了结果之后调用：确定的结果换新键，不确定的保留（下次点击是重试）。 */
   settle(err?: unknown): void {
     if (err === undefined || !isUncertainFailure(err)) {

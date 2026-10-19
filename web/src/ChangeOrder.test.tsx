@@ -250,5 +250,34 @@ describe('SC-014 只放已交付的那几期', () => {
       confirmSpy.mockRestore();
     }
   });
-});
 
+  // SC-016（225 号 spec）
+  it('服务端出错后再点一次用同一个键（结果不确定，是重试）', async () => {
+    localStorage.setItem('token', 'tok');
+    const keys: string[] = [];
+    let attempts = 0;
+    const routes: Record<string, unknown> = { '/users/me': REQUESTER, '/tasks/7': FUNDED_TASK, '/contracts/by-task/7': STAGED, '/contracts/3/change-orders': [] };
+    const fetchImpl = vi.fn(async (url: string, init?: { method?: string; headers?: Record<string, string> }) => {
+      const path = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+      if (path === '/contracts/3/milestones/release-delivered') {
+        keys.push(init?.headers?.['Idempotency-Key'] ?? '');
+        attempts += 1;
+        if (attempts === 1) return { ok: false, status: 503, text: async () => JSON.stringify({ detail: { code: 'upstream', message: '服务暂时不可用' } }) };
+        return { ok: true, status: 200, text: async () => JSON.stringify({ ...STAGED, released_cents: 12000 }) };
+      }
+      return { ok: true, status: 200, text: async () => JSON.stringify(routes[path] ?? []) };
+    }) as unknown as typeof fetch;
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    try {
+      render(<MemoryRouter initialEntries={['/tasks/7']}><AppProvider client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })}><App /></AppProvider></MemoryRouter>);
+      fireEvent.click(await screen.findByText('放款已交付的 2 期（共 ¥120.00）'));
+      expect(await screen.findByText('服务暂时不可用')).toBeTruthy();
+      fireEvent.click(screen.getByText('放款已交付的 2 期（共 ¥120.00）'));
+      await waitFor(() => expect(keys).toHaveLength(2));
+      expect(keys[0]).toMatch(/^[0-9a-f]{32}$/);
+      expect(keys[1]).toBe(keys[0]);
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
+});

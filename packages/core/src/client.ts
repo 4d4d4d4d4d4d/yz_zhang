@@ -1161,9 +1161,10 @@ export class PlatformClient {
   }
   /** SC-014 只放点名的、已交付的那几期（146 号 spec）。`expectedTotalCents` 是界面上给人看的合计：
    *  对不上（期间有一期状态变了）就整批不放，不会放出一笔没看到的钱 */
-  releaseDelivered(contractId: number, idxs: number[], expectedTotalCents: number) {
+  releaseDelivered(contractId: number, idxs: number[], expectedTotalCents: number, idempotencyKey?: string) {
+    // SC-016（225 号 spec）带上 `OperationKey` 的键：网络断了重试时服务端回放第一次的结果，钱只放一次
     return this.request<Contract>('POST', `/contracts/${contractId}/milestones/release-delivered`,
-      { idxs, expected_total_cents: expectedTotalCents });
+      { idxs, expected_total_cents: expectedTotalCents }, idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined);
   }
   /** SC-007b 变更单：金额、截止时间、范围三样可以单独改也可以一起改；只传要改的 */
   proposeChangeOrder(contractId: number, input: { new_amount_cents?: number; new_deadline?: string; scope_change?: string; reason?: string }) {
