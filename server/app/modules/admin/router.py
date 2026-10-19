@@ -764,7 +764,34 @@ def platform_finance_periods(
     out = wallet.platform_finance_periods(db, *_period_args(granularity, start, end))
     for r in out["periods"]:
         r["start"], r["end"] = iso(r["start"]), iso(r["end"])
+    out["locked_at"] = iso(out["locked_at"])
     return out
+
+
+class FinanceLockIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    through: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+@router.post("/admin/platform-finance/lock")
+def lock_platform_finance(body: FinanceLockIn, admin: User = Depends(require_role("finance")),
+                          db: Session = Depends(get_db, scope="function")):
+    """FIN-063 锁账（223 号 spec）：把报表锁到某个已经过完的月份（含）。锁过的月份报表不再变，
+    之后才记进去的流水记到第一个未锁的月份并写明；不能解锁。进审计。"""
+    from app.modules.wallet import service as wallet
+
+    from sqlalchemy.exc import IntegrityError
+
+    now = utcnow()
+    try:
+        months = wallet.lock_periods(db, body.through, admin.id, now)
+    except IntegrityError:      # 两位财务同时锁：后到的那位看到已锁，而不是 500
+        db.rollback()
+        raise conflict("另一位财务刚刚锁了这些月份：刷新看看锁到了哪个月", "period_already_closed")
+    record_audit(db, admin.id, "lock_platform_finance", "platform", None,
+                 f"锁到 {body.through}（{months[0]}~{months[-1]}，{len(months)} 个月）")
+    db.commit()
+    return {"locked_through": body.through, "months": months, "locked_at": iso(now)}
 
 
 @router.get("/admin/platform-finance/periods/export")
@@ -785,11 +812,14 @@ def export_platform_finance_periods(
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["期间", f"起（{EXPORT_TZ_LABEL}）", f"止（{EXPORT_TZ_LABEL}，不含）", "佣金收入（元）", "佣金笔数",
-                "结算划出（元）", "补贴支出（元）", "其他调整（元）", "本期净额（元）", "期初余额（元）", "期末余额（元）", "自检"])
+                "结算划出（元）", "补贴支出（元）", "其他调整（元）", "本期净额（元）", "期初余额（元）", "期末余额（元）",
+                # FIN-063（223 号 spec）；「自检」保持在最后一列，原来按列读的不受影响
+                "锁账", "锁账后又记进本期（元，已记到下一个未锁月份）", "本期含补记以前期间（元）", "自检"])
     for r in out["periods"]:
         w.writerow([r["period"], export_time(r["start"]), export_time(r["end"]), f"{r['fee_cents'] / 100:.2f}", r["fee_count"],
                     f"{r['settled_cents'] / 100:.2f}", f"{r['subsidy_cents'] / 100:.2f}", f"{r['other_cents'] / 100:.2f}",
                     f"{r['net_cents'] / 100:.2f}", f"{r['opening_cents'] / 100:.2f}", f"{r['closing_cents'] / 100:.2f}",
+                    "已锁" if r["closed"] else "未锁", f"{r['late_cents'] / 100:.2f}", f"{r['carried_in_cents'] / 100:.2f}",
                     "平" if r["balanced"] else "不平"])
     first, last = out["periods"][0]["period"], out["periods"][-1]["period"]
     record_audit(db, admin.id, "export_platform_finance", "platform", None, f"{granularity} {first}~{last}")

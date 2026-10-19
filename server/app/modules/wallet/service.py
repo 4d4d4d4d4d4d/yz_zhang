@@ -691,7 +691,7 @@ PERIOD_MAX = 24   # 一次最多 24 个期间（两年的月报 / 六年的季�
 PERIOD_COLUMNS = {"fee": "fee_cents", "platform_settle": "settled_cents", "subsidy_out": "subsidy_cents"}
 
 
-def period_bounds(granularity: str, start: str, end: str) -> list[tuple[str, datetime, datetime]]:
+def period_bounds(granularity: str, start: str, end: str, limit: int = PERIOD_MAX) -> list[tuple[str, datetime, datetime]]:
     """北京时间的自然月 / 自然季度，返回 [(标签, UTC 起, UTC 止)]。start / end 形如 2026-07（季度按所在季度）。"""
     from zoneinfo import ZoneInfo
 
@@ -713,7 +713,7 @@ def period_bounds(granularity: str, start: str, end: str) -> list[tuple[str, dat
         hi = datetime(ny, nm, 1, tzinfo=tz).astimezone(timezone.utc).replace(tzinfo=None)
         label = f"{y}-Q{(m - 1) // 3 + 1}" if granularity == "quarter" else f"{y}-{m:02d}"
         out.append((label, lo, hi))
-        if len(out) > PERIOD_MAX:
+        if len(out) > limit:
             raise bad_request(f"一次最多看 {PERIOD_MAX} 个期间：请缩短起止范围", "period_range_too_long")
         y, m = ny, nm
     if not out:
@@ -722,6 +722,151 @@ def period_bounds(granularity: str, start: str, end: str) -> list[tuple[str, dat
 
 
 def platform_finance_periods(db: Session, granularity: str, start: str, end: str) -> dict:
+    """FIN-061 按期间的报表；FIN-063（223 号 spec）有锁账的月份时，已锁的月份读快照、补记记到第一个未锁月份。
+    一个月都没锁时与锁账之前完全一样（同一段计算），只多几个恒为默认值的字段。"""
+    from .models import FinancePeriodLock
+
+    locks = {x.period: x for x in db.query(FinancePeriodLock).all()}
+    if not locks:
+        out = _live_periods(db, granularity, start, end)
+        for r in out["periods"]:
+            r.update(_LOCK_DEFAULTS)
+        return {**out, "locked_through": None, "locked_at": None}
+    bounds = period_bounds(granularity, start, end)      # 先按请求的粒度校验范围与上限
+    months = period_bounds("month", f"{bounds[0][0][:4]}-{_first_month(bounds[0][0])}", _last_month(bounds[-1][0]),
+                           limit=PERIOD_MAX * 3)
+    rows = _locked_month_rows(db, months, locks)
+    if granularity == "quarter":
+        rows = [_sum_months(label, lo, hi, [r for r in rows if lo <= r["start"] < hi]) for label, lo, hi in bounds]
+    top = max(locks.values(), key=lambda x: x.period)
+    return {"granularity": granularity, "periods": rows, "locked_through": top.period, "locked_at": top.locked_at}
+
+
+_LOCK_DEFAULTS = {"closed": False, "late_cents": 0, "late_count": 0, "carried_in_cents": 0, "carried_in_count": 0}
+_RAW_COLS = ("fee_cents", "settled_cents", "subsidy_cents", "other_cents")
+
+
+def _first_month(label: str) -> str:
+    return f"{(int(label[-1]) - 1) * 3 + 1:02d}" if "-Q" in label else label[5:7]
+
+
+def _last_month(label: str) -> str:
+    return f"{label[:4]}-{int(label[-1]) * 3:02d}" if "-Q" in label else label
+
+
+def _next_month(label: str) -> str:
+    y, m = int(label[:4]), int(label[5:7])
+    return f"{y + m // 12}-{m % 12 + 1:02d}"
+
+
+def _raw(db: Session, *conds) -> dict:
+    """按报表栏目的原始合计（出账为负）与笔数、佣金笔数。"""
+    from sqlalchemy import func
+
+    out = {c: 0 for c in _RAW_COLS} | {"count": 0, "fee_count": 0}
+    for kind, amount, n in (db.query(LedgerEntry.kind, func.coalesce(func.sum(LedgerEntry.amount_cents), 0),
+                                     func.count(LedgerEntry.id))
+                            .filter(LedgerEntry.user_id == PLATFORM_USER_ID, *conds).group_by(LedgerEntry.kind).all()):
+        out[PERIOD_COLUMNS.get(kind, "other_cents")] += int(amount)
+        out["count"] += int(n)
+        if kind == "fee":
+            out["fee_count"] += int(n)
+    return out
+
+
+def _row(label: str, lo: datetime, hi: datetime, raw: dict, opening: int, closing: int) -> dict:
+    net = sum(raw[c] for c in _RAW_COLS)
+    return {"period": label, "start": lo, "end": hi, "fee_cents": raw["fee_cents"], "fee_count": raw["fee_count"],
+            "settled_cents": -raw["settled_cents"], "subsidy_cents": -raw["subsidy_cents"],
+            "other_cents": raw["other_cents"], "net_cents": net, "opening_cents": opening, "closing_cents": closing,
+            "balanced": closing - opening == net}
+
+
+def _locked_month_rows(db: Session, months: list, locks: dict) -> list[dict]:
+    """已锁的月份：锁账时的快照，另报「锁账后又记进这个月的」合计与笔数（late），它们已记到 late_to 那个月。
+    锁到 W 月时，W 月以前（含）都按已锁处理；W 的下一个月是第一个未锁月份，补记全记在这里（carried_in）：
+    本期多出这些、期初少这些——于是它的期初正好等于 W 月快照的期末，已出的数一分不变。"""
+    top = max(locks)
+    target = _next_month(top)
+    rows = []
+    for label, lo, hi in months:
+        if label <= top:
+            lock = locks.get(label)
+            live = _raw(db, LedgerEntry.created_at >= lo, LedgerEntry.created_at < hi)
+            if lock is not None:
+                row = {**lock.snapshot, "start": lo, "end": hi}
+                late, late_n = sum(live[c] for c in _RAW_COLS) - lock.in_month_cents, live["count"] - lock.in_month_count
+            else:   # 锁到 W 时还没有流水的更早月份
+                row = _row(label, lo, hi, {c: 0 for c in _RAW_COLS} | {"fee_count": 0}, 0, 0)
+                late, late_n = sum(live[c] for c in _RAW_COLS), live["count"]
+            rows.append({**row, **_LOCK_DEFAULTS, "closed": True, "late_cents": late, "late_count": late_n})
+            continue
+        raw = _raw(db, LedgerEntry.created_at >= lo, LedgerEntry.created_at < hi)
+        opening = sum(_raw(db, LedgerEntry.created_at < lo)[c] for c in _RAW_COLS)
+        closing = sum(_raw(db, LedgerEntry.created_at < hi)[c] for c in _RAW_COLS)
+        carried, carried_n = 0, 0
+        if label == target:
+            lock = locks[top]
+            now_cum = _raw(db, LedgerEntry.created_at < lo)
+            for c in _RAW_COLS:
+                d = now_cum[c] - int(lock.cumulative.get(c, 0))
+                raw[c] += d
+                carried += d
+            raw["fee_count"] += now_cum["fee_count"] - int(lock.cumulative.get("fee_count", 0))
+            carried_n = now_cum["count"] - int(lock.cumulative.get("count", 0))
+            opening -= carried
+        rows.append({**_row(label, lo, hi, raw, opening, closing), **_LOCK_DEFAULTS,
+                     "carried_in_cents": carried, "carried_in_count": carried_n})
+    return rows
+
+
+def _sum_months(label: str, lo: datetime, hi: datetime, months: list[dict]) -> dict:
+    raw = {"fee_cents": sum(m["fee_cents"] for m in months), "settled_cents": -sum(m["settled_cents"] for m in months),
+           "subsidy_cents": -sum(m["subsidy_cents"] for m in months), "other_cents": sum(m["other_cents"] for m in months),
+           "fee_count": sum(m["fee_count"] for m in months)}
+    row = _row(label, lo, hi, raw, months[0]["opening_cents"], months[-1]["closing_cents"])
+    return {**row, "closed": all(m["closed"] for m in months),
+            **{k: sum(m[k] for m in months) for k in ("late_cents", "late_count", "carried_in_cents", "carried_in_count")}}
+
+
+def lock_periods(db: Session, through: str, admin_id: int, now: datetime) -> list[str]:
+    """FIN-063 锁账到 through 月（含）：从上次锁到的下一个月（第一次锁则从有流水的第一个月）起逐月存快照。
+    只能锁已经过完的月份；锁过的不能再锁、不能解锁——要改已出的数，在当期记一笔调整。"""
+    from sqlalchemy import func
+
+    from app.modules.workbench.service import local
+
+    from .models import FinancePeriodLock
+
+    _, lo, hi = period_bounds("month", through, through)[0]
+    if hi > now:
+        raise bad_request(f"{through} 还没过完：只能锁已经结束的月份（北京时间）", "period_not_ended")
+    locks = {x.period: x for x in db.query(FinancePeriodLock).all()}
+    top = max(locks) if locks else None
+    if top and through <= top:
+        raise bad_request(f"已经锁到 {top}：锁过的月份不能再锁，要更正请在当期记调整", "period_already_closed")
+    if top:
+        start = _next_month(top)
+    else:
+        first = db.query(func.min(LedgerEntry.created_at)).filter(LedgerEntry.user_id == PLATFORM_USER_ID).scalar()
+        start = min(through, f"{local(first).year}-{local(first).month:02d}") if first else through
+    done = []
+    for label, mlo, mhi in period_bounds("month", start, through, limit=10_000):
+        row = _locked_month_rows(db, [(label, mlo, mhi)], locks)[0] if locks else \
+            {**_live_periods(db, "month", label, label)["periods"][0]}
+        live = _raw(db, LedgerEntry.created_at >= mlo, LedgerEntry.created_at < mhi)
+        snap = {k: v for k, v in row.items() if k not in ("start", "end", *_LOCK_DEFAULTS)}
+        lock = FinancePeriodLock(period=label, snapshot=snap, in_month_cents=sum(live[c] for c in _RAW_COLS),
+                                 in_month_count=live["count"], cumulative=_raw(db, LedgerEntry.created_at < mhi),
+                                 locked_by=admin_id, locked_at=now)
+        db.add(lock)
+        db.flush()
+        locks[label] = lock
+        done.append(label)
+    return done
+
+
+def _live_periods(db: Session, granularity: str, start: str, end: str) -> dict:
     """平台账户按期间的收支：佣金（实收）、结算划出、补贴支出、其他调整，期初 / 期末余额，
     以及一条自检：期末 − 期初 = 本期净额。数字全部来自平台账户流水（与累计口径同一个事实来源）。"""
     from sqlalchemy import func

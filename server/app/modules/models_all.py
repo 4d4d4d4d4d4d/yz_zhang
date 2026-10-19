@@ -66,7 +66,7 @@ from app.modules.task.models import (  # noqa: F401
     Review,
     Task,
 )
-from app.modules.wallet.models import LedgerEntry, WalletAccount  # noqa: F401
+from app.modules.wallet.models import FinancePeriodLock, LedgerEntry, WalletAccount  # noqa: F401
 from app.modules.orchestrator.models import (  # noqa: F401
     Mission,
     MissionEvent,

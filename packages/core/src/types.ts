@@ -109,10 +109,27 @@ export interface PlatformFinancePeriod {
   closing_cents: number;
   /** 自检：期末 − 期初 = 本期净额 */
   balanced: boolean;
+  /** FIN-063（223 号 spec）已锁账：数字是锁账时的快照（季度要三个月都锁了才算） */
+  closed: boolean;
+  /** 已锁的期间：锁账后又记进来的合计与笔数（已记到第一个未锁月份，不改这期的数） */
+  late_cents: number;
+  late_count: number;
+  /** 第一个未锁月份：其中补记以前期间的合计与笔数 */
+  carried_in_cents: number;
+  carried_in_count: number;
 }
 export interface PlatformFinancePeriods {
   granularity: 'month' | 'quarter';
   periods: PlatformFinancePeriod[];
+  /** 锁到哪个月（YYYY-MM），没锁过是 null */
+  locked_through: string | null;
+  locked_at: string | null;
+}
+export interface PlatformFinanceLockResult {
+  locked_through: string;
+  /** 这一次锁上的月份 */
+  months: string[];
+  locked_at: string;
 }
 export interface PlatformFinanceExport {
   filename: string;

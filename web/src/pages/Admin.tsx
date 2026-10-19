@@ -420,10 +420,23 @@ function FinancePeriods() {
   const [data, setData] = useState<PlatformFinancePeriods | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [reload, setReload] = useState(0);
   useEffect(() => {
     client.platformFinancePeriods({ granularity })
       .then((d) => setData(d && Array.isArray(d.periods) ? d : null)).catch((e) => setError(apiErrorText(e)));
-  }, [client, granularity]);
+  }, [client, granularity, reload]);
+  // FIN-063（223 号 spec）锁账：锁过的月份报表不再变，补记记到第一个未锁月份；不能解锁，所以按下前说清
+  const [through, setThrough] = useState('');
+  async function lock() {
+    setError(''); setNotice('');
+    if (!through) { setError('先选要锁到哪个月'); return; }
+    if (!window.confirm(`锁账到 ${through}（含）之后，这些月份的报表不再变化，之后补记的流水记到下一个未锁月份。锁了不能解锁，确定吗？`)) return;
+    try {
+      const r = await client.lockPlatformFinance(through);
+      setNotice(`已锁到 ${r.locked_through}（这次锁了 ${r.months.length} 个月：${r.months[0]}~${r.months[r.months.length - 1]}）。已记入审计。`);
+      setReload((n) => n + 1);
+    } catch (e) { setError(apiErrorText(e)); }
+  }
   async function exportCsv() {
     setError(''); setNotice('');
     try {
@@ -443,6 +456,13 @@ function FinancePeriods() {
         </select>
         <button className="ghost" onClick={() => void exportCsv()}>导出 CSV</button>
       </div>
+      <div className="row">
+        <span className="muted grow" data-testid="finance-locked-through">
+          {data?.locked_through ? `已锁到 ${data.locked_through}${data.locked_at ? `（${formatDateTime(data.locked_at)}）` : ''}：锁过的月份报表不再变` : '还没有锁过账：每次打开都按最新流水现算'}
+        </span>
+        <input type="month" aria-label="锁账到" value={through} onChange={(e) => setThrough(e.target.value)} />
+        <button className="ghost" onClick={() => void lock()}>锁账到此月</button>
+      </div>
       {notice && <p role="status">{notice}</p>}
       {error && <p className="error">{error}</p>}
       {data && (
@@ -453,7 +473,12 @@ function FinancePeriods() {
               <tr key={r.period}>
                 <td>{r.period}</td><td>{fmtYuan(r.fee_cents)}</td><td>{r.fee_count}</td><td>{fmtYuan(r.settled_cents)}</td>
                 <td>{fmtYuan(r.subsidy_cents)}</td><td>{fmtYuan(r.other_cents)}</td><td>{fmtYuan(r.closing_cents)}</td>
-                <td>{r.balanced ? '' : <span className="badge warn">期末与期初对不上</span>}</td>
+                <td data-testid={`period-note-${r.period}`}>
+                  {r.balanced ? '' : <span className="badge warn">期末与期初对不上</span>}
+                  {r.closed && <span className="badge"> 已锁</span>}
+                  {r.closed && r.late_count > 0 && <span className="muted"> 锁账后又记进 {r.late_count} 笔（{fmtYuan(r.late_cents)}），已记到下一个未锁月份</span>}
+                  {r.carried_in_count > 0 && <span className="muted"> 含补记以前期间 {r.carried_in_count} 笔（{fmtYuan(r.carried_in_cents)}）</span>}
+                </td>
               </tr>
             ))}
           </tbody>

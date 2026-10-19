@@ -319,6 +319,7 @@ api POST /api/v1/admin/packs/{pack_id}/approve
 api POST /api/v1/admin/packs/{pack_id}/reject
 api POST /api/v1/admin/packs/{pack_id}/retire
 api POST /api/v1/admin/packs/{pack_id}/submit
+api POST /api/v1/admin/platform-finance/lock
 api POST /api/v1/admin/platform-finance/settle
 api POST /api/v1/admin/platform-finance/settle-requests/{request_id}/approve
 api POST /api/v1/admin/platform-finance/settle-requests/{request_id}/reject
@@ -843,6 +844,7 @@ sdk listApplications
 sdk listProgress
 sdk listReviews
 sdk listTasks
+sdk lockPlatformFinance
 sdk login
 sdk machineActions
 sdk machineMandate

@@ -128,6 +128,7 @@ import type {
   ApiKeyUsageView,
   PeriodQuery,
   PlatformFinanceExport,
+  PlatformFinanceLockResult,
   PlatformFinancePeriods,
   AuditChainReport,
   AuditLogExport,
@@ -1577,6 +1578,10 @@ export class PlatformClient {
   }
   exportPlatformFinancePeriods(params: PeriodQuery = {}) {
     return this.request<PlatformFinanceExport>('GET', `/admin/platform-finance/periods/export${qs(params)}`);
+  }
+  /** FIN-063 锁账到某个已经过完的月份（含）：不能解锁（223 号 spec） */
+  lockPlatformFinance(through: string) {
+    return this.request<PlatformFinanceLockResult>('POST', '/admin/platform-finance/lock', { through });
   }
   /** ADMIN-061 审计日志分页与筛选（143 号 spec）：带总条数 */
   adminAuditLogPage(params: AuditLogFilter & { limit?: number; offset?: number } = {}) {

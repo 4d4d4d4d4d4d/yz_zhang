@@ -81,6 +81,9 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   api_key_quota_above_cap: '每日配额不能超过平台默认值；需要更高配额请联系平台',
   api_account_quota_exceeded: '你账号下所有 API Key 今天（北京时间）合计的配额用完了，明天 0 点恢复；需要更高配额请联系平台',
   period_range_too_long: '一次最多看 24 个期间：请缩短起止范围',
+  // FIN-063（223 号 spec）锁账
+  period_not_ended: '这个月还没过完：只能锁已经结束的月份（北京时间）',
+  period_already_closed: '这些月份已经锁过账：锁过的不能再锁，要更正请在当期记一笔调整',
   period_range_invalid: '结束期间不能早于开始期间',
   invitation_not_found: '没有发给你的待处理邀请：可能已经接受、拒绝或过期了',
   admin_role_required: '这件事需要别的管理员角色：请超级管理员在后台「管理员与角色」里给你加上',

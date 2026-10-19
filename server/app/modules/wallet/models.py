@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String
+from sqlalchemy import JSON, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -36,6 +36,22 @@ class LedgerEntry(Base):
     contract_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     memo: Mapped[str] = mapped_column(String(200), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class FinancePeriodLock(Base):
+    """FIN-063（223 号 spec）已锁账的月份：锁账那一刻的报表快照。之后这个月的报表只读快照，
+    锁账后才记进来的流水（「补记」）记到锁账之后的第一个未锁月份，不改已出的数。"""
+
+    __tablename__ = "finance_period_locks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    period: Mapped[str] = mapped_column(String(7), unique=True)          # 北京时间自然月 2026-09
+    snapshot: Mapped[dict] = mapped_column(JSON)                         # 锁账时这个月的报表行
+    in_month_cents: Mapped[int] = mapped_column(Integer, default=0)      # 锁账时记在这个月里的流水合计与笔数
+    in_month_count: Mapped[int] = mapped_column(Integer, default=0)
+    cumulative: Mapped[dict] = mapped_column(JSON)                       # 锁账时月末以前的累计（按报表栏目，含笔数）
+    locked_by: Mapped[int] = mapped_column(Integer)
+    locked_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class WithdrawRequest(Base):
