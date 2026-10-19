@@ -97,6 +97,17 @@ class TaskTemplateDef(_M):
     category: str = Field(min_length=1, max_length=40)
     description: str = Field(default="", max_length=2000)
     acceptance: list[str] = Field(default_factory=list, max_length=10)
+    # SCN-133（211 号 spec）带清单的模板：发单时预填「要上门几次」「每次要做的事」，接单人照着逐项勾着回报。
+    # 与发布任务同一套限制：最多 8 项、每项最多 20 字
+    visits_planned: int = Field(default=0, ge=0, le=60)
+    visit_checklist: list[str] = Field(default_factory=list, max_length=8)
+
+    @field_validator("visit_checklist")
+    @classmethod
+    def _items(cls, v):
+        if any(not x.strip() or len(x.strip()) > 20 for x in v):
+            raise ValueError("清单每项 1~20 个字")
+        return [x.strip() for x in v]
 
 
 class AssistantDef(_M):

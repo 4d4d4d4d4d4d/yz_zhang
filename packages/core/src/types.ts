@@ -2440,6 +2440,9 @@ export interface PackTaskTemplateBrief {
   category: string;
   /** 说明（含验收标准），用来预填发布页 */
   description: string;
+  /** SCN-133 带清单的模板：预填「要上门几次」「每次要做的事」（没有是 0 / 空） */
+  visits_planned?: number;
+  visit_checklist?: string[];
 }
 export interface PackAssets {
   assistants: PackAssistant[];

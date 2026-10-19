@@ -67,7 +67,9 @@ def _assets(d: schema.PackDef) -> dict:
         # 发单模板只预填发布页（标题 / 类目 / 说明含验收标准），发不发由人决定（publish 关口）
         "task_templates": [{"key": t.key, "title": t.title, "category": t.category,
                             "description": t.description + ("\n\n验收标准：\n" + "\n".join(f"- {x}" for x in t.acceptance)
-                                                            if t.acceptance else "")}
+                                                            if t.acceptance else ""),
+                            # SCN-133 带清单的模板：预填上门次数与每次要做的事
+                            "visits_planned": t.visits_planned, "visit_checklist": list(t.visit_checklist)}
                            for t in d.task_templates],
     }
 

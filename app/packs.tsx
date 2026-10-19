@@ -1,6 +1,6 @@
 // PACK-100 服务包（123 号 spec）——App 端：浏览、启用 / 升级 / 停用、问助手专家、反馈。
 import {
-  apiErrorText, type AssistantContract, type PackAnswer, type PlatformClient, type ScenarioPackCard,
+  apiErrorText, type AssistantContract, type PackAnswer, type PackTaskTemplateBrief, type PlatformClient, type ScenarioPackCard,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -9,7 +9,11 @@ const SEGMENT: Record<string, string> = {
   opc: '一人公司', gig: '接单者', creator: '创作者', studio: '工作室', buyer: '发单方', general: '所有人',
 };
 
-export function PacksScreen({ client, onPublish }: { client: PlatformClient; onPublish?: (category: string) => void }) {
+export function PacksScreen({ client, onPublish, onPublishTemplate }: {
+  client: PlatformClient; onPublish?: (category: string) => void;
+  /** SCN-133 用服务包的发单模板去发单（预填标题、类目、说明，带清单的再加上门次数与清单） */
+  onPublishTemplate?: (t: PackTaskTemplateBrief) => void;
+}) {
   const [cards, setCards] = useState<ScenarioPackCard[]>([]);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -17,7 +21,7 @@ export function PacksScreen({ client, onPublish }: { client: PlatformClient; onP
   const refresh = useCallback(() => setVersion((v) => v + 1), []);
   useEffect(() => { client.scenarioPacks().then(setCards).catch((e) => setError(apiErrorText(e))); }, [client, version]);
   const open = cards.find((c) => c.key === openKey);
-  if (open) return <Detail client={client} card={open} onBack={() => setOpenKey(null)} onChanged={refresh} onPublish={onPublish} />;
+  if (open) return <Detail client={client} card={open} onBack={() => setOpenKey(null)} onChanged={refresh} onPublish={onPublish} onPublishTemplate={onPublishTemplate} />;
   return (
     <View style={s.box}>
       <Text style={s.muted}>每个服务包解决一类人的一件麻烦事。启用后复制进你的知识库和工作台，之后就是你自己的。</Text>
@@ -34,8 +38,9 @@ export function PacksScreen({ client, onPublish }: { client: PlatformClient; onP
   );
 }
 
-function Detail({ client, card, onBack, onChanged, onPublish }: {
+function Detail({ client, card, onBack, onChanged, onPublish, onPublishTemplate }: {
   client: PlatformClient; card: ScenarioPackCard; onBack: () => void; onChanged: () => void; onPublish?: (category: string) => void;
+  onPublishTemplate?: (t: PackTaskTemplateBrief) => void;
 }) {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -72,6 +77,18 @@ function Detail({ client, card, onBack, onChanged, onPublish }: {
       {card.assets.methods.map((m) => <Text key={m.key}>· {m.name}（{m.steps} 步）</Text>)}
       <Text style={s.h}>知识</Text>
       {card.assets.knowledge.map((k) => <Text key={k.key}>· {k.title}<Text style={s.muted}>（出处：{k.source}{k.valid_until ? `；有效期至 ${k.valid_until}` : ''}）</Text></Text>)}
+      {onPublishTemplate && Array.isArray(card.assets.task_templates) && card.assets.task_templates.length > 0 && (
+        <>
+          <Text style={s.h}>发单模板</Text>
+          {card.assets.task_templates.map((t) => (
+            <View key={t.key} style={s.row}>
+              <Text>· {t.title}（{t.category}）{t.visit_checklist?.length ? `，带 ${t.visit_checklist.length} 项清单` : ''}</Text>
+              <TouchableOpacity onPress={() => onPublishTemplate(t)}><Text style={s.link}>用这个模板发单</Text></TouchableOpacity>
+            </View>
+          ))}
+          <Text style={s.muted}>只是预填，发不发你决定</Text>
+        </>
+      )}
       {voted ? <Text style={s.muted}>谢谢，已记下</Text> : (
         <View style={s.row}>
           <Text style={s.muted}>有用吗？</Text>

@@ -6,7 +6,7 @@ import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, dayLabel, dayShiftsPayload, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, shiftLabel, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type DayShiftInput, type LedgerRow, type Me, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, dayLabel, dayShiftsPayload, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, shiftLabel, templatePrefill, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type DayShiftInput, type LedgerRow, type Me, type PackTaskTemplateBrief, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { isSandbox, loadSandbox } from './sandboxState';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
@@ -956,15 +956,18 @@ const DISPUTE_STATUS_LABEL: Record<string, string> = {
  * 漏一个字段在 `Partial<Task>` 面前不是类型错误。
  * 现在它是了（SDK 里改成必需参数），这段代码漏掉它就编译不过。
  */
-export function PublishScreen({ client, onDone, category = '跑腿', allowProject = false }: {
+export function PublishScreen({ client, onDone, category = '跑腿', allowProject = false, template }: {
   client: PlatformClient; onDone: (created?: Task) => void;
+  /** SCN-133（211 号 spec）从服务包的发单模板过来：预填标题、说明、上门次数与清单（只是预填，发不发由人定） */
+  template?: PackTaskTemplateBrief;
   /** APP-077 「这是一个要拆开做的项目」。只在合作入口给：从「不懂就问」带着类目来的，是一单具体的活 */
   allowProject?: boolean;
   /** LAW-051 别处把人送来时会带上类目（问答答不了 → 发一单法律咨询）。
    *  写死类目的话那个补救入口就是假的：人到了发布页，类目还停在「跑腿」上。 */
   category?: string;
 }) {
-  const [title, setTitle] = useState('');
+  const prefill = template ? templatePrefill(template) : null;
+  const [title, setTitle] = useState(prefill?.title ?? '');
   const [budget, setBudget] = useState('200');
   // 没有默认值是有意的（IPC-001）：替发布方猜归属，对执行方不公平，
   // 对含第三方素材的交付物直接就是错的
@@ -986,8 +989,8 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
   const [onsite, setOnsite] = useState('');
   const [consented, setConsented] = useState(false);
   // SCN-120（176 号 spec）一单多次上门：上门几次、每次要做的事
-  const [visits, setVisits] = useState('');
-  const [checklist, setChecklist] = useState('');
+  const [visits, setVisits] = useState(prefill?.visits ?? '');
+  const [checklist, setChecklist] = useState(prefill?.checklist ?? '');
   const [error, setError] = useState('');
   const nDays = parseInt(days, 10) || 1;
   const nPeople = parseInt(people, 10) || 1;
@@ -1080,6 +1083,7 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
         try {
           const created = await client.createTask({
             title, category, task_type: project ? 'project' : 'event',
+            ...(prefill?.description ? { description: prefill.description } : {}),
             budget_cents: Math.round(parseFloat(budget || '0') * 100),
             ip_assignment: ip,
             ...(!project && nPeople > 1 ? { people_needed: nPeople } : {}),
@@ -1325,6 +1329,8 @@ function MeScreen({ client, me, refresh, onLogout }: {
   // LAW-051 问答答不了时服务端给出「发一单法律咨询」，这里要真的送得到——
   // 否则那个按钮点下去什么也不会发生，而它看起来像是能办事的。
   const [askPublish, setAskPublish] = useState<string | null>(null);
+  // SCN-133 从服务包的发单模板过来：预填标题、说明、上门次数与清单
+  const [askTemplate, setAskTemplate] = useState<PackTaskTemplateBrief | null>(null);
   const [notice, setNotice] = useState('');
   const [agreements, setAgreements] = useState<string[]>([]);
   const [docText, setDocText] = useState('');
@@ -1343,17 +1349,18 @@ function MeScreen({ client, me, refresh, onLogout }: {
   if (askPublish !== null) {
     return (
       <>
-        <TouchableOpacity onPress={() => setAskPublish(null)}>
+        <TouchableOpacity onPress={() => { setAskPublish(null); setAskTemplate(null); }}>
           <Text style={styles.linkRow}>← 返回「不懂就问」</Text>
         </TouchableOpacity>
-        <PublishScreen client={client} category={askPublish}
-                       onDone={() => { setAskPublish(null); refresh(); }} />
+        <PublishScreen client={client} category={askPublish} template={askTemplate ?? undefined}
+                       onDone={() => { setAskPublish(null); setAskTemplate(null); refresh(); }} />
       </>
     );
   }
   if (sub) {
     return <SubScreenHost client={client} screen={sub} onBack={() => setSub(null)}
-                          onPublish={(c) => setAskPublish(c)} />;
+                          onPublish={(c) => setAskPublish(c)}
+                          onPublishTemplate={(t) => { setAskTemplate(t); setAskPublish(t.category); }} />;
   }
   if (!me) return <Text style={styles.muted}>加载中…</Text>;
   return (

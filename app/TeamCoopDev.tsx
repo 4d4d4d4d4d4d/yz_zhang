@@ -18,7 +18,7 @@ import {
   apiErrorText, fmtYuan,
   type ApiKeyView, type ContributionView, type ShareRow,
   type SpendRequestView, type TeamDetail, type TeamView, type VentureView,
-  type PlatformClient,
+  type PackTaskTemplateBrief, type PlatformClient,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { CertificationsScreen } from './certifications';
@@ -66,10 +66,12 @@ export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   xapp: '跨 App 助手（授权 / 逐步确认 / 叫停）',
 };
 
-export function SubScreenHost({ client, screen, onBack, onPublish }: {
+export function SubScreenHost({ client, screen, onBack, onPublish, onPublishTemplate }: {
   client: PlatformClient; screen: SubScreen; onBack: () => void;
   /** LAW-051 问答答不了时把人送去发一单（类目由服务端给）。 */
   onPublish?: (category: string) => void;
+  /** SCN-133 用服务包的发单模板去发单 */
+  onPublishTemplate?: (t: PackTaskTemplateBrief) => void;
 }) {
   return (
     <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: 24 }}>
@@ -86,7 +88,7 @@ export function SubScreenHost({ client, screen, onBack, onPublish }: {
       {screen === 'developer' && <DeveloperScreen client={client} />}
       {screen === 'workbench' && <WorkbenchScreen client={client} />}
       {screen === 'notebook' && <NotebookScreen client={client} />}
-      {screen === 'packs' && <PacksScreen client={client} onPublish={onPublish} />}
+      {screen === 'packs' && <PacksScreen client={client} onPublish={onPublish} onPublishTemplate={onPublishTemplate} />}
       {screen === 'opc' && <OpcScreen client={client} />}
       {screen === 'gig' && <GigScreen client={client} />}
       {screen === 'capability' && <CapabilityScreen client={client} />}

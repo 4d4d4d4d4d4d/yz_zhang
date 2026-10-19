@@ -2,6 +2,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { PlatformClient } from '@platform/core';
 import { PacksScreen } from './packs';
+import { PublishScreen } from './App';
 
 type Call = { method: string; path: string; body?: unknown };
 const CARD = {
@@ -57,5 +58,29 @@ describe('PACK-100 App 上的服务包', () => {
     await waitFor(() => expect(calls.find((c) => c.path === '/packs/collab-basics/disable')?.body).toEqual({ remove_copies: false }));
     fireEvent.press(screen.getByText('有用'));
     await waitFor(() => expect(calls.find((c) => c.path === '/packs/collab-basics/feedback')?.body).toEqual({ helpful: true }));
+  });
+});
+
+describe('SCN-133 App 用服务包的发单模板发单', () => {
+  const TPL = { key: 'v', title: '异地代看房（按套）', category: '跑腿', description: '只看、拍、问', visits_planned: 1,
+    visit_checklist: ['小区门口与楼栋号', '水电燃气表读数'] };
+  it('详情里列出模板，按下把模板交出去', async () => {
+    const card = { ...CARD, assets: { ...CARD.assets, task_templates: [TPL] } };
+    const onTpl = jest.fn();
+    render(<PacksScreen client={makeClient({ '/packs': [card], '/packs/collab-basics': card }, [])} onPublishTemplate={onTpl} />);
+    fireEvent.press(await screen.findByText('平台协作入门（已启用）'));
+    expect(await screen.findByText('· 异地代看房（按套）（跑腿），带 2 项清单')).toBeTruthy();
+    fireEvent.press(screen.getByText('用这个模板发单'));
+    expect(onTpl).toHaveBeenCalledWith(TPL);
+  });
+
+  it('发布页按模板预填，发出去带着说明、上门次数与清单', async () => {
+    const calls: Call[] = [];
+    render(<PublishScreen client={makeClient({ 'POST /tasks': { id: 9, title: TPL.title } }, calls)} category="跑腿" template={TPL} onDone={() => {}} />);
+    expect(screen.getByPlaceholderText(/标题/).props.value).toBe('异地代看房（按套）');
+    fireEvent.press(screen.getAllByText(/^○ /)[0]);
+    fireEvent.press(screen.getByText('发布（线上任务）'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks')?.body).toMatchObject({
+      title: '异地代看房（按套）', description: '只看、拍、问', visits_planned: 1, visit_checklist: ['小区门口与楼栋号', '水电燃气表读数'] }));
   });
 });

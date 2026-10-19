@@ -1,6 +1,6 @@
 // PACK-100 服务包（123 号 spec）：浏览、启用、问助手专家（带出处与人工关口）、运营台的四眼与雷达。
 import { PlatformClient } from '@platform/core';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -127,5 +127,21 @@ describe('PACK-100 服务包', () => {
     expect(await screen.findByText(/已起草进「household-chores」v2 的草稿.*【待填写】/)).toBeTruthy();
     expect((screen.getByLabelText('服务包定义') as HTMLTextAreaElement).value).toContain('radar-legal-gap-1');
     expect(screen.getByText('编辑草稿 #7')).toBeTruthy();
+  });
+});
+
+describe('SCN-133 带清单的发单模板', () => {
+  it('跳到发布页时带上上门次数与清单，发布页预填好', async () => {
+    const tpl = { key: 'v', title: '异地代看房（按套）', category: '跑腿', description: '只看、拍、问', visits_planned: 1,
+      visit_checklist: ['小区门口与楼栋号', '水电燃气表读数'] };
+    const withTpl = { ...CARD, assets: { ...CARD.assets, task_templates: [tpl] } };
+    open('/packs?pack=collab-basics', { '/packs': [withTpl], '/packs/collab-basics': withTpl });
+    const link = await screen.findByRole('link', { name: '用这个模板发单' });
+    const href = new URL(link.getAttribute('href') ?? '', 'http://x');
+    expect([href.searchParams.get('visits'), href.searchParams.get('checklist')]).toEqual(['1', '小区门口与楼栋号、水电燃气表读数']);
+    cleanup();
+    open(`/publish?${href.searchParams.toString()}`, { '/categories': [{ name: '跑腿', required_cert: '' }] });
+    expect(((await screen.findByLabelText('每次要做的事')) as HTMLInputElement).value).toBe('小区门口与楼栋号、水电燃气表读数');
+    expect((screen.getByLabelText('要上门几次') as HTMLInputElement).value).toBe('1');
   });
 });

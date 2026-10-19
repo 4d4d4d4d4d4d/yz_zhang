@@ -1,4 +1,4 @@
-import {
+import { templatePublishQuery,
   apiErrorText, formatDateTime,
   type AssistantContract, type PackAnswer, type PackAssistant, type ScenarioPackCard,
 } from '@platform/core';
@@ -133,7 +133,7 @@ function PackDetail({ card, onBack, onChanged }: { card: ScenarioPackCard; onBac
         ))}</ul>
         {card.assets.task_templates.length > 0 && (<><h4>发单模板</h4>
           <ul>{card.assets.task_templates.map((t) => (
-            <li key={t.key}>{t.title}（{t.category}） <Link to={`/publish?${new URLSearchParams({ title: t.title, category: t.category, description: t.description })}`}>用这个模板发单</Link>
+            <li key={t.key}>{t.title}（{t.category}） <Link to={`/publish?${templatePublishQuery(t)}`}>用这个模板发单</Link>
               <span className="muted"> · 只是预填，发不发你决定</span></li>
           ))}</ul></>)}
         {card.assets.routines.length > 0 && (<><h4>定时提醒</h4>
