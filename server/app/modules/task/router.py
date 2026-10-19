@@ -275,6 +275,9 @@ def _validate_minor(body: TaskIn) -> None:
                           "minor_needs_guardian_mode")
     if not body.guardian_consented:
         raise bad_request("服务对象是未成年人时，要由监护人本人发单或经监护人同意：确认后勾选再发", "guardian_required")
+    # SCN-146（216 号 spec）线下的单至少按一次上门回报：每次上门都留一条记录给监护人看（212 号 G2 的最后一项）
+    if not body.is_remote and body.visits_planned < 1:
+        body.visits_planned = 1
 
 
 def _validate_on_behalf(body: TaskIn) -> None:

@@ -81,3 +81,15 @@ def test_the_care_category_needs_the_record_check_even_without_the_flag(client, 
     worker = make_verified(client, "13600002426")
     r = client.post(f"{API}/{t['id']}/applications", json={}, headers=auth(worker))
     assert r.status_code == 400 and r.json()["detail"]["code"] == "certification_required", "类目本身就要这份证明"
+
+
+def test_onsite_minor_tasks_report_every_visit(client, requester):
+    """SCN-146（216 号 spec）：线下的单没写上门次数时按 1 次，接单人上门后要交回报；写了的照写的；线上单不加。"""
+    onsite = _post(client, requester, title="孩子钢琴陪练", description="每周六", **MINOR).json()
+    assert onsite["visits_planned"] == 1
+    many = _post(client, requester, title="孩子游泳陪练", description="四次课", visits_planned=4, **MINOR).json()
+    assert many["visits_planned"] == 4
+    remote = _post(client, requester, title="孩子线上钢琴陪练", description="视频", is_remote=True, lat=None, lng=None, **MINOR).json()
+    assert remote["visits_planned"] == 0
+    plain = _post(client, requester, title="周末帮忙搬家", description="两小时").json()
+    assert plain["visits_planned"] == 0, "别的单不受影响"
