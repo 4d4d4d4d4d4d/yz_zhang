@@ -171,6 +171,9 @@ def validate_publishable(task: Task, db: Session | None = None, reviewed: bool =
 
     check_pricing(task.pricing)
     assert_no_finance_offer(f"{task.title} {task.description}")
+    from app.modules.task.k12 import assert_no_k12_tutoring
+
+    assert_no_k12_tutoring(f"{task.title} {task.description}")   # SCN-143 中小学学科类家教不承接
     if not reviewed:
         hit = machine_review(task.title + " " + task.description, db)
         if hit:

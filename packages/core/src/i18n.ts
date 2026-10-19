@@ -103,6 +103,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   influence_vouch_locked: '他已经开工了：为这一单的担保要等这一单结束才释放',
   gig_need_location: '先打开「现在有空」，或者带上当前位置',
   gig_need_destination: '选一个目的地（常用地点）',
+  k12_subject_tutoring: '平台不承接中小学学科类有偿家教：需要学科辅导请找有办学资质的培训机构；钢琴、游泳这类非学科陪练可以照常发单',
   gig_route_same_place: '起点和终点要是两个不同的常用地点',
   gig_route_no_days: '选上哪几天走这条路（星期一到星期日）',
   gig_route_time_invalid: '出发时间按 24 小时制写成 HH:MM（例如 08:30）',

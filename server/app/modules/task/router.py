@@ -203,6 +203,10 @@ def _validate_ip_and_pricing(body: "TaskIn") -> None:
     # 他会以为选完就能发。
     check_pricing(body.pricing)
     assert_no_finance_offer(f"{body.title} {body.description}")
+    # SCN-143（213 号 spec）同样是平台不能做的业务，草稿也不收：先说清楚，免得写完了才发现发不出去
+    from app.modules.task.k12 import assert_no_k12_tutoring
+
+    assert_no_k12_tutoring(f"{body.title} {body.description}")
 
     if body.ip_assignment not in IP_ASSIGNMENTS:
         raise bad_request(
