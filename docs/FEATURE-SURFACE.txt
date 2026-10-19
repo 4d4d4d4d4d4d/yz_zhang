@@ -444,6 +444,7 @@ api POST /api/v1/open/v1/tasks
 api POST /api/v1/open/v1/tasks/{task_id}/applications
 api POST /api/v1/open/v1/tasks/{task_id}/deliver
 api POST /api/v1/openapi/jobs/deliver-webhooks
+api POST /api/v1/openapi/jobs/purge-usage
 api POST /api/v1/packs/{key}/assistants/{akey}/ask
 api POST /api/v1/packs/{key}/disable
 api POST /api/v1/packs/{key}/enable

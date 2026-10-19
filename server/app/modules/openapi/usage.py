@@ -133,3 +133,11 @@ def view(db: Session, key: ApiKey, days: int = 14, now: datetime | None = None) 
         "days": [{"day": d, "count": rows[d].count if d in rows else 0,
                   "rejected": rows[d].rejected if d in rows else 0} for d in wanted],
     }
+
+
+def purge_usage(db: Session, now: datetime | None = None) -> dict:
+    """API-055（219 号 spec）用量页最多看 90 天，更早的用量行留着没有用处：按北京日期清掉。
+    当天与近 90 天的不动（每日配额读的是当天那一行）。"""
+    cutoff = day_of((now or utcnow()) - timedelta(days=USAGE_DAYS_MAX))
+    n = db.query(ApiKeyUsage).filter(ApiKeyUsage.day < cutoff).delete(synchronize_session=False)
+    return {"purged": int(n or 0), "kept_from": cutoff}

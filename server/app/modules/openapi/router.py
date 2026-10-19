@@ -272,6 +272,15 @@ def open_wallet(principal=Depends(require_scope("wallet:read")),
             "frozen_cents": acct.frozen_cents}
 
 
+@router.post("/openapi/jobs/purge-usage")
+def run_purge_usage(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                    __=Depends(job_slot("api_usage_purge"), scope="function")):
+    """API-055 清掉 90 天以前的 Key 用量记录（一天一次）。"""
+    from .usage import purge_usage
+
+    return purge_usage(db)
+
+
 @router.post("/openapi/jobs/deliver-webhooks")
 def run_deliver(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
                 __=Depends(job_slot("deliver_webhooks"), scope="function")):
