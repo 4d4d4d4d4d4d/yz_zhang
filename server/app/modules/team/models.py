@@ -75,6 +75,8 @@ class TeamMember(Base):
     spend_limit_cents: Mapped[int] = mapped_column(Integer, default=0)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # TEAM-068（228 号 spec）通过哪条邀请链接加入的；所有者手动加的为空
+    invite_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
 
 
 class SpendRequest(Base):

@@ -152,7 +152,9 @@ def get_team(team_id: int, user: User = Depends(get_current_user),
         "my_role": me.role, "my_spend_limit_cents": me.spend_limit_cents,
         # TEAM-065 昵称：成员管理的界面要写人名，不能只写编号（136 号 spec）
         "members": [{"user_id": m.user_id, "role": m.role, "spend_limit_cents": m.spend_limit_cents,
-                     "nickname": names.get(m.user_id, "")} for m in members],
+                     "nickname": names.get(m.user_id, ""),
+                     # TEAM-068（228 号 spec）通过哪条邀请链接加入的（手动加的为空）
+                     "invite_id": m.invite_id} for m in members],
         # TEAM-030 客户端的「开票」按钮读这个，与服务端同一判断
         "invoice_block": service.can_invoice(team),
         # TEAM-052 预算池与本月用量：界面要能说清「还剩多少」，

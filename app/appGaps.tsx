@@ -1,6 +1,6 @@
 // APP-090 App 补齐（136 号 spec）：平台服务费发票、纠纷证据包导出、团队成员管理（TEAM-065）。
 // 三件事 Web 上早就有（或者两端都没有），App 上没有入口——用户在手机上做不完一件事。
-import { apiErrorText, fmtYuan, formatDate, teamHandoverDetail, type InvoiceRow, type PlatformClient, type TeamDetail } from '@platform/core';
+import { memberSourceLabel, apiErrorText, fmtYuan, formatDate, teamHandoverDetail, type InvoiceRow, type PlatformClient, type TeamDetail } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { TeamInviteLinkBlock } from './teamInvites';
@@ -77,7 +77,7 @@ export function TeamMembersBlock({ client, teamId, team, onChanged }: { client: 
       <Text style={s.title}>成员（{team.members.length}）</Text>
       {team.members.map((m) => (
         <View key={m.user_id} style={s.row}>
-          <Text style={{ flex: 1 }}>{m.nickname || `用户 #${m.user_id}`} · {m.role === 'owner' ? '所有者' : m.role === 'admin' ? '管理员' : '成员'} · 月度额度 {fmtYuan(m.spend_limit_cents)}</Text>
+          <Text style={{ flex: 1 }}>{m.nickname || `用户 #${m.user_id}`} · {m.role === 'owner' ? '所有者' : m.role === 'admin' ? '管理员' : '成员'} · 月度额度 {fmtYuan(m.spend_limit_cents)}{memberSourceLabel(m) ? ` · ${memberSourceLabel(m)}` : ''}</Text>
           {owner && m.role !== 'owner' && (
             <>
               <TouchableOpacity accessibilityLabel={`切换角色：${m.nickname || m.user_id}`} onPress={() => void act(

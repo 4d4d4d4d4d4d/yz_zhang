@@ -110,3 +110,12 @@ describe('APP-090 App 补齐', () => {
     alert.mockRestore();
   });
 });
+
+describe('TEAM-068 App 成员来源', () => {
+  it('通过邀请链接加入的成员写明是哪条链接', () => {
+    const client = makeClient({}, []);
+    const team = { ...TEAM, members: [{ user_id: 5, role: 'member', spend_limit_cents: 50000, nickname: '小林', invite_id: 3 }] } as unknown as TeamDetail;
+    render(<TeamMembersBlock client={client} teamId={9} team={team} onChanged={() => undefined} />);
+    expect(screen.getByText('小林 · 成员 · 月度额度 ¥500.00 · 通过邀请链接 #3 加入')).toBeTruthy();
+  });
+});

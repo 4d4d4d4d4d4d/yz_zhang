@@ -1,5 +1,5 @@
 import {
-  apiErrorText, fmtYuan, teamHandoverDetail,
+  apiErrorText, fmtYuan, inviteJoinedLine, memberSourceLabel, teamHandoverDetail,
   type SpendRequestView, type TeamDetail, type TeamInviteLink, type TeamView,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -221,7 +221,9 @@ function TeamMembers({ teamId, team, onChanged }: { teamId: number; team: TeamDe
         <tbody>
           {team.members.map((m) => (
             <tr key={m.user_id}>
-              <td><Link to={`/people/${m.user_id}`}>{m.nickname || `用户 #${m.user_id}`}</Link></td>
+              <td><Link to={`/people/${m.user_id}`}>{m.nickname || `用户 #${m.user_id}`}</Link>
+                {/* TEAM-068（228 号 spec）从哪条邀请链接进来的 */}
+                {memberSourceLabel(m) && <span className="muted"> · {memberSourceLabel(m)}</span>}</td>
               <td>{ROLE[m.role] ?? m.role}</td>
               <td>{fmtYuan(m.spend_limit_cents)}</td>
               {owner && <td>{m.role !== 'owner' && <>
@@ -290,7 +292,8 @@ function InviteLinks({ teamId }: { teamId: number }) {
       {error && <p className="error">{error}</p>}
       <ul className="muted">
         {rows.map((r) => (
-          <li key={r.id}>额度 {fmtYuan(r.spend_limit_cents)} · 已用 {r.uses}/{r.max_uses} · {STATE[r.state] ?? r.state}
+          <li key={r.id} data-testid={`invite-link-${r.id}`}>#{r.id} 额度 {fmtYuan(r.spend_limit_cents)} · 已用 {r.uses}/{r.max_uses} · {STATE[r.state] ?? r.state}
+            {inviteJoinedLine(r) && <> · {inviteJoinedLine(r)}</>}
             {r.state === 'active' && <> <button className="text-link" onClick={() => void client.revokeTeamInviteLink(teamId, r.id).then(load)}>作废</button></>}</li>
         ))}
       </ul>

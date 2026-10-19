@@ -64,6 +64,15 @@ export interface TeamInviteLink {
   expires_at: string;
   created_at: string;
   state: 'active' | 'used_up' | 'expired' | 'revoked';
+  /** TEAM-068（228 号 spec）通过这条链接加入的人（列表接口才有；生成 / 作废的响应里没有） */
+  joined?: TeamInviteJoin[];
+}
+export interface TeamInviteJoin {
+  user_id: number;
+  nickname: string;
+  joined_at: string;
+  /** 还在团队里；被移出或离开的为 false */
+  active: boolean;
 }
 /** 生成时的响应：令牌只出现这一次 */
 export interface TeamInviteCreated extends TeamInviteLink {
@@ -1399,7 +1408,7 @@ export interface TeamDetail extends TeamView {
   /** TEAM-050 **月度累计**额度（V87 起），不是单笔——只管单笔的额度
    *  拆单就能绕过，那是 V55 在提现上修过的同一个洞。 */
   my_spend_limit_cents: number;
-  members: Array<{ user_id: number; role: string; spend_limit_cents: number; nickname: string }>;
+  members: Array<{ user_id: number; role: string; spend_limit_cents: number; nickname: string; invite_id?: number | null }>;
   /** TEAM-030 客户端的「开票」按钮读这个，与服务端同一判断。 */
   invoice_block: string;
   /** TEAM-052 团队月度预算池（0 = 不设池）与本月用量。 */

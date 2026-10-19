@@ -69,7 +69,17 @@ def list_links(team_id: int, user: User = Depends(get_current_user), db: Session
         raise not_found("团队不存在")
     service.require_role(db, team_id, user.id, "owner")
     rows = db.query(TeamInvite).filter(TeamInvite.team_id == team_id).order_by(TeamInvite.id.desc()).limit(100).all()
-    return [_dump(r) for r in rows]
+    # TEAM-068（228 号 spec）每条链接谁进来了、什么时候、现在还在不在
+    joined: dict[int, list[dict]] = {}
+    if rows:
+        members = (db.query(TeamMember).filter(TeamMember.team_id == team_id,
+                                               TeamMember.invite_id.in_([r.id for r in rows]))
+                   .order_by(TeamMember.joined_at).all())
+        names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_([m.user_id for m in members] or [-1]))}
+        for m in members:
+            joined.setdefault(m.invite_id, []).append(
+                {"user_id": m.user_id, "nickname": names.get(m.user_id, ""), "joined_at": iso(m.joined_at), "active": m.active})
+    return [{**_dump(r), "joined": joined.get(r.id, [])} for r in rows]
 
 
 @router.post("/teams/{team_id}/invite-links/{link_id}/revoke")
@@ -115,6 +125,15 @@ def accept(token: str, user: User = Depends(get_current_user), db: Session = Dep
              .update({"uses": TeamInvite.uses + 1}, synchronize_session=False))
     if taken != 1:
         raise not_found("这条邀请链接刚刚用完了。请找团队所有者重新发一条", "team_invite_invalid")
-    db.add(TeamMember(team_id=row.team_id, user_id=user.id, role="member", spend_limit_cents=row.spend_limit_cents))
+    db.add(TeamMember(team_id=row.team_id, user_id=user.id, role="member", spend_limit_cents=row.spend_limit_cents,
+                      invite_id=row.id))
+    # TEAM-068 告诉所有者谁通过哪条链接进来了（链接可能被转发给了别人，越早知道越好）
+    from app.modules.notification.service import notify
+
+    team = db.get(Team, row.team_id)
+    if team:
+        notify(db, team.owner_id, "system", f"{user.nickname or f'用户 #{user.id}'} 通过邀请链接加入了团队「{team.name}」",
+               f"邀请链接 #{row.id}（已用 {row.uses + 1}/{row.max_uses}），加入后的月度额度 ¥{row.spend_limit_cents / 100:.2f}。"
+               "不认识这个人的话，可以在团队成员里把他移出，并作废这条链接。")
     db.flush()
     return {"team_id": row.team_id, "user_id": user.id, "role": "member", "spend_limit_cents": row.spend_limit_cents}

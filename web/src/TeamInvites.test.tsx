@@ -57,4 +57,16 @@ describe('TEAM-066 团队邀请链接', () => {
     fireEvent.click(screen.getByText('加入团队'));
     await screen.findByText(/已加入/);
   });
+
+  it('TEAM-068 每条链接写明谁通过它加入、离开的标出来；成员表里写来源', async () => {
+    const T2 = { ...TEAM, members: [...TEAM.members, { user_id: 5, role: 'member', spend_limit_cents: 10000, nickname: '小甲', invite_id: 3 }] };
+    open('/teams', { '/users/me': ME, '/teams/mine': [T2], '/teams/9': T2, '/teams/9/spends': [],
+      '/teams/9/invite-links': [{ id: 3, spend_limit_cents: 10000, uses: 2, max_uses: 3, expires_at: '2026-10-22T00:00:00Z', created_at: '2026-10-15T00:00:00Z', state: 'active',
+        joined: [{ user_id: 5, nickname: '小甲', joined_at: '2026-10-16T02:00:00Z', active: true }, { user_id: 6, nickname: '小乙', joined_at: '2026-10-16T03:00:00Z', active: false }] }] });
+    fireEvent.click(await screen.findByText('打开'));
+    const li = await screen.findByTestId('invite-link-3');
+    await waitFor(() => expect(li.textContent).toContain('已加入：小甲（'));
+    expect(li.textContent).toContain('小乙（已离开）');
+    expect(screen.getByText(/通过邀请链接 #3 加入/)).toBeTruthy();
+  });
 });
