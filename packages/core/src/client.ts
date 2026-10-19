@@ -129,6 +129,7 @@ import type {
   PeriodQuery,
   PlatformFinanceExport,
   PlatformFinanceLockResult,
+  AutoVerifyUsage,
   PlatformFinancePeriods,
   AuditChainReport,
   AuditLogExport,
@@ -1538,6 +1539,8 @@ export class PlatformClient {
       total_users: number; verified_users: number; total_tasks: number; published_tasks: number;
       completed_tasks: number; closed_loop_rate: number; dispute_count: number;
       gmv_cents: number; fee_income_cents: number;
+      /** AGT-073（224 号 spec）平台自费核验的用量与额度 */
+      auto_verify: AutoVerifyUsage;
     }>('GET', '/admin/metrics');
   }
   adminReports(status = 'pending') {

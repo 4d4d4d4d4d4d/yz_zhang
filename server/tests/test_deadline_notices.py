@@ -274,3 +274,39 @@ def test_agt072_auto_orders_stop_at_the_daily_cap_and_the_publisher_is_told(clie
     assert second["title"] in body and "手动下一张核验单" in body
     r = client.post(f"/api/v1/tasks/{second['id']}/verification", headers=auth(requester))
     assert r.status_code == 201, "发布方手动下单的出口还在"
+
+
+# --------------------------------- AGT-073 自费核验用量进运营看板（224 号 spec，V251）
+def test_agt073_metrics_show_auto_verify_usage_with_the_same_count_as_the_cap(client, requester, runner, moderation, monkeypatch):
+    """上限判断与看板必须是同一个口径：看板说还剩 0 张，审核拿不准时就真的不再自动下单。"""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "AUTO_VERIFY_DAILY_MAX", 1)
+    admin = make_admin(client, "13800065079")
+    u = client.get("/api/v1/admin/metrics", headers=auth(admin)).json()["auto_verify"]
+    assert u == {"used_24h": 0, "daily_max": 1, "remaining": 1, "fee_cents_24h": 0, "skipped_24h": 0}
+    moderation.status = "review"
+    first, _ = _agent_task_ready(client, requester, "13800065072")
+    client.post(f"/api/v1/tasks/{first['id']}/agent-run", headers=auth(requester))
+    fee = sum(o.fee_cents for o in _orders(first["id"]))
+    u = client.get("/api/v1/admin/metrics", headers=auth(admin)).json()["auto_verify"]
+    assert (u["used_24h"], u["remaining"], u["fee_cents_24h"], u["skipped_24h"]) == (1, 0, fee, 0)
+    second, _ = _agent_task_ready(client, requester, "13800065073")
+    client.post(f"/api/v1/tasks/{second['id']}/agent-run", headers=auth(requester))
+    u = client.get("/api/v1/admin/metrics", headers=auth(admin)).json()["auto_verify"]
+    assert (u["used_24h"], u["remaining"], u["skipped_24h"]) == (1, 0, 1), "额度用完后没自动下的那次要记上"
+    # 拿不准时发布方手动下的单也是平台付（V74 的规则），与上限判断同一个口径计入；剩余不会变成负数
+    client.post(f"/api/v1/tasks/{second['id']}/verification", headers=auth(requester))
+    u = client.get("/api/v1/admin/metrics", headers=auth(admin)).json()["auto_verify"]
+    assert (u["used_24h"], u["remaining"]) == (2, 0)
+    # 只数「拿不准」触发的：别的类型即便由平台付也不占这份额度（与上限判断同一个条件）
+    from app.core.db import SessionLocal
+    from app.modules.verify.models import VerificationOrder
+
+    with SessionLocal() as db:
+        db.add(VerificationOrder(task_id=first["id"], payer_id=0, trigger="requested", fee_cents=100))
+        db.commit()
+    assert client.get("/api/v1/admin/metrics", headers=auth(admin)).json()["auto_verify"]["used_24h"] == 2
+    from tests.test_client_shape_alignment import _assert_shape
+
+    _assert_shape(u, "AutoVerifyUsage")

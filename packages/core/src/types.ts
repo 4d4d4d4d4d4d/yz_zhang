@@ -125,6 +125,15 @@ export interface PlatformFinancePeriods {
   locked_through: string | null;
   locked_at: string | null;
 }
+/** AGT-073（224 号 spec）近 24 小时平台自费的自动核验单 */
+export interface AutoVerifyUsage {
+  used_24h: number;
+  daily_max: number;
+  remaining: number;
+  fee_cents_24h: number;
+  /** 额度用完后没有自动下单（只通知了发布方）的次数 */
+  skipped_24h: number;
+}
 export interface PlatformFinanceLockResult {
   locked_through: string;
   /** 这一次锁上的月份 */

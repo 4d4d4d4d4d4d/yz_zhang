@@ -990,6 +990,8 @@ def metrics(admin: User = Depends(require_role(*ANY)), db: Session = Depends(get
     # 而非按 Σreleased×费率估算（会漏计纠纷/取消佣金）
     from app.modules.wallet import service as wallet
 
+    from app.modules.agent.service import auto_verify_usage
+
     fee_income = wallet.platform_finance(db)["total_fee_cents"]
     closed_loop_rate = round(completed / total_tasks, 4) if total_tasks else 0.0
     return {
@@ -1002,6 +1004,8 @@ def metrics(admin: User = Depends(require_role(*ANY)), db: Session = Depends(get
         "dispute_count": disputed,
         "gmv_cents": int(gmv),
         "fee_income_cents": int(fee_income),
+        # AGT-073（224 号 spec）平台自费核验的用量与额度
+        "auto_verify": auto_verify_usage(db),
     }
 
 

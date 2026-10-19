@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -18,6 +18,7 @@ type Metrics = {
   total_users: number; verified_users: number; total_tasks: number; published_tasks: number;
   completed_tasks: number; closed_loop_rate: number; dispute_count: number;
   gmv_cents: number; fee_income_cents: number;
+  auto_verify?: AutoVerifyUsage;
 };
 type ReportRow = { id: number; reporter_id: number; target_type: string; target_id: number; reason: string };
 type UserRow = { id: number; phone: string; nickname: string; is_verified: boolean; is_banned: boolean; credit_score: number; tasks_completed: number };
@@ -83,6 +84,12 @@ export default function Admin() {
             <Stat label="任务 总/招募/完成" value={`${metrics.total_tasks}/${metrics.published_tasks}/${metrics.completed_tasks}`} />
             <Stat label="纠纷数" value={String(metrics.dispute_count)} />
           </div>
+          {/* AGT-073（224 号 spec）平台自费核验的用量：用完了之后拿不准的交付不再自动请人看 */}
+          {metrics.auto_verify && (
+            <p data-testid="auto-verify-usage" className={autoVerifyLevel(metrics.auto_verify) === 'ok' ? 'muted' : 'error'}>
+              {autoVerifyLine(metrics.auto_verify)}
+            </p>
+          )}
         </div>
       )}
       {see('roles') && <AdminRolesPanel />}

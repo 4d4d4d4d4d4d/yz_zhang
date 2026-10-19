@@ -328,7 +328,7 @@ def _maybe_auto_verify(db: Session, task, run, labels: list[str]) -> None:
         # AGT-072 平台自费的额度用完了：不下单，但告诉发布方这单还没人看过、他可以自己下单（出口不能静默消失）
         from app.modules.notification.service import notify
 
-        run.error = f"{run.error}；平台今天自费核验的额度已用完，未自动下核验单".lstrip("；")
+        run.error = f"{run.error}；{AUTO_VERIFY_SKIPPED_MARK}，未自动下核验单".lstrip("；")
         notify(db, task.creator_id, "task", "这单 AI 交付需要人工看一眼",
                f"《{task.title}》的 AI 交付审核拿不准，平台今天自费核验的额度已用完。"
                "你可以在任务详情里手动下一张核验单，或自己验收。")
@@ -344,19 +344,37 @@ def _maybe_auto_verify(db: Session, task, run, labels: list[str]) -> None:
         pass
 
 
+AUTO_VERIFY_SKIPPED_MARK = "平台今天自费核验的额度已用完"
+
+
 def _auto_verify_capped(db: Session) -> bool:
     """AGT-072 近 24 小时平台自费的自动核验单（trigger = escalation、付款方是平台）到了上限没有。"""
+    u = auto_verify_usage(db)
+    return u["used_24h"] >= u["daily_max"]
+
+
+def auto_verify_usage(db: Session) -> dict:
+    """AGT-073（224 号 spec）运营看板上的自费核验用量：近 24 小时自动下了几张、额度、还剩、花了多少，
+    以及额度用完后有几次拿不准的交付没有自动请人看（只通知了发布方）。与上限判断同一个口径。"""
     from datetime import timedelta
+
+    from sqlalchemy import func
 
     from app.core.config import settings
     from app.modules.verify.models import VerificationOrder
     from app.modules.wallet import service as wallet
 
-    n = (db.query(VerificationOrder)
-         .filter(VerificationOrder.trigger == "escalation", VerificationOrder.payer_id == wallet.PLATFORM_USER_ID,
-                 VerificationOrder.created_at >= utcnow() - timedelta(hours=24))
-         .count())
-    return n >= settings.AUTO_VERIFY_DAILY_MAX
+    from .models import AgentRun
+
+    since = utcnow() - timedelta(hours=24)
+    used, fee = (db.query(func.count(VerificationOrder.id), func.coalesce(func.sum(VerificationOrder.fee_cents), 0))
+                 .filter(VerificationOrder.trigger == "escalation", VerificationOrder.payer_id == wallet.PLATFORM_USER_ID,
+                         VerificationOrder.created_at >= since).one())
+    skipped = (db.query(func.count(AgentRun.id))
+               .filter(AgentRun.created_at >= since, AgentRun.error.contains(AUTO_VERIFY_SKIPPED_MARK)).scalar())
+    cap = settings.AUTO_VERIFY_DAILY_MAX
+    return {"used_24h": int(used), "daily_max": cap, "remaining": max(0, cap - int(used)),
+            "fee_cents_24h": int(fee), "skipped_24h": int(skipped)}
 
 
 def gross_margin_cents(db: Session, agent_user_id: int) -> dict:
