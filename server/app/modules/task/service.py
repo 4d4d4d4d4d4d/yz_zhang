@@ -23,7 +23,10 @@ SEED_CATEGORIES = [
 # 后来加的类目：已有库里没有就补上（只补一次；补上之后运营可以停用，不会被重新打开）。
 # 「财税」——OPC 服务包的发单模板与答不了时的去处（124 号 spec）
 # 「宠物照护」「助老陪伴」——第四轮场景发掘的两个服务包的发单模板与去处（173 号 spec，V200）
-ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助老陪伴"}]
+# 「陪练看护」——服务对象是未成年人的陪练、看护、接送；接单要有审核通过的无犯罪记录证明（214 号 spec，V242）
+MINOR_CARE_CERT = "无犯罪记录证明"
+ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助老陪伴"},
+                    {"name": "陪练看护", "required_cert": MINOR_CARE_CERT}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
@@ -72,6 +75,8 @@ def check_category_qualification(db: Session, task, user) -> None:
     """ACC-022 受限类目准入（读类目表，运营后台可配）。"""
     category = get_category(db, task.category)
     required = category.required_cert if category else ""
+    if not required and getattr(task, "minor_involved", False):
+        required = MINOR_CARE_CERT          # SCN-144 服务对象是未成年人的单，不论哪个类目都要这份证明
     if not required:
         return
     # CERT-001/005 读的是**已核准且未过期**的资质，不是 user.certifications 里

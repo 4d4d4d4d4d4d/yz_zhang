@@ -6,7 +6,7 @@ import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, dayLabel, dayShiftsPayload, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, shiftLabel, templatePrefill, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type DayShiftInput, type LedgerRow, type Me, type PackTaskTemplateBrief, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, dayLabel, dayShiftsPayload, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, shiftLabel, templatePrefill, GUARDIAN_MODE_LABEL, minorPayload, minorTaskLine, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type DayShiftInput, type LedgerRow, type Me, type PackTaskTemplateBrief, type GuardianMode, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { isSandbox, loadSandbox } from './sandboxState';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
@@ -480,6 +480,8 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       {!!task.address_exact && <Text style={styles.mutedLeft}>📍 {task.address_exact}</Text>}
       {/* SCN-117 每天几点到几点 */}
       {!!shiftLabel(task) && <Text style={styles.mutedLeft} accessibilityLabel="时段">🕘 {shiftLabel(task)}（北京时间）</Text>}
+      {/* SCN-144 服务对象是未成年人：安排方式与要求的证明 */}
+      {!!minorTaskLine(task) && <Text style={styles.mutedLeft} accessibilityLabel="未成年人服务">{minorTaskLine(task)}</Text>}
       {/* SCN-119 替别人发的单：谁都看得到；称呼与到场联系只给成交双方 */}
       {!!task.on_behalf && (
         <Text style={styles.mutedLeft} accessibilityLabel="服务对象">
@@ -988,6 +990,10 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
   const [recipient, setRecipient] = useState('');
   const [onsite, setOnsite] = useState('');
   const [consented, setConsented] = useState(false);
+  // SCN-144（214 号 spec）服务对象是未成年人：监护人在场或公开场所、监护人确认
+  const [minor, setMinor] = useState(false);
+  const [guardianMode, setGuardianMode] = useState<GuardianMode | ''>('');
+  const [guardianOk, setGuardianOk] = useState(false);
   // SCN-120（176 号 spec）一单多次上门：上门几次、每次要做的事
   const [visits, setVisits] = useState(prefill?.visits ?? '');
   const [checklist, setChecklist] = useState(prefill?.checklist ?? '');
@@ -1068,6 +1074,25 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
           </TouchableOpacity>
         </>
       )}
+      {/* SCN-144 服务对象是未成年人（陪练、看护、接送）：不允许单独相处，接单的人要有无犯罪记录证明 */}
+      <TouchableOpacity onPress={() => setMinor((v) => !v)} accessibilityRole="checkbox" accessibilityLabel="服务对象是未成年人"
+                        accessibilityState={{ checked: minor }}>
+        <Text style={minor ? styles.optionActive : styles.option}>{minor ? '☑ ' : '☐ '}服务对象是未成年人（陪练、看护、接送）</Text>
+      </TouchableOpacity>
+      {minor && (
+        <>
+          {(Object.keys(GUARDIAN_MODE_LABEL) as GuardianMode[]).map((m) => (
+            <TouchableOpacity key={m} onPress={() => setGuardianMode(m)} accessibilityRole="radio" accessibilityState={{ selected: guardianMode === m }}>
+              <Text style={guardianMode === m ? styles.optionActive : styles.option}>{guardianMode === m ? '● ' : '○ '}{GUARDIAN_MODE_LABEL[m]}</Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity onPress={() => setGuardianOk((v) => !v)} accessibilityRole="checkbox" accessibilityLabel="我是监护人或已经监护人同意"
+                            accessibilityState={{ checked: guardianOk }}>
+            <Text style={guardianOk ? styles.optionActive : styles.option}>{guardianOk ? '☑ ' : '☐ '}我是孩子的监护人，或已经监护人同意</Text>
+          </TouchableOpacity>
+          <Text style={styles.mutedLeft}>平台不允许和孩子单独相处的安排；接这类单的人要有平台审核通过的无犯罪记录证明。</Text>
+        </>
+      )}
       <Text style={styles.mutedLeft}>交付成果归谁（必选）</Text>
       {(Object.keys(IP_ASSIGNMENT_LABEL) as IpAssignment[]).map((key) => (
         <TouchableOpacity key={key} onPress={() => setIp(key)}>
@@ -1093,6 +1118,7 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
             ...(!project && (parseInt(visits, 10) || 0) > 0 ? { visits_planned: parseInt(visits, 10) } : {}),
             ...(!project && checklist.trim() ? { visit_checklist: checklist.split(/[、,，]/).map((x) => x.trim()).filter(Boolean) } : {}),
             ...(onBehalf ? { on_behalf: true, recipient_label: recipient, onsite_contact: onsite, recipient_consented: consented } : {}),
+            ...minorPayload(minor, guardianMode, guardianOk),
             // 项目先存草稿：拆好、说清每一步谁来做之后，只有能开工的步骤发布出去
             is_remote: true, publish_now: !project,
           });

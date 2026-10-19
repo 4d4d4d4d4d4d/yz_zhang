@@ -1,6 +1,6 @@
 // SCN-119 替别人发单（175 号 spec）：勾上「替别人发」才出现服务对象三项，并只在勾了时带进请求；详情页按可见性显示。
 import { PlatformClient } from '@platform/core';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -109,5 +109,34 @@ describe('SCN-123 发单后改服务对象', () => {
     openAs(POSTER, [], TASK({ on_behalf: true, recipient_label: '我妈', onsite_contact: '', status: 'completed' }));
     await screen.findByLabelText('服务对象');
     expect(screen.queryByText('改服务对象')).toBeNull();
+  });
+});
+
+describe('SCN-144 服务对象是未成年人', () => {
+  it('勾上才出现安排方式与监护人确认；请求带这三项', async () => {
+    const calls: Call[] = [];
+    open(PUBLISH, calls);
+    await screen.findByDisplayValue('装扶手');
+    expect(screen.queryByLabelText('监护人在场')).toBeNull();
+    fireEvent.click(screen.getByLabelText('服务对象是未成年人'));
+    fireEvent.click(screen.getByLabelText('在公开场所'));
+    fireEvent.click(screen.getByLabelText('我是监护人或已经监护人同意'));
+    fireEvent.change(screen.getByDisplayValue('— 请选择 —'), { target: { value: 'assign' } });
+    fireEvent.submit(screen.getByLabelText('服务对象是未成年人').closest('form')!);
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks')?.body).toMatchObject(
+      { minor_involved: true, guardian_mode: 'public_place', guardian_consented: true }));
+  });
+
+  it('不勾不带；详情页写明安排方式与要求的证明', async () => {
+    const calls: Call[] = [];
+    open(PUBLISH, calls);
+    await screen.findByDisplayValue('装扶手');
+    fireEvent.change(screen.getByDisplayValue('— 请选择 —'), { target: { value: 'assign' } });
+    fireEvent.submit(screen.getByLabelText('服务对象是未成年人').closest('form')!);
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/tasks')).toBe(true));
+    expect('minor_involved' in (calls.find((c) => c.method === 'POST' && c.path === '/tasks')!.body as object)).toBe(false);
+    cleanup();
+    open('/tasks/60', [], { '/tasks/60': TASK({ minor_involved: true, guardian_mode: 'guardian_present' }) });
+    expect((await screen.findByLabelText('未成年人服务')).textContent).toBe('服务对象是未成年人 · 监护人在场 · 接单要有平台审核通过的无犯罪记录证明');
   });
 });

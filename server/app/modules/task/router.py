@@ -78,6 +78,10 @@ class TaskIn(BaseModel):
     # SCN-120（176 号 spec）一单多次上门：要上门几次、每次要做的事（最多 8 项，每项最多 20 字）
     visits_planned: int = Field(default=0, ge=0, le=60)
     visit_checklist: list[str] = Field(default_factory=list, max_length=8)
+    # SCN-144（214 号 spec）服务对象是未成年人：监护人安排方式（guardian_present / public_place）与监护人确认
+    minor_involved: bool = False
+    guardian_mode: str = Field(default="", max_length=20)
+    guardian_consented: bool = False
 
 
 class DeliverIn(BaseModel):
@@ -172,6 +176,9 @@ def dump_task(task: Task, viewer: User | None = None) -> dict:
         # SCN-120 一单多次上门：要上门几次、每次要做的事（公开：这是活的一部分）
         "visits_planned": task.visits_planned or 0,
         "visit_checklist": list(task.visit_checklist or []),
+        # SCN-144 服务对象是未成年人：公开（接单前就要知道要求什么证明、在什么场合）；不含孩子的任何信息
+        "minor_involved": bool(task.minor_involved),
+        "guardian_mode": task.guardian_mode or "",
         "recurred_from_id": task.recurred_from_id,
         "status": task.status,
         "deadline": iso(task.deadline),
@@ -253,6 +260,23 @@ def _validate_visits(body: TaskIn) -> None:
     body.visit_checklist = items
 
 
+GUARDIAN_MODES = ("guardian_present", "public_place")
+
+
+def _validate_minor(body: TaskIn) -> None:
+    """SCN-144 服务对象是未成年人：监护人确认 + 监护人在场或公开场所，不允许单独相处的安排（212 号 G2）。"""
+    if not body.minor_involved:
+        if body.guardian_mode or body.guardian_consented:
+            raise bad_request("只有服务对象是未成年人时才选监护人安排：勾上「服务对象是未成年人」，或把这几项清空",
+                              "guardian_without_minor")
+        return
+    if body.guardian_mode not in GUARDIAN_MODES:
+        raise bad_request("服务对象是未成年人时，选「监护人在场」或「在公开场所」：平台不允许和孩子单独相处的安排",
+                          "minor_needs_guardian_mode")
+    if not body.guardian_consented:
+        raise bad_request("服务对象是未成年人时，要由监护人本人发单或经监护人同意：确认后勾选再发", "guardian_required")
+
+
 def _validate_on_behalf(body: TaskIn) -> None:
     """SCN-119 替别人发单（175 号 spec）：说清替谁、问过本人。没勾「替别人发」时这几项一律不收，免得悄悄带上别人的信息。"""
     body.recipient_label, body.onsite_contact = body.recipient_label.strip(), body.onsite_contact.strip()
@@ -297,6 +321,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
     _validate_day_shifts(body)
     _validate_on_behalf(body)
     _validate_visits(body)
+    _validate_minor(body)
     multi = body.people_needed > 1 or body.days > 1
     publishing = body.publish_now or multi
     if publishing:
@@ -305,9 +330,12 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
 
         assert_no_finance_offer(f"{body.title} {body.description}")
         service.review_or_reject(db, body.title + " " + body.description)
-    task = Task(creator_id=user.id, **body.model_dump(exclude={"publish_now", "start_date", "recipient_consented", "day_shifts"}))
+    task = Task(creator_id=user.id, **body.model_dump(exclude={"publish_now", "start_date", "recipient_consented", "day_shifts",
+                                                               "guardian_consented"}))
     if task.on_behalf:
         task.recipient_consent_at = utcnow()
+    if task.minor_involved:
+        task.guardian_consent_at = utcnow()
     if body.days > 1:
         task.work_date = body.start_date
         task.deadline = _day_end_utc(body.start_date + timedelta(days=body.days - 1))
@@ -345,6 +373,8 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
                     on_behalf=task.on_behalf, recipient_label=task.recipient_label,
                     onsite_contact=task.onsite_contact, recipient_consent_at=task.recipient_consent_at,
                     visits_planned=task.visits_planned, visit_checklist=task.visit_checklist,
+                    minor_involved=task.minor_involved, guardian_mode=task.guardian_mode,
+                    guardian_consent_at=task.guardian_consent_at,
                     visibility=task.visibility, circle_id=task.circle_id,
                     work_date=day_, deadline=_day_end_utc(day_) if day_ else None,
                     shift_start=s_start, shift_end=s_end,

@@ -1,4 +1,4 @@
-import { apiErrorText, IP_ASSIGNMENT_LABEL, dayLabel, dayShiftsPayload, fmtYuan, localInputToServerTime, type IpAssignment, type PriceReference, type Task } from '@platform/core';
+import { GUARDIAN_MODE_LABEL, minorPayload, type GuardianMode, apiErrorText, IP_ASSIGNMENT_LABEL, dayLabel, dayShiftsPayload, fmtYuan, localInputToServerTime, type IpAssignment, type PriceReference, type Task } from '@platform/core';
 import { DraftHints } from '../Profiles';
 import { useEffect, useState, type FormEvent } from 'react';
 import type { DayShiftInput } from '@platform/core';
@@ -27,6 +27,8 @@ export default function Publish() {
     lat: '31.2304', lng: '121.4737', address_hint: '', address_exact: '',
     // SCN-119（175 号 spec）替别人发单：替谁、到场联系谁、问过本人没有
     on_behalf: false, recipient_label: '', onsite_contact: '', recipient_consented: false,
+    // SCN-144（214 号 spec）服务对象是未成年人：监护人在场或公开场所、监护人确认
+    minor_involved: false, guardian_mode: '' as GuardianMode | '', guardian_consented: false,
     // SCN-120（176 号 spec）一单多次上门：上门几次、每次要做的事（顿号或逗号分开）
     // SCN-133（211 号 spec）从带清单的服务包模板过来时预填
     visits_planned: params.get('visits') || '', visit_checklist: params.get('checklist') || '',
@@ -119,6 +121,7 @@ export default function Publish() {
         // SCN-119 只有勾了「替别人发」才带这几项（服务端对没勾却带了的会拒）
         ...(form.on_behalf ? { on_behalf: true, recipient_label: form.recipient_label, onsite_contact: form.onsite_contact,
           recipient_consented: form.recipient_consented } : {}),
+        ...minorPayload(form.minor_involved, form.guardian_mode, form.guardian_consented),
         // TZ-063 发出去的是**带偏移**的 ISO：datetime-local 给的是没有偏移的
         // 本地字符串，直发的话服务端会当 UTC，差一个时区
         ...(form.deadline_local ? { deadline: localInputToServerTime(form.deadline_local) } : {}),
@@ -317,6 +320,27 @@ export default function Publish() {
                 已经问过本人，他/她同意有人上门、同意把称呼和联系方式给接单的人
               </label>
               <p className="muted">身份证号、银行卡、验证码不要写在任何地方；钱由你托管、你验收。</p>
+            </div>
+          )}
+          {/* SCN-144（214 号 spec）服务对象是未成年人（陪练、看护、接送）：不允许单独相处，接单的人要有无犯罪记录证明 */}
+          <label className="row">
+            <input type="checkbox" aria-label="服务对象是未成年人" checked={form.minor_involved} onChange={(e) => set('minor_involved', e.target.checked)} />
+            服务对象是未成年人（陪练、看护、接送）
+          </label>
+          {form.minor_involved && (
+            <div aria-label="监护人安排">
+              {(Object.keys(GUARDIAN_MODE_LABEL) as GuardianMode[]).map((m) => (
+                <label key={m} className="row">
+                  <input type="radio" name="guardian_mode" aria-label={GUARDIAN_MODE_LABEL[m]} checked={form.guardian_mode === m}
+                         onChange={() => set('guardian_mode', m)} />{GUARDIAN_MODE_LABEL[m]}
+                </label>
+              ))}
+              <label className="row">
+                <input type="checkbox" aria-label="我是监护人或已经监护人同意" checked={form.guardian_consented}
+                       onChange={(e) => set('guardian_consented', e.target.checked)} />
+                我是孩子的监护人，或已经监护人同意
+              </label>
+              <p className="muted">平台不允许和孩子单独相处的安排；接这类单的人要有平台审核通过的无犯罪记录证明。中小学学科类家教平台不承接。</p>
             </div>
           )}
           {error && <p className="error">{error}</p>}

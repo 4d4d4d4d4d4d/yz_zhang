@@ -85,3 +85,29 @@ describe('SCN-123 App 发单后改服务对象', () => {
     for (const status of ['completed', 'cancelled', 'disputed'] as const) expect(canChangeRecipient(TASK({ on_behalf: true, status }), 9)).toBe(false);
   });
 });
+
+describe('SCN-144 App 服务对象是未成年人', () => {
+  it('勾上选监护人在场并确认，请求带这三项', async () => {
+    const calls: Call[] = [];
+    const done = jest.fn();
+    render(<PublishScreen client={makeClient({ 'POST /tasks': TASK({}) }, calls)} onDone={done} />);
+    expect(screen.queryByText('○ 监护人在场')).toBeNull();
+    fireEvent.changeText(screen.getByPlaceholderText(/标题/), '钢琴陪练');
+    fireEvent.press(screen.getByLabelText('服务对象是未成年人'));
+    fireEvent.press(screen.getByText('○ 监护人在场'));
+    fireEvent.press(screen.getByLabelText('我是监护人或已经监护人同意'));
+    fireEvent.press(screen.getByText(/^○ 著作权转让给我/));
+    fireEvent.press(screen.getByText('发布（线上任务）'));
+    await waitFor(() => expect(done).toHaveBeenCalled());
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks')!.body).toMatchObject(
+      { minor_involved: true, guardian_mode: 'guardian_present', guardian_consented: true });
+  });
+});
+
+describe('SCN-144 App 详情页写明未成年人服务的安排', () => {
+  it('安排方式与要求的证明都写上', () => {
+    render(<TaskDetailScreen client={makeClient({}, [])} me={{ id: 5, nickname: '路人' } as never}
+      task={TASK({ minor_involved: true, guardian_mode: 'public_place' })} onBack={() => {}} onChanged={async () => {}} />);
+    expect(screen.getByLabelText('未成年人服务').props.children).toBe('服务对象是未成年人 · 在公开场所 · 接单要有平台审核通过的无犯罪记录证明');
+  });
+});

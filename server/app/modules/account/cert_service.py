@@ -1,4 +1,6 @@
 """CERT 资质准入判定与申请处理（51 号 spec）。"""
+from datetime import timedelta
+
 from sqlalchemy.orm import Session
 
 from app.core.errors import bad_request, conflict
@@ -50,6 +52,14 @@ def submit(db: Session, user: User, *, name: str, holder_name: str, cert_number:
         )
     if expires_at is not None and expires_at <= utcnow():
         raise bad_request("证件已过期，请提交在有效期内的证件", "certificate_expired")
+    # SCN-144（214 号 spec）无犯罪记录证明只证明开具那一刻：有效期必填、最长一年，过期要重交
+    from app.modules.task.service import MINOR_CARE_CERT
+
+    if name == MINOR_CARE_CERT:
+        if expires_at is None:
+            raise bad_request("无犯罪记录证明要填有效期（开具日起最长一年）", "certificate_expiry_required")
+        if expires_at > utcnow() + timedelta(days=366):
+            raise bad_request("无犯罪记录证明的有效期最长一年：按开具日起一年填", "certificate_expiry_too_far")
     # CERT-012 同一资质不能堆待审申请
     dup = (
         db.query(CertificationApplication)

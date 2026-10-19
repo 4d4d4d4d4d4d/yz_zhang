@@ -88,6 +88,11 @@ class Task(Base):
     recipient_label: Mapped[str] = mapped_column(String(20), default="")
     onsite_contact: Mapped[str] = mapped_column(String(40), default="")
     recipient_consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # SCN-144（214 号 spec）服务对象是未成年人（陪练、看护、接送）：发单人确认是监护人或经监护人同意（记下时间），
+    # 选「监护人在场」或「公开场所」；接这类单要持有审核通过的无犯罪记录证明。不存孩子的任何信息
+    minor_involved: Mapped[bool] = mapped_column(Boolean, default=False)
+    guardian_mode: Mapped[str] = mapped_column(String(20), default="")
+    guardian_consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # SCN-120（176 号 spec）一单多次上门：要上门几次、每次要做的事（清单）。0 / 空表示不按次回报
     visits_planned: Mapped[int] = mapped_column(Integer, default=0)
     visit_checklist: Mapped[list] = mapped_column(JSON, default=list)

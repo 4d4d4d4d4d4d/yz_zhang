@@ -228,6 +228,10 @@ export type TaskStatus =
 
 export type TaskType = 'service' | 'trade' | 'project' | 'event';
 
+/** SCN-144 服务对象是未成年人时的监护人安排 */
+export type GuardianMode = 'guardian_present' | 'public_place';
+export const GUARDIAN_MODE_LABEL: Record<GuardianMode, string> = { guardian_present: '监护人在场', public_place: '在公开场所' };
+
 export interface Task {
   id: number;
   creator_id: number;
@@ -281,6 +285,10 @@ export interface Task {
   visits_planned?: number;
   /** 每次上门要做的事（清单） */
   visit_checklist?: string[];
+  /** SCN-144（214 号 spec）服务对象是未成年人；接单要有审核通过的无犯罪记录证明 */
+  minor_involved?: boolean;
+  /** 监护人安排：guardian_present（监护人在场）/ public_place（公开场所）；不涉及未成年人是空串 */
+  guardian_mode?: GuardianMode | '';
   status: TaskStatus;
   deadline: string | null;
   reject_count: number;
@@ -368,6 +376,11 @@ export interface TaskCreateInput {
   /** SCN-120 要上门几次（0~60）与每次要做的事（最多 8 项，每项最多 20 字） */
   visits_planned?: number;
   visit_checklist?: string[];
+  /** SCN-144 服务对象是未成年人：监护人安排方式与监护人确认 */
+  minor_involved?: boolean;
+  /** 没选时是空串：服务端会说清要选哪一种 */
+  guardian_mode?: GuardianMode | '';
+  guardian_consented?: boolean;
   acceptance_criteria?: string[];
   bonus_cents?: number;
   publish_now?: boolean;
