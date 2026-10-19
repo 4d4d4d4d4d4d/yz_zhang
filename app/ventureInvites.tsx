@@ -1,6 +1,6 @@
 // COOP-060 合作体邀请、加入、分配记录（142 号 spec）——App 端。
 // 邀请制的另一半：被邀请的人看得到邀请、整篇读风险揭示书后自己签署加入，或者拒绝；成员能邀请别人、能看分配记录。
-import {
+import { VENTURE_INVITE_STATUS_LABEL, type VentureSentInvitation,
   apiErrorText, fmtYuan, type PlatformClient, type RiskDisclosure, type ShareRow, type VentureInvitationView,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -59,6 +59,12 @@ export function InviteMemberBlock({ client, ventureId }: { client: PlatformClien
   const [uid, setUid] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  // COOP-062（220 号 spec）我发出的邀请：对方接没接、拒没拒、过没过期
+  const [sent, setSent] = useState<VentureSentInvitation[]>([]);
+  const loadSent = useCallback(() => {
+    client.ventureSentInvitations(ventureId).then(setSent).catch(() => setSent([]));
+  }, [client, ventureId]);
+  useEffect(() => { loadSent(); }, [loadSent]);
   return (
     <View style={s.card} accessibilityLabel="邀请成员">
       <Text style={s.title}>邀请成员</Text>
@@ -66,10 +72,14 @@ export function InviteMemberBlock({ client, ventureId }: { client: PlatformClien
       <TextInput style={s.input} accessibilityLabel="被邀请人编号" keyboardType="numeric" placeholder="对方的用户编号" value={uid} onChangeText={setUid} />
       <Button title="发出邀请" disabled={!Number(uid)} onPress={() => void (async () => {
         setError(''); setNotice('');
-        try { await client.inviteToVenture(ventureId, Number(uid)); setNotice(`已邀请 #${uid}`); setUid(''); } catch (e) { setError(apiErrorText(e)); }
+        try { await client.inviteToVenture(ventureId, Number(uid)); setNotice(`已邀请 #${uid}`); setUid(''); loadSent(); } catch (e) { setError(apiErrorText(e)); }
       })()} />
       {!!notice && <Text accessibilityRole="alert">{notice}</Text>}
       {!!error && <Text style={s.error}>{error}</Text>}
+      {sent.length > 0 && <Text style={s.muted}>我发出的邀请</Text>}
+      {sent.map((x) => (
+        <Text key={x.invitee_id}>· {x.invitee_nickname || `#${x.invitee_id}`}：{VENTURE_INVITE_STATUS_LABEL[x.status] ?? x.status}</Text>
+      ))}
     </View>
   );
 }

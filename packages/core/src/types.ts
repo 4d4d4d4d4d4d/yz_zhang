@@ -3211,3 +3211,17 @@ export interface XappStepInput {
   channel: string;
   vision_where?: 'device' | 'cloud';
 }
+
+/** COOP-062（220 号 spec）我在一个合作体里发出的邀请：待接受 / 已加入 / 已拒绝 / 已过期 */
+export type VentureInviteStatus = 'pending' | 'accepted' | 'declined' | 'expired';
+export const VENTURE_INVITE_STATUS_LABEL: Record<VentureInviteStatus, string> = {
+  pending: '待接受', accepted: '已加入', declined: '已拒绝', expired: '已过期（可以再邀一次）',
+};
+export interface VentureSentInvitation {
+  invitee_id: number;
+  invitee_nickname: string;
+  status: VentureInviteStatus;
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+}

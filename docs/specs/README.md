@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 220 | 邀请人看我发出的邀请 | [220-venture-sent-invitations.md](./220-venture-sent-invitations.md) | P0 |
 | 219 | API Key 用量记录的保留期清理 | [219-api-usage-retention.md](./219-api-usage-retention.md) | P0 |
 | 218 | 只说谢谢不重开已结工单 | [218-ticket-thanks.md](./218-ticket-thanks.md) | P0 |
 | 217 | 自动核验单的速率上限 | [217-auto-verify-cap.md](./217-auto-verify-cap.md) | P0 |

@@ -54,10 +54,13 @@ describe('COOP-060 App 上的合作体邀请', () => {
   it('成员能按编号邀请、能看分配记录（含当时的份额快照）', async () => {
     const calls: Call[] = [];
     const client = makeClient({ 'POST /ventures/31/invitations': { invited: 9, venture_id: 31, risk_disclosure_version: 'v2' },
+      '/ventures/31/invitations/sent': [{ invitee_id: 8, invitee_nickname: '小林', status: 'expired', created_at: '2026-10-10T00:00:00Z',
+        expires_at: '2026-10-17T00:00:00Z', accepted_at: null }],
       '/ventures/31/distributions': [{ id: 1, total_cents: 30000, memo: '首月', created_at: '2026-10-10T00:00:00Z',
         share_snapshot: [{ user_id: 2, valued_cents: 1, share_bps: 6000 }, { user_id: 5, valued_cents: 1, share_bps: 4000 }] }] }, calls);
     render(<><InviteMemberBlock client={client} ventureId={31} /><DistributionHistoryBlock client={client} ventureId={31} /></>);
     expect(await screen.findByText('2026-10-10 · 共 ¥300.00 · 首月（按当时份额：#2 60.00%、#5 40.00%）')).toBeTruthy();
+    expect(await screen.findByText('· 小林：已过期（可以再邀一次）')).toBeTruthy();   // COOP-062 我发出的邀请
     fireEvent.changeText(screen.getByLabelText('被邀请人编号'), '9');
     fireEvent.press(screen.getByText('发出邀请'));
     expect(await screen.findByText('已邀请 #9')).toBeTruthy();

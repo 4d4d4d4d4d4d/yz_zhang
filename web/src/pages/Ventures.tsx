@@ -1,6 +1,6 @@
 import PayoutGovernance from '../PayoutGovernance';
 import OrganizationRecords from '../OrganizationRecords';
-import {
+import { VENTURE_INVITE_STATUS_LABEL, formatDateTime, type VentureSentInvitation,
   apiErrorText, fmtYuan,
   type CompliancePath, type ContributionKind, type ContributionView,
   type RiskDisclosure, type ShareRow, type VentureDetail, type VentureInvitationView, type VentureView,
@@ -330,6 +330,12 @@ function InviteMember({ ventureId }: { ventureId: number }) {
   const [uid, setUid] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  // COOP-062（220 号 spec）我发出的邀请：对方接没接、拒没拒、过没过期
+  const [sent, setSent] = useState<VentureSentInvitation[]>([]);
+  const loadSent = useCallback(() => {
+    client.ventureSentInvitations(ventureId).then(setSent).catch(() => setSent([]));
+  }, [client, ventureId]);
+  useEffect(() => { loadSent(); }, [loadSent]);
   return (
     <div aria-label="邀请成员">
       <h4>邀请成员</h4>
@@ -338,11 +344,19 @@ function InviteMember({ ventureId }: { ventureId: number }) {
         <input aria-label="被邀请人编号" type="number" placeholder="对方的用户编号" value={uid} onChange={(e) => setUid(e.target.value)} />
         <button disabled={!Number(uid)} onClick={() => void (async () => {
           setError(''); setNotice('');
-          try { await client.inviteToVenture(ventureId, Number(uid)); setNotice(`已邀请 #${uid}`); setUid(''); } catch (e) { setError(apiErrorText(e)); }
+          try { await client.inviteToVenture(ventureId, Number(uid)); setNotice(`已邀请 #${uid}`); setUid(''); loadSent(); } catch (e) { setError(apiErrorText(e)); }
         })()}>发出邀请</button>
       </div>
       {notice && <p role="status">{notice}</p>}
       {error && <p className="error">{error}</p>}
+      {sent.length > 0 && (
+        <ul aria-label="我发出的邀请">
+          {sent.map((x) => (
+            <li key={x.invitee_id}>{x.invitee_nickname || `#${x.invitee_id}`}：{VENTURE_INVITE_STATUS_LABEL[x.status] ?? x.status}
+              <span className="muted"> · {formatDateTime(x.created_at)} 发出</span></li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

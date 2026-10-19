@@ -223,6 +223,7 @@ api GET /api/v1/ventures/{venture_id}
 api GET /api/v1/ventures/{venture_id}/compliance-path
 api GET /api/v1/ventures/{venture_id}/contributions
 api GET /api/v1/ventures/{venture_id}/distributions
+api GET /api/v1/ventures/{venture_id}/invitations/sent
 api GET /api/v1/ventures/{venture_id}/organization-records
 api GET /api/v1/ventures/{venture_id}/payout-proposals
 api GET /api/v1/ventures/{venture_id}/shares
@@ -1044,6 +1045,7 @@ sdk ventureCompliancePath
 sdk ventureContributions
 sdk ventureDistributions
 sdk ventureRiskDisclosure
+sdk ventureSentInvitations
 sdk ventureShares
 sdk verificationOrder
 sdk verifyAnchorChain

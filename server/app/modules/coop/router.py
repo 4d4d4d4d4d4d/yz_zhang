@@ -199,6 +199,28 @@ def invite(venture_id: int, body: InviteIn, user: User = Depends(get_current_use
             "risk_disclosure_version": cpath.RISK_DISCLOSURE_VERSION}
 
 
+# COOP-062（220 号 spec）邀请人看「我发出的邀请」及其状态：发了邀请不知道对方接没接、过没过期
+@router.get("/{venture_id}/invitations/sent")
+def sent_invitations(venture_id: int, user: User = Depends(get_current_user),
+                     db: Session = Depends(get_db, scope="function")):
+    """只列本人在这个合作体发出的邀请（不列别的成员发的）；待接受过了 7 天写成「已过期」。"""
+    from app.modules.account.models import utcnow
+
+    from .models import VentureInvitation
+
+    _get(db, venture_id)
+    _require_member(db, venture_id, user)
+    rows = (db.query(VentureInvitation).filter(VentureInvitation.venture_id == venture_id,
+                                               VentureInvitation.inviter_id == user.id)
+            .order_by(VentureInvitation.created_at.desc(), VentureInvitation.id.desc()).limit(100).all())
+    names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_([r.invitee_id for r in rows] or [-1]))}
+    now = utcnow()
+    return [{"invitee_id": r.invitee_id, "invitee_nickname": names.get(r.invitee_id, ""),
+             "status": "expired" if r.status == "pending" and r.expires_at <= now else r.status,
+             "created_at": iso(r.created_at), "expires_at": iso(r.expires_at), "accepted_at": iso(r.accepted_at)}
+            for r in rows]
+
+
 @router.post("/{venture_id}/members", status_code=201)
 def accept_invite(venture_id: int, body: AcceptInviteIn,
                   user: User = Depends(require_verified), db: Session = Depends(get_db, scope="function")):

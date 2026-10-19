@@ -56,8 +56,12 @@ describe('COOP-060 合作体邀请', () => {
       '/ventures/31/compliance-path': { documents: [], registrations: [], notices: [], disclaimer: '不是法律意见' },
       '/ventures/31/distributions': [{ id: 1, total_cents: 30000, memo: '首月', created_at: '2026-10-10T00:00:00Z',
         share_snapshot: [{ user_id: 5, valued_cents: 1, share_bps: 10000 }] }],
-      'POST /ventures/31/invitations': { invited: 9, venture_id: 31, risk_disclosure_version: 'rd-2026-02' } });
+      'POST /ventures/31/invitations': { invited: 9, venture_id: 31, risk_disclosure_version: 'rd-2026-02' },
+      // COOP-062（220 号 spec）我发出的邀请
+      '/ventures/31/invitations/sent': [{ invitee_id: 8, invitee_nickname: '小林', status: 'declined', created_at: '2026-10-10T00:00:00Z',
+        expires_at: '2026-10-17T00:00:00Z', accepted_at: null }] });
     fireEvent.click(await screen.findByText('打开'));
+    expect((await screen.findByLabelText('我发出的邀请')).textContent).toContain('小林：已拒绝');
     const hist = await screen.findByLabelText('分配记录');
     await waitFor(() => expect(hist.textContent).toContain('共 ¥300.00 · 首月'));
     expect(hist.textContent).toContain('#5 100.00%');
@@ -65,5 +69,6 @@ describe('COOP-060 合作体邀请', () => {
     fireEvent.click(screen.getByText('发出邀请'));
     await screen.findByText('已邀请 #9');
     expect(calls.find((c) => c.method === 'POST' && c.path === '/ventures/31/invitations')?.body).toEqual({ user_id: 9 });
+    await waitFor(() => expect(calls.filter((c) => c.path === '/ventures/31/invitations/sent').length).toBe(2));   // 发出后刷新
   });
 });

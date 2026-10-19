@@ -1,6 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
-  AssistantContract, SkillConceptAdminView, SkillConceptList, SkillConceptRow, SkillNormalizeResult, Cockpit, CapabilityProfile, SandboxModelAdminRow, SandboxModelInput, SandboxModelList, SandboxState, InfluenceLeaderboard, InfluenceMine, InfluenceLatestSnapshot, InfluenceProof, InfluencePublic, InfluenceVouchInput, InfluenceVouchRow, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, GigRouteInput, GigRouteView, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarKnowledgeDraft, RadarSignal, LegalFaqInput, LegalFaqRow, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineHealth, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbRunStatus, WbStatus, WbStep,
+  AssistantContract, SkillConceptAdminView, SkillConceptList, SkillConceptRow, SkillNormalizeResult, Cockpit, CapabilityProfile, SandboxModelAdminRow, SandboxModelInput, SandboxModelList, SandboxState, InfluenceLeaderboard, InfluenceMine, InfluenceLatestSnapshot, InfluenceProof, InfluencePublic, InfluenceVouchInput, InfluenceVouchRow, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, GigRouteInput, GigRouteView, VentureSentInvitation, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarKnowledgeDraft, RadarSignal, LegalFaqInput, LegalFaqRow, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineHealth, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbRunStatus, WbStatus, WbStep,
   CommercialReadiness,
   AgentProfileView,
   PayoutProposalView,
@@ -1954,6 +1954,10 @@ export class PlatformClient {
     return this.request<{ invited: number; venture_id: number; risk_disclosure_version: string }>(
       'POST', `/ventures/${ventureId}/invitations`, { user_id: userId },
     );
+  }
+  /** COOP-062 我在这个合作体发出的邀请及其状态（只列本人发出的） */
+  ventureSentInvitations(ventureId: number) {
+    return this.request<VentureSentInvitation[]>('GET', `/ventures/${ventureId}/invitations/sent`).then(listOf);
   }
   /** 风险揭示书由**被邀请人自己**签：代签的知情同意不是知情同意。 */
   joinVenture(ventureId: number, riskDisclosureVersion: string) {
