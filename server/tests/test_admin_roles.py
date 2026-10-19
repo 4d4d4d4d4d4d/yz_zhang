@@ -34,6 +34,8 @@ ROUTE_ROLES = {
     "POST /admin/platform-finance/settle-requests/{request_id}/approve": ('finance',),
     "POST /admin/platform-finance/settle-requests/{request_id}/reject": ('finance',),
     "GET /admin/platform-finance/periods/export": ('finance',),
+    "POST /admin/platform-finance/lock": ('finance',),          # FIN-063（223 号 spec）
+    "GET /admin/tickets/{ticket_id}": ('support',),             # ESCA-058（221 号 spec）
     "GET /admin/campaigns": ('ops',),
     "GET /admin/certifications": ('compliance',),
     "GET /admin/certifications/pending": ('compliance',),
