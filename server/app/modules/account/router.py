@@ -759,9 +759,10 @@ def _export_tickets(db: Session, user_id: int) -> list[dict]:
         for r in (db.query(TicketReply).filter(TicketReply.ticket_id.in_([t.id for t in rows]))
                   .order_by(TicketReply.id)):
             replies.setdefault(r.ticket_id, []).append(
-                {"body": r.body, "from": "客服" if r.is_staff else "我", "created_at": iso(r.created_at)})
+                {"body": r.body, "from": "客服" if r.is_staff else "我", "created_at": iso(r.created_at),
+                 "images": r.images or []})
     return [{"id": t.id, "subject": t.subject, "body": t.body, "status": t.status, "created_at": iso(t.created_at),
-             "replies": replies.get(t.id, [])} for t in rows]
+             "replies": replies.get(t.id, []), "images": t.images or []} for t in rows]
 
 
 def _export_gig(db: Session, user_id: int) -> dict:

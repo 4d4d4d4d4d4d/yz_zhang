@@ -1,6 +1,7 @@
 import { ticketReplyNotice, apiErrorText, formatDateTime, type MyTicket, type TicketCategory } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
+import PhotoPicker from '../PhotoPicker';
 
 interface QA { q: string; a: string; human: boolean; ctx: string | null }
 
@@ -54,6 +55,23 @@ export default function Support() {
  * 也看不到自己的工单与回复。V101 给运营补了工单队列，运营认真回了，
  * 而提问的人只收到一条通知，回到平台上无处可看。
  */
+/** ESCA-057（227 号 spec）工单里的截图：点开看原图 */
+export function TicketImages({ urls, label }: { urls?: string[]; label: string }) {
+  if (!urls?.length) return null;
+  return (
+    <span className="row" style={{ gap: 6 }} data-testid={label}>
+      {urls.map((u, i) => (
+        <a key={u} href={u} target="_blank" rel="noreferrer" aria-label={`截图 ${i + 1}`}>
+          <img src={u} alt={`截图 ${i + 1}`} style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6 }} />
+        </a>
+      ))}
+    </span>
+  );
+}
+
+/** ESCA-057 一条消息最多附几张（与服务端 MAX_TICKET_IMAGES 一致） */
+const MAX_TICKET_IMAGES = 4;
+
 function MyTickets() {
   const { client } = useApp();
   const [rows, setRows] = useState<MyTicket[]>([]);
@@ -64,6 +82,9 @@ function MyTickets() {
   // ESCA-052（172 号 spec）资金、账号类加急，时限更短
   const [category, setCategory] = useState<TicketCategory>('general');
   const [error, setError] = useState('');
+  // ESCA-057（227 号 spec）截图：提单一组、每张工单的补充各一组
+  const [images, setImages] = useState<string[]>([]);
+  const [draftImages, setDraftImages] = useState<Record<number, string[]>>({});
 
   const load = useCallback(async () => {
     setRows(await client.myTickets().catch(() => []));
@@ -73,8 +94,8 @@ function MyTickets() {
   async function create() {
     setError('');
     try {
-      await client.createTicket(subject, body, category === 'general' ? undefined : category);
-      setSubject(''); setBody(''); setCategory('general');
+      await client.createTicket(subject, body, category === 'general' ? undefined : category, images);
+      setSubject(''); setBody(''); setCategory('general'); setImages([]);
       await load();
     } catch (err) { setError(apiErrorText(err)); }
   }
@@ -94,6 +115,8 @@ function MyTickets() {
             <option value="account">账号（登录、安全）· 加急</option>
           </select>
         </label>
+        <span className="muted">截图（最多 {MAX_TICKET_IMAGES} 张，截之前请遮住卡号、证件号）</span>
+        <PhotoPicker urls={images} onChange={setImages} max={MAX_TICKET_IMAGES} />
         {error && <p className="error">{error}</p>}
         <button disabled={subject.trim().length < 2} onClick={() => void create()}>提交工单</button>
       </div>
@@ -106,13 +129,15 @@ function MyTickets() {
               <strong>{t.subject}</strong> <span className="badge">{t.status}</span>
               {t.priority === 'urgent' && <span className="badge warn" data-testid={`ticket-urgent-${t.id}`}> 加急</span>}
               <p className="muted">{t.body} · {formatDateTime(t.created_at)}</p>
+              <TicketImages urls={t.images} label={`ticket-images-${t.id}`} />
               {/* 运营的回复原文——回复只发一条通知的话，
                   用户回到平台上就再也找不到它 */}
               {t.reply && <p data-testid={`ticket-reply-${t.id}`}>客服回复：{t.reply}</p>}
               {/* ESCA-053（157 号 spec）往来记录：多于一条时把之前的也列出来 */}
               {((t.replies?.length ?? 0) > 1 || (t.replies ?? []).some((x) => !x.is_staff)) && (
                 <ol className="muted" data-testid={`ticket-replies-${t.id}`}>
-                  {t.replies.map((x, i) => <li key={i}>{x.is_staff ? '客服' : '我'}（{formatDateTime(x.created_at)}）：{x.body}</li>)}
+                  {t.replies.map((x, i) => <li key={i}>{x.is_staff ? '客服' : '我'}（{formatDateTime(x.created_at)}）：{x.body}
+                    <TicketImages urls={x.images} label={`ticket-reply-images-${t.id}-${i}`} /></li>)}
                 </ol>
               )}
               {/* ESCA-051（150 号 spec）：等的人要知道有没有人在管、是不是已经升级 */}
@@ -130,12 +155,14 @@ function MyTickets() {
                   <button className="ghost" disabled={!(drafts[t.id] ?? '').trim()} onClick={() => void (async () => {
                     setError('');
                     try {
-                      const r = await client.replyMyTicket(t.id, (drafts[t.id] ?? '').trim());
+                      const r = await client.replyMyTicket(t.id, (drafts[t.id] ?? '').trim(), draftImages[t.id]);
                       setDrafts({ ...drafts, [t.id]: '' });
+                      setDraftImages({ ...draftImages, [t.id]: [] });
                       setRows(rows.map((x) => (x.id === r.id ? r : x)));
                       setReplied(ticketReplyNotice(r));
                     } catch (e) { setError(apiErrorText(e)); }
                   })()}>补充</button>
+                  <PhotoPicker urls={draftImages[t.id] ?? []} onChange={(u) => setDraftImages({ ...draftImages, [t.id]: u })} max={MAX_TICKET_IMAGES} />
                 </div>
               )}
             </div>

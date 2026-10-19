@@ -1624,6 +1624,8 @@ export interface TicketReplyItem {
   body: string;
   is_staff: boolean;
   created_at: string;
+  /** ESCA-057（227 号 spec）这一句附的截图 url */
+  images?: string[];
 }
 
 /** ESCA-053 客服回复（不结单）的结果 */
@@ -1669,6 +1671,8 @@ export interface MyTicket {
   category: TicketCategory;
   priority: 'urgent' | 'normal';
   priority_label: string;
+  /** ESCA-057（227 号 spec）提单时附的截图 url（老服务端没有） */
+  images?: string[];
 }
 export type TicketCategory = 'funds' | 'account' | 'general';
 /** ESCA-052 客服调整优先级后的时限 */
@@ -3281,6 +3285,8 @@ export interface AdminTicketThreadItem {
   is_staff: boolean;
   author: string;
   created_at: string;
+  /** ESCA-057 这一句附的截图 */
+  images?: string[];
 }
 export interface AdminTicketDetail {
   id: number;
@@ -3305,5 +3311,7 @@ export interface AdminTicketDetail {
   category: TicketCategory;
   priority: 'urgent' | 'normal';
   priority_label: string;
+  /** ESCA-057 提单时附的截图 */
+  images?: string[];
   thread: AdminTicketThreadItem[];
 }

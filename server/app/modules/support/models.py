@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -32,6 +32,8 @@ class Ticket(Base):
     # ESCA-052（172 号 spec）提单人选的类别（funds 资金 / account 账号 / general 一般）与优先级（urgent / normal）。
     # 资金、账号类默认加急，时限更短；客服可以调整优先级
     category: Mapped[str] = mapped_column(String(10), default="general")
+    # ESCA-057（227 号 spec）提单时附的截图：自己上传过的图片名（最多 4 张）
+    images: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
     priority: Mapped[str] = mapped_column(String(10), default="normal")
     escalated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # ESCA-053 首次响应（157 号 spec）：客服第一次回话的时间；超时提醒只发一次
@@ -49,6 +51,8 @@ class TicketReply(Base):
     author_id: Mapped[int] = mapped_column(Integer)
     is_staff: Mapped[bool] = mapped_column(Boolean, default=True)
     body: Mapped[str] = mapped_column(Text)
+    # ESCA-057 追加回复时附的截图
+    images: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

@@ -3,6 +3,29 @@
 import { ticketReplyNotice, apiErrorText, formatDateTime, type MyTicket, type PlatformClient, type TicketCategory } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+
+// ESCA-057（227 号 spec）截图：一条最多 4 张（与服务端一致），每张不超过 2MB
+const MAX_TICKET_IMAGES = 4;
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+/** 从相册选一张截图上传，返回 url；没权限、太大、读不到时返回说明（给人看的那句） */
+export async function pickScreenshot(client: PlatformClient): Promise<{ url?: string; error?: string }> {
+  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (perm.status !== 'granted') return { error: '没有相册权限，请在系统设置里允许后重试' };
+  const r = await ImagePicker.launchImageLibraryAsync({ quality: 0.6, base64: true });
+  if (r.canceled) return {};
+  const asset = r.assets?.[0];
+  if (!asset?.base64) return { error: '读不到图片数据，请换一张' };
+  if ((asset.base64.length / 4) * 3 > MAX_IMAGE_BYTES) return { error: '这张图超过 2MB，请裁小一些再选' };
+  const up = await client.uploadImage(asset.mimeType || 'image/jpeg', asset.base64);
+  return { url: up.url };
+}
+
+/** 工单里「附 N 张截图」（App 上不铺开大图，点进 Web 或客服后台看） */
+export function imagesNote(urls?: string[]): string {
+  return urls?.length ? `附 ${urls.length} 张截图` : '';
+}
 
 export function ticketProgress(t: MyTicket): string {
   if (t.status !== 'open') return '';
@@ -22,6 +45,16 @@ export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   // ESCA-052（172 号 spec）资金、账号类加急，时限更短
   const [category, setCategory] = useState<TicketCategory>('general');
+  const [images, setImages] = useState<string[]>([]);
+  const [draftImages, setDraftImages] = useState<Record<number, string[]>>({});
+  async function addShot(onUrl: (u: string) => void) {
+    setError('');
+    try {
+      const r = await pickScreenshot(client);
+      if (r.error) setError(r.error);
+      if (r.url) onUrl(r.url);
+    } catch (e) { setError(apiErrorText(e)); }
+  }
   const load = useCallback(async () => {
     try { setRows(await client.myTickets()); } catch (e) { setError(apiErrorText(e)); }
   }, [client]);
@@ -38,11 +71,15 @@ export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
             <Button key={k} title={category === k ? `✓ ${label}` : label} onPress={() => setCategory(k)} />
           ))}
         </View>
+        {images.length < MAX_TICKET_IMAGES && (
+          <Button title={images.length ? `再加一张截图（已附 ${images.length} 张）` : '附截图（截之前遮住卡号、证件号）'}
+                  onPress={() => void addShot((u) => setImages((p) => [...p, u]))} />
+        )}
         <Button title="提交工单" disabled={subject.trim().length < 2} onPress={() => void (async () => {
           setError(''); setNotice('');
           try {
-            await client.createTicket(subject.trim(), body.trim(), category === 'general' ? undefined : category);
-            setSubject(''); setBody(''); setCategory('general');
+            await client.createTicket(subject.trim(), body.trim(), category === 'general' ? undefined : category, images);
+            setSubject(''); setBody(''); setCategory('general'); setImages([]);
             setNotice('已提交。客服回复会发站内信，也会显示在下面。');
             await load();
           } catch (e) { setError(apiErrorText(e)); }
@@ -56,11 +93,12 @@ export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
         <View key={t.id} style={s.card} accessibilityLabel={`工单 ${t.id}`}>
           <Text style={{ fontWeight: '600' }}>{t.subject} · {STATUS[t.status] || t.status}{t.priority === 'urgent' ? ' · 加急' : ''}</Text>
           {!!t.body && <Text style={s.muted}>{t.body}</Text>}
+          {!!imagesNote(t.images) && <Text style={s.muted}>{imagesNote(t.images)}</Text>}
           <Text style={s.muted}>{formatDateTime(t.created_at)}</Text>
           {!!t.reply && <Text>客服回复：{t.reply}</Text>}
           {/* ESCA-053（157 号 spec）往来记录：多于一条时把之前的也列出来 */}
           {((t.replies?.length ?? 0) > 1 || (t.replies ?? []).some((x) => !x.is_staff)) && t.replies.map((x, i) => (
-            <Text key={i} style={s.muted}>{x.is_staff ? '客服' : '我'}（{formatDateTime(x.created_at)}）：{x.body}</Text>
+            <Text key={i} style={s.muted}>{x.is_staff ? '客服' : '我'}（{formatDateTime(x.created_at)}）：{x.body}{imagesNote(x.images) ? `（${imagesNote(x.images)}）` : ''}</Text>
           ))}
           {!!ticketProgress(t) && <Text style={s.muted}>{ticketProgress(t)}</Text>}
           {/* ESCA-056（166 号 spec）补充材料不用再开一张；已结的 7 天内补充会重新打开 */}
@@ -69,11 +107,16 @@ export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
               <TextInput style={s.input} accessibilityLabel={`补充工单 ${t.id}`} multiline value={drafts[t.id] ?? ''}
                          placeholder={t.status === 'resolved' ? '没解决？补充说明会重新打开这张工单' : '补充说明或材料'}
                          onChangeText={(v) => setDrafts({ ...drafts, [t.id]: v })} />
+              {(draftImages[t.id] ?? []).length < MAX_TICKET_IMAGES && (
+                <Button title={(draftImages[t.id] ?? []).length ? `再加一张截图（已附 ${(draftImages[t.id] ?? []).length} 张）` : '附截图'}
+                        onPress={() => void addShot((u) => setDraftImages((p) => ({ ...p, [t.id]: [...(p[t.id] ?? []), u] })))} />
+              )}
               <Button title="补充" disabled={!(drafts[t.id] ?? '').trim()} onPress={() => void (async () => {
                 setError(''); setNotice('');
                 try {
-                  const r = await client.replyMyTicket(t.id, (drafts[t.id] ?? '').trim());
+                  const r = await client.replyMyTicket(t.id, (drafts[t.id] ?? '').trim(), draftImages[t.id]);
                   setDrafts({ ...drafts, [t.id]: '' });
+                  setDraftImages({ ...draftImages, [t.id]: [] });
                   setNotice(ticketReplyNotice(r));
                   await load();
                 } catch (e) { setError(apiErrorText(e)); }

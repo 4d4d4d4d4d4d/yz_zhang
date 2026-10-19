@@ -337,6 +337,7 @@ def ticket_detail(ticket_id: int, admin: User = Depends(require_role("support"))
     客服之间可以看到彼此的名字（提单人那一侧仍然只看到「客服」，ESCA-053）。"""
     from app.modules.support.escalation import sla_view
     from app.modules.support.models import Ticket, TicketReply
+    from app.modules.support.router import image_urls
 
     t = db.get(Ticket, ticket_id)
     if t is None:
@@ -348,10 +349,10 @@ def ticket_detail(ticket_id: int, admin: User = Depends(require_role("support"))
             "body": t.body, "status": t.status, "reply": t.reply, "created_at": iso(t.created_at),
             "resolved_at": iso(t.resolved_at), "assignee_id": t.assignee_id,
             "assignee_nickname": names.get(t.assignee_id, "") if t.assignee_id else "",
-            **sla_view(t, utcnow()),
+            **sla_view(t, utcnow()), "images": image_urls(t.images),   # ESCA-057（227 号 spec）
             "thread": [{"body": r.body, "is_staff": r.is_staff,
                         "author": (names.get(r.author_id, "") or f"客服 #{r.author_id}") if r.is_staff else "提单人",
-                        "created_at": iso(r.created_at)} for r in rows]}
+                        "created_at": iso(r.created_at), "images": image_urls(r.images)} for r in rows]}
 
 
 class TicketReplyIn(BaseModel):

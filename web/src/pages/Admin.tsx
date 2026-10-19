@@ -13,6 +13,7 @@ import { SandboxModelsAdmin } from '../AdminSandbox';
 import { SkillConceptsAdmin } from '../AdminSkills';
 import { AdminRolesPanel } from '../AdminRoles';
 import { useApp } from '../store';
+import { TicketImages } from './Support';
 
 type Metrics = {
   total_users: number; verified_users: number; total_tasks: number; published_tasks: number;
@@ -1066,10 +1067,12 @@ function TicketQueue() {
                 <div data-testid={`ticket-thread-${t.id}`} style={{ marginTop: 6 }}>
                   <p className="muted">提单人：{detail.user_nickname || `#${detail.user_id}`} · {formatDateTime(detail.created_at)}</p>
                   <p>{detail.body || '（没写详细内容）'}</p>
+                  <TicketImages urls={detail.images} label={`admin-ticket-images-${t.id}`} />
                   {detail.thread.length === 0 && <p className="muted">还没有往来。</p>}
                   {detail.thread.map((m, i) => (
                     <p key={i} className={m.is_staff ? '' : 'muted'}>
                       <strong>{m.is_staff ? `客服 ${m.author}` : m.author}</strong>（{formatDateTime(m.created_at)}）：{m.body}
+                      <TicketImages urls={m.images} label={`admin-thread-images-${t.id}-${i}`} />
                     </p>
                   ))}
                 </div>

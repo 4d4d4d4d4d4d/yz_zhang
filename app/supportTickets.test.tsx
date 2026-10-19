@@ -90,3 +90,30 @@ describe('ESCA-053 App 上的往来记录（157 号 spec）', () => {
     await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/support/tickets')?.body).toEqual({ subject: '钱没到', body: '', category: 'funds' }));
   });
 });
+
+describe('ESCA-057 App 工单截图', () => {
+  it('附截图后提单带上 images；工单里写附了几张', async () => {
+    const calls: Array<{ method: string; path: string; body: unknown }> = [];
+    const fetchImpl = (async (url: string, init?: { method?: string; body?: string }) => {
+      const path = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+      const method = init?.method ?? 'GET';
+      calls.push({ method, path, body: init?.body ? JSON.parse(init.body) : null });
+      const body = path === '/files' ? { url: '/api/v1/files/shot1abcdef', ref: 'shot1abcdef' }
+        : method === 'GET' && path === '/support/tickets'
+          ? [{ id: 3, subject: '页面报错', body: '', status: 'open', reply: '', created_at: '2026-10-13T00:00:00Z', claimed: false,
+              escalation_level: 0, escalation_label: '', waited_hours: 1, sla_hours: 24, overdue_hours: 0, first_responded: false,
+              first_response_hours: 4, first_response_overdue: false, replies: [], category: 'general', priority: 'normal', priority_label: '一般',
+              images: ['/api/v1/files/a', '/api/v1/files/b'] }]
+          : { id: 4, status: 'open', reply: '' };
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    }) as unknown as typeof fetch;
+    render(<SupportTicketsScreen client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })} />);
+    expect(await screen.findByText('附 2 张截图')).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('问题概括'), '提现页面报错');
+    fireEvent.press(screen.getByText('附截图（截之前遮住卡号、证件号）'));
+    expect(await screen.findByText('再加一张截图（已附 1 张）')).toBeTruthy();
+    fireEvent.press(screen.getByText('提交工单'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/support/tickets')?.body)
+      .toEqual({ subject: '提现页面报错', body: '', images: ['/api/v1/files/shot1abcdef'] }));
+  });
+});

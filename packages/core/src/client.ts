@@ -2248,16 +2248,18 @@ export class PlatformClient {
     return this.request<ContentItem[]>('GET', `/users/${userId}/contents`).then(listOf);
   }
   /** ESCA-052 类别：资金 / 账号类加急（时限更短）；不填按一般 */
-  createTicket(subject: string, body = '', category?: TicketCategory) {
+  createTicket(subject: string, body = '', category?: TicketCategory, images?: string[]) {
+    // ESCA-057（227 号 spec）截图：先 uploadImage 拿 url，最多 4 张；不带图时请求体与以前一样
     return this.request<{ id: number; status: string; reply: string; priority?: string }>('POST', '/support/tickets',
-      category ? { subject, body, category } : { subject, body });
+      { subject, body, ...(category ? { category } : {}), ...(images?.length ? { images } : {}) });
   }
   myTickets() {
     return this.request<MyTicket[]>('GET', '/support/tickets').then(listOf);
   }
   /** ESCA-056 在自己的工单里追加内容：已结 7 天内会重新打开；转了纠纷的请到纠纷里补 */
-  replyMyTicket(ticketId: number, body: string) {
-    return this.request<MyTicketReplied>('POST', `/support/tickets/${ticketId}/replies`, { body });
+  replyMyTicket(ticketId: number, body: string, images?: string[]) {
+    return this.request<MyTicketReplied>('POST', `/support/tickets/${ticketId}/replies`,
+      images?.length ? { body, images } : { body });
   }
   /** ESCA-001 工单转纠纷**带上下文**：不带的话用户要把刚说过的话重说一遍，
    *  而两次陈述不一致会在纠纷里被当成翻供。 */

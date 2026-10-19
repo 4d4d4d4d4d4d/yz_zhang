@@ -176,9 +176,10 @@ def erase_personal_data(db: Session, user: User) -> dict:
     plain = [t for t in db.query(Ticket).filter(Ticket.user_id == user.id) if not t.escalated_to_dispute_id]
     for t in plain:
         t.subject, t.body, t.reply = "（已注销用户的工单）", "", ""
+        t.images = []          # ESCA-057（227 号 spec）截图同样可能拍到个人情况
     if plain:
         db.query(TicketReply).filter(TicketReply.ticket_id.in_([t.id for t in plain])).update(
-            {"body": ""}, synchronize_session=False)
+            {"body": "", "images": []}, synchronize_session=False)
     # XAPP-006（161 号 spec）跨 App 助手的授权、执行与步骤记录：本人私有，注销即物理删除
     from app.modules.xapp.models import XappGrant, XappRun, XappStep
     run_ids = [r.id for r in db.query(XappRun.id).filter(XappRun.user_id == user.id)]
