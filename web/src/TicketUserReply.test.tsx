@@ -82,3 +82,16 @@ describe('ESCA-056 提单人追加回复', () => {
     await waitFor(() => expect(calls.find((c) => c.path === '/admin/tickets/7/priority')?.body).toEqual({ priority: 'urgent', reason: '其实是钱没到账' }));
   });
 });
+
+
+describe('ESCA-059 只说谢谢不重开', () => {
+  it('已结的工单回一句谢谢：写明保持已解决', async () => {
+    const calls: Call[] = [];
+    const after = { ...T, reopened: false, kept_closed: true,
+      replies: [...T.replies, { body: '谢谢', is_staff: false, created_at: '2026-10-14T00:00:00Z' }] };
+    open('/support', ME, { 'GET /support/tickets': [T], 'POST /support/tickets/3/replies': after }, calls);
+    fireEvent.change(await screen.findByLabelText('补充工单 3'), { target: { value: '谢谢' } });
+    fireEvent.click(screen.getByRole('button', { name: '补充' }));
+    expect(await screen.findByText('收到，工单 #3 保持已解决；如果问题还在，写清哪里不对就会重新打开')).toBeTruthy();
+  });
+});

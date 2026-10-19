@@ -1667,6 +1667,8 @@ export function teamHandoverDetail(r: Partial<TeamMemberRemoved>): string {
 /** ESCA-056（166 号 spec）提单人追加回复后的工单；已结 7 天内追加会重新打开 */
 export interface MyTicketReplied extends MyTicket {
   reopened: boolean;
+  /** ESCA-059 已结的单只回了谢谢 / 收到 / 已解决：记下了，但保持已结、不打扰客服 */
+  kept_closed?: boolean;
 }
 
 /** SECEV-030 安全看板。读 DB，所以任何副本看到的都一样。 */

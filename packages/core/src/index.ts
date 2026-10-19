@@ -15,3 +15,4 @@ export * from './dayShifts';
 export * from './depart';
 export * from './packTemplates';
 export * from './minor';
+export * from './tickets';

@@ -1,6 +1,6 @@
 // CS-013 / ESCA-051 App 上的「我的工单」（150 号 spec）：此前 App 上提不了工单、也看不到客服回复；
 // 现在能提、能看回复，并且看得到有没有人接手、是否已超时升级（看不到接手的是哪位管理员）。
-import { apiErrorText, formatDateTime, type MyTicket, type PlatformClient, type TicketCategory } from '@platform/core';
+import { ticketReplyNotice, apiErrorText, formatDateTime, type MyTicket, type PlatformClient, type TicketCategory } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -74,7 +74,7 @@ export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
                 try {
                   const r = await client.replyMyTicket(t.id, (drafts[t.id] ?? '').trim());
                   setDrafts({ ...drafts, [t.id]: '' });
-                  setNotice(r.reopened ? `已补充，工单 #${r.id} 重新打开` : `已补充到工单 #${r.id}`);
+                  setNotice(ticketReplyNotice(r));
                   await load();
                 } catch (e) { setError(apiErrorText(e)); }
               })()} />

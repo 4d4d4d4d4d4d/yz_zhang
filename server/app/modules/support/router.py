@@ -1,4 +1,6 @@
 """智能客服（10）MVP：FAQ 检索问答 + 账户上下文 + 低置信度转人工工单。"""
+import re
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -87,6 +89,18 @@ class TicketReplyIn(BaseModel):
     body: str = Field(min_length=1, max_length=2000)
 
 
+# ESCA-059（218 号 spec）只说谢谢、收到、已解决的，不把已结的单重新打开（业界老问题：一句谢谢让客服白跑一趟）。
+# 去掉标点、表情和空白后整句都是这些词才算；「谢谢，但还是不行」带了别的内容，照旧重开
+_THANKS_WORDS = re.compile(r"(谢谢你?们?|谢了|感谢|多谢|辛苦了?|好的?|好滴|收到了?|明白了?|知道了|嗯+|哦+|ok|okay|thanks?|thank\s*you|"
+                           r"已经?解决了?|问题解决了|搞定了?|没问题了?|可以了|行了?)+", re.I)
+_NOISE = re.compile(r"[\s\W_]+", re.U)
+
+
+def thanks_only(text: str) -> bool:
+    t = _NOISE.sub("", text or "")
+    return bool(t) and len(t) <= 20 and bool(_THANKS_WORDS.fullmatch(t))
+
+
 @router.post("/tickets/{ticket_id}/replies")
 def reply_my_ticket(ticket_id: int, body: TicketReplyIn, user: User = Depends(get_current_user),
                     db: Session = Depends(get_db, scope="function")):
@@ -108,7 +122,8 @@ def reply_my_ticket(ticket_id: int, body: TicketReplyIn, user: User = Depends(ge
                        "ticket_in_dispute")
     now = utcnow()
     reopened = False
-    if t.status == "resolved":
+    kept_closed = t.status == "resolved" and thanks_only(text)
+    if t.status == "resolved" and not kept_closed:
         if t.resolved_at is not None and t.resolved_at < now - timedelta(days=REOPEN_DAYS):
             raise conflict(f"这张工单已结超过 {REOPEN_DAYS} 天：请新开一张，写上原工单号 #{t.id}", "ticket_closed_too_long")
         t.status, t.resolved_at, reopened = "open", None, True
@@ -117,11 +132,11 @@ def reply_my_ticket(ticket_id: int, body: TicketReplyIn, user: User = Depends(ge
         raise conflict(f"这张工单你已经补充了 {MAX_USER_REPLIES} 次：请等客服回复，或新开一张", "ticket_reply_limit")
     db.add(TicketReply(ticket_id=t.id, author_id=user.id, is_staff=False, body=text, created_at=now))
     db.add(t)
-    if t.assignee_id:
+    if t.assignee_id and not kept_closed:      # 只说谢谢的不打扰客服：记在往来里就够了
         notify(db, t.assignee_id, "system", f"工单 #{t.id} 提单人{'重新打开并' if reopened else ''}补充了内容",
                text[:100])
     db.flush()
-    return {**_ticket_rows(db, [t])[0], "reopened": reopened}
+    return {**_ticket_rows(db, [t])[0], "reopened": reopened, "kept_closed": kept_closed}
 
 
 def _ticket_rows(db: Session, rows: list) -> list[dict]:

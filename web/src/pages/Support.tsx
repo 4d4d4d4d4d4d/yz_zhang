@@ -1,4 +1,4 @@
-import { apiErrorText, formatDateTime, type MyTicket, type TicketCategory } from '@platform/core';
+import { ticketReplyNotice, apiErrorText, formatDateTime, type MyTicket, type TicketCategory } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 
@@ -133,7 +133,7 @@ function MyTickets() {
                       const r = await client.replyMyTicket(t.id, (drafts[t.id] ?? '').trim());
                       setDrafts({ ...drafts, [t.id]: '' });
                       setRows(rows.map((x) => (x.id === r.id ? r : x)));
-                      setReplied(r.reopened ? `已补充，工单 #${r.id} 重新打开` : `已补充到工单 #${r.id}`);
+                      setReplied(ticketReplyNotice(r));
                     } catch (e) { setError(apiErrorText(e)); }
                   })()}>补充</button>
                 </div>

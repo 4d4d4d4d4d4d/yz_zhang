@@ -68,6 +68,16 @@ describe('ESCA-053 App 上的往来记录（157 号 spec）', () => {
     expect(await screen.findByText('已补充，工单 #3 重新打开')).toBeTruthy();
   });
 
+  it('ESCA-059 已结的单只回谢谢：写明保持已解决', async () => {
+    const done = { ...T, status: 'resolved', escalation_level: 0 };
+    const after = { ...done, reopened: false, kept_closed: true, replies: [{ body: '谢谢', is_staff: false, created_at: '2026-10-14T00:00:00Z' }] };
+    const client = makeClient({ 'GET /support/tickets': [done], 'POST /support/tickets/3/replies': after }, []);
+    render(<SupportTicketsScreen client={client} />);
+    fireEvent.changeText(await screen.findByLabelText('补充工单 3'), '谢谢');
+    fireEvent.press(screen.getByText('补充'));
+    expect(await screen.findByText('收到，工单 #3 保持已解决；如果问题还在，写清哪里不对就会重新打开')).toBeTruthy();
+  });
+
   it('ESCA-052 选「资金 · 加急」提交带上类别；加急的工单写明', async () => {
     const calls: Call[] = [];
     const client = makeClient({ 'GET /support/tickets': [{ ...T, priority: 'urgent', category: 'funds', priority_label: '加急' }],
