@@ -21,7 +21,10 @@ ACCEPT_HINT = re.compile(r"验收|标准|交付物|交付|完成后|做到")
 RISK_WORDS = {
     "advance": (re.compile(r"垫付|先付|预付"), "需要垫付：金额与凭证提前说清，走平台记录"),
     "onsite_home": (re.compile(r"上门|入户|家里|家中"), "上门服务：注意人身安全，到达后在平台打卡"),
-    "minor": (re.compile(r"未成年|孩子|儿童|小孩"), "涉及未成年人：平台要求额外核验，不允许单独相处的安排"),
+    # SCN-145（215 号 spec）说清该怎么做：勾哪一项、要什么证明（以前只说「要额外核验」，发单人不知道下一步）
+    "minor": (re.compile(r"未成年|孩子|儿童|小孩"),
+              "说明里提到孩子：服务对象是未成年人的，请勾选「服务对象是未成年人」并选监护人在场或公开场所；"
+              "接单的人要有平台审核通过的无犯罪记录证明，不允许和孩子单独相处的安排"),
 }
 
 
@@ -124,6 +127,11 @@ def task_profile(db: Session, t: dict) -> dict:
     for kind, (pat, msg) in RISK_WORDS.items():
         if pat.search(text) and not (kind == "onsite_home" and remote):
             risks.append({"kind": kind, "text": msg})
+    from app.modules.task.k12 import is_k12_subject_tutoring
+
+    if is_k12_subject_tutoring(text):          # SCN-145 发出去会被拒（213 号），写的时候就先说
+        risks.append({"kind": "k12", "text": "中小学学科类有偿家教平台不承接，发布时会被拒绝：需要学科辅导请找有办学资质的机构；"
+                                             "钢琴、游泳这类非学科陪练可以照常发"})
     if budget >= 500_000:
         risks.append({"kind": "large_amount", "text": "金额较大：建议分期（里程碑）托管，每期交付后再放款"})
 

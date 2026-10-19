@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 215 | 写单时提醒勾选未成年人与学科家教 | [215-draft-minor-hints.md](./215-draft-minor-hints.md) | P0 |
 | 214 | 未成年人服务对象的监护人关口与陪练看护资质 | [214-minor-guardian.md](./214-minor-guardian.md) | P0 |
 | 213 | 不承接中小学学科类有偿家教 | [213-k12-tutoring-guard.md](./213-k12-tutoring-guard.md) | P0 |
 | 212 | 家教、陪练类场景的关口设计 | [212-minor-services-gates.md](./212-minor-services-gates.md) | P0 |
