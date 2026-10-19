@@ -85,6 +85,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   period_not_ended: '这个月还没过完：只能锁已经结束的月份（北京时间）',
   period_already_closed: '这些月份已经锁过账：锁过的不能再锁，要更正请在当期记一笔调整',
   period_range_invalid: '结束期间不能早于开始期间',
+  spend_not_executed: '这笔支出还没执行，钱没划给你，不需要退回',
   invitation_not_found: '没有发给你的待处理邀请：可能已经接受、拒绝或过期了',
   admin_role_required: '这件事需要别的管理员角色：请超级管理员在后台「管理员与角色」里给你加上',
   admin_role_unknown: '不认识的管理员角色：可选的是超级管理员、客服、仲裁、合规、财务、运营',
@@ -463,6 +464,9 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
  * 这件事可数、可查——一个说不清自己覆盖了多少的翻译表，等于没有覆盖率。
  */
 export const SERVER_WORDED_CODES: string[] = [
+  // TEAM-070（226 号 spec）消息里写明还能退多少、当前余额多少
+  'return_exceeds_spend',
+  'return_insufficient_balance',
   // SCN-127 消息里写明一共几天，客户端编不出等价文案
   'day_shifts_length',
   // AI-DEC-044 消息里点名是哪几步、各差什么，客户端编不出等价文案

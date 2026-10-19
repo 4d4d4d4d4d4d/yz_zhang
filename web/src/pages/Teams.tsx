@@ -150,6 +150,8 @@ function TeamCard({ teamId }: { teamId: number }) {
                 <p className="muted">
                   #{s.requester_id} · {s.status}
                   {s.decision_reason && ` · ${s.decision_reason}`}
+                  {/* TEAM-070（226 号 spec）发起人退回了多少 */}
+                  {(s.returned_cents ?? 0) > 0 && ` · 已退回 ${fmtYuan(s.returned_cents)}`}
                 </p>
               </div>
               <span className="row">

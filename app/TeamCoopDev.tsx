@@ -218,6 +218,8 @@ function TeamDetailBlock({ client, teamId }: { client: PlatformClient; teamId: n
             #{sp.requester_id} · {sp.status}
             {/* TEAM-061 被强制写下的那段理由，界面要显示出来 */}
             {sp.decision_reason ? ` · ${sp.decision_reason}` : ''}
+            {/* TEAM-070（226 号 spec）发起人退回了多少 */}
+            {(sp.returned_cents ?? 0) > 0 ? ` · 已退回 ${fmtYuan(sp.returned_cents)}` : ''}
           </Text>
           {/* UI-075 读服务端的 can_decide：自己批自己不算审批，客户端不重判 */}
           {sp.can_decide && rejecting !== sp.id && (

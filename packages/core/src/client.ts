@@ -129,6 +129,8 @@ import type {
   PeriodQuery,
   PlatformFinanceExport,
   PlatformFinanceLockResult,
+  ReturnableTeamSpend,
+  TeamSpendReturned,
   AutoVerifyUsage,
   PlatformFinancePeriods,
   AuditChainReport,
@@ -2067,6 +2069,15 @@ export class PlatformClient {
     );
   }
   /** TEAM-054（170 号 spec）移出时交接：没执行的申请关掉，在途任务清单交给接手人（不填就是操作的 owner） */
+  /** TEAM-070（226 号 spec）团队拨给我、还能退回的支出（含已经离开的团队） */
+  returnableTeamSpends() {
+    return this.request<ReturnableTeamSpend[]>('GET', '/teams/returnable-spends');
+  }
+  /** TEAM-070 把没用完的拨款退回团队。资金操作，`idempotencyKey` 必填（同一次操作重试用同一个键） */
+  returnTeamSpend(teamId: number, requestId: number, amountCents: number, idempotencyKey: string) {
+    return this.request<TeamSpendReturned>('POST', `/teams/${teamId}/spends/${requestId}/return`,
+      { amount_cents: amountCents }, { 'Idempotency-Key': idempotencyKey });
+  }
   removeTeamMember(teamId: number, memberUserId: number, handoverTo?: number) {
     const qs = handoverTo ? `?handover_to=${handoverTo}` : '';
     return this.request<TeamMemberRemoved>('DELETE', `/teams/${teamId}/members/${memberUserId}${qs}`);

@@ -33,11 +33,13 @@ LEDGER_KINDS: frozenset[str] = frozenset({
     "verify_hold", "verify_payout", "verify_refund",
     "coop_distribution_in", "coop_distribution_out",
     "team_spend_in", "team_spend_out",
+    "team_return_in", "team_return_out",     # TEAM-070（226 号 spec）
 })
 
 # transfer() 允许的科目前缀（会各自拼出 _in / _out 两条）
 TRANSFER_KINDS: frozenset[str] = frozenset(
-    {"adjust", "subsidy", "agent_payout", "coop_distribution", "team_spend"})
+    {"adjust", "subsidy", "agent_payout", "coop_distribution", "team_spend",
+     "team_return"})   # TEAM-070（226 号 spec）成员把没用完的团队拨款退回团队
 
 
 def get_or_create(db: Session, user_id: int) -> WalletAccount:

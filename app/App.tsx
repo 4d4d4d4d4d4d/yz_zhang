@@ -1,3 +1,4 @@
+import { TeamReturnsBlock } from './teamReturns';
 import { ChainEntry } from './ChainEntry';
 import { EvidenceExportButton, InvoicesBlock } from './appGaps';
 import { MilestonesBlock } from './milestones';
@@ -1198,6 +1199,8 @@ export function WalletScreen({ client }: { client: PlatformClient }) {
       {!!error && <Text style={styles.error}>{error}</Text>}
 
       <PayoutAccountBlock client={client} />
+      {/* TEAM-070（226 号 spec）团队拨款没用完的退回 */}
+      <TeamReturnsBlock client={client} onChanged={() => void load()} />
       {/* APP-090 平台服务费发票（136 号 spec） */}
       <InvoicesBlock client={client} />
 

@@ -1,7 +1,7 @@
 """TEAM 团队账户端点（53 号 spec）。"""
 import secrets
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Header
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -104,6 +104,37 @@ def my_teams(user: User = Depends(get_current_user), db: Session = Depends(get_d
             out.append({**_dump(t), "my_role": m.role,
                         "my_spend_limit_cents": m.spend_limit_cents})
     return out
+
+
+@router.get("/returnable-spends")
+def my_returnable_spends(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """TEAM-070（226 号 spec）团队拨给我、还能退回的支出（含已经离开的团队）：钱包页「团队拨款」读这个。"""
+    rows = (db.query(SpendRequest).filter(SpendRequest.requester_id == user.id, SpendRequest.status == "executed")
+            .order_by(SpendRequest.id.desc()).limit(100).all())
+    rows = [r for r in rows if service.returnable_cents(r) > 0]
+    names = {t.user_id: t.name for t in db.query(Team).filter(Team.user_id.in_({r.team_id for r in rows}))} if rows else {}
+    return [{"id": r.id, "team_id": r.team_id, "team_name": names.get(r.team_id, ""), "purpose": r.purpose,
+             "amount_cents": r.amount_cents, "returned_cents": r.returned_cents or 0,
+             "returnable_cents": service.returnable_cents(r), "created_at": iso(r.created_at)} for r in rows]
+
+
+class ReturnIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    amount_cents: int = Field(ge=1)
+
+
+@router.post("/{team_id}/spends/{request_id}/return")
+def return_spend(team_id: int, request_id: int, body: ReturnIn, user: User = Depends(get_current_user),
+                 db: Session = Depends(get_db, scope="function"), idempotency_key: str = Header(default="")):
+    """TEAM-070 把没用完的拨款退回团队。资金操作，强制带 Idempotency-Key（104 号）。"""
+    from app.core import idempotency
+
+    req = db.get(SpendRequest, request_id)
+    if not req or req.team_id != team_id:
+        raise not_found("支出申请不存在")
+    return idempotency.replay_or_run(db, user.id, idempotency.require_key(idempotency_key), "team.return_spend",
+                                     lambda: service.return_spend(db, req, user, body.amount_cents),
+                                     {"request_id": request_id, "amount_cents": body.amount_cents})
 
 
 @router.get("/{team_id}")
@@ -244,6 +275,8 @@ def list_spends(team_id: int, user: User = Depends(get_current_user),
          "purpose": r.purpose, "status": r.status, "task_id": r.task_id,
          "decided_by": r.decided_by, "decision_reason": r.decision_reason,
          "created_at": iso(r.created_at),
+         # TEAM-070（226 号 spec）已退回与还能退回的
+         "returned_cents": r.returned_cents or 0, "returnable_cents": service.returnable_cents(r),
          # 客户端的「审批」按钮读这个，与服务端同一判断（TEAM-021）
          "can_decide": (r.status == "pending" and me.role in ("owner", "admin")
                         and r.requester_id != user.id)}

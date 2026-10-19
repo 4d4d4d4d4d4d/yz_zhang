@@ -104,6 +104,8 @@ class SpendRequest(Base):
     # 「第二次提醒」如果也只有一次，三个月后还是同一个问题。
     reminded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # TEAM-070（226 号 spec）这笔拨款里发起人已经退回团队的钱。最多退到拨款额
+    returned_cents: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class TeamInvite(Base):

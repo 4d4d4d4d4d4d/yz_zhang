@@ -1,6 +1,7 @@
 import { hasLists, apiErrorText, OperationKey, fmtYuan, formatDate, formatDateTime, ledgerKindLabel, type InvoiceRow, type LedgerRow, type PayoutAccountView, type TaxSummary, type Wallet } from '@platform/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../store';
+import { TeamReturns } from '../TeamReturns';
 
 export default function WalletPage() {
   const { client } = useApp();
@@ -62,6 +63,7 @@ export default function WalletPage() {
         {error && <p className="error">{error}</p>}
       </div>
       <PayoutAccount onBound={load} />
+      <TeamReturns onChanged={() => void load()} />
       <div className="card">
         <h3>账单流水</h3>
         <table>

@@ -360,6 +360,46 @@ def can_invoice(team: Team) -> str:
     return ""
 
 
+# ------------------------------------------------------------------ TEAM-070 没用完的拨款退回团队（226 号 spec）
+def returnable_cents(req: SpendRequest) -> int:
+    return max(0, req.amount_cents - (req.returned_cents or 0)) if req.status == "executed" else 0
+
+
+def return_spend(db: Session, req: SpendRequest, actor: User, amount_cents: int) -> dict:
+    """发起人把这笔拨款里没用完的钱退回团队。
+
+    口径（先定下的规则）：钱划到个人钱包后与他自己的钱混在一起，平台分不出「哪一块是团队的」，
+    所以不替他判断用掉了多少、也不从他钱包里扣——由他自己按实际剩下的退，最多退到拨款额，
+    每次退都留流水（团队「成员退回」、个人「退回团队」），所有者在支出列表里看得到。
+    已经离开团队的人也能退（钱是在团队时拨的）。"""
+    from app.modules.notification.service import notify
+
+    if req.requester_id != actor.id:
+        raise forbidden("只有这笔支出的发起人能退回")
+    if req.status != "executed":
+        raise conflict("这笔支出还没执行，钱没划给你，不需要退回", "spend_not_executed")
+    left = returnable_cents(req)
+    if amount_cents > left:
+        raise bad_request(f"这笔拨款最多还能退 ¥{left / 100:.2f}（拨了 ¥{req.amount_cents / 100:.2f}，"
+                          f"已退 ¥{(req.returned_cents or 0) / 100:.2f}）", "return_exceeds_spend")
+    mine = wallet.get_or_create(db, actor.id)
+    if mine.available_cents < amount_cents:
+        raise bad_request(f"你的可用余额只有 ¥{mine.available_cents / 100:.2f}：钱可能在托管或冻结里，"
+                          "等任务结算或退款到账后再退", "return_insufficient_balance")
+    wallet.transfer(db, actor.id, req.team_id, amount_cents, None,
+                    memo=f"退回团队支出 #{req.id}：{req.purpose}", kind="team_return")
+    req.returned_cents = (req.returned_cents or 0) + amount_cents
+    db.add(req)
+    team = db.get(Team, req.team_id)
+    if team:
+        notify(db, team.owner_id, "system", f"团队「{team.name}」收到退回 ¥{amount_cents / 100:.2f}",
+               f"支出 #{req.id}（{req.purpose or '未填用途'}）的发起人退回了没用完的钱，这笔累计已退 "
+               f"¥{req.returned_cents / 100:.2f} / ¥{req.amount_cents / 100:.2f}。")
+    db.flush()
+    return {"id": req.id, "returned_cents": req.returned_cents, "returnable_cents": returnable_cents(req),
+            "available_cents": mine.available_cents}
+
+
 # ------------------------------------------------------------------ TEAM-054 成员离开时的交接（170 号 spec）
 OPEN_TASK_STATUSES = ("draft", "published", "matched", "in_progress", "pending_acceptance", "disputed")
 
@@ -387,8 +427,15 @@ def hand_over(db: Session, team: Team, member_id: int, taker_id: int, actor_id: 
     if in_flight:
         notify(db, taker_id, "system", f"团队「{team.name}」有成员离开，{len(in_flight)} 个在途任务交给你跟进",
                lines + "。合约仍由原成员履行：请与他确认收尾，或在任务里协商取消。")
+    # TEAM-070（226 号 spec）还没退回的拨款：写进通知，让他知道可以退、退多少
+    unreturned = sum(returnable_cents(r) for r in (
+        db.query(SpendRequest).filter(SpendRequest.team_id == team.user_id, SpendRequest.requester_id == member_id,
+                                      SpendRequest.status == "executed").all()))
+    tail = (f"团队拨给你、还没退回的共 ¥{unreturned / 100:.2f}：没用完的请在钱包页的「团队拨款」里退回。"
+            if unreturned else "")
     notify(db, member_id, "system", f"你已离开团队「{team.name}」",
-           ("以下用团队的钱发的任务仍由你负责完成或协商取消：" + lines) if in_flight
-           else "你不能再使用团队的钱；没执行的支出申请已自动关闭。")
+           (("以下用团队的钱发的任务仍由你负责完成或协商取消：" + lines) if in_flight
+            else "你不能再使用团队的钱；没执行的支出申请已自动关闭。") + tail)
     db.flush()
-    return {"closed_requests": closed, "in_flight_tasks": in_flight, "handover_to": taker_id}
+    return {"closed_requests": closed, "in_flight_tasks": in_flight, "handover_to": taker_id,
+            "unreturned_cents": unreturned}

@@ -65,6 +65,9 @@ export const LEDGER_KIND_LABEL: Record<string, string> = {
   // —— 团队支出（TEAM-020）——
   team_spend_in: '团队拨款',
   team_spend_out: '团队支出',
+  // TEAM-070（226 号 spec）
+  team_return_in: '成员退回',
+  team_return_out: '退回团队',
 };
 
 /** 认不出的科目显示原始标识符——宁可给用户一串能发给客服的字符，

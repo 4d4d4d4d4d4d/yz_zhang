@@ -197,6 +197,7 @@ api GET /api/v1/tasks/{task_id}/trip
 api GET /api/v1/tasks/{task_id}/visits
 api GET /api/v1/team-invites/{token}
 api GET /api/v1/teams/mine
+api GET /api/v1/teams/returnable-spends
 api GET /api/v1/teams/{team_id}
 api GET /api/v1/teams/{team_id}/invite-links
 api GET /api/v1/teams/{team_id}/spends
@@ -500,6 +501,7 @@ api POST /api/v1/teams/{team_id}/members
 api POST /api/v1/teams/{team_id}/spends
 api POST /api/v1/teams/{team_id}/spends/{request_id}/decide
 api POST /api/v1/teams/{team_id}/spends/{request_id}/execute
+api POST /api/v1/teams/{team_id}/spends/{request_id}/return
 api POST /api/v1/users/me/certifications
 api POST /api/v1/users/me/deactivate
 api POST /api/v1/users/me/verify
@@ -591,6 +593,7 @@ app search
 app spaces
 app supportTickets
 app teamInvites
+app teamReturns
 app ventureInvites
 app visits
 app workbench
@@ -949,6 +952,8 @@ sdk resolveUpload
 sdk retireSandboxModel
 sdk retireSkillConcept
 sdk retractKnowledgeTask
+sdk returnTeamSpend
+sdk returnableTeamSpends
 sdk review
 sdk reviewAmlActivity
 sdk reviewContract

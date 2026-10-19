@@ -1420,6 +1420,27 @@ export interface SpendRequestView {
   created_at: string;
   /** TEAM-021 「审批」按钮读这个：自己批自己不算审批。 */
   can_decide: boolean;
+  /** TEAM-070（226 号 spec）发起人已经退回团队的钱、还能退回的钱（只有已执行的才有） */
+  returned_cents: number;
+  returnable_cents: number;
+}
+
+/** TEAM-070 团队拨给我、还能退回的支出（含已经离开的团队）：钱包页「团队拨款」 */
+export interface ReturnableTeamSpend {
+  id: number;
+  team_id: number;
+  team_name: string;
+  purpose: string;
+  amount_cents: number;
+  returned_cents: number;
+  returnable_cents: number;
+  created_at: string;
+}
+export interface TeamSpendReturned {
+  id: number;
+  returned_cents: number;
+  returnable_cents: number;
+  available_cents: number;
 }
 
 /** TEAM-031 待核验的团队企业信息（76 号 spec）。
@@ -1679,6 +1700,8 @@ export interface TeamMemberRemoved {
   closed_requests: number[];
   in_flight_tasks: TeamHandoverTask[];
   handover_to: number;
+  /** TEAM-070 团队拨给他、还没退回的钱（老服务端没有） */
+  unreturned_cents?: number;
 }
 
 /** 移出后给操作人看的交接说明（两端同一句）；老服务端没有这些字段时返回空串 */
