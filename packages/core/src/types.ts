@@ -3225,3 +3225,36 @@ export interface VentureSentInvitation {
   expires_at: string;
   accepted_at: string | null;
 }
+
+/** ESCA-058（221 号 spec）后台工单详情：完整往来，每句写明是提单人还是哪位客服 */
+export interface AdminTicketThreadItem {
+  body: string;
+  is_staff: boolean;
+  author: string;
+  created_at: string;
+}
+export interface AdminTicketDetail {
+  id: number;
+  user_id: number;
+  user_nickname: string;
+  subject: string;
+  body: string;
+  status: string;
+  reply: string;
+  created_at: string;
+  resolved_at: string | null;
+  assignee_id: number | null;
+  assignee_nickname: string;
+  escalation_level: number;
+  escalation_label: string;
+  waited_hours: number;
+  sla_hours: number;
+  overdue_hours: number;
+  first_responded: boolean;
+  first_response_hours: number;
+  first_response_overdue: boolean;
+  category: TicketCategory;
+  priority: 'urgent' | 'normal';
+  priority_label: string;
+  thread: AdminTicketThreadItem[];
+}

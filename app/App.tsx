@@ -6,7 +6,7 @@ import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, dayLabel, dayShiftsPayload, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, shiftLabel, templatePrefill, GUARDIAN_MODE_LABEL, minorPayload, minorTaskLine, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type DayShiftInput, type LedgerRow, type Me, type PackTaskTemplateBrief, type GuardianMode, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, dayLabel, dayShiftsPayload, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, isAuthRejection, shiftLabel, templatePrefill, GUARDIAN_MODE_LABEL, minorPayload, minorTaskLine, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type DayShiftInput, type LedgerRow, type Me, type PackTaskTemplateBrief, type GuardianMode, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { isSandbox, loadSandbox } from './sandboxState';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
@@ -71,7 +71,8 @@ export default function App() {
   useEffect(() => { void loadSandbox(); }, []);
 
   useEffect(() => {
-    if (token) client.me().then(setMe).catch(() => setToken(null));
+    // REG-002（222 号 spec）只有服务端明确不认这个登录才清；手机信号一抖就登出是不对的
+    if (token) client.me().then(setMe).catch((e) => { if (isAuthRejection(e)) setToken(null); });
     else setMe(null);
   }, [token, client]);
 

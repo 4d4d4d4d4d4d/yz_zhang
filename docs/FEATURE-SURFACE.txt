@@ -60,6 +60,7 @@ api GET /api/v1/admin/settlements/verify
 api GET /api/v1/admin/skill-concepts
 api GET /api/v1/admin/teams/pending
 api GET /api/v1/admin/tickets
+api GET /api/v1/admin/tickets/{ticket_id}
 api GET /api/v1/admin/uploads/pending
 api GET /api/v1/admin/users
 api GET /api/v1/admin/users/{user_id}/ban-impact
@@ -641,6 +642,7 @@ sdk adminSecurity
 sdk adminSkillConcepts
 sdk adminSubmitLegalFaq
 sdk adminSubmitPack
+sdk adminTicketDetail
 sdk adminTickets
 sdk adminUpdateLegalFaq
 sdk adminUpdatePack

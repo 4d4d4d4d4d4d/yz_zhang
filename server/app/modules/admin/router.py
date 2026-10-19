@@ -329,6 +329,31 @@ def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
     ]
 
 
+# ESCA-058（221 号 spec）后台工单详情：队列只露提单人最新一句，完整往来以前要到哪里看都没有
+@router.get("/admin/tickets/{ticket_id}")
+def ticket_detail(ticket_id: int, admin: User = Depends(require_role("support")),
+                  db: Session = Depends(get_db, scope="function")):
+    """完整往来：每一句是提单人说的还是哪位客服说的、什么时候；工单原文、处理结果、接手人、时限一并给出。
+    客服之间可以看到彼此的名字（提单人那一侧仍然只看到「客服」，ESCA-053）。"""
+    from app.modules.support.escalation import sla_view
+    from app.modules.support.models import Ticket, TicketReply
+
+    t = db.get(Ticket, ticket_id)
+    if t is None:
+        raise not_found("没有这张工单")
+    rows = db.query(TicketReply).filter(TicketReply.ticket_id == t.id).order_by(TicketReply.id).all()
+    ids = {r.author_id for r in rows if r.author_id} | ({t.assignee_id} if t.assignee_id else set()) | {t.user_id}
+    names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_(ids))}
+    return {"id": t.id, "user_id": t.user_id, "user_nickname": names.get(t.user_id, ""), "subject": t.subject,
+            "body": t.body, "status": t.status, "reply": t.reply, "created_at": iso(t.created_at),
+            "resolved_at": iso(t.resolved_at), "assignee_id": t.assignee_id,
+            "assignee_nickname": names.get(t.assignee_id, "") if t.assignee_id else "",
+            **sla_view(t, utcnow()),
+            "thread": [{"body": r.body, "is_staff": r.is_staff,
+                        "author": (names.get(r.author_id, "") or f"客服 #{r.author_id}") if r.is_staff else "提单人",
+                        "created_at": iso(r.created_at)} for r in rows]}
+
+
 class TicketReplyIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     reply: str = Field(min_length=1, max_length=2000)

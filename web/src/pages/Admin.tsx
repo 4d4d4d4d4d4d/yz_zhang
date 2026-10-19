@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketRow, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -993,6 +993,14 @@ function TicketQueue() {
     } catch (err) { setError(apiErrorText(err)); }
   }
 
+  // ESCA-058（221 号 spec）完整往来：列表只给最近一条补充，接手的人要先看懂前面说过什么
+  const [detail, setDetail] = useState<AdminTicketDetail | null>(null);
+  async function openThread(id: number) {
+    setError('');
+    if (detail?.id === id) { setDetail(null); return; }
+    try { setDetail(await client.adminTicketDetail(id)); } catch (err) { setError(apiErrorText(err)); }
+  }
+
   const filtered = view.escalated_only || view.mine;
   if (rows.length === 0 && !filtered) return null;
   return (
@@ -1022,7 +1030,20 @@ function TicketQueue() {
                 {t.last_user_reply && <span className="muted" style={{ display: 'block' }} data-testid={`ticket-user-reply-${t.id}`}>提单人补充（{t.last_user_reply_at ? formatDateTime(t.last_user_reply_at) : ''}）：{t.last_user_reply}</span>}
               </p>
               {t.first_response_overdue && <p className="error" data-testid={`ticket-fr-${t.id}`}>首次响应已超时：先回一句告诉对方在处理</p>}
+              {detail?.id === t.id && (
+                <div data-testid={`ticket-thread-${t.id}`} style={{ marginTop: 6 }}>
+                  <p className="muted">提单人：{detail.user_nickname || `#${detail.user_id}`} · {formatDateTime(detail.created_at)}</p>
+                  <p>{detail.body || '（没写详细内容）'}</p>
+                  {detail.thread.length === 0 && <p className="muted">还没有往来。</p>}
+                  {detail.thread.map((m, i) => (
+                    <p key={i} className={m.is_staff ? '' : 'muted'}>
+                      <strong>{m.is_staff ? `客服 ${m.author}` : m.author}</strong>（{formatDateTime(m.created_at)}）：{m.body}
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
+            <button className="ghost" onClick={() => void openThread(t.id)}>{detail?.id === t.id ? '收起往来' : '看完整往来'}</button>
             <button className="ghost" onClick={() => void claim(t.id)}>{t.assignee_id ? '改由我处理' : '我来处理'}</button>
             {/* ESCA-052（172 号 spec）选错类别的改优先级，时限随之变化 */}
             <button className="ghost" onClick={() => {

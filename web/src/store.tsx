@@ -1,4 +1,4 @@
-import { PlatformClient, type Me } from '@platform/core';
+import { PlatformClient, isAuthRejection, type Me } from '@platform/core';
 import { readSandbox } from './sandboxLocal';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
@@ -41,9 +41,12 @@ export function AppProvider({ children, client: injected }: { children: ReactNod
     }
     try {
       setMe(await client.me());
-    } catch {
-      setToken(null);
-      setMe(null);
+    } catch (e) {
+      // REG-002（222 号 spec）只有服务端明确不认这个登录才清；断网、页面跳走取消的请求不清（以前一跳页就被登出）
+      if (isAuthRejection(e)) {
+        setToken(null);
+        setMe(null);
+      }
     }
   }, [client, setToken]);
 
