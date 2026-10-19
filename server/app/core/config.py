@@ -39,6 +39,8 @@ class Settings:
     DISPUTE_RESPONSE_HOURS = int(os.environ.get("PLATFORM_DISPUTE_RESPONSE_HOURS", "48"))
     # VER 人类核验（49 号 spec）
     VERIFY_DEADLINE_HOURS = int(os.environ.get("PLATFORM_VERIFY_DEADLINE_HOURS", "24"))
+    # AGT-072（217 号 spec）平台自费的自动核验单，24 小时内最多下几张：供应商的 review 比例未知，没有上限就是没封顶的成本
+    AUTO_VERIFY_DAILY_MAX = int(os.environ.get("PLATFORM_AUTO_VERIFY_DAILY_MAX", "50"))
     VERIFIER_MIN_CREDIT = int(os.environ.get("PLATFORM_VERIFIER_MIN_CREDIT", "100"))
     # ESCA 客服工单 SLA（超时不自动转纠纷——纠纷会冻结资金，留给人决定；V178 起只在平台内部逐级叫人，见下一项）
     SUPPORT_SLA_HOURS = int(os.environ.get("PLATFORM_SUPPORT_SLA_HOURS", "24"))
@@ -165,7 +167,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.230.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.231.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

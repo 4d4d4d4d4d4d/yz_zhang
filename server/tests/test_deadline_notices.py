@@ -254,3 +254,23 @@ def test_agt071_low_confidence_alone_does_not_auto_open(client, requester, runne
                       headers=auth(requester)).json()
     assert run["status"] == "escalated"
     assert _orders(task["id"]) == []
+
+
+# --------------------------------- AGT-072 自动核验单有上限（217 号 spec，V245）
+def test_agt072_auto_orders_stop_at_the_daily_cap_and_the_publisher_is_told(client, requester, runner, moderation, monkeypatch):
+    """供应商的 review 比例未知：平台自费的自动核验单 24 小时内有上限，到了就不再自动下，
+    但发布方要知道这单没人看过、他可以自己下单——出口不能静默消失。"""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "AUTO_VERIFY_DAILY_MAX", 1)
+    moderation.status = "review"
+    first, _ = _agent_task_ready(client, requester, "13800065070")
+    client.post(f"/api/v1/tasks/{first['id']}/agent-run", headers=auth(requester))
+    assert len(_orders(first["id"])) == 1
+    second, _ = _agent_task_ready(client, requester, "13800065071")
+    run = client.post(f"/api/v1/tasks/{second['id']}/agent-run", headers=auth(requester)).json()
+    assert run["status"] == "escalated" and _orders(second["id"]) == [], "到了上限还在自动下单"
+    body = notices(requester["id"], "这单 AI 交付需要人工看一眼")[-1].body
+    assert second["title"] in body and "手动下一张核验单" in body
+    r = client.post(f"/api/v1/tasks/{second['id']}/verification", headers=auth(requester))
+    assert r.status_code == 201, "发布方手动下单的出口还在"

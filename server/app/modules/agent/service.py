@@ -324,6 +324,15 @@ def _maybe_auto_verify(db: Session, task, run, labels: list[str]) -> None:
     from app.modules.wallet import service as wallet
 
     db.flush()      # create_order 会再查一次库（autoflush=False）
+    if _auto_verify_capped(db):
+        # AGT-072 平台自费的额度用完了：不下单，但告诉发布方这单还没人看过、他可以自己下单（出口不能静默消失）
+        from app.modules.notification.service import notify
+
+        run.error = f"{run.error}；平台今天自费核验的额度已用完，未自动下核验单".lstrip("；")
+        notify(db, task.creator_id, "task", "这单 AI 交付需要人工看一眼",
+               f"《{task.title}》的 AI 交付审核拿不准，平台今天自费核验的额度已用完。"
+               "你可以在任务详情里手动下一张核验单，或自己验收。")
+        return
     try:
         verify_service.create_order(
             db, task, trigger="escalation", agent_run_id=run.id,
@@ -333,6 +342,21 @@ def _maybe_auto_verify(db: Session, task, run, labels: list[str]) -> None:
         # 已有进行中的核验单等情形：不下第二张，也不让它影响这次执行的结论。
         # 核验单没下成，任务仍然是 escalated——发布方手动下单那条路还在。
         pass
+
+
+def _auto_verify_capped(db: Session) -> bool:
+    """AGT-072 近 24 小时平台自费的自动核验单（trigger = escalation、付款方是平台）到了上限没有。"""
+    from datetime import timedelta
+
+    from app.core.config import settings
+    from app.modules.verify.models import VerificationOrder
+    from app.modules.wallet import service as wallet
+
+    n = (db.query(VerificationOrder)
+         .filter(VerificationOrder.trigger == "escalation", VerificationOrder.payer_id == wallet.PLATFORM_USER_ID,
+                 VerificationOrder.created_at >= utcnow() - timedelta(hours=24))
+         .count())
+    return n >= settings.AUTO_VERIFY_DAILY_MAX
 
 
 def gross_margin_cents(db: Session, agent_user_id: int) -> dict:
