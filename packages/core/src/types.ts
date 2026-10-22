@@ -3394,3 +3394,27 @@ export interface AdminTicketDetail {
   images?: string[];
   thread: AdminTicketThreadItem[];
 }
+
+/** API-057（241 号 spec）接入方的提额申请。status：pending / approved / rejected / withdrawn */
+export interface ApiQuotaRequest {
+  id: number;
+  daily_quota: number;
+  /** 想要多少天（null = 长期） */
+  days: number | null;
+  purpose: string;
+  status: 'pending' | 'approved' | 'rejected' | 'withdrawn';
+  created_at: string;
+  decided_at: string | null;
+  /** 批准的备注或驳回的理由 */
+  decision_note: string;
+  /** 实际批了多少、多少天（可能与申请的不同） */
+  granted_quota: number | null;
+  granted_days: number | null;
+}
+/** API-057 后台看到的申请：多出申请人、现在的配额、最近 7 天用量最多的一天 */
+export interface AdminApiQuotaRequest extends ApiQuotaRequest {
+  user_id: number;
+  nickname: string;
+  current_quota: number;
+  peak_7d: number;
+}

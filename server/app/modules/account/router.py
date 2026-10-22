@@ -750,6 +750,14 @@ def _export_xapp(db: Session, user_id: int) -> dict:
     return {"grants": [xsvc.dump_grant(g) for g in grants], "runs": [xsvc.dump_run(db, r, with_steps=True) for r in runs]}
 
 
+def _export_quota_requests(db: Session, user_id: int) -> dict:
+    from app.modules.openapi.models import ApiQuotaRequest
+    from app.modules.openapi.router import quota_request_row
+
+    rows = db.query(ApiQuotaRequest).filter(ApiQuotaRequest.user_id == user_id).order_by(ApiQuotaRequest.id).all()
+    return {"api_quota_requests": [quota_request_row(r) for r in rows]} if rows else {}
+
+
 def _export_tickets(db: Session, user_id: int) -> list[dict]:
     from app.modules.support.models import Ticket, TicketReply
 
@@ -807,6 +815,8 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
         "xapp": _export_xapp(db, user.id),
         # SCN-140（208 号 spec）接单的常用地点（粗化坐标）与常用路线
         "gig": _export_gig(db, user.id),
+        # API-057（241 号 spec）开放 API 提额申请：有才带（没申请过的导出与以前一样）
+        **_export_quota_requests(db, user.id),
         "real_name": user.real_name,
         "tasks": [{"id": t.id, "title": t.title, "status": t.status, "budget_cents": t.budget_cents,
                    "role": "creator" if t.creator_id == user.id else "executor",

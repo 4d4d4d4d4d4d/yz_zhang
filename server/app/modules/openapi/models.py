@@ -140,3 +140,23 @@ class ApiAccountQuota(Base):
     set_by: Mapped[int] = mapped_column(Integer)
     set_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class ApiQuotaRequest(Base):
+    """API-057（241 号 spec）接入方自己申请提高账号每日总配额：写用途与想要多少，运营在后台批或驳回。
+    批准时可以按申请的量，也可以改成别的量与天数；结果写回 `api_account_quotas`（与 235 号运营主动调同一处）。"""
+
+    __tablename__ = "api_quota_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    daily_quota: Mapped[int] = mapped_column(Integer)                 # 想要的每日总量
+    days: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 想要多少天（空 = 长期）
+    purpose: Mapped[str] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(12), default="pending", index=True)  # pending / approved / rejected / withdrawn
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    decided_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    decision_note: Mapped[str] = mapped_column(String(200), default="")
+    granted_quota: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    granted_days: Mapped[int | None] = mapped_column(Integer, nullable=True)

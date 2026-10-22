@@ -462,26 +462,120 @@ def api_account_quotas(admin: User = Depends(require_role("ops")), db: Session =
 def set_api_account_quota(user_id: int, body: ApiAccountQuotaIn, admin: User = Depends(require_role("ops")),
                           db: Session = Depends(get_db, scope="function")):
     """API-056 给某个接入方单独调账号每日总配额（可以调高也可以调低）。写理由、进审计、通知对方。"""
+    target = db.get(User, user_id)
+    if target is None or target.is_deleted:
+        raise not_found("没有这个用户")
+    now = utcnow()
+    row = _apply_account_quota(db, admin, user_id, body.daily_quota, body.days, body.reason.strip(), now)
+    db.flush()
+    return _quota_row(db, row, {target.id: target.nickname}, now)
+
+
+def _apply_account_quota(db: Session, admin: User, user_id: int, daily_quota: int, days: int | None, reason: str, now,
+                         extra_note: str = ""):
+    """API-056 / API-057 写配额、进审计、通知对方（运营主动调与批准申请走同一处）。"""
     from datetime import timedelta
 
     from app.modules.notification.service import notify
     from app.modules.openapi.models import ApiAccountQuota
 
-    target = db.get(User, user_id)
-    if target is None or target.is_deleted:
-        raise not_found("没有这个用户")
-    now = utcnow()
     row = db.query(ApiAccountQuota).filter(ApiAccountQuota.user_id == user_id).first() or ApiAccountQuota(user_id=user_id)
-    row.daily_quota, row.reason, row.set_by, row.set_at = body.daily_quota, body.reason.strip(), admin.id, now
-    row.expires_at = now + timedelta(days=body.days) if body.days else None
+    row.daily_quota, row.reason, row.set_by, row.set_at = daily_quota, reason, admin.id, now
+    row.expires_at = now + timedelta(days=days) if days else None
     db.add(row)
     record_audit(db, admin.id, "api_account_quota", "user", user_id,
-                 f"{body.daily_quota}/天{f'，{body.days} 天' if body.days else ''}：{row.reason}")
+                 f"{daily_quota}/天{f'，{days} 天' if days else ''}：{row.reason}")
     notify(db, user_id, "system", "你的开放 API 账号每日配额已调整",
-           f"所有 API Key 合计每天 {body.daily_quota} 次（默认 {settings.API_ACCOUNT_DAILY_QUOTA} 次）"
-           + (f"，{body.days} 天后恢复默认" if body.days else "") + "。按北京时间的天计算。")
+           extra_note + f"所有 API Key 合计每天 {daily_quota} 次（默认 {settings.API_ACCOUNT_DAILY_QUOTA} 次）"
+           + (f"，{days} 天后恢复默认" if days else "") + "。按北京时间的天计算。")
+    return row
+
+
+# ---------- API-057（241 号 spec）接入方的提额申请：运营批或驳回 ----------
+class QuotaDecisionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    note: str = Field(default="", max_length=200)
+    # 批准时可以改量与天数；不填按申请的
+    daily_quota: int | None = Field(default=None, ge=1, le=10_000_000)
+    days: int | None = Field(default=None, ge=1, le=366)
+
+
+@router.get("/admin/api-quota-requests")
+def api_quota_requests(status: str = Query(default="pending", pattern="^(pending|approved|rejected|withdrawn|all)$"),
+                       admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
+    """API-057 提额申请：谁、要多少、干什么用；附上现在的配额与最近 7 天用量最多的一天，方便判断。"""
+    from datetime import timedelta
+
+    from app.modules.openapi import usage
+    from app.modules.openapi.models import ApiQuotaRequest
+    from app.modules.openapi.router import quota_request_row
+
+    q = db.query(ApiQuotaRequest)
+    if status != "all":
+        q = q.filter(ApiQuotaRequest.status == status)
+    rows = q.order_by(ApiQuotaRequest.id.desc() if status != "pending" else ApiQuotaRequest.id).limit(200).all()
+    names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_([r.user_id for r in rows] or [-1]))}
+    now = utcnow()
+    today = usage.local(now).date()
+    days = [usage.day_str(today - timedelta(days=i)) for i in range(7)]
+    out = []
+    for r in rows:
+        current, _c = usage.account_quota(db, r.user_id, now)
+        peak = max(usage.account_used(db, r.user_id, d) for d in days)
+        out.append({**quota_request_row(r), "user_id": r.user_id, "nickname": names.get(r.user_id, ""),
+                    "current_quota": current, "peak_7d": peak})
+    return out
+
+
+def _pending_request(db: Session, request_id: int):
+    from app.modules.openapi.models import ApiQuotaRequest
+
+    r = db.get(ApiQuotaRequest, request_id)
+    if r is None:
+        raise not_found("没有这个申请")
+    if r.status != "pending":
+        raise conflict("这个申请已经有结果了（或已撤回）", "api_quota_request_decided")
+    return r
+
+
+@router.post("/admin/api-quota-requests/{request_id}/approve")
+def approve_quota_request(request_id: int, body: QuotaDecisionIn, admin: User = Depends(require_role("ops")),
+                          db: Session = Depends(get_db, scope="function")):
+    """API-057 批准：按申请的量与天数，或改成别的。结果写进账号配额（与运营主动调同一处）、通知对方。"""
+    from app.modules.openapi.router import quota_request_row
+
+    r = _pending_request(db, request_id)
+    now = utcnow()
+    quota = body.daily_quota or r.daily_quota
+    days = body.days if body.days is not None else r.days
+    note = body.note.strip()
+    _apply_account_quota(db, admin, r.user_id, quota, days, f"按申请 #{r.id}" + (f"：{note}" if note else ""), now,
+                         extra_note=f"你的提额申请 #{r.id} 已批准" + ("（按你申请的）" if (quota, days) == (r.daily_quota, r.days)
+                                                                 else "（批的量或天数与申请的不同）") + "。")
+    r.status, r.decided_by, r.decided_at, r.decision_note = "approved", admin.id, now, note
+    r.granted_quota, r.granted_days = quota, days
+    db.add(r)
     db.flush()
-    return _quota_row(db, row, {target.id: target.nickname}, now)
+    return quota_request_row(r)
+
+
+@router.post("/admin/api-quota-requests/{request_id}/reject")
+def reject_quota_request(request_id: int, body: QuotaDecisionIn, admin: User = Depends(require_role("ops")),
+                         db: Session = Depends(get_db, scope="function")):
+    """API-057 驳回：要写理由（对方会看到）。"""
+    from app.modules.notification.service import notify
+    from app.modules.openapi.router import quota_request_row
+
+    note = body.note.strip()
+    if len(note) < 4:
+        raise bad_request("驳回要写理由（至少 4 个字）：对方会看到这句话", "api_quota_reject_reason_required")
+    r = _pending_request(db, request_id)
+    r.status, r.decided_by, r.decided_at, r.decision_note = "rejected", admin.id, utcnow(), note
+    db.add(r)
+    record_audit(db, admin.id, "api_quota_request_reject", "user", r.user_id, f"申请 #{r.id}：{note}")
+    notify(db, r.user_id, "system", "你的开放 API 提额申请没有通过", f"申请 #{r.id}：{note}。可以补充用途后重新申请。")
+    db.flush()
+    return quota_request_row(r)
 
 
 @router.delete("/admin/api-accounts/{user_id}/quota")

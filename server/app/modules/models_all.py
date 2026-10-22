@@ -37,6 +37,7 @@ from app.modules.agent.models import AgentProfile, AgentRun  # noqa: F401
 from app.modules.openapi.models import (  # noqa: F401
     ApiAccountQuota,
     ApiKey,
+    ApiQuotaRequest,
     ApiKeyUsage,
     Webhook,
     WebhookDelivery,

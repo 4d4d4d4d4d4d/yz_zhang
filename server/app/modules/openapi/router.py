@@ -6,10 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.deps import get_current_user, require_job_auth
-from app.core.errors import bad_request, forbidden, not_found
+from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.core.locks import job_slot
 from app.core.timefmt import iso
-from app.modules.account.models import User
+from app.modules.account.models import User, utcnow
 
 from . import service, usage
 from .deps import require_scope
@@ -18,6 +18,7 @@ from .models import (
     SCOPES,
     WEBHOOK_EVENTS,
     ApiKey,
+    ApiQuotaRequest,
     Webhook,
     WebhookDelivery,
 )
@@ -121,6 +122,61 @@ def set_key_quota(key_id: int, body: QuotaIn, user: User = Depends(get_current_u
         raise bad_request(f"每日配额不能超过平台默认的 {cap} 次；需要更高配额请联系平台", "api_key_quota_above_cap")
     row.daily_quota = body.daily_quota
     return {"id": row.id, "daily_quota": row.daily_quota, "effective_daily_quota": usage.effective_quota(row)}
+
+
+# ---------- API-057（241 号 spec）接入方自己申请提额 ----------
+QUOTA_REQUEST_MAX = 10_000_000
+
+
+class QuotaRequestIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    daily_quota: int = Field(ge=1, le=QUOTA_REQUEST_MAX)
+    days: int | None = Field(default=None, ge=1, le=366)
+    purpose: str = Field(min_length=10, max_length=500)
+
+
+def quota_request_row(r: ApiQuotaRequest) -> dict:
+    return {"id": r.id, "daily_quota": r.daily_quota, "days": r.days, "purpose": r.purpose, "status": r.status,
+            "created_at": iso(r.created_at), "decided_at": iso(r.decided_at), "decision_note": r.decision_note,
+            "granted_quota": r.granted_quota, "granted_days": r.granted_days}
+
+
+@router.post("/developer/quota-requests", status_code=201)
+def request_quota(body: QuotaRequestIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """API-057 申请提高账号每日总配额（所有 Key 合计）。同一时间只能有一个待批的申请；要比现在的高。"""
+    if db.query(ApiKey).filter(ApiKey.user_id == user.id).first() is None:
+        raise bad_request("先建一个 API Key 再申请配额：配额是给 Key 用的", "api_quota_request_no_key")
+    current, _custom = usage.account_quota(db, user.id)
+    if body.daily_quota <= current:
+        raise bad_request(f"现在每天已经是 {current} 次：申请的量要比这个高", "api_quota_request_not_higher")
+    if db.query(ApiQuotaRequest).filter(ApiQuotaRequest.user_id == user.id, ApiQuotaRequest.status == "pending").first():
+        raise conflict("你已经有一个待批的申请：等结果出来，或先撤回再重新申请", "api_quota_request_pending")
+    r = ApiQuotaRequest(user_id=user.id, daily_quota=body.daily_quota, days=body.days, purpose=body.purpose.strip())
+    db.add(r)
+    db.flush()
+    return quota_request_row(r)
+
+
+@router.get("/developer/quota-requests")
+def my_quota_requests(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """API-057 我的提额申请（最新的在前，最多 20 条）。"""
+    rows = (db.query(ApiQuotaRequest).filter(ApiQuotaRequest.user_id == user.id)
+            .order_by(ApiQuotaRequest.id.desc()).limit(20).all())
+    return [quota_request_row(r) for r in rows]
+
+
+@router.delete("/developer/quota-requests/{request_id}")
+def withdraw_quota_request(request_id: int, user: User = Depends(get_current_user),
+                           db: Session = Depends(get_db, scope="function")):
+    """API-057 撤回还没批的申请。"""
+    r = db.get(ApiQuotaRequest, request_id)
+    if r is None or r.user_id != user.id:
+        raise not_found("没有这个申请")
+    if r.status != "pending":
+        raise conflict("这个申请已经有结果了，不能撤回", "api_quota_request_decided")
+    r.status, r.decided_at = "withdrawn", utcnow()
+    db.add(r)
+    return quota_request_row(r)
 
 
 @router.get("/developer/api-keys/{key_id}/usage")

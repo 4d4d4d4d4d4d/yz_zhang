@@ -570,6 +570,12 @@ def _resolve_body_keys(expr: str) -> tuple[set[str], bool]:
 
 # 解析不了的请求体 -> 为什么（值是**理由**，不是布尔）
 DYNAMIC_BODY: dict[tuple[str, str], str] = {
+    ("POST", "/developer/quota-requests"): (
+        "API-057（241 号 spec）填了天数才带 days（不填 = 长期）；服务端 QuotaRequestIn 认 daily_quota / days / purpose，extra=forbid"
+    ),
+    ("POST", "/admin/api-quota-requests/{x}/approve"): (
+        "API-057（241 号 spec）改了量或天数才带 daily_quota / days（不填按申请的）；服务端 QuotaDecisionIn 认 note / daily_quota / days，extra=forbid"
+    ),
     ("POST", "/admin/announcements"): (
         "NTF-068（238 号 spec）选了类目才带 category（不选时请求体与 V159 一样）；服务端 AnnouncementIn 认 category"
     ),

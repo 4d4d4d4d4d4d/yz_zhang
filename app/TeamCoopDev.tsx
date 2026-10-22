@@ -5,7 +5,7 @@ import { DistributionHistoryBlock, InviteMemberBlock, VentureInvitesBlock } from
 import { JoinTeamByCode } from './teamInvites';
 import { SupportTicketsScreen } from './supportTickets';
 import { XappScreen } from './xapp';
-import { KeyUsageBlock } from './apiKeyUsage';
+import { KeyUsageBlock, QuotaRequestsBlock } from './apiKeyUsage';
 // APP-069 三条线的 App 界面：团队 / 合作体 / 开发者（67 号 spec）。
 //
 // V84 把这三页做在了网页上，App 至今一个都没有。V92 给团队审批补了通知，
@@ -461,6 +461,8 @@ function DeveloperScreen({ client }: { client: PlatformClient }) {
           )}
         </View>
       ))}
+      {/* API-057（241 号 spec）申请提高账号配额：点开才加载 */}
+      {keys.length > 0 && <QuotaRequestsBlock client={client} />}
 
       <Text style={s.cardTitle}>Webhook</Text>
       <TextInput style={s.input} value={url} onChangeText={setUrl}

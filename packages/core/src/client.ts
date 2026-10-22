@@ -132,6 +132,8 @@ import type {
   ReturnableTeamSpend,
   UrgentHint,
   SupportPause,
+  ApiQuotaRequest,
+  AdminApiQuotaRequest,
   SupportScope,
   ApiAccountQuotaRow,
   TeamSpendReturned,
@@ -1713,6 +1715,35 @@ export class PlatformClient {
   resetApiAccountQuota(userId: number, reason: string) {
     return this.request<{ user_id: number; daily_quota: number; custom: boolean }>(
       'DELETE', `/admin/api-accounts/${userId}/quota?reason=${encodeURIComponent(reason)}`);
+  }
+  /** API-057（241 号 spec）申请提高账号每日总配额：写想要多少、多少天（不填 = 长期）、用途 */
+  requestApiQuota(dailyQuota: number, purpose: string, days?: number) {
+    return this.request<ApiQuotaRequest>('POST', '/developer/quota-requests',
+      days ? { daily_quota: dailyQuota, purpose, days } : { daily_quota: dailyQuota, purpose });
+  }
+  /** API-057 我的提额申请（最新的在前） */
+  myApiQuotaRequests() {
+    return this.request<ApiQuotaRequest[]>('GET', '/developer/quota-requests').then(listOf);
+  }
+  /** API-057 撤回还没批的申请 */
+  withdrawApiQuotaRequest(id: number) {
+    return this.request<ApiQuotaRequest>('DELETE', `/developer/quota-requests/${id}`);
+  }
+  /** API-057 后台：提额申请（默认只看待批的） */
+  adminApiQuotaRequests(status: 'pending' | 'approved' | 'rejected' | 'withdrawn' | 'all' = 'pending') {
+    return this.request<AdminApiQuotaRequest[]>('GET', `/admin/api-quota-requests${qs({ status })}`).then(listOf);
+  }
+  /** API-057 后台：批准（不填量与天数就按申请的） */
+  approveApiQuotaRequest(id: number, opts: { note?: string; dailyQuota?: number; days?: number } = {}) {
+    return this.request<ApiQuotaRequest>('POST', `/admin/api-quota-requests/${id}/approve`, {
+      note: opts.note ?? '',
+      ...(opts.dailyQuota ? { daily_quota: opts.dailyQuota } : {}),
+      ...(opts.days ? { days: opts.days } : {}),
+    });
+  }
+  /** API-057 后台：驳回（要写理由，对方会看到） */
+  rejectApiQuotaRequest(id: number, note: string) {
+    return this.request<ApiQuotaRequest>('POST', `/admin/api-quota-requests/${id}/reject`, { note });
   }
   /** ESCA-061（234 号 spec）我负责哪几类工单 */
   mySupportCategories() {

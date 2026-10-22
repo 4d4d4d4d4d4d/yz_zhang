@@ -1,5 +1,5 @@
 // API-056（235 号 spec）后台「开放 API 配额」：给某个接入方单独调账号每日总配额（写理由、可设天数），改回默认。
-import { apiErrorText, formatDate, type ApiAccountQuotaRow } from '@platform/core';
+import { apiErrorText, formatDate, quotaRequestLine, type AdminApiQuotaRequest, type ApiAccountQuotaRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from './store';
 
@@ -12,9 +12,13 @@ export function ApiQuotasAdmin() {
   const [reason, setReason] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  // API-057（241 号 spec）接入方的提额申请
+  const [reqs, setReqs] = useState<AdminApiQuotaRequest[]>([]);
   const load = useCallback(async () => {
     const r = await client.apiAccountQuotas().catch(() => []);
     setRows(Array.isArray(r) ? r : []);
+    const q = await client.adminApiQuotaRequests().catch(() => []);
+    setReqs(Array.isArray(q) ? q : []);
   }, [client]);
   useEffect(() => { void load(); }, [load]);
 
@@ -37,6 +41,30 @@ export function ApiQuotasAdmin() {
       </div>
       {notice && <p role="status">{notice}</p>}
       {error && <p className="error">{error}</p>}
+      {reqs.length > 0 && (
+        <div aria-label="待批的提额申请">
+          <h4>待批的提额申请（{reqs.length}）</h4>
+          <ul>
+            {reqs.map((r) => (
+              <li key={r.id} data-testid={`quota-req-${r.id}`}>
+                {r.nickname || `#${r.user_id}`}：{quotaRequestLine(r)} · 现在每天 {r.current_quota} 次，最近 7 天最多一天用了 {r.peak_7d} 次
+                {' '}<button className="text-link" onClick={() => {
+                  const q = window.prompt(`批多少次 / 天（直接确定 = 按申请的 ${r.daily_quota}）：`, String(r.daily_quota));
+                  if (q === null) return;
+                  const note = window.prompt('备注（可不填，对方会看到）：') ?? '';
+                  const n = Number(q);
+                  void run(() => client.approveApiQuotaRequest(r.id, { note: note.trim(), ...(n && n !== r.daily_quota ? { dailyQuota: n } : {}) }),
+                    `已批准 #${r.id}`);
+                }}>批准</button>
+                {' '}<button className="text-link" onClick={() => {
+                  const why = window.prompt('驳回的理由（至少 4 个字，对方会看到）：') ?? '';
+                  if (why.trim().length >= 4) void run(() => client.rejectApiQuotaRequest(r.id, why.trim()), `已驳回 #${r.id}`);
+                }}>驳回</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {rows.length === 0 && <p className="muted">还没有单独调过配额的账号。</p>}
       <ul>
         {rows.map((r) => (

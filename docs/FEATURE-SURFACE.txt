@@ -5,6 +5,7 @@ api DELETE /api/v1/contents/{content_id}
 api DELETE /api/v1/conversations/{conv_id}/members/{member_id}
 api DELETE /api/v1/decompositions/{dec_id}/nodes/{node_id}
 api DELETE /api/v1/developer/api-keys/{key_id}
+api DELETE /api/v1/developer/quota-requests/{request_id}
 api DELETE /api/v1/developer/webhooks/{webhook_id}
 api DELETE /api/v1/friends/{user_id}
 api DELETE /api/v1/gig/available
@@ -30,6 +31,7 @@ api GET /api/v1/admin/aml/activities
 api GET /api/v1/admin/aml/stats
 api GET /api/v1/admin/announcements
 api GET /api/v1/admin/api-accounts/quotas
+api GET /api/v1/admin/api-quota-requests
 api GET /api/v1/admin/audit-log
 api GET /api/v1/admin/audit-log/export
 api GET /api/v1/admin/audit-log/verify
@@ -103,6 +105,7 @@ api GET /api/v1/developer/api-keys
 api GET /api/v1/developer/api-keys/{key_id}/actions
 api GET /api/v1/developer/api-keys/{key_id}/mandate
 api GET /api/v1/developer/api-keys/{key_id}/usage
+api GET /api/v1/developer/quota-requests
 api GET /api/v1/developer/scopes
 api GET /api/v1/developer/webhooks
 api GET /api/v1/developer/webhooks/{webhook_id}/deliveries
@@ -293,6 +296,8 @@ api POST /api/v1/admin/announcements
 api POST /api/v1/admin/announcements/preview
 api POST /api/v1/admin/announcements/{announcement_id}/cancel
 api POST /api/v1/admin/announcements/{announcement_id}/revoke
+api POST /api/v1/admin/api-quota-requests/{request_id}/approve
+api POST /api/v1/admin/api-quota-requests/{request_id}/reject
 api POST /api/v1/admin/campaigns
 api POST /api/v1/admin/categories
 api POST /api/v1/admin/certifications/{application_id}/decide
@@ -395,6 +400,7 @@ api POST /api/v1/decompositions/{dec_id}/expand
 api POST /api/v1/developer/api-keys
 api POST /api/v1/developer/api-keys/{key_id}/mandate
 api POST /api/v1/developer/api-keys/{key_id}/rotate
+api POST /api/v1/developer/quota-requests
 api POST /api/v1/developer/webhooks
 api POST /api/v1/disputes/jobs/escalate-overdue
 api POST /api/v1/disputes/jobs/remind-response
@@ -628,6 +634,7 @@ sdk addTeamMember
 sdk addWorkbenchChildren
 sdk addWorkbenchLog
 sdk addWorkbenchMemory
+sdk adminApiQuotaRequests
 sdk adminApproveLegalFaq
 sdk adminApprovePack
 sdk adminAuditLog
@@ -678,6 +685,7 @@ sdk appealDispute
 sdk apply
 sdk applyDays
 sdk applyMethod
+sdk approveApiQuotaRequest
 sdk approveCircleMember
 sdk approveSettle
 sdk askNotebook
@@ -872,6 +880,7 @@ sdk mergeKnowledgeCluster
 sdk messages
 sdk missionSummary
 sdk myAgreements
+sdk myApiQuotaRequests
 sdk myApplications
 sdk myBlocks
 sdk myBookmarks
@@ -942,6 +951,7 @@ sdk recallMessage
 sdk recommendations
 sdk register
 sdk registerDevice
+sdk rejectApiQuotaRequest
 sdk rejectChangeOrder
 sdk rejectDelivery
 sdk rejectSettle
@@ -957,6 +967,7 @@ sdk replyTicket
 sdk report
 sdk reportRenderError
 sdk reportVisit
+sdk requestApiQuota
 sdk requestInvoice
 sdk requestTeamSpend
 sdk requestVerification
@@ -1086,6 +1097,7 @@ sdk wallet
 sdk webhookDeliveries
 sdk webhooks
 sdk withdraw
+sdk withdrawApiQuotaRequest
 sdk withdrawApplication
 sdk withdrawRequests
 sdk withdrawRequestsPage

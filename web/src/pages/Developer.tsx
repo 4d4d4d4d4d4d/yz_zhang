@@ -1,6 +1,7 @@
 import {
   apiErrorText, formatDateTime,
-  type ApiKeyUsageView, type ApiKeyView, type WebhookDeliveryView, type WebhookView, accountQuotaNote } from '@platform/core';
+  type ApiKeyUsageView, type ApiKeyView, type ApiQuotaRequest, type WebhookDeliveryView, type WebhookView, accountQuotaNote,
+  quotaRequestLine } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 import MachineMandate from '../MachineMandate';
@@ -111,6 +112,9 @@ export default function Developer() {
           ))}
         </div>
       </div>
+
+      {/* API-057（241 号 spec）有 Key 才能申请提额 */}
+      {keys.length > 0 && <QuotaRequests />}
 
       <div className="card">
         <h3>Webhook</h3>
@@ -233,5 +237,59 @@ function KeyRate({ keyId, own, effective, onSave }: { keyId: number; own: number
              onChange={(e) => setV(e.target.value)} />
       <button className="ghost" disabled={v === ''} onClick={() => { onSave(Number(v)); setV(''); }}>保存</button>
     </p>
+  );
+}
+
+/** API-057（241 号 spec）申请提高账号每日总配额：写想要多少、多少天、干什么用；运营批或驳回后在这里看到结果。 */
+function QuotaRequests() {
+  const { client } = useApp();
+  const [rows, setRows] = useState<ApiQuotaRequest[]>([]);
+  const [quota, setQuota] = useState('');
+  const [days, setDays] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    const r = await client.myApiQuotaRequests().catch(() => []);
+    setRows(Array.isArray(r) ? r : []);
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+  const pending = rows.some((r) => r.status === 'pending');
+  async function submit() {
+    const q = Number(quota), d = days ? Number(days) : undefined, p = purpose.trim();
+    setError(''); setNotice('');
+    try {
+      await client.requestApiQuota(q, p, d);
+      setQuota(''); setDays(''); setPurpose('');
+      setNotice('已提交：运营会看你的用途与最近的用量，批了或没批都会通知你');
+      await load();
+    } catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <div className="card" aria-label="申请提高配额">
+      <h3>申请提高账号配额</h3>
+      <p className="muted">账号下所有 Key 合计每天有上限。用量要变大时写清想要多少、多少天、干什么用，运营批了立刻生效。</p>
+      {!pending && (
+        <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <input aria-label="想要的每日配额" type="number" min={1} placeholder="每天多少次" value={quota} onChange={(e) => setQuota(e.target.value)} style={{ width: 130 }} />
+          <input aria-label="想要多少天" type="number" min={1} max={366} placeholder="多少天（空 = 长期）" value={days} onChange={(e) => setDays(e.target.value)} style={{ width: 160 }} />
+          <input aria-label="用途" className="grow" placeholder="用途（至少 10 个字：接什么系统、每天大概调用哪些接口）" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
+          <button disabled={!quota || purpose.trim().length < 10} onClick={() => void submit()}>提交申请</button>
+        </div>
+      )}
+      {notice && <p role="status">{notice}</p>}
+      {error && <p className="error">{error}</p>}
+      <ul>
+        {rows.map((r) => (
+          <li key={r.id} data-testid={`quota-request-${r.id}`}>
+            {quotaRequestLine(r)}
+            {r.status === 'pending' && <> <button className="text-link" onClick={async () => {
+              setError(''); setNotice('');
+              try { await client.withdrawApiQuotaRequest(r.id); setNotice('已撤回'); await load(); } catch (e) { setError(apiErrorText(e)); }
+            }}>撤回</button></>}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
