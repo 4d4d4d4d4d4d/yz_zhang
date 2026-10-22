@@ -281,6 +281,8 @@ def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
                  offset: int = Query(0, ge=0),
                  escalated_only: bool = False, mine: bool = False,
                  sort: Literal["id", "urgent"] = "id",
+                 # ESCA-061（234 号 spec）只看我负责的类别（没声明过的不筛）
+                 my_categories: bool = False,
                  admin: User = Depends(require_role("support")), db: Session = Depends(get_db, scope="function")):
     """PAY-045 带分页：此前它接受 `offset` 然后忽略它——
     翻页的人会看到第一页无限重复，而且不知道自己在原地。
@@ -296,6 +298,12 @@ def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
         q = q.filter(Ticket.escalation_level > 0)
     if mine:
         q = q.filter(Ticket.assignee_id == admin.id)
+    if my_categories:
+        from app.modules.support.escalation import agent_scopes
+
+        cats = agent_scopes(db).get(admin.id)
+        if cats:
+            q = q.filter(Ticket.category.in_(cats))
     # ESCA-052（172 号 spec）「最急的在前」先看加急，再看升级级别与等待时长
     q = (q.order_by((Ticket.priority == "urgent").desc(), Ticket.escalation_level.desc(), Ticket.created_at, Ticket.id)
          if sort == "urgent" else q.order_by(Ticket.id))
@@ -333,6 +341,45 @@ def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
          "requester_downgraded_90d": urgent.get(t.user_id, (0, 0))[1]}
         for t in rows
     ]
+
+
+class SupportScopeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    categories: list[str] = Field(max_length=3)
+
+
+@router.get("/admin/support/my-categories")
+def my_support_categories(admin: User = Depends(require_role("support")), db: Session = Depends(get_db, scope="function")):
+    """ESCA-061（234 号 spec）我负责哪几类工单；没声明过的视为什么都管。"""
+    from app.modules.support.escalation import CATEGORIES
+    from app.modules.support.models import SupportAgentScope
+
+    row = db.query(SupportAgentScope).filter(SupportAgentScope.user_id == admin.id).first()
+    return {"categories": list(row.categories) if row else list(CATEGORIES), "declared": row is not None,
+            "labels": CATEGORIES}
+
+
+@router.put("/admin/support/my-categories")
+def set_my_support_categories(body: SupportScopeIn, admin: User = Depends(require_role("support")),
+                              db: Session = Depends(get_db, scope="function")):
+    """ESCA-061 声明我负责的类别：没人接手的工单超时提醒优先叫负责这一类的人。至少选一类。"""
+    from app.modules.support.escalation import CATEGORIES
+    from app.modules.support.models import SupportAgentScope
+
+    cats = [c for c in CATEGORIES if c in set(body.categories)]
+    if len(set(body.categories)) != len(cats):
+        raise bad_request("类别只能是资金（funds）、账号（account）或一般（general）", "ticket_bad_category")
+    if not cats:
+        raise bad_request("至少负责一类：都不想管的话请让主管把你的客服角色去掉", "support_categories_empty")
+    row = db.query(SupportAgentScope).filter(SupportAgentScope.user_id == admin.id).first()
+    if row is None:
+        row = SupportAgentScope(user_id=admin.id, categories=cats)
+    else:
+        row.categories, row.updated_at = cats, utcnow()
+    db.add(row)
+    record_audit(db, admin.id, "support_scope", "user", admin.id, "、".join(cats))
+    db.flush()
+    return {"categories": cats, "declared": True, "labels": CATEGORIES}
 
 
 # ESCA-058（221 号 spec）后台工单详情：队列只露提单人最新一句，完整往来以前要到哪里看都没有

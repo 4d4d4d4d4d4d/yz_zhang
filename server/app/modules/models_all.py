@@ -26,7 +26,7 @@ from app.modules.growth.models import Campaign, Coupon, ReferralReward, UserCoup
 from app.modules.legal.consent import UserConsent  # noqa: F401
 from app.modules.legal.faq import LegalFaq  # noqa: F401
 from app.modules.matching.models import Invitation, MatchingConfig, Subscription  # noqa: F401
-from app.modules.support.models import NotificationPref, Ticket, TicketReply  # noqa: F401
+from app.modules.support.models import NotificationPref, SupportAgentScope, Ticket, TicketReply  # noqa: F401
 from app.modules.tax.models import InvoiceRequest, TaxWithholding  # noqa: F401
 from app.modules.im.models import Conversation, Message  # noqa: F401
 from app.modules.im.models_social import Friendship  # noqa: F401

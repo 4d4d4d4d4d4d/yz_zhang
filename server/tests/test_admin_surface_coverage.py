@@ -51,6 +51,8 @@ def _admin_paths() -> set[str]:
 REACHED_BY: dict[str, str] = {
     # ESCA-058（221 号 spec）后台工单详情：工单台每一行「看完整往来」
     "/admin/tickets/{x}": "adminTicketDetail",
+    # ESCA-061（234 号 spec）工单台「我负责的类别」
+    "/admin/support/my-categories": "mySupportCategories",
     # FIN-063（223 号 spec）报表锁账：后台「平台财务 · 按期间」的「锁账到此月」
     "/admin/platform-finance/lock": "lockPlatformFinance",
     # APP-094 页面渲染出错的聚合（184 号 spec）：后台「页面出错」一块

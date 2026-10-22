@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportScope, type TicketCategory, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -986,8 +986,25 @@ function TicketQueue() {
   const PAGE = 20;
   const [more, setMore] = useState(false);
   // ESCA-051 筛选（150 号 spec）：只看已升级的、只看我接手的、最急的在前
-  const [view, setView] = useState<{ escalated_only: boolean; mine: boolean; sort: 'id' | 'urgent' }>(
+  const [view, setView] = useState<{ escalated_only: boolean; mine: boolean; sort: 'id' | 'urgent'; my_categories?: boolean }>(
     { escalated_only: false, mine: false, sort: 'urgent' });
+  // ESCA-061（234 号 spec）我负责的类别：没人接手的工单超时提醒优先叫负责这一类的人
+  const [scope, setScope] = useState<SupportScope | null>(null);
+  const [scopeDraft, setScopeDraft] = useState<TicketCategory[]>([]);
+  const [scopeNote, setScopeNote] = useState('');
+  useEffect(() => {
+    // 老服务端没有这个接口时不显示这一块（形状不对也当没有）
+    client.mySupportCategories().then((r) => {
+      if (r && Array.isArray(r.categories) && r.labels) { setScope(r); setScopeDraft(r.categories); } else setScope(null);
+    }).catch(() => setScope(null));
+  }, [client]);
+  async function saveScope() {
+    setError(''); setScopeNote('');
+    try {
+      const r = await client.setMySupportCategories(scopeDraft);
+      setScope(r); setScopeNote('已保存：没人接手的工单超时，会优先提醒负责这一类的客服');
+    } catch (err) { setError(apiErrorText(err)); }
+  }
 
   const load = useCallback(async (limit = PAGE) => {
     // CI-002：响应不是数组时当作空表（此前 r.slice 在异步里抛错，没人接住）
@@ -1056,7 +1073,19 @@ function TicketQueue() {
         <label><input type="checkbox" checked={view.escalated_only} onChange={(e) => setView({ ...view, escalated_only: e.target.checked })} /> 只看已升级的</label>
         <label><input type="checkbox" checked={view.mine} onChange={(e) => setView({ ...view, mine: e.target.checked })} /> 只看我接手的</label>
         <label><input type="checkbox" checked={view.sort === 'urgent'} onChange={(e) => setView({ ...view, sort: e.target.checked ? 'urgent' : 'id' })} /> 最急的在前</label>
+        {scope?.declared && <label><input type="checkbox" checked={!!view.my_categories} onChange={(e) => setView({ ...view, my_categories: e.target.checked })} /> 只看我负责的类别</label>}
       </div>
+      {scope && (
+        <div className="row" style={{ flexWrap: 'wrap', gap: 12 }} aria-label="我负责的类别">
+          <span className="muted">我负责：{scope.declared ? '' : '（还没选，视为都管）'}</span>
+          {(['funds', 'account', 'general'] as TicketCategory[]).map((c) => (
+            <label key={c}><input type="checkbox" checked={scopeDraft.includes(c)}
+              onChange={(e) => setScopeDraft(e.target.checked ? [...scopeDraft, c] : scopeDraft.filter((x) => x !== c))} /> {scope.labels[c] ?? c}</label>
+          ))}
+          <button className="ghost" onClick={() => void saveScope()}>保存</button>
+          {scopeNote && <span role="status">{scopeNote}</span>}
+        </div>
+      )}
       {error && <p className="error">{error}</p>}
       {rows.length === 0 && <p className="muted">没有符合条件的工单。</p>}
       <div className="list" style={{ marginTop: 8 }}>

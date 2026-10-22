@@ -86,6 +86,8 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   period_already_closed: '这些月份已经锁过账：锁过的不能再锁，要更正请在当期记一笔调整',
   period_range_invalid: '结束期间不能早于开始期间',
   spend_not_executed: '这笔支出还没执行，钱没划给你，不需要退回',
+  // ESCA-061（234 号 spec）
+  support_categories_empty: '至少负责一类：都不想管的话请让主管把你的客服角色去掉',
   // TEAM-071（230 号 spec）
   nothing_to_return: '这笔拨款没有可退的了（没执行，或已经全部退回）',
   return_asked_recently: '这笔拨款 24 小时内已经提醒过了：给对方一点时间',

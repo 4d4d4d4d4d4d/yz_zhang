@@ -103,7 +103,18 @@ def level1_recipients(db: Session, t: Ticket) -> list[int]:
     admins = _admins(db)
     support = [u.id for u in admins if "support" in roles_of(u)]
     # 没有专职客服时退到「能处理工单的人」（超级管理员）
-    return support or [u.id for u in admins if has_role(u, "support")]
+    pool = support or [u.id for u in admins if has_role(u, "support")]
+    # ESCA-061（234 号 spec）优先叫负责这一类的人（没声明的视为什么都管）；一个都没有就照旧叫全部
+    scopes = agent_scopes(db)
+    covering = [uid for uid in pool if uid not in scopes or (t.category or "general") in scopes[uid]]
+    return covering or pool
+
+
+def agent_scopes(db: Session) -> dict[int, list[str]]:
+    """ESCA-061 客服声明的负责类别：{user_id: [类别]}；没声明的不在里面。"""
+    from .models import SupportAgentScope
+
+    return {r.user_id: list(r.categories or []) for r in db.query(SupportAgentScope).all()}
 
 
 def level2_recipients(db: Session) -> list[int]:

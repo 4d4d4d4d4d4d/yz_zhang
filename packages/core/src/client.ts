@@ -131,6 +131,7 @@ import type {
   PlatformFinanceLockResult,
   ReturnableTeamSpend,
   UrgentHint,
+  SupportScope,
   TeamSpendReturned,
   TeamReturnAsked,
   AutoVerifyUsage,
@@ -1691,12 +1692,19 @@ export class PlatformClient {
   }
   /** CS-030 工单队列。用户的求助在这里，不回就是 SLA 是摆设。 */
   adminTickets(status = 'open', limit = 50, offset = 0,
-    opts: { escalated_only?: boolean; mine?: boolean; sort?: 'id' | 'urgent' } = {}) {
+    opts: { escalated_only?: boolean; mine?: boolean; sort?: 'id' | 'urgent'; my_categories?: boolean } = {}) {
     // ESCA-051（150 号 spec）：只看已升级的、只看我接手的、按最急排
     const extra = qs(opts);
     return this.request<AdminTicketRow[]>(
       'GET', `/admin/tickets?status=${status}&limit=${limit}&offset=${offset}${extra ? `&${extra.slice(1)}` : ''}`,
     ).then(listOf);
+  }
+  /** ESCA-061（234 号 spec）我负责哪几类工单 */
+  mySupportCategories() {
+    return this.request<SupportScope>('GET', '/admin/support/my-categories');
+  }
+  setMySupportCategories(categories: TicketCategory[]) {
+    return this.request<SupportScope>('PUT', '/admin/support/my-categories', { categories });
   }
   /** ESCA-058（221 号 spec）后台工单详情：完整往来 */
   adminTicketDetail(ticketId: number) {

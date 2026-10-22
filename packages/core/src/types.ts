@@ -1694,6 +1694,13 @@ export interface MyTicket {
   images?: string[];
 }
 export type TicketCategory = 'funds' | 'account' | 'general';
+/** ESCA-061（234 号 spec）客服负责的工单类别；没声明过（declared=false）视为什么都管 */
+export interface SupportScope {
+  categories: TicketCategory[];
+  declared: boolean;
+  /** 类别的中文名 */
+  labels: Record<string, string>;
+}
 /** ESCA-060（229 号 spec）我最近自选加急被改回一般的情况；message 为空就不用提示 */
 export interface UrgentHint {
   days: number;

@@ -58,6 +58,7 @@ api GET /api/v1/admin/sandbox/models
 api GET /api/v1/admin/security
 api GET /api/v1/admin/settlements/verify
 api GET /api/v1/admin/skill-concepts
+api GET /api/v1/admin/support/my-categories
 api GET /api/v1/admin/teams/pending
 api GET /api/v1/admin/tickets
 api GET /api/v1/admin/tickets/{ticket_id}
@@ -549,6 +550,7 @@ api PUT /api/v1/admin/admins/{user_id}/roles
 api PUT /api/v1/admin/legal/faqs/{faq_id}
 api PUT /api/v1/admin/matching-config
 api PUT /api/v1/admin/packs/{pack_id}
+api PUT /api/v1/admin/support/my-categories
 api PUT /api/v1/developer/api-keys/{key_id}/quota
 api PUT /api/v1/developer/api-keys/{key_id}/rate-limit
 api PUT /api/v1/gig/available
@@ -879,6 +881,7 @@ sdk myReferrals
 sdk mySandbox
 sdk mySessions
 sdk mySubscriptions
+sdk mySupportCategories
 sdk myTasks
 sdk myTax
 sdk myTeams
@@ -992,6 +995,7 @@ sdk setFriendRemark
 sdk setGigAvailable
 sdk setKnowledgeUnitStatus
 sdk setMissionTools
+sdk setMySupportCategories
 sdk setNotificationPref
 sdk setSandbox
 sdk setTeamBudget

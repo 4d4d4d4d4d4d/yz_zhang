@@ -66,3 +66,15 @@ class NotificationPref(Base):
     user_id: Mapped[int] = mapped_column(Integer, index=True)
     category: Mapped[str] = mapped_column(String(20))  # task/funds/system
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class SupportAgentScope(Base):
+    """ESCA-061（234 号 spec）客服自己声明负责哪几类工单（funds / account / general）。
+    没声明的客服视为什么都管；没人接手的工单超时提醒优先叫负责这一类的人。"""
+
+    __tablename__ = "support_agent_scopes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    categories: Mapped[list] = mapped_column(JSON, default=list)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
