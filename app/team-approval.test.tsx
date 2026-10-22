@@ -140,3 +140,22 @@ describe('TEAM-064 App 审批通知方式', () => {
     await waitFor(() => expect(calls.find((c) => c.path === '/teams/5/approval-mode')?.body).toEqual({ mode: 'rotate' }));
   });
 });
+
+describe('TEAM-073 App 改派', () => {
+  it('所有者在待批申请上按「改派给 X」；候选去掉发起人与当前指派的人', async () => {
+    const T3 = { ...TEAM, approval_mode: 'rotate', members: [{ user_id: 7, role: 'admin', spend_limit_cents: 0, nickname: '主管' },
+      { user_id: 8, role: 'admin', spend_limit_cents: 0, nickname: '财务主管' }, { user_id: 9, role: 'admin', spend_limit_cents: 0, nickname: '发起的管理员' }] };
+    const calls: Array<{ method: string; path: string; body: unknown }> = [];
+    const client = makeClient({ '/teams/mine': [T3], '/teams/5': T3, '/teams/5/spends': [spend({ assignee_id: 7 })],
+      '/teams/5/spends/11/assign': { id: 11, assignee_id: 8, assignee_nickname: '财务主管', previous_assignee_id: 7 } }, calls);
+    render(<SubScreenHost client={client} screen="teams" onBack={() => undefined} />);
+    await waitFor(() => expect(screen.getByText('某某科技')).toBeTruthy());
+    fireEvent.press(screen.getByText('某某科技'));
+    expect(await screen.findByText('改派给 财务主管')).toBeTruthy();
+    expect(screen.queryByText('改派给 主管')).toBeNull();
+    expect(screen.queryByText('改派给 发起的管理员')).toBeNull();
+    fireEvent.press(screen.getByText('改派给 财务主管'));
+    await waitFor(() => expect(calls.find((c) => c.path === '/teams/5/spends/11/assign')?.body).toEqual({ assignee_id: 8 }));
+    expect(await screen.findByText('已改派给 财务主管，已通知他')).toBeTruthy();
+  });
+});

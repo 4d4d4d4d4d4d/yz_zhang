@@ -132,6 +132,7 @@ import type {
   ReturnableTeamSpend,
   UrgentHint,
   SupportPause,
+  TeamSpendReassigned,
   PlatformGmvTaxPeriods,
   ApiQuotaRequest,
   AdminApiQuotaRequest,
@@ -2179,6 +2180,10 @@ export class PlatformClient {
     return this.request<{ id: number; status: string; decision_reason: string }>(
       'POST', `/teams/${teamId}/spends/${requestId}/decide`, { approve, reason },
     );
+  }
+  /** TEAM-073（243 号 spec）所有者把待批申请改派给指定的审批人（所有者 / 管理员，不能是发起人） */
+  reassignTeamSpend(teamId: number, requestId: number, assigneeId: number) {
+    return this.request<TeamSpendReassigned>('POST', `/teams/${teamId}/spends/${requestId}/assign`, { assignee_id: assigneeId });
   }
   executeTeamSpend(teamId: number, requestId: number) {
     return this.request<{ id: number; status: string; amount_cents: number }>(

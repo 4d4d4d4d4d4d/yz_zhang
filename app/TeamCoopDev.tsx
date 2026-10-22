@@ -233,6 +233,16 @@ function TeamDetailBlock({ client, teamId }: { client: PlatformClient; teamId: n
             {/* TEAM-070（226 号 spec）发起人退回了多少 */}
             {(sp.returned_cents ?? 0) > 0 ? ` · 已退回 ${fmtYuan(sp.returned_cents)}` : ''}
           </Text>
+          {/* TEAM-073（243 号 spec）所有者改派给指定的审批人 */}
+          {sp.status === 'pending' && team.my_role === 'owner' && team.members
+            .filter((m) => (m.role === 'owner' || m.role === 'admin') && m.user_id !== sp.requester_id && m.user_id !== sp.assignee_id)
+            .map((m) => (
+              <Button key={m.user_id} title={`改派给 ${m.nickname || `#${m.user_id}`}`} onPress={() => act(async () => {
+                await client.reassignTeamSpend(teamId, sp.id, m.user_id);
+                setNotice(`已改派给 ${m.nickname || `#${m.user_id}`}，已通知他`);
+                await load();
+              })} />
+            ))}
           {/* TEAM-071（230 号 spec）所有者 / 管理员提醒发起人退回没用完的（一天一次，只提醒不扣钱） */}
           {(team.my_role === 'owner' || team.my_role === 'admin') && (sp.returnable_cents ?? 0) > 0 && (
             <Button title={`提醒退回${sp.return_asked_at ? `（上次 ${formatDateTime(sp.return_asked_at)}）` : ''}`} onPress={() => act(async () => {

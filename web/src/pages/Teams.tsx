@@ -167,6 +167,18 @@ function TeamCard({ teamId }: { teamId: number }) {
                   {s.decision_reason && ` · ${s.decision_reason}`}
                   {/* TEAM-064（236 号 spec）轮流指派时轮到谁 */}
                   {s.status === 'pending' && s.assignee_id && ` · 轮到 ${team.members.find((m) => m.user_id === s.assignee_id)?.nickname || `#${s.assignee_id}`} 审批`}
+                  {/* TEAM-073（243 号 spec）所有者改派给指定的审批人 */}
+                  {s.status === 'pending' && team.my_role === 'owner' && (
+                    <select aria-label={`改派 #${s.id}`} value="" onChange={(e) => {
+                      const to = Number(e.target.value);
+                      const name = team.members.find((m) => m.user_id === to)?.nickname || `#${to}`;
+                      if (to) void act(async () => { await client.reassignTeamSpend(teamId, s.id, to); setNotice(`已改派给 ${name}，已通知他`); });
+                    }}>
+                      <option value="">改派给…</option>
+                      {team.members.filter((m) => (m.role === 'owner' || m.role === 'admin') && m.user_id !== s.requester_id && m.user_id !== s.assignee_id)
+                        .map((m) => <option key={m.user_id} value={m.user_id}>{m.nickname || `#${m.user_id}`}</option>)}
+                    </select>
+                  )}
                   {/* TEAM-070（226 号 spec）发起人退回了多少 */}
                   {(s.returned_cents ?? 0) > 0 && ` · 已退回 ${fmtYuan(s.returned_cents)}`}
                 </p>

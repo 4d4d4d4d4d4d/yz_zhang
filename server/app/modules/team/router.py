@@ -315,6 +315,22 @@ def decide(team_id: int, request_id: int, body: DecideIn,
     return {"id": req.id, "status": req.status, "decision_reason": req.decision_reason}
 
 
+class ReassignIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    assignee_id: int = Field(ge=1)
+
+
+@router.post("/{team_id}/spends/{request_id}/assign")
+def reassign(team_id: int, request_id: int, body: ReassignIn, user: User = Depends(get_current_user),
+             db: Session = Depends(get_db, scope="function")):
+    """TEAM-073（243 号 spec）所有者把待批申请改派给指定的审批人。"""
+    _get(db, team_id)
+    req = db.get(SpendRequest, request_id)
+    if not req or req.team_id != team_id:
+        raise not_found("支出申请不存在")
+    return service.reassign_spend(db, req, user, body.assignee_id)
+
+
 @router.post("/{team_id}/spends/{request_id}/execute")
 def execute(team_id: int, request_id: int, user: User = Depends(get_current_user),
             db: Session = Depends(get_db, scope="function")):

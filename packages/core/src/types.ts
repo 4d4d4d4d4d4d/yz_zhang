@@ -3449,3 +3449,11 @@ export interface PlatformGmvTaxPeriods {
   /** 「口径草稿，申报前请财税确认」 */
   draft_note: string;
 }
+
+/** TEAM-073（243 号 spec）所有者改派一笔待批申请的结果 */
+export interface TeamSpendReassigned {
+  id: number;
+  assignee_id: number;
+  assignee_nickname: string;
+  previous_assignee_id: number | null;
+}
