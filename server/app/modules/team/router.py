@@ -218,6 +218,9 @@ def patch_member(team_id: int, member_user_id: int, body: MemberPatch,
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(m, field, value)
     db.add(m)
+    # TEAM-075（254 号 spec）降为成员后不能再批：指派给他的待批申请交回轮转
+    if m.role not in ("owner", "admin"):
+        service.release_assignments(db, db.get(Team, team_id), m.user_id)
     return {"user_id": m.user_id, "role": m.role,
             "spend_limit_cents": m.spend_limit_cents}
 
@@ -245,6 +248,7 @@ def remove_member(team_id: int, member_user_id: int, handover_to: int | None = N
             raise bad_request("接手人必须是这个团队里的在职成员", "handover_not_member")
     m.active = False
     db.add(m)
+    service.release_assignments(db, team, member_user_id)       # TEAM-075（254 号 spec）
     return {"removed": member_user_id, **service.hand_over(db, team, member_user_id, taker_id, user.id)}
 
 

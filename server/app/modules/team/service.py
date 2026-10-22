@@ -176,6 +176,28 @@ def next_assignee(db: Session, team: Team, candidates: list[int]) -> int:
     return after[0] if after else ordered[0]
 
 
+def release_assignments(db: Session, team: Team, user_id: int) -> int:
+    """TEAM-075（254 号 spec）某人不再能审批（降为成员、被移出）时，指派给他的待批申请交回轮转：
+    轮流模式下轮给下一位能批的人并通知；默认模式（或没人能批）就清掉指派——不能让申请挂在一个批不了的人名下。"""
+    from app.modules.notification.service import notify
+
+    db.flush()
+    moved = 0
+    for req in (db.query(SpendRequest).filter(SpendRequest.team_id == team.user_id, SpendRequest.status == "pending",
+                                              SpendRequest.assignee_id == user_id).order_by(SpendRequest.id).all()):
+        targets = approvers(db, team.user_id, exclude_user_id=req.requester_id)
+        if team.approval_mode == "rotate" and targets:
+            req.assignee_id = next_assignee(db, team, targets)
+            notify(db, req.assignee_id, "team", "支出待审批（原指派人已不能审批）",
+                   f"「{team.name}」一笔 ¥{req.amount_cents / 100:.2f}（{req.purpose or '未填用途'}）的支出申请"
+                   f"原来轮到的人已经不能审批，现在轮到你。")
+        else:
+            req.assignee_id = None
+        db.add(req)
+        moved += 1
+    return moved
+
+
 def can_reassign(req: SpendRequest, member: TeamMember) -> bool:
     """TEAM-073 所有者可以改派；TEAM-074（250 号 spec）轮到的那位管理员可以自己转交给别人。"""
     if req.status != "pending":
