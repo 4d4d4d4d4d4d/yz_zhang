@@ -570,6 +570,9 @@ def _resolve_body_keys(expr: str) -> tuple[set[str], bool]:
 
 # 解析不了的请求体 -> 为什么（值是**理由**，不是布尔）
 DYNAMIC_BODY: dict[tuple[str, str], str] = {
+    ("PUT", "/admin/support/my-categories"): (
+        "ESCA-064（237 号 spec）传了 autoAssign 才带 auto_assign（不传时请求体与 V261 一样）；服务端 SupportScopeIn 认 categories / auto_assign，extra=forbid"
+    ),
     ("POST", "/admin/tickets/{x}/reply"): (
         "ESCA-062（231 号 spec）附了图才带 images（不带图时请求体与 V183 一样只有 reply）；服务端 TicketReplyIn 认 reply / images，extra=forbid"
     ),

@@ -40,6 +40,9 @@ def ask(body: AskIn, user: User = Depends(get_current_user), db: Session = Depen
     ticket = Ticket(user_id=user.id, subject=body.question[:120], body=body.question)
     db.add(ticket)
     db.flush()
+    from .escalation import auto_assign
+
+    auto_assign(db, ticket)       # ESCA-064（237 号 spec）
     return {"answer": "这个问题我还不确定，已为你转接人工客服并生成工单。",
             "source": None, "account_context": context, "escalate_to_human": True,
             "ticket_id": ticket.id}
@@ -98,6 +101,10 @@ def create_ticket(body: TicketIn, user: User = Depends(get_current_user), db: Se
                     priority="urgent" if body.category in URGENT_CATEGORIES else "normal", images=images)
     db.add(ticket)
     db.flush()
+    # ESCA-064（237 号 spec）有客服打开了「自动分给我」就按类别分
+    from .escalation import auto_assign
+
+    auto_assign(db, ticket)
     # ESCA-060（229 号 spec）自选加急、而最近多数被改回一般的：照旧加急，回一句提示
     from .escalation import urgent_downgrades, urgent_hint
 

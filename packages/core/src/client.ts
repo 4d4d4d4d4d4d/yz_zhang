@@ -1715,8 +1715,10 @@ export class PlatformClient {
   mySupportCategories() {
     return this.request<SupportScope>('GET', '/admin/support/my-categories');
   }
-  setMySupportCategories(categories: TicketCategory[]) {
-    return this.request<SupportScope>('PUT', '/admin/support/my-categories', { categories });
+  setMySupportCategories(categories: TicketCategory[], autoAssign?: boolean) {
+    // ESCA-064（237 号 spec）不传 autoAssign 时请求体与以前一样，服务端保持原样
+    return this.request<SupportScope>('PUT', '/admin/support/my-categories',
+      autoAssign === undefined ? { categories } : { categories, auto_assign: autoAssign });
   }
   /** ESCA-058（221 号 spec）后台工单详情：完整往来 */
   adminTicketDetail(ticketId: number) {

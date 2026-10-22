@@ -41,7 +41,7 @@ describe('ESCA-061 我负责的类别', () => {
     fireEvent.click(within(box).getByLabelText(/账号/));
     fireEvent.click(within(box).getByLabelText(/一般/));
     fireEvent.click(within(box).getByText('保存'));
-    await waitFor(() => expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ categories: ['funds'] }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ categories: ['funds'], auto_assign: false }));
     expect(await within(box).findByRole('status')).toBeTruthy();
     fireEvent.click(await screen.findByLabelText(/只看我负责的类别/));
     await waitFor(() => expect(calls.some((c) => c.url.startsWith('/admin/tickets?') && c.url.includes('my_categories=true'))).toBe(true));
@@ -51,5 +51,14 @@ describe('ESCA-061 我负责的类别', () => {
     open([], []);
     await screen.findByText('钱没到账');
     expect(screen.queryByLabelText('我负责的类别')).toBeNull();
+  });
+
+  it('ESCA-064 勾上「新工单自动分给我」一起保存，提示写明会自动分', async () => {
+    const calls: Call[] = [];
+    open({ categories: ['funds'], declared: true, labels: LABELS, auto_assign: false }, calls);
+    const box = await screen.findByLabelText('我负责的类别');
+    fireEvent.click(within(box).getByLabelText('新工单自动分给我'));
+    fireEvent.click(within(box).getByText('保存'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ categories: ['funds'], auto_assign: true }));
   });
 });

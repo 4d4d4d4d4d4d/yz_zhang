@@ -1717,6 +1717,8 @@ export interface SupportScope {
   declared: boolean;
   /** 类别的中文名 */
   labels: Record<string, string>;
+  /** ESCA-064（237 号 spec）新工单自动分给我（老服务端没有） */
+  auto_assign?: boolean;
 }
 /** ESCA-060（229 号 spec）我最近自选加急被改回一般的情况；message 为空就不用提示 */
 export interface UrgentHint {

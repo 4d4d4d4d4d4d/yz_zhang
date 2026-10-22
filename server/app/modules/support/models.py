@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text, UniqueConstraint
+from sqlalchemy import false as sa_false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -78,3 +79,5 @@ class SupportAgentScope(Base):
     user_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
     categories: Mapped[list] = mapped_column(JSON, default=list)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # ESCA-064（237 号 spec）新工单自动分给我（按负责的类别、手上未结的最少的人先分）；默认不分
+    auto_assign: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())

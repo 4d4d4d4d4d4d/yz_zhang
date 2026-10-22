@@ -995,17 +995,19 @@ function TicketQueue() {
   const [scope, setScope] = useState<SupportScope | null>(null);
   const [scopeDraft, setScopeDraft] = useState<TicketCategory[]>([]);
   const [scopeNote, setScopeNote] = useState('');
+  const [autoAssign, setAutoAssign] = useState(false);
   useEffect(() => {
     // 老服务端没有这个接口时不显示这一块（形状不对也当没有）
     client.mySupportCategories().then((r) => {
-      if (r && Array.isArray(r.categories) && r.labels) { setScope(r); setScopeDraft(r.categories); } else setScope(null);
+      if (r && Array.isArray(r.categories) && r.labels) { setScope(r); setScopeDraft(r.categories); setAutoAssign(!!r.auto_assign); } else setScope(null);
     }).catch(() => setScope(null));
   }, [client]);
   async function saveScope() {
     setError(''); setScopeNote('');
     try {
-      const r = await client.setMySupportCategories(scopeDraft);
-      setScope(r); setScopeNote('已保存：没人接手的工单超时，会优先提醒负责这一类的客服');
+      const r = await client.setMySupportCategories(scopeDraft, autoAssign);
+      setScope(r); setScopeNote('已保存：没人接手的工单超时，会优先提醒负责这一类的客服'
+        + (r.auto_assign ? '；这几类的新工单会自动分给你（手上未结的最少的人先分）' : ''));
     } catch (err) { setError(apiErrorText(err)); }
   }
 
@@ -1085,6 +1087,8 @@ function TicketQueue() {
             <label key={c}><input type="checkbox" checked={scopeDraft.includes(c)}
               onChange={(e) => setScopeDraft(e.target.checked ? [...scopeDraft, c] : scopeDraft.filter((x) => x !== c))} /> {scope.labels[c] ?? c}</label>
           ))}
+          {/* ESCA-064（237 号 spec）新工单按类别自动分，手上未结的最少的人先分 */}
+          <label><input type="checkbox" checked={autoAssign} onChange={(e) => setAutoAssign(e.target.checked)} /> 新工单自动分给我</label>
           <button className="ghost" onClick={() => void saveScope()}>保存</button>
           {scopeNote && <span role="status">{scopeNote}</span>}
         </div>

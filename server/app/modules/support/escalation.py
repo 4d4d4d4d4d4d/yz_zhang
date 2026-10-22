@@ -204,3 +204,32 @@ def urgent_hint(self_urgent: int, downgraded: int) -> str:
         return ""
     return (f"你最近 {URGENT_HINT_DAYS} 天选了加急的 {self_urgent} 张工单里，有 {downgraded} 张被客服改回了一般。"
             "加急只留给资金没到账、账号登录或安全这类事：选错会让真正着急的人排在后面。")
+
+
+def auto_assign(db: Session, t: Ticket) -> int | None:
+    """ESCA-064（237 号 spec）新工单按类别自动分：在打开了「自动分给我」、负责这一类的客服里，
+    挑手上未结工单最少的（一样多时编号小的先）。没人打开就不分，照旧进公共队列。"""
+    from app.modules.notification.service import notify
+
+    from .models import SupportAgentScope
+
+    cat = t.category or "general"
+    rows = db.query(SupportAgentScope).filter(SupportAgentScope.auto_assign.is_(True)).all()
+    ids = [r.user_id for r in rows if cat in (r.categories or [])]
+    if not ids:
+        return None
+    users = [u for u in db.query(User).filter(User.id.in_(ids)).all()
+             if u.is_admin and not u.is_banned and not getattr(u, "is_deleted", False) and has_role(u, "support")]
+    if not users:
+        return None
+    from sqlalchemy import func
+
+    load = dict(db.query(Ticket.assignee_id, func.count(Ticket.id))
+                .filter(Ticket.status == "open", Ticket.assignee_id.in_([u.id for u in users]))
+                .group_by(Ticket.assignee_id).all())
+    pick = min(users, key=lambda u: (load.get(u.id, 0), u.id))
+    t.assignee_id, t.claimed_at = pick.id, utcnow()
+    db.add(t)
+    notify(db, pick.id, "system", f"新工单 #{t.id} 分给你了",
+           f"「{t.subject[:40]}」（{CATEGORIES.get(cat, cat)}）。按你负责的类别自动分配：你手上未结的工单最少。")
+    return pick.id

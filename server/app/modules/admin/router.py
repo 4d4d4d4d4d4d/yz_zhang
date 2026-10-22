@@ -346,6 +346,8 @@ def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
 class SupportScopeIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     categories: list[str] = Field(max_length=3)
+    # ESCA-064（237 号 spec）新工单自动分给我；不传就保持原样
+    auto_assign: bool | None = None
 
 
 @router.get("/admin/support/my-categories")
@@ -356,7 +358,7 @@ def my_support_categories(admin: User = Depends(require_role("support")), db: Se
 
     row = db.query(SupportAgentScope).filter(SupportAgentScope.user_id == admin.id).first()
     return {"categories": list(row.categories) if row else list(CATEGORIES), "declared": row is not None,
-            "labels": CATEGORIES}
+            "labels": CATEGORIES, "auto_assign": bool(row.auto_assign) if row else False}
 
 
 @router.put("/admin/support/my-categories")
@@ -373,13 +375,16 @@ def set_my_support_categories(body: SupportScopeIn, admin: User = Depends(requir
         raise bad_request("至少负责一类：都不想管的话请让主管把你的客服角色去掉", "support_categories_empty")
     row = db.query(SupportAgentScope).filter(SupportAgentScope.user_id == admin.id).first()
     if row is None:
-        row = SupportAgentScope(user_id=admin.id, categories=cats)
+        row = SupportAgentScope(user_id=admin.id, categories=cats, auto_assign=bool(body.auto_assign))
     else:
         row.categories, row.updated_at = cats, utcnow()
+        if body.auto_assign is not None:
+            row.auto_assign = body.auto_assign
     db.add(row)
-    record_audit(db, admin.id, "support_scope", "user", admin.id, "、".join(cats))
+    record_audit(db, admin.id, "support_scope", "user", admin.id,
+                 "、".join(cats) + ("；新工单自动分给我" if row.auto_assign else ""))
     db.flush()
-    return {"categories": cats, "declared": True, "labels": CATEGORIES}
+    return {"categories": cats, "declared": True, "labels": CATEGORIES, "auto_assign": bool(row.auto_assign)}
 
 
 # ---------- API-056（235 号 spec）开放 API 账号配额按客户单独调整 ----------
