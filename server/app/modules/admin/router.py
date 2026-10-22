@@ -458,6 +458,33 @@ def support_agents(admin: User = Depends(require_role("super")), db: Session = D
     return out
 
 
+@router.post("/admin/support/agents/{user_id}/pause")
+def pause_support_agent(user_id: int, body: SupportPauseIn, admin: User = Depends(require_role("super")),
+                        db: Session = Depends(get_db, scope="function")):
+    """ESCA-067（256 号 spec）主管替某位客服暂停接单（排班、请假时由主管安排）：同样到点自动恢复。进审计、通知本人。"""
+    from datetime import timedelta
+
+    from app.core.admin_roles import has_role
+    from app.modules.notification.service import notify
+    from app.modules.support.escalation import CATEGORIES
+    from app.modules.support.models import SupportAgentScope
+
+    target = db.get(User, user_id)
+    if target is None or not target.is_admin or target.is_banned or not has_role(target, "support"):
+        raise bad_request("只能给能处理工单的客服设置暂停", "assignee_not_support")
+    row = db.query(SupportAgentScope).filter(SupportAgentScope.user_id == user_id).first()
+    if row is None:
+        row = SupportAgentScope(user_id=user_id, categories=list(CATEGORIES))
+    row.paused_until = utcnow() + timedelta(hours=body.hours)
+    db.add(row)
+    record_audit(db, admin.id, "support_pause_by_supervisor", "user", user_id, f"主管安排暂停接单 {body.hours} 小时")
+    if user_id != admin.id:
+        notify(db, user_id, "system", "主管为你安排了暂停接单",
+               f"{admin.nickname} 为你安排暂停接单 {body.hours} 小时：这段时间新工单不自动分给你，到点自动恢复。手上已接的工单不动。")
+    db.flush()
+    return {"user_id": user_id, "paused_until": iso(row.paused_until)}
+
+
 @router.delete("/admin/support/agents/{user_id}/pause")
 def resume_support_agent(user_id: int, admin: User = Depends(require_role("super")),
                          db: Session = Depends(get_db, scope="function")):

@@ -1798,6 +1798,10 @@ export class PlatformClient {
   supportAgents() {
     return this.request<SupportAgentStatus[]>('GET', '/admin/support/agents').then(listOf);
   }
+  /** ESCA-067（256 号 spec）主管替某位客服暂停接单几个小时 */
+  pauseSupportAgent(userId: number, hours: number) {
+    return this.request<{ user_id: number; paused_until: string }>('POST', `/admin/support/agents/${userId}/pause`, { hours });
+  }
   /** ESCA-066 主管替某位客服恢复接单 */
   resumeSupportAgent(userId: number) {
     return this.request<{ user_id: number; paused_until: null }>('DELETE', `/admin/support/agents/${userId}/pause`);

@@ -1084,7 +1084,14 @@ function SupportAgentBoard() {
               <td>{r.auto_assign ? '开' : '关'}</td>
               <td>{r.paused_until ? `暂停到 ${formatDateTime(r.paused_until)}` : '在岗'}</td>
               <td>{r.open_tickets}</td>
-              <td>{r.paused_until && <button className="ghost" onClick={async () => {
+              <td>{!r.paused_until && <button className="ghost" onClick={async () => {
+                const hours = Number(window.prompt(`给 ${r.nickname || `#${r.user_id}`} 暂停接单几小时？（1~720）`, '8') ?? '');
+                if (!hours) return;
+                setError(''); setNotice('');
+                try { await client.pauseSupportAgent(r.user_id, hours); setNotice(`已为 ${r.nickname || `#${r.user_id}`} 暂停接单 ${hours} 小时，已通知他`); await load(); }
+                catch (e) { setError(apiErrorText(e)); }
+              }}>替他暂停</button>}
+                {r.paused_until && <button className="ghost" onClick={async () => {
                 setError(''); setNotice('');
                 try { await client.resumeSupportAgent(r.user_id); setNotice(`已恢复 ${r.nickname || `#${r.user_id}`} 的接单，已通知他`); await load(); }
                 catch (e) { setError(apiErrorText(e)); }

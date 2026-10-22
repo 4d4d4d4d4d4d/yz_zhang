@@ -63,3 +63,25 @@ def test_only_supervisors(client):
     b = _admin(client, "13800348012", ["support"])
     assert client.get(BOARD, headers=auth(b)).status_code == 403, "普通客服看不到全体"
     assert client.delete(f"{BOARD}/{a['id']}/pause", headers=auth(b)).status_code == 403, "也不能替别人恢复"
+
+
+def test_esca067_supervisor_pauses_an_agent(client):
+    """ESCA-067（256 号 spec）主管替客服安排暂停：到点自动恢复、通知本人、进审计；自动分配照样跳过他。"""
+    boss = _admin(client, "13800348021", ["super"])
+    a = _admin(client, "13800348022", ["support"])
+    b = _admin(client, "13800348023", ["support"])
+    for x in (a, b):
+        client.put(f"{API}/admin/support/my-categories", json={"categories": ["funds"], "auto_assign": True}, headers=auth(x))
+    r = client.post(f"{BOARD}/{a['id']}/pause", json={"hours": 24}, headers=auth(boss))
+    assert r.status_code == 200 and r.json()["paused_until"]
+    assert client.get(f"{API}/admin/support/my-categories", headers=auth(a)).json()["paused_until"] == r.json()["paused_until"]
+    assert "主管为你安排了暂停接单" in _titles(client, a)
+    t = _ticket(client, "13800348024", "funds")
+    with SessionLocal() as db:
+        assert db.get(Ticket, t).assignee_id == b["id"], "暂停中的人照样被自动分配跳过"
+        assert db.query(AdminAudit).filter(AdminAudit.action == "support_pause_by_supervisor").count() == 1
+    fin = _admin(client, "13800348025", ["finance"])
+    bad = client.post(f"{BOARD}/{fin['id']}/pause", json={"hours": 2}, headers=auth(boss))
+    assert bad.status_code == 400 and bad.json()["detail"]["code"] == "assignee_not_support"
+    assert client.post(f"{BOARD}/{b['id']}/pause", json={"hours": 2}, headers=auth(a)).status_code == 403, "普通客服不能替别人暂停"
+    assert client.post(f"{BOARD}/{b['id']}/pause", json={"hours": 0}, headers=auth(boss)).status_code == 422

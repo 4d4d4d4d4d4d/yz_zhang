@@ -17,19 +17,20 @@ const AGENTS = [
   { user_id: 2, nickname: '客服甲', categories: ['funds'], declared: true, auto_assign: true, paused_until: '2026-10-22T10:00:00Z', open_tickets: 0 },
   { user_id: 3, nickname: '客服乙', categories: ['funds', 'account', 'general'], declared: false, auto_assign: false, paused_until: null, open_tickets: 4 },
 ];
-type Call = { method: string; path: string };
+type Call = { method: string; path: string; body?: unknown };
 
 function open(roles: string[], calls: Call[]) {
   localStorage.setItem('token', 'tok');
   let resumed = false;
-  const fetchImpl = vi.fn(async (url: string, init?: { method?: string }) => {
+  const fetchImpl = vi.fn(async (url: string, init?: { method?: string; body?: string }) => {
     const p = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
     const method = init?.method ?? 'GET';
-    calls.push({ method, path: p });
+    calls.push({ method, path: p, body: init?.body ? JSON.parse(init.body) : undefined });
     if (method === 'DELETE' && p === '/admin/support/agents/2/pause') resumed = true;
     const body = p === '/users/me' ? ME(roles) : p === '/admin/tickets' ? [ROW]
       : p === '/admin/support/agents' ? (resumed ? [{ ...AGENTS[0], paused_until: null }, AGENTS[1]] : AGENTS)
       : p === '/admin/support/agents/2/pause' ? { user_id: 2, paused_until: null }
+      : p === '/admin/support/agents/3/pause' ? { user_id: 3, paused_until: '2026-10-22T14:00:00Z' }
       : p === '/admin/admins' ? { admins: [] }
       : p === '/admin/aml/activities' ? { items: [], note: '' } : [];
     return { ok: true, status: 200, text: async () => JSON.stringify(body), headers: { get: () => null } };
@@ -62,4 +63,17 @@ describe('ESCA-066 客服状态', () => {
     await screen.findByText('钱没到账');
     expect(screen.queryByText('看客服状态')).toBeNull();
   });
+
+  it('ESCA-067 主管替在岗的客服安排暂停：问几小时、带上小时数', async () => {
+    const calls: Call[] = [];
+    open(['super'], calls);
+    fireEvent.click(await screen.findByText('看客服状态'));
+    const box = await screen.findByLabelText('客服状态');
+    expect(within(within(box).getByTestId('agent-2')).queryByText('替他暂停')).toBeNull();
+    vi.spyOn(window, 'prompt').mockReturnValueOnce('4');
+    fireEvent.click(within(within(box).getByTestId('agent-3')).getByText('替他暂停'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/admin/support/agents/3/pause')?.body).toEqual({ hours: 4 }));
+    expect((await within(box).findByRole('status')).textContent).toBe('已为 客服乙 暂停接单 4 小时，已通知他');
+  });
 });
+
