@@ -57,6 +57,8 @@ REACHED_BY: dict[str, str] = {
     "/admin/support/my-pause": "pauseMySupport",
     # ESCA-066（248 号 spec）工单台「客服状态」（主管）
     "/admin/support/agents": "supportAgents",
+    # NTF-071（252 号 spec）发过的公告「分类目看阅读率」
+    "/admin/announcements/{x}/read-by-category": "announcementReadByCategory",
     "/admin/support/agents/{x}/pause": "resumeSupportAgent",
     # FIN-062（242 号 spec）后台「平台财务 · 按期间」下的「成交额与代扣税」
     "/admin/platform-finance/gmv-tax": "platformGmvTax",

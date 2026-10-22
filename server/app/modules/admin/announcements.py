@@ -202,6 +202,38 @@ def read_counts(db: Session, ids: list[int]) -> dict[int, int]:
     return {k: int(v) for k, v in rows}
 
 
+def read_by_category(db: Session, ann: Announcement) -> dict:
+    """NTF-071（252 号 spec）多类目公告按类目拆开看阅读率：每个类目里收到了几个人、点开了几个。
+    类目归属按**发出时**算（发出前 180 天在这类发过单 / 报过名），与圈人时同一口径；一个人可以同时属于几个类目。"""
+    from app.modules.notification.models import Notification
+    from app.modules.task.models import Application, Task
+
+    cats = list(ann.categories or []) or ([ann.category] if ann.category else [])
+    base = {"announcement_id": ann.id, "categories": []}
+    if not cats or ann.sent_at is None:
+        return {**base, "overlap": 0, "note": "这条公告没有按类目定向，或还没发出"}
+    got = {uid: bool(read) for uid, read in db.query(Notification.user_id, Notification.is_read)
+           .filter(Notification.announcement_id == ann.id)}
+    since = ann.sent_at - timedelta(days=ACTIVE_DAYS)
+    seen: dict[int, int] = {}
+    rows = []
+    for c in cats:
+        members: set[int] = set()
+        if (ann.audience or "all") in ("all", "publishers"):
+            members |= {u for (u,) in db.query(Task.creator_id).filter(
+                Task.category == c, Task.created_at >= since, Task.created_at <= ann.sent_at)}
+        if (ann.audience or "all") in ("all", "workers"):
+            members |= {u for (u,) in db.query(Application.applicant_id).join(Task, Task.id == Application.task_id).filter(
+                Task.category == c, Application.created_at >= since, Application.created_at <= ann.sent_at)}
+        hit = [u for u in got if u in members]
+        for u in hit:
+            seen[u] = seen.get(u, 0) + 1
+        read = sum(1 for u in hit if got[u])
+        rows.append({"category": c, "delivered": len(hit), "read": read,
+                     "read_rate": round(read / len(hit), 3) if hit else None})
+    return {**base, "categories": rows, "overlap": sum(1 for v in seen.values() if v > 1), "note": ""}
+
+
 def row(a: Announcement, read: int | None = None) -> dict:
     out = _row(a)
     # NTF-067（159 号 spec）阅读率：已读人数 / 送达人数

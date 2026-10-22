@@ -107,3 +107,42 @@ def test_ntf070_several_categories_are_a_union_and_only_echoed_when_more_than_on
     _assert_shape(rows[0], "AnnouncementRow")
     with SessionLocal() as db:
         assert any("类目「设计、跑腿」" in a.detail for a in db.query(AdminAudit).filter(AdminAudit.action == "announcement_send"))
+
+
+def test_ntf071_read_rate_split_by_category(client):
+    """NTF-071（252 号 spec）多类目公告按类目拆开看阅读率；一个人同时属于两类时两边都算，另报重叠人数。"""
+    from app.modules.notification.models import Notification
+
+    _categories("跑腿", "设计")
+    ops = _ops(client)
+    sh, bj, old = _people(client)                     # 上海：跑腿发单；北京：跑腿报名
+    designer = register(client, "13800320034", "做设计的")
+    with SessionLocal() as db:
+        db.add(Task(creator_id=designer["id"], title="logo", description="", category="设计", budget_cents=10000,
+                    status="published", visibility="public"))
+        db.add(Task(creator_id=sh["id"], title="海报", description="", category="设计", budget_cents=10000,
+                    status="published", visibility="public"))       # 上海那位也在设计类发过单：两类都算
+        db.commit()
+    single = client.post(URL, json={"title": "单类目", "body": "x", "category": "跑腿"}, headers=auth(ops)).json()
+    r = client.post(URL, json={"title": "多类目", "body": "x", "category": "跑腿", "categories": ["设计"]}, headers=auth(ops)).json()
+    assert r["delivered"] == 3
+    with SessionLocal() as db:
+        for uid in (sh["id"], designer["id"]):
+            db.query(Notification).filter(Notification.user_id == uid, Notification.announcement_id == r["id"]).one().is_read = True
+        db.commit()
+    v = client.get(f"{URL}/{r['id']}/read-by-category", headers=auth(ops)).json()
+    from tests.test_client_shape_alignment import _assert_shape
+
+    _assert_shape(v, "AnnouncementReadByCategory")
+    rows = {x["category"]: x for x in v["categories"]}
+    assert (rows["跑腿"]["delivered"], rows["跑腿"]["read"], rows["跑腿"]["read_rate"]) == (2, 1, 0.5)
+    assert (rows["设计"]["delivered"], rows["设计"]["read"], rows["设计"]["read_rate"]) == (2, 2, 1.0)
+    assert v["overlap"] == 1, "上海那位两类都算"
+    s = client.get(f"{URL}/{single['id']}/read-by-category", headers=auth(ops)).json()
+    assert [x["category"] for x in s["categories"]] == ["跑腿"]
+    plain = client.post(URL, json={"title": "不限类目", "body": "x"}, headers=auth(ops)).json()
+    p = client.get(f"{URL}/{plain['id']}/read-by-category", headers=auth(ops)).json()
+    assert p["categories"] == [] and "没有按类目定向" in p["note"]
+    assert client.get(f"{URL}/999999/read-by-category", headers=auth(ops)).status_code == 404
+    other = register(client, "13800320035", "路人")
+    assert client.get(f"{URL}/{r['id']}/read-by-category", headers=auth(other)).status_code == 403

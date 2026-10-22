@@ -26,6 +26,8 @@ function open(calls: Call[]) {
       : path === '/admin/announcements/preview' ? { audience: 80, verified_only: false, city: '', audience_kind: 'workers', category: '跑腿',
         title: '跑腿规则调整', body: '', warnings: [] }
       : method === 'POST' && path === '/admin/announcements' ? { delivered: 80, id: 6, status: 'sent', scheduled_at: null }
+      : path === '/admin/announcements/6/read-by-category' ? { announcement_id: 6, overlap: 1, note: '',
+          categories: [{ category: '跑腿', delivered: 2, read: 1, read_rate: 0.5 }, { category: '设计', delivered: 2, read: 2, read_rate: 1 }] }
       : path === '/admin/aml/activities' ? { items: [], note: '' } : [];
     return { ok: true, status: 200, text: async () => JSON.stringify(body), headers: { get: () => null } };
   }) as unknown as typeof fetch;
@@ -71,6 +73,19 @@ describe('NTF-068 公告按类目定向', () => {
     await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/admin/announcements')?.body)
       .toMatchObject({ category: '跑腿', categories: ['设计'] }));
     expect((await screen.findByLabelText('发过的公告')).textContent).toContain('（类目「跑腿、设计」）');
+  });
+
+  it('NTF-071 多类目的公告能分类目看阅读率；单类目的不显示', async () => {
+    const calls: Call[] = [];
+    open(calls);
+    const table = await screen.findByLabelText('发过的公告');
+    const btns = await within(table).findAllByText('分类目');
+    expect(btns).toHaveLength(1);
+    fireEvent.click(btns[0]);
+    const box = await screen.findByTestId('cat-reads-6');
+    expect(box.textContent).toContain('跑腿：1/2 人（50%）');
+    expect(box.textContent).toContain('设计：2/2 人（100%）');
+    expect(box.textContent).toContain('1 人同时属于几个类目');
   });
 });
 

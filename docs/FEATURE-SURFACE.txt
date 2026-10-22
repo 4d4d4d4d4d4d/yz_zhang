@@ -31,6 +31,7 @@ api GET /api/v1/admin/agents
 api GET /api/v1/admin/aml/activities
 api GET /api/v1/admin/aml/stats
 api GET /api/v1/admin/announcements
+api GET /api/v1/admin/announcements/{announcement_id}/read-by-category
 api GET /api/v1/admin/api-accounts/quotas
 api GET /api/v1/admin/api-quota-requests
 api GET /api/v1/admin/audit-log
@@ -686,6 +687,7 @@ sdk agents
 sdk amlActivities
 sdk amlStats
 sdk anchorCoverage
+sdk announcementReadByCategory
 sdk announcements
 sdk apiAccountQuotas
 sdk apiKeyUsage

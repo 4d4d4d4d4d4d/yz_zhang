@@ -1029,6 +1029,19 @@ def list_announcements(status: str = "", limit: int = Query(50, ge=1, le=200), o
     return [ann_svc.row(a, reads.get(a.id, 0)) for a in rows]
 
 
+@router.get("/admin/announcements/{announcement_id}/read-by-category")
+def announcement_read_by_category(announcement_id: int, admin: User = Depends(require_role("ops")),
+                                  db: Session = Depends(get_db, scope="function")):
+    """NTF-071（252 号 spec）按类目定向的公告：每个类目收到几人、点开几人。"""
+    from . import announcements as ann_svc
+    from .models import Announcement
+
+    ann = db.get(Announcement, announcement_id)
+    if ann is None:
+        raise not_found("没有这条公告")
+    return ann_svc.read_by_category(db, ann)
+
+
 @router.post("/admin/announcements/{announcement_id}/cancel")
 def cancel_announcement(announcement_id: int, body: AnnouncementCloseIn, admin: User = Depends(require_role("ops")),
                         db: Session = Depends(get_db, scope="function")):

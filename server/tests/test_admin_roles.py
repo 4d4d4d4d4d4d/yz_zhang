@@ -45,7 +45,8 @@ ROUTE_ROLES = {
     "POST /admin/api-quota-requests/{request_id}/approve": ('ops',),
     "POST /admin/api-quota-requests/{request_id}/reject": ('ops',),               # ESCA-065（240 号 spec）
     "DELETE /admin/support/my-pause": ('support',),
-    "GET /admin/support/agents": ('super',),                    # ESCA-066（248 号 spec）
+    "GET /admin/support/agents": ('super',),
+    "GET /admin/announcements/{announcement_id}/read-by-category": ('ops',),   # NTF-071（252 号 spec）                    # ESCA-066（248 号 spec）
     "DELETE /admin/support/agents/{user_id}/pause": ('super',),
     "GET /admin/api-accounts/quotas": ('ops',),                 # API-056（235 号 spec）
     "PUT /admin/api-accounts/{user_id}/quota": ('ops',),

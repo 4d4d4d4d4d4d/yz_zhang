@@ -132,6 +132,7 @@ import type {
   ReturnableTeamSpend,
   UrgentHint,
   SupportPause,
+  AnnouncementReadByCategory,
   MissionMethodSuggestions,
   SupportAgentStatus,
   NbMethodHistory,
@@ -864,6 +865,10 @@ export class PlatformClient {
   /** NTF-064 公告记录（最新的在前） */
   announcements(status = '') {
     return this.request<AnnouncementRow[]>('GET', `/admin/announcements${qs({ status })}`).then(listOf);
+  }
+  /** NTF-071（252 号 spec）按类目定向的公告：每个类目收到几人、点开几人 */
+  announcementReadByCategory(id: number) {
+    return this.request<AnnouncementReadByCategory>('GET', `/admin/announcements/${id}/read-by-category`);
   }
   /** NTF-064 取消还没发出的定时公告 */
   cancelAnnouncement(id: number, reason = '') {

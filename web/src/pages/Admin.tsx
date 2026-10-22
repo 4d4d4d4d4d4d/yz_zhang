@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type TicketCategory, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -657,7 +657,9 @@ function Announcement() {
                 <td>{formatDateTime(a.sent_at ?? a.scheduled_at ?? a.created_at)}</td>
                 <td>{a.status === 'scheduled' ? '—' : a.delivered}</td>
                 {/* NTF-067（159 号 spec）阅读率 */}
-                <td>{typeof a.read_rate === 'number' ? `${a.read} 人（${Math.round(a.read_rate * 100)}%）` : '—'}</td>
+                <td>{typeof a.read_rate === 'number' ? `${a.read} 人（${Math.round(a.read_rate * 100)}%）` : '—'}
+                  {/* NTF-071（252 号 spec）多类目的公告按类目拆开看 */}
+                  {(a.categories?.length ?? 0) > 1 && a.status !== 'scheduled' && <CategoryReads id={a.id} />}</td>
                 <td>
                   {a.status === 'scheduled' && <button className="ghost" onClick={() => void run(async () => {
                     await client.cancelAnnouncement(a.id, prompt('取消的原因（可不填）：') ?? '');
@@ -676,6 +678,24 @@ function Announcement() {
           </tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+/** NTF-071（252 号 spec）每个类目收到几人、点开几人；点开才加载 */
+function CategoryReads({ id }: { id: number }) {
+  const { client } = useApp();
+  const [v, setV] = useState<AnnouncementReadByCategory | null>(null);
+  const [error, setError] = useState('');
+  if (!v) {
+    return <>{error && <span className="error">{error}</span>}<button className="text-link" onClick={() => void client.announcementReadByCategory(id)
+      .then(setV, (e) => setError(apiErrorText(e)))}>分类目</button></>;
+  }
+  const rows = Array.isArray(v.categories) ? v.categories : [];
+  return (
+    <div data-testid={`cat-reads-${id}`} className="muted">
+      {rows.map((r) => <div key={r.category}>{r.category}：{r.read}/{r.delivered} 人{typeof r.read_rate === 'number' ? `（${Math.round(r.read_rate * 100)}%）` : ''}</div>)}
+      {v.overlap > 0 && <div>{v.overlap} 人同时属于几个类目，各类都算了一次</div>}
     </div>
   );
 }

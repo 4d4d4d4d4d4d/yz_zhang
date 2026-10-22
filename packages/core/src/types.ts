@@ -3493,3 +3493,11 @@ export interface MissionMethodSuggestions {
   /** 没有建议时的说明 */
   note: string;
 }
+
+/** NTF-071（252 号 spec）多类目公告按类目拆开的阅读率（类目归属按发出时算；一个人可同时属于几类，overlap 是这样的人数） */
+export interface AnnouncementReadByCategory {
+  announcement_id: number;
+  categories: Array<{ category: string; delivered: number; read: number; read_rate: number | null }>;
+  overlap: number;
+  note: string;
+}
