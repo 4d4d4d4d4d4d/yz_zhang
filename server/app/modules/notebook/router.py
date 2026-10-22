@@ -405,6 +405,15 @@ def _replace_steps(db: Session, m: NbMethod, steps: list) -> None:
     db.add(NbMethodVersion(method_id=m.id, owner_id=m.owner_id, version=m.version or 1, steps=list(m.steps or [])))
     m.version = (m.version or 1) + 1
     m.steps = steps
+    db.flush()
+    # AGT-099（253 号 spec）只留最近 METHOD_HISTORY_KEEP 个旧版：更早的删掉（版本号照旧递增，不复用）
+    stale = (db.query(NbMethodVersion.id).filter(NbMethodVersion.method_id == m.id)
+             .order_by(NbMethodVersion.version.desc()).offset(METHOD_HISTORY_KEEP).all())
+    if stale:
+        db.query(NbMethodVersion).filter(NbMethodVersion.id.in_([i for (i,) in stale])).delete(synchronize_session=False)
+
+
+METHOD_HISTORY_KEEP = 20
 
 
 @router.get("/notebook/methods/{method_id}/versions")
@@ -416,6 +425,8 @@ def method_versions(method_id: int, user: User = Depends(get_current_user), db: 
     olds = (db.query(NbMethodVersion).filter(NbMethodVersion.method_id == m.id)
             .order_by(NbMethodVersion.version.desc()).all())
     return {"method_id": m.id, "current": {"version": m.version or 1, "steps": m.steps or []},
+            # AGT-099（253 号 spec）最多保留几个旧版
+            "max_kept": METHOD_HISTORY_KEEP,
             "versions": [{"version": v.version, "steps": v.steps or [], "replaced_at": iso(v.replaced_at)} for v in olds]}
 
 

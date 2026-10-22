@@ -15,7 +15,7 @@ V2 = [{"title": "先列清单", "note": ""}] + STEPS
 def test_history_keeps_old_steps_and_restore_is_itself_a_new_version(client, requester):
     m = _method(client, requester)
     h = client.get(f"{URL}/{m['id']}/versions", headers=auth(requester)).json()
-    assert h == {"method_id": m["id"], "current": {"version": 1, "steps": STEPS}, "versions": []}
+    assert h == {"method_id": m["id"], "current": {"version": 1, "steps": STEPS}, "versions": [], "max_kept": 20}
     client.patch(f"{URL}/{m['id']}", json={"name": "改个名"}, headers=auth(requester))
     assert client.get(f"{URL}/{m['id']}/versions", headers=auth(requester)).json()["versions"] == [], "改名不存旧版"
     client.patch(f"{URL}/{m['id']}", json={"steps": V2}, headers=auth(requester))
@@ -52,3 +52,24 @@ def test_history_is_private_and_goes_away_with_the_method(client, requester):
     client.delete(f"{URL}/{m['id']}", headers=auth(requester))
     with SessionLocal() as db:
         assert db.query(NbMethodVersion).filter(NbMethodVersion.method_id == m["id"]).count() == 0, "删方法连旧版一起删"
+
+
+def test_agt099_only_the_latest_old_versions_are_kept(client, requester, monkeypatch):
+    """AGT-099（253 号 spec）历史只留最近若干个旧版；更早的删掉，版本号照旧递增、不复用。"""
+    from app.modules.notebook import router as nb
+
+    monkeypatch.setattr(nb, "METHOD_HISTORY_KEEP", 3)
+    m = _method(client, requester)
+    for i in range(5):
+        client.patch(f"{URL}/{m['id']}", json={"steps": [{"title": f"第 {i} 种做法", "note": ""}]}, headers=auth(requester))
+    h = client.get(f"{URL}/{m['id']}/versions", headers=auth(requester)).json()
+    assert h["current"]["version"] == 6 and h["max_kept"] == 3
+    assert [v["version"] for v in h["versions"]] == [5, 4, 3], "只留最近 3 个旧版"
+    with SessionLocal() as db:
+        assert db.query(NbMethodVersion).filter(NbMethodVersion.method_id == m["id"]).count() == 3
+    other = _method(client, requester, "另一个方法")
+    client.patch(f"{URL}/{other['id']}", json={"steps": V2}, headers=auth(requester))
+    with SessionLocal() as db:
+        assert db.query(NbMethodVersion).filter(NbMethodVersion.method_id == m["id"]).count() == 3, "清理只按同一个方法算"
+        assert db.query(NbMethodVersion).filter(NbMethodVersion.method_id == other["id"]).count() == 1, "别的方法的旧版不被挤掉"
+    assert client.post(f"{URL}/{m['id']}/versions/2/restore", headers=auth(requester)).status_code == 404, "清理掉的版本退不回去"

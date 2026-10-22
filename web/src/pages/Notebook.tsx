@@ -327,7 +327,8 @@ function MethodHistory({ id, onRestored }: { id: number; onRestored: () => void 
   const newer = (i: number) => (i === 0 ? h.current.steps : vs[i - 1].steps);
   return (
     <div data-testid={`method-history-${id}`}>
-      <p className="muted">现在是第 {h.current.version} 版。{vs.length ? '' : '记版本之前改过的步骤没有存下来。'}</p>
+      <p className="muted">现在是第 {h.current.version} 版。{vs.length ? '' : '记版本之前改过的步骤没有存下来。'}
+        {h.max_kept && vs.length >= h.max_kept ? `只保留最近 ${h.max_kept} 个旧版，更早的已经清理。` : ''}</p>
       {vs.map((v, i) => (
         <div key={v.version} className="row">
           <span className="grow">第 {v.version} 版（{formatDateTime(v.replaced_at)} 被替换）：{v.steps.map((s) => s.title).join(' → ')}

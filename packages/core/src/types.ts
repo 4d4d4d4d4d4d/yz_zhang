@@ -3468,6 +3468,8 @@ export interface TeamSpendReassigned {
 export interface NbMethodHistory {
   method_id: number;
   current: { version: number; steps: WbStep[] };
+  /** AGT-099（253 号 spec）最多保留最近几个旧版（更早的已清理；老服务端没有） */
+  max_kept?: number;
   versions: Array<{ version: number; steps: WbStep[]; replaced_at: string }>;
 }
 
