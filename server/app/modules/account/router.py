@@ -760,9 +760,10 @@ def _export_tickets(db: Session, user_id: int) -> list[dict]:
                   .order_by(TicketReply.id)):
             replies.setdefault(r.ticket_id, []).append(
                 {"body": r.body, "from": "客服" if r.is_staff else "我", "created_at": iso(r.created_at),
-                 "images": r.images or []})
+                 # ESCA-057（227 号 spec）有截图才带这一项：没附图的导出与以前一模一样
+                 **({"images": r.images} if r.images else {})})
     return [{"id": t.id, "subject": t.subject, "body": t.body, "status": t.status, "created_at": iso(t.created_at),
-             "replies": replies.get(t.id, []), "images": t.images or []} for t in rows]
+             "replies": replies.get(t.id, []), **({"images": t.images} if t.images else {})} for t in rows]
 
 
 def _export_gig(db: Session, user_id: int) -> dict:
