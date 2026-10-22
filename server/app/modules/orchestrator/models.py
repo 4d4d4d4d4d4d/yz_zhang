@@ -65,6 +65,8 @@ class Mission(Base):
     allow_tools: Mapped[bool] = mapped_column(Boolean, default=False)
     # AGT-094（164 号 spec）用本人的「我的方法」作第一轮计划：按方法的步骤拆，不调模型
     method_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # AGT-097（239 号 spec）用的是方法的第几版（记版本之前建的编排为空）
+    method_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # ORC-005 验收标准：每步产出按此校验（人工验收 + 规则校验的依据）
     acceptance_criteria: Mapped[list] = mapped_column(JSON, default=list)
     last_error: Mapped[str] = mapped_column(String(300), default="")

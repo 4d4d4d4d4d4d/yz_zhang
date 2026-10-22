@@ -133,6 +133,24 @@ describe('KB-100 个人知识库', () => {
     expect(screen.queryByTestId('method-stats-9')).toBeNull();
   });
 
+  it('AGT-097 改过步骤的方法按版本分开看效果；只用过一版的不分', async () => {
+    const base = { description: '', steps: [{ title: '打包', note: '' }], source_note_ids: [], uses: 3, created_at: '', updated_at: '' };
+    const ver = (version: number, total: number, ok: number, bad: number, rate: number | null) =>
+      ({ version, missions_total: total, missions_succeeded: ok, missions_failed: bad, missions_spent_cents: 0, success_rate: rate });
+    const rows = [
+      { ...base, id: 7, name: '搬家做法', missions_total: 7, missions_succeeded: 4, missions_failed: 3, missions_spent_cents: 0, success_rate: 0.57,
+        version: 2, versions: [ver(2, 4, 3, 1, 0.75), ver(1, 3, 1, 2, 0.33)] },
+      { ...base, id: 8, name: '报税流程', missions_total: 3, missions_succeeded: 2, missions_failed: 1, missions_spent_cents: 0, success_rate: 0.67,
+        version: 1, versions: [ver(1, 3, 2, 1, 0.67)] },
+    ];
+    open('/notebook?tab=methods', { '/users/me': ME, '/notebook/summary': SUMMARY, 'GET /notebook/methods': rows });
+    const box = await screen.findByTestId('method-versions-7');
+    expect(box.textContent).toContain('第 1 版成功率 33% → 第 2 版 75%：改了之后变好了');
+    expect(box.textContent).toContain('第 2 版：用过 4 次，做成 3、没成 1');
+    expect(box.textContent).toContain('第 1 版：用过 3 次，做成 1、没成 2');
+    expect(screen.queryByTestId('method-versions-8')).toBeNull();
+  });
+
   it('工作台任务里：相关笔记摆在眼前，能套用我的方法', async () => {
     const calls: Call[] = [];
     open('/workbench?tab=all&item=5', {

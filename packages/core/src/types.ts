@@ -918,6 +918,8 @@ export interface Mission {
   acceptance_criteria: string[];
   /** AGT-094（164 号 spec）第一轮按哪个「我的方法」拆；null 表示由 AI 分解 */
   method_id: number | null;
+  /** AGT-097（239 号 spec）用的是方法的第几版 */
+  method_version: number | null;
   last_error: string;
   created_at: string;
 }
@@ -2500,8 +2502,20 @@ export interface NbMethod {
   missions_spent_cents: number;
   /** 做完（成或败）的少于 3 个时为 null：小样本不给比率 */
   success_rate: number | null;
+  /** AGT-097（239 号 spec）当前是第几版（改了步骤升一版）与每一版各自的效果，新版在前 */
+  version: number;
+  versions: NbMethodVersionStats[];
   created_at: string;
   updated_at: string;
+}
+/** AGT-097 方法某一版的效果；version 为 null 的一组是记版本之前建的编排 */
+export interface NbMethodVersionStats {
+  version: number | null;
+  missions_total: number;
+  missions_succeeded: number;
+  missions_failed: number;
+  missions_spent_cents: number;
+  success_rate: number | null;
 }
 export interface NbMethodDraft {
   name: string;

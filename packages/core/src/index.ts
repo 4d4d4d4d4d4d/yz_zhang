@@ -21,3 +21,4 @@ export * from './teamInviteUsage';
 export * from './apiQuota';
 export * from './tickets';
 export * from './session';
+export * from './methodVersions';

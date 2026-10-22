@@ -1,6 +1,6 @@
 import {
   asList,
-  apiErrorText, fmtYuan, formatDateTime,
+  apiErrorText, fmtYuan, formatDateTime, methodVersionCompare, methodVersionLines,
   type NbAnswer, type NbMethod, type NbMethodDraft, type NbNote, type NbNoteBrief, type NbSummary, type NbTodoDraft,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -265,6 +265,13 @@ function Methods({ version }: { version: number }) {
             {/* AGT-095（168 号 spec）按它拆过的编排做得怎么样 */}
             {m.missions_total > 0 && <span className="muted" data-testid={`method-stats-${m.id}`}>{methodStats(m)}</span>}
             <button className="danger" onClick={() => void client.deleteMethod(m.id).then(() => setV(v + 1)).catch((e) => setError(apiErrorText(e)))}>删除</button></div>
+          {/* AGT-097（239 号 spec）改过步骤的方法按版本分开看效果 */}
+          {(methodVersionCompare(m) || methodVersionLines(m).length > 0) && (
+            <div data-testid={`method-versions-${m.id}`}>
+              {methodVersionCompare(m) && <p>{methodVersionCompare(m)}</p>}
+              {methodVersionLines(m).map((l) => <p key={l} className="muted">{l}</p>)}
+            </div>
+          )}
           <ol>{m.steps.map((s, n) => <li key={n}>{s.title}{s.note && <span className="muted"> · {s.note}</span>}</li>)}</ol>
         </div>
       ))}

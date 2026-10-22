@@ -51,7 +51,7 @@ def _dump(m: Mission) -> dict:
         "iteration": m.iteration, "max_iterations": m.max_iterations,
         "completion_pct": m.completion_pct, "quality_pct": m.quality_pct,
         "model_calls": m.model_calls, "allow_agents": m.allow_agents, "allow_tools": m.allow_tools,
-        "acceptance_criteria": m.acceptance_criteria, "method_id": m.method_id,
+        "acceptance_criteria": m.acceptance_criteria, "method_id": m.method_id, "method_version": m.method_version,
         "last_error": m.last_error, "created_at": iso(m.created_at),
     }
 
@@ -78,7 +78,7 @@ def create_mission(
             raise not_found("没有这个方法")
         method.uses = (method.uses or 0) + 1
         db.add(method)
-    m = Mission(method_id=body.method_id,
+    m = Mission(method_id=body.method_id, method_version=method.version if body.method_id is not None else None,
         owner_id=user.id, goal=body.goal, detail=body.detail, category=body.category,
         budget_cap_cents=body.budget_cap_cents, max_iterations=body.max_iterations,
         acceptance_criteria=body.acceptance_criteria, allow_agents=body.allow_agents,

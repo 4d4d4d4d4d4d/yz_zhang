@@ -82,6 +82,18 @@ describe('KB-100 App 上的个人知识库', () => {
     expect(screen.getByText(/成功率 75%/)).toBeTruthy();
   });
 
+  it('AGT-097 改过步骤的方法按版本分开看效果', async () => {
+    const ver = (version: number, total: number, ok: number, bad: number, rate: number | null) =>
+      ({ version, missions_total: total, missions_succeeded: ok, missions_failed: bad, missions_spent_cents: 0, success_rate: rate });
+    const m = { id: 7, name: '搬家做法', description: '', steps: [{ title: '打包', note: '' }], source_note_ids: [], uses: 3, created_at: '', updated_at: '',
+      missions_total: 6, missions_succeeded: 2, missions_failed: 4, missions_spent_cents: 0, success_rate: 0.33,
+      version: 3, versions: [ver(3, 3, 0, 3, 0), ver(2, 3, 2, 1, 0.67)] };
+    render(<NotebookScreen client={makeClient({ 'GET /notebook/methods': [m] }, [])} />);
+    fireEvent.press(await screen.findByText('我的方法'));
+    expect(await screen.findByText('第 2 版成功率 67% → 第 3 版 0%：改了之后变差了，看看改了哪一步')).toBeTruthy();
+    expect(screen.getByText(/^第 3 版：用过 3 次，做成 0、没成 3/)).toBeTruthy();
+  });
+
   it('笔记可以删除（知识库满了的补救）', async () => {
     const calls: Call[] = [];
     const client = makeClient({ '/notebook/summary': SUMMARY, 'GET /notebook/notes': [brief(4, '旧笔记')],

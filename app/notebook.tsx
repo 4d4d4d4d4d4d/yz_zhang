@@ -2,7 +2,7 @@
 //
 // 手机上最常用的是：随手记一句、粘一个链接、会后把纪要里的待办抽进工作台、问一句「我以前记过什么」。
 import {
-  apiErrorText, fmtYuan, formatDateTime,
+  apiErrorText, fmtYuan, formatDateTime, methodVersionCompare, methodVersionLines,
   type NbAnswer, type NbMethod, type NbMethodDraft, type NbNote, type NbNoteBrief, type NbSummary, type NbTodoDraft, type PlatformClient,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -199,6 +199,9 @@ function Methods({ client }: { client: PlatformClient }) {
               {m.success_rate === null ? '做完的还少，先不算成功率' : `成功率 ${Math.round(m.success_rate * 100)}%`}
             </Text>
           )}
+          {/* AGT-097（239 号 spec）改过步骤的方法按版本分开看效果 */}
+          {!!methodVersionCompare(m) && <Text>{methodVersionCompare(m)}</Text>}
+          {methodVersionLines(m).map((l) => <Text key={l} style={s.muted}>{l}</Text>)}
           {m.steps.map((st, n) => <Text key={n}>{n + 1}. {st.title}{st.note ? ` · ${st.note}` : ''}</Text>)}
         </View>
       ))}

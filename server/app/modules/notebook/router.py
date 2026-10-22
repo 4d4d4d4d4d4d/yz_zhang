@@ -167,30 +167,47 @@ def method_stats(db: Session, ids: list[int]) -> dict[int, dict]:
 
     from app.modules.orchestrator.models import Mission
 
-    out = {i: {"total": 0, "succeeded": 0, "failed": 0, "spent_cents": 0} for i in ids}
+    out = {i: {"total": 0, "succeeded": 0, "failed": 0, "spent_cents": 0, "versions": {}} for i in ids}
     if not ids:
         return out
-    rows = (db.query(Mission.method_id, Mission.status, func.count(Mission.id), func.coalesce(func.sum(Mission.spent_cents), 0))
-            .filter(Mission.method_id.in_(ids)).group_by(Mission.method_id, Mission.status).all())
-    for mid, status, n, spent in rows:
-        o = out[mid]
-        o["total"] += int(n)
-        o["spent_cents"] += int(spent)
-        if status == "succeeded":
-            o["succeeded"] += int(n)
-        elif status in ("failed", "cancelled"):
-            o["failed"] += int(n)
+    # AGT-097（239 号 spec）多按版本分一层，仍是一次查询
+    rows = (db.query(Mission.method_id, Mission.method_version, Mission.status, func.count(Mission.id),
+                     func.coalesce(func.sum(Mission.spent_cents), 0))
+            .filter(Mission.method_id.in_(ids)).group_by(Mission.method_id, Mission.method_version, Mission.status).all())
+    for mid, ver, status, n, spent in rows:
+        v = out[mid]["versions"].setdefault(ver, {"total": 0, "succeeded": 0, "failed": 0, "spent_cents": 0})
+        for o in (out[mid], v):
+            o["total"] += int(n)
+            o["spent_cents"] += int(spent)
+            if status == "succeeded":
+                o["succeeded"] += int(n)
+            elif status in ("failed", "cancelled"):
+                o["failed"] += int(n)
     return out
+
+
+def _rate(st: dict) -> float | None:
+    finished = st["succeeded"] + st["failed"]
+    return round(st["succeeded"] / finished, 2) if finished >= MIN_FINISHED_FOR_RATE else None
+
+
+def _versions(st: dict) -> list[dict]:
+    """AGT-097 每一版各自的效果，新版在前；记版本之前建的编排归在 version=null 一组、排最后。"""
+    vs = st.get("versions") or {}
+    keys = sorted((k for k in vs if k is not None), reverse=True) + ([None] if None in vs else [])
+    return [{"version": k, "missions_total": vs[k]["total"], "missions_succeeded": vs[k]["succeeded"],
+             "missions_failed": vs[k]["failed"], "missions_spent_cents": vs[k]["spent_cents"],
+             "success_rate": _rate(vs[k])} for k in keys]
 
 
 def _dump_method(m: NbMethod, stats: dict | None = None) -> dict:
     st = stats if stats is not None else {"total": 0, "succeeded": 0, "failed": 0, "spent_cents": 0}
-    finished = st["succeeded"] + st["failed"]
     return {"id": m.id, "name": m.name, "description": m.description, "steps": m.steps or [],
             "source_note_ids": m.source_note_ids or [], "uses": m.uses,
             "missions_total": st["total"], "missions_succeeded": st["succeeded"], "missions_failed": st["failed"],
             "missions_spent_cents": st["spent_cents"],
-            "success_rate": round(st["succeeded"] / finished, 2) if finished >= MIN_FINISHED_FOR_RATE else None,
+            "success_rate": _rate(st),
+            "version": m.version or 1, "versions": _versions(st),
             "created_at": iso(m.created_at), "updated_at": iso(m.updated_at)}
 
 
@@ -372,7 +389,10 @@ def update_method(method_id: int, body: MethodPatch, user: User = Depends(get_cu
     if body.description is not None:
         m.description = body.description
     if body.steps is not None:
-        m.steps = [s.model_dump() for s in body.steps]
+        steps = [s.model_dump() for s in body.steps]
+        if steps != (m.steps or []):
+            m.version = (m.version or 1) + 1      # AGT-097 只有步骤真的变了才升版；改名、改说明不升
+        m.steps = steps
     m.updated_at = utcnow()
     db.add(m)
     db.flush()

@@ -42,5 +42,7 @@ class NbMethod(Base):
     steps: Mapped[list] = mapped_column(JSON, default=list)               # [{title, note}]
     source_note_ids: Mapped[list] = mapped_column(JSON, default=list)
     uses: Mapped[int] = mapped_column(Integer, default=0)
+    # AGT-097（239 号 spec）改了步骤就升一版；编排记下用的是第几版，效果按版本分开算
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
