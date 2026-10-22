@@ -98,9 +98,25 @@ def create_ticket(body: TicketIn, user: User = Depends(get_current_user), db: Se
                     priority="urgent" if body.category in URGENT_CATEGORIES else "normal", images=images)
     db.add(ticket)
     db.flush()
+    # ESCA-060（229 号 spec）自选加急、而最近多数被改回一般的：照旧加急，回一句提示
+    from .escalation import urgent_downgrades, urgent_hint
+
+    note = ""
+    if body.category in URGENT_CATEGORIES:
+        note = urgent_hint(*urgent_downgrades(db, [user.id]).get(user.id, (0, 0)))
     # `reply` 一开始是空串。共享 SDK 的声明里有它，而这里以前不返回——
     # 「声明了却不给」（V64 那一类）
-    return {"id": ticket.id, "status": ticket.status, "reply": ticket.reply, "priority": ticket.priority}
+    return {"id": ticket.id, "status": ticket.status, "reply": ticket.reply, "priority": ticket.priority,
+            "priority_note": note}
+
+
+@router.get("/tickets/urgent-hint")
+def my_urgent_hint(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """ESCA-060 提单页选「加急」类别时显示：我最近自选加急被改回一般的情况。"""
+    from .escalation import URGENT_HINT_DAYS, urgent_downgrades, urgent_hint
+
+    n, d = urgent_downgrades(db, [user.id]).get(user.id, (0, 0))
+    return {"days": URGENT_HINT_DAYS, "self_urgent": n, "downgraded": d, "message": urgent_hint(n, d)}
 
 
 @router.get("/tickets")

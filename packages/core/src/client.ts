@@ -130,6 +130,7 @@ import type {
   PlatformFinanceExport,
   PlatformFinanceLockResult,
   ReturnableTeamSpend,
+  UrgentHint,
   TeamSpendReturned,
   AutoVerifyUsage,
   PlatformFinancePeriods,
@@ -2250,8 +2251,13 @@ export class PlatformClient {
   /** ESCA-052 类别：资金 / 账号类加急（时限更短）；不填按一般 */
   createTicket(subject: string, body = '', category?: TicketCategory, images?: string[]) {
     // ESCA-057（227 号 spec）截图：先 uploadImage 拿 url，最多 4 张；不带图时请求体与以前一样
-    return this.request<{ id: number; status: string; reply: string; priority?: string }>('POST', '/support/tickets',
+    // ESCA-060（229 号 spec）priority_note：自选加急而最近多数被改回时的一句提示（照旧按加急处理）
+    return this.request<{ id: number; status: string; reply: string; priority?: string; priority_note?: string }>('POST', '/support/tickets',
       { subject, body, ...(category ? { category } : {}), ...(images?.length ? { images } : {}) });
+  }
+  /** ESCA-060 提单页选加急类别时显示的提示 */
+  myUrgentHint() {
+    return this.request<UrgentHint>('GET', '/support/tickets/urgent-hint');
   }
   myTickets() {
     return this.request<MyTicket[]>('GET', '/support/tickets').then(listOf);

@@ -1,4 +1,4 @@
-import { ticketReplyNotice, apiErrorText, formatDateTime, type MyTicket, type TicketCategory } from '@platform/core';
+import { ticketReplyNotice, apiErrorText, formatDateTime, type MyTicket, type TicketCategory, type UrgentHint } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 import PhotoPicker from '../PhotoPicker';
@@ -84,6 +84,10 @@ function MyTickets() {
   const [error, setError] = useState('');
   // ESCA-057（227 号 spec）截图：提单一组、每张工单的补充各一组
   const [images, setImages] = useState<string[]>([]);
+  // ESCA-060（229 号 spec）选加急类别时，若最近自选加急多数被改回一般，提示一句（不拦）
+  const [urgentHint, setUrgentHint] = useState<UrgentHint | null>(null);
+  const [created, setCreated] = useState('');
+  useEffect(() => { client.myUrgentHint().then(setUrgentHint).catch(() => setUrgentHint(null)); }, [client]);
   const [draftImages, setDraftImages] = useState<Record<number, string[]>>({});
 
   const load = useCallback(async () => {
@@ -94,8 +98,9 @@ function MyTickets() {
   async function create() {
     setError('');
     try {
-      await client.createTicket(subject, body, category === 'general' ? undefined : category, images);
+      const r = await client.createTicket(subject, body, category === 'general' ? undefined : category, images);
       setSubject(''); setBody(''); setCategory('general'); setImages([]);
+      setCreated(r.priority_note ? `已提交（按加急处理）。${r.priority_note}` : '');
       await load();
     } catch (err) { setError(apiErrorText(err)); }
   }
@@ -115,12 +120,14 @@ function MyTickets() {
             <option value="account">账号（登录、安全）· 加急</option>
           </select>
         </label>
+        {category !== 'general' && urgentHint?.message && <p className="warn" data-testid="urgent-hint">{urgentHint.message}</p>}
         <span className="muted">截图（最多 {MAX_TICKET_IMAGES} 张，截之前请遮住卡号、证件号）</span>
         <PhotoPicker urls={images} onChange={setImages} max={MAX_TICKET_IMAGES} />
         {error && <p className="error">{error}</p>}
         <button disabled={subject.trim().length < 2} onClick={() => void create()}>提交工单</button>
       </div>
       {replied && <p role="status">{replied}</p>}
+      {created && <p className="muted" data-testid="ticket-created-note">{created}</p>}
       <div className="list" style={{ marginTop: 12 }}>
         {rows.length === 0 && <p className="muted">还没有工单。</p>}
         {rows.map((t) => (

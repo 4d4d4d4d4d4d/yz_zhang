@@ -316,6 +316,9 @@ def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
             last_any[r.ticket_id] = r
             if not r.is_staff:
                 last_user[r.ticket_id] = r
+    from app.modules.support.escalation import urgent_downgrades
+
+    urgent = urgent_downgrades(db, {t.user_id for t in rows})
     now = utcnow()
     return [
         {"id": t.id, "user_id": t.user_id, "subject": t.subject, "body": t.body,
@@ -324,7 +327,10 @@ def ticket_queue(status: str = "open", limit: int = Query(50, ge=1, le=200),
          **sla_view(t, now), "replies_count": int(counts.get(t.id, 0)),
          "last_user_reply": last_user[t.id].body[:300] if t.id in last_user else "",
          "last_user_reply_at": iso(last_user[t.id].created_at) if t.id in last_user else None,
-         "awaiting_staff": bool(t.id in last_any and not last_any[t.id].is_staff)}
+         "awaiting_staff": bool(t.id in last_any and not last_any[t.id].is_staff),
+         # ESCA-060（229 号 spec）这位用户近 90 天自选加急几张、被改回一般几张：判断「加急」可信度的依据
+         "requester_urgent_90d": urgent.get(t.user_id, (0, 0))[0],
+         "requester_downgraded_90d": urgent.get(t.user_id, (0, 0))[1]}
         for t in rows
     ]
 

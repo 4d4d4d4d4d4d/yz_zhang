@@ -1626,6 +1626,9 @@ export interface AdminTicketRow {
   last_user_reply_at: string | null;
   /** 最后一句是提单人说的：在等客服回 */
   awaiting_staff: boolean;
+  /** ESCA-060（229 号 spec）提单人近 90 天自选加急几张、其中被改回一般几张（老服务端没有） */
+  requester_urgent_90d?: number;
+  requester_downgraded_90d?: number;
 }
 
 /** ESCA-053 工单里的一条往来（不含是哪位管理员） */
@@ -1684,6 +1687,13 @@ export interface MyTicket {
   images?: string[];
 }
 export type TicketCategory = 'funds' | 'account' | 'general';
+/** ESCA-060（229 号 spec）我最近自选加急被改回一般的情况；message 为空就不用提示 */
+export interface UrgentHint {
+  days: number;
+  self_urgent: number;
+  downgraded: number;
+  message: string;
+}
 /** ESCA-052 客服调整优先级后的时限 */
 export interface TicketPriorityUpdated {
   id: number;

@@ -117,3 +117,24 @@ describe('ESCA-057 App 工单截图', () => {
       .toEqual({ subject: '提现页面报错', body: '', images: ['/api/v1/files/shot1abcdef'] }));
   });
 });
+
+describe('ESCA-060 App 自选加急的滥用提示', () => {
+  it('选了加急类别才显示提示；提交后的提示里带上这句', async () => {
+    const MSG = '你最近 90 天选了加急的 3 张工单里，有 2 张被客服改回了一般。';
+    const fetchImpl = (async (url: string, init?: { method?: string }) => {
+      const path = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+      const method = init?.method ?? 'GET';
+      const body = path === '/support/tickets/urgent-hint' ? { days: 90, self_urgent: 3, downgraded: 2, message: MSG }
+        : method === 'GET' ? [] : { id: 4, status: 'open', reply: '', priority: 'urgent', priority_note: MSG };
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    }) as unknown as typeof fetch;
+    render(<SupportTicketsScreen client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })} />);
+    await screen.findByText('还没有工单。');
+    expect(screen.queryByText(MSG)).toBeNull();
+    fireEvent.press(screen.getByText('资金 · 加急'));
+    expect(await screen.findByText(MSG)).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('问题概括'), '提现没到账');
+    fireEvent.press(screen.getByText('提交工单'));
+    expect(await screen.findByText(`已提交。客服回复会发站内信，也会显示在下面。\n${MSG}`)).toBeTruthy();
+  });
+});

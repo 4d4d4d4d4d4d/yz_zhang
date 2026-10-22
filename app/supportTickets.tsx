@@ -1,6 +1,6 @@
 // CS-013 / ESCA-051 App 上的「我的工单」（150 号 spec）：此前 App 上提不了工单、也看不到客服回复；
 // 现在能提、能看回复，并且看得到有没有人接手、是否已超时升级（看不到接手的是哪位管理员）。
-import { ticketReplyNotice, apiErrorText, formatDateTime, type MyTicket, type PlatformClient, type TicketCategory } from '@platform/core';
+import { ticketReplyNotice, apiErrorText, formatDateTime, type MyTicket, type PlatformClient, type TicketCategory, type UrgentHint } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -46,6 +46,9 @@ export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
   // ESCA-052（172 号 spec）资金、账号类加急，时限更短
   const [category, setCategory] = useState<TicketCategory>('general');
   const [images, setImages] = useState<string[]>([]);
+  // ESCA-060（229 号 spec）选加急类别时，若最近自选加急多数被改回一般，提示一句（不拦）
+  const [urgentHint, setUrgentHint] = useState<UrgentHint | null>(null);
+  useEffect(() => { client.myUrgentHint().then(setUrgentHint).catch(() => setUrgentHint(null)); }, [client]);
   const [draftImages, setDraftImages] = useState<Record<number, string[]>>({});
   async function addShot(onUrl: (u: string) => void) {
     setError('');
@@ -71,6 +74,7 @@ export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
             <Button key={k} title={category === k ? `✓ ${label}` : label} onPress={() => setCategory(k)} />
           ))}
         </View>
+        {category !== 'general' && !!urgentHint?.message && <Text style={s.warn}>{urgentHint.message}</Text>}
         {images.length < MAX_TICKET_IMAGES && (
           <Button title={images.length ? `再加一张截图（已附 ${images.length} 张）` : '附截图（截之前遮住卡号、证件号）'}
                   onPress={() => void addShot((u) => setImages((p) => [...p, u]))} />
@@ -78,9 +82,9 @@ export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
         <Button title="提交工单" disabled={subject.trim().length < 2} onPress={() => void (async () => {
           setError(''); setNotice('');
           try {
-            await client.createTicket(subject.trim(), body.trim(), category === 'general' ? undefined : category, images);
+            const r = await client.createTicket(subject.trim(), body.trim(), category === 'general' ? undefined : category, images);
             setSubject(''); setBody(''); setCategory('general'); setImages([]);
-            setNotice('已提交。客服回复会发站内信，也会显示在下面。');
+            setNotice('已提交。客服回复会发站内信，也会显示在下面。' + (r.priority_note ? `\n${r.priority_note}` : ''));
             await load();
           } catch (e) { setError(apiErrorText(e)); }
         })()} />
@@ -134,5 +138,6 @@ const s = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '600' },
   muted: { color: '#6b7280' },
   error: { color: '#b91c1c' },
+  warn: { color: '#b45309' },
   input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 6, padding: 8 },
 });

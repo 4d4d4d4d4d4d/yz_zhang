@@ -1063,6 +1063,10 @@ function TicketQueue() {
                 {t.last_user_reply && <span className="muted" style={{ display: 'block' }} data-testid={`ticket-user-reply-${t.id}`}>提单人补充（{t.last_user_reply_at ? formatDateTime(t.last_user_reply_at) : ''}）：{t.last_user_reply}</span>}
               </p>
               {t.first_response_overdue && <p className="error" data-testid={`ticket-fr-${t.id}`}>首次响应已超时：先回一句告诉对方在处理</p>}
+              {/* ESCA-060（229 号 spec）这位用户自选加急的可信度 */}
+              {(t.requester_downgraded_90d ?? 0) > 0 && (
+                <p className="muted" data-testid={`ticket-urgent-record-${t.id}`}>提单人近 90 天自选加急 {t.requester_urgent_90d} 张，被改回一般 {t.requester_downgraded_90d} 张</p>
+              )}
               {detail?.id === t.id && (
                 <div data-testid={`ticket-thread-${t.id}`} style={{ marginTop: 6 }}>
                   <p className="muted">提单人：{detail.user_nickname || `#${detail.user_id}`} · {formatDateTime(detail.created_at)}</p>

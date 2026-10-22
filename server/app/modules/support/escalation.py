@@ -154,3 +154,41 @@ def escalate_overdue(db: Session, now: datetime | None = None) -> dict:
             out["level2"].append(t.id)
         t.escalation_level, t.escalated_at = target, now
     return out
+
+
+# ---------------------------------------------------------------- ESCA-060 自选加急的滥用提示（229 号 spec）
+URGENT_HINT_DAYS = 90       # 看最近多久
+URGENT_HINT_MIN = 3         # 自选加急至少几张才下结论：一两张被改回不说明什么
+
+
+def urgent_downgrades(db: Session, user_ids: list[int] | set[int]) -> dict[int, tuple[int, int]]:
+    """每个人近 90 天自选加急（资金 / 账号类）的工单数，以及其中被客服改回一般的张数。
+    「改回」以客服改优先级时写的审计为准（ESCA-052：urgent -> normal），同一张改来改去只算一次。"""
+    from datetime import timedelta
+
+    from app.modules.admin.models import AdminAudit
+
+    out: dict[int, tuple[int, int]] = {}
+    ids = list(user_ids)
+    if not ids:
+        return out
+    since = utcnow() - timedelta(days=URGENT_HINT_DAYS)
+    rows = (db.query(Ticket.id, Ticket.user_id)
+            .filter(Ticket.user_id.in_(ids), Ticket.category.in_(URGENT_CATEGORIES), Ticket.created_at >= since).all())
+    if not rows:
+        return out
+    down = {a.target_id for a in db.query(AdminAudit.target_id).filter(
+        AdminAudit.action == "ticket_priority", AdminAudit.target_type == "ticket",
+        AdminAudit.target_id.in_([r.id for r in rows]), AdminAudit.detail.like("urgent -> normal%"))}
+    for tid, uid in rows:
+        n, d = out.get(uid, (0, 0))
+        out[uid] = (n + 1, d + (1 if tid in down else 0))
+    return out
+
+
+def urgent_hint(self_urgent: int, downgraded: int) -> str:
+    """过半被改回、且样本够时给一句提示；不拦，照旧按用户选的加急处理。"""
+    if self_urgent < URGENT_HINT_MIN or downgraded * 2 < self_urgent:
+        return ""
+    return (f"你最近 {URGENT_HINT_DAYS} 天选了加急的 {self_urgent} 张工单里，有 {downgraded} 张被客服改回了一般。"
+            "加急只留给资金没到账、账号登录或安全这类事：选错会让真正着急的人排在后面。")

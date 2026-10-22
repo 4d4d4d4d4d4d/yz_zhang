@@ -176,6 +176,7 @@ api GET /api/v1/spaces/me
 api GET /api/v1/spaces/{user_id}
 api GET /api/v1/subscriptions
 api GET /api/v1/support/tickets
+api GET /api/v1/support/tickets/urgent-hint
 api GET /api/v1/task-templates
 api GET /api/v1/tasks
 api GET /api/v1/tasks/mine
@@ -880,6 +881,7 @@ sdk myTasks
 sdk myTax
 sdk myTeams
 sdk myTickets
+sdk myUrgentHint
 sdk myVentureInvitations
 sdk myVentures
 sdk newcomerProgress
