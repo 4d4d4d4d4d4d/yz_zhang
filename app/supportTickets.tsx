@@ -101,7 +101,8 @@ export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
           <Text style={s.muted}>{formatDateTime(t.created_at)}</Text>
           {!!t.reply && <Text>客服回复：{t.reply}</Text>}
           {/* ESCA-053（157 号 spec）往来记录：多于一条时把之前的也列出来 */}
-          {((t.replies?.length ?? 0) > 1 || (t.replies ?? []).some((x) => !x.is_staff)) && t.replies.map((x, i) => (
+          {/* ESCA-062（231 号 spec）客服回复附了图的，也把往来列出来 */}
+          {((t.replies?.length ?? 0) > 1 || (t.replies ?? []).some((x) => !x.is_staff || (x.images?.length ?? 0) > 0)) && t.replies.map((x, i) => (
             <Text key={i} style={s.muted}>{x.is_staff ? '客服' : '我'}（{formatDateTime(x.created_at)}）：{x.body}{imagesNote(x.images) ? `（${imagesNote(x.images)}）` : ''}</Text>
           ))}
           {!!ticketProgress(t) && <Text style={s.muted}>{ticketProgress(t)}</Text>}

@@ -68,4 +68,28 @@ describe('ESCA-057 工单截图', () => {
     expect((await screen.findByTestId('admin-ticket-images-7')).querySelector('img')?.getAttribute('src')).toBe('/api/v1/files/aaaa1111');
     expect(screen.getByTestId('admin-thread-images-7-0').querySelector('img')?.getAttribute('src')).toBe('/api/v1/files/bbbb2222');
   });
+
+  it('ESCA-062 客服在完整往来里回复并附图；用户那边只有一条客服回复带图时也列出往来', async () => {
+    const calls: Call[] = [];
+    const ADMIN = { ...ME, id: 1, is_admin: true, admin_roles: ['support'] };
+    const ROW = { id: 7, user_id: 9, subject: '在哪改手机号', body: '', created_at: '2026-10-13T00:00:00Z', assignee_id: 1,
+      assignee_nickname: '客服甲', escalation_level: 0, escalation_label: '', waited_hours: 1, sla_hours: 24, overdue_hours: 0,
+      first_responded: false, first_response_hours: 4, first_response_overdue: false, replies_count: 0,
+      last_user_reply: '', last_user_reply_at: null, awaiting_staff: false, category: 'general', priority: 'normal', priority_label: '一般' };
+    const DETAIL = { ...ROW, user_nickname: '小林', status: 'open', reply: '', resolved_at: null, images: [], thread: [] };
+    open('/admin', ADMIN, { '/admin/tickets': [ROW], '/admin/tickets/7': DETAIL,
+      'POST /admin/tickets/7/reply': { id: 7, status: 'open', first_response_at: '2026-10-13T01:00:00Z', replies: 1 } }, calls);
+    fireEvent.click(await screen.findByRole('button', { name: '看完整往来' }));
+    fireEvent.change(await screen.findByLabelText('回复工单 7'), { target: { value: '点右上角设置，见图' } });
+    fireEvent.click(screen.getAllByText(/替身加图/)[0]);
+    fireEvent.click(screen.getByRole('button', { name: '发送回复' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/admin/tickets/7/reply')?.body)
+      .toEqual({ reply: '点右上角设置，见图', images: ['/api/v1/files/shot1abcdef'] }));
+  });
+
+  it('ESCA-062 用户：只有一条客服回复但带了图，也把往来列出来', async () => {
+    const one = { ...T, images: [], replies: [{ body: '见图', is_staff: true, created_at: '2026-10-13T01:00:00Z', images: ['/api/v1/files/cccc3333'] }] };
+    open('/support', ME, { 'GET /support/tickets': [one] }, []);
+    expect((await screen.findByTestId('ticket-reply-images-3-0')).querySelector('img')?.getAttribute('src')).toBe('/api/v1/files/cccc3333');
+  });
 });

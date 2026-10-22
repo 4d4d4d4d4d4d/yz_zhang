@@ -14,6 +14,7 @@ import { SkillConceptsAdmin } from '../AdminSkills';
 import { AdminRolesPanel } from '../AdminRoles';
 import { useApp } from '../store';
 import { TicketImages } from './Support';
+import PhotoPicker from '../PhotoPicker';
 
 type Metrics = {
   total_users: number; verified_users: number; total_tasks: number; published_tasks: number;
@@ -1028,6 +1029,18 @@ function TicketQueue() {
 
   // ESCA-058（221 号 spec）完整往来：列表只给最近一条补充，接手的人要先看懂前面说过什么
   const [detail, setDetail] = useState<AdminTicketDetail | null>(null);
+  // ESCA-062（231 号 spec）在完整往来里回复、可附图（截图教用户点哪里）
+  const [threadReply, setThreadReply] = useState('');
+  const [threadImages, setThreadImages] = useState<string[]>([]);
+  async function sendThreadReply(id: number) {
+    setError('');
+    try {
+      await client.replyTicket(id, threadReply.trim(), threadImages);
+      setThreadReply(''); setThreadImages([]);
+      setDetail(await client.adminTicketDetail(id));
+      await load();
+    } catch (err) { setError(apiErrorText(err)); }
+  }
   async function openThread(id: number) {
     setError('');
     if (detail?.id === id) { setDetail(null); return; }
@@ -1073,6 +1086,12 @@ function TicketQueue() {
                   <p>{detail.body || '（没写详细内容）'}</p>
                   <TicketImages urls={detail.images} label={`admin-ticket-images-${t.id}`} />
                   {detail.thread.length === 0 && <p className="muted">还没有往来。</p>}
+                  <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                    <input className="grow" aria-label={`回复工单 ${t.id}`} placeholder="回复（不结单），可附图" value={threadReply}
+                           onChange={(e) => setThreadReply(e.target.value)} />
+                    <PhotoPicker urls={threadImages} onChange={setThreadImages} max={4} />
+                    <button className="ghost" disabled={!threadReply.trim()} onClick={() => void sendThreadReply(t.id)}>发送回复</button>
+                  </div>
                   {detail.thread.map((m, i) => (
                     <p key={i} className={m.is_staff ? '' : 'muted'}>
                       <strong>{m.is_staff ? `客服 ${m.author}` : m.author}</strong>（{formatDateTime(m.created_at)}）：{m.body}

@@ -1703,8 +1703,9 @@ export class PlatformClient {
     return this.request<AdminTicketDetail>('GET', `/admin/tickets/${ticketId}`);
   }
   /** ESCA-053 先回一句、不结单（157 号 spec）；第一次回复记为首次响应 */
-  replyTicket(ticketId: number, reply: string) {
-    return this.request<TicketReplied>('POST', `/admin/tickets/${ticketId}/reply`, { reply });
+  replyTicket(ticketId: number, reply: string, images?: string[]) {
+    // ESCA-062（231 号 spec）客服回复附图：不带图时请求体与以前一样
+    return this.request<TicketReplied>('POST', `/admin/tickets/${ticketId}/reply`, images?.length ? { reply, images } : { reply });
   }
   /** ESCA-054 主管把工单指派给某位客服（只有超级管理员），进审计 */
   assignTicket(ticketId: number, assigneeId: number) {

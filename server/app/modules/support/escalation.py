@@ -79,12 +79,13 @@ def sla_view(t: Ticket, now: datetime | None = None) -> dict:
             "priority_label": PRIORITY_LABEL.get(t.priority or "normal", "一般")}
 
 
-def record_staff_reply(db: Session, t: Ticket, admin_id: int, body: str) -> None:
-    """ESCA-053 客服的一次回复：记进往来、更新最近一次回复（兼容 `Ticket.reply`）、第一次回复记下首次响应时间。"""
+def record_staff_reply(db: Session, t: Ticket, admin_id: int, body: str, images: list[str] | None = None) -> None:
+    """ESCA-053 客服的一次回复：记进往来、更新最近一次回复（兼容 `Ticket.reply`）、第一次回复记下首次响应时间。
+    ESCA-062（231 号 spec）可附图（图片名，已在入口校验过是客服自己上传的）。"""
     from .models import TicketReply
 
     now = utcnow()
-    db.add(TicketReply(ticket_id=t.id, author_id=admin_id, is_staff=True, body=body, created_at=now))
+    db.add(TicketReply(ticket_id=t.id, author_id=admin_id, is_staff=True, body=body, created_at=now, images=images or []))
     t.reply = body
     if t.first_response_at is None:
         t.first_response_at = now

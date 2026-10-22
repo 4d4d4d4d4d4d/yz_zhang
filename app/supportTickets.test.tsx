@@ -138,3 +138,14 @@ describe('ESCA-060 App 自选加急的滥用提示', () => {
     expect(await screen.findByText(`已提交。客服回复会发站内信，也会显示在下面。\n${MSG}`)).toBeTruthy();
   });
 });
+
+describe('ESCA-062 App 客服回复带图', () => {
+  it('只有一条客服回复但带了图，也列出往来并写附了几张', async () => {
+    const fetchImpl = (async () => ({ ok: true, status: 200, text: async () => JSON.stringify([{ id: 3, subject: '改手机号', body: '', status: 'open',
+      reply: '见图', created_at: '2026-10-13T00:00:00Z', claimed: true, escalation_level: 0, escalation_label: '', waited_hours: 1, sla_hours: 24,
+      overdue_hours: 0, first_responded: true, first_response_hours: 4, first_response_overdue: false, category: 'general', priority: 'normal',
+      priority_label: '一般', replies: [{ body: '见图', is_staff: true, created_at: '2026-10-13T01:00:00Z', images: ['/api/v1/files/c'] }] }]) })) as unknown as typeof fetch;
+    render(<SupportTicketsScreen client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })} />);
+    expect(await screen.findByText(/见图（附 1 张截图）/)).toBeTruthy();
+  });
+});

@@ -90,3 +90,31 @@ def test_thanks_with_a_screenshot_still_reopens_and_deletion_clears_images(clien
     with SessionLocal() as db:
         assert not db.get(Ticket, tid).images, "注销后截图引用清掉（截图同样可能拍到个人情况）"
         assert all(not r.images for r in db.query(TicketReply).filter(TicketReply.ticket_id == tid))
+
+
+# --------------------------------- ESCA-062 客服回复时附图（231 号 spec，V258）
+def test_staff_reply_with_screenshots_reaches_the_user(client):
+    u = register(client, "13800327011", "提问的人")
+    tid = client.post(f"{API}/support/tickets", json={"subject": "在哪里改手机号"}, headers=auth(u)).json()["id"]
+    agent = _admin(client, "13800327012", ["support"])
+    shot = _img(client, agent)
+    r = client.post(f"{API}/admin/tickets/{tid}/reply", json={"reply": "点右上角「设置」，见图", "images": [shot]}, headers=auth(agent))
+    assert r.status_code == 200, r.text
+    mine = client.get(f"{API}/support/tickets", headers=auth(u)).json()[0]
+    assert mine["replies"][-1]["is_staff"] and mine["replies"][-1]["images"] == [shot]
+    assert client.get(f"{API}/admin/tickets/{tid}", headers=auth(agent)).json()["thread"][-1]["images"] == [shot]
+    assert any("（附 1 张图）" in t for t in [n for n in _bodies(u["id"])])
+    # 客服也只能附自己上传的图；不带图时照旧
+    others = _img(client, u)
+    r = client.post(f"{API}/admin/tickets/{tid}/reply", json={"reply": "借用户的图", "images": [others]}, headers=auth(agent))
+    assert r.json()["detail"]["code"] == "ticket_image_not_yours"
+    r = client.post(f"{API}/admin/tickets/{tid}/reply", json={"reply": "好的"}, headers=auth(agent))
+    assert r.status_code == 200
+    assert client.get(f"{API}/support/tickets", headers=auth(u)).json()[0]["replies"][-1]["images"] == []
+
+
+def _bodies(user_id):
+    from app.modules.notification.models import Notification
+
+    with SessionLocal() as db:
+        return [n.body for n in db.query(Notification).filter(Notification.user_id == user_id)]

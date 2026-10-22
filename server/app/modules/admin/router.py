@@ -364,6 +364,8 @@ def ticket_detail(ticket_id: int, admin: User = Depends(require_role("support"))
 class TicketReplyIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     reply: str = Field(min_length=1, max_length=2000)
+    # ESCA-062（231 号 spec）客服回复附图：客服自己上传的图，最多 4 张（与提单人同一套规则）
+    images: list[str] = Field(default_factory=list, max_length=20)
 
 
 class TicketPriorityIn(BaseModel):
@@ -406,11 +408,15 @@ def reply_ticket(ticket_id: int, body: TicketReplyIn, admin: User = Depends(requ
     from app.modules.support.escalation import record_staff_reply
     from app.modules.support.models import Ticket, TicketReply
 
+    from app.modules.support.router import _ticket_images
+
     ticket = db.get(Ticket, ticket_id)
     if not ticket or ticket.status != "open":
         raise not_found("工单不存在或已处理")
-    record_staff_reply(db, ticket, admin.id, body.reply)
-    notify(db, ticket.user_id, "system", "客服回复了你的工单", f"「{ticket.subject[:40]}」：{body.reply[:100]}")
+    images = _ticket_images(db, admin, body.images)
+    record_staff_reply(db, ticket, admin.id, body.reply, images)
+    notify(db, ticket.user_id, "system", "客服回复了你的工单",
+           f"「{ticket.subject[:40]}」：{body.reply[:100]}" + (f"（附 {len(images)} 张图）" if images else ""))
     db.flush()
     n = db.query(TicketReply).filter(TicketReply.ticket_id == ticket.id).count()
     return {"id": ticket.id, "status": ticket.status, "first_response_at": iso(ticket.first_response_at), "replies": n}

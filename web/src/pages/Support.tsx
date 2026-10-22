@@ -141,7 +141,8 @@ function MyTickets() {
                   用户回到平台上就再也找不到它 */}
               {t.reply && <p data-testid={`ticket-reply-${t.id}`}>客服回复：{t.reply}</p>}
               {/* ESCA-053（157 号 spec）往来记录：多于一条时把之前的也列出来 */}
-              {((t.replies?.length ?? 0) > 1 || (t.replies ?? []).some((x) => !x.is_staff)) && (
+              {/* ESCA-062（231 号 spec）客服回复附了图的，也要把往来列出来，图才看得到 */}
+              {((t.replies?.length ?? 0) > 1 || (t.replies ?? []).some((x) => !x.is_staff || (x.images?.length ?? 0) > 0)) && (
                 <ol className="muted" data-testid={`ticket-replies-${t.id}`}>
                   {t.replies.map((x, i) => <li key={i}>{x.is_staff ? '客服' : '我'}（{formatDateTime(x.created_at)}）：{x.body}
                     <TicketImages urls={x.images} label={`ticket-reply-images-${t.id}-${i}`} /></li>)}

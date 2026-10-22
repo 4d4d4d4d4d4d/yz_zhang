@@ -570,6 +570,9 @@ def _resolve_body_keys(expr: str) -> tuple[set[str], bool]:
 
 # 解析不了的请求体 -> 为什么（值是**理由**，不是布尔）
 DYNAMIC_BODY: dict[tuple[str, str], str] = {
+    ("POST", "/admin/tickets/{x}/reply"): (
+        "ESCA-062（231 号 spec）附了图才带 images（不带图时请求体与 V183 一样只有 reply）；服务端 TicketReplyIn 认 reply / images，extra=forbid"
+    ),
     ("POST", "/support/tickets/{x}/replies"): (
         "ESCA-057（227 号 spec）附了截图才带 images（不带图时请求体与 V193 一样只有 body）；服务端 TicketReplyIn 认 body / images"
     ),
