@@ -2,7 +2,7 @@
 // 现在能提、能看回复，并且看得到有没有人接手、是否已超时升级（看不到接手的是哪位管理员）。
 import { ticketReplyNotice, apiErrorText, formatDateTime, type MyTicket, type PlatformClient, type TicketCategory, type UrgentHint } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
-import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Button, Image, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 // ESCA-057（227 号 spec）截图：一条最多 4 张（与服务端一致），每张不超过 2MB
@@ -22,7 +22,38 @@ export async function pickScreenshot(client: PlatformClient): Promise<{ url?: st
   return { url: up.url };
 }
 
-/** 工单里「附 N 张截图」（App 上不铺开大图，点进 Web 或客服后台看） */
+// ESCA-063（233 号 spec）截图的地址是站内路径（/api/v1/files/…），拼上 API 地址才能显示
+const DEFAULT_BASE = (process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
+
+export function shotUri(url: string, baseUrl: string): string {
+  return url.startsWith('http') ? url : `${baseUrl}${url}`;
+}
+
+/** ESCA-063 「看截图 1」「看截图 2」：点开全屏看大图，点「关闭」回来 */
+export function TicketShots({ urls, baseUrl, label }: { urls?: string[]; baseUrl: string; label: string }) {
+  const [open, setOpen] = useState<string | null>(null);
+  if (!urls?.length) return null;
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      {urls.map((u, i) => (
+        <TouchableOpacity key={u} accessibilityLabel={`${label}：看截图 ${i + 1}`} onPress={() => setOpen(u)}>
+          <Text style={{ color: '#2563eb' }}>看截图 {i + 1}</Text>
+        </TouchableOpacity>
+      ))}
+      <Modal visible={open !== null} transparent animationType="fade" onRequestClose={() => setOpen(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', padding: 12, gap: 12 }}>
+          {open !== null && (
+            <Image accessibilityLabel="截图大图" source={{ uri: shotUri(open, baseUrl) }}
+                   style={{ width: '100%', height: '80%' }} resizeMode="contain" />
+          )}
+          <Button title="关闭" onPress={() => setOpen(null)} />
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+/** 工单里「附 N 张截图」（ESCA-063 起旁边有「看截图」可以点开大图） */
 export function imagesNote(urls?: string[]): string {
   return urls?.length ? `附 ${urls.length} 张截图` : '';
 }
@@ -36,7 +67,7 @@ export function ticketProgress(t: MyTicket): string {
 
 const STATUS: Record<string, string> = { open: '处理中', resolved: '已处理', escalated: '已转纠纷' };
 
-export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
+export function SupportTicketsScreen({ client, baseUrl = DEFAULT_BASE }: { client: PlatformClient; baseUrl?: string }) {
   const [rows, setRows] = useState<MyTicket[]>([]);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -98,12 +129,16 @@ export function SupportTicketsScreen({ client }: { client: PlatformClient }) {
           <Text style={{ fontWeight: '600' }}>{t.subject} · {STATUS[t.status] || t.status}{t.priority === 'urgent' ? ' · 加急' : ''}</Text>
           {!!t.body && <Text style={s.muted}>{t.body}</Text>}
           {!!imagesNote(t.images) && <Text style={s.muted}>{imagesNote(t.images)}</Text>}
+          <TicketShots urls={t.images} baseUrl={baseUrl} label={`工单 ${t.id}`} />
           <Text style={s.muted}>{formatDateTime(t.created_at)}</Text>
           {!!t.reply && <Text>客服回复：{t.reply}</Text>}
           {/* ESCA-053（157 号 spec）往来记录：多于一条时把之前的也列出来 */}
           {/* ESCA-062（231 号 spec）客服回复附了图的，也把往来列出来 */}
           {((t.replies?.length ?? 0) > 1 || (t.replies ?? []).some((x) => !x.is_staff || (x.images?.length ?? 0) > 0)) && t.replies.map((x, i) => (
-            <Text key={i} style={s.muted}>{x.is_staff ? '客服' : '我'}（{formatDateTime(x.created_at)}）：{x.body}{imagesNote(x.images) ? `（${imagesNote(x.images)}）` : ''}</Text>
+            <View key={i}>
+              <Text style={s.muted}>{x.is_staff ? '客服' : '我'}（{formatDateTime(x.created_at)}）：{x.body}{imagesNote(x.images) ? `（${imagesNote(x.images)}）` : ''}</Text>
+              <TicketShots urls={x.images} baseUrl={baseUrl} label={`工单 ${t.id} 第 ${i + 1} 条`} />
+            </View>
           ))}
           {!!ticketProgress(t) && <Text style={s.muted}>{ticketProgress(t)}</Text>}
           {/* ESCA-056（166 号 spec）补充材料不用再开一张；已结的 7 天内补充会重新打开 */}

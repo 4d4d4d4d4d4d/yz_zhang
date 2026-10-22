@@ -1,7 +1,7 @@
 // CS-013 / ESCA-051 App 上的我的工单（150 号 spec）。
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { PlatformClient, type MyTicket } from '@platform/core';
-import { SupportTicketsScreen, ticketProgress } from './supportTickets';
+import { SupportTicketsScreen, shotUri, ticketProgress } from './supportTickets';
 
 type Call = { method: string; path: string; body: unknown };
 function makeClient(routes: Record<string, unknown>, calls: Call[]) {
@@ -147,5 +147,30 @@ describe('ESCA-062 App 客服回复带图', () => {
       priority_label: '一般', replies: [{ body: '见图', is_staff: true, created_at: '2026-10-13T01:00:00Z', images: ['/api/v1/files/c'] }] }]) })) as unknown as typeof fetch;
     render(<SupportTicketsScreen client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })} />);
     expect(await screen.findByText(/见图（附 1 张截图）/)).toBeTruthy();
+  });
+});
+
+describe('ESCA-063 App 上看截图大图', () => {
+  it('站内路径拼上 API 地址；完整地址原样用', () => {
+    expect(shotUri('/api/v1/files/abc', 'https://api.x.cn')).toBe('https://api.x.cn/api/v1/files/abc');
+    expect(shotUri('https://cdn.x.cn/abc', 'https://api.x.cn')).toBe('https://cdn.x.cn/abc');
+  });
+
+  it('点「看截图」全屏显示大图，点「关闭」回来；回复里的截图也能点开', async () => {
+    const fetchImpl = (async () => ({ ok: true, status: 200, text: async () => JSON.stringify([{ id: 3, subject: '页面报错', body: '', status: 'open',
+      reply: '', created_at: '2026-10-13T00:00:00Z', claimed: false, escalation_level: 0, escalation_label: '', waited_hours: 1, sla_hours: 24,
+      overdue_hours: 0, first_responded: false, first_response_hours: 4, first_response_overdue: false, category: 'general', priority: 'normal',
+      priority_label: '一般', images: ['/api/v1/files/a1', '/api/v1/files/a2'],
+      replies: [{ body: '见图', is_staff: true, created_at: '2026-10-13T01:00:00Z', images: ['/api/v1/files/b2'] }] }]) })) as unknown as typeof fetch;
+    render(<SupportTicketsScreen client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })} baseUrl="https://api.x.cn" />);
+    fireEvent.press(await screen.findByLabelText('工单 3：看截图 1'));
+    expect(screen.getByLabelText('截图大图').props.source).toEqual({ uri: 'https://api.x.cn/api/v1/files/a1' });
+    fireEvent.press(screen.getByText('关闭'));
+    await waitFor(() => expect(screen.queryByLabelText('截图大图')).toBeNull());
+    fireEvent.press(screen.getByLabelText('工单 3：看截图 2'));
+    expect(screen.getByLabelText('截图大图').props.source).toEqual({ uri: 'https://api.x.cn/api/v1/files/a2' });
+    fireEvent.press(screen.getByText('关闭'));
+    fireEvent.press(screen.getByLabelText('工单 3 第 1 条：看截图 1'));
+    expect(screen.getByLabelText('截图大图').props.source).toEqual({ uri: 'https://api.x.cn/api/v1/files/b2' });
   });
 });
