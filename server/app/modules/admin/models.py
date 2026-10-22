@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -88,6 +88,8 @@ class Announcement(Base):
     audience: Mapped[str] = mapped_column(String(12), default="all")
     # NTF-068（238 号 spec）类目定向：近 180 天在这个类目发过单 / 报过名的人（空 = 不限）
     category: Mapped[str] = mapped_column(String(50), default="", server_default="")
+    # NTF-070（246 号 spec）选了不止一个类目时的全部类目（含主类目）；只选一个时为空
+    categories: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
     # scheduled（等时间到）/ sent / cancelled（定时的取消了，没发）/ revoked（发了又撤回）
     status: Mapped[str] = mapped_column(String(12), default="sent", index=True)
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

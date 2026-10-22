@@ -910,6 +910,8 @@ class AnnouncementIn(BaseModel):
     audience: str = Field(default="all", max_length=12)
     # NTF-068（238 号 spec）类目定向（空 = 不限）
     category: str = Field(default="", max_length=50)
+    # NTF-070（246 号 spec）「也发给」的类目，与 category 取并集
+    categories: list[str] = Field(default_factory=list, max_length=10)
 
 
 class AnnouncementPreviewIn(BaseModel):
@@ -919,6 +921,8 @@ class AnnouncementPreviewIn(BaseModel):
     city: str = Field(default="", max_length=50)
     audience: str = Field(default="all", max_length=12)
     category: str = Field(default="", max_length=50)
+    # NTF-070（246 号 spec）「也发给」的类目，与 category 取并集
+    categories: list[str] = Field(default_factory=list, max_length=10)
 
 
 class AnnouncementCloseIn(BaseModel):
@@ -937,10 +941,11 @@ def broadcast_announcement(
     from . import announcements as ann_svc
 
     ann = ann_svc.create(db, admin.id, body.title, body.body, body.verified_only, body.scheduled_at,
-                         body.city.strip(), body.audience, body.category.strip())
+                         body.city.strip(), body.audience, body.category.strip(), _clean(body.categories))
     target = (f"{'仅已实名' if ann.verified_only else '全体'}"
               + (f"·{ann.city}" if ann.city else "")
-              + (f"·类目「{ann.category}」" if ann.category else "")
+              + (f"·类目「{'、'.join(ann.categories)}」" if ann.categories
+                 else f"·类目「{ann.category}」" if ann.category else "")
               + (f"·{ann_svc.AUDIENCES[ann.audience]}" if ann.audience != "all" else ""))
     record_audit(db, admin.id, "announcement_schedule" if ann.status == "scheduled" else "announcement_send",
                  "announcement", ann.id,
@@ -956,7 +961,11 @@ def preview_announcement(body: AnnouncementPreviewIn, admin: User = Depends(requ
     from . import announcements as ann_svc
 
     return ann_svc.preview(db, body.title, body.body, body.verified_only, body.city.strip(), body.audience,
-                           body.category.strip())
+                           body.category.strip(), _clean(body.categories))
+
+
+def _clean(items: list[str]) -> list[str]:
+    return [x.strip() for x in items if x.strip()]
 
 
 @router.get("/admin/announcements")

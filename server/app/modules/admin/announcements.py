@@ -25,7 +25,13 @@ AUDIENCES = {"all": "全体用户", "publishers": "近 180 天发过单的人", 
 ACTIVE_DAYS = 180
 
 
-def audience_query(db: Session, verified_only: bool, city: str = "", audience: str = "all", category: str = ""):
+def merge_categories(category: str = "", categories: list[str] | None = None) -> list[str]:
+    """NTF-070（246 号 spec）主类目 + 「也发给」的类目，去重保序。"""
+    return list(dict.fromkeys([c for c in [category, *(categories or [])] if c]))
+
+
+def audience_query(db: Session, verified_only: bool, city: str = "", audience: str = "all", category: str = "",
+                   categories: list[str] | None = None):
     """NTF-066（159 号 spec）定向：仅已实名、城市、人群（发单的 / 接单的）可以叠加。
     NTF-068（238 号 spec）再叠加类目：近 180 天在这个类目发过单（发单的）/ 报过名（接单的）/ 两者之一（全体）。"""
     q = db.query(User).filter(User.is_deleted.is_(False), User.is_banned.is_(False))
@@ -33,15 +39,17 @@ def audience_query(db: Session, verified_only: bool, city: str = "", audience: s
         q = q.filter(User.is_verified.is_(True))
     if city:
         q = q.filter(User.city == city)
-    if category:
+    cats = merge_categories(category, categories)
+    if cats:
         from sqlalchemy import or_
 
         from app.modules.task.models import Application, Task
 
         since = utcnow() - timedelta(days=ACTIVE_DAYS)
-        pub = db.query(Task.creator_id).filter(Task.category == category, Task.created_at >= since)
+        # NTF-070（246 号 spec）几个类目取并集
+        pub = db.query(Task.creator_id).filter(Task.category.in_(cats), Task.created_at >= since)
         app_ = (db.query(Application.applicant_id).join(Task, Task.id == Application.task_id)
-                .filter(Task.category == category, Application.created_at >= since))
+                .filter(Task.category.in_(cats), Application.created_at >= since))
         if audience == "publishers":
             q = q.filter(User.id.in_(pub))
         elif audience == "workers":
@@ -77,16 +85,18 @@ def check_category(db: Session, category: str) -> None:
 
 
 def preview(db: Session, title: str, body: str, verified_only: bool, city: str = "", audience: str = "all",
-            category: str = "") -> dict:
+            category: str = "", categories: list[str] | None = None) -> dict:
     """发之前说清：会送给多少人、用户看到的样子、有没有要留意的地方。不落库、不发。
     公告这一类用户关不掉（通知偏好里没有它），所以受众人数就是会收到的人数。"""
     check_audience(audience)
-    check_category(db, category)
-    n = audience_query(db, verified_only, city, audience, category).count()
+    cats = merge_categories(category, categories)
+    for c in cats:
+        check_category(db, c)
+    n = audience_query(db, verified_only, city, audience, category, categories).count()
     warnings = []
     if n == 0:
         warnings.append("按这个条件一个人都发不到：检查城市名是否写对"
-                        + ("，或者这个类目近 180 天没人发单 / 报名" if category else ""))
+                        + ("，或者这个类目近 180 天没人发单 / 报名" if cats else ""))
     if len(title) > PUSH_TITLE_HINT:
         warnings.append(f"标题超过 {PUSH_TITLE_HINT} 个字，手机锁屏推送会被截断")
     if not body.strip():
@@ -94,7 +104,9 @@ def preview(db: Session, title: str, body: str, verified_only: bool, city: str =
     if not verified_only and any(w in title + body for w in ("资金", "提现", "税", "实名")):
         warnings.append("看起来是资金或合规类公告，是否只发给已实名用户？")
     return {"audience": n, "verified_only": verified_only, "city": city, "audience_kind": audience, "title": title, "body": body,
-            "warnings": warnings, "category": category}
+            "warnings": warnings, "category": category,
+            # NTF-070 选了不止一个类目才带（只选一个时响应与 V265 一样）
+            **({"categories": cats} if len(cats) > 1 else {})}
 
 
 def deliver(db: Session, ann: Announcement) -> int:
@@ -102,7 +114,7 @@ def deliver(db: Session, ann: Announcement) -> int:
 
     count = 0
     for (uid,) in audience_query(db, ann.verified_only, ann.city or "", ann.audience or "all",
-                                 ann.category or "").with_entities(User.id):
+                                 ann.category or "", list(ann.categories or [])).with_entities(User.id):
         notify(db, uid, "announcement", ann.title, ann.body, announcement_id=ann.id)
         count += 1
     ann.status, ann.sent_at, ann.delivered = "sent", utcnow(), count
@@ -110,12 +122,15 @@ def deliver(db: Session, ann: Announcement) -> int:
 
 
 def create(db: Session, admin_id: int, title: str, body: str, verified_only: bool,
-           scheduled_at: datetime | None, city: str = "", audience: str = "all", category: str = "") -> Announcement:
+           scheduled_at: datetime | None, city: str = "", audience: str = "all", category: str = "",
+           categories: list[str] | None = None) -> Announcement:
     check_audience(audience)
-    check_category(db, category)
+    cats = merge_categories(category, categories)
+    for c in cats:
+        check_category(db, c)
     now = utcnow()
     ann = Announcement(title=title, body=body, verified_only=verified_only, created_by=admin_id, created_at=now,
-                       city=city, audience=audience, category=category)
+                       city=city, audience=audience, category=category, categories=cats if len(cats) > 1 else [])
     if scheduled_at is not None:
         if scheduled_at <= now + timedelta(minutes=1):
             raise bad_request("定时发送的时间要晚于现在至少 1 分钟；要马上发就不填时间", "schedule_in_past")
@@ -200,4 +215,5 @@ def _row(a: Announcement) -> dict:
             "city": a.city or "", "audience": a.audience or "all", "category": a.category or "",
             "scheduled_at": iso(a.scheduled_at), "created_by": a.created_by, "created_at": iso(a.created_at),
             "sent_at": iso(a.sent_at), "delivered": a.delivered, "closed_by": a.closed_by,
-            "closed_at": iso(a.closed_at), "close_reason": a.close_reason}
+            "closed_at": iso(a.closed_at), "close_reason": a.close_reason,
+            **({"categories": list(a.categories)} if a.categories else {})}

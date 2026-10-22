@@ -22,7 +22,7 @@ function open(calls: Call[]) {
     calls.push({ method, path, body: init?.body ? JSON.parse(init.body) : null });
     const body: unknown = path === '/users/me' ? ADMIN
       : path === '/categories' ? [{ id: 1, name: '跑腿', required_cert: '' }, { id: 2, name: '设计', required_cert: '' }]
-      : method === 'GET' && path === '/admin/announcements' ? [SENT]
+      : method === 'GET' && path === '/admin/announcements' ? [SENT, { ...SENT, id: 6, title: '多类目', categories: ['跑腿', '设计'] }]
       : path === '/admin/announcements/preview' ? { audience: 80, verified_only: false, city: '', audience_kind: 'workers', category: '跑腿',
         title: '跑腿规则调整', body: '', warnings: [] }
       : method === 'POST' && path === '/admin/announcements' ? { delivered: 80, id: 6, status: 'sent', scheduled_at: null }
@@ -52,4 +52,25 @@ describe('NTF-068 公告按类目定向', () => {
       .toMatchObject({ category: '跑腿', audience: 'workers' }));
     expect((await screen.findByLabelText('发过的公告')).textContent).toContain('（类目「跑腿」）');
   });
+
+  it('NTF-070 选了类目后可以「也发给」别的类目；没勾不带 categories，勾了带上，历史写明全部类目', async () => {
+    const calls: Call[] = [];
+    open(calls);
+    const card = await screen.findByLabelText('全站公告');
+    fireEvent.change(within(card).getByPlaceholderText('标题'), { target: { value: '规则调整' } });
+    expect(within(card).queryByLabelText('也发给类目')).toBeNull();
+    fireEvent.change(await within(card).findByLabelText('只发给类目'), { target: { value: '跑腿' } });
+    fireEvent.click(within(card).getByText('预览'));
+    await waitFor(() => expect(calls.filter((c) => c.path === '/admin/announcements/preview')).toHaveLength(1));
+    expect(calls.find((c) => c.path === '/admin/announcements/preview')?.body).not.toHaveProperty('categories');
+    fireEvent.click(within(within(card).getByLabelText('也发给类目')).getByLabelText('设计'));
+    fireEvent.click(within(card).getByText('预览'));
+    await waitFor(() => expect(calls.filter((c) => c.path === '/admin/announcements/preview')).toHaveLength(2));
+    expect(calls.filter((c) => c.path === '/admin/announcements/preview')[1].body).toMatchObject({ category: '跑腿', categories: ['设计'] });
+    fireEvent.click(within(card).getByText('发布'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/admin/announcements')?.body)
+      .toMatchObject({ category: '跑腿', categories: ['设计'] }));
+    expect((await screen.findByLabelText('发过的公告')).textContent).toContain('（类目「跑腿、设计」）');
+  });
 });
+

@@ -842,19 +842,21 @@ export class PlatformClient {
   /** NTF-064 起可以定时（scheduledAt 为带时区的 ISO 时间，不填就马上发），响应多了 id / status（151 号 spec） */
   /** NTF-066（159 号 spec）起可按城市与人群定向（target 不填 = 全体） */
   broadcastAnnouncement(title: string, body = '', verifiedOnly = false, scheduledAt?: string,
-    target: { city?: string; audience?: AnnouncementAudience; category?: string } = {}) {
+    target: { city?: string; audience?: AnnouncementAudience; category?: string; categories?: string[] } = {}) {
     return this.request<AnnouncementSent>('POST', '/admin/announcements', {
       title, body, verified_only: verifiedOnly, scheduled_at: scheduledAt ?? null,
       city: target.city ?? '', audience: target.audience ?? 'all',
       ...(target.category ? { category: target.category } : {}),
+      ...(target.categories?.length ? { categories: target.categories } : {}),
     });
   }
   /** NTF-064 发之前先看：会送给多少人、要留意的地方。不发、不落库 */
   previewAnnouncement(title: string, body = '', verifiedOnly = false,
-    target: { city?: string; audience?: AnnouncementAudience; category?: string } = {}) {
+    target: { city?: string; audience?: AnnouncementAudience; category?: string; categories?: string[] } = {}) {
     return this.request<AnnouncementPreview>('POST', '/admin/announcements/preview', {
       title, body, verified_only: verifiedOnly, city: target.city ?? '', audience: target.audience ?? 'all',
       ...(target.category ? { category: target.category } : {}),
+      ...(target.categories?.length ? { categories: target.categories } : {}),
     });
   }
   /** NTF-064 公告记录（最新的在前） */

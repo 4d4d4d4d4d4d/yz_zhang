@@ -74,3 +74,36 @@ def test_unknown_category_is_refused_and_empty_means_no_limit(client):
     assert client.post(URL, json={"title": "x 公告", "body": "x", "category": "跑腿腿"}, headers=auth(ops)).status_code == 400
     allp = client.post(f"{URL}/preview", json={"title": "全体公告", "body": "x"}, headers=auth(ops)).json()
     assert allp["category"] == "" and allp["audience"] >= 3
+
+
+def test_ntf070_several_categories_are_a_union_and_only_echoed_when_more_than_one(client):
+    """NTF-070（246 号 spec）「也发给」别的类目：几个类目取并集；只选一个时响应与 V265 一样。"""
+    _categories("跑腿", "设计", "家政")
+    ops = _ops(client)
+    sh, bj, old = _people(client)
+    designer = register(client, "13800320024", "做设计的")
+    with SessionLocal() as db:
+        db.add(Task(creator_id=designer["id"], title="logo", description="", category="设计", budget_cents=10000,
+                    status="published", visibility="public"))
+        db.commit()
+    one = client.post(f"{URL}/preview", json={"title": "跑腿规则", "body": "x", "category": "跑腿", "categories": []}, headers=auth(ops)).json()
+    assert "categories" not in one and one["audience"] == 2
+    both = client.post(f"{URL}/preview", json={"title": "规则调整", "body": "x", "category": "跑腿", "categories": ["设计", "跑腿"]},
+                       headers=auth(ops)).json()
+    assert both["categories"] == ["跑腿", "设计"] and both["audience"] == 3, "跑腿两人 + 设计一人；重复的类目只算一次"
+    from tests.test_client_shape_alignment import _assert_shape
+
+    _assert_shape(both, "AnnouncementPreview")
+    bad = client.post(f"{URL}/preview", json={"title": "规则调整", "body": "x", "categories": ["设计", "没这个"]}, headers=auth(ops))
+    assert bad.json()["detail"]["code"] == "announcement_bad_category", "每个类目都要是平台上有的"
+    assert client.post(f"{URL}/preview", json={"title": "x 公告", "body": "x", "categories": ["设计"] * 11}, headers=auth(ops)).status_code == 422
+    r = client.post(URL, json={"title": "规则调整", "body": "下周起", "category": "设计", "categories": ["跑腿"], "audience": "publishers"},
+                    headers=auth(ops))
+    assert r.json()["delivered"] == 2, "设计类发单的 + 跑腿类发单的（上海那位）"
+    assert [n["title"] for n in _inbox(client, designer)] == ["规则调整"] and [n["title"] for n in _inbox(client, sh)] == ["规则调整"]
+    assert _inbox(client, bj) == []
+    rows = client.get(URL, headers=auth(ops)).json()
+    assert rows[0]["categories"] == ["设计", "跑腿"]
+    _assert_shape(rows[0], "AnnouncementRow")
+    with SessionLocal() as db:
+        assert any("类目「设计、跑腿」" in a.detail for a in db.query(AdminAudit).filter(AdminAudit.action == "announcement_send"))

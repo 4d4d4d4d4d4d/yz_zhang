@@ -1562,6 +1562,8 @@ export interface AnnouncementPreview {
   audience_kind: AnnouncementAudience;
   /** NTF-068（238 号 spec）定向的类目（空 = 不限） */
   category: string;
+  /** NTF-070（246 号 spec）选了不止一个类目时的全部类目（只选一个时没有） */
+  categories?: string[];
   title: string;
   body: string;
   /** 要留意的地方，例如「标题太长锁屏会被截断」 */
@@ -1582,6 +1584,8 @@ export interface AnnouncementRow {
   audience: AnnouncementAudience;
   /** NTF-068（238 号 spec）定向的类目（空 = 不限） */
   category: string;
+  /** NTF-070（246 号 spec）选了不止一个类目时的全部类目（只选一个时没有） */
+  categories?: string[];
   /** NTF-067 点开过的人数与阅读率（送达为 0 时为 null） */
   read: number;
   read_rate: number | null;
