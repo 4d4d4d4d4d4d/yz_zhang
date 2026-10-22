@@ -99,3 +99,46 @@ def test_removed_member_is_told_how_much_is_unreturned_and_can_still_return(clie
     assert client.get(f"{API}/teams/{team_id}/spends", headers=auth(staff)).status_code in (403, 404), "离开后进不了团队页"
     assert [x["id"] for x in client.get(f"{API}/teams/returnable-spends", headers=auth(staff)).json()] == [rid]
     assert _ret(client, staff, team_id, rid, 6000, "ret-b").json()["returnable_cents"] == 0, "离开了也能退"
+
+
+# --------------------------------- TEAM-071 所有者提醒退回（230 号 spec，V257）
+def test_owner_or_admin_asks_for_return_once_a_day_and_requester_is_told(client):
+    from datetime import timedelta
+
+    from app.modules.account.models import utcnow
+
+    owner, staff, team_id, rid = _setup(client, "04")
+    url = f"{API}/teams/{team_id}/spends/{rid}/ask-return"
+    assert client.post(url, headers=auth(staff)).status_code == 403, "发起人自己、普通成员不能催"
+    lead = make_user(client, "1330070405", "主管")
+    add_member(client, team_id, owner, lead, role="admin")
+    r = client.post(url, headers=auth(owner))
+    assert r.status_code == 200, r.text
+    assert r.json()["returnable_cents"] == 8000 and r.json()["return_asked_at"]
+    from tests.test_client_shape_alignment import _assert_shape
+
+    _assert_shape(r.json(), "TeamReturnAsked")
+    with SessionLocal() as db:
+        from app.modules.notification.models import Notification
+
+        n = [x for x in db.query(Notification).filter(Notification.user_id == staff["id"]) if "提醒你退回" in x.title][-1]
+    assert "最多还能退 ¥80.00" in n.body and "钱包页" in n.body
+    again = client.post(url, headers=auth(owner))
+    assert again.status_code == 409 and again.json()["detail"]["code"] == "return_asked_recently"
+    with SessionLocal() as db:
+        db.get(SpendRequest, rid).return_asked_at = utcnow() - timedelta(hours=23)
+        db.commit()
+    assert client.post(url, headers=auth(owner)).status_code == 409, "23 小时前提醒过，还不到一天"
+    row = next(x for x in client.get(f"{API}/teams/{team_id}/spends", headers=auth(owner)).json() if x["id"] == rid)
+    assert row["return_asked_at"]
+    _assert_shape(row, "SpendRequestView")
+    with SessionLocal() as db:
+        db.get(SpendRequest, rid).return_asked_at = utcnow() - timedelta(hours=25)
+        db.commit()
+    assert client.post(url, headers=auth(lead)).status_code == 200, "过了一天可以再提醒；管理员也能提醒"
+    # 退清了就没什么可催的
+    with SessionLocal() as db:
+        db.get(SpendRequest, rid).return_asked_at = None
+        db.commit()
+    _ret(client, staff, team_id, rid, 8000, "ret-all")
+    assert client.post(url, headers=auth(owner)).json()["detail"]["code"] == "nothing_to_return"

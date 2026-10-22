@@ -15,7 +15,7 @@ import { KeyUsageBlock } from './apiKeyUsage';
 // 按钮的可用性一律读服务端的判断（`can_decide` / `invoice_block`），
 // 客户端不重写：**第二份实现必然抄漏**（UI-075 立过这条）。
 import {
-  apiErrorText, fmtYuan,
+  apiErrorText, fmtYuan, formatDateTime,
   type ApiKeyView, type ContributionView, type ShareRow,
   type SpendRequestView, type TeamDetail, type TeamView, type VentureView,
   type PackTaskTemplateBrief, type PlatformClient,
@@ -221,6 +221,14 @@ function TeamDetailBlock({ client, teamId }: { client: PlatformClient; teamId: n
             {/* TEAM-070（226 号 spec）发起人退回了多少 */}
             {(sp.returned_cents ?? 0) > 0 ? ` · 已退回 ${fmtYuan(sp.returned_cents)}` : ''}
           </Text>
+          {/* TEAM-071（230 号 spec）所有者 / 管理员提醒发起人退回没用完的（一天一次，只提醒不扣钱） */}
+          {(team.my_role === 'owner' || team.my_role === 'admin') && (sp.returnable_cents ?? 0) > 0 && (
+            <Button title={`提醒退回${sp.return_asked_at ? `（上次 ${formatDateTime(sp.return_asked_at)}）` : ''}`} onPress={() => act(async () => {
+              await client.askTeamSpendReturn(teamId, sp.id);
+              setNotice(`已提醒 #${sp.requester_id} 退回没用完的拨款`);
+              await load();
+            })} />
+          )}
           {/* UI-075 读服务端的 can_decide：自己批自己不算审批，客户端不重判 */}
           {sp.can_decide && rejecting !== sp.id && (
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>

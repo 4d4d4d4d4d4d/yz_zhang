@@ -108,6 +108,8 @@ class SpendRequest(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     # TEAM-070（226 号 spec）这笔拨款里发起人已经退回团队的钱。最多退到拨款额
     returned_cents: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # TEAM-071（230 号 spec）所有者 / 管理员上一次提醒发起人退回的时间：一天最多提醒一次
+    return_asked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class TeamInvite(Base):

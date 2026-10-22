@@ -123,6 +123,16 @@ class ReturnIn(BaseModel):
     amount_cents: int = Field(ge=1)
 
 
+@router.post("/{team_id}/spends/{request_id}/ask-return")
+def ask_return(team_id: int, request_id: int, user: User = Depends(get_current_user),
+               db: Session = Depends(get_db, scope="function")):
+    """TEAM-071（230 号 spec）所有者 / 管理员提醒发起人退回没用完的拨款；一天最多一次。"""
+    req = db.get(SpendRequest, request_id)
+    if not req or req.team_id != team_id:
+        raise not_found("支出申请不存在")
+    return service.ask_return(db, req, user)
+
+
 @router.post("/{team_id}/spends/{request_id}/return")
 def return_spend(team_id: int, request_id: int, body: ReturnIn, user: User = Depends(get_current_user),
                  db: Session = Depends(get_db, scope="function"), idempotency_key: str = Header(default="")):
@@ -279,6 +289,8 @@ def list_spends(team_id: int, user: User = Depends(get_current_user),
          "created_at": iso(r.created_at),
          # TEAM-070（226 号 spec）已退回与还能退回的
          "returned_cents": r.returned_cents or 0, "returnable_cents": service.returnable_cents(r),
+         # TEAM-071（230 号 spec）上一次提醒退回的时间
+         "return_asked_at": iso(r.return_asked_at),
          # 客户端的「审批」按钮读这个，与服务端同一判断（TEAM-021）
          "can_decide": (r.status == "pending" and me.role in ("owner", "admin")
                         and r.requester_id != user.id)}

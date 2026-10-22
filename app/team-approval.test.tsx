@@ -99,3 +99,29 @@ describe('APP-069 团队支出审批', () => {
     await waitFor(() => expect(screen.getByText(TEAM.invoice_block)).toBeTruthy());
   });
 });
+
+describe('TEAM-071 App 提醒退回', () => {
+  it('所有者看到「提醒退回」（写上次提醒时间），点了发请求并提示；没有可退的不显示', async () => {
+    const calls = open({ '/teams/5/spends': [
+      spend({ id: 21, status: 'executed', can_decide: false, returned_cents: 1000, returnable_cents: 7000, return_asked_at: null }),
+      spend({ id: 22, status: 'executed', can_decide: false, returned_cents: 8000, returnable_cents: 0 }),
+    ], '/teams/5/spends/21/ask-return': { id: 21, returnable_cents: 7000, return_asked_at: '2026-10-22T02:00:00Z' } });
+    await waitFor(() => expect(screen.getByText('某某科技')).toBeTruthy());
+    fireEvent.press(screen.getByText('某某科技'));
+    await waitFor(() => expect(screen.getAllByText('提醒退回')).toHaveLength(1));
+    fireEvent.press(screen.getByText('提醒退回'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/teams/5/spends/21/ask-return')).toBe(true));
+    expect(await screen.findByText('已提醒 #9 退回没用完的拨款')).toBeTruthy();
+  });
+
+  it('普通成员看不到「提醒退回」', async () => {
+    const MEMBER = { ...TEAM, my_role: 'member' };
+    const client = makeClient({ '/teams/mine': [MEMBER], '/teams/5': MEMBER,
+      '/teams/5/spends': [spend({ id: 21, status: 'executed', can_decide: false, returned_cents: 0, returnable_cents: 7000 })] });
+    render(<SubScreenHost client={client} screen="teams" onBack={() => undefined} />);
+    await waitFor(() => expect(screen.getByText('某某科技')).toBeTruthy());
+    fireEvent.press(screen.getByText('某某科技'));
+    await waitFor(() => expect(screen.getByText('支出申请')).toBeTruthy());
+    expect(screen.queryByText(/提醒退回/)).toBeNull();
+  });
+});

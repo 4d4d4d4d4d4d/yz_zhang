@@ -1,5 +1,5 @@
 import {
-  apiErrorText, fmtYuan, inviteJoinedLine, memberSourceLabel, teamHandoverDetail,
+  apiErrorText, fmtYuan, formatDateTime, inviteJoinedLine, memberSourceLabel, teamHandoverDetail,
   type SpendRequestView, type TeamDetail, type TeamInviteLink, type TeamView,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -168,6 +168,13 @@ function TeamCard({ teamId }: { teamId: number }) {
                 {s.status === 'approved' && (
                   <button className="ghost" onClick={() => act(() => client.executeTeamSpend(teamId, s.id))}>
                     执行
+                  </button>
+                )}
+                {/* TEAM-071（230 号 spec）所有者 / 管理员提醒发起人退回没用完的（一天一次，只提醒不扣钱） */}
+                {(team.my_role === 'owner' || team.my_role === 'admin') && (s.returnable_cents ?? 0) > 0 && (
+                  <button className="ghost" data-testid={`ask-return-${s.id}`}
+                          onClick={() => void act(async () => { await client.askTeamSpendReturn(teamId, s.id); setNotice(`已提醒 #${s.requester_id} 退回没用完的拨款`); })}>
+                    提醒退回{s.return_asked_at ? `（上次 ${formatDateTime(s.return_asked_at)}）` : ''}
                   </button>
                 )}
               </span>

@@ -132,6 +132,7 @@ import type {
   ReturnableTeamSpend,
   UrgentHint,
   TeamSpendReturned,
+  TeamReturnAsked,
   AutoVerifyUsage,
   PlatformFinancePeriods,
   AuditChainReport,
@@ -2078,6 +2079,10 @@ export class PlatformClient {
   returnTeamSpend(teamId: number, requestId: number, amountCents: number, idempotencyKey: string) {
     return this.request<TeamSpendReturned>('POST', `/teams/${teamId}/spends/${requestId}/return`,
       { amount_cents: amountCents }, { 'Idempotency-Key': idempotencyKey });
+  }
+  /** TEAM-071（230 号 spec）所有者 / 管理员提醒发起人退回没用完的拨款；一天最多一次 */
+  askTeamSpendReturn(teamId: number, requestId: number) {
+    return this.request<TeamReturnAsked>('POST', `/teams/${teamId}/spends/${requestId}/ask-return`);
   }
   removeTeamMember(teamId: number, memberUserId: number, handoverTo?: number) {
     const qs = handoverTo ? `?handover_to=${handoverTo}` : '';

@@ -1432,6 +1432,13 @@ export interface SpendRequestView {
   /** TEAM-070（226 号 spec）发起人已经退回团队的钱、还能退回的钱（只有已执行的才有） */
   returned_cents: number;
   returnable_cents: number;
+  /** TEAM-071（230 号 spec）所有者 / 管理员上一次提醒退回的时间（一天最多一次） */
+  return_asked_at?: string | null;
+}
+export interface TeamReturnAsked {
+  id: number;
+  returnable_cents: number;
+  return_asked_at: string;
 }
 
 /** TEAM-070 团队拨给我、还能退回的支出（含已经离开的团队）：钱包页「团队拨款」 */

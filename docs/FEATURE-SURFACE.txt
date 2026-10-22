@@ -500,6 +500,7 @@ api POST /api/v1/teams/{team_id}/invite-links
 api POST /api/v1/teams/{team_id}/invite-links/{link_id}/revoke
 api POST /api/v1/teams/{team_id}/members
 api POST /api/v1/teams/{team_id}/spends
+api POST /api/v1/teams/{team_id}/spends/{request_id}/ask-return
 api POST /api/v1/teams/{team_id}/spends/{request_id}/decide
 api POST /api/v1/teams/{team_id}/spends/{request_id}/execute
 api POST /api/v1/teams/{team_id}/spends/{request_id}/return
@@ -673,6 +674,7 @@ sdk approveSettle
 sdk askNotebook
 sdk askPackAssistant
 sdk askSupport
+sdk askTeamSpendReturn
 sdk assignKnowledgeCard
 sdk assignTicket
 sdk assistantContract

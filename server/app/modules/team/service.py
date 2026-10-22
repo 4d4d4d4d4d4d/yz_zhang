@@ -400,6 +400,36 @@ def return_spend(db: Session, req: SpendRequest, actor: User, amount_cents: int)
             "available_cents": mine.available_cents}
 
 
+ASK_RETURN_GAP_HOURS = 24
+
+
+def ask_return(db: Session, req: SpendRequest, actor: User) -> dict:
+    """TEAM-071（230 号 spec）所有者或管理员提醒发起人把没用完的拨款退回。只是提醒：不扣钱、不替他判断用掉多少（226 号口径）。
+    一天最多提醒一次；发起人已经离开团队也能提醒（钱是在团队时拨的）。"""
+    from datetime import timedelta
+
+    from app.core.timefmt import iso
+    from app.modules.notification.service import notify
+
+    me = member_of(db, req.team_id, actor.id)
+    if me is None or me.role not in ("owner", "admin"):
+        raise forbidden("只有团队所有者或管理员能提醒退回")
+    left = returnable_cents(req)
+    if left <= 0:
+        raise conflict("这笔拨款没有可退的了（没执行，或已经全部退回）", "nothing_to_return")
+    now = utcnow()
+    if req.return_asked_at and req.return_asked_at > now - timedelta(hours=ASK_RETURN_GAP_HOURS):
+        raise conflict(f"这笔拨款 {ASK_RETURN_GAP_HOURS} 小时内已经提醒过了：给对方一点时间", "return_asked_recently")
+    req.return_asked_at = now
+    db.add(req)
+    team = db.get(Team, req.team_id)
+    notify(db, req.requester_id, "system", f"团队「{team.name if team else ''}」提醒你退回没用完的拨款",
+           f"支出 #{req.id}（{req.purpose or '未填用途'}）拨给你 ¥{req.amount_cents / 100:.2f}，最多还能退 ¥{left / 100:.2f}。"
+           "按实际没用完的退就行：在钱包页的「团队拨款」里退回。")
+    db.flush()
+    return {"id": req.id, "returnable_cents": left, "return_asked_at": iso(now)}
+
+
 # ------------------------------------------------------------------ TEAM-054 成员离开时的交接（170 号 spec）
 OPEN_TASK_STATUSES = ("draft", "published", "matched", "in_progress", "pending_acceptance", "disputed")
 
