@@ -25,6 +25,7 @@ describe('FIN-062 成交额与代扣税', () => {
         : path === '/admin/platform-finance' ? { balance_cents: 0, total_fee_cents: 0, settled_cents: 0, fee_count: 0 }
         : path === '/admin/platform-finance/gmv-tax' ? { granularity: 'month', periods: [ROW('2026-08', 15000), ROW('2026-09', 2000)],
             basis: ['成交额（GMV）按放款算', '代扣税额按税款专户的流水算'], draft_note: '口径草稿：对外申报、报送前请财税负责人确认口径' }
+        : path === '/admin/platform-finance/gmv-tax/export' ? { filename: 'gmv-tax-2026-08-2026-09.csv', rows: 2, timezone: '北京时间（UTC+8）', csv: '期间\n' }
         : path === '/admin/aml/activities' ? { items: [], note: '' } : [];
       return { ok: true, status: 200, text: async () => JSON.stringify(body), headers: { get: () => null } };
     }) as unknown as typeof fetch;
@@ -36,6 +37,11 @@ describe('FIN-062 成交额与代扣税', () => {
     expect(aug.textContent).toContain('¥9.00（2 笔）');
     expect(aug.textContent).toContain('¥3.00');
     expect(box.textContent).toContain('成交额（GMV）按放款算');
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    fireEvent.click(within(box).getByText('导出成交额与代扣税 CSV'));
+    await waitFor(() => expect(calls.some((c) => c.startsWith('/admin/platform-finance/gmv-tax/export') && c.includes('granularity=month'))).toBe(true));
+    expect((await within(box).findByRole('status')).textContent).toContain('已导出 2 个期间');
     fireEvent.change(screen.getByLabelText('期间粒度'), { target: { value: 'quarter' } });
     await waitFor(() => expect(calls.some((c) => c.startsWith('/admin/platform-finance/gmv-tax') && c.includes('granularity=quarter'))).toBe(true));
   });

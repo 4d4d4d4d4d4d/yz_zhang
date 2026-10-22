@@ -434,11 +434,24 @@ function GmvTaxPeriods({ granularity }: { granularity: 'month' | 'quarter' }) {
     client.platformGmvTax({ granularity })
       .then((d) => setData(d && Array.isArray(d.periods) ? d : null)).catch((e) => setError(apiErrorText(e)));
   }, [client, granularity]);
-  if (error) return <p className="error">{error}</p>;
+  const [notice, setNotice] = useState('');
+  // FIN-066（249 号 spec）导出 CSV 给记账代理：表尾附口径与草稿提示
+  async function exportCsv() {
+    setError(''); setNotice('');
+    try {
+      const r = await client.exportPlatformGmvTax({ granularity });
+      const url = URL.createObjectURL(new Blob(['\ufeff' + r.csv], { type: 'text/csv;charset=utf-8' }));
+      const a = document.createElement('a'); a.href = url; a.download = r.filename; a.click(); URL.revokeObjectURL(url);
+      setNotice(`已导出 ${r.rows} 个期间（起止时间为${r.timezone}，表尾附口径）。导出已记入审计。`);
+    } catch (e) { setError(apiErrorText(e)); }
+  }
+  if (error && !data) return <p className="error">{error}</p>;
   if (!data) return null;
   return (
     <div aria-label="成交额与代扣税">
-      <h4>成交额与代扣税</h4>
+      <div className="row"><h4 className="grow">成交额与代扣税</h4><button className="ghost" onClick={() => void exportCsv()}>导出成交额与代扣税 CSV</button></div>
+      {notice && <p role="status">{notice}</p>}
+      {error && <p className="error">{error}</p>}
       <p className="badge warn">{data.draft_note}</p>
       <table>
         <thead><tr><th>期间</th><th>成交额（按放款）</th><th>放款笔数</th><th>纠纷分账</th><th>退款</th><th>代扣税</th><th>被代扣人数</th><th>缴库</th><th>期末待缴</th></tr></thead>

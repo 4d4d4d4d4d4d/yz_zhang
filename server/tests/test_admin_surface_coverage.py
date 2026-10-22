@@ -60,6 +60,7 @@ REACHED_BY: dict[str, str] = {
     "/admin/support/agents/{x}/pause": "resumeSupportAgent",
     # FIN-062（242 号 spec）后台「平台财务 · 按期间」下的「成交额与代扣税」
     "/admin/platform-finance/gmv-tax": "platformGmvTax",
+    "/admin/platform-finance/gmv-tax/export": "exportPlatformGmvTax",
     # API-057（241 号 spec）后台「开放 API 配额」里的提额申请：不批，接入方就一直等着
     "/admin/api-quota-requests": "adminApiQuotaRequests",
     "/admin/api-quota-requests/{x}/approve": "approveApiQuotaRequest",

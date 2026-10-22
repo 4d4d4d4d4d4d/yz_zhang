@@ -40,7 +40,8 @@ ROUTE_ROLES = {
     "PUT /admin/support/my-categories": ('support',),
     "POST /admin/support/my-pause": ('support',),
     "GET /admin/api-quota-requests": ('ops',),
-    "GET /admin/platform-finance/gmv-tax": ('finance',),        # FIN-062（242 号 spec）                  # API-057（241 号 spec）
+    "GET /admin/platform-finance/gmv-tax": ('finance',),        # FIN-062（242 号 spec）
+    "GET /admin/platform-finance/gmv-tax/export": ('finance',),  # FIN-066（249 号 spec）                  # API-057（241 号 spec）
     "POST /admin/api-quota-requests/{request_id}/approve": ('ops',),
     "POST /admin/api-quota-requests/{request_id}/reject": ('ops',),               # ESCA-065（240 号 spec）
     "DELETE /admin/support/my-pause": ('support',),

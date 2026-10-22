@@ -1609,6 +1609,10 @@ export class PlatformClient {
   platformGmvTax(params: PeriodQuery = {}) {
     return this.request<PlatformGmvTaxPeriods>('GET', `/admin/platform-finance/gmv-tax${qs(params)}`);
   }
+  /** FIN-066（249 号 spec）成交额与代扣税表导出 CSV（表尾附口径与草稿提示） */
+  exportPlatformGmvTax(params: PeriodQuery = {}) {
+    return this.request<PlatformFinanceExport>('GET', `/admin/platform-finance/gmv-tax/export${qs(params)}`);
+  }
   exportPlatformFinancePeriods(params: PeriodQuery = {}) {
     return this.request<PlatformFinanceExport>('GET', `/admin/platform-finance/periods/export${qs(params)}`);
   }

@@ -55,6 +55,7 @@ api GET /api/v1/admin/packs
 api GET /api/v1/admin/packs/radar
 api GET /api/v1/admin/platform-finance
 api GET /api/v1/admin/platform-finance/gmv-tax
+api GET /api/v1/admin/platform-finance/gmv-tax/export
 api GET /api/v1/admin/platform-finance/periods
 api GET /api/v1/admin/platform-finance/periods/export
 api GET /api/v1/admin/platform-finance/settle-requests
@@ -820,6 +821,7 @@ sdk exportMyData
 sdk exportNotebook
 sdk exportOpcBooks
 sdk exportPlatformFinancePeriods
+sdk exportPlatformGmvTax
 sdk extractNoteTodos
 sdk finalReport
 sdk followStats

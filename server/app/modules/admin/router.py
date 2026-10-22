@@ -1178,6 +1178,44 @@ def export_platform_finance_periods(
             "timezone": EXPORT_TZ_LABEL, "csv": buf.getvalue()}
 
 
+@router.get("/admin/platform-finance/gmv-tax/export")
+def export_platform_gmv_tax(
+    granularity: str = Query(default="month", pattern="^(month|quarter)$"),
+    start: str = Query(default="", pattern=PERIOD_PATTERN),
+    end: str = Query(default="", pattern=PERIOD_PATTERN),
+    admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function"),
+):
+    """FIN-066（249 号 spec）成交额与代扣税表导出 CSV：期间起止写北京时间，表尾附口径与「草稿」提示；导出进审计。"""
+    import csv
+    import io
+
+    from app.core.timefmt import EXPORT_TZ_LABEL, export_time
+    from app.modules.wallet import service as wallet
+
+    out = wallet.gmv_tax_periods(db, *_period_args(granularity, start, end))
+    yuan = lambda c: f"{c / 100:.2f}"  # noqa: E731
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["期间", f"起（{EXPORT_TZ_LABEL}）", f"止（{EXPORT_TZ_LABEL}，不含）", "成交额（元，按放款）", "放款笔数",
+                "执行者到手（元）", "平台佣金（元）", "纠纷分账（元，不计入成交额）", "退款（元，不计入成交额）",
+                "代扣税（元）", "代扣笔数", "被代扣人数", "被代扣对应收入（元）", "缴库（元）", "期末待缴（元）"])
+    for r in out["periods"]:
+        w.writerow([r["period"], export_time(r["start"]), export_time(r["end"]), yuan(r["gmv_cents"]), r["release_count"],
+                    yuan(r["executor_net_cents"]), yuan(r["fee_cents"]), yuan(r["dispute_split_cents"]), yuan(r["refund_cents"]),
+                    yuan(r["withheld_cents"]), r["withheld_count"], r["withheld_people"], yuan(r["withheld_income_cents"]),
+                    yuan(r["remitted_cents"]), yuan(r["tax_pending_cents"])])
+    w.writerow([])
+    w.writerow(["口径"])
+    for b in out["basis"]:
+        w.writerow([b])
+    w.writerow([out["draft_note"]])
+    first, last = out["periods"][0]["period"], out["periods"][-1]["period"]
+    record_audit(db, admin.id, "export_platform_gmv_tax", "platform", None, f"{granularity} {first}~{last}")
+    db.commit()
+    return {"filename": f"gmv-tax-{first}-{last}.csv", "rows": len(out["periods"]),
+            "timezone": EXPORT_TZ_LABEL, "csv": buf.getvalue()}
+
+
 @router.post("/admin/platform-finance/settle")
 def settle_platform(
     body: SettleIn, admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function")

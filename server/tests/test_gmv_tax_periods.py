@@ -68,3 +68,33 @@ def test_roles_and_range(client):
     assert client.get(URL, params={"start": "2026-05", "end": "2026-03"}, headers=auth(fin)).json()["detail"]["code"] == "period_range_invalid"
     d = client.get(URL, headers=auth(fin)).json()
     assert len(d["periods"]) == 12 and all(p["gmv_cents"] == 0 for p in d["periods"]), "默认最近 12 个月，没流水全是 0"
+
+
+def test_fin066_csv_export_with_basis_and_audit(client):
+    """FIN-066（249 号 spec）导出 CSV：起止写北京时间、金额按元、表尾附口径与草稿提示；导出进审计。"""
+    import csv
+    import io
+
+    from app.modules.admin.models import AdminAudit
+
+    _seed()
+    fin = make_admin(client, "13800342021", "财务")
+    r = client.get(f"{URL}/export", params={"start": "2026-08", "end": "2026-09"}, headers=auth(fin))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    from tests.test_client_shape_alignment import _assert_shape
+
+    _assert_shape(body, "PlatformFinanceExport")
+    assert body["filename"] == "gmv-tax-2026-08-2026-09.csv" and body["rows"] == 2
+    rows = list(csv.reader(io.StringIO(body["csv"])))
+    assert rows[0][0] == "期间" and "北京时间" in rows[0][1] and rows[0][3] == "成交额（元，按放款）"
+    aug = rows[1]
+    assert aug[0] == "2026-08" and aug[1].startswith("2026-08-01 00:00") and aug[3] == "150.00" and aug[9] == "9.00" and aug[11] == "2"
+    assert rows[2][0] == "2026-09" and rows[2][14] == "3.00", "期末待缴"
+    assert ["口径"] in rows and any("按放款" in x[0] for x in rows if x) and "财税负责人确认" in rows[-1][0]
+    with SessionLocal() as db:
+        assert db.query(AdminAudit).filter(AdminAudit.action == "export_platform_gmv_tax").one().detail == "month 2026-08~2026-09"
+    q = client.get(f"{URL}/export", params={"granularity": "quarter", "start": "2026-08", "end": "2026-08"}, headers=auth(fin)).json()
+    assert q["filename"] == "gmv-tax-2026-Q3-2026-Q3.csv" and list(csv.reader(io.StringIO(q["csv"])))[1][3] == "170.00", "按季度导出"
+    ops = _admin(client, "13800342022", ["ops"])
+    assert client.get(f"{URL}/export", headers=auth(ops)).status_code == 403
