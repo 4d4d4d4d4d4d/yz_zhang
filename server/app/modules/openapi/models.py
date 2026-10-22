@@ -160,3 +160,5 @@ class ApiQuotaRequest(Base):
     decision_note: Mapped[str] = mapped_column(String(200), default="")
     granted_quota: Mapped[int | None] = mapped_column(Integer, nullable=True)
     granted_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # API-058（247 号 spec）上一次催运营的时间（一天最多一次）
+    reminded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

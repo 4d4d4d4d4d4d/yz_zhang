@@ -50,6 +50,9 @@ JOBS: tuple[ScheduledJob, ...] = (
                  "DSP-009 超 SLA 未结案的纠纷升级人审"),
     ScheduledJob("/openapi/jobs/purge-usage", 86400, "api_usage_purge",
                  "API-055 Key 用量记录只留 90 天（用量页最多看 90 天），一天清一次就够"),
+    ScheduledJob("/openapi/jobs/remind-quota-requests", 3600, "quota_request_reminders",
+                 "API-058 待批超过 48 小时的提额申请催运营（每笔一天一次）——接入方配额用完就 429，"
+                 "申请躺着没人看等于业务停着（247 号 spec）"),
     ScheduledJob("/openapi/jobs/deliver-webhooks", 60, "deliver_webhooks",
                  "HOOK-002 Webhook 投递与指数退避重试；连续失败自动停用并通知拥有者"),
     ScheduledJob("/verify/jobs/expire-orders", 3600, "expire_verifications",

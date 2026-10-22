@@ -154,7 +154,51 @@ def request_quota(body: QuotaRequestIn, user: User = Depends(get_current_user), 
     r = ApiQuotaRequest(user_id=user.id, daily_quota=body.daily_quota, days=body.days, purpose=body.purpose.strip())
     db.add(r)
     db.flush()
+    # API-058（247 号 spec）告诉运营有新申请：不说的话要等运营哪天想起来打开后台
+    _notify_ops(db, "新的开放 API 提额申请",
+                f"{user.nickname} 申请每天 {body.daily_quota} 次（现在 {current} 次）：{r.purpose[:80]}。到后台「开放 API 配额」处理。")
     return quota_request_row(r)
+
+
+QUOTA_REQUEST_REMIND_HOURS = 48
+
+
+def _ops_ids(db: Session) -> list[int]:
+    from app.core.admin_roles import has_role
+
+    return [u.id for u in db.query(User).filter(User.is_admin.is_(True), User.is_banned.is_(False)).order_by(User.id)
+            if has_role(u, "ops")]
+
+
+def _notify_ops(db: Session, title: str, body: str) -> int:
+    from app.modules.notification.service import notify
+
+    ids = _ops_ids(db)
+    for uid in ids:
+        notify(db, uid, "system", title, body)
+    return len(ids)
+
+
+def remind_quota_requests(db: Session) -> dict:
+    """API-058 待批超过 48 小时的提额申请：催运营，每笔一天最多一次。"""
+    from datetime import timedelta
+
+    now = utcnow()
+    due = (db.query(ApiQuotaRequest)
+           .filter(ApiQuotaRequest.status == "pending",
+                   ApiQuotaRequest.created_at <= now - timedelta(hours=QUOTA_REQUEST_REMIND_HOURS))
+           .order_by(ApiQuotaRequest.id).all())
+    due = [r for r in due if r.reminded_at is None or r.reminded_at <= now - timedelta(hours=24)]
+    if not due:
+        return {"reminded": 0}
+    hours = {r.id: int((now - r.created_at).total_seconds() // 3600) for r in due}
+    _notify_ops(db, "开放 API 提额申请等待处理",
+                f"有 {len(due)} 笔提额申请等了 {QUOTA_REQUEST_REMIND_HOURS} 小时以上还没处理（最久 {max(hours.values())} 小时）："
+                + "、".join(f"#{r.id}" for r in due[:10]) + "。到后台「开放 API 配额」批准或驳回。")
+    for r in due:
+        r.reminded_at = now
+        db.add(r)
+    return {"reminded": len(due)}
 
 
 @router.get("/developer/quota-requests")
@@ -335,6 +379,13 @@ def run_purge_usage(db: Session = Depends(get_db, scope="function"), _=Depends(r
     from .usage import purge_usage
 
     return purge_usage(db)
+
+
+@router.post("/openapi/jobs/remind-quota-requests")
+def run_remind_quota_requests(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                              __=Depends(job_slot("quota_request_reminders"), scope="function")):
+    """API-058（247 号 spec）待批太久的提额申请催运营。"""
+    return remind_quota_requests(db)
 
 
 @router.post("/openapi/jobs/deliver-webhooks")
