@@ -18,5 +18,6 @@ export * from './minor';
 export * from './autoVerify';
 export * from './teamReturns';
 export * from './teamInviteUsage';
+export * from './apiQuota';
 export * from './tickets';
 export * from './session';

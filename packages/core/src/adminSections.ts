@@ -39,6 +39,8 @@ export const ADMIN_SECTIONS = {
   audit: { label: '审计日志', probe: 'GET /admin/audit-log', roles: ['compliance'] },
   finance: { label: '平台财务', probe: 'GET /admin/platform-finance', roles: ['finance'] },
   announcements: { label: '全站公告', probe: 'GET /admin/announcements', roles: ['ops'] },
+  // API-056（235 号 spec）
+  apiQuotas: { label: '开放 API 配额', probe: 'GET /admin/api-accounts/quotas', roles: ['ops'] },
 } satisfies Record<string, AdminSection>;
 
 export type AdminSectionKey = keyof typeof ADMIN_SECTIONS;

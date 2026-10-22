@@ -382,6 +382,78 @@ def set_my_support_categories(body: SupportScopeIn, admin: User = Depends(requir
     return {"categories": cats, "declared": True, "labels": CATEGORIES}
 
 
+# ---------- API-056（235 号 spec）开放 API 账号配额按客户单独调整 ----------
+class ApiAccountQuotaIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    daily_quota: int = Field(ge=1, le=10_000_000)
+    reason: str = Field(min_length=4, max_length=200)
+    days: int | None = Field(default=None, ge=1, le=366)     # 不填 = 一直有效，直到改回默认
+
+
+def _quota_row(db: Session, r, names: dict, now) -> dict:
+    from app.modules.openapi import usage
+
+    return {"user_id": r.user_id, "nickname": names.get(r.user_id, ""), "daily_quota": r.daily_quota,
+            "default_quota": settings.API_ACCOUNT_DAILY_QUOTA, "reason": r.reason, "set_at": iso(r.set_at),
+            "expires_at": iso(r.expires_at), "active": r.expires_at is None or r.expires_at > now,
+            "today_used": usage.account_used(db, r.user_id, usage.day_of(now))}
+
+
+@router.get("/admin/api-accounts/quotas")
+def api_account_quotas(admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
+    """API-056 单独调过账号配额的接入方：调到多少、为什么、到哪天、今天用了多少。"""
+    from app.modules.openapi.models import ApiAccountQuota
+
+    now = utcnow()
+    rows = db.query(ApiAccountQuota).order_by(ApiAccountQuota.set_at.desc()).limit(200).all()
+    names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_([r.user_id for r in rows] or [-1]))}
+    return [_quota_row(db, r, names, now) for r in rows]
+
+
+@router.put("/admin/api-accounts/{user_id}/quota")
+def set_api_account_quota(user_id: int, body: ApiAccountQuotaIn, admin: User = Depends(require_role("ops")),
+                          db: Session = Depends(get_db, scope="function")):
+    """API-056 给某个接入方单独调账号每日总配额（可以调高也可以调低）。写理由、进审计、通知对方。"""
+    from datetime import timedelta
+
+    from app.modules.notification.service import notify
+    from app.modules.openapi.models import ApiAccountQuota
+
+    target = db.get(User, user_id)
+    if target is None or target.is_deleted:
+        raise not_found("没有这个用户")
+    now = utcnow()
+    row = db.query(ApiAccountQuota).filter(ApiAccountQuota.user_id == user_id).first() or ApiAccountQuota(user_id=user_id)
+    row.daily_quota, row.reason, row.set_by, row.set_at = body.daily_quota, body.reason.strip(), admin.id, now
+    row.expires_at = now + timedelta(days=body.days) if body.days else None
+    db.add(row)
+    record_audit(db, admin.id, "api_account_quota", "user", user_id,
+                 f"{body.daily_quota}/天{f'，{body.days} 天' if body.days else ''}：{row.reason}")
+    notify(db, user_id, "system", "你的开放 API 账号每日配额已调整",
+           f"所有 API Key 合计每天 {body.daily_quota} 次（默认 {settings.API_ACCOUNT_DAILY_QUOTA} 次）"
+           + (f"，{body.days} 天后恢复默认" if body.days else "") + "。按北京时间的天计算。")
+    db.flush()
+    return _quota_row(db, row, {target.id: target.nickname}, now)
+
+
+@router.delete("/admin/api-accounts/{user_id}/quota")
+def reset_api_account_quota(user_id: int, reason: str = Query(min_length=4, max_length=200),
+                            admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
+    """API-056 改回默认配额。写理由、进审计、通知对方。"""
+    from app.modules.notification.service import notify
+    from app.modules.openapi.models import ApiAccountQuota
+
+    row = db.query(ApiAccountQuota).filter(ApiAccountQuota.user_id == user_id).first()
+    if row is None:
+        raise not_found("这个账号没有单独调过配额", "api_account_quota_not_set")
+    db.delete(row)
+    record_audit(db, admin.id, "api_account_quota_reset", "user", user_id, reason.strip())
+    notify(db, user_id, "system", "你的开放 API 账号每日配额已恢复默认",
+           f"所有 API Key 合计每天 {settings.API_ACCOUNT_DAILY_QUOTA} 次，按北京时间的天计算。")
+    db.flush()
+    return {"user_id": user_id, "daily_quota": settings.API_ACCOUNT_DAILY_QUOTA, "custom": False}
+
+
 # ESCA-058（221 号 spec）后台工单详情：队列只露提单人最新一句，完整往来以前要到哪里看都没有
 @router.get("/admin/tickets/{ticket_id}")
 def ticket_detail(ticket_id: int, admin: User = Depends(require_role("support")),

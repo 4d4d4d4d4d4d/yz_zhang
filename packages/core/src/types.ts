@@ -1694,6 +1694,19 @@ export interface MyTicket {
   images?: string[];
 }
 export type TicketCategory = 'funds' | 'account' | 'general';
+/** API-056（235 号 spec）运营给某个接入方单独调的账号每日配额 */
+export interface ApiAccountQuotaRow {
+  user_id: number;
+  nickname: string;
+  daily_quota: number;
+  default_quota: number;
+  reason: string;
+  set_at: string;
+  expires_at: string | null;
+  /** 没过期 */
+  active: boolean;
+  today_used: number;
+}
 /** ESCA-061（234 号 spec）客服负责的工单类别；没声明过（declared=false）视为什么都管 */
 export interface SupportScope {
   categories: TicketCategory[];
@@ -1805,6 +1818,9 @@ export interface ApiKeyUsageView {
   account_today_used: number;
   account_daily_quota: number;
   account_today_remaining: number;
+  /** API-056（235 号 spec）账号配额是不是平台给你单独调过的、到哪天（老服务端没有） */
+  account_quota_custom?: boolean;
+  account_quota_expires_at?: string | null;
   key_id: number;
   daily_quota: number;
   effective_daily_quota: number;

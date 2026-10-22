@@ -35,6 +35,7 @@ from app.modules.notification.models_device import DeviceToken  # noqa: F401
 from app.modules.account.models_cert import CertificationApplication  # noqa: F401
 from app.modules.agent.models import AgentProfile, AgentRun  # noqa: F401
 from app.modules.openapi.models import (  # noqa: F401
+    ApiAccountQuota,
     ApiKey,
     ApiKeyUsage,
     Webhook,

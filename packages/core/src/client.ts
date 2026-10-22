@@ -132,6 +132,7 @@ import type {
   ReturnableTeamSpend,
   UrgentHint,
   SupportScope,
+  ApiAccountQuotaRow,
   TeamSpendReturned,
   TeamReturnAsked,
   AutoVerifyUsage,
@@ -1698,6 +1699,17 @@ export class PlatformClient {
     return this.request<AdminTicketRow[]>(
       'GET', `/admin/tickets?status=${status}&limit=${limit}&offset=${offset}${extra ? `&${extra.slice(1)}` : ''}`,
     ).then(listOf);
+  }
+  /** API-056（235 号 spec）单独调过账号配额的接入方（运营） */
+  apiAccountQuotas() {
+    return this.request<ApiAccountQuotaRow[]>('GET', '/admin/api-accounts/quotas').then(listOf);
+  }
+  setApiAccountQuota(userId: number, input: { daily_quota: number; reason: string; days?: number }) {
+    return this.request<ApiAccountQuotaRow>('PUT', `/admin/api-accounts/${userId}/quota`, input);
+  }
+  resetApiAccountQuota(userId: number, reason: string) {
+    return this.request<{ user_id: number; daily_quota: number; custom: boolean }>(
+      'DELETE', `/admin/api-accounts/${userId}/quota?reason=${encodeURIComponent(reason)}`);
   }
   /** ESCA-061（234 号 spec）我负责哪几类工单 */
   mySupportCategories() {

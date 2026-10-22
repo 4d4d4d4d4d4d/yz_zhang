@@ -14,6 +14,7 @@ import { SkillConceptsAdmin } from '../AdminSkills';
 import { AdminRolesPanel } from '../AdminRoles';
 import { useApp } from '../store';
 import { TicketImages } from './Support';
+import { ApiQuotasAdmin } from '../AdminApiQuotas';
 import PhotoPicker from '../PhotoPicker';
 
 type Metrics = {
@@ -169,6 +170,8 @@ export default function Admin() {
       {see('audit') && <AuditLog />}
       {see('finance') && <PlatformFinance />}
       {see('announcements') && <Announcement />}
+      {/* API-056（235 号 spec） */}
+      {see('apiQuotas') && <ApiQuotasAdmin />}
       {hiddenAdminSections(me).length > 0 && (
         <p className="muted" aria-label="不在你职责里的板块">
           这些板块不在你的职责里，所以没有显示：{hiddenAdminSections(me).join('、')}。需要的话请超级管理员在「管理员与角色」里给你加上对应角色。

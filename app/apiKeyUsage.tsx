@@ -1,5 +1,5 @@
 // API-052 App 上看 API Key 用量与设每日配额（152 号 spec）。
-import { apiErrorText, formatDateTime, type ApiKeyUsageView, type PlatformClient } from '@platform/core';
+import { apiErrorText, formatDateTime, type ApiKeyUsageView, type PlatformClient, accountQuotaNote } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -18,6 +18,8 @@ export function KeyUsageBlock({ client, keyId }: { client: PlatformClient; keyId
       <Text>今天（{u.time_zone}）已用 {u.today_used} / {u.effective_daily_quota} 次{u.daily_quota ? '（你设的配额）' : '（平台默认配额）'}，还剩 {u.today_remaining} 次；{formatDateTime(u.resets_at)} 恢复</Text>
       {/* API-054（158 号 spec）多把 Key 不能叠加配额 */}
       {typeof u.account_daily_quota === 'number' && <Text style={s.muted}>账号下所有 Key 今天合计 {u.account_today_used} / {u.account_daily_quota} 次</Text>}
+      {/* API-056（235 号 spec） */}
+      {!!accountQuotaNote(u) && <Text style={s.muted}>{accountQuotaNote(u)}</Text>}
       <Text style={s.muted}>最近 7 天：{u.days.map((d) => `${d.day.slice(5)} ${d.count}${d.rejected ? `（挡回 ${d.rejected}）` : ''}`).join(' · ')}</Text>
       <TextInput style={s.input} accessibilityLabel={`Key ${keyId} 每日配额`} keyboardType="numeric" placeholder="设更低的每日配额（0 = 默认）"
                  value={quota} onChangeText={setQuota} />

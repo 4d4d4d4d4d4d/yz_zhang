@@ -20,7 +20,7 @@ from app.core.timefmt import day as day_str, iso
 from app.modules.account.models import utcnow
 from app.modules.workbench.service import _back, local
 
-from .models import ApiKey, ApiKeyUsage
+from .models import ApiAccountQuota, ApiKey, ApiKeyUsage
 
 USAGE_DAYS_MAX = 90
 
@@ -87,12 +87,21 @@ def consume(db: Session, key: ApiKey, now: datetime | None = None) -> tuple[int,
     return used, limit
 
 
+def account_quota(db: Session, user_id: int, now: datetime | None = None) -> tuple[int, ApiAccountQuota | None]:
+    """API-056（235 号 spec）这个账号当前生效的每日总配额：单独调过且没过期的用调过的，否则用默认。"""
+    now = now or utcnow()
+    row = db.query(ApiAccountQuota).filter(ApiAccountQuota.user_id == user_id).first()
+    if row is not None and (row.expires_at is None or row.expires_at > now):
+        return row.daily_quota, row
+    return settings.API_ACCOUNT_DAILY_QUOTA, None
+
+
 def consume_ex(db: Session, key: ApiKey, now: datetime | None = None) -> tuple[int, int, dict]:
     from app.vendors.base import checkpoint
 
     now = now or utcnow()
     day, limit = day_of(now), effective_quota(key)
-    acct_limit = settings.API_ACCOUNT_DAILY_QUOTA
+    acct_limit, _custom = account_quota(db, key.user_id, now)
     _bump(db, key.id, day, "count")
     db.flush()
     used = _used(db, key.id, day)
@@ -122,11 +131,15 @@ def view(db: Session, key: ApiKey, days: int = 14, now: datetime | None = None) 
             .filter(ApiKeyUsage.key_id == key.id, ApiKeyUsage.day.in_(wanted)).all()}
     limit = effective_quota(key)
     used = rows[wanted[0]].count if wanted[0] in rows else 0
-    acct_used, acct_limit = account_used(db, key.user_id, wanted[0]), settings.API_ACCOUNT_DAILY_QUOTA
+    acct_limit, custom = account_quota(db, key.user_id, now)
+    acct_used = account_used(db, key.user_id, wanted[0])
     return {
         # API-054（158 号 spec）账号所有 Key 当天合计
         "account_today_used": acct_used, "account_daily_quota": acct_limit,
         "account_today_remaining": max(0, acct_limit - acct_used),
+        # API-056（235 号 spec）账号配额是不是平台给你单独调过的、到哪天
+        "account_quota_custom": custom is not None,
+        "account_quota_expires_at": iso(custom.expires_at) if custom is not None else None,
         "key_id": key.id, "daily_quota": key.daily_quota, "effective_daily_quota": limit,
         "today": wanted[0], "today_used": used, "today_remaining": max(0, limit - used),
         "resets_at": iso(next_reset(now)), "time_zone": "北京时间 UTC+8",

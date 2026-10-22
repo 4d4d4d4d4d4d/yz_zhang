@@ -46,4 +46,11 @@ describe('API-052 App 上的 Key 用量', () => {
     render(<KeyUsageBlock client={client} keyId={4} />);
     expect(await screen.findByText('账号下所有 Key 今天合计 41000 / 50000 次')).toBeTruthy();
   });
+
+  it('API-056 平台单独调过账号配额的写明（235 号 spec）', async () => {
+    const client = makeClient({ 'GET /developer/api-keys/4/usage': { ...USAGE, account_today_used: 1, account_daily_quota: 200000, account_today_remaining: 199999,
+      account_quota_custom: true, account_quota_expires_at: null } }, []);
+    render(<KeyUsageBlock client={client} keyId={4} />);
+    expect(await screen.findByText('平台为你单独调过账号配额')).toBeTruthy();
+  });
 });

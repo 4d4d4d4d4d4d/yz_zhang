@@ -1,7 +1,6 @@
 import {
   apiErrorText, formatDateTime,
-  type ApiKeyUsageView, type ApiKeyView, type WebhookDeliveryView, type WebhookView,
-} from '@platform/core';
+  type ApiKeyUsageView, type ApiKeyView, type WebhookDeliveryView, type WebhookView, accountQuotaNote } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
 import MachineMandate from '../MachineMandate';
@@ -199,7 +198,9 @@ function KeyUsage({ keyId }: { keyId: number }) {
         今天（{u.time_zone}）已用 {u.today_used} / {u.effective_daily_quota} 次{u.daily_quota ? '（你设的配额）' : '（平台默认配额）'}，
         还剩 {u.today_remaining} 次，{formatDateTime(u.resets_at)} 恢复
         {/* API-054（158 号 spec） */}
-        {typeof u.account_daily_quota === 'number' && `；账号下所有 Key 合计 ${u.account_today_used} / ${u.account_daily_quota} 次`} ·
+        {typeof u.account_daily_quota === 'number' && `；账号下所有 Key 合计 ${u.account_today_used} / ${u.account_daily_quota} 次`}
+        {/* API-056（235 号 spec） */}
+        {accountQuotaNote(u) && `（${accountQuotaNote(u)}）`} ·
         <input style={{ width: 110 }} aria-label={`Key ${keyId} 每日配额`} type="number" min={0} placeholder="设更低的配额" value={v}
                onChange={(e) => setV(e.target.value)} />
         <button className="ghost" disabled={v === ''} onClick={async () => {

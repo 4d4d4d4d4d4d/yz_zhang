@@ -125,3 +125,18 @@ class WebhookDelivery(Base):
     response_excerpt: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class ApiAccountQuota(Base):
+    """API-056（235 号 spec）给某个接入方单独调整的账号每日总配额（所有 Key 合计）。
+    没有这一行就用默认的 `PLATFORM_API_ACCOUNT_DAILY_QUOTA`；可以设到期日，过期自动回到默认。"""
+
+    __tablename__ = "api_account_quotas"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    daily_quota: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(200), default="")
+    set_by: Mapped[int] = mapped_column(Integer)
+    set_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

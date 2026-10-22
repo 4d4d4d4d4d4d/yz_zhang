@@ -53,6 +53,9 @@ REACHED_BY: dict[str, str] = {
     "/admin/tickets/{x}": "adminTicketDetail",
     # ESCA-061（234 号 spec）工单台「我负责的类别」
     "/admin/support/my-categories": "mySupportCategories",
+    # API-056（235 号 spec）后台「开放 API 配额」
+    "/admin/api-accounts/quotas": "apiAccountQuotas",
+    "/admin/api-accounts/{x}/quota": "setApiAccountQuota",
     # FIN-063（223 号 spec）报表锁账：后台「平台财务 · 按期间」的「锁账到此月」
     "/admin/platform-finance/lock": "lockPlatformFinance",
     # APP-094 页面渲染出错的聚合（184 号 spec）：后台「页面出错」一块

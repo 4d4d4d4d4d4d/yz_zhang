@@ -1,4 +1,5 @@
 # 功能面清单（FEAT-001）：只增不减。下线须进 scripts/feature_surface.py 的 RETIRED 并写理由
+api DELETE /api/v1/admin/api-accounts/{user_id}/quota
 api DELETE /api/v1/contents/{content_id}
 api DELETE /api/v1/conversations/{conv_id}/members/{member_id}
 api DELETE /api/v1/decompositions/{dec_id}/nodes/{node_id}
@@ -27,6 +28,7 @@ api GET /api/v1/admin/agents
 api GET /api/v1/admin/aml/activities
 api GET /api/v1/admin/aml/stats
 api GET /api/v1/admin/announcements
+api GET /api/v1/admin/api-accounts/quotas
 api GET /api/v1/admin/audit-log
 api GET /api/v1/admin/audit-log/export
 api GET /api/v1/admin/audit-log/verify
@@ -547,6 +549,7 @@ api POST /api/v1/xapp/runs/{run_id}/steps/{step_id}/confirm
 api POST /api/v1/xapp/runs/{run_id}/steps/{step_id}/result
 api POST /api/v1/xapp/runs/{run_id}/stop
 api PUT /api/v1/admin/admins/{user_id}/roles
+api PUT /api/v1/admin/api-accounts/{user_id}/quota
 api PUT /api/v1/admin/legal/faqs/{faq_id}
 api PUT /api/v1/admin/matching-config
 api PUT /api/v1/admin/packs/{pack_id}
@@ -664,6 +667,7 @@ sdk amlActivities
 sdk amlStats
 sdk anchorCoverage
 sdk announcements
+sdk apiAccountQuotas
 sdk apiKeyUsage
 sdk apiKeys
 sdk apiScopes
@@ -952,6 +956,7 @@ sdk reportVisit
 sdk requestInvoice
 sdk requestTeamSpend
 sdk requestVerification
+sdk resetApiAccountQuota
 sdk resetPassword
 sdk resolveReport
 sdk resolveTicket
@@ -989,6 +994,7 @@ sdk sendMessage
 sdk sendQuoteCard
 sdk sendSmsCode
 sdk setAdminRoles
+sdk setApiAccountQuota
 sdk setApiKeyQuota
 sdk setApiKeyRate
 sdk setFriendRemark
