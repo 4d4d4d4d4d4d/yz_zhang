@@ -23,7 +23,7 @@ describe('FIN-062 成交额与代扣税', () => {
       calls.push(full);
       const body: unknown = path === '/users/me' ? ADMIN
         : path === '/admin/platform-finance' ? { balance_cents: 0, total_fee_cents: 0, settled_cents: 0, fee_count: 0 }
-        : path === '/admin/platform-finance/gmv-tax' ? { granularity: 'month', periods: [ROW('2026-08', 15000), ROW('2026-09', 2000)],
+        : path === '/admin/platform-finance/gmv-tax' ? { granularity: 'month', periods: [{ ...ROW('2026-08', 15000), closed: true, late_gmv_cents: 1000, late_withheld_cents: 50 }, ROW('2026-09', 2000)],
             basis: ['成交额（GMV）按放款算', '代扣税额按税款专户的流水算'], draft_note: '口径草稿：对外申报、报送前请财税负责人确认口径' }
         : path === '/admin/platform-finance/gmv-tax/export' ? { filename: 'gmv-tax-2026-08-2026-09.csv', rows: 2, timezone: '北京时间（UTC+8）', csv: '期间\n' }
         : path === '/admin/aml/activities' ? { items: [], note: '' } : [];
@@ -36,6 +36,9 @@ describe('FIN-062 成交额与代扣税', () => {
     expect(aug.textContent).toContain('¥150.00');
     expect(aug.textContent).toContain('¥9.00（2 笔）');
     expect(aug.textContent).toContain('¥3.00');
+    expect(aug.textContent).toContain('已锁');
+    expect(aug.textContent).toContain('锁账后又记进成交额 ¥10.00、代扣 ¥0.50，未计入上面的数');
+    expect(within(box).getByTestId('gmv-2026-09').textContent).not.toContain('已锁');
     expect(box.textContent).toContain('成交额（GMV）按放款算');
     URL.createObjectURL = vi.fn(() => 'blob:x');
     URL.revokeObjectURL = vi.fn();

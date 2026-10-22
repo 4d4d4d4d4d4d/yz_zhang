@@ -460,7 +460,11 @@ function GmvTaxPeriods({ granularity }: { granularity: 'month' | 'quarter' }) {
             <tr key={r.period} data-testid={`gmv-${r.period}`}>
               <td>{r.period}</td><td>{fmtYuan(r.gmv_cents)}</td><td>{r.release_count}</td><td>{fmtYuan(r.dispute_split_cents)}</td>
               <td>{fmtYuan(r.refund_cents)}</td><td>{fmtYuan(r.withheld_cents)}（{r.withheld_count} 笔）</td><td>{r.withheld_people}</td>
-              <td>{fmtYuan(r.remitted_cents)}</td><td>{fmtYuan(r.tax_pending_cents)}</td>
+              <td>{fmtYuan(r.remitted_cents)}</td><td>{fmtYuan(r.tax_pending_cents)}
+                {/* FIN-067（258 号 spec）锁过账的月份读快照，锁账后又记进来的另报 */}
+                {r.closed && <span className="badge"> 已锁</span>}
+                {r.closed && ((r.late_gmv_cents ?? 0) !== 0 || (r.late_withheld_cents ?? 0) !== 0) &&
+                  <span className="muted"> 锁账后又记进成交额 {fmtYuan(r.late_gmv_cents ?? 0)}、代扣 {fmtYuan(r.late_withheld_cents ?? 0)}，未计入上面的数</span>}</td>
             </tr>
           ))}
         </tbody>

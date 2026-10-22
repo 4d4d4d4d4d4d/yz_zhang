@@ -3450,6 +3450,10 @@ export interface PlatformGmvTaxRow {
   /** 缴库划出（正数）与期末待缴 */
   remitted_cents: number;
   tax_pending_cents: number;
+  /** FIN-067（258 号 spec）锁过账（读锁账时的快照）、锁账后又记进来的成交额与代扣税（老服务端没有） */
+  closed?: boolean;
+  late_gmv_cents?: number;
+  late_withheld_cents?: number;
 }
 export interface PlatformGmvTaxPeriods {
   granularity: 'month' | 'quarter';

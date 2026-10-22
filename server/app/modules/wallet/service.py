@@ -858,9 +858,10 @@ def lock_periods(db: Session, through: str, admin_id: int, now: datetime) -> lis
             {**_live_periods(db, "month", label, label)["periods"][0]}
         live = _raw(db, LedgerEntry.created_at >= mlo, LedgerEntry.created_at < mhi)
         snap = {k: v for k, v in row.items() if k not in ("start", "end", *_LOCK_DEFAULTS)}
+        gmv = {k: v for k, v in _gmv_tax_rows(db, [(label, mlo, mhi)])[0].items() if k not in ("start", "end")}
         lock = FinancePeriodLock(period=label, snapshot=snap, in_month_cents=sum(live[c] for c in _RAW_COLS),
                                  in_month_count=live["count"], cumulative=_raw(db, LedgerEntry.created_at < mhi),
-                                 locked_by=admin_id, locked_at=now)
+                                 locked_by=admin_id, locked_at=now, gmv_tax=gmv)
         db.add(lock)
         db.flush()
         locks[label] = lock
@@ -913,13 +914,53 @@ GMV_TAX_BASIS = [
 GMV_TAX_DRAFT_NOTE = "口径草稿：对外申报、报送前请财税负责人确认口径（钱与申报的事 AI 只出草稿，人确认）。"
 
 
+_GMV_LOCK_DEFAULTS = {"closed": False, "late_gmv_cents": 0, "late_withheld_cents": 0}
+_GMV_SUM_COLS = ("gmv_cents", "release_count", "executor_net_cents", "fee_cents", "dispute_split_cents", "refund_cents",
+                 "withheld_cents", "withheld_count", "withheld_income_cents", "remitted_cents",
+                 "late_gmv_cents", "late_withheld_cents")
+
+
 def gmv_tax_periods(db: Session, granularity: str, start: str, end: str) -> dict:
+    """FIN-062；FIN-067（258 号 spec）锁过账的月份读锁账时的快照，另报锁账后又记进来的差额（late_*）。
+    一个月都没锁时与锁账之前完全一样，只多几个恒为默认值的字段。"""
+    from .models import FinancePeriodLock
+
+    bounds = period_bounds(granularity, start, end)
+    locks = {x.period: x.gmv_tax for x in db.query(FinancePeriodLock).filter(FinancePeriodLock.gmv_tax.isnot(None))}
+    if not locks:
+        rows = [{**r, **_GMV_LOCK_DEFAULTS} for r in _gmv_tax_rows(db, bounds)]
+    else:
+        months = period_bounds("month", f"{bounds[0][0][:4]}-{_first_month(bounds[0][0])}", _last_month(bounds[-1][0]),
+                               limit=PERIOD_MAX * 3)
+        rows = []
+        for r in _gmv_tax_rows(db, months):
+            snap = locks.get(r["period"])
+            if snap is None:
+                rows.append({**r, **_GMV_LOCK_DEFAULTS})
+                continue
+            rows.append({**r, **snap, "start": r["start"], "end": r["end"], "closed": True,
+                         "late_gmv_cents": r["gmv_cents"] - snap["gmv_cents"],
+                         "late_withheld_cents": r["withheld_cents"] - snap["withheld_cents"]})
+        if granularity == "quarter":
+            rows = [_sum_gmv_months(label, lo, hi, [r for r in rows if lo <= r["start"] < hi]) for label, lo, hi in bounds]
+    return {"granularity": granularity, "periods": rows, "basis": GMV_TAX_BASIS, "draft_note": GMV_TAX_DRAFT_NOTE}
+
+
+def _sum_gmv_months(label: str, lo: datetime, hi: datetime, months: list[dict]) -> dict:
+    """季度 = 三个月相加；人数取各月之和（同一人跨月会重复，季度口径写在 basis 里）、期末待缴取最后一个月的。"""
+    out = {"period": label, "start": lo, "end": hi, **{c: sum(m[c] for m in months) for c in _GMV_SUM_COLS},
+           "withheld_people": sum(m["withheld_people"] for m in months),
+           "tax_pending_cents": months[-1]["tax_pending_cents"] if months else 0,
+           "closed": bool(months) and all(m["closed"] for m in months)}
+    return out
+
+
+def _gmv_tax_rows(db: Session, bounds: list) -> list[dict]:
     from sqlalchemy import func
 
     from app.modules.tax.models import TaxWithholding
     from app.modules.tax.service import TAX_USER_ID
 
-    bounds = period_bounds(granularity, start, end)
     rows = []
     for label, lo, hi in bounds:
         in_range = (LedgerEntry.created_at >= lo, LedgerEntry.created_at < hi)
@@ -951,4 +992,4 @@ def gmv_tax_periods(db: Session, granularity: str, start: str, end: str) -> dict
             "withheld_people": int(people), "withheld_income_cents": int(income),
             "remitted_cents": -tax.get("tax_remit", (0, 0))[0], "tax_pending_cents": pending,
         })
-    return {"granularity": granularity, "periods": rows, "basis": GMV_TAX_BASIS, "draft_note": GMV_TAX_DRAFT_NOTE}
+    return rows

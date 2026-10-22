@@ -50,6 +50,8 @@ class FinancePeriodLock(Base):
     in_month_cents: Mapped[int] = mapped_column(Integer, default=0)      # 锁账时记在这个月里的流水合计与笔数
     in_month_count: Mapped[int] = mapped_column(Integer, default=0)
     cumulative: Mapped[dict] = mapped_column(JSON)                       # 锁账时月末以前的累计（按报表栏目，含笔数）
+    # FIN-067（258 号 spec）同时锁住这个月的成交额与代扣税表（本批之前锁的月份为空）
+    gmv_tax: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     locked_by: Mapped[int] = mapped_column(Integer)
     locked_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 

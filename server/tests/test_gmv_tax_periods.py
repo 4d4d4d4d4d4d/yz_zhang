@@ -98,3 +98,33 @@ def test_fin066_csv_export_with_basis_and_audit(client):
     assert q["filename"] == "gmv-tax-2026-Q3-2026-Q3.csv" and list(csv.reader(io.StringIO(q["csv"])))[1][3] == "170.00", "按季度导出"
     ops = _admin(client, "13800342022", ["ops"])
     assert client.get(f"{URL}/export", headers=auth(ops)).status_code == 403
+
+
+def test_fin067_lock_freezes_gmv_and_tax_and_reports_late_entries(client):
+    """FIN-067（258 号 spec）锁账时同时锁住成交额与代扣税表：锁过的月份读快照，之后补记的另报差额，不改已出的数。"""
+    _seed()
+    fin = make_admin(client, "13800342031", "财务")
+    before = client.get(URL, params={"start": "2026-08", "end": "2026-09"}, headers=auth(fin)).json()
+    assert all(p["closed"] is False and p["late_gmv_cents"] == 0 for p in before["periods"]), "没锁过：与以前一样，只多默认字段"
+    from tests.test_client_shape_alignment import _assert_shape
+
+    _assert_shape(before["periods"][0], "PlatformGmvTaxRow")
+    assert client.post("/api/v1/admin/platform-finance/lock", json={"through": "2026-08"}, headers=auth(fin)).status_code == 200
+    with SessionLocal() as db:                               # 锁账之后又补记了 8 月的一笔放款和一笔代扣
+        db.add_all([LedgerEntry(user_id=205, kind="escrow_release", amount_cents=900, memo="补记", created_at=datetime(2026, 8, 20, 3)),
+                    LedgerEntry(user_id=wallet.PLATFORM_USER_ID, kind="fee", amount_cents=100, memo="补记", created_at=datetime(2026, 8, 20, 3)),
+                    LedgerEntry(user_id=TAX_USER_ID, kind="tax_withheld", amount_cents=50, memo="补记", created_at=datetime(2026, 8, 20, 3))])
+        db.commit()
+    after = client.get(URL, params={"start": "2026-08", "end": "2026-09"}, headers=auth(fin)).json()
+    aug, sep = after["periods"]
+    assert (aug["closed"], aug["gmv_cents"], aug["withheld_cents"]) == (True, 15000, 900), "锁过的月份读快照：已出的数不变"
+    assert (aug["late_gmv_cents"], aug["late_withheld_cents"]) == (1000, 50), "锁账后又记进来的另报"
+    assert (sep["closed"], sep["gmv_cents"]) == (False, 2000)
+    q = client.get(URL, params={"granularity": "quarter", "start": "2026-08", "end": "2026-08"}, headers=auth(fin)).json()["periods"][0]
+    assert (q["period"], q["gmv_cents"], q["late_gmv_cents"], q["closed"]) == ("2026-Q3", 17000, 1000, False), "季度：锁过的月读快照，没锁完不算已锁"
+    import csv
+    import io
+
+    rows = list(csv.reader(io.StringIO(client.get(f"{URL}/export", params={"start": "2026-08", "end": "2026-09"}, headers=auth(fin)).json()["csv"])))
+    assert rows[0][15] == "锁账" and rows[1][15:] == ["已锁", "10.00", "0.50"] and rows[1][3] == "150.00", "导出同样读快照、另列补记"
+    assert q["tax_pending_cents"] == sep["tax_pending_cents"], "期末待缴取季度最后一个月的"

@@ -1246,12 +1246,15 @@ def export_platform_gmv_tax(
     w = csv.writer(buf)
     w.writerow(["期间", f"起（{EXPORT_TZ_LABEL}）", f"止（{EXPORT_TZ_LABEL}，不含）", "成交额（元，按放款）", "放款笔数",
                 "执行者到手（元）", "平台佣金（元）", "纠纷分账（元，不计入成交额）", "退款（元，不计入成交额）",
-                "代扣税（元）", "代扣笔数", "被代扣人数", "被代扣对应收入（元）", "缴库（元）", "期末待缴（元）"])
+                "代扣税（元）", "代扣笔数", "被代扣人数", "被代扣对应收入（元）", "缴库（元）", "期末待缴（元）",
+                # FIN-067（258 号 spec）放在最后，原来按列读的不受影响
+                "锁账", "锁账后又记进成交额（元，未计入本行）", "锁账后又记进代扣税（元，未计入本行）"])
     for r in out["periods"]:
         w.writerow([r["period"], export_time(r["start"]), export_time(r["end"]), yuan(r["gmv_cents"]), r["release_count"],
                     yuan(r["executor_net_cents"]), yuan(r["fee_cents"]), yuan(r["dispute_split_cents"]), yuan(r["refund_cents"]),
                     yuan(r["withheld_cents"]), r["withheld_count"], r["withheld_people"], yuan(r["withheld_income_cents"]),
-                    yuan(r["remitted_cents"]), yuan(r["tax_pending_cents"])])
+                    yuan(r["remitted_cents"]), yuan(r["tax_pending_cents"]),
+                    "已锁" if r["closed"] else "未锁", yuan(r["late_gmv_cents"]), yuan(r["late_withheld_cents"])])
     w.writerow([])
     w.writerow(["口径"])
     for b in out["basis"]:
