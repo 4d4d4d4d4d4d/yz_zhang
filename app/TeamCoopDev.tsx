@@ -190,6 +190,16 @@ function TeamDetailBlock({ client, teamId }: { client: PlatformClient; teamId: n
           : `未设预算池（本月已花 ${fmtYuan(team.month_spent_cents)}）`}
       </Text>
 
+      {/* TEAM-064（236 号 spec）审批通知方式：所有者可以改成轮流指派一人 */}
+      {team.my_role === 'owner' && team.approval_mode && (
+        <Button title={team.approval_mode === 'rotate' ? '审批通知：轮流指派一人（点此改为发给所有管理员）' : '审批通知：发给所有管理员（点此改为轮流指派一人）'}
+                onPress={() => act(async () => {
+                  const next = team.approval_mode === 'rotate' ? 'all' : 'rotate';
+                  await client.setTeamApprovalMode(teamId, next);
+                  setNotice(next === 'rotate' ? '之后的超额申请轮流指派一位管理员审批；一天没批会叫上所有人' : '之后的超额申请会通知所有管理员');
+                  await load();
+                })} />
+      )}
       {/* TEAM-065 成员管理（136 号 spec） */}
       <TeamMembersBlock client={client} teamId={teamId} team={team} onChanged={() => void load()} />
 
@@ -218,6 +228,8 @@ function TeamDetailBlock({ client, teamId }: { client: PlatformClient; teamId: n
             #{sp.requester_id} · {sp.status}
             {/* TEAM-061 被强制写下的那段理由，界面要显示出来 */}
             {sp.decision_reason ? ` · ${sp.decision_reason}` : ''}
+            {/* TEAM-064（236 号 spec）轮流指派时轮到谁 */}
+            {sp.status === 'pending' && sp.assignee_id ? ` · 轮到 ${team.members.find((m) => m.user_id === sp.assignee_id)?.nickname || `#${sp.assignee_id}`} 审批` : ''}
             {/* TEAM-070（226 号 spec）发起人退回了多少 */}
             {(sp.returned_cents ?? 0) > 0 ? ` · 已退回 ${fmtYuan(sp.returned_cents)}` : ''}
           </Text>

@@ -125,3 +125,18 @@ describe('TEAM-071 App 提醒退回', () => {
     expect(screen.queryByText(/提醒退回/)).toBeNull();
   });
 });
+
+describe('TEAM-064 App 审批通知方式', () => {
+  it('所有者切换成轮流指派；申请上写轮到谁', async () => {
+    const T2 = { ...TEAM, approval_mode: 'all', members: [{ user_id: 7, role: 'admin', spend_limit_cents: 0, nickname: '主管' }] };
+    const calls: Array<{ method: string; path: string; body: unknown }> = [];
+    const client = makeClient({ '/teams/mine': [T2], '/teams/5': T2, '/teams/5/spends': [spend({ assignee_id: 7 })],
+      '/teams/5/approval-mode': { team_id: 5, approval_mode: 'rotate' } }, calls);
+    render(<SubScreenHost client={client} screen="teams" onBack={() => undefined} />);
+    await waitFor(() => expect(screen.getByText('某某科技')).toBeTruthy());
+    fireEvent.press(screen.getByText('某某科技'));
+    expect(await screen.findByText(/轮到 主管 审批/)).toBeTruthy();
+    fireEvent.press(screen.getByText('审批通知：发给所有管理员（点此改为轮流指派一人）'));
+    await waitFor(() => expect(calls.find((c) => c.path === '/teams/5/approval-mode')?.body).toEqual({ mode: 'rotate' }));
+  });
+});

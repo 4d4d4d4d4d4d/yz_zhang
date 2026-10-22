@@ -1415,6 +1415,8 @@ export interface TeamDetail extends TeamView {
   monthly_budget_cents: number;
   month_spent_cents: number;
   my_month_spent_cents: number;
+  /** TEAM-064（236 号 spec）审批通知：all 发给所有管理员 / rotate 轮流指派一人（老服务端没有） */
+  approval_mode?: 'all' | 'rotate';
 }
 
 export interface SpendRequestView {
@@ -1434,6 +1436,8 @@ export interface SpendRequestView {
   returnable_cents: number;
   /** TEAM-071（230 号 spec）所有者 / 管理员上一次提醒退回的时间（一天最多一次） */
   return_asked_at?: string | null;
+  /** TEAM-064（236 号 spec）轮流指派时轮到谁审批（其他审批人也能批） */
+  assignee_id?: number | null;
 }
 export interface TeamReturnAsked {
   id: number;

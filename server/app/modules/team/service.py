@@ -151,10 +151,29 @@ def notify_pending(db: Session, team: Team, req: SpendRequest, requester: User) 
     """
     from app.modules.notification.service import notify
 
-    for uid in approvers(db, team.user_id, exclude_user_id=req.requester_id):
+    # TEAM-064（236 号 spec）轮流指派：只通知轮到的那一位（谁都收到 = 谁都不负责）
+    targets = approvers(db, team.user_id, exclude_user_id=req.requester_id)
+    if team.approval_mode == "rotate" and targets:
+        req.assignee_id = next_assignee(db, team, targets)
+        db.add(req)
+        targets = [req.assignee_id]
+    for uid in targets:
         notify(db, uid, "team", "支出待审批",
                f"{requester.nickname} 申请从「{team.name}」支出 "
-               f"¥{req.amount_cents / 100:.2f}（{req.purpose or '未填用途'}），等待你审批。")
+               f"¥{req.amount_cents / 100:.2f}（{req.purpose or '未填用途'}），等待你审批。"
+               + ("（轮到你审批；其他管理员也能批）" if team.approval_mode == "rotate" else ""))
+
+
+def next_assignee(db: Session, team: Team, candidates: list[int]) -> int:
+    """TEAM-064 按用户编号轮流：上一笔指派给谁，这一笔就给名单里他后面的那位（到底了从头开始）。"""
+    last = (db.query(SpendRequest.assignee_id)
+            .filter(SpendRequest.team_id == team.user_id, SpendRequest.assignee_id.isnot(None))
+            .order_by(SpendRequest.id.desc()).first())
+    ordered = sorted(candidates)
+    if last is None or last[0] is None:
+        return ordered[0]
+    after = [u for u in ordered if u > last[0]]
+    return after[0] if after else ordered[0]
 
 
 def notify_decided(db: Session, team: Team, req: SpendRequest) -> None:
@@ -336,11 +355,21 @@ def remind_pending_spends(db: Session, now=None) -> dict:
         who = requester.nickname if requester else f"用户 {req.requester_id}"
         # 催办必须说**已经等了多久**：不说的话它只是同一条通知重发，
         # 审批人无法判断紧迫程度
-        for uid in approvers(db, team.user_id, exclude_user_id=req.requester_id):
+        targets = approvers(db, team.user_id, exclude_user_id=req.requester_id)
+        # TEAM-064（236 号 spec）轮流指派的：第一轮催办只叫轮到的人；再没批就叫全部，不让申请卡在一个人身上
+        on_duty = req.assignee_id if req.assignee_id in targets else None
+        first_round = req.reminded_at is None
+        if on_duty is not None and first_round:
+            targets = [on_duty]
+        duty_note = ""
+        if on_duty is not None and not first_round:
+            duty = db.get(User, on_duty)
+            duty_note = f"（轮到 {duty.nickname if duty else f'#{on_duty}'} 审批还没处理，请其他管理员帮忙看一下）"
+        for uid in targets:
             notify(db, uid, "team", "支出待审批催办",
                    f"{who} 申请从「{team.name}」支出 ¥{req.amount_cents / 100:.2f}"
                    f"（{req.purpose or '未填用途'}）已等待 {hours} 小时仍未处理；"
-                   f"超过 {settings.TEAM_APPROVAL_TIMEOUT_DAYS} 天将自动关闭。")
+                   f"超过 {settings.TEAM_APPROVAL_TIMEOUT_DAYS} 天将自动关闭。" + duty_note)
         req.reminded_at = now
         db.add(req)
         reminded += 1

@@ -47,4 +47,15 @@ describe('TEAM-071 提醒退回', () => {
     await screen.findByText('支出申请');
     expect(screen.queryByTestId('ask-return-21')).toBeNull();
   });
+
+  it('TEAM-064 所有者改审批通知方式；轮到谁审批写在申请上', async () => {
+    const calls: Call[] = [];
+    const T2 = { ...TEAM, approval_mode: 'all', members: [...TEAM.members, { user_id: 5, role: 'admin', spend_limit_cents: 0, nickname: '主管' }] };
+    open(T2, [S(31, { status: 'pending', can_decide: true, returnable_cents: 0, assignee_id: 5 })], calls);
+    fireEvent.click(await screen.findByText('打开'));
+    expect(await screen.findByText(/轮到 主管 审批/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('审批通知方式'), { target: { value: 'rotate' } });
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH' && c.path === '/teams/9/approval-mode')).toBe(true));
+    expect((await screen.findByTestId('spend-notice')).textContent).toContain('轮流指派一位管理员审批');
+  });
 });

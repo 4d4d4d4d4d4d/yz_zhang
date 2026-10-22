@@ -115,6 +115,21 @@ function TeamCard({ teamId }: { teamId: number }) {
             </button>
           )}
         </p>
+        {/* TEAM-064（236 号 spec）审批通知：发给所有管理员（谁都收到 = 谁都不负责）或轮流指派一人 */}
+        {team.my_role === 'owner' && team.approval_mode && (
+          <label className="muted">审批通知：
+            <select aria-label="审批通知方式" value={team.approval_mode}
+                    onChange={(e) => {
+                      // 先取值：await 之后受控下拉可能已被重渲染回旧值
+                      const mode = e.target.value as 'all' | 'rotate';
+                      void act(async () => { await client.setTeamApprovalMode(teamId, mode);
+                        setNotice(mode === 'rotate' ? '之后的超额申请轮流指派一位管理员审批；一天没批会叫上所有人' : '之后的超额申请会通知所有管理员'); });
+                    }}>
+              <option value="all">发给所有管理员</option>
+              <option value="rotate">轮流指派一人</option>
+            </select>
+          </label>
+        )}
         {error && <p className="error">{error}</p>}
         {notice && <p className="muted" data-testid="spend-notice">{notice}</p>}
 
@@ -150,6 +165,8 @@ function TeamCard({ teamId }: { teamId: number }) {
                 <p className="muted">
                   #{s.requester_id} · {s.status}
                   {s.decision_reason && ` · ${s.decision_reason}`}
+                  {/* TEAM-064（236 号 spec）轮流指派时轮到谁 */}
+                  {s.status === 'pending' && s.assignee_id && ` · 轮到 ${team.members.find((m) => m.user_id === s.assignee_id)?.nickname || `#${s.assignee_id}`} 审批`}
                   {/* TEAM-070（226 号 spec）发起人退回了多少 */}
                   {(s.returned_cents ?? 0) > 0 && ` · 已退回 ${fmtYuan(s.returned_cents)}`}
                 </p>

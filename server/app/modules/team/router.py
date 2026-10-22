@@ -170,6 +170,8 @@ def get_team(team_id: int, user: User = Depends(get_current_user),
         # TEAM-052 预算池与本月用量：界面要能说清「还剩多少」，
         # 只显示「超额」的话，人不知道该改金额还是该改池子
         "monthly_budget_cents": team.monthly_budget_cents,
+        # TEAM-064（236 号 spec）审批通知方式：all 发给所有管理员 / rotate 轮流指派一人
+        "approval_mode": team.approval_mode or "all",
         "month_spent_cents": service.team_spent_this_month(db, team_id),
         "my_month_spent_cents": service.member_spent_this_month(db, team_id, user.id),
     }
@@ -291,6 +293,8 @@ def list_spends(team_id: int, user: User = Depends(get_current_user),
          "returned_cents": r.returned_cents or 0, "returnable_cents": service.returnable_cents(r),
          # TEAM-071（230 号 spec）上一次提醒退回的时间
          "return_asked_at": iso(r.return_asked_at),
+         # TEAM-064（236 号 spec）轮流指派时轮到谁审批
+         "assignee_id": r.assignee_id,
          # 客户端的「审批」按钮读这个，与服务端同一判断（TEAM-021）
          "can_decide": (r.status == "pending" and me.role in ("owner", "admin")
                         and r.requester_id != user.id)}
@@ -319,6 +323,23 @@ def execute(team_id: int, request_id: int, user: User = Depends(get_current_user
     if not req or req.team_id != team_id:
         raise not_found("支出申请不存在")
     return service.execute_spend(db, req, user)
+
+
+class ApprovalModeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: str = Field(pattern="^(all|rotate)$")
+
+
+@router.patch("/{team_id}/approval-mode")
+def set_approval_mode(team_id: int, body: ApprovalModeIn, user: User = Depends(get_current_user),
+                      db: Session = Depends(get_db, scope="function")):
+    """TEAM-064（236 号 spec）审批通知发给所有管理员（all），还是轮流指派一人（rotate）。只有所有者能改。"""
+    team = _get(db, team_id)
+    service.require_role(db, team_id, user.id, "owner")
+    team.approval_mode = body.mode
+    db.add(team)
+    db.flush()
+    return {"team_id": team_id, "approval_mode": team.approval_mode}
 
 
 @router.post("/{team_id}/budget")

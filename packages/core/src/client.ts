@@ -2101,6 +2101,10 @@ export class PlatformClient {
     return this.request<TeamSpendReturned>('POST', `/teams/${teamId}/spends/${requestId}/return`,
       { amount_cents: amountCents }, { 'Idempotency-Key': idempotencyKey });
   }
+  /** TEAM-064（236 号 spec）审批通知发给所有管理员（all）还是轮流指派一人（rotate）；只有所有者能改 */
+  setTeamApprovalMode(teamId: number, mode: 'all' | 'rotate') {
+    return this.request<{ team_id: number; approval_mode: 'all' | 'rotate' }>('PATCH', `/teams/${teamId}/approval-mode`, { mode });
+  }
   /** TEAM-071（230 号 spec）所有者 / 管理员提醒发起人退回没用完的拨款；一天最多一次 */
   askTeamSpendReturn(teamId: number, requestId: number) {
     return this.request<TeamReturnAsked>('POST', `/teams/${teamId}/spends/${requestId}/ask-return`);

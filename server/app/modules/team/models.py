@@ -28,6 +28,8 @@ class Team(Base):
     user_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(60))
     owner_id: Mapped[int] = mapped_column(Integer, index=True)
+    # TEAM-064（236 号 spec）审批通知：all = 发给所有所有者 / 管理员（原样）；rotate = 轮流指派一人
+    approval_mode: Mapped[str] = mapped_column(String(10), default="all", server_default="all")
 
     # TEAM-030 企业信息。**没核过不能开票**——一张开给未核验抬头的发票，
     # 是税务风险不是便利。
@@ -110,6 +112,8 @@ class SpendRequest(Base):
     returned_cents: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     # TEAM-071（230 号 spec）所有者 / 管理员上一次提醒发起人退回的时间：一天最多提醒一次
     return_asked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # TEAM-064（236 号 spec）轮流指派时这笔轮到谁审批（其他审批人照样能批）
+    assignee_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class TeamInvite(Base):
