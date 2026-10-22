@@ -81,3 +81,5 @@ class SupportAgentScope(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     # ESCA-064（237 号 spec）新工单自动分给我（按负责的类别、手上未结的最少的人先分）；默认不分
     auto_assign: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
+    # ESCA-065（240 号 spec）暂停接单到这个时间（下班 / 请假）：自动分配跳过、超时提醒先叫别人；过了自动恢复
+    paused_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

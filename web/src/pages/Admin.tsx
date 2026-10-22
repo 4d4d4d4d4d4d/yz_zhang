@@ -1014,6 +1014,25 @@ function TicketQueue() {
       if (r && Array.isArray(r.categories) && r.labels) { setScope(r); setScopeDraft(r.categories); setAutoAssign(!!r.auto_assign); } else setScope(null);
     }).catch(() => setScope(null));
   }, [client]);
+  // ESCA-065（240 号 spec）暂停接单：下班 / 请假时不自动分给我，到点自动恢复
+  const [pauseHours, setPauseHours] = useState(8);
+  async function pause() {
+    const hours = pauseHours;
+    setError(''); setScopeNote('');
+    try {
+      const r = await client.pauseMySupport(hours);
+      if (scope) setScope({ ...scope, paused_until: r.paused_until ?? undefined });
+      setScopeNote(`已暂停接单到 ${formatDateTime(r.paused_until ?? '')}：这段时间新工单不自动分给你，超时提醒先叫别人；到点自动恢复。手上已接的工单不动`);
+    } catch (err) { setError(apiErrorText(err)); }
+  }
+  async function resume() {
+    setError(''); setScopeNote('');
+    try {
+      await client.resumeMySupport();
+      if (scope) { const { paused_until: _, ...rest } = scope; setScope(rest); }
+      setScopeNote('已恢复接单');
+    } catch (err) { setError(apiErrorText(err)); }
+  }
   async function saveScope() {
     setError(''); setScopeNote('');
     try {
@@ -1102,6 +1121,16 @@ function TicketQueue() {
           {/* ESCA-064（237 号 spec）新工单按类别自动分，手上未结的最少的人先分 */}
           <label><input type="checkbox" checked={autoAssign} onChange={(e) => setAutoAssign(e.target.checked)} /> 新工单自动分给我</label>
           <button className="ghost" onClick={() => void saveScope()}>保存</button>
+          {/* ESCA-065（240 号 spec）暂停接单 */}
+          {scope.paused_until
+            ? <span>暂停接单到 {formatDateTime(scope.paused_until)} <button className="ghost" onClick={() => void resume()}>恢复接单</button></span>
+            : <span>
+                <select aria-label="暂停多久" value={pauseHours} onChange={(e) => setPauseHours(Number(e.target.value))}>
+                  <option value={2}>2 小时</option><option value={8}>8 小时（下班）</option>
+                  <option value={24}>1 天</option><option value={72}>3 天</option><option value={168}>7 天</option>
+                </select>
+                <button className="ghost" onClick={() => void pause()}>暂停接单</button>
+              </span>}
           {scopeNote && <span role="status">{scopeNote}</span>}
         </div>
       )}

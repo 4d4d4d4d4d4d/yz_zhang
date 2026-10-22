@@ -357,8 +357,51 @@ def my_support_categories(admin: User = Depends(require_role("support")), db: Se
     from app.modules.support.models import SupportAgentScope
 
     row = db.query(SupportAgentScope).filter(SupportAgentScope.user_id == admin.id).first()
-    return {"categories": list(row.categories) if row else list(CATEGORIES), "declared": row is not None,
-            "labels": CATEGORIES, "auto_assign": bool(row.auto_assign) if row else False}
+    out = {"categories": list(row.categories) if row else list(CATEGORIES), "declared": row is not None,
+           "labels": CATEGORIES, "auto_assign": bool(row.auto_assign) if row else False}
+    # ESCA-065（240 号 spec）暂停中才带（与 V264 的响应一样，没暂停时不多字段）
+    if row is not None and row.paused_until and row.paused_until > utcnow():
+        out["paused_until"] = iso(row.paused_until)
+    return out
+
+
+class SupportPauseIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    hours: int = Field(ge=1, le=24 * 30)
+
+
+@router.post("/admin/support/my-pause")
+def pause_my_support(body: SupportPauseIn, admin: User = Depends(require_role("support")),
+                     db: Session = Depends(get_db, scope="function")):
+    """ESCA-065（240 号 spec）暂停接单：这段时间新工单不自动分给我，超时提醒先叫别人；到点自动恢复。
+    手上已经接的工单不动（要转给别人请用改派）。"""
+    from datetime import timedelta
+
+    from app.modules.support.escalation import CATEGORIES
+    from app.modules.support.models import SupportAgentScope
+
+    row = db.query(SupportAgentScope).filter(SupportAgentScope.user_id == admin.id).first()
+    if row is None:
+        # 没声明过等于什么都管：照这个意思补一行，行为不变
+        row = SupportAgentScope(user_id=admin.id, categories=list(CATEGORIES))
+    row.paused_until = utcnow() + timedelta(hours=body.hours)
+    db.add(row)
+    record_audit(db, admin.id, "support_pause", "user", admin.id, f"暂停接单 {body.hours} 小时")
+    db.flush()
+    return {"paused_until": iso(row.paused_until)}
+
+
+@router.delete("/admin/support/my-pause")
+def resume_my_support(admin: User = Depends(require_role("support")), db: Session = Depends(get_db, scope="function")):
+    """ESCA-065 提前恢复接单。没暂停时也返回成功（幂等）。"""
+    from app.modules.support.models import SupportAgentScope
+
+    row = db.query(SupportAgentScope).filter(SupportAgentScope.user_id == admin.id).first()
+    if row is not None and row.paused_until is not None:
+        row.paused_until = None
+        db.add(row)
+        record_audit(db, admin.id, "support_resume", "user", admin.id, "恢复接单")
+    return {"paused_until": None}
 
 
 @router.put("/admin/support/my-categories")

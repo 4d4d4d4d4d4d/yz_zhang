@@ -107,7 +107,19 @@ def level1_recipients(db: Session, t: Ticket) -> list[int]:
     # ESCA-061（234 号 spec）优先叫负责这一类的人（没声明的视为什么都管）；一个都没有就照旧叫全部
     scopes = agent_scopes(db)
     covering = [uid for uid in pool if uid not in scopes or (t.category or "general") in scopes[uid]]
-    return covering or pool
+    # ESCA-065（240 号 spec）暂停接单的人先不叫；都暂停了就照旧叫（不让工单没人管）
+    paused = paused_agents(db)
+    awake = [uid for uid in (covering or pool) if uid not in paused]
+    return awake or covering or pool
+
+
+def paused_agents(db: Session) -> set[int]:
+    """ESCA-065 现在处于暂停接单的客服（暂停时间过了就不算）。"""
+    from .models import SupportAgentScope
+
+    now = utcnow()
+    return {r.user_id for r in db.query(SupportAgentScope).filter(SupportAgentScope.paused_until.is_not(None),
+                                                                   SupportAgentScope.paused_until > now)}
 
 
 def agent_scopes(db: Session) -> dict[int, list[str]]:
@@ -215,7 +227,9 @@ def auto_assign(db: Session, t: Ticket) -> int | None:
 
     cat = t.category or "general"
     rows = db.query(SupportAgentScope).filter(SupportAgentScope.auto_assign.is_(True)).all()
-    ids = [r.user_id for r in rows if cat in (r.categories or [])]
+    now = utcnow()
+    # ESCA-065（240 号 spec）暂停接单的人跳过
+    ids = [r.user_id for r in rows if cat in (r.categories or []) and not (r.paused_until and r.paused_until > now)]
     if not ids:
         return None
     users = [u for u in db.query(User).filter(User.id.in_(ids)).all()

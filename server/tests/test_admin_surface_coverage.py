@@ -53,6 +53,8 @@ REACHED_BY: dict[str, str] = {
     "/admin/tickets/{x}": "adminTicketDetail",
     # ESCA-061（234 号 spec）工单台「我负责的类别」
     "/admin/support/my-categories": "mySupportCategories",
+    # ESCA-065（240 号 spec）工单台「我负责」那一行的「暂停接单」
+    "/admin/support/my-pause": "pauseMySupport",
     # API-056（235 号 spec）后台「开放 API 配额」
     "/admin/api-accounts/quotas": "apiAccountQuotas",
     "/admin/api-accounts/{x}/quota": "setApiAccountQuota",

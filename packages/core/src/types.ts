@@ -1725,6 +1725,12 @@ export interface SupportScope {
   labels: Record<string, string>;
   /** ESCA-064（237 号 spec）新工单自动分给我（老服务端没有） */
   auto_assign?: boolean;
+  /** ESCA-065（240 号 spec）暂停接单到什么时候；没暂停时没有这个字段 */
+  paused_until?: string;
+}
+/** ESCA-065 暂停 / 恢复接单的结果 */
+export interface SupportPause {
+  paused_until: string | null;
 }
 /** ESCA-060（229 号 spec）我最近自选加急被改回一般的情况；message 为空就不用提示 */
 export interface UrgentHint {

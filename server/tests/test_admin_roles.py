@@ -38,6 +38,8 @@ ROUTE_ROLES = {
     "GET /admin/tickets/{ticket_id}": ('support',),             # ESCA-058（221 号 spec）
     "GET /admin/support/my-categories": ('support',),           # ESCA-061（234 号 spec）
     "PUT /admin/support/my-categories": ('support',),
+    "POST /admin/support/my-pause": ('support',),               # ESCA-065（240 号 spec）
+    "DELETE /admin/support/my-pause": ('support',),
     "GET /admin/api-accounts/quotas": ('ops',),                 # API-056（235 号 spec）
     "PUT /admin/api-accounts/{user_id}/quota": ('ops',),
     "DELETE /admin/api-accounts/{user_id}/quota": ('ops',),

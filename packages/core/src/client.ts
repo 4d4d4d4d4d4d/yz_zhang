@@ -131,6 +131,7 @@ import type {
   PlatformFinanceLockResult,
   ReturnableTeamSpend,
   UrgentHint,
+  SupportPause,
   SupportScope,
   ApiAccountQuotaRow,
   TeamSpendReturned,
@@ -1721,6 +1722,14 @@ export class PlatformClient {
     // ESCA-064（237 号 spec）不传 autoAssign 时请求体与以前一样，服务端保持原样
     return this.request<SupportScope>('PUT', '/admin/support/my-categories',
       autoAssign === undefined ? { categories } : { categories, auto_assign: autoAssign });
+  }
+  /** ESCA-065（240 号 spec）暂停接单几个小时：不自动分给我、超时提醒先叫别人；到点自动恢复 */
+  pauseMySupport(hours: number) {
+    return this.request<SupportPause>('POST', '/admin/support/my-pause', { hours });
+  }
+  /** ESCA-065 提前恢复接单 */
+  resumeMySupport() {
+    return this.request<SupportPause>('DELETE', '/admin/support/my-pause');
   }
   /** ESCA-058（221 号 spec）后台工单详情：完整往来 */
   adminTicketDetail(ticketId: number) {
