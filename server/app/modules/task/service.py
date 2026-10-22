@@ -24,9 +24,12 @@ SEED_CATEGORIES = [
 # 「财税」——OPC 服务包的发单模板与答不了时的去处（124 号 spec）
 # 「宠物照护」「助老陪伴」——第四轮场景发掘的两个服务包的发单模板与去处（173 号 spec，V200）
 # 「陪练看护」——服务对象是未成年人的陪练、看护、接送；接单要有审核通过的无犯罪记录证明（214 号 spec，V242）
+# 「翻译」——自由译者服务包（259 号 spec，V286）
 MINOR_CARE_CERT = "无犯罪记录证明"
 ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助老陪伴"},
-                    {"name": "陪练看护", "required_cert": MINOR_CARE_CERT}]
+                    {"name": "陪练看护", "required_cert": MINOR_CARE_CERT},
+                    # 「翻译」——第七轮场景发掘的自由译者服务包的发单模板与去处（259 号 spec，V286）
+                    {"name": "翻译"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
