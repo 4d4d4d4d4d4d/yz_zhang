@@ -3423,6 +3423,10 @@ export interface AdminApiQuotaRequest extends ApiQuotaRequest {
   nickname: string;
   current_quota: number;
   peak_7d: number;
+  /** API-059（255 号 spec）等了几小时（待批的到现在，已处理的到处理时）、处理时限、是否已超时（老服务端没有） */
+  waited_hours?: number;
+  sla_hours?: number;
+  overdue?: boolean;
 }
 
 /** FIN-062（242 号 spec）按期间的成交额与代扣税额：一个期间一行 */

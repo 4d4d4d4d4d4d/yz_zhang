@@ -47,7 +47,9 @@ export function ApiQuotasAdmin() {
           <ul>
             {reqs.map((r) => (
               <li key={r.id} data-testid={`quota-req-${r.id}`}>
+                {r.overdue && <span className="badge warn">超过 {r.sla_hours} 小时</span>}{' '}
                 {r.nickname || `#${r.user_id}`}：{quotaRequestLine(r)} · 现在每天 {r.current_quota} 次，最近 7 天最多一天用了 {r.peak_7d} 次
+                {typeof r.waited_hours === 'number' && ` · 已等 ${r.waited_hours} 小时`}
                 {' '}<button className="text-link" onClick={() => {
                   const q = window.prompt(`批多少次 / 天（直接确定 = 按申请的 ${r.daily_quota}）：`, String(r.daily_quota));
                   if (q === null) return;

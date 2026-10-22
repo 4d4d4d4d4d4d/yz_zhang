@@ -58,7 +58,7 @@ describe('API-057 提额申请', () => {
 
   it('后台：列出待批申请与现在的配额、最近用量；批准可改量，驳回要理由', async () => {
     const calls: Call[] = [];
-    const row = { ...REQ, user_id: 9, nickname: '某接入方', current_quota: 50000, peak_7d: 48000 };
+    const row = { ...REQ, user_id: 9, nickname: '某接入方', current_quota: 50000, peak_7d: 48000, waited_hours: 50, sla_hours: 48, overdue: true };
     open('/admin', OPS, {
       'GET /admin/api-quota-requests': [row],
       'POST /admin/api-quota-requests/3/approve': { ...REQ, status: 'approved', granted_quota: 3000, granted_days: 30 },
@@ -67,6 +67,8 @@ describe('API-057 提额申请', () => {
     const li = await screen.findByTestId('quota-req-3');
     expect(li.textContent).toContain('某接入方：#3 申请每天 5000 次、30 天');
     expect(li.textContent).toContain('现在每天 50000 次，最近 7 天最多一天用了 48000 次');
+    expect(li.textContent).toContain('超过 48 小时');
+    expect(li.textContent).toContain('已等 50 小时');
     const prompt = vi.spyOn(window, 'prompt').mockReturnValueOnce('3000').mockReturnValueOnce('先给 3000');
     fireEvent.click(within(li).getByText('批准'));
     await waitFor(() => expect(calls.find((c) => c.path === '/admin/api-quota-requests/3/approve')?.body)

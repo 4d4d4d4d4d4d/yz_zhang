@@ -559,17 +559,25 @@ def api_quota_requests(status: str = Query(default="pending", pattern="^(pending
     q = db.query(ApiQuotaRequest)
     if status != "all":
         q = q.filter(ApiQuotaRequest.status == status)
-    rows = q.order_by(ApiQuotaRequest.id.desc() if status != "pending" else ApiQuotaRequest.id).limit(200).all()
+    # API-059 待批的按等待时间排（等得最久的在前）；其他按新到旧
+    rows = q.order_by(ApiQuotaRequest.created_at.desc() if status != "pending" else ApiQuotaRequest.created_at,
+                      ApiQuotaRequest.id).limit(200).all()
     names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_([r.user_id for r in rows] or [-1]))}
     now = utcnow()
     today = usage.local(now).date()
     days = [usage.day_str(today - timedelta(days=i)) for i in range(7)]
+    from app.modules.openapi.router import QUOTA_REQUEST_REMIND_HOURS
+
     out = []
     for r in rows:
         current, _c = usage.account_quota(db, r.user_id, now)
         peak = max(usage.account_used(db, r.user_id, d) for d in days)
+        # API-059（255 号 spec）处理时限：待批的按到现在算，已处理的按到处理时算
+        waited = int(((r.decided_at or now) - r.created_at).total_seconds() // 3600)
         out.append({**quota_request_row(r), "user_id": r.user_id, "nickname": names.get(r.user_id, ""),
-                    "current_quota": current, "peak_7d": peak})
+                    "current_quota": current, "peak_7d": peak, "waited_hours": waited,
+                    "sla_hours": QUOTA_REQUEST_REMIND_HOURS,
+                    "overdue": r.status == "pending" and waited >= QUOTA_REQUEST_REMIND_HOURS})
     return out
 
 
