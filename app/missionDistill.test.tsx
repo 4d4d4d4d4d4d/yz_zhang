@@ -61,7 +61,7 @@ describe('AGT-100 App 用这次的问题改进方法', () => {
         steps_total: 2, steps_done: 1, steps_failed: 1, remedies: 1, avg_review_score: null, drafts_total: 0, drafts_adopted: 0, duration_days: 0,
         highlights: [], next: '存进个人知识库' },
       '/missions/7/method-suggestions': { method_id: 3, method_name: '我的搬家做法', method_version: 1, note: '',
-  suggestions: [{ title: '打包', current_note: '易碎品单独装箱', suggested_note: '易碎品单独装箱；上次这一步没做到：缺装箱照片', reason: '试了 2 次才做成' },
+  suggestions: [{ title: '打包', current_note: '易碎品单独装箱', suggested_note: '易碎品单独装箱；上次这一步没做到：缺装箱照片', reason: '试了 2 次才做成', fixed_items: ['易碎品没有标记'], fixed_on_attempt: 2 },
     { title: '搬运', current_note: '', suggested_note: '上次这一步没做成：没人接单', reason: '试了 2 次仍没做成' }] },
       'POST /missions/7/method-suggestions/apply': { id: 3, name: '我的搬家做法', description: '', steps: [], source_note_ids: [], uses: 1,
         created_at: '', updated_at: '', version: 2 },
@@ -70,6 +70,7 @@ describe('AGT-100 App 用这次的问题改进方法', () => {
     fireEvent.press(await screen.findByText('周六搬家'));
     fireEvent.press(await screen.findByText('用这次的问题改进我的方法'));
     expect(await screen.findByText('易碎品单独装箱 → 易碎品单独装箱；上次这一步没做到：缺装箱照片')).toBeTruthy();
+    expect(screen.getByText('第 2 次补上了：易碎品没有标记')).toBeTruthy();
     fireEvent.press(screen.getByText('☑ 搬运（试了 2 次仍没做成）'));
     fireEvent.press(screen.getByText('写回我的方法'));
     await waitFor(() => expect(calls.find((c) => c.path === '/missions/7/method-suggestions/apply')?.body).toEqual({ titles: ['打包'] }));

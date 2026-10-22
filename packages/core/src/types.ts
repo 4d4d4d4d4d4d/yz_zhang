@@ -3495,7 +3495,8 @@ export interface MissionMethodSuggestions {
   method_id: number | null;
   method_name: string;
   method_version: number | null;
-  suggestions: Array<{ title: string; current_note: string; suggested_note: string; reason: string }>;
+  /** AGT-101（257 号 spec）做成了的步骤多 fixed_items（做成那一轮补上了哪几项）与 fixed_on_attempt（第几次做成） */
+  suggestions: Array<{ title: string; current_note: string; suggested_note: string; reason: string; fixed_items?: string[]; fixed_on_attempt?: number }>;
   /** 没有建议时的说明 */
   note: string;
 }

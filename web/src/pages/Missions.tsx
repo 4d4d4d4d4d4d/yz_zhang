@@ -219,7 +219,8 @@ function MethodSuggestions({ missionId }: { missionId: number }) {
           <label key={x.title} className="row">
             <input type="checkbox" checked={picked.includes(x.title)}
                    onChange={(e) => setPicked(e.target.checked ? [...picked, x.title] : picked.filter((t) => t !== x.title))} />
-            <span><strong>{x.title}</strong>（{x.reason}）：{x.current_note || '（原来没有备注）'} → {x.suggested_note}</span>
+            <span><strong>{x.title}</strong>（{x.reason}）：{x.current_note || '（原来没有备注）'} → {x.suggested_note}
+              {x.fixed_items?.length ? <span className="muted">（第 {x.fixed_on_attempt} 次补上了：{x.fixed_items.join('、')}）</span> : null}</span>
           </label>
         ))}
         <button disabled={!picked.length} onClick={async () => {

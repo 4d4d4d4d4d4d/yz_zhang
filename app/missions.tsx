@@ -174,6 +174,7 @@ function MethodSuggestionsBlock({ client, missionId }: { client: PlatformClient;
           <Button title={`${picked.includes(x.title) ? '☑' : '☐'} ${x.title}（${x.reason}）`}
                   onPress={() => setPicked(picked.includes(x.title) ? picked.filter((t) => t !== x.title) : [...picked, x.title])} />
           <Text style={s.muted}>{x.current_note || '（原来没有备注）'} → {x.suggested_note}</Text>
+          {!!x.fixed_items?.length && <Text style={s.muted}>第 {x.fixed_on_attempt} 次补上了：{x.fixed_items.join('、')}</Text>}
         </View>
       ))}
       {items.length > 0 && <Button title="写回我的方法" disabled={!picked.length} onPress={() => void client.applyMissionMethodSuggestions(missionId, picked)

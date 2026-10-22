@@ -82,3 +82,17 @@ def test_admins_can_look_at_missions_but_not_rewrite_someone_elses_method(client
     assert client.get(f"{API}/{m['id']}/method-suggestions", headers=auth(boss)).status_code == 403
     r = client.post(f"{API}/{m['id']}/method-suggestions/apply", json={"titles": [STEPS[0]["title"]]}, headers=auth(boss))
     assert r.status_code == 403, "方法只能本人改"
+
+
+def test_agt101_done_steps_say_what_the_successful_round_fixed(client, requester):
+    """AGT-101（257 号 spec）做成了的步骤写明「第几次补上了哪几项」；仍没做成的不带。"""
+    meth, m = _setup(client, requester)
+    with SessionLocal() as db:                               # 做成的那一轮还剩一项没补齐
+        r = db.query(MissionStep).filter(MissionStep.mission_id == m["id"], MissionStep.is_remedy == 1,
+                                         MissionStep.title == STEPS[0]["title"]).one()
+        r.review_missing = ["缺装箱照片"]
+        r.attempt = 3                                       # 记的是做成那一步自己的尝试次数（不是这一标题下有几步）
+        db.commit()
+    by = {x["title"]: x for x in client.get(f"{API}/{m['id']}/method-suggestions", headers=auth(requester)).json()["suggestions"]}
+    assert by[STEPS[0]["title"]]["fixed_items"] == ["易碎品没有标记"] and by[STEPS[0]["title"]]["fixed_on_attempt"] == 3
+    assert "fixed_items" not in by[STEPS[1]["title"]], "仍没做成的不带"

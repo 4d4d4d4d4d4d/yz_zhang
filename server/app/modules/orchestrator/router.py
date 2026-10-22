@@ -346,10 +346,17 @@ def _method_suggestions(db: Session, m: Mission) -> dict:
         current = str(st.get("note", "")).strip()
         if lesson in current:
             continue
-        done = any(s.status == "done" for s in tries)
-        out.append({"title": title, "current_note": current,
-                    "suggested_note": (current + "；" if current else "") + lesson,
-                    "reason": f"试了 {len(tries)} 次" + ("才做成" if done else "仍没做成")})
+        done_step = next((s for s in tries if s.status == "done"), None)
+        done = done_step is not None
+        item = {"title": title, "current_note": current,
+                "suggested_note": (current + "；" if current else "") + lesson,
+                "reason": f"试了 {len(tries)} 次" + ("才做成" if done else "仍没做成")}
+        # AGT-101（257 号 spec）做成的那一轮补上了哪几项（之前缺、做成时不再缺的）
+        if done_step is not None:
+            still = set(done_step.review_missing or [])
+            item["fixed_items"] = [x for x in missing if x not in still]
+            item["fixed_on_attempt"] = done_step.attempt
+        out.append(item)
     return {"method_id": method.id, "method_name": method.name, "method_version": method.version or 1, "suggestions": out,
             "note": "" if out else "按方法拆的步骤都一次做成了：没有要补的备注"}
 

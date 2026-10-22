@@ -80,7 +80,7 @@ describe('AGT-093 复盘蒸馏成我的方法', () => {
       'GET /missions': [MISSION], '/missions/7': { ...MISSION, method_id: 3, status: 'succeeded', steps: [STEP], timeline: [] },
       '/missions/7/summary': SUMMARY,
       '/missions/7/method-suggestions': { method_id: 3, method_name: '我的搬家做法', method_version: 1, note: '',
-  suggestions: [{ title: '打包', current_note: '易碎品单独装箱', suggested_note: '易碎品单独装箱；上次这一步没做到：缺装箱照片', reason: '试了 2 次才做成' },
+  suggestions: [{ title: '打包', current_note: '易碎品单独装箱', suggested_note: '易碎品单独装箱；上次这一步没做到：缺装箱照片', reason: '试了 2 次才做成', fixed_items: ['易碎品没有标记'], fixed_on_attempt: 2 },
     { title: '搬运', current_note: '', suggested_note: '上次这一步没做成：没人接单', reason: '试了 2 次仍没做成' }] },
       'POST /missions/7/method-suggestions/apply': { id: 3, name: '我的搬家做法', description: '', steps: [], source_note_ids: [], uses: 1,
         created_at: '', updated_at: '', version: 2 },
@@ -90,6 +90,7 @@ describe('AGT-093 复盘蒸馏成我的方法', () => {
     expect(box.textContent).toContain('给「我的搬家做法」（第 1 版）的建议');
     expect(box.textContent).toContain('易碎品单独装箱 → 易碎品单独装箱；上次这一步没做到：缺装箱照片');
     expect(box.textContent).toContain('（原来没有备注）');
+    expect(box.textContent).toContain('（第 2 次补上了：易碎品没有标记）');
     expect(calls.some((c) => c.path === '/missions/7/method-suggestions/apply')).toBe(false);
     fireEvent.click(within(box).getAllByRole('checkbox')[1]);
     fireEvent.click(screen.getByRole('button', { name: '写回我的方法' }));
