@@ -1,6 +1,6 @@
 // AGT-093（154 号 spec）沿用 ORC-066 / AGT-084 AI 编排（131 号 spec）：新建（默认授权经验工具）、推进、经验工具草稿采用 / 丢弃、收回授权；工作台显示本月助手成本。
 import { PlatformClient } from '@platform/core';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -73,4 +73,35 @@ describe('AGT-093 复盘蒸馏成我的方法', () => {
     expect((await screen.findByLabelText('方法草稿')).textContent).toContain('还没有做成的步骤');
     expect(screen.queryByRole('button', { name: '保存为我的方法' })).toBeNull();
   });
+
+  it('AGT-100 用了方法的编排：起草方法备注的修改建议，勾选后写回（只写勾了的）', async () => {
+    const calls: Call[] = [];
+    open('/missions?id=7', {
+      'GET /missions': [MISSION], '/missions/7': { ...MISSION, method_id: 3, status: 'succeeded', steps: [STEP], timeline: [] },
+      '/missions/7/summary': SUMMARY,
+      '/missions/7/method-suggestions': { method_id: 3, method_name: '我的搬家做法', method_version: 1, note: '',
+  suggestions: [{ title: '打包', current_note: '易碎品单独装箱', suggested_note: '易碎品单独装箱；上次这一步没做到：缺装箱照片', reason: '试了 2 次才做成' },
+    { title: '搬运', current_note: '', suggested_note: '上次这一步没做成：没人接单', reason: '试了 2 次仍没做成' }] },
+      'POST /missions/7/method-suggestions/apply': { id: 3, name: '我的搬家做法', description: '', steps: [], source_note_ids: [], uses: 1,
+        created_at: '', updated_at: '', version: 2 },
+    }, calls);
+    fireEvent.click(await screen.findByRole('button', { name: '用这次的问题改进我的方法' }));
+    const box = await screen.findByLabelText('方法改进建议');
+    expect(box.textContent).toContain('给「我的搬家做法」（第 1 版）的建议');
+    expect(box.textContent).toContain('易碎品单独装箱 → 易碎品单独装箱；上次这一步没做到：缺装箱照片');
+    expect(box.textContent).toContain('（原来没有备注）');
+    expect(calls.some((c) => c.path === '/missions/7/method-suggestions/apply')).toBe(false);
+    fireEvent.click(within(box).getAllByRole('checkbox')[1]);
+    fireEvent.click(screen.getByRole('button', { name: '写回我的方法' }));
+    await waitFor(() => expect(calls.find((c) => c.path === '/missions/7/method-suggestions/apply')?.body).toEqual({ titles: ['打包'] }));
+    expect((await screen.findByRole('status')).textContent).toBe('已写回「我的搬家做法」，现在是第 2 版');
+  });
+
+  it('没用方法的编排不显示这个入口', async () => {
+    open('/missions?id=7', { 'GET /missions': [MISSION], '/missions/7': { ...MISSION, method_id: null, status: 'succeeded', steps: [STEP], timeline: [] },
+      '/missions/7/summary': SUMMARY }, []);
+    await screen.findByRole('button', { name: '蒸馏成我的方法' });
+    expect(screen.queryByRole('button', { name: '用这次的问题改进我的方法' })).toBeNull();
+  });
 });
+

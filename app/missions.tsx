@@ -1,7 +1,7 @@
 // ORC-066 / AGT-084 AI 编排（131 号 spec）——App 端：说一个目标，平台在预算上限内拆成任务发出去、看结果、不达标就整改；
 // 授权后分发时用平台经验工具生成草稿，挂在步骤上等你「采用 / 丢弃」，不会替你发给任何人。
 import {
-  apiErrorText, fmtYuan, type Mission, type MissionEvent, type MissionMethodDraft, type MissionStep, type MissionSummary, type PlatformClient, type NbMethod
+  apiErrorText, fmtYuan, type Mission, type MissionEvent, type MissionMethodDraft, type MissionMethodSuggestions, type MissionStep, type MissionSummary, type PlatformClient, type NbMethod
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -76,6 +76,8 @@ export function MissionsScreen({ client }: { client: PlatformClient }) {
               setNotice(r.created ? `已存进你的知识库：「${r.title}」` : `已更新知识库里的「${r.title}」`);
             }, '')} />
             <Button title="蒸馏成我的方法" onPress={() => void act(async () => { setDraft(await client.distillMissionMethod(d.id)); }, '')} />
+            {/* AGT-100（251 号 spec）按方法拆的编排：整改过的步骤起草成方法备注的修改建议 */}
+            {!!d.method_id && <MethodSuggestionsBlock client={client} missionId={d.id} />}
             {draft && (
               <View style={s.card} accessibilityLabel="方法草稿">
                 {draft.steps.length === 0
@@ -145,6 +147,38 @@ export function MissionsScreen({ client }: { client: PlatformClient }) {
           setGoal(''); setOpenId(m.id);
         }, '已建好：点「推进一轮」开始规划和分发')} />
       </View>
+    </View>
+  );
+}
+
+/** AGT-100（251 号 spec）方法备注的修改建议：只出草稿，勾选后才写回方法 */
+function MethodSuggestionsBlock({ client, missionId }: { client: PlatformClient; missionId: number }) {
+  const [sg, setSg] = useState<MissionMethodSuggestions | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [msg, setMsg] = useState('');
+  if (!sg) {
+    return (
+      <View>
+        {!!msg && <Text>{msg}</Text>}
+        <Button title="用这次的问题改进我的方法" onPress={() => void client.missionMethodSuggestions(missionId)
+          .then((r) => { setSg(r); setPicked(Array.isArray(r.suggestions) ? r.suggestions.map((x) => x.title) : []); }, (e) => setMsg(apiErrorText(e)))} />
+      </View>
+    );
+  }
+  const items = Array.isArray(sg.suggestions) ? sg.suggestions : [];
+  return (
+    <View style={s.card} accessibilityLabel="方法改进建议">
+      {items.length === 0 ? <Text style={s.muted}>{sg.note}</Text> : null}
+      {items.map((x) => (
+        <View key={x.title}>
+          <Button title={`${picked.includes(x.title) ? '☑' : '☐'} ${x.title}（${x.reason}）`}
+                  onPress={() => setPicked(picked.includes(x.title) ? picked.filter((t) => t !== x.title) : [...picked, x.title])} />
+          <Text style={s.muted}>{x.current_note || '（原来没有备注）'} → {x.suggested_note}</Text>
+        </View>
+      ))}
+      {items.length > 0 && <Button title="写回我的方法" disabled={!picked.length} onPress={() => void client.applyMissionMethodSuggestions(missionId, picked)
+        .then((m) => { setMsg(`已写回「${m.name}」，现在是第 ${m.version} 版`); setSg(null); }, (e) => setMsg(apiErrorText(e)))} />}
+      {!!msg && <Text>{msg}</Text>}
     </View>
   );
 }

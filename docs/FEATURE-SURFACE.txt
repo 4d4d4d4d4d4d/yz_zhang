@@ -153,6 +153,7 @@ api GET /api/v1/me/newcomer
 api GET /api/v1/me/referrals
 api GET /api/v1/missions
 api GET /api/v1/missions/{mission_id}
+api GET /api/v1/missions/{mission_id}/method-suggestions
 api GET /api/v1/missions/{mission_id}/steps/{step_id}/reviews
 api GET /api/v1/missions/{mission_id}/summary
 api GET /api/v1/notebook/export
@@ -445,6 +446,7 @@ api POST /api/v1/messages/{message_id}/recall
 api POST /api/v1/missions
 api POST /api/v1/missions/jobs/tick-all
 api POST /api/v1/missions/{mission_id}/cancel
+api POST /api/v1/missions/{mission_id}/method-suggestions/apply
 api POST /api/v1/missions/{mission_id}/steps/{step_id}/drafts/{invocation_id}/adopt
 api POST /api/v1/missions/{mission_id}/steps/{step_id}/drafts/{invocation_id}/discard
 api POST /api/v1/missions/{mission_id}/summary/distill
@@ -693,6 +695,7 @@ sdk appealDispute
 sdk apply
 sdk applyDays
 sdk applyMethod
+sdk applyMissionMethodSuggestions
 sdk approveApiQuotaRequest
 sdk approveCircleMember
 sdk approveSettle
@@ -888,6 +891,7 @@ sdk me
 sdk mergeKnowledgeCluster
 sdk messages
 sdk methodVersions
+sdk missionMethodSuggestions
 sdk missionSummary
 sdk myAgreements
 sdk myApiQuotaRequests

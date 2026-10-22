@@ -3483,3 +3483,13 @@ export interface SupportAgentStatus {
   /** 手上未结的工单数 */
   open_tickets: number;
 }
+
+/** AGT-100（251 号 spec）这次编排对「我的方法」的备注修改建议（草稿） */
+export interface MissionMethodSuggestions {
+  method_id: number | null;
+  method_name: string;
+  method_version: number | null;
+  suggestions: Array<{ title: string; current_note: string; suggested_note: string; reason: string }>;
+  /** 没有建议时的说明 */
+  note: string;
+}

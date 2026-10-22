@@ -309,6 +309,84 @@ def _save_summary_note(db: Session, m, user: User):
     return note, created
 
 
+# ---------- AGT-100（251 号 spec）从这次编排的问题里起草方法备注的修改建议 ----------
+class ApplySuggestionsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    titles: list[str] = Field(min_length=1, max_length=10)
+
+
+def _own_method(db: Session, m: Mission):
+    if not m.method_id:
+        return None
+    from app.modules.notebook.models import NbMethod
+
+    method = db.get(NbMethod, m.method_id)
+    return method if method is not None and method.owner_id == m.owner_id else None
+
+
+def _method_suggestions(db: Session, m: Mission) -> dict:
+    """按方法拆的步骤里，整改过（失败、被修复步接续）的那几步：把「上次缺什么」起草成方法备注的追加内容。只出草稿。"""
+    method = _own_method(db, m)
+    if method is None:
+        return {"method_id": None, "method_name": "", "method_version": None, "suggestions": [],
+                "note": "这次编排没有用你的方法（或方法已经删了）：没有可以写回的地方"}
+    by_title: dict[str, list[MissionStep]] = {}
+    for s in db.query(MissionStep).filter(MissionStep.mission_id == m.id).order_by(MissionStep.id):
+        by_title.setdefault(s.title, []).append(s)
+    out = []
+    for st in method.steps or []:
+        title = str(st.get("title", "")).strip()
+        tries = by_title.get(title[:120], [])
+        bad = [s for s in tries if s.status in ("failed", "superseded")]
+        if not bad:
+            continue
+        missing = list(dict.fromkeys(x for s in bad for x in (s.review_missing or []) if x))
+        lesson = ("上次这一步没做到：" + "、".join(missing)) if missing else (
+            "上次这一步没做成：" + (bad[-1].observation or "未能完成")[:60])
+        current = str(st.get("note", "")).strip()
+        if lesson in current:
+            continue
+        done = any(s.status == "done" for s in tries)
+        out.append({"title": title, "current_note": current,
+                    "suggested_note": (current + "；" if current else "") + lesson,
+                    "reason": f"试了 {len(tries)} 次" + ("才做成" if done else "仍没做成")})
+    return {"method_id": method.id, "method_name": method.name, "method_version": method.version or 1, "suggestions": out,
+            "note": "" if out else "按方法拆的步骤都一次做成了：没有要补的备注"}
+
+
+@router.get("/missions/{mission_id}/method-suggestions")
+def method_suggestions(mission_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """AGT-100（251 号 spec）方法备注的修改建议（草稿）：哪一步整改过、现在的备注、建议改成什么、为什么。"""
+    m = _get_mission(db, mission_id, user)
+    if m.owner_id != user.id:
+        raise forbidden("只有发起人能看这次编排对自己方法的建议")
+    return _method_suggestions(db, m)
+
+
+@router.post("/missions/{mission_id}/method-suggestions/apply")
+def apply_method_suggestions(mission_id: int, body: ApplySuggestionsIn, user: User = Depends(get_current_user),
+                             db: Session = Depends(get_db, scope="function")):
+    """AGT-100 发起人勾选后写回方法：改了步骤备注算一次修改（升一版、旧版进历史，239 / 244 号）。"""
+    from app.modules.account.models import utcnow
+    from app.modules.notebook.router import _dump_method, _replace_steps, method_stats
+
+    m = _get_mission(db, mission_id, user)
+    if m.owner_id != user.id:
+        raise forbidden("只有发起人能改自己的方法")
+    s = _method_suggestions(db, m)
+    picked = {x["title"]: x["suggested_note"] for x in s["suggestions"] if x["title"] in set(body.titles)}
+    if not picked:
+        raise conflict("勾选的步骤没有可写回的建议（可能已经写过了）", "method_suggestion_none")
+    method = _own_method(db, m)
+    steps = [{**st, "note": picked[str(st.get("title", "")).strip()]} if str(st.get("title", "")).strip() in picked else st
+             for st in (method.steps or [])]
+    _replace_steps(db, method, steps)
+    method.updated_at = utcnow()
+    db.add(method)
+    db.flush()
+    return _dump_method(method, method_stats(db, [method.id])[method.id])
+
+
 @router.put("/missions/{mission_id}/tools")
 def set_tools(mission_id: int, body: ToolsIn, user: User = Depends(get_current_user),
               db: Session = Depends(get_db, scope="function")):

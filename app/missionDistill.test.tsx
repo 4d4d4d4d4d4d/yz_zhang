@@ -51,3 +51,28 @@ describe('AGT-093 App 上复盘蒸馏成我的方法', () => {
       .toEqual({ name: '周六搬家的做法', steps: DRAFT.steps, source_note_ids: [9] }));
   });
 });
+
+describe('AGT-100 App 用这次的问题改进方法', () => {
+  it('点开看建议、取消一项、写回只带勾了的', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({
+      'GET /missions': [MISSION], '/missions/7': { ...MISSION, method_id: 3, steps: [STEP], timeline: [] },
+      '/missions/7/summary': { mission_id: 7, goal: '周六搬家', status: 'succeeded', rounds: 1, max_rounds: 3, spent_cents: 21000, committed_cents: 0, cap_cents: 30000,
+        steps_total: 2, steps_done: 1, steps_failed: 1, remedies: 1, avg_review_score: null, drafts_total: 0, drafts_adopted: 0, duration_days: 0,
+        highlights: [], next: '存进个人知识库' },
+      '/missions/7/method-suggestions': { method_id: 3, method_name: '我的搬家做法', method_version: 1, note: '',
+  suggestions: [{ title: '打包', current_note: '易碎品单独装箱', suggested_note: '易碎品单独装箱；上次这一步没做到：缺装箱照片', reason: '试了 2 次才做成' },
+    { title: '搬运', current_note: '', suggested_note: '上次这一步没做成：没人接单', reason: '试了 2 次仍没做成' }] },
+      'POST /missions/7/method-suggestions/apply': { id: 3, name: '我的搬家做法', description: '', steps: [], source_note_ids: [], uses: 1,
+        created_at: '', updated_at: '', version: 2 },
+    }, calls);
+    render(<MissionsScreen client={client} />);
+    fireEvent.press(await screen.findByText('周六搬家'));
+    fireEvent.press(await screen.findByText('用这次的问题改进我的方法'));
+    expect(await screen.findByText('易碎品单独装箱 → 易碎品单独装箱；上次这一步没做到：缺装箱照片')).toBeTruthy();
+    fireEvent.press(screen.getByText('☑ 搬运（试了 2 次仍没做成）'));
+    fireEvent.press(screen.getByText('写回我的方法'));
+    await waitFor(() => expect(calls.find((c) => c.path === '/missions/7/method-suggestions/apply')?.body).toEqual({ titles: ['打包'] }));
+    expect(await screen.findByText('已写回「我的搬家做法」，现在是第 2 版')).toBeTruthy();
+  });
+});

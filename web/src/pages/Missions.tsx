@@ -1,6 +1,6 @@
 import {
   apiErrorText, fmtYuan, formatDateTime,
-  type Mission, type MissionEvent, type MissionMethodDraft, type MissionStep, type MissionSummary, type NbMethod } from '@platform/core';
+  type Mission, type MissionEvent, type MissionMethodDraft, type MissionMethodSuggestions, type MissionStep, type MissionSummary, type NbMethod } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../store';
@@ -105,6 +105,8 @@ export default function Missions() {
               <button className="ghost" onClick={() => void act(async () => {
                 setDraft(await client.distillMissionMethod(detail.id));
               }, '')}>蒸馏成我的方法</button>
+              {/* AGT-100（251 号 spec）按方法拆的编排：把整改过的步骤起草成方法备注的修改建议 */}
+              {detail.method_id && <MethodSuggestions missionId={detail.id} />}
               {draft && (
                 <div className="card" aria-label="方法草稿">
                   {draft.steps.length === 0
@@ -183,6 +185,53 @@ export default function Missions() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** AGT-100（251 号 spec）方法备注的修改建议：只出草稿，勾选后才写回方法 */
+function MethodSuggestions({ missionId }: { missionId: number }) {
+  const { client } = useApp();
+  const [s, setS] = useState<MissionMethodSuggestions | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  async function load() {
+    setError('');
+    try {
+      const r = await client.missionMethodSuggestions(missionId);
+      setS(r); setPicked(Array.isArray(r.suggestions) ? r.suggestions.map((x) => x.title) : []);
+    } catch (e) { setError(apiErrorText(e)); }
+  }
+  if (!s) {
+    return (<>
+      {notice && <p role="status">{notice}</p>}
+      {error && <p className="error">{error}</p>}
+      <button className="ghost" onClick={() => void load()}>用这次的问题改进我的方法</button>
+    </>);
+  }
+  const items = Array.isArray(s.suggestions) ? s.suggestions : [];
+  return (
+    <div className="card" aria-label="方法改进建议">
+      {items.length === 0 ? <p className="muted">{s.note}</p> : (<>
+        <p>给「{s.method_name}」（第 {s.method_version} 版）的建议，勾选的会写回方法（升一版，旧版留在历史里）：</p>
+        {items.map((x) => (
+          <label key={x.title} className="row">
+            <input type="checkbox" checked={picked.includes(x.title)}
+                   onChange={(e) => setPicked(e.target.checked ? [...picked, x.title] : picked.filter((t) => t !== x.title))} />
+            <span><strong>{x.title}</strong>（{x.reason}）：{x.current_note || '（原来没有备注）'} → {x.suggested_note}</span>
+          </label>
+        ))}
+        <button disabled={!picked.length} onClick={async () => {
+          setError(''); setNotice('');
+          try {
+            const m = await client.applyMissionMethodSuggestions(missionId, picked);
+            setNotice(`已写回「${m.name}」，现在是第 ${m.version} 版`); setS(null);
+          } catch (e) { setError(apiErrorText(e)); }
+        }}>写回我的方法</button>
+      </>)}
+      {notice && <p role="status">{notice}</p>}
+      {error && <p className="error">{error}</p>}
     </div>
   );
 }

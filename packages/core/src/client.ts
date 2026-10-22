@@ -132,6 +132,7 @@ import type {
   ReturnableTeamSpend,
   UrgentHint,
   SupportPause,
+  MissionMethodSuggestions,
   SupportAgentStatus,
   NbMethodHistory,
   TeamSpendReassigned,
@@ -1032,6 +1033,14 @@ export class PlatformClient {
   /** 一键叫停 */
   stopXappRun(runId: number, reason = '') { return this.request<XappRun>('POST', `/xapp/runs/${runId}/stop`, { reason }); }
   /** AGT-093 复盘一步蒸馏成「我的方法」草稿（154 号 spec）：先存复盘笔记作出处，只收做成了的步骤；确认后调 createMethod */
+  /** AGT-100（251 号 spec）从这次编排整改过的步骤里起草方法备注的修改建议（只出草稿） */
+  missionMethodSuggestions(missionId: number) {
+    return this.request<MissionMethodSuggestions>('GET', `/missions/${missionId}/method-suggestions`);
+  }
+  /** AGT-100 勾选后写回方法（升一版、旧版进历史） */
+  applyMissionMethodSuggestions(missionId: number, titles: string[]) {
+    return this.request<NbMethod>('POST', `/missions/${missionId}/method-suggestions/apply`, { titles });
+  }
   distillMissionMethod(id: number) { return this.request<MissionMethodDraft>('POST', `/missions/${id}/summary/distill`); }
   /** REL-110 本月助手花了多少、上限多少 */
   assistantCosts() { return this.request<AssistantCosts>('GET', '/users/me/assistant-costs'); }
