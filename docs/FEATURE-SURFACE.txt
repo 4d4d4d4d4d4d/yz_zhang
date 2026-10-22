@@ -53,6 +53,7 @@ api GET /api/v1/admin/north-star
 api GET /api/v1/admin/packs
 api GET /api/v1/admin/packs/radar
 api GET /api/v1/admin/platform-finance
+api GET /api/v1/admin/platform-finance/gmv-tax
 api GET /api/v1/admin/platform-finance/periods
 api GET /api/v1/admin/platform-finance/periods/export
 api GET /api/v1/admin/platform-finance/settle-requests
@@ -935,6 +936,7 @@ sdk personalSpace
 sdk planXapp
 sdk platformFinance
 sdk platformFinancePeriods
+sdk platformGmvTax
 sdk previewAnnouncement
 sdk priceReference
 sdk propose

@@ -3418,3 +3418,34 @@ export interface AdminApiQuotaRequest extends ApiQuotaRequest {
   current_quota: number;
   peak_7d: number;
 }
+
+/** FIN-062（242 号 spec）按期间的成交额与代扣税额：一个期间一行 */
+export interface PlatformGmvTaxRow {
+  period: string;
+  start: string;
+  end: string;
+  /** 成交额（按放款）= 执行者到手 + 同一笔扣的平台佣金 */
+  gmv_cents: number;
+  release_count: number;
+  executor_net_cents: number;
+  fee_cents: number;
+  /** 另列、不计入成交额 */
+  dispute_split_cents: number;
+  refund_cents: number;
+  /** 代扣进税款专户的金额与笔数、被代扣人数与对应收入 */
+  withheld_cents: number;
+  withheld_count: number;
+  withheld_people: number;
+  withheld_income_cents: number;
+  /** 缴库划出（正数）与期末待缴 */
+  remitted_cents: number;
+  tax_pending_cents: number;
+}
+export interface PlatformGmvTaxPeriods {
+  granularity: 'month' | 'quarter';
+  periods: PlatformGmvTaxRow[];
+  /** 口径，逐条 */
+  basis: string[];
+  /** 「口径草稿，申报前请财税确认」 */
+  draft_note: string;
+}

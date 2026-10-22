@@ -900,3 +900,55 @@ def _live_periods(db: Session, granularity: str, start: str, end: str) -> dict:
             "balanced": int(closing) - int(opening) == net,
         })
     return {"granularity": granularity, "periods": rows}
+
+
+# FIN-062（242 号 spec）按期间的成交额与代扣税额：与平台收支（144 号）分开出表
+GMV_TAX_BASIS = [
+    "成交额（GMV）按放款算：期间内验收放款给执行者的金额加上同一笔里扣的平台佣金（即发布方托管里放出去的总额）；"
+    "未放款的托管不算，退回发布方的另列「退款」，纠纷裁决分给执行者的另列「纠纷分账」，都不计入成交额。",
+    "代扣税额按税款专户的流水算：期间内代扣进专户的金额与笔数、缴库划出的金额；「期末待缴」是专户到期末的余额。",
+    "被代扣人数与对应收入取自每笔代扣的完税明细（只记扣了税的支付）。",
+    "期间按北京时间自然月 / 季度、按流水记账时间归属；本表不受锁账影响（锁账只管平台收支表）。",
+]
+GMV_TAX_DRAFT_NOTE = "口径草稿：对外申报、报送前请财税负责人确认口径（钱与申报的事 AI 只出草稿，人确认）。"
+
+
+def gmv_tax_periods(db: Session, granularity: str, start: str, end: str) -> dict:
+    from sqlalchemy import func
+
+    from app.modules.tax.models import TaxWithholding
+    from app.modules.tax.service import TAX_USER_ID
+
+    bounds = period_bounds(granularity, start, end)
+    rows = []
+    for label, lo, hi in bounds:
+        in_range = (LedgerEntry.created_at >= lo, LedgerEntry.created_at < hi)
+        sums: dict[tuple[str, bool], tuple[int, int]] = {}
+        for kind, is_platform, amount, n in (
+                db.query(LedgerEntry.kind, LedgerEntry.user_id == PLATFORM_USER_ID,
+                         func.coalesce(func.sum(LedgerEntry.amount_cents), 0), func.count(LedgerEntry.id))
+                .filter(*in_range, LedgerEntry.user_id != TAX_USER_ID,
+                        LedgerEntry.kind.in_(("escrow_release", "fee", "dispute_split", "refund")))
+                .group_by(LedgerEntry.kind, LedgerEntry.user_id == PLATFORM_USER_ID).all()):
+            a, c = sums.get((kind, bool(is_platform)), (0, 0))
+            sums[(kind, bool(is_platform))] = (a + int(amount), c + int(n))
+        tax = {k: (int(a), int(n)) for k, a, n in (
+            db.query(LedgerEntry.kind, func.coalesce(func.sum(LedgerEntry.amount_cents), 0), func.count(LedgerEntry.id))
+            .filter(*in_range, LedgerEntry.user_id == TAX_USER_ID).group_by(LedgerEntry.kind).all())}
+        pending = int(db.query(func.coalesce(func.sum(LedgerEntry.amount_cents), 0))
+                      .filter(LedgerEntry.user_id == TAX_USER_ID, LedgerEntry.created_at < hi).scalar() or 0)
+        people, income = db.query(func.count(func.distinct(TaxWithholding.user_id)),
+                                  func.coalesce(func.sum(TaxWithholding.income_cents), 0)).filter(
+            TaxWithholding.created_at >= lo, TaxWithholding.created_at < hi).one()
+        net, release_n = sums.get(("escrow_release", False), (0, 0))
+        fee, _fee_n = sums.get(("fee", True), (0, 0))
+        rows.append({
+            "period": label, "start": lo, "end": hi,
+            "gmv_cents": net + fee, "release_count": release_n, "executor_net_cents": net, "fee_cents": fee,
+            "dispute_split_cents": sums.get(("dispute_split", False), (0, 0))[0],
+            "refund_cents": sums.get(("refund", False), (0, 0))[0],
+            "withheld_cents": tax.get("tax_withheld", (0, 0))[0], "withheld_count": tax.get("tax_withheld", (0, 0))[1],
+            "withheld_people": int(people), "withheld_income_cents": int(income),
+            "remitted_cents": -tax.get("tax_remit", (0, 0))[0], "tax_pending_cents": pending,
+        })
+    return {"granularity": granularity, "periods": rows, "basis": GMV_TAX_BASIS, "draft_note": GMV_TAX_DRAFT_NOTE}

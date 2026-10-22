@@ -1047,6 +1047,22 @@ def platform_finance_periods(
     return out
 
 
+@router.get("/admin/platform-finance/gmv-tax")
+def platform_gmv_tax(
+    granularity: str = Query(default="month", pattern="^(month|quarter)$"),
+    start: str = Query(default="", pattern=PERIOD_PATTERN),
+    end: str = Query(default="", pattern=PERIOD_PATTERN),
+    admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function"),
+):
+    """FIN-062（242 号 spec）按期间的成交额与代扣税额：与平台收支表分开，口径逐条写在 basis 里，是草稿。"""
+    from app.modules.wallet import service as wallet
+
+    out = wallet.gmv_tax_periods(db, *_period_args(granularity, start, end))
+    for r in out["periods"]:
+        r["start"], r["end"] = iso(r["start"]), iso(r["end"])
+    return out
+
+
 class FinanceLockIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     through: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")

@@ -132,6 +132,7 @@ import type {
   ReturnableTeamSpend,
   UrgentHint,
   SupportPause,
+  PlatformGmvTaxPeriods,
   ApiQuotaRequest,
   AdminApiQuotaRequest,
   SupportScope,
@@ -1590,6 +1591,10 @@ export class PlatformClient {
   /** FIN-061 按期间的平台财务（144 号 spec） */
   platformFinancePeriods(params: PeriodQuery = {}) {
     return this.request<PlatformFinancePeriods>('GET', `/admin/platform-finance/periods${qs(params)}`);
+  }
+  /** FIN-062（242 号 spec）按期间的成交额与代扣税额（口径草稿） */
+  platformGmvTax(params: PeriodQuery = {}) {
+    return this.request<PlatformGmvTaxPeriods>('GET', `/admin/platform-finance/gmv-tax${qs(params)}`);
   }
   exportPlatformFinancePeriods(params: PeriodQuery = {}) {
     return this.request<PlatformFinanceExport>('GET', `/admin/platform-finance/periods/export${qs(params)}`);

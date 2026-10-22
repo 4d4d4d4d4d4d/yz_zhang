@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportScope, type TicketCategory, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportScope, type TicketCategory, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -425,6 +425,38 @@ function SettleRequests({ onChanged }: { onChanged: () => void }) {
   );
 }
 
+/** FIN-062（242 号 spec）按期间的成交额与代扣税额：与平台收支分开，口径逐条写明，是草稿 */
+function GmvTaxPeriods({ granularity }: { granularity: 'month' | 'quarter' }) {
+  const { client } = useApp();
+  const [data, setData] = useState<PlatformGmvTaxPeriods | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    client.platformGmvTax({ granularity })
+      .then((d) => setData(d && Array.isArray(d.periods) ? d : null)).catch((e) => setError(apiErrorText(e)));
+  }, [client, granularity]);
+  if (error) return <p className="error">{error}</p>;
+  if (!data) return null;
+  return (
+    <div aria-label="成交额与代扣税">
+      <h4>成交额与代扣税</h4>
+      <p className="badge warn">{data.draft_note}</p>
+      <table>
+        <thead><tr><th>期间</th><th>成交额（按放款）</th><th>放款笔数</th><th>纠纷分账</th><th>退款</th><th>代扣税</th><th>被代扣人数</th><th>缴库</th><th>期末待缴</th></tr></thead>
+        <tbody>
+          {[...data.periods].reverse().map((r) => (
+            <tr key={r.period} data-testid={`gmv-${r.period}`}>
+              <td>{r.period}</td><td>{fmtYuan(r.gmv_cents)}</td><td>{r.release_count}</td><td>{fmtYuan(r.dispute_split_cents)}</td>
+              <td>{fmtYuan(r.refund_cents)}</td><td>{fmtYuan(r.withheld_cents)}（{r.withheld_count} 笔）</td><td>{r.withheld_people}</td>
+              <td>{fmtYuan(r.remitted_cents)}</td><td>{fmtYuan(r.tax_pending_cents)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <details><summary>口径</summary><ul>{(Array.isArray(data.basis) ? data.basis : []).map((b) => <li key={b}>{b}</li>)}</ul></details>
+    </div>
+  );
+}
+
 /** FIN-061 按期间的平台财务（144 号 spec）：本月佣金、本季结算。期间按北京时间自然月 / 季度。 */
 function FinancePeriods() {
   const { client } = useApp();
@@ -496,6 +528,7 @@ function FinancePeriods() {
           </tbody>
         </table>
       )}
+      <GmvTaxPeriods granularity={granularity} />
     </div>
   );
 }
