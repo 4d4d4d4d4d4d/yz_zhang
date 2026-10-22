@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 245 | 修复步也参考方法里的备注 | [245-remedy-method-notes.md](./245-remedy-method-notes.md) | P0 |
 | 244 | 方法的版本历史 | [244-method-history.md](./244-method-history.md) | P0 |
 | 243 | 所有者手动改派某笔申请 | [243-team-reassign.md](./243-team-reassign.md) | P0 |
 | 242 | 按期间的成交额与代扣税额 | [242-gmv-tax-periods.md](./242-gmv-tax-periods.md) | P0 |

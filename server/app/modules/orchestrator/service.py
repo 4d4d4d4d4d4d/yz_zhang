@@ -444,6 +444,7 @@ def _make_remedy_steps(db: Session, mission: Mission) -> list[MissionStep]:
         .all()
     )
     remedies = []
+    method_notes = _method_notes(db, mission) if failed else None
     for step in failed:
         # AIO-022 幂等：已经为该步生成过修复步就不再重复
         dup = (
@@ -463,6 +464,10 @@ def _make_remedy_steps(db: Session, mission: Mission) -> list[MissionStep]:
             notes.append("上一轮未达标，请务必补齐：" + "、".join(missing))
         else:
             notes.append("上一轮未能完成，请按验收要点重新执行。")
+        # AGT-096（245 号 spec）按方法拆的步骤：整改要求里带上方法里这一步的备注（读最新的：失败后改过的备注也用得上）
+        if method_notes and method_notes["notes"].get(step.title):
+            notes.append(f"按你的方法「{method_notes['name']}」，这一步要注意：{method_notes['notes'][step.title]}"
+                         + method_notes["changed"])
 
         # AIO-021 连续多轮不达标 → 重新拆解：上浮预算重新招募
         if attempt > REPLAN_AFTER_ATTEMPTS:
@@ -490,6 +495,23 @@ def _make_remedy_steps(db: Session, mission: Mission) -> list[MissionStep]:
         remedies.append(remedy)
     db.flush()
     return remedies
+
+
+def _method_notes(db: Session, mission: Mission) -> dict | None:
+    """AGT-096 这次编排用的方法里每一步的备注（按步骤标题对上）；没用方法、方法删了或不是他的返回 None。"""
+    if not mission.method_id:
+        return None
+    from app.modules.notebook.models import NbMethod
+
+    method = db.get(NbMethod, mission.method_id)
+    if method is None or method.owner_id != mission.owner_id:
+        return None
+    notes = {str(s.get("title", "")).strip()[:120]: str(s.get("note", "")).strip()
+             for s in (method.steps or []) if str((s or {}).get("note", "")).strip()}
+    changed = ""
+    if mission.method_version and (method.version or 1) != mission.method_version:
+        changed = f"（方法已从第 {mission.method_version} 版改到第 {method.version} 版，按最新的备注）"
+    return {"name": method.name, "notes": notes, "changed": changed}
 
 
 def _log_event(db: Session, mission: Mission, action: str, summary: str) -> None:
