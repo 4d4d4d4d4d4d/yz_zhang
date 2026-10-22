@@ -1558,6 +1558,8 @@ export interface AnnouncementPreview {
   /** NTF-066（159 号 spec）定向的城市（空 = 不限）与人群 */
   city: string;
   audience_kind: AnnouncementAudience;
+  /** NTF-068（238 号 spec）定向的类目（空 = 不限） */
+  category: string;
   title: string;
   body: string;
   /** 要留意的地方，例如「标题太长锁屏会被截断」 */
@@ -1576,6 +1578,8 @@ export interface AnnouncementRow {
   /** NTF-066（159 号 spec）定向 */
   city: string;
   audience: AnnouncementAudience;
+  /** NTF-068（238 号 spec）定向的类目（空 = 不限） */
+  category: string;
   /** NTF-067 点开过的人数与阅读率（送达为 0 时为 null） */
   read: number;
   read_rate: number | null;

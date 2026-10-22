@@ -355,6 +355,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   revoke_reason_required: '撤回公告要写明理由：用户会在通知里看到这句话',
   schedule_in_past: '定时发送的时间要晚于现在至少 1 分钟；要马上发就不填时间',
   schedule_too_far: '定时最多提前 30 天；更远的请到时候再排',
+  announcement_bad_category: '没有这个类目：请从类目列表里选；不限类目就留空',
   announcement_not_scheduled: '只有还没发出的定时公告能取消；已经发出的请用「撤回」',
   announcement_not_sent: '只有已发出的公告能撤回；还没发的定时公告请用「取消」',
   legal_faq_no_keywords: '至少要一个关键词：用户的问题里出现它才会匹配到这一条',

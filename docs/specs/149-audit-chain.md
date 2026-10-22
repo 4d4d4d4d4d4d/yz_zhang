@@ -15,7 +15,7 @@
 - **哈希链（hash chain）**：每条日志的哈希包含上一条的哈希，改或删任何一条都会让其后的链对不上。这是安全日志防篡改的标准做法，见 Schneier & Kelsey, *Secure Audit Logs to Support Computer Forensics*（ACM TISSEC 1999，<https://www.schneier.com/academic/archives/1999/05/secure_audit_logs_to.html>）。
 - **链头 / 检查点**：单纯的链发现不了「删掉最后几条」，所以要单独记最新一条的编号与哈希（Crosby & Wallach, *Efficient Data Structures for Tamper-Evident Logging*，USENIX Security 2009，<https://www.usenix.org/legacy/event/sec09/tech/full_papers/crosby.pdf>）。
 - **外部锚定**：库管理员可以把整条链重算，所以成熟做法会把链头哈希定期写到外部（时间戳服务、存证链）。本批没做，见第 7 节。
-- 国内要求：《网络安全法》第二十一条要求留存网络日志不少于六个月；等保 2.0（GB/T 22239-2019）安全审计条款要求「对审计记录进行保护……避免受到未预期的删除、修改或覆盖」。
+- 国内要求：《网络安全法》第二十一条要求留存网络日志不少于六个月；等保 2.0（GB/T 22259-2019）安全审计条款要求「对审计记录进行保护……避免受到未预期的删除、修改或覆盖」。
 
 ## 2. 数据（迁移 `c1d220260027`，SQLite 与 Postgres 都验过）
 

@@ -570,6 +570,12 @@ def _resolve_body_keys(expr: str) -> tuple[set[str], bool]:
 
 # 解析不了的请求体 -> 为什么（值是**理由**，不是布尔）
 DYNAMIC_BODY: dict[tuple[str, str], str] = {
+    ("POST", "/admin/announcements"): (
+        "NTF-068（238 号 spec）选了类目才带 category（不选时请求体与 V159 一样）；服务端 AnnouncementIn 认 category"
+    ),
+    ("POST", "/admin/announcements/preview"): (
+        "NTF-068（238 号 spec）选了类目才带 category（不选时请求体与 V159 一样）；服务端 AnnouncementPreviewIn 认 category"
+    ),
     ("PUT", "/admin/support/my-categories"): (
         "ESCA-064（237 号 spec）传了 autoAssign 才带 auto_assign（不传时请求体与 V261 一样）；服务端 SupportScopeIn 认 categories / auto_assign，extra=forbid"
     ),

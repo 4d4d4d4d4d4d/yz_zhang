@@ -771,6 +771,8 @@ class AnnouncementIn(BaseModel):
     # NTF-066 定向（159 号 spec）：城市（空 = 不限）、人群（all / publishers / workers）
     city: str = Field(default="", max_length=50)
     audience: str = Field(default="all", max_length=12)
+    # NTF-068（238 号 spec）类目定向（空 = 不限）
+    category: str = Field(default="", max_length=50)
 
 
 class AnnouncementPreviewIn(BaseModel):
@@ -779,6 +781,7 @@ class AnnouncementPreviewIn(BaseModel):
     verified_only: bool = False
     city: str = Field(default="", max_length=50)
     audience: str = Field(default="all", max_length=12)
+    category: str = Field(default="", max_length=50)
 
 
 class AnnouncementCloseIn(BaseModel):
@@ -797,9 +800,10 @@ def broadcast_announcement(
     from . import announcements as ann_svc
 
     ann = ann_svc.create(db, admin.id, body.title, body.body, body.verified_only, body.scheduled_at,
-                         body.city.strip(), body.audience)
+                         body.city.strip(), body.audience, body.category.strip())
     target = (f"{'仅已实名' if ann.verified_only else '全体'}"
               + (f"·{ann.city}" if ann.city else "")
+              + (f"·类目「{ann.category}」" if ann.category else "")
               + (f"·{ann_svc.AUDIENCES[ann.audience]}" if ann.audience != "all" else ""))
     record_audit(db, admin.id, "announcement_schedule" if ann.status == "scheduled" else "announcement_send",
                  "announcement", ann.id,
@@ -814,7 +818,8 @@ def preview_announcement(body: AnnouncementPreviewIn, admin: User = Depends(requ
     """NTF-064 发之前先看：会送给多少人、多少人关了公告通知、用户看到的样子、要留意的地方。不发、不落库。"""
     from . import announcements as ann_svc
 
-    return ann_svc.preview(db, body.title, body.body, body.verified_only, body.city.strip(), body.audience)
+    return ann_svc.preview(db, body.title, body.body, body.verified_only, body.city.strip(), body.audience,
+                           body.category.strip())
 
 
 @router.get("/admin/announcements")

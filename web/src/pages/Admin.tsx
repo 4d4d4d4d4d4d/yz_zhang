@@ -513,6 +513,9 @@ function Announcement() {
   // NTF-066（159 号 spec）定向
   const [city, setCity] = useState('');
   const [aud, setAud] = useState<AnnouncementAudience>('all');
+  // NTF-068（238 号 spec）只发给某个类目的人
+  const [cat, setCat] = useState('');
+  const [cats, setCats] = useState<string[]>([]);
   const [preview, setPreview] = useState<AnnouncementPreview | null>(null);
   const [history, setHistory] = useState<AnnouncementRow[]>([]);
   const [notice, setNotice] = useState('');
@@ -523,6 +526,9 @@ function Announcement() {
     setHistory(Array.isArray(r) ? r : []);
   }, [client]);
   useEffect(() => { void loadHistory(); }, [loadHistory]);
+  useEffect(() => {
+    void client.categories().then((r) => setCats(Array.isArray(r) ? r.map((c) => c.name) : []), () => setCats([]));
+  }, [client]);
 
   async function run(fn: () => Promise<void>) {
     setNotice(''); setError('');
@@ -532,7 +538,7 @@ function Announcement() {
   // 「发布」保持一步可发（原有行为）；预览是建议的前一步，发布时一并清掉
   const publish = () => run(async () => {
     const r = await client.broadcastAnnouncement(title.trim(), body, verifiedOnly, when ? `${when}:00+08:00` : undefined,
-      { city: city.trim(), audience: aud });
+      { city: city.trim(), audience: aud, category: cat });
     setTitle(''); setBody(''); setWhen(''); setPreview(null);
     // 送达人数原样回显：公告发出去收不回来，得让人看到自己刚影响了多少人
     setNotice(r.status === 'scheduled' ? `已定时，到 ${formatDateTime(r.scheduled_at ?? '')} 发出；发出前可以取消` : `已送达 ${r.delivered} 人`);
@@ -558,18 +564,24 @@ function Announcement() {
           <option value="publishers">近 180 天发过单的人</option>
           <option value="workers">近 180 天报过名接单的人</option>
         </select>
+        {cats.length > 0 && (
+          <select aria-label="只发给类目" value={cat} onChange={(e) => { setCat(e.target.value); draftChanged(); }}>
+            <option value="">不限类目</option>
+            {cats.map((c) => <option key={c} value={c}>{c}（近 180 天在这类发过单或报过名）</option>)}
+          </select>
+        )}
         <label className="muted">定时（北京时间，可不填）
           <input aria-label="定时发送" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
         </label>
         <button className="ghost" disabled={title.trim().length < 2} onClick={() => void run(async () => {
-          setPreview(await client.previewAnnouncement(title.trim(), body, verifiedOnly, { city: city.trim(), audience: aud }));
+          setPreview(await client.previewAnnouncement(title.trim(), body, verifiedOnly, { city: city.trim(), audience: aud, category: cat }));
         })}>预览</button>
         <button disabled={title.trim().length < 2} onClick={() => void publish()}>发布</button>
       </div>
       {when && <p className="muted">已填定时：按「发布」后先排队，到时间才发出，发出前可以取消。</p>}
       {preview && (
         <div data-testid="ann-preview" style={{ marginTop: 8 }}>
-          <p>将送给 <strong>{preview.audience}</strong> 人（{preview.verified_only ? '仅已实名用户' : '全体用户'}{preview.city ? ` · ${preview.city}` : ''}{preview.audience_kind && preview.audience_kind !== 'all' ? ` · ${AUD_LABEL[preview.audience_kind]}` : ''}），用户会看到：</p>
+          <p>将送给 <strong>{preview.audience}</strong> 人（{preview.verified_only ? '仅已实名用户' : '全体用户'}{preview.city ? ` · ${preview.city}` : ''}{preview.audience_kind && preview.audience_kind !== 'all' ? ` · ${AUD_LABEL[preview.audience_kind]}` : ''}{preview.category ? ` · 类目「${preview.category}」` : ''}），用户会看到：</p>
           <div className="task-item"><div><strong>{preview.title}</strong><p className="muted">{preview.body || '（没有正文）'}</p></div></div>
           {preview.warnings.map((w) => <p key={w} className="error">留意：{w}</p>)}
           <p className="muted">没问题就按上面的「发布」。</p>
@@ -583,7 +595,7 @@ function Announcement() {
           <tbody>
             {history.map((a) => (
               <tr key={a.id}>
-                <td>{a.title}{a.verified_only ? '（仅已实名）' : ''}{a.city ? `（${a.city}）` : ''}{a.audience && a.audience !== 'all' ? `（${AUD_LABEL[a.audience]}）` : ''}</td>
+                <td>{a.title}{a.verified_only ? '（仅已实名）' : ''}{a.city ? `（${a.city}）` : ''}{a.audience && a.audience !== 'all' ? `（${AUD_LABEL[a.audience]}）` : ''}{a.category ? `（类目「${a.category}」）` : ''}</td>
                 <td>{ANN_STATUS[a.status] ?? a.status}{a.close_reason ? `：${a.close_reason}` : ''}</td>
                 <td>{formatDateTime(a.sent_at ?? a.scheduled_at ?? a.created_at)}</td>
                 <td>{a.status === 'scheduled' ? '—' : a.delivered}</td>
