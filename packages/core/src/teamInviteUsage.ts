@@ -13,3 +13,6 @@ export function inviteJoinedLine(link: Pick<TeamInviteLink, 'joined'>): string {
 export function memberSourceLabel(m: { invite_id?: number | null }): string {
   return m.invite_id ? `通过邀请链接 #${m.invite_id} 加入` : '';
 }
+
+/** TEAM-072（232 号 spec）链接状态的中文名（App 链接清单用；与 Web 团队页同一组词） */
+export const INVITE_STATE_LABEL: Record<string, string> = { active: '有效', used_up: '已用完', expired: '已过期', revoked: '已作废' };

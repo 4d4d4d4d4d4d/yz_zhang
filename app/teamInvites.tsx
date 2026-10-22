@@ -1,6 +1,6 @@
 // TEAM-066 团队邀请链接在 App 上（147 号 spec）：所有者生成链接交给系统分享；被邀请的人粘贴链接或邀请码，看清楚再加入。
-import { apiErrorText, fmtYuan, formatDateTime, type PlatformClient, type TeamInvitePreview } from '@platform/core';
-import { useState } from 'react';
+import { INVITE_STATE_LABEL, apiErrorText, fmtYuan, formatDateTime, inviteJoinedLine, type PlatformClient, type TeamInviteLink, type TeamInvitePreview } from '@platform/core';
+import { useCallback, useState } from 'react';
 import { Button, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
 /** 从整条链接或单独的邀请码里取出令牌 */
@@ -19,6 +19,13 @@ export function TeamInviteLinkBlock({ client, teamId, origin = WEB_ORIGIN, share
   const [limit, setLimit] = useState('0');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  // TEAM-072（232 号 spec）链接清单：状态、用了几次、谁通过它加入（228 号）；链接外泄时在手机上就能作废
+  // 点开才加载：打开团队页的人多半只是想发一条新链接
+  const [links, setLinks] = useState<TeamInviteLink[] | null>(null);
+  const load = useCallback(async () => {
+    const r = await client.teamInviteLinks(teamId).catch(() => []);
+    setLinks(Array.isArray(r) ? r : []);
+  }, [client, teamId]);
   return (
     <View style={s.card} accessibilityLabel="邀请链接">
       <Text style={s.title}>邀请链接</Text>
@@ -32,10 +39,32 @@ export function TeamInviteLinkBlock({ client, teamId, origin = WEB_ORIGIN, share
           const where = origin ? `${origin}${r.path}` : `邀请码 ${r.token}`;
           await share({ message: `邀请你加入我的团队：${where}\n（7 天内有效，只能用一次；也可以在 App「团队」里粘贴它加入）` });
           setNotice('已生成并交给系统分享。链接只显示这一次，丢了就作废重发。');
+          if (links) await load();
         } catch (e) { setError(apiErrorText(e)); }
       })()} />
       {!!notice && <Text accessibilityRole="alert">{notice}</Text>}
       {!!error && <Text style={s.error}>{error}</Text>}
+      {links === null
+        ? <Button title="查看已发的链接" onPress={() => void load()} />
+        : links.length === 0 && <Text style={s.muted}>还没有发过邀请链接。</Text>}
+      {(links ?? []).map((l) => (
+        <View key={l.id} style={{ gap: 4 }} accessibilityLabel={`邀请链接 ${l.id}`}>
+          <Text style={s.muted}>
+            #{l.id} 额度 {fmtYuan(l.spend_limit_cents)} · 已用 {l.uses}/{l.max_uses} · {INVITE_STATE_LABEL[l.state] ?? l.state}
+            {inviteJoinedLine(l) ? ` · ${inviteJoinedLine(l)}` : ''}
+          </Text>
+          {l.state === 'active' && (
+            <Button title={`作废 #${l.id}`} color="#b91c1c" onPress={() => void (async () => {
+              setError(''); setNotice('');
+              try {
+                await client.revokeTeamInviteLink(teamId, l.id);
+                setNotice(`已作废邀请链接 #${l.id}：再有人点开会看到「链接无效」`);
+                await load();
+              } catch (e) { setError(apiErrorText(e)); }
+            })()} />
+          )}
+        </View>
+      ))}
     </View>
   );
 }

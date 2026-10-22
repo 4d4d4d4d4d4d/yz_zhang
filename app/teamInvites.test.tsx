@@ -61,3 +61,30 @@ describe('TEAM-066 App 上的团队邀请链接', () => {
     expect(calls.find((c) => c.method === 'POST')?.path).toBe('/team-invites/tk9/accept');
   });
 });
+
+describe('TEAM-072 App 上的邀请链接清单', () => {
+  it('列出链接的状态、用量与谁加入了；有效的可以作废，作废后刷新', async () => {
+    const calls: Call[] = [];
+    let revoked = false;
+    const LINK = { id: 3, spend_limit_cents: 10000, uses: 1, max_uses: 3, expires_at: '2026-10-29T00:00:00Z', created_at: '2026-10-22T00:00:00Z',
+      state: 'active', joined: [{ user_id: 7, nickname: '小甲', joined_at: '2026-10-22T02:00:00Z', active: true }] };
+    const fetchImpl = (async (url: string, init?: { method?: string; body?: string }) => {
+      const path = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+      const method = init?.method ?? 'GET';
+      calls.push({ method, path, body: null });
+      if (method === 'POST' && path === '/teams/5/invite-links/3/revoke') revoked = true;
+      const body = path === '/teams/5/invite-links' ? [{ ...LINK, state: revoked ? 'revoked' : 'active' }, { ...LINK, id: 2, state: 'used_up', joined: [] }] : {};
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    }) as unknown as typeof fetch;
+    render(<TeamInviteLinkBlock client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })} teamId={5} origin="" share={async () => undefined} />);
+    expect(calls).toHaveLength(0);
+    fireEvent.press(screen.getByText('查看已发的链接'));
+    expect(await screen.findByText(/#3 额度 ¥100.00 · 已用 1\/3 · 有效 · 已加入：小甲（/)).toBeTruthy();
+    expect(screen.getByText(/#2 额度 ¥100.00 · 已用 1\/3 · 已用完/)).toBeTruthy();
+    expect(screen.queryByText('作废 #2')).toBeNull();
+    fireEvent.press(screen.getByText('作废 #3'));
+    expect(await screen.findByText('已作废邀请链接 #3：再有人点开会看到「链接无效」')).toBeTruthy();
+    expect(await screen.findByText(/#3 额度 ¥100.00 · 已用 1\/3 · 已作废/)).toBeTruthy();
+    expect(screen.queryByText('作废 #3')).toBeNull();
+  });
+});
