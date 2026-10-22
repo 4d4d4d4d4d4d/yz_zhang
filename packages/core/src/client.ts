@@ -132,6 +132,7 @@ import type {
   ReturnableTeamSpend,
   UrgentHint,
   SupportPause,
+  SupportAgentStatus,
   NbMethodHistory,
   TeamSpendReassigned,
   PlatformGmvTaxPeriods,
@@ -1774,6 +1775,14 @@ export class PlatformClient {
   /** ESCA-065（240 号 spec）暂停接单几个小时：不自动分给我、超时提醒先叫别人；到点自动恢复 */
   pauseMySupport(hours: number) {
     return this.request<SupportPause>('POST', '/admin/support/my-pause', { hours });
+  }
+  /** ESCA-066（248 号 spec）主管看全体客服的状态 */
+  supportAgents() {
+    return this.request<SupportAgentStatus[]>('GET', '/admin/support/agents').then(listOf);
+  }
+  /** ESCA-066 主管替某位客服恢复接单 */
+  resumeSupportAgent(userId: number) {
+    return this.request<{ user_id: number; paused_until: null }>('DELETE', `/admin/support/agents/${userId}/pause`);
   }
   /** ESCA-065 提前恢复接单 */
   resumeMySupport() {

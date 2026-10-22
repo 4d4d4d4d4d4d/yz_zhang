@@ -430,6 +430,52 @@ def set_my_support_categories(body: SupportScopeIn, admin: User = Depends(requir
     return {"categories": cats, "declared": True, "labels": CATEGORIES, "auto_assign": bool(row.auto_assign)}
 
 
+# ---------- ESCA-066（248 号 spec）主管看全体客服的状态 ----------
+@router.get("/admin/support/agents")
+def support_agents(admin: User = Depends(require_role("super")), db: Session = Depends(get_db, scope="function")):
+    """ESCA-066 能处理工单的每一位：负责哪几类、是否自动分给他、是否暂停到几点、手上几张未结工单。"""
+    from sqlalchemy import func
+
+    from app.core.admin_roles import has_role
+    from app.modules.support.escalation import CATEGORIES
+    from app.modules.support.models import SupportAgentScope, Ticket
+
+    now = utcnow()
+    people = [u for u in db.query(User).filter(User.is_admin.is_(True), User.is_banned.is_(False)).order_by(User.id)
+              if not getattr(u, "is_deleted", False) and has_role(u, "support")]
+    ids = [u.id for u in people] or [-1]
+    scopes = {r.user_id: r for r in db.query(SupportAgentScope).filter(SupportAgentScope.user_id.in_(ids))}
+    load = dict(db.query(Ticket.assignee_id, func.count(Ticket.id))
+                .filter(Ticket.status == "open", Ticket.assignee_id.in_(ids)).group_by(Ticket.assignee_id).all())
+    out = []
+    for u in people:
+        sc = scopes.get(u.id)
+        paused = sc is not None and sc.paused_until is not None and sc.paused_until > now
+        out.append({"user_id": u.id, "nickname": u.nickname,
+                    "categories": list(sc.categories) if sc else list(CATEGORIES), "declared": sc is not None,
+                    "auto_assign": bool(sc.auto_assign) if sc else False,
+                    "paused_until": iso(sc.paused_until) if paused else None, "open_tickets": int(load.get(u.id, 0))})
+    return out
+
+
+@router.delete("/admin/support/agents/{user_id}/pause")
+def resume_support_agent(user_id: int, admin: User = Depends(require_role("super")),
+                         db: Session = Depends(get_db, scope="function")):
+    """ESCA-066 主管替某位客服恢复接单（例如他提前回来了、或忘了设回来）。进审计、通知本人。"""
+    from app.modules.notification.service import notify
+    from app.modules.support.models import SupportAgentScope
+
+    row = db.query(SupportAgentScope).filter(SupportAgentScope.user_id == user_id).first()
+    if row is None or row.paused_until is None or row.paused_until <= utcnow():
+        raise conflict("这位客服现在没有暂停接单", "support_agent_not_paused")
+    row.paused_until = None
+    db.add(row)
+    record_audit(db, admin.id, "support_resume_by_supervisor", "user", user_id, "主管恢复接单")
+    if user_id != admin.id:
+        notify(db, user_id, "system", "主管已恢复你的接单", f"{admin.nickname} 把你的「暂停接单」提前结束了：新工单会照常自动分给你。")
+    return {"user_id": user_id, "paused_until": None}
+
+
 # ---------- API-056（235 号 spec）开放 API 账号配额按客户单独调整 ----------
 class ApiAccountQuotaIn(BaseModel):
     model_config = ConfigDict(extra="forbid")

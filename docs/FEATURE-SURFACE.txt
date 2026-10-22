@@ -1,5 +1,6 @@
 # 功能面清单（FEAT-001）：只增不减。下线须进 scripts/feature_surface.py 的 RETIRED 并写理由
 api DELETE /api/v1/admin/api-accounts/{user_id}/quota
+api DELETE /api/v1/admin/support/agents/{user_id}/pause
 api DELETE /api/v1/admin/support/my-pause
 api DELETE /api/v1/contents/{content_id}
 api DELETE /api/v1/conversations/{conv_id}/members/{member_id}
@@ -64,6 +65,7 @@ api GET /api/v1/admin/sandbox/models
 api GET /api/v1/admin/security
 api GET /api/v1/admin/settlements/verify
 api GET /api/v1/admin/skill-concepts
+api GET /api/v1/admin/support/agents
 api GET /api/v1/admin/support/my-categories
 api GET /api/v1/admin/teams/pending
 api GET /api/v1/admin/tickets
@@ -986,6 +988,7 @@ sdk resolveTicket
 sdk resolveUpload
 sdk restoreMethodVersion
 sdk resumeMySupport
+sdk resumeSupportAgent
 sdk retireSandboxModel
 sdk retireSkillConcept
 sdk retractKnowledgeTask
@@ -1049,6 +1052,7 @@ sdk submitTeamCompany
 sdk submitVerificationOutcome
 sdk subscribeCategory
 sdk supplyHint
+sdk supportAgents
 sdk taskDraftProfile
 sdk taskProfile
 sdk taskTemplate

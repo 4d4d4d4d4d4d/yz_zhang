@@ -3468,3 +3468,16 @@ export interface NbMethodHistory {
   current: { version: number; steps: WbStep[] };
   versions: Array<{ version: number; steps: WbStep[]; replaced_at: string }>;
 }
+
+/** ESCA-066（248 号 spec）主管看到的一位客服的状态 */
+export interface SupportAgentStatus {
+  user_id: number;
+  nickname: string;
+  categories: TicketCategory[];
+  declared: boolean;
+  auto_assign: boolean;
+  /** 暂停接单到什么时候；没暂停为 null */
+  paused_until: string | null;
+  /** 手上未结的工单数 */
+  open_tickets: number;
+}

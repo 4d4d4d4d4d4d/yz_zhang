@@ -55,6 +55,9 @@ REACHED_BY: dict[str, str] = {
     "/admin/support/my-categories": "mySupportCategories",
     # ESCA-065（240 号 spec）工单台「我负责」那一行的「暂停接单」
     "/admin/support/my-pause": "pauseMySupport",
+    # ESCA-066（248 号 spec）工单台「客服状态」（主管）
+    "/admin/support/agents": "supportAgents",
+    "/admin/support/agents/{x}/pause": "resumeSupportAgent",
     # FIN-062（242 号 spec）后台「平台财务 · 按期间」下的「成交额与代扣税」
     "/admin/platform-finance/gmv-tax": "platformGmvTax",
     # API-057（241 号 spec）后台「开放 API 配额」里的提额申请：不批，接入方就一直等着

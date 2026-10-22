@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportScope, type TicketCategory, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type TicketCategory, type AnnouncementAudience, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -1028,6 +1028,44 @@ function UploadQueue() {
   );
 }
 
+/** ESCA-066（248 号 spec）主管看全体客服：负责哪几类、自动分配、暂停到几点、手上几张；可替人恢复接单。点开才加载 */
+function SupportAgentBoard() {
+  const { client } = useApp();
+  const [rows, setRows] = useState<SupportAgentStatus[] | null>(null);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  async function load() {
+    setError('');
+    try { setRows(await client.supportAgents()); } catch (e) { setError(apiErrorText(e)); }
+  }
+  if (rows === null) return <>{error && <p className="error">{error}</p>}<button className="ghost" onClick={() => void load()}>看客服状态</button></>;
+  return (
+    <div aria-label="客服状态">
+      <table>
+        <thead><tr><th>客服</th><th>负责</th><th>自动分配</th><th>状态</th><th>手上未结</th><th /></tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.user_id} data-testid={`agent-${r.user_id}`}>
+              <td>{r.nickname || `#${r.user_id}`}</td>
+              <td>{r.declared ? r.categories.join('、') : '都管（没选）'}</td>
+              <td>{r.auto_assign ? '开' : '关'}</td>
+              <td>{r.paused_until ? `暂停到 ${formatDateTime(r.paused_until)}` : '在岗'}</td>
+              <td>{r.open_tickets}</td>
+              <td>{r.paused_until && <button className="ghost" onClick={async () => {
+                setError(''); setNotice('');
+                try { await client.resumeSupportAgent(r.user_id); setNotice(`已恢复 ${r.nickname || `#${r.user_id}`} 的接单，已通知他`); await load(); }
+                catch (e) { setError(apiErrorText(e)); }
+              }}>替他恢复</button>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {notice && <p role="status">{notice}</p>}
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 /** CS-030 工单队列。SUPPORT_SLA_HOURS 定了多久要回，而回的那个人此前没有界面。 */
 function TicketQueue() {
   const { client, me } = useApp();
@@ -1178,6 +1216,7 @@ function TicketQueue() {
           {scopeNote && <span role="status">{scopeNote}</span>}
         </div>
       )}
+      {isSuper && <SupportAgentBoard />}
       {error && <p className="error">{error}</p>}
       {rows.length === 0 && <p className="muted">没有符合条件的工单。</p>}
       <div className="list" style={{ marginTop: 8 }}>
