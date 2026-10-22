@@ -1,6 +1,6 @@
 // AGT-097（239 号 spec）方法按版本分开的效果。
 import { describe, expect, it } from 'vitest';
-import { methodVersionCompare, methodVersionLines } from './methodVersions';
+import { methodStepDiff, methodVersionCompare, methodVersionLines } from './methodVersions';
 
 const v = (version: number | null, total: number, ok: number, bad: number, rate: number | null, spent = 0) =>
   ({ version, missions_total: total, missions_succeeded: ok, missions_failed: bad, missions_spent_cents: spent, success_rate: rate });
@@ -37,5 +37,16 @@ describe('AGT-097 methodVersionLines / methodVersionCompare', () => {
     const m = { version: 1, versions: [v(1, 3, 3, 0, 1), v(null, 5, 2, 3, 0.4)] };
     expect(methodVersionLines(m)[1]).toBe('记版本之前：用过 5 次，做成 2、没成 3，花了 ¥0.00；成功率 40%');
     expect(methodVersionCompare(m)).toBe('记版本之前成功率 40% → 第 1 版 100%：改了之后变好了');
+  });
+});
+
+describe('AGT-098 methodStepDiff', () => {
+  const st = (...t: string[]) => t.map((title) => ({ title, note: '' }));
+  it('说清加了哪几步、去掉了哪几步；只改顺序或备注也说', () => {
+    expect(methodStepDiff(st('打包', '搬运'), st('先列清单', '打包', '搬运'))).toBe('加了「先列清单」');
+    expect(methodStepDiff(st('打包', '搬运', '验收'), st('打包'))).toBe('去掉了「搬运」「验收」');
+    expect(methodStepDiff(st('打包', '搬运'), st('打包', '清点'))).toBe('加了「清点」；去掉了「搬运」');
+    expect(methodStepDiff(st('打包', '搬运'), st('搬运', '打包'))).toBe('步骤一样，顺序改了');
+    expect(methodStepDiff(st('打包'), [{ title: '打包', note: '用纸箱' }])).toBe('步骤一样，备注改了');
   });
 });

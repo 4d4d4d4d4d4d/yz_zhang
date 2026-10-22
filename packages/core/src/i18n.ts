@@ -355,6 +355,8 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   revoke_reason_required: '撤回公告要写明理由：用户会在通知里看到这句话',
   schedule_in_past: '定时发送的时间要晚于现在至少 1 分钟；要马上发就不填时间',
   schedule_too_far: '定时最多提前 30 天；更远的请到时候再排',
+  nb_method_version_not_found: '没有这一版：只有改过步骤之后的旧版能退回',
+  nb_method_version_same: '这一版的步骤和现在一样，不用退回',
   team_assignee_not_approver: '只能改派给能批这笔的人：团队所有者或管理员，且不能是发起人',
   api_quota_request_no_key: '先建一个 API Key 再申请配额',
   api_quota_request_not_higher: '申请的量要比现在每天的配额高',

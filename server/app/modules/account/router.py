@@ -704,10 +704,17 @@ def _export_notebook(db: Session, user_id: int) -> dict:
 
     notes = db.query(NbNote).filter(NbNote.owner_id == user_id).order_by(NbNote.id).all()
     methods = db.query(NbMethod).filter(NbMethod.owner_id == user_id).order_by(NbMethod.id).all()
+    from app.modules.notebook.models import NbMethodVersion
+
+    olds: dict[int, list] = {}
+    for v in db.query(NbMethodVersion).filter(NbMethodVersion.owner_id == user_id).order_by(NbMethodVersion.version):
+        olds.setdefault(v.method_id, []).append({"version": v.version, "steps": v.steps, "replaced_at": iso(v.replaced_at)})
     return {
         "notes": [{"id": n.id, "kind": n.kind, "title": n.title, "body": n.body, "url": n.url, "status": n.status,
                    "tags": n.tags, "created_at": iso(n.created_at), "updated_at": iso(n.updated_at)} for n in notes],
-        "methods": [{"name": m.name, "description": m.description, "steps": m.steps, "uses": m.uses}
+        "methods": [{"name": m.name, "description": m.description, "steps": m.steps, "uses": m.uses,
+                     # AGT-098（244 号 spec）有旧版本才带（没改过步骤的导出与以前一样）
+                     **({"old_versions": olds[m.id]} if m.id in olds else {})}
                     for m in methods],
     }
 

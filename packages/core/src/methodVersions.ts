@@ -1,5 +1,5 @@
 // AGT-097（239 号 spec）方法按版本分开的效果：两端知识库「我的方法」同几句话。
-import type { NbMethod, NbMethodVersionStats } from './types';
+import type { NbMethod, NbMethodVersionStats, WbStep } from './types';
 
 const yuan = (c: number) => `¥${(c / 100).toFixed(2)}`;
 const pct = (r: number) => `${Math.round(r * 100)}%`;
@@ -31,4 +31,19 @@ export function methodVersionCompare(m: Versioned): string {
   if (cur.success_rate > prev.success_rate) return `${head}：改了之后变好了`;
   if (cur.success_rate < prev.success_rate) return `${head}：改了之后变差了，看看改了哪一步`;
   return `${head}：没有变化`;
+}
+
+/** AGT-098（244 号 spec）两版步骤差在哪：按步骤标题比，加了哪几步、去掉了哪几步；标题都一样时看顺序与备注 */
+export function methodStepDiff(older: WbStep[], newer: WbStep[]): string {
+  const a = (Array.isArray(older) ? older : []).map((s) => s.title);
+  const b = (Array.isArray(newer) ? newer : []).map((s) => s.title);
+  const added = b.filter((t) => !a.includes(t));
+  const removed = a.filter((t) => !b.includes(t));
+  const parts = [
+    added.length ? `加了${added.map((t) => `「${t}」`).join('')}` : '',
+    removed.length ? `去掉了${removed.map((t) => `「${t}」`).join('')}` : '',
+  ].filter(Boolean);
+  if (parts.length) return parts.join('；');
+  if (a.join('\n') !== b.join('\n')) return '步骤一样，顺序改了';
+  return '步骤一样，备注改了';
 }

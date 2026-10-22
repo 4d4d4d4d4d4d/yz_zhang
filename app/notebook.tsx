@@ -2,7 +2,7 @@
 //
 // 手机上最常用的是：随手记一句、粘一个链接、会后把纪要里的待办抽进工作台、问一句「我以前记过什么」。
 import {
-  apiErrorText, fmtYuan, formatDateTime, methodVersionCompare, methodVersionLines,
+  apiErrorText, fmtYuan, formatDateTime, methodStepDiff, methodVersionCompare, methodVersionLines, type NbMethodHistory,
   type NbAnswer, type NbMethod, type NbMethodDraft, type NbNote, type NbNoteBrief, type NbSummary, type NbTodoDraft, type PlatformClient,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -183,7 +183,8 @@ function NoteDetail({ client, id, onBack }: { client: PlatformClient; id: number
 function Methods({ client }: { client: PlatformClient }) {
   const [rows, setRows] = useState<NbMethod[]>([]);
   const [error, setError] = useState('');
-  useEffect(() => { client.notebookMethods().then(setRows).catch((e) => setError(apiErrorText(e))); }, [client]);
+  const load = useCallback(() => client.notebookMethods().then(setRows).catch((e) => setError(apiErrorText(e))), [client]);
+  useEffect(() => { void load(); }, [load]);
   return (
     <View style={s.box}>
       <Text style={s.muted}>从笔记里蒸馏出来、可以反复套用的步骤。在工作台任务里点「套用我的方法」，步骤就变成清单。</Text>
@@ -203,6 +204,8 @@ function Methods({ client }: { client: PlatformClient }) {
           {!!methodVersionCompare(m) && <Text>{methodVersionCompare(m)}</Text>}
           {methodVersionLines(m).map((l) => <Text key={l} style={s.muted}>{l}</Text>)}
           {m.steps.map((st, n) => <Text key={n}>{n + 1}. {st.title}{st.note ? ` · ${st.note}` : ''}</Text>)}
+          {/* AGT-098（244 号 spec）改过步骤的方法能看每一版、退回旧版 */}
+          {(m.version ?? 1) > 1 && <MethodHistoryBlock client={client} id={m.id} onRestored={() => void load()} />}
         </View>
       ))}
     </View>
@@ -233,6 +236,35 @@ function Ask({ client, open }: { client: PlatformClient; open: (id: number) => v
           ))}
         </View>
       ))}
+    </View>
+  );
+}
+
+/** AGT-098（244 号 spec）方法的历史：点开才加载；每个旧版写明和下一版差在哪，可以退回 */
+function MethodHistoryBlock({ client, id, onRestored }: { client: PlatformClient; id: number; onRestored: () => void }) {
+  const [h, setH] = useState<NbMethodHistory | null>(null);
+  const [error, setError] = useState('');
+  if (!h) {
+    return (
+      <View>
+        {!!error && <Text style={s.error}>{error}</Text>}
+        <Button title="看历史版本" onPress={() => void client.methodVersions(id).then(setH, (e) => setError(apiErrorText(e)))} />
+      </View>
+    );
+  }
+  const vs = Array.isArray(h.versions) ? h.versions : [];
+  return (
+    <View>
+      <Text style={s.muted}>现在是第 {h.current.version} 版</Text>
+      {vs.map((v, i) => (
+        <View key={v.version}>
+          <Text>第 {v.version} 版：{v.steps.map((st) => st.title).join(' → ')}</Text>
+          <Text style={s.muted}>第 {i === 0 ? h.current.version : vs[i - 1].version} 版{methodStepDiff(v.steps, i === 0 ? h.current.steps : vs[i - 1].steps)}</Text>
+          <Button title={`退回第 ${v.version} 版`} onPress={() => void client.restoreMethodVersion(id, v.version)
+            .then(() => { setH(null); onRestored(); }, (e) => setError(apiErrorText(e)))} />
+        </View>
+      ))}
+      {!!error && <Text style={s.error}>{error}</Text>}
     </View>
   );
 }

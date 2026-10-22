@@ -3457,3 +3457,10 @@ export interface TeamSpendReassigned {
   assignee_nickname: string;
   previous_assignee_id: number | null;
 }
+
+/** AGT-098（244 号 spec）方法的每一版步骤：current 是现在的；versions 是被替换掉的旧版（版本号倒序） */
+export interface NbMethodHistory {
+  method_id: number;
+  current: { version: number; steps: WbStep[] };
+  versions: Array<{ version: number; steps: WbStep[]; replaced_at: string }>;
+}

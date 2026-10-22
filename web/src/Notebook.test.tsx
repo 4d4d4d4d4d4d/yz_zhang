@@ -151,6 +151,29 @@ describe('KB-100 个人知识库', () => {
     expect(screen.queryByTestId('method-versions-8')).toBeNull();
   });
 
+  it('AGT-098 改过步骤的方法能看每一版、写明改了哪一步、退回旧版', async () => {
+    const calls: Call[] = [];
+    const m = { id: 7, name: '搬家做法', description: '', steps: [{ title: '先列清单', note: '' }, { title: '打包', note: '' }], source_note_ids: [],
+      uses: 3, created_at: '', updated_at: '', missions_total: 0, missions_succeeded: 0, missions_failed: 0, missions_spent_cents: 0,
+      success_rate: null, version: 3, versions: [] };
+    const plain = { ...m, id: 8, name: '没改过', version: 1 };
+    open('/notebook?tab=methods', { '/users/me': ME, '/notebook/summary': SUMMARY, 'GET /notebook/methods': [m, plain],
+      'GET /notebook/methods/7/versions': { method_id: 7, current: { version: 3, steps: m.steps },
+        versions: [{ version: 2, steps: [{ title: '打包', note: '' }, { title: '清点', note: '' }], replaced_at: '2026-10-21T02:00:00Z' },
+          { version: 1, steps: [{ title: '打包', note: '' }, { title: '搬运', note: '' }], replaced_at: '2026-10-20T02:00:00Z' }] },
+      'POST /notebook/methods/7/versions/1/restore': { ...m, version: 3 } }, calls);
+    const btns = await screen.findAllByText('看历史版本');
+    expect(btns).toHaveLength(1);
+    fireEvent.click(btns[0]);
+    const box = await screen.findByTestId('method-history-7');
+    expect(box.textContent).toContain('第 1 版');
+    expect(box.textContent).toContain('打包 → 搬运');
+    expect(box.textContent).toContain('第 3 版加了「先列清单」；去掉了「清点」');
+    expect(box.textContent).toContain('第 2 版加了「清点」；去掉了「搬运」');
+    fireEvent.click(screen.getAllByText('退回这一版')[1]);
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/notebook/methods/7/versions/1/restore')).toBe(true));
+  });
+
   it('工作台任务里：相关笔记摆在眼前，能套用我的方法', async () => {
     const calls: Call[] = [];
     open('/workbench?tab=all&item=5', {

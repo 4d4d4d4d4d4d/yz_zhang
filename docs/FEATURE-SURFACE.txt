@@ -154,6 +154,7 @@ api GET /api/v1/missions/{mission_id}/steps/{step_id}/reviews
 api GET /api/v1/missions/{mission_id}/summary
 api GET /api/v1/notebook/export
 api GET /api/v1/notebook/methods
+api GET /api/v1/notebook/methods/{method_id}/versions
 api GET /api/v1/notebook/notes
 api GET /api/v1/notebook/notes/{note_id}
 api GET /api/v1/notebook/related
@@ -450,6 +451,7 @@ api POST /api/v1/notebook/ask
 api POST /api/v1/notebook/methods
 api POST /api/v1/notebook/methods/distill
 api POST /api/v1/notebook/methods/{method_id}/apply
+api POST /api/v1/notebook/methods/{method_id}/versions/{version}/restore
 api POST /api/v1/notebook/notes
 api POST /api/v1/notebook/notes/{note_id}/extract-todos
 api POST /api/v1/notebook/notes/{note_id}/todos
@@ -880,6 +882,7 @@ sdk marketHealth
 sdk me
 sdk mergeKnowledgeCluster
 sdk messages
+sdk methodVersions
 sdk missionSummary
 sdk myAgreements
 sdk myApiQuotaRequests
@@ -980,6 +983,7 @@ sdk resetPassword
 sdk resolveReport
 sdk resolveTicket
 sdk resolveUpload
+sdk restoreMethodVersion
 sdk resumeMySupport
 sdk retireSandboxModel
 sdk retireSkillConcept

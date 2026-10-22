@@ -132,6 +132,7 @@ import type {
   ReturnableTeamSpend,
   UrgentHint,
   SupportPause,
+  NbMethodHistory,
   TeamSpendReassigned,
   PlatformGmvTaxPeriods,
   ApiQuotaRequest,
@@ -395,6 +396,14 @@ export class PlatformClient {
     return this.request<NbMethod>('PATCH', `/notebook/methods/${id}`, {
       name: patch.name, description: patch.description, steps: patch.steps,
     });
+  }
+  /** AGT-098（244 号 spec）方法的每一版步骤 */
+  methodVersions(id: number) {
+    return this.request<NbMethodHistory>('GET', `/notebook/methods/${id}/versions`);
+  }
+  /** AGT-098 退回某个旧版的步骤（退回也算一次修改，升一版） */
+  restoreMethodVersion(id: number, version: number) {
+    return this.request<NbMethod>('POST', `/notebook/methods/${id}/versions/${version}/restore`);
   }
   deleteMethod(id: number) { return this.request<{ deleted: boolean }>('DELETE', `/notebook/methods/${id}`); }
   /** 把方法套到工作台任务上：步骤变成它的清单子项 */

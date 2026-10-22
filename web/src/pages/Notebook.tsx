@@ -1,6 +1,6 @@
 import {
   asList,
-  apiErrorText, fmtYuan, formatDateTime, methodVersionCompare, methodVersionLines,
+  apiErrorText, fmtYuan, formatDateTime, methodStepDiff, methodVersionCompare, methodVersionLines, type NbMethodHistory,
   type NbAnswer, type NbMethod, type NbMethodDraft, type NbNote, type NbNoteBrief, type NbSummary, type NbTodoDraft,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -273,6 +273,8 @@ function Methods({ version }: { version: number }) {
             </div>
           )}
           <ol>{m.steps.map((s, n) => <li key={n}>{s.title}{s.note && <span className="muted"> · {s.note}</span>}</li>)}</ol>
+          {/* AGT-098（244 号 spec）改过步骤的方法能看每一版、退回旧版 */}
+          {(m.version ?? 1) > 1 && <MethodHistory id={m.id} onRestored={() => setV(v + 1)} />}
         </div>
       ))}
     </div>
@@ -306,6 +308,37 @@ function Ask({ open }: { open: (id: number) => void }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** AGT-098（244 号 spec）方法的历史：点开才加载；每个旧版写明它和下一版差在哪，可以退回 */
+function MethodHistory({ id, onRestored }: { id: number; onRestored: () => void }) {
+  const { client } = useApp();
+  const [h, setH] = useState<NbMethodHistory | null>(null);
+  const [error, setError] = useState('');
+  async function load() {
+    setError('');
+    try { setH(await client.methodVersions(id)); } catch (e) { setError(apiErrorText(e)); }
+  }
+  if (!h) return <>{error && <p className="error">{error}</p>}<button className="ghost" onClick={() => void load()}>看历史版本</button></>;
+  const vs = Array.isArray(h.versions) ? h.versions : [];
+  // 每个旧版和比它新一版的比：versions 是倒序的，前一个（或当前）就是新一版
+  const newer = (i: number) => (i === 0 ? h.current.steps : vs[i - 1].steps);
+  return (
+    <div data-testid={`method-history-${id}`}>
+      <p className="muted">现在是第 {h.current.version} 版。{vs.length ? '' : '记版本之前改过的步骤没有存下来。'}</p>
+      {vs.map((v, i) => (
+        <div key={v.version} className="row">
+          <span className="grow">第 {v.version} 版（{formatDateTime(v.replaced_at)} 被替换）：{v.steps.map((s) => s.title).join(' → ')}
+            <span className="muted"> · 第 {i === 0 ? h.current.version : vs[i - 1].version} 版{methodStepDiff(v.steps, newer(i))}</span></span>
+          <button className="ghost" onClick={async () => {
+            setError('');
+            try { await client.restoreMethodVersion(id, v.version); setH(null); onRestored(); } catch (e) { setError(apiErrorText(e)); }
+          }}>退回这一版</button>
+        </div>
+      ))}
+      {error && <p className="error">{error}</p>}
     </div>
   );
 }

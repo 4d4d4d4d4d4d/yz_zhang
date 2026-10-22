@@ -389,10 +389,50 @@ def update_method(method_id: int, body: MethodPatch, user: User = Depends(get_cu
     if body.description is not None:
         m.description = body.description
     if body.steps is not None:
-        steps = [s.model_dump() for s in body.steps]
-        if steps != (m.steps or []):
-            m.version = (m.version or 1) + 1      # AGT-097 只有步骤真的变了才升版；改名、改说明不升
-        m.steps = steps
+        _replace_steps(db, m, [s.model_dump() for s in body.steps])
+    m.updated_at = utcnow()
+    db.add(m)
+    db.flush()
+    return _dump_method(m, method_stats(db, [m.id])[m.id])
+
+
+def _replace_steps(db: Session, m: NbMethod, steps: list) -> None:
+    """AGT-097 只有步骤真的变了才升版（改名、改说明不升）；AGT-098 升版前把旧步骤存一份。"""
+    from .models import NbMethodVersion
+
+    if steps == (m.steps or []):
+        return
+    db.add(NbMethodVersion(method_id=m.id, owner_id=m.owner_id, version=m.version or 1, steps=list(m.steps or [])))
+    m.version = (m.version or 1) + 1
+    m.steps = steps
+
+
+@router.get("/notebook/methods/{method_id}/versions")
+def method_versions(method_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """AGT-098（244 号 spec）方法的每一版步骤：当前版在前，旧版按版本号倒序。记版本之前改过的步骤没有存下来。"""
+    from .models import NbMethodVersion
+
+    m = _own(db, NbMethod, method_id, user, "方法")
+    olds = (db.query(NbMethodVersion).filter(NbMethodVersion.method_id == m.id)
+            .order_by(NbMethodVersion.version.desc()).all())
+    return {"method_id": m.id, "current": {"version": m.version or 1, "steps": m.steps or []},
+            "versions": [{"version": v.version, "steps": v.steps or [], "replaced_at": iso(v.replaced_at)} for v in olds]}
+
+
+@router.post("/notebook/methods/{method_id}/versions/{version}/restore")
+def restore_method_version(method_id: int, version: int, user: User = Depends(get_current_user),
+                           db: Session = Depends(get_db, scope="function")):
+    """AGT-098 退回某个旧版的步骤：退回本身也算一次修改（升一版、当前的存成旧版），历史不丢。"""
+    from .models import NbMethodVersion
+
+    m = _own(db, NbMethod, method_id, user, "方法")
+    old = (db.query(NbMethodVersion)
+           .filter(NbMethodVersion.method_id == m.id, NbMethodVersion.version == version).first())
+    if old is None:
+        raise not_found("没有这一版：只有改过步骤之后的旧版能退回", "nb_method_version_not_found")
+    if (old.steps or []) == (m.steps or []):
+        raise conflict("这一版的步骤和现在一样，不用退回", "nb_method_version_same")
+    _replace_steps(db, m, list(old.steps or []))
     m.updated_at = utcnow()
     db.add(m)
     db.flush()
@@ -402,7 +442,11 @@ def update_method(method_id: int, body: MethodPatch, user: User = Depends(get_cu
 @router.delete("/notebook/methods/{method_id}")
 def delete_method(method_id: int, user: User = Depends(get_current_user),
                   db: Session = Depends(get_db, scope="function")):
-    db.delete(_own(db, NbMethod, method_id, user, "方法"))
+    from .models import NbMethodVersion
+
+    m = _own(db, NbMethod, method_id, user, "方法")
+    db.query(NbMethodVersion).filter(NbMethodVersion.method_id == m.id).delete(synchronize_session=False)
+    db.delete(m)
     return {"deleted": True}
 
 

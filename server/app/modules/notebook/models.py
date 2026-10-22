@@ -46,3 +46,17 @@ class NbMethod(Base):
     version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class NbMethodVersion(Base):
+    """AGT-098（244 号 spec）方法的旧版本：改步骤（或退回旧版）之前把当时的步骤存一份，才看得到改了哪一步、能退回去。
+    当前版本仍在 `nb_methods` 上；这里只存被替换掉的。"""
+
+    __tablename__ = "nb_method_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    method_id: Mapped[int] = mapped_column(Integer, index=True)
+    owner_id: Mapped[int] = mapped_column(Integer, index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    steps: Mapped[list] = mapped_column(JSON, default=list)
+    replaced_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)    # 被下一版替换的时间

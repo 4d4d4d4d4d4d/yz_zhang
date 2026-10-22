@@ -148,8 +148,8 @@ def erase_personal_data(db: Session, user: User) -> dict:
     for model in (WbRoutineRun, WbRoutine, WbMemory, WbLog, WbItem, WbProject):
         db.query(model).filter(model.owner_id == user.id).delete(synchronize_session=False)
     # KB-109 个人知识库同理：笔记与方法只属于本人，注销即物理删除
-    from app.modules.notebook.models import NbMethod, NbNote
-    for model in (NbMethod, NbNote):
+    from app.modules.notebook.models import NbMethod, NbMethodVersion, NbNote
+    for model in (NbMethodVersion, NbMethod, NbNote):
         db.query(model).filter(model.owner_id == user.id).delete(synchronize_session=False)
     # PACK-109 启用记录与使用事件：指标只要聚合数，注销后不留可回溯到人的行
     from app.modules.packs.models import PackEnrollment, PackEvent

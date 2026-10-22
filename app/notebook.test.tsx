@@ -94,6 +94,23 @@ describe('KB-100 App 上的个人知识库', () => {
     expect(screen.getByText(/^第 3 版：用过 3 次，做成 0、没成 3/)).toBeTruthy();
   });
 
+  it('AGT-098 改过步骤的方法能看历史、退回旧版', async () => {
+    const calls: Call[] = [];
+    const m = { id: 7, name: '搬家做法', description: '', steps: [{ title: '先列清单', note: '' }], source_note_ids: [], uses: 3, created_at: '', updated_at: '',
+      missions_total: 0, missions_succeeded: 0, missions_failed: 0, missions_spent_cents: 0, success_rate: null, version: 2, versions: [] };
+    render(<NotebookScreen client={makeClient({ 'GET /notebook/methods': [m],
+      'GET /notebook/methods/7/versions': { method_id: 7, current: { version: 2, steps: m.steps },
+        versions: [{ version: 1, steps: [{ title: '打包', note: '' }], replaced_at: '2026-10-20T02:00:00Z' }] },
+      'POST /notebook/methods/7/versions/1/restore': { ...m, version: 3 } }, calls)} />);
+    fireEvent.press(await screen.findByText('我的方法'));
+    fireEvent.press(await screen.findByText('看历史版本'));
+    expect(await screen.findByText('第 2 版加了「先列清单」；去掉了「打包」')).toBeTruthy();
+    fireEvent.press(screen.getByText('退回第 1 版'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/notebook/methods/7/versions/1/restore')).toBe(true));
+    await waitFor(() => expect(calls.filter((c) => c.method === 'GET' && c.path === '/notebook/methods')).toHaveLength(2));
+    expect(await screen.findByText('看历史版本')).toBeTruthy();
+  });
+
   it('笔记可以删除（知识库满了的补救）', async () => {
     const calls: Call[] = [];
     const client = makeClient({ '/notebook/summary': SUMMARY, 'GET /notebook/notes': [brief(4, '旧笔记')],
