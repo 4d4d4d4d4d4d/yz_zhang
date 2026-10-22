@@ -48,4 +48,26 @@ describe('TEAM-073 改派', () => {
     await screen.findByText(/轮到 主管 审批/);
     expect(screen.queryByLabelText('改派 #21')).toBeNull();
   });
+
+  it('TEAM-074 轮到的管理员能把这笔转交给别人（服务端说 can_reassign）', async () => {
+    const calls: Call[] = [];
+    localStorage.setItem('token', 'tok');
+    const team = { ...TEAM, my_role: 'admin' };
+    const fetchImpl = vi.fn(async (url: string, init?: { method?: string; body?: string }) => {
+      const p = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+      const method = init?.method ?? 'GET';
+      calls.push({ method, path: p, body: init?.body ? JSON.parse(init.body) : null });
+      const body = p === '/users/me' ? { ...ME, id: 5 } : p === '/teams/mine' ? [team] : p === '/teams/9' ? team
+        : p === '/teams/9/spends' ? [{ ...SPEND, can_reassign: true }]
+        : p === '/teams/9/spends/21/assign' ? { id: 21, assignee_id: 6, assignee_nickname: '财务主管', previous_assignee_id: 5 } : [];
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    }) as unknown as typeof fetch;
+    render(<MemoryRouter initialEntries={['/teams']}><AppProvider client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })}><App /></AppProvider></MemoryRouter>);
+    fireEvent.click(await screen.findByText('打开'));
+    const sel = await screen.findByLabelText('改派 #21');
+    expect(sel.querySelector('option')?.textContent).toBe('转交给…');
+    fireEvent.change(sel, { target: { value: '6' } });
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/teams/9/spends/21/assign')?.body).toEqual({ assignee_id: 6 }));
+  });
 });
+

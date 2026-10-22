@@ -1440,6 +1440,8 @@ export interface SpendRequestView {
   return_asked_at?: string | null;
   /** TEAM-064（236 号 spec）轮流指派时轮到谁审批（其他审批人也能批） */
   assignee_id?: number | null;
+  /** TEAM-073 / TEAM-074（250 号 spec）我能不能改派 / 转交这笔：所有者，或轮到的那位管理员（老服务端没有） */
+  can_reassign?: boolean;
 }
 export interface TeamReturnAsked {
   id: number;

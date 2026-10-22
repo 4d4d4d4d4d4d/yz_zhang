@@ -72,3 +72,31 @@ def test_only_owner_and_only_to_an_approver(client):
                        headers=auth(other_owner)).status_code == 403
     assert client.post(f"{API}/teams/{team_id}/spends/999999/assign", json={"assignee_id": admin["id"]},
                        headers=auth(owner)).status_code == 404
+
+
+def test_team074_assignee_admin_hands_over_but_other_admins_cannot(client):
+    """TEAM-074（250 号 spec）轮到的那位管理员可以自己把这笔转交给别的审批人；别的管理员不行；列表写明谁能转交。"""
+    owner, admin, staff, team_id = _team_with_staff(client, ("13300643021", "13300643022", "13300643023"))
+    admin2 = make_user(client, "13300643024", "财务主管")
+    add_member(client, team_id, owner, admin2, role="admin", limit=50000)
+    client.patch(f"{API}/teams/{team_id}/approval-mode", json={"mode": "rotate"}, headers=auth(owner))
+    req = _request(client, team_id, staff)
+    url = f"{API}/teams/{team_id}/spends/{req['id']}/assign"
+    client.post(url, json={"assignee_id": admin["id"]}, headers=auth(owner))     # 先指派给 admin
+    rows = {u["id"]: {x["id"]: x for x in client.get(f"{API}/teams/{team_id}/spends", headers=auth(u)).json()}
+            for u in (owner, admin, admin2)}
+    assert [rows[u["id"]][req["id"]]["can_reassign"] for u in (owner, admin, admin2)] == [True, True, False]
+    no = client.post(url, json={"assignee_id": admin["id"]}, headers=auth(admin2))
+    assert no.status_code == 403 and no.json()["detail"]["code"] == "team_transfer_not_yours"
+    ok = client.post(url, json={"assignee_id": admin2["id"]}, headers=auth(admin))
+    assert ok.status_code == 200 and ok.json()["previous_assignee_id"] == admin["id"]
+    assert "转交给你审批" in notices(admin2["id"], "支出待审批（改派给你）")[-1].body
+    assert notices(admin["id"], "支出申请已改派") == [], "自己转交的不用再通知自己"
+    after = {x["id"]: x for x in client.get(f"{API}/teams/{team_id}/spends", headers=auth(admin)).json()}
+    assert after[req["id"]]["can_reassign"] is False, "转交出去之后就不是他的了"
+    from tests.test_client_shape_alignment import _assert_shape
+
+    _assert_shape(after[req["id"]], "SpendRequestView")
+    client.post(f"{API}/teams/{team_id}/spends/{req['id']}/decide", json={"approve": True}, headers=auth(admin2))
+    done = {x["id"]: x for x in client.get(f"{API}/teams/{team_id}/spends", headers=auth(owner)).json()}
+    assert done[req["id"]]["can_reassign"] is False, "批完了谁都不能再改派"

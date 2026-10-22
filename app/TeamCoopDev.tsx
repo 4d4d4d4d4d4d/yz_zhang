@@ -234,10 +234,10 @@ function TeamDetailBlock({ client, teamId }: { client: PlatformClient; teamId: n
             {(sp.returned_cents ?? 0) > 0 ? ` · 已退回 ${fmtYuan(sp.returned_cents)}` : ''}
           </Text>
           {/* TEAM-073（243 号 spec）所有者改派给指定的审批人 */}
-          {sp.status === 'pending' && team.my_role === 'owner' && team.members
+          {sp.status === 'pending' && (sp.can_reassign ?? team.my_role === 'owner') && team.members
             .filter((m) => (m.role === 'owner' || m.role === 'admin') && m.user_id !== sp.requester_id && m.user_id !== sp.assignee_id)
             .map((m) => (
-              <Button key={m.user_id} title={`改派给 ${m.nickname || `#${m.user_id}`}`} onPress={() => act(async () => {
+              <Button key={m.user_id} title={`${team.my_role === 'owner' ? '改派' : '转交'}给 ${m.nickname || `#${m.user_id}`}`} onPress={() => act(async () => {
                 await client.reassignTeamSpend(teamId, sp.id, m.user_id);
                 setNotice(`已改派给 ${m.nickname || `#${m.user_id}`}，已通知他`);
                 await load();

@@ -176,12 +176,21 @@ def next_assignee(db: Session, team: Team, candidates: list[int]) -> int:
     return after[0] if after else ordered[0]
 
 
+def can_reassign(req: SpendRequest, member: TeamMember) -> bool:
+    """TEAM-073 所有者可以改派；TEAM-074（250 号 spec）轮到的那位管理员可以自己转交给别人。"""
+    if req.status != "pending":
+        return False
+    return member.role == "owner" or (member.role == "admin" and req.assignee_id == member.user_id)
+
+
 def reassign_spend(db: Session, req: SpendRequest, actor: User, assignee_id: int) -> dict:
     """TEAM-073（243 号 spec）所有者把一笔待批申请改派给指定的审批人（轮到的人请假、或这笔该某人看）。
     只能改派给能批这笔的人（所有者 / 管理员，不含发起人）；改派后之后的第一轮催办叫他。通知新旧两位。"""
     from app.modules.notification.service import notify
 
-    require_role(db, req.team_id, actor.id, "owner")
+    me = require_role(db, req.team_id, actor.id, "owner", "admin")
+    if me.role != "owner" and req.assignee_id != actor.id:
+        raise forbidden("只有所有者能改派；管理员只能把轮到自己的这笔转交给别人", "team_transfer_not_yours")
     if req.status != "pending":
         raise conflict("该申请已处理，不用再改派", "already_decided")
     if assignee_id not in approvers(db, req.team_id, exclude_user_id=req.requester_id):
@@ -195,8 +204,9 @@ def reassign_spend(db: Session, req: SpendRequest, actor: User, assignee_id: int
         db.add(req)
         amount = f"¥{req.amount_cents / 100:.2f}（{req.purpose or '未填用途'}）"
         team_name = team.name if team else ""
+        verb = "改派" if me.role == "owner" else "转交"
         notify(db, assignee_id, "team", "支出待审批（改派给你）",
-               f"{actor.nickname} 把「{team_name}」一笔 {amount} 的支出申请改派给你审批。")
+               f"{actor.nickname} 把「{team_name}」一笔 {amount} 的支出申请{verb}给你审批。")
         if previous is not None and previous != actor.id:
             notify(db, previous, "team", "支出申请已改派",
                    f"「{team_name}」一笔 {amount} 的支出申请已由 {actor.nickname} 改派给 {name}，你不用再处理（仍然可以批）。")

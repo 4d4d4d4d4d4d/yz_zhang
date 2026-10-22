@@ -297,7 +297,9 @@ def list_spends(team_id: int, user: User = Depends(get_current_user),
          "assignee_id": r.assignee_id,
          # 客户端的「审批」按钮读这个，与服务端同一判断（TEAM-021）
          "can_decide": (r.status == "pending" and me.role in ("owner", "admin")
-                        and r.requester_id != user.id)}
+                        and r.requester_id != user.id),
+         # TEAM-073 / TEAM-074（250 号 spec）能不能改派 / 转交：所有者，或轮到的那位审批人自己
+         "can_reassign": service.can_reassign(r, me)}
         for r in rows
     ]
 

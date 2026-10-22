@@ -159,3 +159,17 @@ describe('TEAM-073 App 改派', () => {
     expect(await screen.findByText('已改派给 财务主管，已通知他')).toBeTruthy();
   });
 });
+
+describe('TEAM-074 App 转交', () => {
+  it('轮到的管理员看到「转交给 X」（服务端说 can_reassign）；没有 can_reassign 的管理员看不到', async () => {
+    const T4 = { ...TEAM, my_role: 'admin', approval_mode: 'rotate', members: [{ user_id: 7, role: 'admin', spend_limit_cents: 0, nickname: '主管' },
+      { user_id: 8, role: 'admin', spend_limit_cents: 0, nickname: '财务主管' }] };
+    const client = makeClient({ '/teams/mine': [T4], '/teams/5': T4,
+      '/teams/5/spends': [spend({ id: 11, assignee_id: 7, can_reassign: true }), spend({ id: 12, assignee_id: 8, can_reassign: false })] });
+    render(<SubScreenHost client={client} screen="teams" onBack={() => undefined} />);
+    await waitFor(() => expect(screen.getByText('某某科技')).toBeTruthy());
+    fireEvent.press(screen.getByText('某某科技'));
+    expect(await screen.findByText('转交给 财务主管')).toBeTruthy();
+    expect(screen.queryAllByText(/转交给|改派给/)).toHaveLength(1);
+  });
+});

@@ -358,6 +358,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   support_agent_not_paused: '这位客服现在没有暂停接单',
   nb_method_version_not_found: '没有这一版：只有改过步骤之后的旧版能退回',
   nb_method_version_same: '这一版的步骤和现在一样，不用退回',
+  team_transfer_not_yours: '只有所有者能改派；管理员只能把轮到自己的这笔转交给别人',
   team_assignee_not_approver: '只能改派给能批这笔的人：团队所有者或管理员，且不能是发起人',
   api_quota_request_no_key: '先建一个 API Key 再申请配额',
   api_quota_request_not_higher: '申请的量要比现在每天的配额高',
