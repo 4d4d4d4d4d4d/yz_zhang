@@ -43,7 +43,7 @@ def test_ban_closes_open_listings_and_rejects_applicants(client, requester, work
 
 
 def test_square_excludes_banned_creator_tasks(client, requester, worker):
-    admin = _make_admin(client, "35000000010")
+    _make_admin(client, "35000000010")
     task = publish_task(client, requester, title="广场过滤单")
     ids = [t["id"] for t in client.get("/api/v1/tasks").json()]
     assert task["id"] in ids

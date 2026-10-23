@@ -27,7 +27,10 @@ OBS = os.path.join(SERVER, "app", "core", "observability.py")
 # 语法层面的 yield/return/break 误用。风格类一条不开（理由同前端 APPB-052b）
 # LINT-004（262 号 spec，V289）例外：未用导入（F401）。清到 0 之后它只会在新代码里出现、改一行就好，
 # 不会逼人加 --quiet；留着它，读代码的人会以为那个名字在这里有用（V168 的 func 就是反过来的同一类错）
-RULES = "F821,F822,F823,F632,F601,F7,F401"
+RULES = "F821,F822,F823,F632,F601,F7,F401,F841"
+# LINT-007（270 号 spec，V297）只查 app/ 与 scripts/ 的规则：重复定义（F811）在测试里会误报
+# ——按名字注入的 pytest fixture 从别的文件导进来、再作为参数出现，就是 F811 的样子
+APP_ONLY_RULES = "F811"
 
 
 def _metric(text: str, name: str) -> int:
@@ -86,5 +89,8 @@ def test_no_names_that_are_certainly_wrong():
     # LINT-006（264 号 spec，V291）范围扩到 tests/ 与 migrations/：测试里写错名字一样会让断言悄悄不跑
     r = subprocess.run(["ruff", "check", "--no-cache", "--select", RULES, "--output-format", "concise",
                         "app", "scripts", "tests", "migrations"],
+                       cwd=SERVER, capture_output=True, text=True)
+    assert r.returncode == 0, "这些一定是错：\n" + r.stdout + r.stderr
+    r = subprocess.run(["ruff", "check", "--no-cache", "--select", APP_ONLY_RULES, "--output-format", "concise", "app", "scripts"],
                        cwd=SERVER, capture_output=True, text=True)
     assert r.returncode == 0, "这些一定是错：\n" + r.stdout + r.stderr

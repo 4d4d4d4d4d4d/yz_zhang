@@ -135,7 +135,7 @@ def test_priv061_private_and_deleted_people_are_not_searchable(client):
     from app.modules.account.models import User
 
     seeker = register(client, "13800097101", "找人的人")
-    public = register(client, "13800097102", "可见的木工")
+    register(client, "13800097102", "可见的木工")
     private = register(client, "13800097103", "隐身的木工")
     gone = register(client, "13800097104", "离开的木工")
     client.patch("/api/v1/users/me", json={"privacy": {"profile_public": False}},

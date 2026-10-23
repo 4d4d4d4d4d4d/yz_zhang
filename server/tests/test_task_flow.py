@@ -99,7 +99,7 @@ def test_full_closed_loop_with_escrow_and_fee(client, requester, worker):
     """核心闭环：托管 2 万分 → 验收 → 执行者收到 92%（8% 抽佣）。"""
     topup(client, requester, 50000)
     task = publish_task(client, requester)
-    contract_id = match_and_fund(client, requester, worker, task)
+    match_and_fund(client, requester, worker, task)
 
     # 托管后余额
     w = client.get("/api/v1/wallet", headers=auth(requester)).json()

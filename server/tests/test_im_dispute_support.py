@@ -20,7 +20,7 @@ def test_im002_task_conversation_auto_created(client, requester, worker):
 
 
 def test_im006_risky_message_flagged(client, requester, worker):
-    task = _funded_task(client, requester, worker)
+    _funded_task(client, requester, worker)
     conv = client.get("/api/v1/conversations", headers=auth(worker)).json()[0]
     r = client.post(
         f"/api/v1/conversations/{conv['id']}/messages",
