@@ -84,8 +84,25 @@ def test_every_fallback_in_the_metrics_module_leaves_a_trace():
     assert not silent, f"observability.py 第 {silent} 行的 except Exception 悄悄吞了错误"
 
 
-@pytest.mark.skipif(shutil.which("ruff") is None, reason="本机没有 ruff；CI 与回归环境装了（见 ci.yml）")
+def ruff_missing_action(env) -> str:
+    """LINT-005（280 号 spec，V308）没装 ruff 时怎么办：CI（GitHub Actions 自带 CI=true）与全量回归
+    （tools/regress.sh 设 PLATFORM_REQUIRE_RUFF=1）里必须**失败**——静默跳过等于这条闸门不存在；
+    只有开发者本机随手跑时才跳过。"""
+    return "fail" if env.get("CI") or env.get("PLATFORM_REQUIRE_RUFF") else "skip"
+
+
+def test_ruff_missing_fails_where_it_must():
+    assert ruff_missing_action({"CI": "true"}) == "fail"
+    assert ruff_missing_action({"PLATFORM_REQUIRE_RUFF": "1"}) == "fail"
+    assert ruff_missing_action({}) == "skip"
+
+
 def test_no_names_that_are_certainly_wrong():
+    if shutil.which("ruff") is None:
+        msg = "本机没有 ruff：pip install ruff==0.15.8（与 ci.yml 一致）"
+        if ruff_missing_action(os.environ) == "fail":
+            pytest.fail(msg + "；CI 与全量回归里不能跳过这条静态检查")
+        pytest.skip(msg)
     # LINT-006（264 号 spec，V291）范围扩到 tests/ 与 migrations/：测试里写错名字一样会让断言悄悄不跑
     r = subprocess.run(["ruff", "check", "--no-cache", "--select", RULES, "--output-format", "concise",
                         "app", "scripts", "tests", "migrations"],

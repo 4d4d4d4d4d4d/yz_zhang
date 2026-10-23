@@ -18,7 +18,8 @@ for d in node_modules web/node_modules app/node_modules packages/core/node_modul
 done
 rm -rf "$W/reg.db" "$W/be.txt" "$W/fe.txt" "$W/counts"
 echo "回归 $SHA 于 $W"
-( cd "$W/server" && PLATFORM_DATABASE_URL="sqlite:///$W/reg.db" python -m pytest -q -p no:cacheprovider 2>&1 | tail -3 > "$W/be.txt" )
+# LINT-005（280 号 spec）全量回归里静态检查不许因为没装 ruff 而静默跳过
+( cd "$W/server" && PLATFORM_REQUIRE_RUFF=1 PLATFORM_DATABASE_URL="sqlite:///$W/reg.db" python -m pytest -q -p no:cacheprovider 2>&1 | tail -3 > "$W/be.txt" )
 J="$W/counts"; mkdir -p "$J"
 ( cd "$W" && {
   # CI-002：只 grep「Tests」那行会漏掉 vitest 的「Errors  3 errors」（未处理的异步错误：测试全过、退出码却是 1，
