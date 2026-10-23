@@ -17,10 +17,9 @@
 import re
 from datetime import timedelta
 
-import sqlalchemy as sa
 
 from app.core.config import settings
-from app.core.db import SessionLocal, engine
+from app.core.db import SessionLocal
 from app.modules.account.models import utcnow
 from app.modules.dispute.models import Dispute
 

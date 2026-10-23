@@ -24,9 +24,7 @@
 2. **行为验**：对钱与身份那一批，真的用 B 的 token 去拿 A 的对象，
    断言不是 200。不比声明，比行为。
 """
-import os
 import re
-import sys
 
 import pytest
 

@@ -12,7 +12,7 @@ from app.modules.account.models import User
 from app.core.db import SessionLocal
 from app.vendors import registry
 
-from .conftest import money, auth, register
+from .conftest import money, auth
 
 
 def oauth(client, provider="wechat", credential="cred-abc123"):

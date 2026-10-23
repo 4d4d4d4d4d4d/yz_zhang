@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from app.core.db import engine
 from app.modules.account.models import utcnow
 
-from .conftest import JOB_HEADERS, auth, register, verify_user
+from .conftest import JOB_HEADERS, auth
 from .test_task_flow import match_and_fund, publish_task
 
 

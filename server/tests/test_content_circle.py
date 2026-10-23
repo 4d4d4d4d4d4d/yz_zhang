@@ -1,5 +1,5 @@
 """08 内容 + 09 圈层：CNT-001/006/010/020/021, CIR-001~007, TASK-008"""
-from .conftest import auth, register, topup, verify_user
+from .conftest import auth, register, verify_user
 
 
 # ---------- 内容 ----------

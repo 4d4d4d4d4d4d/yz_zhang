@@ -1,9 +1,7 @@
 """11 法律 / 12 管理后台 / MATCH-004 邀约 / TASK-042 订阅"""
-import sqlalchemy as sa
 
-from app.core.db import engine
 
-from .conftest import auth, promote_admin, register, topup, verify_user
+from .conftest import auth, promote_admin, register, topup
 from .test_task_flow import match_and_fund, publish_task
 
 

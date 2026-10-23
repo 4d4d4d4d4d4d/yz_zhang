@@ -9,7 +9,7 @@ from datetime import timedelta
 
 from app.modules.account.models import utcnow
 
-from .conftest import auth, register, verify_user
+from .conftest import auth, register
 from .test_task_flow import publish_task
 
 

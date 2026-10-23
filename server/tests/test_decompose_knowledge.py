@@ -1,5 +1,5 @@
 """04 AI 分解 + 06 知识库：AI-DEC-010/011/020/030, TASK-036, KB-001/020/021"""
-from .conftest import auth, register, topup, verify_user
+from .conftest import auth, topup
 from .test_task_flow import match_and_fund
 
 PROJECT = {

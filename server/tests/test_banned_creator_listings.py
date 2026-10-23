@@ -3,11 +3,9 @@
 V36 处理了在途合约；本批补未成交挂单——封禁后无人能选人，
 留在广场是纯粹的用户时间浪费。
 """
-import sqlalchemy as sa
 
-from app.core.db import engine
 
-from .conftest import auth, ban_user_row, promote_admin, register, topup, verify_user
+from .conftest import auth, ban_user_row, promote_admin, register
 from .test_task_flow import publish_task
 
 

@@ -13,7 +13,7 @@ import pytest
 
 from app.core.config import settings
 from app.modules.decompose import llm
-from tests.conftest import JOB_HEADERS, auth, register, topup
+from tests.conftest import JOB_HEADERS, auth, topup
 from tests.test_task_flow import match_and_fund
 
 PROJECT = {

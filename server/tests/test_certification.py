@@ -15,7 +15,7 @@ from datetime import timedelta
 from app.core.db import SessionLocal
 from app.modules.account import cert_service
 from app.modules.account.models import utcnow
-from tests.conftest import auth, make_admin, register, topup, verify_user
+from tests.conftest import auth, make_admin, register, verify_user
 from tests.test_task_flow import publish_task
 
 PNG = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x11" * 96).decode()

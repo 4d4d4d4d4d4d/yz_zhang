@@ -5,9 +5,7 @@
 """
 import random
 
-import sqlalchemy as sa
 
-from app.core.db import engine
 from app.modules.risk.service import reconcile
 
 from .conftest import auth, promote_admin, register, topup, verify_user

@@ -7,9 +7,7 @@
 from app.core.db import SessionLocal
 from app.modules.risk.service import reconcile
 
-import sqlalchemy as sa
 
-from app.core.db import engine
 
 from .conftest import auth, promote_admin, register, respond_dispute, topup, verify_user
 from .test_task_flow import publish_task

@@ -3,7 +3,7 @@
 广场只展示 published+public，此前用户无法列出自己的草稿/执行中/已完成任务，
 也看不到自己正在执行的单。补个人任务中心后闭合这一能力缺口。
 """
-from .conftest import auth, register, topup, verify_user
+from .conftest import auth, topup
 from .test_task_flow import match_and_fund, publish_task
 
 

@@ -25,9 +25,8 @@ V124 开工前先探过一次：把 OpenAPI 里所有请求体 schema 的字段�
 """
 import re
 
-import pytest
 
-from tests.conftest import auth, register, topup, verify_user
+from tests.conftest import auth, register, topup
 from tests.test_task_flow import publish_task
 
 # ---------------------------------------------------------------- 永不接受

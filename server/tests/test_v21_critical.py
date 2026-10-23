@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.modules.account.models import utcnow
 
-from .conftest import JOB_HEADERS, auth, promote_admin, register, topup, verify_user
+from .conftest import JOB_HEADERS, auth, promote_admin, register, topup
 from .test_task_flow import match_and_fund, publish_task
 
 

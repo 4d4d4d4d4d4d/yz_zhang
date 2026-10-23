@@ -83,6 +83,8 @@ def test_every_fallback_in_the_metrics_module_leaves_a_trace():
 
 @pytest.mark.skipif(shutil.which("ruff") is None, reason="本机没有 ruff；CI 与回归环境装了（见 ci.yml）")
 def test_no_names_that_are_certainly_wrong():
-    r = subprocess.run(["ruff", "check", "--no-cache", "--select", RULES, "--output-format", "concise", "app", "scripts"],
+    # LINT-006（264 号 spec，V291）范围扩到 tests/ 与 migrations/：测试里写错名字一样会让断言悄悄不跑
+    r = subprocess.run(["ruff", "check", "--no-cache", "--select", RULES, "--output-format", "concise",
+                        "app", "scripts", "tests", "migrations"],
                        cwd=SERVER, capture_output=True, text=True)
     assert r.returncode == 0, "这些一定是错：\n" + r.stdout + r.stderr

@@ -3,7 +3,7 @@
 密码：改密验旧密码、重置走短信码，两者都吊销全部旧会话（防被盗号后旧 token 续命）。
 报名撤回：pending 可撤、撤后可重报；撤回的报名不可被发布者成交（防替人签约）。
 """
-from .conftest import auth, register, topup, verify_user
+from .conftest import auth, register, topup
 from .test_task_flow import publish_task
 
 

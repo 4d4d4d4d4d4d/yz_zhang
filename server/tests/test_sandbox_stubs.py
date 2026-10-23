@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.vendors import ledger, notary, registry, sandbox, signature
 
-from .conftest import JOB_HEADERS, auth, register, topup, verify_user
+from .conftest import JOB_HEADERS, auth, register, topup
 from .test_task_flow import match_and_fund, publish_task
 
 

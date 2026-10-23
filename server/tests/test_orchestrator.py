@@ -4,7 +4,7 @@
 护栏是重点：agent 会自动花钱，必须有预算上限、迭代上限、人工停机，
 且资金动作仍复用既有托管/守恒链路。
 """
-from .conftest import JOB_HEADERS, auth, register, topup, verify_user
+from .conftest import JOB_HEADERS, auth, topup
 from .test_task_flow import match_and_fund
 
 

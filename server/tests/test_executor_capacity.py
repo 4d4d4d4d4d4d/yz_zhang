@@ -7,7 +7,7 @@ import pytest
 
 from app.core.config import settings
 
-from .conftest import auth, register, topup, verify_user
+from .conftest import auth, topup
 from .test_task_flow import match_and_fund, publish_task
 
 

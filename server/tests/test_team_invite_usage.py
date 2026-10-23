@@ -3,7 +3,6 @@
 一条能用 5 次的链接，以前只显示「已用 3/5」：是谁用的、什么时候进来的，所有者不知道；
 链接被转发给了不认识的人也看不出来。现在每条链接列出通过它加入的人，成员带上来源，加入时通知所有者。
 """
-from app.core.db import SessionLocal
 from tests.conftest import auth, register
 from tests.test_team_accounts import add_member, make_team, make_user
 from tests.test_team_invites import _link

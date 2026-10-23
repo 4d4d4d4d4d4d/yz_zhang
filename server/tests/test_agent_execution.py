@@ -11,11 +11,10 @@
 """
 import pytest
 
-from app.modules.agent import service as agent_service
 from app.modules.agent.runner import AgentUnavailable, RunResult, set_runner
 from app.modules.wallet import service as wallet
 from tests.conftest import auth, make_admin, register, topup, verify_user
-from tests.test_task_flow import match_and_fund, publish_task
+from tests.test_task_flow import publish_task
 
 
 class FakeRunner:

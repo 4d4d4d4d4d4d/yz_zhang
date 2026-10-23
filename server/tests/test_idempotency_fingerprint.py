@@ -6,7 +6,7 @@
    会把 topup 的缓存响应返回给 withdraw（串味）。
 修复后两者都以 idempotency_key_conflict(409) 拒绝。
 """
-from .conftest import money, auth, bind_payout, register, topup, verify_user
+from .conftest import money, auth, bind_payout, topup
 
 
 def test_same_key_different_amount_rejected(client, requester):

@@ -79,9 +79,7 @@ def test_accdel030_review_cleared_then_deactivation_leaves_all_buckets_zero(clie
 
     断言的是**不变量本身**（三态全零），而不是「某几个 409」。
     """
-    import sqlalchemy as sa
 
-    from app.core.db import engine
 
     u = make_user(client, "13911100003")
     topup(client, u, 5000)

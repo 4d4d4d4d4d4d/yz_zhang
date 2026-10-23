@@ -13,7 +13,7 @@ from app.core.db import SessionLocal
 from app.modules.account.models import utcnow
 from app.modules.openapi import service as api_service
 from app.modules.openapi.models import SCOPES, ApiKey, Webhook, WebhookDelivery
-from tests.conftest import JOB_HEADERS, auth, ban_user_row, register, topup, verify_user
+from tests.conftest import JOB_HEADERS, auth, ban_user_row, topup
 from tests.test_task_flow import publish_task
 
 

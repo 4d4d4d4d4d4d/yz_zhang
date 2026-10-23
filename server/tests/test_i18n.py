@@ -11,7 +11,6 @@
 **错误的稳定契约是 `code`，不是 `message`**。
 """
 import ast
-import json
 import pathlib
 import re
 

@@ -5,14 +5,13 @@
 """
 from datetime import datetime
 
-import pytest
 
 from app.core.db import SessionLocal
 from app.modules.account.models import User
 from app.modules.admin.models import AdminAudit
 from app.modules.wallet import service as wallet
 from app.modules.wallet.models import LedgerEntry
-from tests.conftest import auth, make_admin, register, topup
+from tests.conftest import auth, make_admin, topup
 from tests.test_task_flow import match_and_fund, publish_task
 
 API = "/api/v1"

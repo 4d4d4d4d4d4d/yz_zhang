@@ -19,7 +19,6 @@ V82 建的覆盖闸门只看**路径**：端点在不在 SDK 里。两批之内�
 OpenAPI 里根本没有 schema（FastAPI 只知道它返回 `dict`）。
 **能拿到真东西的时候就别去比声明。**
 """
-import json
 import re
 from pathlib import Path
 
@@ -321,7 +320,7 @@ def test_cli067_agent_and_verification_shapes(client, requester, runner):
 
 
 def test_cli067_venture_shapes(client):
-    from tests.test_early_cooperation import confirm, contribute, join, make_user, make_venture
+    from tests.test_early_cooperation import contribute, join, make_user, make_venture
 
     founder = make_user(client, "13800060010", "发起人")
     other = make_user(client, "13800060011", "同伴")
@@ -801,7 +800,6 @@ def test_cli077_admin_review_shapes(client):
     管理后台**整体在覆盖闸门之外**（`_server_paths` 跳过 `/admin`），
     所以这两个形状此前没有任何东西看着。建的时候就进闸门。
     """
-    from tests.conftest import make_admin
     from tests.test_withdraw_review_loop import _pending_withdraw
 
     _u, admin, _rid = _pending_withdraw(client, "13800064400", "13800064409")

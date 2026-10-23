@@ -14,9 +14,8 @@ import base64
 import os
 
 import pytest
-import sqlalchemy as sa
 
-from app.core.db import SessionLocal, engine
+from app.core.db import SessionLocal
 from app.modules.files.models import UploadedFile
 from app.vendors import registry
 from app.vendors.base import VendorError, VendorResult

@@ -12,7 +12,7 @@ from app.core.db import SessionLocal
 from app.modules.coop import compliance_path as cpath
 from app.modules.coop import service as coop
 from app.modules.wallet import service as wallet
-from tests.conftest import auth, register, topup, verify_user
+from tests.conftest import auth, register, verify_user
 
 VER = cpath.RISK_DISCLOSURE_VERSION
 

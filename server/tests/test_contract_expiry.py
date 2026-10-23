@@ -13,7 +13,7 @@ from app.core.db import SessionLocal, engine
 from app.modules.account.models import utcnow
 from app.modules.risk.service import reconcile
 
-from .conftest import JOB_HEADERS, auth, register, topup, verify_user
+from .conftest import JOB_HEADERS, auth, topup
 from .test_task_flow import publish_task
 
 

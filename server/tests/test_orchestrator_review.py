@@ -5,8 +5,6 @@
 """
 import pytest
 
-from app.core.db import SessionLocal
-from app.modules.orchestrator import review as review_mod
 from app.modules.orchestrator.review import (
     QUALITY_BAR,
     ModelReview,

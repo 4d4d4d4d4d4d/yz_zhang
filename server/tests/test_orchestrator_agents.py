@@ -12,7 +12,7 @@
 import pytest
 
 from app.modules.agent.runner import RunResult, set_runner
-from tests.conftest import auth, make_admin, register, topup, verify_user
+from tests.conftest import auth, make_admin, topup
 from tests.test_agent_execution import make_agent
 
 

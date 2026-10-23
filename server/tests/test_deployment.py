@@ -6,9 +6,9 @@
 import pytest
 
 from app.core import observability as obs
-from app.core.db import Base, engine, migration_status
+from app.core.db import Base, migration_status
 
-from .conftest import JOB_HEADERS, auth, register
+from .conftest import JOB_HEADERS, auth
 
 
 # ---------- DEP-012 版本 ----------

@@ -4,12 +4,11 @@
 既漏计纠纷/取消场景的佣金（那些不走 released_cents），又有逐笔取整漂移。
 本套件钉住：以平台账户实收为唯一事实来源，纠纷佣金计入，结算后守恒仍成立。
 """
-import sqlalchemy as sa
 
-from app.core.db import SessionLocal, engine
+from app.core.db import SessionLocal
 from app.modules.risk.service import reconcile
 
-from .conftest import auth, promote_admin, register, respond_dispute, topup, verify_user
+from .conftest import auth, promote_admin, register, respond_dispute, topup
 from .test_task_flow import match_and_fund, publish_task
 
 

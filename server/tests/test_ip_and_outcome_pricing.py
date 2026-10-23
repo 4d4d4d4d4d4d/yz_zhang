@@ -10,8 +10,8 @@ IPC 的起点是一条实测出来的缺陷：合同模板有金额、验收、�
 """
 from app.core.db import SessionLocal
 from app.modules.contract.clauses import IP_ASSIGNMENTS
-from tests.conftest import auth, register, topup, verify_user
-from tests.test_task_flow import CLEAN_TASK, match_and_fund, publish_task
+from tests.conftest import auth, topup
+from tests.test_task_flow import CLEAN_TASK, match_and_fund
 
 
 def publish(client, user, **over):

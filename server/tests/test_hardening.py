@@ -1,6 +1,6 @@
 """工程硬化：14.6/05.B 资金幂等 / ACC-001 防刷限流 / 越权访问拒绝"""
 from .conftest import money, auth, register, topup, verify_user
-from .test_task_flow import CLEAN_TASK, match_and_fund, publish_task
+from .test_task_flow import match_and_fund, publish_task
 
 
 # ---------- 资金操作幂等（14.6/05.B） ----------

@@ -3,12 +3,11 @@
 封禁此前是「盲拍开关」：管理员看不到在途合约与涉险托管，对手方也无人告知——
 被封用户永远无法交付/验收，对方的托管资金被无限期困住。
 """
-import sqlalchemy as sa
 
-from app.core.db import SessionLocal, engine
+from app.core.db import SessionLocal
 from app.modules.risk.service import reconcile
 
-from .conftest import auth, promote_admin, register, topup, verify_user
+from .conftest import auth, promote_admin, register, topup
 from .test_task_flow import match_and_fund, publish_task
 
 

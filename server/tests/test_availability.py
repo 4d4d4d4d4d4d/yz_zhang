@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.core.db import SessionLocal
-from app.modules.account.models import User, utcnow
+from app.modules.account.models import utcnow
 from app.modules.matching.service import has_slot_between
 from tests.conftest import auth, register, verify_user
 

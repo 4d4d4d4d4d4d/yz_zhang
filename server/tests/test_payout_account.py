@@ -1,5 +1,5 @@
 """PAY-005 收款账户绑定：提现前置 + 实名一致校验 + 账号脱敏（业界必备）。"""
-from .conftest import money, auth, bind_payout, register, topup, verify_user
+from .conftest import money, auth, bind_payout, register, topup
 
 
 def test_withdraw_blocked_without_payout_account(client, requester):

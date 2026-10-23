@@ -1,5 +1,5 @@
 """NTF-005 通知未读徽章 + 一键全部已读 + 列表分页（应用红点标准能力）。"""
-from .conftest import auth, register, topup, verify_user
+from .conftest import auth, register, topup
 from .test_task_flow import match_and_fund, publish_task
 
 

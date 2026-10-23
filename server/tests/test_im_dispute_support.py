@@ -1,6 +1,6 @@
 """09 IM / 10 客服 / 11 纠纷 / 12 通知"""
-from .conftest import auth, promote_admin, register, respond_dispute, topup, verify_user
-from .test_task_flow import CLEAN_TASK, match_and_fund, publish_task
+from .conftest import auth, promote_admin, register, respond_dispute, topup
+from .test_task_flow import match_and_fund, publish_task
 
 
 def _funded_task(client, requester, worker, budget=20000):
@@ -134,9 +134,7 @@ def test_dsp006_007_verdict_executes_and_penalizes_loser(client, requester, work
     )
     assert r.status_code == 403
     # 提升为仲裁员（模拟后台 RBAC）
-    import sqlalchemy as sa
 
-    from app.core.db import engine
 
     promote_admin(arbiter["id"])
     respond_dispute(client, dispute["id"], worker)  # DSP-005 保障被诉方答辩权

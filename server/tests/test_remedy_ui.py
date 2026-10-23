@@ -17,14 +17,13 @@ CLI-064 立过半条规矩（把服务端的拦截理由原样显示出来）。
 原样显示只是第一半——**第二半是那个理由得有地方去解决。**
 """
 import re
-from pathlib import Path
 
 import pytest
 
 # 扫描实现只有一份（tests/clientscan.py）。此前 remedy_ui 与
 # admin_console_reachability 各写了一份，而第二份漏了「组件得挂上」那一层——
 # **第二份实现必然抄漏**，这条规矩对测试代码同样成立。
-from tests.clientscan import CLIENT_SRC, REPO, calls as _client_calls, sdk_has, server_source
+from tests.clientscan import CLIENT_SRC, REPO, calls as _client_calls
 from tests.clientscan import sources as _sources
 from tests.conftest import money
 

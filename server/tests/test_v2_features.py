@@ -4,7 +4,7 @@ import sqlalchemy as sa
 
 from app.core.db import engine
 
-from .conftest import JOB_HEADERS, auth, make_admin, register, topup, verify_user
+from .conftest import JOB_HEADERS, auth, make_admin, topup
 from .test_task_flow import match_and_fund, publish_task
 
 

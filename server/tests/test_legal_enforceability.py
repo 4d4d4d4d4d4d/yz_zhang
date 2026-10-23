@@ -6,11 +6,10 @@
    自算哈希链不冒充司法存证；
 3. **用词不误导**——平台内部处理决定不得称作「仲裁裁决」。
 """
-import pytest
 
 from app.core.db import SessionLocal
 
-from .conftest import JOB_HEADERS, auth, register, respond_dispute, topup, verify_user
+from .conftest import JOB_HEADERS, auth, register, respond_dispute, topup
 from .test_task_flow import match_and_fund, publish_task
 
 
@@ -277,7 +276,6 @@ def test_platform_decision_is_not_called_arbitration_award(client):
     用「仲裁裁决」这个词会让用户以为已经走完法律程序，是实质性的误导。
     """
     import pathlib
-    import re
 
     root = pathlib.Path(__file__).resolve().parent.parent / "app"
     offenders = []

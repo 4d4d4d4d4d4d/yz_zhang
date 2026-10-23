@@ -6,7 +6,7 @@
 """
 import pytest
 
-from app.modules.agent.runner import RunResult, set_runner
+from app.modules.agent.runner import set_runner
 from app.modules.verify import service as verify_service
 from app.modules.wallet import service as wallet
 from tests.conftest import JOB_HEADERS, auth, make_admin, register, topup, verify_user

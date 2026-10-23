@@ -1,8 +1,7 @@
 """PAY-007 提现风控（业界惯例）：日限额硬拒 + 大额冻结人审 + 守恒不破。"""
-import sqlalchemy as sa
 
 from app.core.config import settings
-from app.core.db import SessionLocal, engine
+from app.core.db import SessionLocal
 from app.modules.risk.service import reconcile
 
 from .conftest import money, auth, promote_admin, register, topup, verify_user

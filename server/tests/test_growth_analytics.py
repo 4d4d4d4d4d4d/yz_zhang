@@ -1,7 +1,5 @@
 """增长与分析：13.C 埋点漏斗 / CNT-022 邀请裂变 / SRCH-003 搜索热词"""
-import sqlalchemy as sa
 
-from app.core.db import engine
 
 from .conftest import auth, promote_admin, register, topup, verify_user
 from .test_task_flow import match_and_fund, publish_task

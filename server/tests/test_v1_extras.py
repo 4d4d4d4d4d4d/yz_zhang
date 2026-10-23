@@ -1,5 +1,5 @@
 """SRCH-001 统一搜索 / TASK-006 周期任务 / LAW-002 文书 / ACC-031 数据导出"""
-from .conftest import auth, register, topup, verify_user
+from .conftest import auth, register, topup
 from .test_task_flow import match_and_fund, publish_task
 
 

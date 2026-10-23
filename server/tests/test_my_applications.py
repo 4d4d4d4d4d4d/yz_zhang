@@ -1,5 +1,5 @@
 """MATCH-010 我的报名：等待选人的报名可追踪（/tasks/mine?role=working 只含已成交单）。"""
-from .conftest import auth, register, topup, verify_user
+from .conftest import auth, topup
 from .test_task_flow import publish_task
 
 

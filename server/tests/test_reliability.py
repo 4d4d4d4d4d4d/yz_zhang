@@ -14,7 +14,7 @@ from app.modules.packs import schema
 from app.modules.packs import service as psvc
 from app.modules.packs.models import PackEvent
 from app.modules.workbench import service as svc
-from app.modules.workbench.models import WbItem, WbRoutine, WbRoutineRun
+from app.modules.workbench.models import WbRoutine, WbRoutineRun
 from tests.conftest import JOB_HEADERS, auth, make_admin
 
 API = "/api/v1/workbench"

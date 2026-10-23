@@ -28,7 +28,6 @@ import inspect
 import re
 import textwrap
 
-import pytest
 
 from tests.test_client_shape_alignment import (
     CLIENT_TS, INTERFACES, _element_decl, _inline_fields, _norm, _split_args, _typed,
