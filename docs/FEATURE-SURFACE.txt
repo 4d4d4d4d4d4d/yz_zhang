@@ -350,6 +350,7 @@ api POST /api/v1/admin/security/unban
 api POST /api/v1/admin/skill-concepts
 api POST /api/v1/admin/skill-concepts/{concept_id}/retire
 api POST /api/v1/admin/subsidy-pool/fund
+api POST /api/v1/admin/support/agents/{user_id}/pause
 api POST /api/v1/admin/support/my-pause
 api POST /api/v1/admin/teams/{team_id}/verify
 api POST /api/v1/admin/tickets/{ticket_id}/assign
@@ -574,6 +575,7 @@ api PUT /api/v1/admin/legal/faqs/{faq_id}
 api PUT /api/v1/admin/matching-config
 api PUT /api/v1/admin/packs/{pack_id}
 api PUT /api/v1/admin/support/my-categories
+api PUT /api/v1/admin/support/my-schedule
 api PUT /api/v1/developer/api-keys/{key_id}/quota
 api PUT /api/v1/developer/api-keys/{key_id}/rate-limit
 api PUT /api/v1/gig/available
@@ -943,6 +945,7 @@ sdk organizationRecords
 sdk ownSpace
 sdk packFeedback
 sdk pauseMySupport
+sdk pauseSupportAgent
 sdk payoutProposals
 sdk pendingCertifications
 sdk pendingTeams
@@ -1038,6 +1041,7 @@ sdk setGigAvailable
 sdk setKnowledgeUnitStatus
 sdk setMissionTools
 sdk setMySupportCategories
+sdk setMySupportSchedule
 sdk setNotificationPref
 sdk setSandbox
 sdk setTeamApprovalMode

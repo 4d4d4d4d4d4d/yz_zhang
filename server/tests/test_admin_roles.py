@@ -39,6 +39,7 @@ ROUTE_ROLES = {
     "GET /admin/support/my-categories": ('support',),           # ESCA-061（234 号 spec）
     "PUT /admin/support/my-categories": ('support',),
     "POST /admin/support/my-pause": ('support',),
+    "PUT /admin/support/my-schedule": ('support',),
     "GET /admin/api-quota-requests": ('ops',),
     "GET /admin/platform-finance/gmv-tax": ('finance',),        # FIN-062（242 号 spec）
     "GET /admin/platform-finance/gmv-tax/export": ('finance',),  # FIN-066（249 号 spec）                  # API-057（241 号 spec）

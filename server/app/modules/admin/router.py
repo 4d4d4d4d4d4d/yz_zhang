@@ -362,7 +362,46 @@ def my_support_categories(admin: User = Depends(require_role("support")), db: Se
     # ESCA-065（240 号 spec）暂停中才带（与 V264 的响应一样，没暂停时不多字段）
     if row is not None and row.paused_until and row.paused_until > utcnow():
         out["paused_until"] = iso(row.paused_until)
+    # ESCA-068（260 号 spec）设了排班才带
+    if row is not None and row.schedule:
+        from app.modules.support.escalation import off_duty
+
+        out["schedule"] = list(row.schedule)
+        out["on_duty"] = not off_duty(row, utcnow())
     return out
+
+
+class ScheduleWindow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    weekday: int = Field(ge=0, le=6)
+    start: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    end: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$|^24:00$")
+
+
+class SupportScheduleIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    windows: list[ScheduleWindow] = Field(default_factory=list, max_length=21)
+
+
+@router.put("/admin/support/my-schedule")
+def set_my_support_schedule(body: SupportScheduleIn, admin: User = Depends(require_role("support")),
+                            db: Session = Depends(get_db, scope="function")):
+    """ESCA-068（260 号 spec）我的排班（北京时间，每周几的几点到几点在岗）：排班以外自动不在岗、到点自动在岗。
+    传空列表 = 取消排班（一直在岗，与以前一样）。"""
+    from app.modules.support.escalation import CATEGORIES, off_duty
+    from app.modules.support.models import SupportAgentScope
+
+    bad = [w for w in body.windows if w.start >= w.end]
+    if bad:
+        raise bad_request("每一段的结束时间要晚于开始时间（跨午夜请拆成两段）", "support_schedule_bad_window")
+    row = db.query(SupportAgentScope).filter(SupportAgentScope.user_id == admin.id).first()
+    if row is None:
+        row = SupportAgentScope(user_id=admin.id, categories=list(CATEGORIES))
+    row.schedule = [w.model_dump() for w in sorted(body.windows, key=lambda w: (w.weekday, w.start))]
+    db.add(row)
+    record_audit(db, admin.id, "support_schedule", "user", admin.id, f"排班 {len(row.schedule)} 段" if row.schedule else "取消排班")
+    db.flush()
+    return {"schedule": row.schedule, "on_duty": not off_duty(row, utcnow())}
 
 
 class SupportPauseIn(BaseModel):
@@ -437,7 +476,7 @@ def support_agents(admin: User = Depends(require_role("super")), db: Session = D
     from sqlalchemy import func
 
     from app.core.admin_roles import has_role
-    from app.modules.support.escalation import CATEGORIES
+    from app.modules.support.escalation import CATEGORIES, off_duty
     from app.modules.support.models import SupportAgentScope, Ticket
 
     now = utcnow()
@@ -454,7 +493,9 @@ def support_agents(admin: User = Depends(require_role("super")), db: Session = D
         out.append({"user_id": u.id, "nickname": u.nickname,
                     "categories": list(sc.categories) if sc else list(CATEGORIES), "declared": sc is not None,
                     "auto_assign": bool(sc.auto_assign) if sc else False,
-                    "paused_until": iso(sc.paused_until) if paused else None, "open_tickets": int(load.get(u.id, 0))})
+                    "paused_until": iso(sc.paused_until) if paused else None, "open_tickets": int(load.get(u.id, 0)),
+                    # ESCA-068（260 号 spec）现在是否在岗（暂停或排班以外为否）与排班
+                    "on_duty": not off_duty(sc, now) if sc else True, "schedule": list(sc.schedule or []) if sc else []})
     return out
 
 

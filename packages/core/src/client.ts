@@ -141,6 +141,8 @@ import type {
   ApiQuotaRequest,
   AdminApiQuotaRequest,
   SupportScope,
+  SupportScheduleWindow,
+  SupportScheduleResult,
   ApiAccountQuotaRow,
   TeamSpendReturned,
   TeamReturnAsked,
@@ -1805,6 +1807,10 @@ export class PlatformClient {
   /** ESCA-066 主管替某位客服恢复接单 */
   resumeSupportAgent(userId: number) {
     return this.request<{ user_id: number; paused_until: null }>('DELETE', `/admin/support/agents/${userId}/pause`);
+  }
+  /** ESCA-068（260 号 spec）设我的排班（北京时间）：排班以外自动不接新单，到点自动接；传空数组取消排班 */
+  setMySupportSchedule(windows: SupportScheduleWindow[]) {
+    return this.request<SupportScheduleResult>('PUT', '/admin/support/my-schedule', { windows });
   }
   /** ESCA-065 提前恢复接单 */
   resumeMySupport() {

@@ -114,12 +114,25 @@ def level1_recipients(db: Session, t: Ticket) -> list[int]:
 
 
 def paused_agents(db: Session) -> set[int]:
-    """ESCA-065 现在处于暂停接单的客服（暂停时间过了就不算）。"""
+    """ESCA-065 现在处于暂停接单的客服（暂停时间过了就不算）；ESCA-068 设了排班、现在不在排班里的也算。"""
     from .models import SupportAgentScope
 
     now = utcnow()
-    return {r.user_id for r in db.query(SupportAgentScope).filter(SupportAgentScope.paused_until.is_not(None),
-                                                                   SupportAgentScope.paused_until > now)}
+    return {r.user_id for r in db.query(SupportAgentScope).all() if off_duty(r, now)}
+
+
+def off_duty(scope, now: datetime) -> bool:
+    """ESCA-065 暂停中，或 ESCA-068（260 号 spec）设了排班而现在（北京时间）不在任何一段里。"""
+    if scope.paused_until is not None and scope.paused_until > now:
+        return True
+    windows = scope.schedule or []
+    if not windows:
+        return False
+    from app.modules.workbench.service import local
+
+    t = local(now)
+    hm = f"{t.hour:02d}:{t.minute:02d}"
+    return not any(w.get("weekday") == t.weekday() and w.get("start", "") <= hm < w.get("end", "") for w in windows)
 
 
 def agent_scopes(db: Session) -> dict[int, list[str]]:
@@ -229,7 +242,7 @@ def auto_assign(db: Session, t: Ticket) -> int | None:
     rows = db.query(SupportAgentScope).filter(SupportAgentScope.auto_assign.is_(True)).all()
     now = utcnow()
     # ESCA-065（240 号 spec）暂停接单的人跳过
-    ids = [r.user_id for r in rows if cat in (r.categories or []) and not (r.paused_until and r.paused_until > now)]
+    ids = [r.user_id for r in rows if cat in (r.categories or []) and not off_duty(r, now)]
     if not ids:
         return None
     users = [u for u in db.query(User).filter(User.id.in_(ids)).all()

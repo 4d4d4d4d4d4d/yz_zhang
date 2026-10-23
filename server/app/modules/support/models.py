@@ -83,3 +83,6 @@ class SupportAgentScope(Base):
     auto_assign: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
     # ESCA-065（240 号 spec）暂停接单到这个时间（下班 / 请假）：自动分配跳过、超时提醒先叫别人；过了自动恢复
     paused_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # ESCA-068（260 号 spec）排班：[{weekday 0~6（周一为 0）, start "09:00", end "18:00"}]，北京时间；
+    # 设了排班的人在排班以外的时间算「不在岗」（与暂停同样处理）；不设 = 一直在岗（与以前一样）
+    schedule: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)

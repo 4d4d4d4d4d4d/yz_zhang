@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -1086,7 +1086,10 @@ function SupportAgentBoard() {
               <td>{r.nickname || `#${r.user_id}`}</td>
               <td>{r.declared ? r.categories.join('、') : '都管（没选）'}</td>
               <td>{r.auto_assign ? '开' : '关'}</td>
-              <td>{r.paused_until ? `暂停到 ${formatDateTime(r.paused_until)}` : '在岗'}</td>
+              <td>{r.paused_until ? `暂停到 ${formatDateTime(r.paused_until)}`
+                // ESCA-068（260 号 spec）没暂停但不在排班里；老服务端没有 on_duty 时照旧算在岗
+                : r.on_duty === false ? '不在排班里' : '在岗'}
+                {!!r.schedule?.length && <span className="muted"> · 排班 {scheduleText(r.schedule)}</span>}</td>
               <td>{r.open_tickets}</td>
               <td>{!r.paused_until && <button className="ghost" onClick={async () => {
                 const hours = Number(window.prompt(`给 ${r.nickname || `#${r.user_id}`} 暂停接单几小时？（1~720）`, '8') ?? '');
@@ -1107,6 +1110,59 @@ function SupportAgentBoard() {
       {notice && <p role="status">{notice}</p>}
       {error && <p className="error">{error}</p>}
     </div>
+  );
+}
+
+const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+function scheduleText(w: SupportScheduleWindow[]) {
+  return w.map((x) => `${WEEKDAYS[x.weekday] ?? x.weekday} ${x.start}–${x.end}`).join('、');
+}
+
+/** ESCA-068（260 号 spec）我的排班：勾选周几、填几点到几点（北京时间）；排班以外自动不接新单，到点自动接。点开才编辑 */
+function SupportScheduleEditor({ scope, onSaved }: { scope: SupportScope; onSaved: (s: SupportScope) => void }) {
+  const { client } = useApp();
+  const [editing, setEditing] = useState(false);
+  const [days, setDays] = useState<number[]>([0, 1, 2, 3, 4]);
+  const [start, setStart] = useState('09:00');
+  const [end, setEnd] = useState('18:00');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  async function save(windows: SupportScheduleWindow[]) {
+    setError(''); setNote('');
+    try {
+      const r = await client.setMySupportSchedule(windows);
+      const { schedule: _s, on_duty: _o, ...rest } = scope;
+      onSaved(r.schedule.length ? { ...rest, schedule: r.schedule, on_duty: r.on_duty } : rest);
+      setEditing(false);
+      setNote(r.schedule.length
+        ? `已保存排班：排班以外新工单不自动分给你、超时提醒先叫别人，到点自动恢复。现在${r.on_duty ? '在排班里' : '不在排班里'}`
+        : '已取消排班：一直算在岗（暂停接单照常可用）');
+    } catch (e) { setError(apiErrorText(e)); }
+  }
+  const has = !!scope.schedule?.length;
+  return (
+    <span aria-label="我的排班">
+      {has
+        ? <span data-testid="my-schedule">排班（北京时间）：{scheduleText(scope.schedule ?? [])} · {scope.on_duty ? '现在在排班里' : '现在不在排班里（新工单不自动分给你）'}</span>
+        : <span className="muted">没设排班（一直算在岗）</span>}
+      {' '}<button className="ghost" onClick={() => setEditing(!editing)}>{editing ? '收起' : has ? '改排班' : '设排班'}</button>
+      {has && !editing && <button className="ghost" onClick={() => void save([])}>取消排班</button>}
+      {editing && (
+        <span>
+          {WEEKDAYS.map((d, i) => (
+            <label key={d}><input type="checkbox" checked={days.includes(i)}
+              onChange={(e) => setDays(e.target.checked ? [...days, i].sort() : days.filter((x) => x !== i))} /> {d}</label>
+          ))}
+          <input aria-label="上班时间" value={start} onChange={(e) => setStart(e.target.value)} style={{ width: 64 }} />
+          –<input aria-label="下班时间" value={end} onChange={(e) => setEnd(e.target.value)} style={{ width: 64 }} />
+          <button className="ghost" disabled={days.length === 0}
+            onClick={() => void save(days.map((weekday) => ({ weekday, start: start.trim(), end: end.trim() })))}>保存排班</button>
+          <span className="muted">时间写 09:00 这样的格式；跨午夜请分两天各写一段（如 22:00–24:00 与 00:00–06:00）</span>
+        </span>
+      )}
+      {note && <span role="status">{note}</span>}
+      {error && <span className="error">{error}</span>}
+    </span>
   );
 }
 
@@ -1258,6 +1314,7 @@ function TicketQueue() {
                 <button className="ghost" onClick={() => void pause()}>暂停接单</button>
               </span>}
           {scopeNote && <span role="status">{scopeNote}</span>}
+          <SupportScheduleEditor scope={scope} onSaved={(x) => { setScope(x); setScopeNote(''); }} />
         </div>
       )}
       {isSuper && <SupportAgentBoard />}

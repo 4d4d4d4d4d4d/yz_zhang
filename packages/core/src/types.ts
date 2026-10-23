@@ -1733,6 +1733,21 @@ export interface SupportScope {
   auto_assign?: boolean;
   /** ESCA-065（240 号 spec）暂停接单到什么时候；没暂停时没有这个字段 */
   paused_until?: string;
+  /** ESCA-068（260 号 spec）我的排班（北京时间）；没设排班时没有这个字段 */
+  schedule?: SupportScheduleWindow[];
+  /** ESCA-068 现在在不在排班里；没设排班时没有这个字段（视为一直在岗） */
+  on_duty?: boolean;
+}
+/** ESCA-068（260 号 spec）一段排班：周几（0=周一）几点到几点，北京时间，含开始不含结束 */
+export interface SupportScheduleWindow {
+  weekday: number;
+  start: string;
+  end: string;
+}
+/** ESCA-068 设排班的结果 */
+export interface SupportScheduleResult {
+  schedule: SupportScheduleWindow[];
+  on_duty: boolean;
 }
 /** ESCA-065 暂停 / 恢复接单的结果 */
 export interface SupportPause {
@@ -3492,6 +3507,10 @@ export interface SupportAgentStatus {
   paused_until: string | null;
   /** 手上未结的工单数 */
   open_tickets: number;
+  /** ESCA-068（260 号 spec）现在在岗：没暂停、且在排班里（没设排班算在岗） */
+  on_duty: boolean;
+  /** ESCA-068 排班；没设为空数组 */
+  schedule: SupportScheduleWindow[];
 }
 
 /** AGT-100（251 号 spec）这次编排对「我的方法」的备注修改建议（草稿） */
