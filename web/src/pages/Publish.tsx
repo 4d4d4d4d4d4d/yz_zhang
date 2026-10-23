@@ -1,4 +1,4 @@
-import { GUARDIAN_MODE_LABEL, minorPayload, type GuardianMode, apiErrorText, IP_ASSIGNMENT_LABEL, dayLabel, dayShiftsPayload, fmtYuan, localInputToServerTime, type IpAssignment, type PriceReference, type Task } from '@platform/core';
+import { GUARDIAN_MODE_LABEL, minorPayload, type GuardianMode, apiErrorText, IP_ASSIGNMENT_LABEL, dayLabel, dayShiftsPayload, priceReferenceLine, localInputToServerTime, type IpAssignment, type PriceReference, type Task } from '@platform/core';
 import { DraftHints } from '../Profiles';
 import { useEffect, useState, type FormEvent } from 'react';
 import type { DayShiftInput } from '@platform/core';
@@ -194,11 +194,8 @@ export default function Publish() {
           )}
           {priceRef && (
             <p className="muted">
-              {priceRef.sample_size > 0
-                ? `同类闭环任务 ${priceRef.sample_size} 单：中位价 ${fmtYuan(priceRef.p50_cents!)}（${fmtYuan(priceRef.min_cents!)} ~ ${fmtYuan(priceRef.max_cents!)}）`
-                  // KB-064（266 号 spec）一位发布方占了大半样本时写明去重后的中位价
-                  + (priceRef.concentrated && priceRef.note ? `。${priceRef.note}` : '')
-                : priceRef.message}
+              {/* KB-064（266 号 spec）一位发布方占了大半样本时写明去重后的中位价；KB-095 与 App 同一句话 */}
+              {priceReferenceLine(priceRef)}
             </p>
           )}
           {/* IPC-001 知识产权归属：**必选，无默认值**。

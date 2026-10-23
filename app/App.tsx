@@ -2,7 +2,7 @@ import { TeamReturnsBlock } from './teamReturns';
 import { ChainEntry } from './ChainEntry';
 import { EvidenceExportButton, InvoicesBlock } from './appGaps';
 import { MilestonesBlock } from './milestones';
-import { DraftHints, TaskProfileBlock } from './profiles';
+import { DraftHints, PriceRefBlock, TaskProfileBlock } from './profiles';
 import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
@@ -1015,6 +1015,7 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
       )}
       <TextInput style={styles.input} placeholder="标题（如：帮忙取快递）" value={title} onChangeText={setTitle} />
       <TextInput style={styles.input} placeholder="预算（元）" value={budget} onChangeText={setBudget} keyboardType="numeric" />
+      <PriceRefBlock client={client} category={category} />
       {/* PROF-101 边写边提示还缺什么（126 号 spec） */}
       <DraftHints client={client} draft={{ title, category, budget_cents: Math.round(parseFloat(budget || '0') * 100), is_remote: true }} />
       {!project && (

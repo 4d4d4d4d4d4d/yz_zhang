@@ -1,7 +1,7 @@
 // PROF-100 任务画像与能力画像（126 号 spec）——App 端：发布时边写边提示、我的能力画像。
 import { briefApplyMessage, briefHint,
   hasLists, MALFORMED_TEXT,
-  apiErrorText, fmtYuan, type CapabilityProfile, type PlatformClient, type SkillNormalized, type TaskDraftInput, type TaskProfile,
+  apiErrorText, fmtYuan, priceReferenceLine, type CapabilityProfile, type PlatformClient, type SkillNormalized, type TaskDraftInput, type TaskProfile,
 } from '@platform/core';
 import { useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -10,6 +10,23 @@ const POSITION: Record<string, string> = {
   below_min: '低于近期同类最低成交价', below_median: '低于同类成交中位', around_median: '与同类成交中位相当',
   above_median: '高于同类成交中位', unknown: '同类成交数据不足',
 };
+
+/** KB-095（267 号 spec）App 发单页「查参考价」：与 Web 同一句话（含 V293 的按发布方去重提示）；点了才查 */
+export function PriceRefBlock({ client, category }: { client: PlatformClient; category: string }) {
+  const [line, setLine] = useState('');
+  const [error, setError] = useState('');
+  return (
+    <View accessibilityLabel="参考价">
+      <Button title="查参考价" onPress={() => {
+        setError('');
+        Promise.resolve().then(() => client.priceReference(category))
+          .then((r) => setLine(priceReferenceLine(r) || '暂时查不到参考价')).catch((e) => setError(apiErrorText(e)));
+      }} />
+      {!!line && <Text style={s.muted}>{line}</Text>}
+      {!!error && <Text style={s.muted}>{error}</Text>}
+    </View>
+  );
+}
 
 /** 停下半秒再算，不每个字都请求；取不到就不显示（不挡发布）。 */
 export function DraftHints({ client, draft, delayMs = 500 }: { client: PlatformClient; draft: TaskDraftInput; delayMs?: number }) {
