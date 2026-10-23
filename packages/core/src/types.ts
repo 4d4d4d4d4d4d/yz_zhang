@@ -139,10 +139,14 @@ export interface FinanceCorrectionNote {
   approved_by: number | null;
   approved_at: string | null;
 }
+/** FIN-068 更正哪张表：平台收支表 / 成交额与代扣税表 */
+export type FinanceCorrectionReport = 'platform' | 'gmv_tax';
 /** FIN-064 更正说明（四眼）：一位财务写，另一位财务批准 */
 export interface FinanceCorrectionRow {
   id: number;
   period: string;
+  /** FIN-068（269 号 spec）更正哪张表 */
+  report: FinanceCorrectionReport;
   note: string;
   amount_delta_cents: number;
   requested_by: number;
@@ -3503,6 +3507,8 @@ export interface PlatformGmvTaxRow {
   closed?: boolean;
   late_gmv_cents?: number;
   late_withheld_cents?: number;
+  /** FIN-068（269 号 spec）这张表已批准的更正说明（不改本期数字）；没有时没有这个字段 */
+  corrections?: FinanceCorrectionNote[];
 }
 export interface PlatformGmvTaxPeriods {
   granularity: 'month' | 'quarter';

@@ -109,6 +109,8 @@ class FinancePeriodCorrection(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     period: Mapped[str] = mapped_column(String(7), index=True)            # 已锁的月份 2026-09
+    # FIN-068（269 号 spec）更正哪张表：platform 平台收支表 / gmv_tax 成交额与代扣税表
+    report: Mapped[str] = mapped_column(String(16), default="platform")
     note: Mapped[str] = mapped_column(String(500))
     # 说明里提到的差额（元以分计，可正可负）；只是说明，不改报表的数
     amount_delta_cents: Mapped[int] = mapped_column(Integer, default=0)

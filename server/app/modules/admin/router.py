@@ -1211,16 +1211,18 @@ def platform_finance_periods(
     return out
 
 
-def _approved_corrections(db: Session) -> list:
+def _approved_corrections(db: Session, report: str = "platform") -> list:
     from .models import FinancePeriodCorrection
 
-    return (db.query(FinancePeriodCorrection).filter(FinancePeriodCorrection.status == "approved")
+    return (db.query(FinancePeriodCorrection).filter(FinancePeriodCorrection.status == "approved",
+                                                     FinancePeriodCorrection.report == report)
             .order_by(FinancePeriodCorrection.period, FinancePeriodCorrection.id).all())
 
 
-def _attach_corrections(db: Session, rows: list[dict]) -> None:
-    """FIN-064（265 号 spec）已批准的更正说明挂到它那个月（季度挂三个月的）上；没有更正的期间不加字段（响应与以前一样）。"""
-    items = _approved_corrections(db)
+def _attach_corrections(db: Session, rows: list[dict], report: str = "platform") -> None:
+    """FIN-064（265 号 spec）已批准的更正说明挂到它那个月（季度挂三个月的）上；没有更正的期间不加字段（响应与以前一样）。
+    FIN-068（269 号 spec）两张表各挂各的。"""
+    items = _approved_corrections(db, report)
     if not items:
         return
     for r in rows:
@@ -1249,6 +1251,7 @@ def platform_gmv_tax(
     from app.modules.wallet import service as wallet
 
     out = wallet.gmv_tax_periods(db, *_period_args(granularity, start, end))
+    _attach_corrections(db, out["periods"], "gmv_tax")      # FIN-068（269 号 spec）
     for r in out["periods"]:
         r["start"], r["end"] = iso(r["start"]), iso(r["end"])
     return out
@@ -1357,6 +1360,15 @@ def export_platform_gmv_tax(
     for b in out["basis"]:
         w.writerow([b])
     w.writerow([out["draft_note"]])
+    # FIN-068（269 号 spec）这些期间里已批准的更正说明（有才写）
+    months = [r["period"] for r in out["periods"]]
+    notes = [c for c in _approved_corrections(db, "gmv_tax") if any(_month_in(c.period, p) for p in months)]
+    if notes:
+        w.writerow([])
+        w.writerow(["更正说明（已批准，不改上表数字）", "月份", "差额（元）", "说明", "写的人", "批准人", f"批准时间（{EXPORT_TZ_LABEL}）"])
+        for c in notes:
+            w.writerow(["", c.period, yuan(c.amount_delta_cents), c.note, f"#{c.requested_by}", f"#{c.decided_by}",
+                        export_time(c.decided_at)])
     first, last = out["periods"][0]["period"], out["periods"][-1]["period"]
     record_audit(db, admin.id, "export_platform_gmv_tax", "platform", None, f"{granularity} {first}~{last}")
     db.commit()
@@ -1369,6 +1381,11 @@ class CorrectionIn(BaseModel):
     period: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
     note: str = Field(min_length=1, max_length=500)
     amount_delta_cents: int = Field(default=0, ge=-10**12, le=10**12)
+    # FIN-068（269 号 spec）更正哪张表；不传是平台收支表（与 V292 一样）
+    report: str = Field(default="platform", pattern="^(platform|gmv_tax)$")
+
+
+CORRECTION_REPORTS = {"platform": "平台收支表", "gmv_tax": "成交额与代扣税表"}
 
 
 class CorrectionDecisionIn(BaseModel):
@@ -1377,8 +1394,8 @@ class CorrectionDecisionIn(BaseModel):
 
 
 def _correction_row(c) -> dict:
-    return {"id": c.id, "period": c.period, "note": c.note, "amount_delta_cents": c.amount_delta_cents,
-            "requested_by": c.requested_by, "status": c.status, "decided_by": c.decided_by,
+    return {"id": c.id, "period": c.period, "report": c.report or "platform", "note": c.note,
+            "amount_delta_cents": c.amount_delta_cents, "requested_by": c.requested_by, "status": c.status, "decided_by": c.decided_by,
             "decision_reason": c.decision_reason, "created_at": iso(c.created_at), "decided_at": iso(c.decided_at)}
 
 
@@ -1393,15 +1410,19 @@ def request_finance_correction(body: CorrectionIn, admin: User = Depends(require
 
     if len(body.note.strip()) < 5:
         raise bad_request("更正说明要写清哪里错、为什么（至少 5 个字）：看报表的人只看得到这句话", "correction_note_required")
-    if db.query(FinancePeriodLock).filter(FinancePeriodLock.period == body.period).first() is None:
+    lock = db.query(FinancePeriodLock).filter(FinancePeriodLock.period == body.period).first()
+    if lock is None:
         raise bad_request(f"{body.period} 还没锁账：没锁的月份直接在当期记一笔调整，报表会跟着变，不用写更正说明",
                           "correction_period_not_closed")
-    c = FinancePeriodCorrection(period=body.period, note=body.note.strip(), amount_delta_cents=body.amount_delta_cents,
-                                requested_by=admin.id)
+    if body.report == "gmv_tax" and lock.gmv_tax is None:
+        raise bad_request(f"{body.period} 锁账时还没有一起锁成交额与代扣税表（V285 之前锁的）：这张表那个月仍按最新流水现算，"
+                          "直接在当期调整即可", "correction_gmv_not_locked")
+    c = FinancePeriodCorrection(period=body.period, report=body.report, note=body.note.strip(),
+                                amount_delta_cents=body.amount_delta_cents, requested_by=admin.id)
     db.add(c)
     db.flush()
     record_audit(db, admin.id, "finance_correction_request", "finance_correction", c.id,
-                 f"{body.period} 更正说明（差额 {body.amount_delta_cents} 分），等另一位财务批准")
+                 f"{body.period} {CORRECTION_REPORTS[body.report]}更正说明（差额 {body.amount_delta_cents} 分），等另一位财务批准")
     return _correction_row(c)
 
 

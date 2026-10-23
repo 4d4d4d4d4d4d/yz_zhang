@@ -569,6 +569,10 @@ def _resolve_body_keys(expr: str) -> tuple[set[str], bool]:
 
 # 解析不了的请求体 -> 为什么（值是**理由**，不是布尔）
 DYNAMIC_BODY: dict[tuple[str, str], str] = {
+    ("POST", "/admin/platform-finance/corrections"): (
+        "FIN-068（269 号 spec）传了 report 才带 report（不传 = 平台收支表，与 V292 一样）；服务端 CorrectionIn 认 "
+        "period / note / amount_delta_cents / report，extra=forbid"
+    ),
     ("POST", "/developer/quota-requests"): (
         "API-057（241 号 spec）填了天数才带 days（不填 = 长期）；服务端 QuotaRequestIn 认 daily_quota / days / purpose，extra=forbid"
     ),

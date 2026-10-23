@@ -135,6 +135,7 @@ import type {
   AnnouncementReadByCategory,
   AnnouncementReadCurve,
   FinanceCorrectionRow,
+  FinanceCorrectionReport,
   MissionMethodSuggestions,
   SupportAgentStatus,
   NbMethodHistory,
@@ -1645,9 +1646,10 @@ export class PlatformClient {
     return this.request<PlatformFinanceExport>('GET', `/admin/platform-finance/periods/export${qs(params)}`);
   }
   /** FIN-064（265 号 spec）给已锁的月份写更正说明（不改已出的数），等另一位财务批准 */
-  requestFinanceCorrection(period: string, note: string, amountDeltaCents = 0) {
+  requestFinanceCorrection(period: string, note: string, amountDeltaCents = 0, report?: FinanceCorrectionReport) {
+    // FIN-068（269 号 spec）不传 report 时请求体与 V292 一样（平台收支表）
     return this.request<FinanceCorrectionRow>('POST', '/admin/platform-finance/corrections',
-      { period, note, amount_delta_cents: amountDeltaCents });
+      report ? { period, note, amount_delta_cents: amountDeltaCents, report } : { period, note, amount_delta_cents: amountDeltaCents });
   }
   financeCorrections(status: FinanceCorrectionRow['status'] = 'awaiting_second') {
     return this.request<FinanceCorrectionRow[]>('GET', `/admin/platform-finance/corrections?status=${status}`).then(listOf);

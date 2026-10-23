@@ -81,3 +81,39 @@ def test_rules_unlocked_month_short_note_reject_and_roles(client):
     sup = _admin(client, "13800360003", ["support"])
     assert client.get(C, headers=auth(sup)).status_code == 403
     assert client.post(C, json={"period": "2025-01", "note": "客服不能写更正说明"}, headers=auth(sup)).status_code == 403
+
+
+def test_fin068_gmv_tax_report_has_its_own_corrections(client):
+    """FIN-068（269 号 spec）成交额与代扣税表的更正说明：各挂各的表；V285 之前锁的月份（没锁这张表）不能写。"""
+    from app.modules.wallet.models import FinancePeriodLock
+
+    a, b = _locked(client)
+    G = f"{API}/admin/platform-finance/gmv-tax"
+    before = client.get(G, params={"start": "2025-01", "end": "2025-03"}, headers=auth(a)).json()
+    r = client.post(C, json={"period": "2025-02", "report": "gmv_tax", "note": "一笔放款重复计入成交额",
+                             "amount_delta_cents": -40000}, headers=auth(a))
+    assert r.status_code == 200 and r.json()["report"] == "gmv_tax"
+    client.post(f"{C}/{r.json()['id']}/approve", headers=auth(b))
+    p = client.post(C, json={"period": "2025-01", "note": "平台收支表的一条更正说明"}, headers=auth(a)).json()
+    assert p["report"] == "platform", "不传就是平台收支表（与 V292 一样）"
+    client.post(f"{C}/{p['id']}/approve", headers=auth(b))
+    gmv = client.get(G, params={"start": "2025-01", "end": "2025-03"}, headers=auth(a)).json()
+    feb = next(x for x in gmv["periods"] if x["period"] == "2025-02")
+    assert [x["note"] for x in feb["corrections"]] == ["一笔放款重复计入成交额"]
+    from tests.test_client_shape_alignment import _assert_shape
+
+    _assert_shape(feb, "PlatformGmvTaxRow")
+    old = next(x for x in before["periods"] if x["period"] == "2025-02")
+    assert {k: v for k, v in feb.items() if k != "corrections"} == old, "成交额表的数一分不变"
+    assert all("corrections" not in x for x in gmv["periods"] if x["period"] != "2025-02"), "平台收支表的更正不挂到这张表"
+    plat = _months(client, auth(a))["periods"]
+    assert [x["note"] for x in plat[0]["corrections"]] == ["平台收支表的一条更正说明"] and "corrections" not in plat[1]
+    csv = client.get(f"{G}/export", params={"start": "2025-01", "end": "2025-03"}, headers=auth(a)).json()["csv"]
+    tail = csv.splitlines()
+    assert tail[-2].startswith("更正说明（已批准，不改上表数字）") and tail[-1].startswith(",2025-02,-400.00,一笔放款重复计入成交额")
+    with SessionLocal() as db:
+        db.query(FinancePeriodLock).filter(FinancePeriodLock.period == "2025-01").one().gmv_tax = None
+        db.commit()
+    old_lock = client.post(C, json={"period": "2025-01", "report": "gmv_tax", "note": "早先锁的月份没有这张表的快照"}, headers=auth(a))
+    assert old_lock.status_code == 400 and old_lock.json()["detail"]["code"] == "correction_gmv_not_locked"
+    assert client.post(C, json={"period": "2025-02", "report": "other", "note": "不认识的表"}, headers=auth(a)).status_code == 422
