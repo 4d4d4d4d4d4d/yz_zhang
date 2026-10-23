@@ -72,3 +72,20 @@ def test_only_completed_tasks_and_only_the_executor(client, requester, worker):
     other = register(client, "13800370001", "别人")
     r = _save(client, other, [{"title": "冒用别人的单", "kind": "work", "task_id": tid}])
     assert r.status_code == 400 and r.json()["detail"]["code"] == "showcase_consent_required", "不是你接的单不能关联"
+
+
+def test_scn158_executor_is_told_when_consent_is_granted_or_withdrawn(client, requester, worker):
+    """SCN-158（279 号 spec）授权与撤回都通知接单人；重复撤回不重复通知。"""
+    tid = _done(client, requester, worker)
+
+    def inbox():
+        rows = client.get(f"{API}/notifications?limit=100", headers=auth(worker)).json()
+        items = rows["items"] if isinstance(rows, dict) else rows
+        return [n["title"] for n in items if n["title"] in ("可以展示这一单了", "展示授权已撤回")]
+
+    client.post(f"{API}/tasks/{tid}/showcase-consent", headers=auth(requester))
+    client.post(f"{API}/tasks/{tid}/showcase-consent", headers=auth(requester))
+    assert inbox() == ["可以展示这一单了"], "重复授权不重复通知"
+    client.delete(f"{API}/tasks/{tid}/showcase-consent", headers=auth(requester))
+    client.delete(f"{API}/tasks/{tid}/showcase-consent", headers=auth(requester))
+    assert sorted(inbox()) == sorted(["可以展示这一单了", "展示授权已撤回"]), "撤回通知一次"

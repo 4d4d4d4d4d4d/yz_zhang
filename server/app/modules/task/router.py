@@ -200,6 +200,11 @@ def grant_showcase_consent(task_id: int, user: User = Depends(get_current_user),
         raise bad_request("这一单完成验收后才能授权展示", "showcase_task_not_completed")
     if task.showcase_consent_at is None:
         task.showcase_consent_at = utcnow()
+        # SCN-158（279 号 spec）告诉接单人：可以把这一单放进作品集了
+        from app.modules.notification.service import notify
+
+        notify(db, task.executor_id, "task", "可以展示这一单了",
+               f"《{task.title}》的发单人允许你把这一单放进作品集：在空间编辑里给作品填任务编号 {task.id} 即可。")
     return {"task_id": task.id, "showcase_consent_at": iso(task.showcase_consent_at)}
 
 
@@ -208,6 +213,12 @@ def withdraw_showcase_consent(task_id: int, user: User = Depends(get_current_use
     task = _get_task(db, task_id)
     if task.creator_id != user.id:
         raise forbidden("只有发单人能撤回展示授权")
+    if task.showcase_consent_at is not None and task.executor_id is not None:
+        # SCN-158（279 号 spec）撤回不能静默：接单人空间里关联这一单的作品不再公开，要告诉他为什么
+        from app.modules.notification.service import notify
+
+        notify(db, task.executor_id, "task", "展示授权已撤回",
+               f"《{task.title}》的发单人撤回了展示授权：你空间里关联这一单的作品已不再公开（编辑页里还在，可以删掉或等对方重新授权）。")
     task.showcase_consent_at = None
     return {"task_id": task.id, "showcase_consent_at": None}
 
