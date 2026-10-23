@@ -29,6 +29,14 @@ describe('PROF-100 App 上的画像', () => {
     await waitFor(() => expect(calls.find((c) => c.path === '/profiles/task-draft')?.body).toMatchObject({ title: '帮忙取快递', budget_cents: 3500 }));
   });
 
+  it('KB-094 样本被一位发布方占了大半：括号里写去重后的中位（271 号 spec）', async () => {
+    const client = makeClient({ 'POST /profiles/task-draft': { category: '跑腿', mode: 'remote', declared_skills: [], inferred_skills: [], size: 'small',
+      price: { sample_size: 9, p50_cents: 5000, min_cents: 5000, max_cents: 22000, position: 'below_median', concentrated: true, reference_cents: 18000 },
+      risks: [], completeness: 0.5, checks: [] } }, []);
+    render(<DraftHints client={client} draft={{ title: '排队', category: '跑腿', budget_cents: 10000, is_remote: true }} delayMs={0} />);
+    expect(await screen.findByText('预算低于同类成交中位（按发布方去重后的中位 ¥180.00）')).toBeTruthy();
+  });
+
   it('SCN-106 创作类的单：列出九项里还没写的（140 号 spec）', async () => {
     const client = makeClient({ 'POST /profiles/task-draft': { category: '设计', mode: 'remote', declared_skills: [], inferred_skills: [], size: 'unknown',
       price: { sample_size: 0, p50_cents: null, min_cents: null, max_cents: null, position: 'unknown' }, risks: [],

@@ -2970,6 +2970,9 @@ export interface GigQuote {
   net_cents: number | null;
   basis: string[];
   disclaimer: string;
+  /** KB-094（271 号 spec）样本被一位发布方占了大半时才有：对照与建议用的是按发布方去重后的中位 */
+  concentrated?: boolean;
+  reference_cents?: number;
 }
 
 // ---- PROF-100 任务画像与能力画像（126 号 spec） ----
@@ -2980,6 +2983,9 @@ export interface TaskProfilePrice {
   max_cents: number | null;
   /** below_min / below_median / around_median / above_median / unknown */
   position: 'below_min' | 'below_median' | 'around_median' | 'above_median' | 'unknown';
+  /** KB-094（271 号 spec）样本被一位发布方占了大半时才有：position 是跟这个去重后的中位比的 */
+  concentrated?: boolean;
+  reference_cents?: number;
 }
 export interface TaskProfileRisk {
   kind: string;

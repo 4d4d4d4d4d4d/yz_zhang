@@ -114,12 +114,17 @@ def task_profile(db: Session, t: dict) -> dict:
         ref = price_reference(db, category, None)
     price = {"sample_size": ref.get("sample_size", 0), "p50_cents": ref.get("p50_cents"),
              "min_cents": ref.get("min_cents"), "max_cents": ref.get("max_cents"), "position": "unknown"}
+    # KB-094（271 号 spec）一位发布方占了大半样本时，预算位置与大小按去重后的中位比（不集中时与以前一样）
+    mid = price["p50_cents"]
+    if ref.get("concentrated"):
+        mid = ref["p50_by_publisher_cents"]
+        price.update({"concentrated": True, "reference_cents": mid})
     if price["sample_size"] and budget:
-        p50, lo = price["p50_cents"], price["min_cents"]
+        p50, lo = mid, price["min_cents"]
         price["position"] = ("below_min" if budget < lo else "below_median" if budget < p50 * 0.9
                              else "above_median" if budget > p50 * 1.1 else "around_median")
     size = ("unknown" if not price["sample_size"] or not budget else
-            "small" if budget < price["p50_cents"] * 0.5 else "large" if budget > price["p50_cents"] * 2 else "medium")
+            "small" if budget < mid * 0.5 else "large" if budget > mid * 2 else "medium")
 
     risks = []
     if cat is not None and cat.required_cert:

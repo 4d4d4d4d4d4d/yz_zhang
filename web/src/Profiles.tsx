@@ -1,5 +1,5 @@
 import { briefApplyMessage, briefHint,
-  apiErrorText, fmtYuan,
+  apiErrorText, profileMedianText,
   type CapabilityProfile, type InfluencePublic, type SkillNormalized, type TaskDraftInput, type TaskProfile, type TaskProfileView,
 } from '@platform/core';
 import { useEffect, useState } from 'react';
@@ -28,7 +28,7 @@ export function DraftHints({ draft }: { draft: TaskDraftInput }) {
   return (
     <div className="card" aria-label="说明完整度">
       <p><strong>说明完整度 {Math.round(p.completeness * 100)}%</strong>
-        {p.price.sample_size > 0 && <span className="muted"> · 预算{POSITION[p.price.position]}（中位 {fmtYuan(p.price.p50_cents ?? 0)}）</span>}</p>
+        {p.price.sample_size > 0 && <span className="muted"> · 预算{POSITION[p.price.position]}（{profileMedianText(p.price)}）</span>}</p>
       {missing.length > 0 && <ul>{missing.map((c) => <li key={c.key}>{c.hint}</li>)}</ul>}
       {/* SCN-106 创作类需求九项（140 号 spec）：只是提示，不计入完整度 */}
       {p.brief && p.brief.missing > 0 && (

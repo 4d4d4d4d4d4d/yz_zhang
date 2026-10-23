@@ -50,6 +50,14 @@ describe('PROF-100 画像', () => {
     expect(box.textContent).not.toContain('用在哪儿');
   });
 
+  it('KB-094 样本被一位发布方占了大半：括号里写去重后的中位（271 号 spec）', async () => {
+    open('/publish', { 'POST /profiles/task-draft': { ...PROFILE, price: { ...PROFILE.price, position: 'below_median', concentrated: true, reference_cents: 70000 } },
+      '/categories': [{ name: '设计', required_cert: '' }] });
+    const box = await screen.findByLabelText('说明完整度', {}, { timeout: 3000 });
+    expect(box.textContent).toContain('按发布方去重后的中位 ¥700.00');
+    expect(box.textContent).not.toContain('中位 ¥500.00');
+  });
+
   it('SCN-106 不是创作类（brief 为空）就不显示九项', async () => {
     open('/publish', { 'POST /profiles/task-draft': { ...PROFILE, brief: null }, '/categories': [{ name: '设计', required_cert: '' }] });
     await screen.findByLabelText('说明完整度', {}, { timeout: 3000 });

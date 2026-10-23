@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { priceReferenceLine } from './priceReference';
+import { priceReferenceLine, profileMedianText } from './priceReference';
 
 describe('KB-064 参考价那一句', () => {
   const base = { sample_size: 9, p50_cents: 5000, min_cents: 5000, max_cents: 22000 };
@@ -15,5 +15,14 @@ describe('KB-064 参考价那一句', () => {
     expect(priceReferenceLine(null)).toBe('');
     expect(priceReferenceLine({} as never)).toBe('');
     expect(priceReferenceLine({ p50_cents: 5000 } as never)).toBe('');
+  });
+});
+
+describe('KB-094 画像里的中位', () => {
+  it('集中时用去重后的中位，否则照旧', () => {
+    expect(profileMedianText({ p50_cents: 5000, concentrated: true, reference_cents: 18000 })).toBe('按发布方去重后的中位 ¥180.00');
+    expect(profileMedianText({ p50_cents: 5000 })).toBe('中位 ¥50.00');
+    expect(profileMedianText({ p50_cents: 5000, concentrated: false, reference_cents: 18000 })).toBe('中位 ¥50.00');
+    expect(profileMedianText({ p50_cents: null })).toBe('中位 ¥0.00');
   });
 });

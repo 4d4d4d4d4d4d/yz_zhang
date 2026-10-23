@@ -129,10 +129,15 @@ def quote(db: Session, category: str, city: str | None, budget_cents: int | None
         ref = price_reference(db, category, None)
         scope = f"{category}（{city}暂无数据，用全平台）"
     basis: list[str] = []
+    # KB-094（271 号 spec）一位发布方占了大半样本时，对照与建议改用按发布方去重后的中位价（不集中时与以前一样）
+    concentrated = bool(ref.get("concentrated"))
     if ref.get("sample_size"):
-        p50 = ref["p50_cents"]
-        basis.append(f"{scope}近 180 天 {ref['sample_size']} 单成交，中位 ¥{p50 / 100:.2f}，"
+        p50 = ref["p50_by_publisher_cents"] if concentrated else ref["p50_cents"]
+        basis.append(f"{scope}近 180 天 {ref['sample_size']} 单成交，中位 ¥{ref['p50_cents'] / 100:.2f}，"
                      f"最低 ¥{ref['min_cents'] / 100:.2f}，最高 ¥{ref['max_cents'] / 100:.2f}")
+        if concentrated:
+            basis.append(f"其中大半来自同一位发布方；按发布方去重后，{ref['publishers']} 位发布方的中位是 ¥{p50 / 100:.2f}，"
+                         "下面按这个数对照")
         if budget_cents:
             diff = (budget_cents - p50) * 100 // p50
             basis.append(f"这一单预算 ¥{budget_cents / 100:.2f}，" +
@@ -147,6 +152,8 @@ def quote(db: Session, category: str, city: str | None, budget_cents: int | None
             "p50_cents": ref.get("p50_cents"), "min_cents": ref.get("min_cents"), "max_cents": ref.get("max_cents"),
             "budget_cents": budget_cents, "suggested_cents": suggested or None,
             "net_cents": net_cents(suggested) if suggested else None, "basis": basis,
+            # KB-094 样本集中时才带：对照用的是哪个中位
+            **({"concentrated": True, "reference_cents": ref["p50_by_publisher_cents"]} if concentrated else {}),
             "disclaimer": "报价参考来自平台成交数据，不是承诺价；报不报、报多少由你决定。"}
 
 

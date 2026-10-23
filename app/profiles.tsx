@@ -1,7 +1,7 @@
 // PROF-100 任务画像与能力画像（126 号 spec）——App 端：发布时边写边提示、我的能力画像。
 import { briefApplyMessage, briefHint,
   hasLists, MALFORMED_TEXT,
-  apiErrorText, fmtYuan, priceReferenceLine, type CapabilityProfile, type PlatformClient, type SkillNormalized, type TaskDraftInput, type TaskProfile,
+  apiErrorText, priceReferenceLine, profileMedianText, type CapabilityProfile, type PlatformClient, type SkillNormalized, type TaskDraftInput, type TaskProfile,
 } from '@platform/core';
 import { useEffect, useState } from 'react';
 import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -44,7 +44,7 @@ export function DraftHints({ client, draft, delayMs = 500 }: { client: PlatformC
   return (
     <View style={s.card} accessibilityLabel="说明完整度">
       <Text style={s.title}>说明完整度 {Math.round(p.completeness * 100)}%</Text>
-      {p.price.sample_size > 0 && <Text style={s.muted}>预算{POSITION[p.price.position]}（中位 {fmtYuan(p.price.p50_cents ?? 0)}）</Text>}
+      {p.price.sample_size > 0 && <Text style={s.muted}>预算{POSITION[p.price.position]}（{profileMedianText(p.price)}）</Text>}
       {missing.map((c) => <Text key={c.key}>· {c.hint}</Text>)}
       {/* SCN-106 创作类需求九项（140 号 spec）：只是提示，不计入完整度 */}
       {p.brief && p.brief.missing > 0 && (
