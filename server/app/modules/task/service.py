@@ -26,10 +26,14 @@ SEED_CATEGORIES = [
 # 「陪练看护」——服务对象是未成年人的陪练、看护、接送；接单要有审核通过的无犯罪记录证明（214 号 spec，V242）
 # 「翻译」——自由译者服务包（259 号 spec，V286）
 MINOR_CARE_CERT = "无犯罪记录证明"
+# SCN-154（274 号 spec）接触直接入口食品的人每年体检、取得健康证明后方可上岗（食品安全法第四十五条）
+HEALTH_CERT = "健康证明"
 ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助老陪伴"},
                     {"name": "陪练看护", "required_cert": MINOR_CARE_CERT},
                     # 「翻译」——第七轮场景发掘的自由译者服务包的发单模板与去处（259 号 spec，V286）
-                    {"name": "翻译"}]
+                    {"name": "翻译"},
+                    # 「整理收纳」「上门做饭」——第八轮场景发掘（274 号 spec，V298）；上门做饭要审核通过的健康证明
+                    {"name": "整理收纳"}, {"name": "上门做饭", "required_cert": HEALTH_CERT}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 

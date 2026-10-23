@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 274 | 第八轮场景发掘：整理收纳、上门做饭 | [274-scenario-round-8.md](./274-scenario-round-8.md) | P0 |
 | 273 | 排班复制到其他几天 | [273-schedule-copy-days.md](./273-schedule-copy-days.md) | P0 |
 | 272 | 大额更正说明要超级管理员批准 | [272-correction-super-approval.md](./272-correction-super-approval.md) | P0 |
 | 271 | 报价助手与任务画像用去重后的中位价 | [271-price-dedupe-consumers.md](./271-price-dedupe-consumers.md) | P0 |

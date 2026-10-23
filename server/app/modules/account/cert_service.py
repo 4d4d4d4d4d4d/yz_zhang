@@ -60,6 +60,14 @@ def submit(db: Session, user: User, *, name: str, holder_name: str, cert_number:
             raise bad_request("无犯罪记录证明要填有效期（开具日起最长一年）", "certificate_expiry_required")
         if expires_at > utcnow() + timedelta(days=366):
             raise bad_request("无犯罪记录证明的有效期最长一年：按开具日起一年填", "certificate_expiry_too_far")
+    # SCN-154（274 号 spec）健康证明一年一检：有效期必填、最长一年
+    from app.modules.task.service import HEALTH_CERT
+
+    if name == HEALTH_CERT:
+        if expires_at is None:
+            raise bad_request("健康证明要填有效期（按证明上写的，最长一年）", "certificate_expiry_required")
+        if expires_at > utcnow() + timedelta(days=366):
+            raise bad_request("健康证明的有效期最长一年：按证明上写的到期日填", "certificate_expiry_too_far")
     # CERT-012 同一资质不能堆待审申请
     dup = (
         db.query(CertificationApplication)
