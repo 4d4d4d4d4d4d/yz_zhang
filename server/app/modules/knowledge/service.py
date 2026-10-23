@@ -77,7 +77,12 @@ def price_reference(db: Session, category: str, city: str | None = None) -> dict
     )
     if city:
         query = query.filter(KnowledgeCard.city == city)
-    prices = [c.price_actual_cents for c in query.all()]
+    from app.modules.task.models import Task
+
+    # KB-064（266 号 spec）连同发布方一起取（同一条查询，不逐张查）
+    rows = (query.outerjoin(Task, Task.id == KnowledgeCard.source_task_id)
+            .with_entities(KnowledgeCard.id, KnowledgeCard.price_actual_cents, Task.creator_id).all())
+    prices = [r.price_actual_cents for r in rows]
     if not prices:
         return {"sample_size": 0, "message": "暂无同类闭环数据，建议参考平台模板报价"}
     return {
@@ -85,7 +90,31 @@ def price_reference(db: Session, category: str, city: str | None = None) -> dict
         "p50_cents": int(statistics.median(prices)),
         "min_cents": min(prices),
         "max_cents": max(prices),
+        **_by_publisher(rows),
     }
+
+
+# KB-064 最大的一位发布方占到这么多样本，就提醒「中位价被他拉着走」
+CONCENTRATED_SHARE = 0.5
+CONCENTRATED_MIN_SAMPLES = 3
+
+
+def _by_publisher(rows) -> dict:
+    """KB-064（266 号 spec）经验卡去重：同一位发布方反复发同类任务，会让中位价变成「他一个人的价」。
+    每位发布方先取自己的中位价、算一个样本，再取中位——原来的 sample_size / p50 不变，另给去重后的数。
+    找不到来源任务的卡各算一位（不硬猜是谁发的）。只给人数与比例，不给是谁。"""
+    groups: dict = {}
+    for r in rows:
+        groups.setdefault(("u", r.creator_id) if r.creator_id is not None else ("card", r.id), []).append(r.price_actual_cents)
+    per = [statistics.median(v) for v in groups.values()]
+    top = max(len(v) for v in groups.values())
+    share = round(top / len(rows), 3)
+    concentrated = len(rows) >= CONCENTRATED_MIN_SAMPLES and share > CONCENTRATED_SHARE
+    p50 = int(statistics.median(per))
+    note = (f"这 {len(rows)} 单里有 {top} 单来自同一位发布方；按发布方去重后，{len(groups)} 位发布方的中位价是 "
+            f"¥{p50 / 100:.2f}，更能代表行情" if concentrated else "")
+    return {"publishers": len(groups), "p50_by_publisher_cents": p50, "top_publisher_share": share,
+            "concentrated": concentrated, "note": note}
 
 
 def find_template(db: Session, category: str, text: str) -> dict | None:

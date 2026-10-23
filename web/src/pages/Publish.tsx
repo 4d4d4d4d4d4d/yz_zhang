@@ -196,6 +196,8 @@ export default function Publish() {
             <p className="muted">
               {priceRef.sample_size > 0
                 ? `同类闭环任务 ${priceRef.sample_size} 单：中位价 ${fmtYuan(priceRef.p50_cents!)}（${fmtYuan(priceRef.min_cents!)} ~ ${fmtYuan(priceRef.max_cents!)}）`
+                  // KB-064（266 号 spec）一位发布方占了大半样本时写明去重后的中位价
+                  + (priceRef.concentrated && priceRef.note ? `。${priceRef.note}` : '')
                 : priceRef.message}
             </p>
           )}

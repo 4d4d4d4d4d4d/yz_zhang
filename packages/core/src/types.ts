@@ -912,6 +912,15 @@ export interface PriceReference {
   min_cents?: number;
   max_cents?: number;
   message?: string;
+  /** KB-064（266 号 spec）样本来自几位发布方（找不到来源任务的卡各算一位）；没有样本时没有 */
+  publishers?: number;
+  /** KB-064 每位发布方先取自己的中位价、算一个样本后的中位价 */
+  p50_by_publisher_cents?: number;
+  /** KB-064 样本最多的那位发布方占了几成 */
+  top_publisher_share?: number;
+  /** KB-064 一位发布方占了一半以上（且至少 3 单）：p50 被他拉着走，看去重后的数 */
+  concentrated?: boolean;
+  note?: string;
 }
 
 // ---- ORC 编排（Agent Harness）----
