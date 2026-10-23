@@ -1170,6 +1170,24 @@ def list_announcements(status: str = "", limit: int = Query(50, ge=1, le=200), o
     return [ann_svc.row(a, reads.get(a.id, 0)) for a in rows]
 
 
+@router.get("/admin/announcements/read-curves")
+def announcement_read_curves(ids: str = Query(pattern=r"^\d+(,\d+){0,4}$"), admin: User = Depends(require_role("ops")),
+                             db: Session = Depends(get_db, scope="function")):
+    """NTF-074（277 号 spec）几条公告（最多 5 条）的阅读曲线放在一起比：按传入的顺序，每条带标题与发出时间（北京时间几点）。"""
+    from app.core.timefmt import export_time
+
+    from . import announcements as ann_svc
+    from .models import Announcement
+
+    want = list(dict.fromkeys(int(x) for x in ids.split(",")))
+    found = {a.id: a for a in db.query(Announcement).filter(Announcement.id.in_(want))}
+    missing = [i for i in want if i not in found]
+    if missing:
+        raise not_found(f"没有这几条公告：{'、'.join(f'#{i}' for i in missing)}")
+    return [{**ann_svc.read_curve(db, found[i]), "title": found[i].title,
+             "sent_local": export_time(found[i].sent_at) if found[i].sent_at else ""} for i in want]
+
+
 @router.get("/admin/announcements/{announcement_id}/read-curve")
 def announcement_read_curve(announcement_id: int, admin: User = Depends(require_role("ops")),
                             db: Session = Depends(get_db, scope="function")):

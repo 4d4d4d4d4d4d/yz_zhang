@@ -3602,6 +3602,12 @@ export interface AnnouncementReadCurve {
   points: Array<{ hours: number; label: string; read: number; read_rate: number | null; reached: boolean }>;
   note: string;
 }
+/** NTF-074（277 号 spec）放在一起比的一条：曲线 + 标题 + 北京时间几点发的 */
+export interface AnnouncementCurveCompareRow extends AnnouncementReadCurve {
+  title: string;
+  /** 北京时间 YYYY-MM-DD HH:MM:SS；没发出是空串 */
+  sent_local: string;
+}
 export interface AnnouncementReadByCategory {
   announcement_id: number;
   categories: Array<{ category: string; delivered: number; read: number; read_rate: number | null }>;

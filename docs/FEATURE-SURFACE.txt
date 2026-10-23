@@ -32,6 +32,7 @@ api GET /api/v1/admin/agents
 api GET /api/v1/admin/aml/activities
 api GET /api/v1/admin/aml/stats
 api GET /api/v1/admin/announcements
+api GET /api/v1/admin/announcements/read-curves
 api GET /api/v1/admin/announcements/{announcement_id}/read-by-category
 api GET /api/v1/admin/announcements/{announcement_id}/read-curve
 api GET /api/v1/admin/api-accounts/quotas
@@ -701,6 +702,7 @@ sdk amlStats
 sdk anchorCoverage
 sdk announcementReadByCategory
 sdk announcementReadCurve
+sdk announcementReadCurves
 sdk announcements
 sdk apiAccountQuotas
 sdk apiKeyUsage

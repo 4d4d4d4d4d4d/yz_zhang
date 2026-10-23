@@ -114,3 +114,27 @@ def test_ntf073_opened_via_push_is_counted_separately(client):
     other = register(client, "13800350069", "外人")          # 公告发出之后才注册：没收到
     assert client.post(f"{API}/notifications/push-opened", json={"announcement_id": a["id"]},
                        headers=auth(other)).status_code == 404, "没收到这条公告的人报不了"
+
+
+def test_ntf074_compare_several_curves_in_the_order_asked(client):
+    """NTF-074（277 号 spec）几条公告（最多 5 条）的曲线放在一起比：按传入顺序、带标题与北京时间几点发的。"""
+    ops = _ops(client, "13800350007")
+    register(client, "13800350071", "甲")
+    a = client.post(URL, json={"title": "早上发的", "body": ""}, headers=auth(ops)).json()
+    b = client.post(URL, json={"title": "晚上发的", "body": ""}, headers=auth(ops)).json()
+    r = client.get(f"{URL}/read-curves", params={"ids": f"{b['id']},{a['id']},{b['id']}"}, headers=auth(ops))
+    assert r.status_code == 200
+    rows = r.json()
+    assert [x["title"] for x in rows] == ["晚上发的", "早上发的"], "按传入顺序、重复的只算一次"
+    assert all(len(x["points"]) == 4 and x["sent_local"] for x in rows)
+    from tests.test_client_shape_alignment import _assert_shape
+
+    _assert_shape(rows[0], "AnnouncementCurveCompareRow")
+    miss = client.get(f"{URL}/read-curves", params={"ids": f"{a['id']},999999"}, headers=auth(ops))
+    assert miss.status_code == 404 and "#999999" in miss.json()["detail"]["message"]
+    assert client.get(f"{URL}/read-curves", params={"ids": "1,2,3,4,5,6"}, headers=auth(ops)).status_code == 422, "最多 5 条"
+    fin = make_admin(client, "13800350072", "财务")
+    with SessionLocal() as db:
+        db.get(User, fin["id"]).admin_roles = ["finance"]
+        db.commit()
+    assert client.get(f"{URL}/read-curves", params={"ids": str(a["id"])}, headers=auth(fin)).status_code == 403

@@ -63,6 +63,7 @@ REACHED_BY: dict[str, str] = {
     # NTF-071（252 号 spec）发过的公告「分类目看阅读率」
     "/admin/announcements/{x}/read-by-category": "announcementReadByCategory",
     "/admin/announcements/{x}/read-curve": "announcementReadCurve",
+    "/admin/announcements/read-curves": "announcementReadCurves",
     "/admin/support/agents/{x}/pause": "resumeSupportAgent",
     # FIN-062（242 号 spec）后台「平台财务 · 按期间」下的「成交额与代扣税」
     "/admin/platform-finance/gmv-tax": "platformGmvTax",

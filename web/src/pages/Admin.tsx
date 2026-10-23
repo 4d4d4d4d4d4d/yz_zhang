@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, copyScheduleDay, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, copyScheduleDay, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementCurveCompareRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -633,6 +633,9 @@ function Announcement() {
   const [cats, setCats] = useState<string[]>([]);
   const [preview, setPreview] = useState<AnnouncementPreview | null>(null);
   const [history, setHistory] = useState<AnnouncementRow[]>([]);
+  // NTF-074（277 号 spec）勾几条（最多 5 条）放在一起比阅读曲线
+  const [compareIds, setCompareIds] = useState<number[]>([]);
+  const [compareRows, setCompareRows] = useState<AnnouncementCurveCompareRow[]>([]);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
@@ -713,6 +716,27 @@ function Announcement() {
       )}
       {notice && <p className="muted" data-testid="ann-result">{notice}</p>}
       {error && <p className="error">{error}</p>}
+      {compareIds.length > 0 && (
+        <div aria-label="对比阅读曲线">
+          <button className="ghost" disabled={compareIds.length < 2} onClick={() => void run(async () => {
+            setCompareRows(await client.announcementReadCurves(compareIds));
+          })}>对比这 {compareIds.length} 条的阅读曲线</button>
+          {compareRows.length > 0 && (
+            <table>
+              <thead><tr><th>公告</th><th>发出（北京时间）</th>{(compareRows[0].points ?? []).map((p) => <th key={p.hours}>{p.label}内</th>)}</tr></thead>
+              <tbody>
+                {compareRows.map((r) => (
+                  <tr key={r.announcement_id} data-testid={`compare-${r.announcement_id}`}>
+                    <td>{r.title}</td><td>{r.sent_local}</td>
+                    {(r.points ?? []).map((p) => <td key={p.hours}>{typeof p.read_rate === 'number' ? `${Math.round(p.read_rate * 100)}%` : '—'}{p.reached ? '' : '*'}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {compareRows.length > 0 && <p className="muted">* 还没到这个时间点，数字是到现在为止的</p>}
+        </div>
+      )}
       {history.length > 0 && (
         <table style={{ marginTop: 8 }} aria-label="发过的公告">
           <thead><tr><th>标题</th><th>状态</th><th>时间</th><th>送达</th><th>已读</th><th></th></tr></thead>
@@ -728,7 +752,10 @@ function Announcement() {
                   {/* NTF-071（252 号 spec）多类目的公告按类目拆开看 */}
                   {(a.categories?.length ?? 0) > 1 && a.status !== 'scheduled' && <CategoryReads id={a.id} />}
                   {/* NTF-072（261 号 spec）发出后多久点开 */}
-                  {a.status === 'sent' && <ReadCurve id={a.id} />}</td>
+                  {a.status === 'sent' && <ReadCurve id={a.id} />}
+                  {a.status === 'sent' && <label><input type="checkbox" aria-label={`对比 ${a.title}`} checked={compareIds.includes(a.id)}
+                    disabled={!compareIds.includes(a.id) && compareIds.length >= 5}
+                    onChange={(e) => { setCompareRows([]); setCompareIds(e.target.checked ? [...compareIds, a.id] : compareIds.filter((x) => x !== a.id)); }} /> 对比</label>}</td>
                 <td>
                   {a.status === 'scheduled' && <button className="ghost" onClick={() => void run(async () => {
                     await client.cancelAnnouncement(a.id, prompt('取消的原因（可不填）：') ?? '');

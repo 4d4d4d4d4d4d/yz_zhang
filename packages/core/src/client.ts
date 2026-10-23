@@ -134,6 +134,7 @@ import type {
   SupportPause,
   AnnouncementReadByCategory,
   AnnouncementReadCurve,
+  AnnouncementCurveCompareRow,
   FinanceCorrectionRow,
   FinanceCorrectionReport,
   MissionMethodSuggestions,
@@ -876,6 +877,10 @@ export class PlatformClient {
   /** NTF-072（261 号 spec）发出后 1 小时 / 1 天 / 3 天 / 7 天内点开的累计人数 */
   announcementReadCurve(id: number) {
     return this.request<AnnouncementReadCurve>('GET', `/admin/announcements/${id}/read-curve`);
+  }
+  /** NTF-074（277 号 spec）几条公告（最多 5 条）的阅读曲线放在一起比 */
+  announcementReadCurves(ids: number[]) {
+    return this.request<AnnouncementCurveCompareRow[]>('GET', `/admin/announcements/read-curves?ids=${ids.slice(0, 5).join(',')}`).then(listOf);
   }
   announcementReadByCategory(id: number) {
     return this.request<AnnouncementReadByCategory>('GET', `/admin/announcements/${id}/read-by-category`);
