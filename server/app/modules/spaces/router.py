@@ -20,6 +20,8 @@ class SpaceItem(BaseModel):
     kind: Literal['work', 'article', 'video', 'shop', 'live', 'service'] = 'work'
     summary: str = Field(default='', max_length=500)
     url: str = Field(default='', max_length=1500)
+    # SCN-156（278 号 spec）这件作品来自平台上的哪一单：要那一单的发单人授权展示（不传与以前一样）
+    task_id: int | None = Field(default=None, ge=1)
 
     @field_validator('url')
     @classmethod
@@ -50,6 +52,22 @@ def visible(query):
         or_(User.privacy['profile_public'].as_boolean().is_(None), User.privacy['profile_public'].as_boolean().is_(True)))
 
 
+def _shown(db, items: list) -> list:
+    """SCN-156 公开时：关联了任务、而那一单的展示授权已撤回（或不再成立）的作品不显示。"""
+    ids = {i.get('task_id') for i in items if i.get('task_id')}
+    if not ids:
+        return items
+    from app.modules.task.models import Task
+
+    ok = {tid for (tid,) in db.query(Task.id).filter(Task.id.in_(ids), Task.showcase_consent_at.isnot(None))}
+    return [i for i in items if not i.get('task_id') or i['task_id'] in ok]
+
+
+def _clean(items: list) -> list:
+    """没关联任务的作品不带 task_id 这个键（与以前存的一样）。"""
+    return [{k: v for k, v in i.items() if not (k == 'task_id' and v is None)} for i in items]
+
+
 def dump(space, user, full=True):
     result = {'user_id': user.id, 'nickname': user.nickname, 'headline': space.headline,
         'theme': space.theme, 'kind': 'agent' if user.is_agent else 'organization' if user.is_team or user.is_venture else 'person',
@@ -70,7 +88,8 @@ def discover_spaces(response: Response, q: str = Query(default='', max_length=80
         query = query.filter(or_(User.nickname.contains(q.strip(), autoescape=True),
             PersonalSpace.headline.contains(q.strip(), autoescape=True), PersonalSpace.introduction.contains(q.strip(), autoescape=True)))
     rows = query.filter(PersonalSpace.user_id > after).order_by(PersonalSpace.user_id).limit(limit + 1).all()
-    return {'items': [dump(s, u, False) for s, u in rows[:limit]],
+    # SCN-156（278 号 spec）预览也不出现撤回了展示授权的作品
+    return {'items': [{**dump(s, u, False), 'preview': _shown(db, s.items)[:2]} for s, u in rows[:limit]],
         'next_cursor': rows[limit - 1][0].user_id if len(rows) > limit else None}
 
 
@@ -99,11 +118,22 @@ def save_space(body: SpaceIn, user: User = Depends(get_current_user), db: Sessio
         raise bad_request('请先在账户隐私设置中允许公开个人资料', 'profile_private')
     if body.published and not body.headline.strip():
         raise bad_request('公开前请写一句介绍', 'headline_required')
+    # SCN-156（278 号 spec）关联任务的作品：自己是那一单的接单人，且发单人授权了展示
+    linked = {i.task_id for i in body.items if i.task_id}
+    if linked:
+        from app.modules.task.models import Task
+
+        allowed = {t.id for t in db.query(Task).filter(Task.id.in_(linked), Task.executor_id == user.id,
+                                                       Task.showcase_consent_at.isnot(None))}
+        bad = sorted(linked - allowed)
+        if bad:
+            raise bad_request(f"任务 {'、'.join(f'#{x}' for x in bad)} 还没有得到发单人的展示授权（或不是你接的单）："
+                              "请对方在任务详情里点「允许展示这一单」", 'showcase_consent_required')
     if s is None:
         s = PersonalSpace(user_id=user.id)
         db.add(s)
     for key, value in body.model_dump(exclude={'revision'}).items():
-        setattr(s, key, value)
+        setattr(s, key, _clean(value) if key == 'items' else value)
     s.revision = body.revision + 1
     db.flush()
     return {**dump(s, user), 'revision': s.revision, 'published': s.published,
@@ -116,7 +146,10 @@ def public_space(user_id: int, response: Response, db: Session = Depends(get_db,
     row = visible(db.query(PersonalSpace, User).join(User, User.id == PersonalSpace.user_id)).filter(User.id == user_id).first()
     if not row:
         raise not_found('空间未公开或已收起')
-    return {**dump(*row), 'track_record': track_record(db, row[1])}
+    out = dump(*row)
+    out['items'] = _shown(db, out['items'])
+    out['items_count'] = len(out['items'])
+    return {**out, 'track_record': track_record(db, row[1])}
 
 
 def track_record(db: Session, user: User) -> dict:

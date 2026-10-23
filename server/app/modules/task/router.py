@@ -184,7 +184,32 @@ def dump_task(task: Task, viewer: User | None = None) -> dict:
         "deadline": iso(task.deadline),
         "reject_count": task.reject_count,
         "created_at": iso(task.created_at),
+        # SCN-156（278 号 spec）作品展示授权：只给成交双方、授权了才带
+        **({"showcase_consent_at": iso(task.showcase_consent_at)} if is_party and task.showcase_consent_at else {}),
     }
+
+
+@router.post("/tasks/{task_id}/showcase-consent")
+def grant_showcase_consent(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """SCN-156（278 号 spec）发单人同意接单人把这一单放进作品集（前后对比照、成品照）。
+    只有发单人能授权，只有已完成的单能授权；随时可以撤回，撤回后接单人空间里关联这一单的作品不再公开。"""
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden("只有发单人能授权展示这一单")
+    if task.status != "completed" or task.executor_id is None:
+        raise bad_request("这一单完成验收后才能授权展示", "showcase_task_not_completed")
+    if task.showcase_consent_at is None:
+        task.showcase_consent_at = utcnow()
+    return {"task_id": task.id, "showcase_consent_at": iso(task.showcase_consent_at)}
+
+
+@router.delete("/tasks/{task_id}/showcase-consent")
+def withdraw_showcase_consent(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden("只有发单人能撤回展示授权")
+    task.showcase_consent_at = None
+    return {"task_id": task.id, "showcase_consent_at": None}
 
 
 def _get_task(db: Session, task_id: int) -> Task:

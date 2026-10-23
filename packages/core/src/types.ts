@@ -359,6 +359,8 @@ export interface Task {
   deadline: string | null;
   reject_count: number;
   created_at: string;
+  /** SCN-156（278 号 spec）发单人授权接单人把这一单放进作品集的时间；只给成交双方、授权了才有 */
+  showcase_consent_at?: string;
   distance_m?: number | null;
   // TASK-017 详情视角上下文（仅 GET /tasks/{id} 返回）
   my_application_status?: 'pending' | 'accepted' | 'rejected' | 'withdrawn' | null;
@@ -2048,7 +2050,14 @@ export interface CommercialReadiness {
   note: string;
 }
 
-export interface SpaceItem { title: string; kind: 'work' | 'article' | 'video' | 'shop' | 'live' | 'service'; summary: string; url: string }
+export interface SpaceItem {
+  title: string;
+  kind: 'work' | 'article' | 'video' | 'shop' | 'live' | 'service';
+  summary: string;
+  url: string;
+  /** SCN-156（278 号 spec）来自平台上的哪一单（要发单人授权展示）；没关联时没有 */
+  task_id?: number;
+}
 export interface SpaceReview {
   stars: number;
   tags: string[];

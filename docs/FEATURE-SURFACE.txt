@@ -20,6 +20,7 @@ api DELETE /api/v1/notifications/devices/{token}
 api DELETE /api/v1/opc/entries/{entry_id}
 api DELETE /api/v1/subscriptions/{sub_id}
 api DELETE /api/v1/tasks/{task_id}/bookmark
+api DELETE /api/v1/tasks/{task_id}/showcase-consent
 api DELETE /api/v1/teams/{team_id}/members/{member_user_id}
 api DELETE /api/v1/users/{user_id}/follow
 api DELETE /api/v1/workbench/items/{item_id}
@@ -520,6 +521,7 @@ api POST /api/v1/tasks/{task_id}/progress
 api POST /api/v1/tasks/{task_id}/publish
 api POST /api/v1/tasks/{task_id}/reject-delivery
 api POST /api/v1/tasks/{task_id}/reviews
+api POST /api/v1/tasks/{task_id}/showcase-consent
 api POST /api/v1/tasks/{task_id}/sos
 api POST /api/v1/tasks/{task_id}/trip-share
 api POST /api/v1/tasks/{task_id}/verification
@@ -869,6 +871,7 @@ sdk gigQuote
 sdk gigRoutes
 sdk grantConsent
 sdk grantMachineMandate
+sdk grantShowcaseConsent
 sdk grantTemporaryAdminRole
 sdk imUnreadCount
 sdk importPlatformIncome
@@ -1146,6 +1149,7 @@ sdk withdrawApiQuotaRequest
 sdk withdrawApplication
 sdk withdrawRequests
 sdk withdrawRequestsPage
+sdk withdrawShowcaseConsent
 sdk withdrawVouch
 sdk workbenchBreakdown
 sdk workbenchItem

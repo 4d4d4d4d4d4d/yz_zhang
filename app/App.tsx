@@ -14,6 +14,7 @@ import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
 import { VisitsBlock, hasVisits } from './visits';
 import { ScreenBoundary } from './ScreenBoundary';
 import { RecipientEditorBlock, canChangeRecipient } from './recipient';
+import { ShowcaseConsentBlock, canGrantShowcase } from './showcase';
 import { DiscoverScreen } from './Discover';
 import { AgentBlock, RecommendationsBlock } from './collaborators';
 import { ExperienceToolsBlock } from './experience';
@@ -493,6 +494,8 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       )}
       {/* SCN-123 发单后改服务对象（197 号 spec） */}
       {canChangeRecipient(task, meId) && <RecipientEditorBlock client={client} task={task} onChanged={onChanged} />}
+      {/* SCN-156（278 号 spec） */}
+      {canGrantShowcase(task, meId) && <ShowcaseConsentBlock client={client} task={task} onChanged={onChanged} />}
       <ReportAndBlock client={client} task={task} meId={meId} />
       {contract && (
         <View style={styles.cardRow}>

@@ -678,6 +678,13 @@ export class PlatformClient {
   }
   /** SCN-118 一个人一次报多天：在多天母任务上选日期（YYYY-MM-DD），每天报一个还在招的名额 */
   /** SCN-123 替别人发的单，发单后改服务对象或到场联系方式（要重新确认问过本人）；多天单同步到没结束的名额 */
+  /** SCN-156（278 号 spec）发单人授权接单人把这一单放进作品集（已完成的单）；随时可以撤回 */
+  grantShowcaseConsent(taskId: number) {
+    return this.request<{ task_id: number; showcase_consent_at: string }>('POST', `/tasks/${taskId}/showcase-consent`);
+  }
+  withdrawShowcaseConsent(taskId: number) {
+    return this.request<{ task_id: number; showcase_consent_at: null }>('DELETE', `/tasks/${taskId}/showcase-consent`);
+  }
   changeRecipient(taskId: number, body: { recipient_label: string; onsite_contact?: string; recipient_consented: boolean }) {
     return this.request<Task>('PATCH', `/tasks/${taskId}/recipient`, body);
   }

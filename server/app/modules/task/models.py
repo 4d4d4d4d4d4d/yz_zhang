@@ -93,6 +93,8 @@ class Task(Base):
     minor_involved: Mapped[bool] = mapped_column(Boolean, default=False)
     guardian_mode: Mapped[str] = mapped_column(String(20), default="")
     guardian_consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # SCN-156（278 号 spec）发单人同意接单人把这一单（前后对比照等）放进作品集的时间；撤回则清空
+    showcase_consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # SCN-120（176 号 spec）一单多次上门：要上门几次、每次要做的事（清单）。0 / 空表示不按次回报
     visits_planned: Mapped[int] = mapped_column(Integer, default=0)
     visit_checklist: Mapped[list] = mapped_column(JSON, default=list)

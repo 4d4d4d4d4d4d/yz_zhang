@@ -366,6 +366,8 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   correction_gmv_not_locked: '那个月锁账时还没有一起锁成交额与代扣税表：这张表仍按最新流水现算，直接在当期调整即可',
   correction_same_approver: '更正说明要另一位财务批准：写的就是你，请转交另一位财务',
   correction_already_decided: '这条更正说明已经处理过了：刷新看看',
+  showcase_consent_required: '关联的那一单还没有得到发单人的展示授权（或不是你接的单）：请对方在任务详情里点「允许展示这一单」',
+  showcase_task_not_completed: '这一单完成验收后才能授权展示',
   holiday_exists: '这一天已经录过了：先删掉再重录',
   holiday_weekday_required: '调休上班要写按周几的排班算（例如按周五）',
   support_schedule_overlap: '同一天的两段排班时间重叠了：请改成首尾相接或分开',

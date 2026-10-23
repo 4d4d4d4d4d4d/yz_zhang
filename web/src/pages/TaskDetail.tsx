@@ -114,6 +114,16 @@ export default function TaskDetail() {
         {task.on_behalf && isCreator && !['completed', 'cancelled', 'disputed'].includes(task.status) && (
           <RecipientEditor taskId={taskId} label={task.recipient_label ?? ''} contact={task.onsite_contact ?? ''} onSaved={setTask} />
         )}
+        {/* SCN-156（278 号 spec）已完成的单：发单人允许接单人把这一单放进作品集，随时撤回 */}
+        {task.status === 'completed' && isCreator && task.executor_id !== null && (
+          <p aria-label="作品展示授权">
+            {task.showcase_consent_at ? '你已允许接单人把这一单放进作品集。' : '接单人想把这一单（前后对比照、成品）放进作品集，要你同意。'}
+            <button className="ghost" onClick={() => void act(async () => {
+              if (task.showcase_consent_at) await client.withdrawShowcaseConsent(taskId);
+              else await client.grantShowcaseConsent(taskId);
+            })}>{task.showcase_consent_at ? '撤回展示授权' : '允许展示这一单'}</button>
+          </p>
+        )}
         {error && <p className="error">{error}</p>}
 
         {/* 状态驱动的操作区（TASK-021） */}
