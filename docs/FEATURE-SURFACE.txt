@@ -56,6 +56,7 @@ api GET /api/v1/admin/north-star
 api GET /api/v1/admin/packs
 api GET /api/v1/admin/packs/radar
 api GET /api/v1/admin/platform-finance
+api GET /api/v1/admin/platform-finance/corrections
 api GET /api/v1/admin/platform-finance/gmv-tax
 api GET /api/v1/admin/platform-finance/gmv-tax/export
 api GET /api/v1/admin/platform-finance/periods
@@ -339,6 +340,9 @@ api POST /api/v1/admin/packs/{pack_id}/approve
 api POST /api/v1/admin/packs/{pack_id}/reject
 api POST /api/v1/admin/packs/{pack_id}/retire
 api POST /api/v1/admin/packs/{pack_id}/submit
+api POST /api/v1/admin/platform-finance/corrections
+api POST /api/v1/admin/platform-finance/corrections/{correction_id}/approve
+api POST /api/v1/admin/platform-finance/corrections/{correction_id}/reject
 api POST /api/v1/admin/platform-finance/lock
 api POST /api/v1/admin/platform-finance/settle
 api POST /api/v1/admin/platform-finance/settle-requests/{request_id}/approve
@@ -704,6 +708,7 @@ sdk applyMethod
 sdk applyMissionMethodSuggestions
 sdk approveApiQuotaRequest
 sdk approveCircleMember
+sdk approveFinanceCorrection
 sdk approveSettle
 sdk askNotebook
 sdk askPackAssistant
@@ -833,6 +838,7 @@ sdk exportPlatformFinancePeriods
 sdk exportPlatformGmvTax
 sdk extractNoteTodos
 sdk finalReport
+sdk financeCorrections
 sdk followStats
 sdk followUser
 sdk followers
@@ -977,6 +983,7 @@ sdk registerDevice
 sdk rejectApiQuotaRequest
 sdk rejectChangeOrder
 sdk rejectDelivery
+sdk rejectFinanceCorrection
 sdk rejectSettle
 sdk relatedNotes
 sdk releaseDelivered
@@ -991,6 +998,7 @@ sdk report
 sdk reportRenderError
 sdk reportVisit
 sdk requestApiQuota
+sdk requestFinanceCorrection
 sdk requestInvoice
 sdk requestTeamSpend
 sdk requestVerification

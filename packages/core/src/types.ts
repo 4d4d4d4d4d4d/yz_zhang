@@ -126,6 +126,31 @@ export interface PlatformFinancePeriod {
   /** 第一个未锁月份：其中补记以前期间的合计与笔数 */
   carried_in_cents: number;
   carried_in_count: number;
+  /** FIN-064（265 号 spec）已批准的更正说明（不改本期数字）；没有时没有这个字段 */
+  corrections?: FinanceCorrectionNote[];
+}
+/** FIN-064 挂在报表期间上的更正说明 */
+export interface FinanceCorrectionNote {
+  id: number;
+  period: string;
+  note: string;
+  amount_delta_cents: number;
+  requested_by: number;
+  approved_by: number | null;
+  approved_at: string | null;
+}
+/** FIN-064 更正说明（四眼）：一位财务写，另一位财务批准 */
+export interface FinanceCorrectionRow {
+  id: number;
+  period: string;
+  note: string;
+  amount_delta_cents: number;
+  requested_by: number;
+  status: 'awaiting_second' | 'approved' | 'rejected';
+  decided_by: number | null;
+  decision_reason: string;
+  created_at: string;
+  decided_at: string | null;
 }
 export interface PlatformFinancePeriods {
   granularity: 'month' | 'quarter';

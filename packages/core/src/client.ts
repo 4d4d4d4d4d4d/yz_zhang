@@ -134,6 +134,7 @@ import type {
   SupportPause,
   AnnouncementReadByCategory,
   AnnouncementReadCurve,
+  FinanceCorrectionRow,
   MissionMethodSuggestions,
   SupportAgentStatus,
   NbMethodHistory,
@@ -1636,6 +1637,22 @@ export class PlatformClient {
   }
   exportPlatformFinancePeriods(params: PeriodQuery = {}) {
     return this.request<PlatformFinanceExport>('GET', `/admin/platform-finance/periods/export${qs(params)}`);
+  }
+  /** FIN-064（265 号 spec）给已锁的月份写更正说明（不改已出的数），等另一位财务批准 */
+  requestFinanceCorrection(period: string, note: string, amountDeltaCents = 0) {
+    return this.request<FinanceCorrectionRow>('POST', '/admin/platform-finance/corrections',
+      { period, note, amount_delta_cents: amountDeltaCents });
+  }
+  financeCorrections(status: FinanceCorrectionRow['status'] = 'awaiting_second') {
+    return this.request<FinanceCorrectionRow[]>('GET', `/admin/platform-finance/corrections?status=${status}`).then(listOf);
+  }
+  /** FIN-064 另一位财务批准（写的人自己不能批） */
+  approveFinanceCorrection(id: number) {
+    return this.request<FinanceCorrectionRow>('POST', `/admin/platform-finance/corrections/${id}/approve`);
+  }
+  /** FIN-064 驳回（别人写的要写理由）或撤回（自己写的） */
+  rejectFinanceCorrection(id: number, reason = '') {
+    return this.request<FinanceCorrectionRow>('POST', `/admin/platform-finance/corrections/${id}/reject`, { reason });
   }
   /** FIN-063 锁账到某个已经过完的月份（含）：不能解锁（223 号 spec） */
   lockPlatformFinance(through: string) {

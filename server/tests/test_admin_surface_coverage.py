@@ -86,6 +86,9 @@ REACHED_BY: dict[str, str] = {
     "/admin/skill-concepts": "adminSkillConcepts",
     # SEC-061c / PAY-042b 大额结算的四眼（148 号 spec）
     "/admin/platform-finance/settle-requests": "settleRequests",
+    "/admin/platform-finance/corrections": "financeCorrections",
+    "/admin/platform-finance/corrections/{x}/approve": "approveFinanceCorrection",
+    "/admin/platform-finance/corrections/{x}/reject": "rejectFinanceCorrection",
     "/admin/platform-finance/settle-requests/{x}/approve": "approveSettle",
     "/admin/platform-finance/settle-requests/{x}/reject": "rejectSettle",
     # FIN-061 按期间的平台财务（144 号 spec）

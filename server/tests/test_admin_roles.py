@@ -31,6 +31,10 @@ ROUTE_ROLES = {
     "GET /admin/audit-log/verify": ('compliance',),
     "GET /admin/platform-finance/periods": ('finance',),
     "GET /admin/platform-finance/settle-requests": ('finance',),
+    "POST /admin/platform-finance/corrections": ('finance',),                          # FIN-064（265 号 spec）
+    "GET /admin/platform-finance/corrections": ('finance',),
+    "POST /admin/platform-finance/corrections/{correction_id}/approve": ('finance',),
+    "POST /admin/platform-finance/corrections/{correction_id}/reject": ('finance',),
     "POST /admin/platform-finance/settle-requests/{request_id}/approve": ('finance',),
     "POST /admin/platform-finance/settle-requests/{request_id}/reject": ('finance',),
     "GET /admin/platform-finance/periods/export": ('finance',),

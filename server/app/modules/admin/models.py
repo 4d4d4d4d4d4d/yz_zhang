@@ -102,6 +102,25 @@ class Announcement(Base):
     close_reason: Mapped[str] = mapped_column(String(200), default="")
 
 
+class FinancePeriodCorrection(Base):
+    """FIN-064（265 号 spec）已锁月份的更正说明：锁账快照本身有错时，不改已出的数，
+    由一位财务写明哪里错、差多少，另一位财务批准后随报表与导出一起给出。"""
+    __tablename__ = "finance_period_corrections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    period: Mapped[str] = mapped_column(String(7), index=True)            # 已锁的月份 2026-09
+    note: Mapped[str] = mapped_column(String(500))
+    # 说明里提到的差额（元以分计，可正可负）；只是说明，不改报表的数
+    amount_delta_cents: Mapped[int] = mapped_column(Integer, default=0)
+    requested_by: Mapped[int] = mapped_column(Integer, index=True)
+    # awaiting_second / approved / rejected
+    status: Mapped[str] = mapped_column(String(16), default="awaiting_second", index=True)
+    decided_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    decision_reason: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class PlatformSettleRequest(Base):
     """SEC-061c / PAY-042b 大额平台结算的四眼（148 号 spec）：一位财务发起，另一位财务确认后才真的划出。"""
     __tablename__ = "platform_settle_requests"

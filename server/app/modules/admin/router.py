@@ -1204,10 +1204,38 @@ def platform_finance_periods(
     from app.modules.wallet import service as wallet
 
     out = wallet.platform_finance_periods(db, *_period_args(granularity, start, end))
+    _attach_corrections(db, out["periods"])
     for r in out["periods"]:
         r["start"], r["end"] = iso(r["start"]), iso(r["end"])
     out["locked_at"] = iso(out["locked_at"])
     return out
+
+
+def _approved_corrections(db: Session) -> list:
+    from .models import FinancePeriodCorrection
+
+    return (db.query(FinancePeriodCorrection).filter(FinancePeriodCorrection.status == "approved")
+            .order_by(FinancePeriodCorrection.period, FinancePeriodCorrection.id).all())
+
+
+def _attach_corrections(db: Session, rows: list[dict]) -> None:
+    """FIN-064（265 号 spec）已批准的更正说明挂到它那个月（季度挂三个月的）上；没有更正的期间不加字段（响应与以前一样）。"""
+    items = _approved_corrections(db)
+    if not items:
+        return
+    for r in rows:
+        hits = [c for c in items if _month_in(c.period, r["period"])]
+        if hits:
+            r["corrections"] = [{"id": c.id, "period": c.period, "note": c.note, "amount_delta_cents": c.amount_delta_cents,
+                                 "requested_by": c.requested_by, "approved_by": c.decided_by,
+                                 "approved_at": iso(c.decided_at)} for c in hits]
+
+
+def _month_in(month: str, period: str) -> bool:
+    if "-Q" in period:
+        q = int(period[-1])
+        return month[:4] == period[:4] and (q - 1) * 3 < int(month[5:7]) <= q * 3
+    return month == period
 
 
 @router.get("/admin/platform-finance/gmv-tax")
@@ -1279,6 +1307,15 @@ def export_platform_finance_periods(
                     f"{r['net_cents'] / 100:.2f}", f"{r['opening_cents'] / 100:.2f}", f"{r['closing_cents'] / 100:.2f}",
                     "已锁" if r["closed"] else "未锁", f"{r['late_cents'] / 100:.2f}", f"{r['carried_in_cents'] / 100:.2f}",
                     "平" if r["balanced"] else "不平"])
+    # FIN-064（265 号 spec）表尾列出这些期间里已批准的更正说明（列不变，按列读的不受影响）；没有更正时与以前一样
+    months = [r["period"] for r in out["periods"]]
+    notes = [c for c in _approved_corrections(db) if any(_month_in(c.period, p) for p in months)]
+    if notes:
+        w.writerow([])
+        w.writerow(["更正说明（已批准，不改上表数字）", "月份", "差额（元）", "说明", "写的人", "批准人", f"批准时间（{EXPORT_TZ_LABEL}）"])
+        for c in notes:
+            w.writerow(["", c.period, f"{c.amount_delta_cents / 100:.2f}", c.note, f"#{c.requested_by}", f"#{c.decided_by}",
+                        export_time(c.decided_at)])
     first, last = out["periods"][0]["period"], out["periods"][-1]["period"]
     record_audit(db, admin.id, "export_platform_finance", "platform", None, f"{granularity} {first}~{last}")
     db.commit()
@@ -1325,6 +1362,96 @@ def export_platform_gmv_tax(
     db.commit()
     return {"filename": f"gmv-tax-{first}-{last}.csv", "rows": len(out["periods"]),
             "timezone": EXPORT_TZ_LABEL, "csv": buf.getvalue()}
+
+
+class CorrectionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    period: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    note: str = Field(min_length=1, max_length=500)
+    amount_delta_cents: int = Field(default=0, ge=-10**12, le=10**12)
+
+
+class CorrectionDecisionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(default="", max_length=200)
+
+
+def _correction_row(c) -> dict:
+    return {"id": c.id, "period": c.period, "note": c.note, "amount_delta_cents": c.amount_delta_cents,
+            "requested_by": c.requested_by, "status": c.status, "decided_by": c.decided_by,
+            "decision_reason": c.decision_reason, "created_at": iso(c.created_at), "decided_at": iso(c.decided_at)}
+
+
+@router.post("/admin/platform-finance/corrections")
+def request_finance_correction(body: CorrectionIn, admin: User = Depends(require_role("finance")),
+                               db: Session = Depends(get_db, scope="function")):
+    """FIN-064（265 号 spec）给已锁的月份写更正说明：快照本身有错时不改已出的数，写明哪里错、差多少；
+    另一位财务批准后才随报表与导出给出。没锁的月份直接在当期记调整，不用这个。"""
+    from app.modules.wallet.models import FinancePeriodLock
+
+    from .models import FinancePeriodCorrection
+
+    if len(body.note.strip()) < 5:
+        raise bad_request("更正说明要写清哪里错、为什么（至少 5 个字）：看报表的人只看得到这句话", "correction_note_required")
+    if db.query(FinancePeriodLock).filter(FinancePeriodLock.period == body.period).first() is None:
+        raise bad_request(f"{body.period} 还没锁账：没锁的月份直接在当期记一笔调整，报表会跟着变，不用写更正说明",
+                          "correction_period_not_closed")
+    c = FinancePeriodCorrection(period=body.period, note=body.note.strip(), amount_delta_cents=body.amount_delta_cents,
+                                requested_by=admin.id)
+    db.add(c)
+    db.flush()
+    record_audit(db, admin.id, "finance_correction_request", "finance_correction", c.id,
+                 f"{body.period} 更正说明（差额 {body.amount_delta_cents} 分），等另一位财务批准")
+    return _correction_row(c)
+
+
+@router.get("/admin/platform-finance/corrections")
+def finance_corrections(status: str = Query(default="awaiting_second", pattern="^(awaiting_second|approved|rejected)$"),
+                        admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function")):
+    from .models import FinancePeriodCorrection
+
+    rows = (db.query(FinancePeriodCorrection).filter(FinancePeriodCorrection.status == status)
+            .order_by(FinancePeriodCorrection.id.desc()).limit(100).all())
+    return [_correction_row(c) for c in rows]
+
+
+def _pending_correction(db: Session, correction_id: int):
+    from .models import FinancePeriodCorrection
+
+    c = (db.query(FinancePeriodCorrection).filter(FinancePeriodCorrection.id == correction_id)
+         .with_for_update().first())
+    if c is None:
+        raise not_found("没有这条更正说明")
+    if c.status != "awaiting_second":
+        raise conflict("这条更正说明已经处理过了", "correction_already_decided")
+    return c
+
+
+@router.post("/admin/platform-finance/corrections/{correction_id}/approve")
+def approve_finance_correction(correction_id: int, admin: User = Depends(require_role("finance")),
+                               db: Session = Depends(get_db, scope="function")):
+    """另一位财务批准：写的人自己不能批（`correction_same_approver`）。批准后随报表与导出给出，不改报表的数。"""
+    c = _pending_correction(db, correction_id)
+    if c.requested_by == admin.id:
+        raise bad_request("更正说明要另一位财务批准：写的就是你，请转交另一位财务", "correction_same_approver")
+    c.status, c.decided_by, c.decided_at = "approved", admin.id, utcnow()
+    record_audit(db, admin.id, "finance_correction_approve", "finance_correction", c.id,
+                 f"批准 {c.period} 的更正说明（写的人 #{c.requested_by}）")
+    return _correction_row(c)
+
+
+@router.post("/admin/platform-finance/corrections/{correction_id}/reject")
+def reject_finance_correction(correction_id: int, body: CorrectionDecisionIn, admin: User = Depends(require_role("finance")),
+                              db: Session = Depends(get_db, scope="function")):
+    """驳回或撤回（写的人自己也可以撤回）。驳回别人写的要写理由。"""
+    c = _pending_correction(db, correction_id)
+    if c.requested_by != admin.id and len(body.reason.strip()) < 2:
+        raise bad_request("驳回别人写的更正说明要写明理由", "reason_required")
+    c.status, c.decided_by, c.decided_at = "rejected", admin.id, utcnow()
+    c.decision_reason = body.reason.strip() or "写的人撤回"
+    record_audit(db, admin.id, "finance_correction_reject", "finance_correction", c.id,
+                 f"驳回 {c.period} 的更正说明：{c.decision_reason}")
+    return _correction_row(c)
 
 
 @router.post("/admin/platform-finance/settle")

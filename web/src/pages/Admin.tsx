@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -475,6 +475,50 @@ function GmvTaxPeriods({ granularity }: { granularity: 'month' | 'quarter' }) {
 }
 
 /** FIN-061 按期间的平台财务（144 号 spec）：本月佣金、本季结算。期间按北京时间自然月 / 季度。 */
+/** FIN-064（265 号 spec）已锁月份的更正说明：一位财务写，另一位财务批准后随报表与导出给出，不改已出的数 */
+function FinanceCorrections({ onApproved }: { onApproved: () => void }) {
+  const { client } = useApp();
+  const [pending, setPending] = useState<FinanceCorrectionRow[]>([]);
+  const [period, setPeriod] = useState('');
+  const [note, setNote] = useState('');
+  const [delta, setDelta] = useState('');
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setPending(asList<FinanceCorrectionRow>(await client.financeCorrections().catch(() => [])));
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+  async function act(fn: () => Promise<unknown>, done: string) {
+    setError(''); setNotice('');
+    try { await fn(); setNotice(done); await load(); } catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <div aria-label="更正说明">
+      <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+        <span className="muted">已锁的月份发现快照有错：写更正说明（不改已出的数），另一位财务批准后随报表与导出给出</span>
+        <input type="month" aria-label="更正哪个月" value={period} onChange={(e) => setPeriod(e.target.value)} />
+        <input aria-label="差额（元，可为负）" placeholder="差额（元）" value={delta} onChange={(e) => setDelta(e.target.value)} style={{ width: 96 }} />
+        <input aria-label="哪里错、为什么" placeholder="哪里错、为什么" value={note} onChange={(e) => setNote(e.target.value)} className="grow" />
+        <button className="ghost" onClick={() => void act(async () => {
+          await client.requestFinanceCorrection(period, note, Math.round(Number(delta || '0') * 100));
+          setNote(''); setDelta('');
+        }, '已提交，等另一位财务批准；批准前不出现在报表上')}>提交更正说明</button>
+      </div>
+      {pending.map((c) => (
+        <div key={c.id} className="row" data-testid={`pending-correction-${c.id}`}>
+          <span className="grow">{c.period} 差额 {fmtYuan(c.amount_delta_cents)}：{c.note}（#{c.requested_by} 写）</span>
+          <button className="ghost" onClick={() => void act(async () => { await client.approveFinanceCorrection(c.id); onApproved(); },
+            '已批准：这条说明已挂到那个月的报表与导出上')}>批准</button>
+          <button className="ghost" onClick={() => void act(() => client.rejectFinanceCorrection(c.id, window.prompt('驳回理由（撤回自己写的可不填）：') ?? ''),
+            '已驳回 / 撤回')}>驳回</button>
+        </div>
+      ))}
+      {notice && <p role="status">{notice}</p>}
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 function FinancePeriods() {
   const { client } = useApp();
   const [granularity, setGranularity] = useState<'month' | 'quarter'>('month');
@@ -526,6 +570,7 @@ function FinancePeriods() {
       </div>
       {notice && <p role="status">{notice}</p>}
       {error && <p className="error">{error}</p>}
+      {data?.locked_through && <FinanceCorrections onApproved={() => setReload((n) => n + 1)} />}
       {data && (
         <table>
           <thead><tr><th>期间</th><th>佣金</th><th>笔数</th><th>结算划出</th><th>补贴</th><th>其他</th><th>期末余额</th><th /></tr></thead>
@@ -539,6 +584,10 @@ function FinancePeriods() {
                   {r.closed && <span className="badge"> 已锁</span>}
                   {r.closed && r.late_count > 0 && <span className="muted"> 锁账后又记进 {r.late_count} 笔（{fmtYuan(r.late_cents)}），已记到下一个未锁月份</span>}
                   {r.carried_in_count > 0 && <span className="muted"> 含补记以前期间 {r.carried_in_count} 笔（{fmtYuan(r.carried_in_cents)}）</span>}
+                  {/* FIN-064（265 号 spec）已批准的更正说明：不改上面的数 */}
+                  {(r.corrections ?? []).map((c) => (
+                    <div key={c.id} className="muted" data-testid={`correction-${c.id}`}>更正（{c.period}，差额 {fmtYuan(c.amount_delta_cents)}）：{c.note}</div>
+                  ))}
                 </td>
               </tr>
             ))}
