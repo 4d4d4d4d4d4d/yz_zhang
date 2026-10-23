@@ -1139,15 +1139,22 @@ function scheduleText(w: SupportScheduleWindow[]) {
   return w.map((x) => `${WEEKDAYS[x.weekday] ?? x.weekday} ${x.start}–${x.end}`).join('、');
 }
 
-/** ESCA-068（260 号 spec）我的排班：勾选周几、填几点到几点（北京时间）；排班以外自动不接新单，到点自动接。点开才编辑 */
+/** ESCA-068（260 号 spec）我的排班：每周几几点到几点（北京时间）；排班以外自动不接新单，到点自动接。点开才编辑。
+ * ESCA-069（263 号 spec）按天分别设、每天可以多段（早晚两班）；「工作日 9–18」一键填 */
 function SupportScheduleEditor({ scope, onSaved }: { scope: SupportScope; onSaved: (s: SupportScope) => void }) {
   const { client } = useApp();
   const [editing, setEditing] = useState(false);
-  const [days, setDays] = useState<number[]>([0, 1, 2, 3, 4]);
-  const [start, setStart] = useState('09:00');
-  const [end, setEnd] = useState('18:00');
+  const [rows, setRows] = useState<SupportScheduleWindow[]>([]);
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
+  const WORKDAYS: SupportScheduleWindow[] = [0, 1, 2, 3, 4].map((weekday) => ({ weekday, start: '09:00', end: '18:00' }));
+  function open() {
+    setRows(scope.schedule?.length ? scope.schedule.map((w) => ({ ...w })) : WORKDAYS);
+    setEditing(!editing);
+  }
+  function edit(i: number, patch: Partial<SupportScheduleWindow>) {
+    setRows(rows.map((w, k) => (k === i ? { ...w, ...patch } : w)));
+  }
   async function save(windows: SupportScheduleWindow[]) {
     setError(''); setNote('');
     try {
@@ -1166,19 +1173,26 @@ function SupportScheduleEditor({ scope, onSaved }: { scope: SupportScope; onSave
       {has
         ? <span data-testid="my-schedule">排班（北京时间）：{scheduleText(scope.schedule ?? [])} · {scope.on_duty ? '现在在排班里' : '现在不在排班里（新工单不自动分给你）'}</span>
         : <span className="muted">没设排班（一直算在岗）</span>}
-      {' '}<button className="ghost" onClick={() => setEditing(!editing)}>{editing ? '收起' : has ? '改排班' : '设排班'}</button>
+      {' '}<button className="ghost" onClick={open}>{editing ? '收起' : has ? '改排班' : '设排班'}</button>
       {has && !editing && <button className="ghost" onClick={() => void save([])}>取消排班</button>}
       {editing && (
         <span>
-          {WEEKDAYS.map((d, i) => (
-            <label key={d}><input type="checkbox" checked={days.includes(i)}
-              onChange={(e) => setDays(e.target.checked ? [...days, i].sort() : days.filter((x) => x !== i))} /> {d}</label>
+          {rows.map((w, i) => (
+            <span key={i} data-testid={`schedule-row-${i}`}>
+              <select aria-label={`第 ${i + 1} 段周几`} value={w.weekday} onChange={(e) => edit(i, { weekday: Number(e.target.value) })}>
+                {WEEKDAYS.map((d, k) => <option key={d} value={k}>{d}</option>)}
+              </select>
+              <input aria-label={`第 ${i + 1} 段开始`} value={w.start} onChange={(e) => edit(i, { start: e.target.value })} style={{ width: 64 }} />
+              –<input aria-label={`第 ${i + 1} 段结束`} value={w.end} onChange={(e) => edit(i, { end: e.target.value })} style={{ width: 64 }} />
+              <button className="text-link" onClick={() => setRows(rows.filter((_, k) => k !== i))}>删掉这段</button>
+            </span>
           ))}
-          <input aria-label="上班时间" value={start} onChange={(e) => setStart(e.target.value)} style={{ width: 64 }} />
-          –<input aria-label="下班时间" value={end} onChange={(e) => setEnd(e.target.value)} style={{ width: 64 }} />
-          <button className="ghost" disabled={days.length === 0}
-            onClick={() => void save(days.map((weekday) => ({ weekday, start: start.trim(), end: end.trim() })))}>保存排班</button>
-          <span className="muted">时间写 09:00 这样的格式；跨午夜请分两天各写一段（如 22:00–24:00 与 00:00–06:00）</span>
+          <button className="ghost" disabled={rows.length >= 21}
+            onClick={() => setRows([...rows, { weekday: rows.length ? rows[rows.length - 1].weekday : 0, start: '19:00', end: '22:00' }])}>加一段</button>
+          <button className="ghost" onClick={() => setRows(WORKDAYS)}>工作日 9–18</button>
+          <button className="ghost" disabled={rows.length === 0}
+            onClick={() => void save(rows.map((w) => ({ weekday: w.weekday, start: w.start.trim(), end: w.end.trim() })))}>保存排班</button>
+          <span className="muted">时间写 09:00 这样的格式；同一天可以有几段（不能重叠）；跨午夜请分两天各写一段（如 22:00–24:00 与 00:00–06:00）</span>
         </span>
       )}
       {note && <span role="status">{note}</span>}

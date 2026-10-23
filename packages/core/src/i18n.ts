@@ -360,6 +360,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   nb_method_version_same: '这一版的步骤和现在一样，不用退回',
   method_suggestion_none: '勾选的步骤没有可写回的建议（可能已经写过了）',
   team_transfer_not_yours: '只有所有者能改派；管理员只能把轮到自己的这笔转交给别人',
+  support_schedule_overlap: '同一天的两段排班时间重叠了：请改成首尾相接或分开',
   support_schedule_bad_window: '排班的结束时间要晚于开始时间；跨午夜请拆成两段（如 22:00–24:00 与次日 00:00–06:00）',
   team_assignee_not_approver: '只能改派给能批这笔的人：团队所有者或管理员，且不能是发起人',
   api_quota_request_no_key: '先建一个 API Key 再申请配额',

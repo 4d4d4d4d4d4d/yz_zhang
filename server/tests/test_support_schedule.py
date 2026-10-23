@@ -67,3 +67,25 @@ def test_schedule_validation_and_roles(client):
     assert client.put(SCHED, json={"windows": [{"weekday": 1, "start": "9:00", "end": "18:00"}]}, headers=auth(a)).status_code == 422
     fin = _admin(client, "13800349012", ["finance"])
     assert client.put(SCHED, json={"windows": []}, headers=auth(fin)).status_code == 403
+
+
+def test_esca069_several_segments_a_day_and_no_overlap(client):
+    """ESCA-069（263 号 spec）同一天早晚两班；重叠的两段拒收并说清是哪两段。"""
+    s = SupportAgentScope(user_id=1, categories=[], schedule=[{"weekday": 3, "start": "08:00", "end": "12:00"},
+                                                              {"weekday": 3, "start": "18:00", "end": "22:00"}])
+    assert escalation.off_duty(s, datetime(2026, 10, 22, 2, 0)) is False, "周四 10:00 在早班"
+    assert escalation.off_duty(s, datetime(2026, 10, 22, 7, 0)) is True, "周四 15:00 两班之间"
+    assert escalation.off_duty(s, datetime(2026, 10, 22, 11, 0)) is False, "周四 19:00 在晚班"
+    a = _admin(client, "13800349021", ["support"])
+    ok = client.put(SCHED, json={"windows": [{"weekday": 3, "start": "18:00", "end": "22:00"},
+                                             {"weekday": 3, "start": "08:00", "end": "12:00"},
+                                             {"weekday": 4, "start": "12:00", "end": "18:00"},
+                                             {"weekday": 4, "start": "08:00", "end": "12:00"}]}, headers=auth(a))
+    assert ok.status_code == 200, "首尾相接不算重叠"
+    assert [w["start"] for w in ok.json()["schedule"]] == ["08:00", "18:00", "08:00", "12:00"], "按周几、开始时间排好存"
+    bad = client.put(SCHED, json={"windows": [{"weekday": 2, "start": "09:00", "end": "13:00"},
+                                              {"weekday": 2, "start": "12:00", "end": "18:00"}]}, headers=auth(a))
+    assert bad.status_code == 400 and bad.json()["detail"]["code"] == "support_schedule_overlap"
+    assert "09:00–13:00" in bad.json()["detail"]["message"] and "12:00–18:00" in bad.json()["detail"]["message"]
+    assert client.put(SCHED, json={"windows": [{"weekday": 2, "start": "09:00", "end": "13:00"},
+                                               {"weekday": 3, "start": "12:00", "end": "18:00"}]}, headers=auth(a)).status_code == 200, "不同天不算重叠"

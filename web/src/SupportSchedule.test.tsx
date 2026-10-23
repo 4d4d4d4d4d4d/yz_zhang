@@ -35,15 +35,39 @@ function open(scope: unknown, calls: Call[], me: unknown = ADMIN, agents: unknow
 }
 
 describe('ESCA-068 排班', () => {
+  it('ESCA-069 同一天加第二段（早晚两班）；改排班时带出已有的', async () => {
+    const calls: Call[] = [];
+    open({ categories: ['funds'], declared: true, labels: LABELS, auto_assign: true, on_duty: true,
+      schedule: [{ weekday: 5, start: '09:00', end: '12:00' }] }, calls);
+    const box = await screen.findByLabelText('我的排班');
+    fireEvent.click(within(box).getByText('改排班'));
+    expect((within(box).getByLabelText('第 1 段周几') as HTMLSelectElement).value).toBe('5');
+    expect((within(box).getByLabelText('第 1 段开始') as HTMLInputElement).value).toBe('09:00');
+    fireEvent.click(within(box).getByText('加一段'));
+    expect((within(box).getByLabelText('第 2 段周几') as HTMLSelectElement).value).toBe('5');
+    fireEvent.change(within(box).getByLabelText('第 2 段周几'), { target: { value: '6' } });
+    fireEvent.click(within(box).getByText('保存排班'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'PUT' && c.url === '/admin/support/my-schedule')?.body).toEqual(
+      { windows: [{ weekday: 5, start: '09:00', end: '12:00' }, { weekday: 6, start: '19:00', end: '22:00' }] }));
+    fireEvent.click(await within(box).findByText('改排班'));
+    fireEvent.click(within(box).getByText('工作日 9–18'));
+    expect(within(box).getByTestId('schedule-row-4')).toBeTruthy();
+    expect(within(box).queryByTestId('schedule-row-5')).toBeNull();
+  });
+
   it('勾周几、填时间保存：发出每天一段，显示排班与「现在不在排班里」；能取消', async () => {
     const calls: Call[] = [];
     open({ categories: ['funds'], declared: true, labels: LABELS, auto_assign: true }, calls);
     const box = await screen.findByLabelText('我的排班');
     expect(box.textContent).toContain('没设排班');
     fireEvent.click(within(box).getByText('设排班'));
-    for (const d of ['周三', '周四', '周五']) fireEvent.click(within(box).getByLabelText(d));   // 默认周一到周五：去掉三天
-    fireEvent.change(within(box).getByLabelText('上班时间'), { target: { value: '10:00' } });
-    fireEvent.change(within(box).getByLabelText('下班时间'), { target: { value: '19:30' } });
+    // 默认填好工作日 9–18 五段：删掉后三段，前两段改成 10:00–19:30
+    for (let k = 0; k < 3; k++) fireEvent.click(within(within(box).getByTestId('schedule-row-2')).getByText('删掉这段'));
+    expect(within(box).queryByTestId('schedule-row-2')).toBeNull();
+    for (const i of [1, 2]) {
+      fireEvent.change(within(box).getByLabelText(`第 ${i} 段开始`), { target: { value: '10:00' } });
+      fireEvent.change(within(box).getByLabelText(`第 ${i} 段结束`), { target: { value: '19:30' } });
+    }
     fireEvent.click(within(box).getByText('保存排班'));
     await waitFor(() => expect(calls.find((c) => c.method === 'PUT' && c.url === '/admin/support/my-schedule')?.body).toEqual(
       { windows: [{ weekday: 0, start: '10:00', end: '19:30' }, { weekday: 1, start: '10:00', end: '19:30' }] }));

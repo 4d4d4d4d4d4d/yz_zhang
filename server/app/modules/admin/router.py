@@ -394,6 +394,12 @@ def set_my_support_schedule(body: SupportScheduleIn, admin: User = Depends(requi
     bad = [w for w in body.windows if w.start >= w.end]
     if bad:
         raise bad_request("每一段的结束时间要晚于开始时间（跨午夜请拆成两段）", "support_schedule_bad_window")
+    # ESCA-069（263 号 spec）同一天的几段不能重叠（重叠多半是填错了，合并后再存反而让人看不懂）
+    ws = sorted(body.windows, key=lambda w: (w.weekday, w.start))
+    for x, y in zip(ws, ws[1:]):
+        if x.weekday == y.weekday and y.start < x.end:
+            raise bad_request(f"同一天的两段时间重叠了（{x.start}–{x.end} 与 {y.start}–{y.end}）：请改成首尾相接或分开",
+                              "support_schedule_overlap")
     row = db.query(SupportAgentScope).filter(SupportAgentScope.user_id == admin.id).first()
     if row is None:
         row = SupportAgentScope(user_id=admin.id, categories=list(CATEGORIES))
