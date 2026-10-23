@@ -78,6 +78,12 @@ def check_second_approver(first: User | None, second: User, amount_cents: int) -
     if amount_cents >= line and "super" not in roles_of(second):
         raise forbidden(f"达到 ¥{line / 100:.2f} 的出款，第二位确认人必须是超级管理员；请转交超级管理员确认",
                         "second_approver_role")
+    # SEC-061g（284 号 spec）第二档：第一位也得是超级管理员（两位超级管理员先后确认）
+    top = settings.DUAL_SUPER_APPROVAL_CENTS
+    # （没有记录第一位的老调用照旧，只看第二位）
+    if amount_cents >= top and first is not None and "super" not in roles_of(first):
+        raise forbidden(f"达到 ¥{top / 100:.2f} 的出款要两位超级管理员先后确认：第一位不是超级管理员，"
+                        "请驳回后由超级管理员重新发起 / 复核", "dual_super_required")
     if first is not None and rank(second) < rank(first):
         raise forbidden("第二位确认人的级别不能低于第一位：第一次复核是超级管理员，请由另一位超级管理员确认",
                         "second_approver_rank")

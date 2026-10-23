@@ -73,6 +73,9 @@ class Settings:
     # SEC-061f / PAY-042c（155 号 spec）提现与平台结算达到这个金额，第二位确认人必须是超级管理员
     SUPER_SECOND_APPROVAL_CENTS = int(
         os.environ.get("PLATFORM_SUPER_SECOND_APPROVAL_CENTS", "10000000"))  # ¥10万
+    # SEC-061g（284 号 spec）第二档：达到这个金额，第一位与第二位都必须是超级管理员（两位超级管理员先后确认）
+    DUAL_SUPER_APPROVAL_CENTS = int(
+        os.environ.get("PLATFORM_DUAL_SUPER_APPROVAL_CENTS", "50000000"))  # ¥50万
     LARGE_WITHDRAW_CENTS = int(os.environ.get("PLATFORM_LARGE_WITHDRAW_CENTS", "1000000"))  # ≥¥1万人审
     # PAY-044 人审提现的催办与超时兜底（75 号 spec）。
     # 超时**只往可逆方向兜**：退回可用余额，绝不自动放款——
@@ -167,7 +170,7 @@ class Settings:
     MODERATION_PROVIDER = os.environ.get("PLATFORM_MODERATION_PROVIDER", "local")
     STORAGE_PROVIDER = os.environ.get("PLATFORM_STORAGE_PROVIDER", "local")
     # ── DEP 部署与可观测（20 号 spec）────────────────────────────────
-    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.296.0")
+    APP_VERSION = os.environ.get("PLATFORM_APP_VERSION", "0.297.0")
     GIT_SHA = os.environ.get("PLATFORM_GIT_SHA", "dev")
     BUILT_AT = os.environ.get("PLATFORM_BUILT_AT", "")
     LOG_LEVEL = os.environ.get("PLATFORM_LOG_LEVEL", "INFO")

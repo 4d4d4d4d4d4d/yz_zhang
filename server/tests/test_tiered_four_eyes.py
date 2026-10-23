@@ -114,3 +114,38 @@ def test_check_second_approver_unit(monkeypatch):
             assert getattr(e, "status_code", 0) == 403
         else:
             raise AssertionError((first.admin_roles, second.admin_roles, amount))
+
+
+def test_sec061g_second_tier_needs_two_super_admins(client, monkeypatch):
+    """SEC-061g（284 号 spec）第二档（默认 ¥50 万）：第一位与第二位都必须是超级管理员。"""
+    monkeypatch.setattr(settings, "SUPER_SECOND_APPROVAL_CENTS", 100)
+    monkeypatch.setattr(settings, "DUAL_SUPER_APPROVAL_CENTS", 1000)
+    fin, boss = User(is_admin=True, admin_roles=["finance"]), User(is_admin=True, admin_roles=["super"])
+    check_second_approver(fin, boss, 999)                   # 第一档：普通财务先批、超管确认就行
+    check_second_approver(boss, boss, 1000)                 # 第二档：两位超级管理员
+    check_second_approver(None, boss, 1000)                 # 没记录第一位的老调用照旧
+    try:
+        check_second_approver(fin, boss, 1000)
+    except Exception as e:   # noqa: BLE001
+        assert getattr(e, "status_code", 0) == 403 and e.detail["code"] == "dual_super_required"
+        assert "两位超级管理员" in e.detail["message"]
+    else:
+        raise AssertionError("第二档里普通财务先批的不能放行")
+
+    monkeypatch.setattr(settings, "PLATFORM_SETTLE_DUAL_APPROVAL_CENTS", 5000)
+    monkeypatch.setattr(settings, "SUPER_SECOND_APPROVAL_CENTS", 50000)
+    monkeypatch.setattr(settings, "DUAL_SUPER_APPROVAL_CENTS", 100000)
+    with SessionLocal() as db:
+        wallet.get_or_create(db, wallet.PLATFORM_USER_ID).available_cents += 500000
+        db.commit()
+    a = _admin(client, "13800380001", ["finance"])
+    boss1 = _admin(client, "13800380002", ["super"])
+    boss2 = _admin(client, "13800380003", ["super"])
+    req = client.post(f"{SETTLE}/settle", json={"amount_cents": 100000, "memo": "季度结算"}, headers=auth(a)).json()
+    assert req["status"] == "awaiting_second"
+    r = client.post(f"{SETTLE}/settle-requests/{req['request_id']}/approve", headers=auth(boss1))
+    assert r.status_code == 403 and r.json()["detail"]["code"] == "dual_super_required", "普通财务发起的第二档结算，超管也确认不了"
+    rid2 = client.post(f"{SETTLE}/settle", json={"amount_cents": 100000, "memo": "超管发起"}, headers=auth(boss1)).json()["request_id"]
+    assert client.post(f"{SETTLE}/settle-requests/{rid2}/approve", headers=auth(boss2)).status_code == 200, "两位超级管理员先后确认"
+    mid = client.post(f"{SETTLE}/settle", json={"amount_cents": 99999, "memo": "第一档"}, headers=auth(a)).json()["request_id"]
+    assert client.post(f"{SETTLE}/settle-requests/{mid}/approve", headers=auth(boss1)).status_code == 200, "第二档以下照旧"
