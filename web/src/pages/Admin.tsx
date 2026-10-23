@@ -518,7 +518,9 @@ function FinanceCorrections({ onApproved }: { onApproved: () => void }) {
       </div>
       {pending.map((c) => (
         <div key={c.id} className="row" data-testid={`pending-correction-${c.id}`}>
-          <span className="grow">{c.report === 'gmv_tax' ? '成交额与代扣税表' : '平台收支表'} {c.period} 差额 {fmtYuan(c.amount_delta_cents)}：{c.note}（#{c.requested_by} 写）</span>
+          <span className="grow">{c.report === 'gmv_tax' ? '成交额与代扣税表' : '平台收支表'} {c.period} 差额 {fmtYuan(c.amount_delta_cents)}：{c.note}（#{c.requested_by} 写）
+            {/* FIN-069（272 号 spec） */}
+            {c.needs_super_second && <span className="badge warn"> 要超级管理员批准</span>}</span>
           <button className="ghost" onClick={() => void act(async () => { await client.approveFinanceCorrection(c.id); onApproved(); },
             '已批准：这条说明已挂到那个月的报表与导出上')}>批准</button>
           <button className="ghost" onClick={() => void act(() => client.rejectFinanceCorrection(c.id, window.prompt('驳回理由（撤回自己写的可不填）：') ?? ''),

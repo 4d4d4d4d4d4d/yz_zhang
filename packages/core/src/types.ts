@@ -155,6 +155,8 @@ export interface FinanceCorrectionRow {
   decision_reason: string;
   created_at: string;
   decided_at: string | null;
+  /** FIN-069（272 号 spec）差额达到超管确认线：要超级管理员批准 */
+  needs_super_second: boolean;
 }
 export interface PlatformFinancePeriods {
   granularity: 'month' | 'quarter';

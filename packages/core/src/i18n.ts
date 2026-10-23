@@ -362,6 +362,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   team_transfer_not_yours: '只有所有者能改派；管理员只能把轮到自己的这笔转交给别人',
   correction_period_not_closed: '这个月还没锁账：直接在当期记一笔调整，报表会跟着变，不用写更正说明',
   correction_note_required: '更正说明要写清哪里错、为什么（至少 5 个字）',
+  correction_needs_super: '差额这么大的更正说明要超级管理员批准：请转交超级管理员',
   correction_gmv_not_locked: '那个月锁账时还没有一起锁成交额与代扣税表：这张表仍按最新流水现算，直接在当期调整即可',
   correction_same_approver: '更正说明要另一位财务批准：写的就是你，请转交另一位财务',
   correction_already_decided: '这条更正说明已经处理过了：刷新看看',

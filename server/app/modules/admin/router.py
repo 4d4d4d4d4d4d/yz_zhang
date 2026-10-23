@@ -1396,7 +1396,9 @@ class CorrectionDecisionIn(BaseModel):
 def _correction_row(c) -> dict:
     return {"id": c.id, "period": c.period, "report": c.report or "platform", "note": c.note,
             "amount_delta_cents": c.amount_delta_cents, "requested_by": c.requested_by, "status": c.status, "decided_by": c.decided_by,
-            "decision_reason": c.decision_reason, "created_at": iso(c.created_at), "decided_at": iso(c.decided_at)}
+            "decision_reason": c.decision_reason, "created_at": iso(c.created_at), "decided_at": iso(c.decided_at),
+            # FIN-069（272 号 spec）差额达到超管确认线：要超级管理员批准（与 155 号的大额结算同一条线）
+            "needs_super_second": abs(c.amount_delta_cents) >= settings.SUPER_SECOND_APPROVAL_CENTS}
 
 
 @router.post("/admin/platform-finance/corrections")
@@ -1455,6 +1457,15 @@ def approve_finance_correction(correction_id: int, admin: User = Depends(require
     c = _pending_correction(db, correction_id)
     if c.requested_by == admin.id:
         raise bad_request("更正说明要另一位财务批准：写的就是你，请转交另一位财务", "correction_same_approver")
+    # FIN-069（272 号 spec）差额大的更正要超级管理员批准；任何金额下批准人的级别都不能低于写的人
+    from app.core.admin_roles import rank, roles_of
+
+    line = settings.SUPER_SECOND_APPROVAL_CENTS
+    if abs(c.amount_delta_cents) >= line and "super" not in roles_of(admin):
+        raise forbidden(f"差额达到 ¥{line / 100:.2f} 的更正说明要超级管理员批准：请转交超级管理员", "correction_needs_super")
+    writer = db.get(User, c.requested_by)
+    if writer is not None and rank(admin) < rank(writer):
+        raise forbidden("批准人的级别不能低于写的人：这条是超级管理员写的，请由另一位超级管理员批准", "second_approver_rank")
     c.status, c.decided_by, c.decided_at = "approved", admin.id, utcnow()
     record_audit(db, admin.id, "finance_correction_approve", "finance_correction", c.id,
                  f"批准 {c.period} 的更正说明（写的人 #{c.requested_by}）")

@@ -14,7 +14,8 @@ const P = (period: string, extra: Record<string, unknown> = {}) => ({ period, st
   settled_cents: 0, subsidy_cents: 0, other_cents: 0, net_cents: 1000, opening_cents: 0, closing_cents: 1000, balanced: true,
   closed: false, late_cents: 0, late_count: 0, carried_in_cents: 0, carried_in_count: 0, ...extra });
 const PENDING = { id: 3, period: '2026-08', report: 'platform', note: '一笔补贴误记为其他调整', amount_delta_cents: -500, requested_by: 2,
-  status: 'awaiting_second', decided_by: null, decision_reason: '', created_at: '2026-09-03T00:00:00Z', decided_at: null };
+  status: 'awaiting_second', decided_by: null, decision_reason: '', created_at: '2026-09-03T00:00:00Z', decided_at: null,
+  needs_super_second: false };
 type Call = { method: string; path: string; body?: unknown };
 const GMV = (corrections: unknown[]) => ({ period: '2026-08', start: '', end: '', gmv_cents: 100000, release_count: 3, executor_net_cents: 90000,
   fee_cents: 10000, dispute_split_cents: 0, refund_cents: 0, withheld_cents: 0, withheld_count: 0, withheld_people: 0, withheld_income_cents: 0,
@@ -34,7 +35,7 @@ function open(calls: Call[], locked: boolean) {
       : path === '/admin/platform-finance/periods' ? {
           granularity: 'month', locked_through: locked ? '2026-08' : null, locked_at: null,
           periods: [P('2026-08', { closed: locked, ...(approved ? { corrections: [note] } : {}) }), P('2026-09')] }
-      : path === '/admin/platform-finance/corrections' && method === 'GET' ? (approved ? [] : [PENDING])
+      : path === '/admin/platform-finance/corrections' && method === 'GET' ? (approved ? [] : [PENDING, { ...PENDING, id: 8, amount_delta_cents: -20000000, needs_super_second: true }])
       : path === '/admin/platform-finance/corrections' ? { ...PENDING, id: 4 }
       : path.startsWith('/admin/platform-finance/corrections/') ? { ...PENDING, status: 'approved', decided_by: 1 }
       : path === '/admin/platform-finance/gmv-tax' ? { granularity: 'month', basis: [], draft_note: '', periods: [GMV(approved ? [{ ...note, id: 5, note: '一笔放款重复计入成交额' }] : [])] }
@@ -64,6 +65,8 @@ describe('FIN-064 更正说明', () => {
     await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/admin/platform-finance/corrections')?.body)
       .toEqual({ period: '2026-08', note: '一笔放款重复计入成交额', amount_delta_cents: 0, report: 'gmv_tax' }));
     expect(within(box).getByTestId('pending-correction-3').textContent).toContain('平台收支表 2026-08');
+    expect(within(box).getByTestId('pending-correction-3').textContent).not.toContain('要超级管理员批准');
+    expect(within(box).getByTestId('pending-correction-8').textContent).toContain('要超级管理员批准');
     fireEvent.click(within(within(box).getByTestId('pending-correction-3')).getByText('批准'));
     expect((await screen.findByTestId('gmv-correction-5')).textContent).toContain('一笔放款重复计入成交额');
   });

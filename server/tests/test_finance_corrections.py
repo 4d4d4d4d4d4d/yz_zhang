@@ -117,3 +117,24 @@ def test_fin068_gmv_tax_report_has_its_own_corrections(client):
     old_lock = client.post(C, json={"period": "2025-01", "report": "gmv_tax", "note": "早先锁的月份没有这张表的快照"}, headers=auth(a))
     assert old_lock.status_code == 400 and old_lock.json()["detail"]["code"] == "correction_gmv_not_locked"
     assert client.post(C, json={"period": "2025-02", "report": "other", "note": "不认识的表"}, headers=auth(a)).status_code == 422
+
+
+def test_fin069_large_corrections_need_a_super_admin(client):
+    """FIN-069（272 号 spec）差额达到超管确认线（默认 ¥10 万，与大额结算同一条线）要超级管理员批准；正负都算。"""
+    from app.core.config import settings
+
+    a, b = _locked(client)
+    boss = _admin(client, "13800360009", ["super"])
+    line = settings.SUPER_SECOND_APPROVAL_CENTS
+    big = client.post(C, json={"period": "2025-02", "note": "一笔大额结算记错了月份", "amount_delta_cents": -line}, headers=auth(a)).json()
+    assert big["needs_super_second"] is True
+    r = client.post(f"{C}/{big['id']}/approve", headers=auth(b))
+    assert r.status_code == 403 and r.json()["detail"]["code"] == "correction_needs_super"
+    assert "超级管理员" in r.json()["detail"]["message"]
+    assert client.post(f"{C}/{big['id']}/approve", headers=auth(boss)).json()["status"] == "approved"
+    small = client.post(C, json={"period": "2025-02", "note": "差一点点的小更正说明", "amount_delta_cents": line - 1}, headers=auth(a)).json()
+    assert small["needs_super_second"] is False
+    assert client.post(f"{C}/{small['id']}/approve", headers=auth(b)).json()["status"] == "approved", "线以下照旧另一位财务就行"
+    by_boss = client.post(C, json={"period": "2025-01", "note": "超级管理员写的更正说明"}, headers=auth(boss)).json()
+    r = client.post(f"{C}/{by_boss['id']}/approve", headers=auth(b))
+    assert r.status_code == 403 and r.json()["detail"]["code"] == "second_approver_rank", "批准人的级别不能低于写的人"
