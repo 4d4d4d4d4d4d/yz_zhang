@@ -216,6 +216,8 @@ export function PublicSpaceScreen({ client, userId, onBack, onOpenConversation }
             <View key={`${it.title}-${i}`} style={styles.card}>
               <Text style={styles.cardTitle}>{KIND_LABEL[it.kind]} · {it.title}</Text>
               {!!it.summary && <Text style={styles.muted}>{it.summary}</Text>}
+              {/* SCN-157 平台上做过的单（委托方已同意展示；撤回的服务端不会给出来） */}
+              {!!it.task_id && <Text style={styles.muted}>平台上做过的单 · 委托方已同意展示</Text>}
               {!!it.url && (
                 // 外部链接由用户主动点开，平台不代理也不嵌入（SPACE-003）。
                 // 把域名显示出来：点开之前他有权知道自己要去哪里。
@@ -374,6 +376,13 @@ export function MySpaceScreen({ client, me, onPreview, refreshMe }: {
                      placeholder="https:// 开头的外部链接（可不填）"
                      onChangeText={(t) => patch({
                        items: space.items.map((x, j) => (j === i ? { ...x, url: t } : x)),
+                     })} />
+          {/* SCN-157（281 号 spec）来自平台上的哪一单：填任务编号，要发单人在任务详情里允许展示 */}
+          <TextInput style={styles.input} value={it.task_id ? String(it.task_id) : ''} keyboardType="numeric"
+                     accessibilityLabel={`第 ${i + 1} 条关联任务`}
+                     placeholder="来自平台上的哪一单（填任务编号，可不填；要发单人允许展示）"
+                     onChangeText={(t) => patch({
+                       items: space.items.map((x, j) => (j === i ? { ...x, task_id: /^\d+$/.test(t) ? Number(t) : undefined } : x)),
                      })} />
           <TouchableOpacity onPress={() => patch({ items: space.items.filter((_, j) => j !== i) })}>
             <Text style={styles.link}>删除这一条</Text>
