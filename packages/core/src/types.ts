@@ -927,6 +927,11 @@ export interface PriceReference {
   /** KB-064 一位发布方占了一半以上（且至少 3 单）：p50 被他拉着走，看去重后的数 */
   concentrated?: boolean;
   note?: string;
+  /** KB-075 按子类取价时才有：子类 id、p90 与样本的时间范围（KB-097 起在类型里声明） */
+  cluster_id?: number;
+  p90_cents?: number;
+  first_sample_at?: string | null;
+  last_sample_at?: string | null;
 }
 
 // ---- ORC 编排（Agent Harness）----

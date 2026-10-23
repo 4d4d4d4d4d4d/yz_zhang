@@ -457,4 +457,21 @@ def price_reference(db: Session, cluster_id: int) -> dict:
                            f"{settings.KB_CLUSTER_MIN_SAMPLES} 个）"}
     return {"sample_size": v["priced_samples"], "cluster_id": cluster.id,
             "p50_cents": v["price_p50_cents"], "p90_cents": v["price_p90_cents"],
-            "first_sample_at": v["first_sample_at"], "last_sample_at": v["last_sample_at"]}
+            "first_sample_at": v["first_sample_at"], "last_sample_at": v["last_sample_at"],
+            **_by_publisher_for(db, cluster.id)}
+
+
+def _by_publisher_for(db: Session, cluster_id: int) -> dict:
+    """KB-097（275 号 spec）子类参考价也按发布方去重（与 266 号的类目参考价同一套口径）：
+    同样只算已完成、有价的样本；发布方经来源任务查，一条查询取齐。"""
+    from collections import namedtuple
+
+    from app.modules.task.models import Task
+
+    from .service import _by_publisher
+
+    done = [m for m in _members(db, cluster_id) if m.outcome == "completed" and m.price_actual_cents > 0]
+    ids = {m.source_task_id for m in done if m.source_task_id}
+    owner = dict(db.query(Task.id, Task.creator_id).filter(Task.id.in_(ids)).all()) if ids else {}
+    Row = namedtuple("Row", "id price_actual_cents creator_id")
+    return _by_publisher([Row(m.id, m.price_actual_cents, owner.get(m.source_task_id)) for m in done])
