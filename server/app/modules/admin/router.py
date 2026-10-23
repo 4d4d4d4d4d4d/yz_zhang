@@ -1541,6 +1541,10 @@ def approve_finance_correction(correction_id: int, admin: User = Depends(require
     if abs(c.amount_delta_cents) >= line and "super" not in roles_of(admin):
         raise forbidden(f"差额达到 ¥{line / 100:.2f} 的更正说明要超级管理员批准：请转交超级管理员", "correction_needs_super")
     writer = db.get(User, c.requested_by)
+    # SEC-061j（285 号 spec）第二档：写的人也得是超级管理员（两位超级管理员），与出款同一条线
+    top = settings.DUAL_SUPER_APPROVAL_CENTS
+    if abs(c.amount_delta_cents) >= top and (writer is None or "super" not in roles_of(writer)):
+        raise forbidden(f"差额达到 ¥{top / 100:.2f} 的更正说明要两位超级管理员：请由超级管理员重新写一条", "dual_super_required")
     if writer is not None and rank(admin) < rank(writer):
         raise forbidden("批准人的级别不能低于写的人：这条是超级管理员写的，请由另一位超级管理员批准", "second_approver_rank")
     c.status, c.decided_by, c.decided_at = "approved", admin.id, utcnow()

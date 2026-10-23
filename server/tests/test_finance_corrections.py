@@ -138,3 +138,21 @@ def test_fin069_large_corrections_need_a_super_admin(client):
     by_boss = client.post(C, json={"period": "2025-01", "note": "超级管理员写的更正说明"}, headers=auth(boss)).json()
     r = client.post(f"{C}/{by_boss['id']}/approve", headers=auth(b))
     assert r.status_code == 403 and r.json()["detail"]["code"] == "second_approver_rank", "批准人的级别不能低于写的人"
+
+
+def test_sec061j_second_tier_corrections_need_two_super_admins(client, monkeypatch):
+    """SEC-061j（285 号 spec）差额达到第二档（默认 ¥50 万）：写的人与批准人都要超级管理员。"""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "DUAL_SUPER_APPROVAL_CENTS", 2 * settings.SUPER_SECOND_APPROVAL_CENTS)
+    top = settings.DUAL_SUPER_APPROVAL_CENTS
+    a, b = _locked(client)
+    boss1 = _admin(client, "13800360011", ["super"])
+    boss2 = _admin(client, "13800360012", ["super"])
+    c1 = client.post(C, json={"period": "2025-02", "note": "一笔特大额结算记错了月份", "amount_delta_cents": -top}, headers=auth(a)).json()
+    r = client.post(f"{C}/{c1['id']}/approve", headers=auth(boss1))
+    assert r.status_code == 403 and r.json()["detail"]["code"] == "dual_super_required"
+    c2 = client.post(C, json={"period": "2025-02", "note": "超级管理员重写的这一条", "amount_delta_cents": -top}, headers=auth(boss1)).json()
+    assert client.post(f"{C}/{c2['id']}/approve", headers=auth(boss2)).json()["status"] == "approved"
+    c3 = client.post(C, json={"period": "2025-02", "note": "第二档以下一分", "amount_delta_cents": top - 1}, headers=auth(a)).json()
+    assert client.post(f"{C}/{c3['id']}/approve", headers=auth(boss1)).json()["status"] == "approved", "第二档以下照旧"
