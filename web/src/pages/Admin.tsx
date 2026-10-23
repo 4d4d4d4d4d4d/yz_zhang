@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, copyScheduleDay, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -1210,6 +1210,9 @@ function SupportScheduleEditor({ scope, onSaved }: { scope: SupportScope; onSave
   const { client } = useApp();
   const [editing, setEditing] = useState(false);
   const [rows, setRows] = useState<SupportScheduleWindow[]>([]);
+  // ESCA-071（273 号 spec）把一天复制到其他几天
+  const [copyFrom, setCopyFrom] = useState(0);
+  const [copyTo, setCopyTo] = useState<number[]>([]);
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const WORKDAYS: SupportScheduleWindow[] = [0, 1, 2, 3, 4].map((weekday) => ({ weekday, start: '09:00', end: '18:00' }));
@@ -1255,6 +1258,16 @@ function SupportScheduleEditor({ scope, onSaved }: { scope: SupportScope; onSave
           <button className="ghost" disabled={rows.length >= 21}
             onClick={() => setRows([...rows, { weekday: rows.length ? rows[rows.length - 1].weekday : 0, start: '19:00', end: '22:00' }])}>加一段</button>
           <button className="ghost" onClick={() => setRows(WORKDAYS)}>工作日 9–18</button>
+          <span aria-label="复制排班">
+            把 <select aria-label="从哪天复制" value={copyFrom} onChange={(e) => setCopyFrom(Number(e.target.value))}>
+              {WEEKDAYS.map((d, k) => <option key={d} value={k}>{d}</option>)}
+            </select> 的几段复制到
+            {WEEKDAYS.map((d, k) => k !== copyFrom && (
+              <label key={d}><input type="checkbox" aria-label={`复制到${d}`} checked={copyTo.includes(k)}
+                onChange={(e) => setCopyTo(e.target.checked ? [...copyTo, k] : copyTo.filter((x) => x !== k))} />{d}</label>
+            ))}
+            <button className="ghost" disabled={copyTo.length === 0} onClick={() => { setRows(copyScheduleDay(rows, copyFrom, copyTo)); setCopyTo([]); }}>复制</button>
+          </span>
           <button className="ghost" disabled={rows.length === 0}
             onClick={() => void save(rows.map((w) => ({ weekday: w.weekday, start: w.start.trim(), end: w.end.trim() })))}>保存排班</button>
           <span className="muted">时间写 09:00 这样的格式；同一天可以有几段（不能重叠）；跨午夜请分两天各写一段（如 22:00–24:00 与 00:00–06:00）</span>

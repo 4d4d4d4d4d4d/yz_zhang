@@ -23,3 +23,4 @@ export * from './tickets';
 export * from './session';
 export * from './methodVersions';
 export * from './priceReference';
+export * from './supportSchedule';

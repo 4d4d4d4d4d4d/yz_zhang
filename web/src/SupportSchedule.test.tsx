@@ -55,6 +55,24 @@ describe('ESCA-068 排班', () => {
     expect(within(box).queryByTestId('schedule-row-5')).toBeNull();
   });
 
+  it('ESCA-071 把周一的早晚两班复制到周二、周三：目标那天原有的被替换', async () => {
+    const calls: Call[] = [];
+    open({ categories: ['funds'], declared: true, labels: LABELS, auto_assign: true, on_duty: true,
+      schedule: [{ weekday: 0, start: '08:00', end: '12:00' }, { weekday: 0, start: '18:00', end: '22:00' }, { weekday: 2, start: '09:00', end: '18:00' }] }, calls);
+    const box = await screen.findByLabelText('我的排班');
+    fireEvent.click(within(box).getByText('改排班'));
+    const copy = within(box).getByLabelText('复制排班');
+    expect(within(copy).getByText('复制')).toHaveProperty('disabled', true);
+    fireEvent.click(within(copy).getByLabelText('复制到周二'));
+    fireEvent.click(within(copy).getByLabelText('复制到周三'));
+    fireEvent.click(within(copy).getByText('复制'));
+    fireEvent.click(within(box).getByText('保存排班'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'PUT' && c.url === '/admin/support/my-schedule')?.body).toEqual({ windows: [
+      { weekday: 0, start: '08:00', end: '12:00' }, { weekday: 0, start: '18:00', end: '22:00' },
+      { weekday: 1, start: '08:00', end: '12:00' }, { weekday: 1, start: '18:00', end: '22:00' },
+      { weekday: 2, start: '08:00', end: '12:00' }, { weekday: 2, start: '18:00', end: '22:00' }] }));
+  });
+
   it('勾周几、填时间保存：发出每天一段，显示排班与「现在不在排班里」；能取消', async () => {
     const calls: Call[] = [];
     open({ categories: ['funds'], declared: true, labels: LABELS, auto_assign: true }, calls);
