@@ -234,6 +234,35 @@ def read_by_category(db: Session, ann: Announcement) -> dict:
     return {**base, "categories": rows, "overlap": sum(1 for v in seen.values() if v > 1), "note": ""}
 
 
+# NTF-072（261 号 spec）发出后这几个时间点各有多少人点开过
+CURVE_POINTS = ((1, "1 小时"), (24, "1 天"), (72, "3 天"), (168, "7 天"))
+
+
+def read_curve(db: Session, ann: Announcement, now: datetime | None = None) -> dict:
+    """NTF-072 阅读率按发出后的时间看：1 小时 / 1 天 / 3 天 / 7 天内点开的累计人数。
+    点开时间是 V288 起才记的；之前点开的算进总数、单列为「时间不详」，不硬塞进某个时间点。
+    还没到的时间点标 reached=false（数字是到现在为止的）。"""
+    from app.modules.notification.models import Notification
+
+    now = now or utcnow()
+    base = {"announcement_id": ann.id, "sent_at": iso(ann.sent_at), "delivered": ann.delivered or 0}
+    if ann.sent_at is None:
+        return {**base, "read": 0, "untimed": 0, "points": [], "note": "这条公告还没发出"}
+    rows = db.query(Notification.is_read, Notification.read_at).filter(Notification.announcement_id == ann.id).all()
+    read = [r for r in rows if r.is_read]
+    timed = [r.read_at for r in read if r.read_at is not None]
+    delivered = ann.delivered or 0
+    points = []
+    for hours, label in CURVE_POINTS:
+        n = sum(1 for t in timed if t <= ann.sent_at + timedelta(hours=hours))
+        points.append({"hours": hours, "label": label, "read": n,
+                       "read_rate": round(n / delivered, 3) if delivered else None,
+                       "reached": now >= ann.sent_at + timedelta(hours=hours)})
+    untimed = len(read) - len(timed)
+    return {**base, "read": len(read), "untimed": untimed, "points": points,
+            "note": f"另有 {untimed} 人点开的时间不详（早于记录点开时间的版本），只算进总数" if untimed else ""}
+
+
 def row(a: Announcement, read: int | None = None) -> dict:
     out = _row(a)
     # NTF-067（159 号 spec）阅读率：已读人数 / 送达人数

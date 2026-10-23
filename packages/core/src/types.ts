@@ -3525,6 +3525,19 @@ export interface MissionMethodSuggestions {
 }
 
 /** NTF-071（252 号 spec）多类目公告按类目拆开的阅读率（类目归属按发出时算；一个人可同时属于几类，overlap 是这样的人数） */
+/** NTF-072（261 号 spec）公告发出后 1 小时 / 1 天 / 3 天 / 7 天内点开的累计人数 */
+export interface AnnouncementReadCurve {
+  announcement_id: number;
+  sent_at: string | null;
+  delivered: number;
+  /** 点开过的总人数（与列表里的 read 同一口径） */
+  read: number;
+  /** 其中点开时间不详的人数（早于记录点开时间的版本） */
+  untimed: number;
+  /** 还没到的时间点 reached=false，数字是到现在为止的 */
+  points: Array<{ hours: number; label: string; read: number; read_rate: number | null; reached: boolean }>;
+  note: string;
+}
 export interface AnnouncementReadByCategory {
   announcement_id: number;
   categories: Array<{ category: string; delivered: number; read: number; read_rate: number | null }>;

@@ -1105,6 +1105,19 @@ def list_announcements(status: str = "", limit: int = Query(50, ge=1, le=200), o
     return [ann_svc.row(a, reads.get(a.id, 0)) for a in rows]
 
 
+@router.get("/admin/announcements/{announcement_id}/read-curve")
+def announcement_read_curve(announcement_id: int, admin: User = Depends(require_role("ops")),
+                            db: Session = Depends(get_db, scope="function")):
+    """NTF-072（261 号 spec）公告发出后 1 小时 / 1 天 / 3 天 / 7 天内点开的累计人数。"""
+    from . import announcements as ann_svc
+    from .models import Announcement
+
+    ann = db.get(Announcement, announcement_id)
+    if ann is None:
+        raise not_found("没有这条公告")
+    return ann_svc.read_curve(db, ann)
+
+
 @router.get("/admin/announcements/{announcement_id}/read-by-category")
 def announcement_read_by_category(announcement_id: int, admin: User = Depends(require_role("ops")),
                                   db: Session = Depends(get_db, scope="function")):

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.core.errors import not_found
-from app.modules.account.models import User
+from app.modules.account.models import User, utcnow
 
 from .models import Notification
 from app.core.timefmt import iso
@@ -50,7 +50,7 @@ def mark_all_read(user: User = Depends(get_current_user), db: Session = Depends(
     marked = (
         db.query(Notification)
         .filter(Notification.user_id == user.id, Notification.is_read.is_(False))
-        .update({"is_read": True})
+        .update({"is_read": True, "read_at": utcnow()})
     )
     return {"marked": int(marked)}
 
@@ -116,6 +116,8 @@ def mark_read(
     n = db.get(Notification, notification_id)
     if not n or n.user_id != user.id:
         raise not_found("通知不存在")
+    if not n.is_read:
+        n.read_at = utcnow()
     n.is_read = True
     db.add(n)
     return {"ok": True}

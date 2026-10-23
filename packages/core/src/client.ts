@@ -133,6 +133,7 @@ import type {
   UrgentHint,
   SupportPause,
   AnnouncementReadByCategory,
+  AnnouncementReadCurve,
   MissionMethodSuggestions,
   SupportAgentStatus,
   NbMethodHistory,
@@ -869,6 +870,10 @@ export class PlatformClient {
     return this.request<AnnouncementRow[]>('GET', `/admin/announcements${qs({ status })}`).then(listOf);
   }
   /** NTF-071（252 号 spec）按类目定向的公告：每个类目收到几人、点开几人 */
+  /** NTF-072（261 号 spec）发出后 1 小时 / 1 天 / 3 天 / 7 天内点开的累计人数 */
+  announcementReadCurve(id: number) {
+    return this.request<AnnouncementReadCurve>('GET', `/admin/announcements/${id}/read-curve`);
+  }
   announcementReadByCategory(id: number) {
     return this.request<AnnouncementReadByCategory>('GET', `/admin/announcements/${id}/read-by-category`);
   }
