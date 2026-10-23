@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.deps import get_current_user, require_job_auth
-from app.core.errors import bad_request, conflict, forbidden, not_found
+from app.core.errors import bad_request, conflict, not_found
 from app.core.locks import job_slot
 from app.core.timefmt import iso
 from app.modules.account.models import User, utcnow

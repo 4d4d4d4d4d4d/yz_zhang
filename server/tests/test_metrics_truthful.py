@@ -25,7 +25,9 @@ SERVER = os.path.abspath(os.path.join(HERE, ".."))
 OBS = os.path.join(SERVER, "app", "core", "observability.py")
 # 只开「一定是错」的规则：未定义名字、__all__ 里不存在的名字、赋值前使用、对字面量用 is、字典键重复、
 # 语法层面的 yield/return/break 误用。风格类一条不开（理由同前端 APPB-052b）
-RULES = "F821,F822,F823,F632,F601,F7"
+# LINT-004（262 号 spec，V289）例外：未用导入（F401）。清到 0 之后它只会在新代码里出现、改一行就好，
+# 不会逼人加 --quiet；留着它，读代码的人会以为那个名字在这里有用（V168 的 func 就是反过来的同一类错）
+RULES = "F821,F822,F823,F632,F601,F7,F401"
 
 
 def _metric(text: str, name: str) -> int:

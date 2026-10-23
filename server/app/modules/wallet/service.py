@@ -269,7 +269,6 @@ def resolve_stuck_payouts(db: Session, older_than_seconds: int = 120, limit: int
 def withdraw(db: Session, user_id: int, amount: int) -> dict:
     """PAY-005/007 提现：须先绑收款账户；日限额硬拒；大额冻结进人审；小额即时出账。"""
     from app.core.config import settings
-    from app.modules.account.models import utcnow
 
     from .models import PayoutAccount, WithdrawRequest
 

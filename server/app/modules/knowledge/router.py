@@ -446,7 +446,7 @@ def invoke_tool(unit_id: int, body: InvokeIn, user: User = Depends(get_current_u
     """KB-088 调用一个 skill_tool。产出一律是**草稿**（AGT-083），留痕（AGT-082），不碰钱（AGT-081）。"""
     import time
 
-    from app.core.errors import conflict, forbidden
+    from app.core.errors import forbidden
     from app.modules.task.models import Task
 
     from . import tools, units

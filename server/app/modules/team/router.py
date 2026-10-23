@@ -6,12 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.deps import get_current_user, require_job_auth, require_verified
-from app.core.errors import bad_request, conflict, forbidden, not_found
+from app.core.errors import bad_request, conflict, not_found
 from app.modules.account.models import User
 from app.modules.wallet import service as wallet
 
 from . import service
-from .models import ROLES, SpendRequest, Team, TeamMember
+from .models import SpendRequest, Team, TeamMember
 from app.core.locks import job_slot
 from app.core.timefmt import iso
 

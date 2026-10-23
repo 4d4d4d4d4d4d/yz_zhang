@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
-from app.core.deps import (get_current_user, require_admin, require_job_auth,
+from app.core.deps import (get_current_user, require_job_auth,
                             require_verified)
 from app.core import idempotency
 from app.core.idempotency import replay_or_run

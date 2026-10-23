@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import get_current_user
 from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.core.locks import job_slot
 from app.modules.account.models import User, utcnow

@@ -9,7 +9,6 @@ import base64
 import hashlib
 import os
 import secrets
-import uuid
 from typing import Protocol
 
 from .base import VendorError, VendorResult

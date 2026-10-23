@@ -11,7 +11,7 @@ from app.modules.account.models import User
 
 from . import compliance_path as cpath
 from . import service
-from .models import CONTRIBUTION_KINDS, Contribution, Distribution, Venture, VentureMember
+from .models import Contribution, Distribution, Venture, VentureMember
 from app.core.timefmt import iso
 
 router = APIRouter(prefix="/ventures", tags=["coop"])

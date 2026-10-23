@@ -4,7 +4,7 @@ from datetime import timedelta
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.errors import bad_request, conflict, forbidden
+from app.core.errors import bad_request, conflict
 from app.modules.account.models import User, utcnow
 from app.modules.wallet import service as wallet
 

@@ -10,7 +10,6 @@ from datetime import timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.events import subscribe
 from app.modules.account.models import utcnow
 
 PAIR_WINDOW_DAYS = 7
