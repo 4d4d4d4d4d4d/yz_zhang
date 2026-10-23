@@ -15,6 +15,7 @@ import { VisitsBlock, hasVisits } from './visits';
 import { ScreenBoundary } from './ScreenBoundary';
 import { RecipientEditorBlock, canChangeRecipient } from './recipient';
 import { ShowcaseConsentBlock, canGrantShowcase } from './showcase';
+import { canRequestInvoice } from './invoiceEntry';
 import { DiscoverScreen } from './Discover';
 import { AgentBlock, RecommendationsBlock } from './collaborators';
 import { ExperienceToolsBlock } from './experience';
@@ -512,7 +513,7 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
               签署：发布方{contract.signed_by_requester ? '✓' : '…'} / 执行方{contract.signed_by_executor ? '✓' : '…'}
             </Text>
             {/* APP-076 开票在合约上：放款后发布方在这里申请这一单的平台服务费发票（136 号 spec） */}
-            {['released', 'split'].includes(contract.status) && meId === contract.requester_id && (
+            {canRequestInvoice(contract, meId) && (
               <InvoicesBlock client={client} contractId={contract.id} />
             )}
           </View>
