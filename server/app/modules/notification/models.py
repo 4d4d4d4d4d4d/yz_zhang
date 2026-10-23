@@ -23,3 +23,5 @@ class Notification(Base):
     announcement_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     # NTF-072（261 号 spec）第一次点开的时间：公告阅读率按发出后的时间看；这一版之前读过的为空
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # NTF-073（268 号 spec）第一次是从哪里点开的：push 推送 / center 通知中心；空 = 没说（老客户端与这一版之前）
+    read_via: Mapped[str] = mapped_column(String(8), default="")

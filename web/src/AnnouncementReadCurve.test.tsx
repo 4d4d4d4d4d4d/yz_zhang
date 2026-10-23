@@ -13,7 +13,7 @@ const SENT = { id: 5, title: '佣金下调', body: '', verified_only: false, sta
   created_at: '2026-10-14T00:00:00Z', sent_at: '2026-10-14T00:00:00Z', delivered: 200, closed_by: null, closed_at: null, close_reason: '',
   read: 90, read_rate: 0.45 };
 const SCHED = { ...SENT, id: 6, title: '维护通知', status: 'scheduled', scheduled_at: '2026-10-16T12:00:00Z', sent_at: null, delivered: 0, read: 0, read_rate: null };
-const CURVE = { announcement_id: 5, sent_at: '2026-10-14T00:00:00Z', delivered: 200, read: 90, untimed: 10,
+const CURVE = { announcement_id: 5, sent_at: '2026-10-14T00:00:00Z', delivered: 200, read: 90, untimed: 10, read_via_push: 25,
   points: [{ hours: 1, label: '1 小时', read: 40, read_rate: 0.2, reached: true }, { hours: 24, label: '1 天', read: 70, read_rate: 0.35, reached: true },
     { hours: 72, label: '3 天', read: 80, read_rate: 0.4, reached: false }, { hours: 168, label: '7 天', read: 80, read_rate: 0.4, reached: false }],
   note: '另有 10 人点开的时间不详（早于记录点开时间的版本），只算进总数' };
@@ -46,5 +46,6 @@ describe('NTF-072 阅读曲线', () => {
     expect(c.textContent).toContain('3 天内：80 人（40%）（还没到，数字是到现在为止的）');
     expect(c.textContent).not.toContain('1 天内：70 人（35%）（还没到');
     expect(c.textContent).toContain('时间不详');
+    expect(c.textContent).toContain('其中从推送点进来 25 人');
   });
 });

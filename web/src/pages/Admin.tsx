@@ -752,6 +752,8 @@ function ReadCurve({ id }: { id: number }) {
       {points.map((p) => (
         <div key={p.hours}>{p.label}内：{p.read} 人{typeof p.read_rate === 'number' ? `（${Math.round(p.read_rate * 100)}%）` : ''}{p.reached ? '' : '（还没到，数字是到现在为止的）'}</div>
       ))}
+      {/* NTF-073（268 号 spec）推送带来的打开 */}
+      {typeof v.read_via_push === 'number' && v.read > 0 && <div>其中从推送点进来 {v.read_via_push} 人（只算报了来源的手机 App）</div>}
       {v.note && <div>{v.note}</div>}
     </div>
   );

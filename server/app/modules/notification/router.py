@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -111,16 +111,40 @@ def set_pref(
 
 @router.post("/{notification_id}/read")
 def mark_read(
-    notification_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+    notification_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
+    via: str = Query(default="", pattern="^(push|center)?$"),
 ):
     n = db.get(Notification, notification_id)
     if not n or n.user_id != user.id:
         raise not_found("通知不存在")
     if not n.is_read:
         n.read_at = utcnow()
+        # NTF-073（268 号 spec）只记第一次从哪里点开
+        n.read_via = via
     n.is_read = True
     db.add(n)
     return {"ok": True}
+
+
+class PushOpenedIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    announcement_id: int = Field(ge=1)
+
+
+@router.post("/push-opened")
+def push_opened(body: PushOpenedIn, user: User = Depends(get_current_user),
+                db: Session = Depends(get_db, scope="function")):
+    """NTF-073（268 号 spec）用户点了公告的推送进来：把自己那条通知记成「从推送点开」。
+    推送里只有公告 id（通知 id 发推送时还没有）；已经点开过的不改第一次的记录。"""
+    n = (db.query(Notification).filter(Notification.user_id == user.id, Notification.announcement_id == body.announcement_id)
+         .order_by(Notification.id.desc()).first())
+    if n is None:
+        raise not_found("没有这条公告的通知")
+    first = not n.is_read
+    if first:
+        n.is_read, n.read_at, n.read_via = True, utcnow(), "push"
+        db.add(n)
+    return {"notification_id": n.id, "recorded": first}
 
 # ---------- NTF-002 设备令牌 ----------
 class DeviceIn(BaseModel):

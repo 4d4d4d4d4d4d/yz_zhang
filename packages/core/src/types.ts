@@ -3568,6 +3568,8 @@ export interface AnnouncementReadCurve {
   read: number;
   /** 其中点开时间不详的人数（早于记录点开时间的版本） */
   untimed: number;
+  /** NTF-073（268 号 spec）其中从推送点进来的人数（App 报了来源的才算） */
+  read_via_push: number;
   /** 还没到的时间点 reached=false，数字是到现在为止的 */
   points: Array<{ hours: number; label: string; read: number; read_rate: number | null; reached: boolean }>;
   note: string;

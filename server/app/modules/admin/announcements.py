@@ -247,8 +247,9 @@ def read_curve(db: Session, ann: Announcement, now: datetime | None = None) -> d
     now = now or utcnow()
     base = {"announcement_id": ann.id, "sent_at": iso(ann.sent_at), "delivered": ann.delivered or 0}
     if ann.sent_at is None:
-        return {**base, "read": 0, "untimed": 0, "points": [], "note": "这条公告还没发出"}
-    rows = db.query(Notification.is_read, Notification.read_at).filter(Notification.announcement_id == ann.id).all()
+        return {**base, "read": 0, "untimed": 0, "read_via_push": 0, "points": [], "note": "这条公告还没发出"}
+    rows = db.query(Notification.is_read, Notification.read_at, Notification.read_via).filter(
+        Notification.announcement_id == ann.id).all()
     read = [r for r in rows if r.is_read]
     timed = [r.read_at for r in read if r.read_at is not None]
     delivered = ann.delivered or 0
@@ -259,7 +260,9 @@ def read_curve(db: Session, ann: Announcement, now: datetime | None = None) -> d
                        "read_rate": round(n / delivered, 3) if delivered else None,
                        "reached": now >= ann.sent_at + timedelta(hours=hours)})
     untimed = len(read) - len(timed)
+    # NTF-073（268 号 spec）其中从推送点进来的（App 报了来源的才算；老客户端点开的不知道来源）
     return {**base, "read": len(read), "untimed": untimed, "points": points,
+            "read_via_push": sum(1 for r in read if r.read_via == "push"),
             "note": f"另有 {untimed} 人点开的时间不详（早于记录点开时间的版本），只算进总数" if untimed else ""}
 
 

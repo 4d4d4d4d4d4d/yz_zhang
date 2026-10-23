@@ -79,6 +79,8 @@ INTENTIONAL: dict[str, str] = {
 #
 # 「欠账」和「有意不做」是两件不同的事，混在一起就看不出还欠多少。
 SCHEDULED: dict[str, str] = {
+    # NTF-073（268 号 spec）App 的 reportPushOpened 已就绪并有单测；接到 expo-notifications 的点击回调要真机推送通道（外）
+    "pushOpened": "NTF-075",
     # 社交线（43 号 spec）：好友、群聊、圈层成员管理整体未上端
     "friends": "SOCIAL-050", "friendRequests": "SOCIAL-050",
     "sendFriendRequest": "SOCIAL-050", "decideFriendRequest": "SOCIAL-050",

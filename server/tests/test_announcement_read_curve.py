@@ -73,3 +73,44 @@ def test_curve_for_unsent_missing_and_roles(client):
         db.get(User, fin["id"]).admin_roles = ["finance"]
         db.commit()
     assert client.get(f"{URL}/{s['id']}/read-curve", headers=auth(fin)).status_code == 403
+
+
+def test_ntf073_opened_via_push_is_counted_separately(client):
+    """NTF-073（268 号 spec）从推送点进来的单独计数：推送带公告 id，App 点进来报一次；只记第一次从哪里点开。"""
+    from app.core.events import OutboxEvent
+
+    ops = _ops(client, "13800350005")
+    us = [register(client, f"1380035006{i}", f"用户{i}") for i in range(3)]
+    a = client.post(URL, json={"title": "活动通知", "body": "周末有活动"}, headers=auth(ops)).json()
+    import json
+
+    from app.modules.notification.service import notify
+
+    with SessionLocal() as db:
+        notify(db, us[0]["id"], "system", "不是公告的通知", "")
+        db.commit()
+    with SessionLocal() as db:
+        ev = [json.loads(e.payload) for e in db.query(OutboxEvent).filter(OutboxEvent.event == "notification.created")]
+        mine = [p for p in ev if p.get("user_id") == us[0]["id"] and p.get("category") == "announcement"]
+        assert mine and mine[-1]["announcement_id"] == a["id"], "公告的推送带上公告 id"
+        others = [p for p in ev if p.get("category") != "announcement"]
+        assert others and all("announcement_id" not in p for p in others), "别的通知不多字段"
+    r = client.post(f"{API}/notifications/push-opened", json={"announcement_id": a["id"]}, headers=auth(us[0]))
+    assert r.status_code == 200 and r.json()["recorded"] is True
+    assert client.post(f"{API}/notifications/push-opened", json={"announcement_id": a["id"]},
+                       headers=auth(us[0])).json()["recorded"] is False, "再点一次不改第一次"
+    nid = _inbox(client, us[1])[0]["id"]
+    client.post(f"{API}/notifications/{nid}/read", params={"via": "center"}, headers=auth(us[1]))
+    assert client.post(f"{API}/notifications/push-opened", json={"announcement_id": a["id"]},
+                       headers=auth(us[1])).json()["recorded"] is False, "已经在通知中心点开过：不算推送带来的"
+    nid2 = _inbox(client, us[2])[0]["id"]
+    assert client.post(f"{API}/notifications/{nid2}/read", params={"via": "bad"}, headers=auth(us[2])).status_code == 422
+    client.post(f"{API}/notifications/{nid2}/read", params={"via": "push"}, headers=auth(us[2]))
+    with SessionLocal() as db:
+        vias = {n.user_id: n.read_via for n in db.query(Notification).filter(Notification.announcement_id == a["id"])}
+    assert (vias[us[0]["id"]], vias[us[1]["id"]], vias[us[2]["id"]]) == ("push", "center", "push")
+    c = client.get(f"{URL}/{a['id']}/read-curve", headers=auth(ops)).json()
+    assert (c["read"], c["read_via_push"]) == (3, 2)
+    other = register(client, "13800350069", "外人")          # 公告发出之后才注册：没收到
+    assert client.post(f"{API}/notifications/push-opened", json={"announcement_id": a["id"]},
+                       headers=auth(other)).status_code == 404, "没收到这条公告的人报不了"

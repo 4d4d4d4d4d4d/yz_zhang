@@ -1182,8 +1182,14 @@ export class PlatformClient {
   notifications(unreadOnly = false) {
     return this.request<Notice[]>('GET', `/notifications${unreadOnly ? '?unread_only=true' : ''}`).then(listOf);
   }
-  markRead(id: number) {
-    return this.request<{ ok: boolean }>('POST', `/notifications/${id}/read`);
+  /** NTF-073（268 号 spec）via：从哪里点开的（不传时请求与以前一样） */
+  markRead(id: number, via?: 'push' | 'center') {
+    return this.request<{ ok: boolean }>('POST', `/notifications/${id}/read${via ? `?via=${via}` : ''}`);
+  }
+  /** NTF-073 点公告的推送进来：把自己那条通知记成「从推送点开」（推送里只有公告 id） */
+  pushOpened(announcementId: number) {
+    return this.request<{ notification_id: number; recorded: boolean }>('POST', '/notifications/push-opened',
+      { announcement_id: announcementId });
   }
   unreadCount() {
     return this.request<{ unread: number }>('GET', '/notifications/unread-count');

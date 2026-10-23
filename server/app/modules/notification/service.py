@@ -63,6 +63,8 @@ def notify(db: Session, user_id: int, category: str, title: str, body: str = "",
 
     publish(db, "notification.created", {
         "user_id": user_id, "category": category, "title": title, "body": body,
+        # NTF-073（268 号 spec）公告的推送带上公告 id：点推送进来时 App 据此报「从推送点开」
+        **({"announcement_id": announcement_id} if announcement_id else {}),
     })
 
 
@@ -173,7 +175,8 @@ def push_to_devices(db: Session, payload: dict) -> dict:
     result = vendor_base.call(
         db, "push", provider.name, "send", {"count": len(tokens)},
         lambda: provider.send(tokens, payload.get("title", ""), payload.get("body", ""),
-                              {"category": payload.get("category", "")}),
+                              {"category": payload.get("category", ""),
+                               **({"announcement_id": payload["announcement_id"]} if payload.get("announcement_id") else {})}),
     )
     # 供应商回报的失效令牌必须落地清理：设备卸载后令牌永久失效，
     # 不清理就会年复一年地推给不存在的设备，而通道按量计费

@@ -467,6 +467,7 @@ api POST /api/v1/notebook/methods/{method_id}/versions/{version}/restore
 api POST /api/v1/notebook/notes
 api POST /api/v1/notebook/notes/{note_id}/extract-todos
 api POST /api/v1/notebook/notes/{note_id}/todos
+api POST /api/v1/notifications/push-opened
 api POST /api/v1/notifications/read-all
 api POST /api/v1/notifications/{notification_id}/read
 api POST /api/v1/opc/contract-review
@@ -974,6 +975,7 @@ sdk publicProfile
 sdk publishContent
 sdk publishSandboxModel
 sdk publishTask
+sdk pushOpened
 sdk reassignTeamSpend
 sdk reboostDay
 sdk recallMessage
