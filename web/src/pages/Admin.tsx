@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, copyScheduleDay, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, copyScheduleDay, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -1151,6 +1151,51 @@ function UploadQueue() {
   );
 }
 
+/** ESCA-070（276 号 spec）节假日 / 调休日历：主管按国务院当年的放假通知录入；只影响设了排班的客服 */
+function SupportHolidays() {
+  const { client } = useApp();
+  const [rows, setRows] = useState<SupportHoliday[]>([]);
+  const [day, setDay] = useState('');
+  const [kind, setKind] = useState<SupportHoliday['kind']>('off');
+  const [asWeekday, setAsWeekday] = useState(4);
+  const [label, setLabel] = useState('');
+  const [error, setError] = useState('');
+  const load = useCallback(async () => { setRows(asList<SupportHoliday>(await client.supportHolidays().catch(() => []))); }, [client]);
+  useEffect(() => { void load(); }, [load]);
+  async function act(fn: () => Promise<unknown>) {
+    setError('');
+    try { await fn(); await load(); } catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <div aria-label="节假日日历">
+      <p className="muted">节假日 / 调休（北京时间）：放假这天设了排班的客服整天不在岗；调休上班按指定那天的排班。没设排班的客服不受影响。</p>
+      {rows.map((h) => (
+        <div key={h.id} className="row" data-testid={`holiday-${h.id}`}>
+          <span className="grow">{h.day} {h.kind === 'off' ? '放假' : `调休上班（按${WEEKDAYS[h.as_weekday ?? 0]}的排班）`} {h.label}</span>
+          <button className="text-link" onClick={() => void act(() => client.deleteSupportHoliday(h.id))}>删掉</button>
+        </div>
+      ))}
+      <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+        <input type="date" aria-label="日期" value={day} onChange={(e) => setDay(e.target.value)} />
+        <select aria-label="放假还是调休" value={kind} onChange={(e) => setKind(e.target.value as SupportHoliday['kind'])}>
+          <option value="off">放假</option><option value="workday">调休上班</option>
+        </select>
+        {kind === 'workday' && (
+          <select aria-label="按周几的排班" value={asWeekday} onChange={(e) => setAsWeekday(Number(e.target.value))}>
+            {WEEKDAYS.map((d, k) => <option key={d} value={k}>按{d}</option>)}
+          </select>
+        )}
+        <input aria-label="说明" placeholder="如：国庆节" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <button className="ghost" disabled={!day} onClick={() => void act(async () => {
+          await client.addSupportHoliday(day, kind, label.trim(), kind === 'workday' ? asWeekday : undefined);
+          setDay(''); setLabel('');
+        })}>录入</button>
+      </div>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 /** ESCA-066（248 号 spec）主管看全体客服：负责哪几类、自动分配、暂停到几点、手上几张；可替人恢复接单。点开才加载 */
 function SupportAgentBoard() {
   const { client } = useApp();
@@ -1195,6 +1240,7 @@ function SupportAgentBoard() {
       </table>
       {notice && <p role="status">{notice}</p>}
       {error && <p className="error">{error}</p>}
+      <SupportHolidays />
     </div>
   );
 }

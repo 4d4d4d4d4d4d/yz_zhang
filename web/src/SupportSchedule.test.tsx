@@ -27,6 +27,8 @@ function open(scope: unknown, calls: Call[], me: unknown = ADMIN, agents: unknow
       : p === '/admin/support/my-categories' ? scope
       : p === '/admin/support/my-schedule' ? { schedule: sent.windows, on_duty: false }
       : p === '/admin/support/agents' ? agents
+      : p === '/admin/support/holidays' && method === 'GET' ? [{ id: 1, day: '2026-10-01', kind: 'off', as_weekday: null, label: '国庆节' }]
+      : p === '/admin/support/holidays' ? { id: 2, ...sent, as_weekday: sent.as_weekday ?? null }
       : p === '/admin/admins' ? { admins: [] }
       : p === '/admin/aml/activities' ? { items: [], note: '' } : [];
     return { ok: true, status: 200, text: async () => JSON.stringify(body), headers: { get: () => null } };
@@ -111,5 +113,24 @@ describe('ESCA-068 排班', () => {
     expect(b.textContent).toContain('不在排班里');
     expect(b.textContent).toContain('周六 09:00–18:00');
     expect((await screen.findByTestId('agent-3')).textContent).toContain('在岗');
+  });
+
+  it('ESCA-070 主管看到节假日日历，录入调休上班要选按周几', async () => {
+    const calls: Call[] = [];
+    const boss = { ...ADMIN, admin_roles: ['super'] };
+    open({ categories: [], declared: false, labels: LABELS }, calls, boss, []);
+    fireEvent.click(await screen.findByText('看客服状态'));
+    const box = await screen.findByLabelText('节假日日历');
+    expect((await within(box).findByTestId('holiday-1')).textContent).toContain('2026-10-01 放假 国庆节');
+    expect(within(box).queryByLabelText('按周几的排班')).toBeNull();
+    fireEvent.change(within(box).getByLabelText('日期'), { target: { value: '2026-10-11' } });
+    fireEvent.change(within(box).getByLabelText('放假还是调休'), { target: { value: 'workday' } });
+    fireEvent.change(within(box).getByLabelText('按周几的排班'), { target: { value: '4' } });
+    fireEvent.change(within(box).getByLabelText('说明'), { target: { value: '国庆调休' } });
+    fireEvent.click(within(box).getByText('录入'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.url === '/admin/support/holidays')?.body)
+      .toEqual({ day: '2026-10-11', kind: 'workday', label: '国庆调休', as_weekday: 4 }));
+    fireEvent.click(within(within(box).getByTestId('holiday-1')).getByText('删掉'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.url === '/admin/support/holidays/1')).toBe(true));
   });
 });

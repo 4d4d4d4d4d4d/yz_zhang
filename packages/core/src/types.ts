@@ -1789,6 +1789,15 @@ export interface SupportScheduleWindow {
   start: string;
   end: string;
 }
+/** ESCA-070（276 号 spec）排班用的节假日 / 调休：off 放假整天不在岗；workday 调休上班按 as_weekday 那天的排班 */
+export interface SupportHoliday {
+  id: number;
+  /** 北京时间的日期 YYYY-MM-DD */
+  day: string;
+  kind: 'off' | 'workday';
+  as_weekday: number | null;
+  label: string;
+}
 /** ESCA-068 设排班的结果 */
 export interface SupportScheduleResult {
   schedule: SupportScheduleWindow[];

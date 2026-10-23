@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy import false as sa_false
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -86,3 +86,19 @@ class SupportAgentScope(Base):
     # ESCA-068（260 号 spec）排班：[{weekday 0~6（周一为 0）, start "09:00", end "18:00"}]，北京时间；
     # 设了排班的人在排班以外的时间算「不在岗」（与暂停同样处理）；不设 = 一直在岗（与以前一样）
     schedule: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
+
+
+class SupportHoliday(Base):
+    """ESCA-070（276 号 spec）客服排班用的节假日 / 调休日历（北京时间的日期）。
+    off：这天放假，设了排班的客服整天不在岗；workday：调休上班，这天按 as_weekday 那天的排班算。
+    日期由主管按国务院当年的放假通知录入——不写死在代码里。"""
+
+    __tablename__ = "support_holidays"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    day: Mapped[date] = mapped_column(Date, unique=True)
+    kind: Mapped[str] = mapped_column(String(8), default="off")          # off / workday
+    as_weekday: Mapped[int | None] = mapped_column(Integer, nullable=True)  # workday 时按周几的排班（0=周一）
+    label: Mapped[str] = mapped_column(String(40), default="")
+    created_by: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

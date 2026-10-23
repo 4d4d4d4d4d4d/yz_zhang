@@ -146,6 +146,7 @@ import type {
   SupportScope,
   SupportScheduleWindow,
   SupportScheduleResult,
+  SupportHoliday,
   ApiAccountQuotaRow,
   TeamSpendReturned,
   TeamReturnAsked,
@@ -1841,6 +1842,18 @@ export class PlatformClient {
   /** ESCA-068（260 号 spec）设我的排班（北京时间）：排班以外自动不接新单，到点自动接；传空数组取消排班 */
   setMySupportSchedule(windows: SupportScheduleWindow[]) {
     return this.request<SupportScheduleResult>('PUT', '/admin/support/my-schedule', { windows });
+  }
+  /** ESCA-070（276 号 spec）节假日 / 调休日历（客服都能看） */
+  supportHolidays() {
+    return this.request<SupportHoliday[]>('GET', '/admin/support/holidays').then(listOf);
+  }
+  /** ESCA-070 主管录入一天：放假或调休上班（调休要写按周几的排班） */
+  addSupportHoliday(day: string, kind: SupportHoliday['kind'], label = '', asWeekday?: number) {
+    return this.request<SupportHoliday>('POST', '/admin/support/holidays',
+      asWeekday === undefined ? { day, kind, label } : { day, kind, label, as_weekday: asWeekday });
+  }
+  deleteSupportHoliday(id: number) {
+    return this.request<{ id: number; deleted: boolean }>('DELETE', `/admin/support/holidays/${id}`);
   }
   /** ESCA-065 提前恢复接单 */
   resumeMySupport() {

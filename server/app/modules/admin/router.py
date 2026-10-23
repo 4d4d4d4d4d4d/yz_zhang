@@ -1,4 +1,5 @@
 """管理后台 API（12.E）：用户管理、举报处置队列、平台指标看板。"""
+from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, Query, Response
@@ -367,7 +368,9 @@ def my_support_categories(admin: User = Depends(require_role("support")), db: Se
         from app.modules.support.escalation import off_duty
 
         out["schedule"] = list(row.schedule)
-        out["on_duty"] = not off_duty(row, utcnow())
+        from app.modules.support.escalation import holidays
+
+        out["on_duty"] = not off_duty(row, utcnow(), holidays(db))
     return out
 
 
@@ -381,6 +384,59 @@ class ScheduleWindow(BaseModel):
 class SupportScheduleIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     windows: list[ScheduleWindow] = Field(default_factory=list, max_length=21)
+
+
+class SupportHolidayIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    day: date
+    kind: str = Field(pattern="^(off|workday)$")
+    as_weekday: int | None = Field(default=None, ge=0, le=6)
+    label: str = Field(default="", max_length=40)
+
+
+def _holiday_row(h) -> dict:
+    return {"id": h.id, "day": h.day.isoformat(), "kind": h.kind, "as_weekday": h.as_weekday, "label": h.label}
+
+
+@router.get("/admin/support/holidays")
+def support_holidays(admin: User = Depends(require_role("support")), db: Session = Depends(get_db, scope="function")):
+    """ESCA-070（276 号 spec）客服排班用的节假日 / 调休日历（客服都能看，主管维护）。"""
+    from app.modules.support.models import SupportHoliday
+
+    return [_holiday_row(h) for h in db.query(SupportHoliday).order_by(SupportHoliday.day)]
+
+
+@router.post("/admin/support/holidays")
+def add_support_holiday(body: SupportHolidayIn, admin: User = Depends(require_role("super")),
+                        db: Session = Depends(get_db, scope="function")):
+    """ESCA-070 主管按国务院当年的放假通知录入：放假（off）这天设了排班的客服整天不在岗；
+    调休上班（workday）这天按 as_weekday 那天的排班算。没设排班的客服不受影响。"""
+    from app.modules.support.models import SupportHoliday
+
+    if body.kind == "workday" and body.as_weekday is None:
+        raise bad_request("调休上班要写按周几的排班算（例如按周五）", "holiday_weekday_required")
+    if db.query(SupportHoliday).filter(SupportHoliday.day == body.day).first() is not None:
+        raise conflict(f"{body.day.isoformat()} 已经录过了：先删掉再重录", "holiday_exists")
+    h = SupportHoliday(day=body.day, kind=body.kind, as_weekday=body.as_weekday if body.kind == "workday" else None,
+                       label=body.label.strip(), created_by=admin.id)
+    db.add(h)
+    db.flush()
+    record_audit(db, admin.id, "support_holiday_add", "support_holiday", h.id,
+                 f"{body.day.isoformat()} {'放假' if body.kind == 'off' else '调休上班'} {body.label}".strip())
+    return _holiday_row(h)
+
+
+@router.delete("/admin/support/holidays/{holiday_id}")
+def delete_support_holiday(holiday_id: int, admin: User = Depends(require_role("super")),
+                           db: Session = Depends(get_db, scope="function")):
+    from app.modules.support.models import SupportHoliday
+
+    h = db.get(SupportHoliday, holiday_id)
+    if h is None:
+        raise not_found("没有这一天")
+    record_audit(db, admin.id, "support_holiday_delete", "support_holiday", h.id, h.day.isoformat())
+    db.delete(h)
+    return {"id": holiday_id, "deleted": True}
 
 
 @router.put("/admin/support/my-schedule")
@@ -407,7 +463,9 @@ def set_my_support_schedule(body: SupportScheduleIn, admin: User = Depends(requi
     db.add(row)
     record_audit(db, admin.id, "support_schedule", "user", admin.id, f"排班 {len(row.schedule)} 段" if row.schedule else "取消排班")
     db.flush()
-    return {"schedule": row.schedule, "on_duty": not off_duty(row, utcnow())}
+    from app.modules.support.escalation import holidays
+
+    return {"schedule": row.schedule, "on_duty": not off_duty(row, utcnow(), holidays(db))}
 
 
 class SupportPauseIn(BaseModel):
@@ -482,10 +540,11 @@ def support_agents(admin: User = Depends(require_role("super")), db: Session = D
     from sqlalchemy import func
 
     from app.core.admin_roles import has_role
-    from app.modules.support.escalation import CATEGORIES, off_duty
+    from app.modules.support.escalation import CATEGORIES, holidays, off_duty
     from app.modules.support.models import SupportAgentScope, Ticket
 
     now = utcnow()
+    hol = holidays(db)
     people = [u for u in db.query(User).filter(User.is_admin.is_(True), User.is_banned.is_(False)).order_by(User.id)
               if not getattr(u, "is_deleted", False) and has_role(u, "support")]
     ids = [u.id for u in people] or [-1]
@@ -501,7 +560,7 @@ def support_agents(admin: User = Depends(require_role("super")), db: Session = D
                     "auto_assign": bool(sc.auto_assign) if sc else False,
                     "paused_until": iso(sc.paused_until) if paused else None, "open_tickets": int(load.get(u.id, 0)),
                     # ESCA-068（260 号 spec）现在是否在岗（暂停或排班以外为否）与排班
-                    "on_duty": not off_duty(sc, now) if sc else True, "schedule": list(sc.schedule or []) if sc else []})
+                    "on_duty": not off_duty(sc, now, hol) if sc else True, "schedule": list(sc.schedule or []) if sc else []})
     return out
 
 

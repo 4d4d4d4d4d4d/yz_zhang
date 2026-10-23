@@ -118,10 +118,18 @@ def paused_agents(db: Session) -> set[int]:
     from .models import SupportAgentScope
 
     now = utcnow()
-    return {r.user_id for r in db.query(SupportAgentScope).all() if off_duty(r, now)}
+    hol = holidays(db)
+    return {r.user_id for r in db.query(SupportAgentScope).all() if off_duty(r, now, hol)}
 
 
-def off_duty(scope, now: datetime) -> bool:
+def holidays(db: Session) -> dict:
+    """ESCA-070（276 号 spec）节假日 / 调休日历：{日期: (kind, as_weekday)}。只在设了排班的客服身上起作用。"""
+    from .models import SupportHoliday
+
+    return {h.day: (h.kind, h.as_weekday) for h in db.query(SupportHoliday).all()}
+
+
+def off_duty(scope, now: datetime, hol: dict | None = None) -> bool:
     """ESCA-065 暂停中，或 ESCA-068（260 号 spec）设了排班而现在（北京时间）不在任何一段里。"""
     if scope.paused_until is not None and scope.paused_until > now:
         return True
@@ -132,7 +140,14 @@ def off_duty(scope, now: datetime) -> bool:
 
     t = local(now)
     hm = f"{t.hour:02d}:{t.minute:02d}"
-    return not any(w.get("weekday") == t.weekday() and w.get("start", "") <= hm < w.get("end", "") for w in windows)
+    weekday = t.weekday()
+    # ESCA-070（276 号 spec）放假整天不在岗；调休上班按指定那天的排班
+    kind, as_weekday = (hol or {}).get(t.date(), (None, None))
+    if kind == "off":
+        return True
+    if kind == "workday" and as_weekday is not None:
+        weekday = as_weekday
+    return not any(w.get("weekday") == weekday and w.get("start", "") <= hm < w.get("end", "") for w in windows)
 
 
 def agent_scopes(db: Session) -> dict[int, list[str]]:
@@ -242,7 +257,8 @@ def auto_assign(db: Session, t: Ticket) -> int | None:
     rows = db.query(SupportAgentScope).filter(SupportAgentScope.auto_assign.is_(True)).all()
     now = utcnow()
     # ESCA-065（240 号 spec）暂停接单的人跳过
-    ids = [r.user_id for r in rows if cat in (r.categories or []) and not off_duty(r, now)]
+    hol = holidays(db)
+    ids = [r.user_id for r in rows if cat in (r.categories or []) and not off_duty(r, now, hol)]
     if not ids:
         return None
     users = [u for u in db.query(User).filter(User.id.in_(ids)).all()

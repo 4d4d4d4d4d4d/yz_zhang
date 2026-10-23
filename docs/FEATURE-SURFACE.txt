@@ -1,6 +1,7 @@
 # 功能面清单（FEAT-001）：只增不减。下线须进 scripts/feature_surface.py 的 RETIRED 并写理由
 api DELETE /api/v1/admin/api-accounts/{user_id}/quota
 api DELETE /api/v1/admin/support/agents/{user_id}/pause
+api DELETE /api/v1/admin/support/holidays/{holiday_id}
 api DELETE /api/v1/admin/support/my-pause
 api DELETE /api/v1/contents/{content_id}
 api DELETE /api/v1/conversations/{conv_id}/members/{member_id}
@@ -70,6 +71,7 @@ api GET /api/v1/admin/security
 api GET /api/v1/admin/settlements/verify
 api GET /api/v1/admin/skill-concepts
 api GET /api/v1/admin/support/agents
+api GET /api/v1/admin/support/holidays
 api GET /api/v1/admin/support/my-categories
 api GET /api/v1/admin/teams/pending
 api GET /api/v1/admin/tickets
@@ -356,6 +358,7 @@ api POST /api/v1/admin/skill-concepts
 api POST /api/v1/admin/skill-concepts/{concept_id}/retire
 api POST /api/v1/admin/subsidy-pool/fund
 api POST /api/v1/admin/support/agents/{user_id}/pause
+api POST /api/v1/admin/support/holidays
 api POST /api/v1/admin/support/my-pause
 api POST /api/v1/admin/teams/{team_id}/verify
 api POST /api/v1/admin/tickets/{ticket_id}/assign
@@ -649,6 +652,7 @@ sdk addNoteTodos
 sdk addOpcEntry
 sdk addOrganizationRecord
 sdk addProgress
+sdk addSupportHoliday
 sdk addTeamMember
 sdk addWorkbenchChildren
 sdk addWorkbenchLog
@@ -801,6 +805,7 @@ sdk deleteGigRoute
 sdk deleteMethod
 sdk deleteNote
 sdk deleteOpcEntry
+sdk deleteSupportHoliday
 sdk deleteWebhook
 sdk deleteWorkbenchItem
 sdk deleteWorkbenchMemory
@@ -1077,6 +1082,7 @@ sdk submitVerificationOutcome
 sdk subscribeCategory
 sdk supplyHint
 sdk supportAgents
+sdk supportHolidays
 sdk taskDraftProfile
 sdk taskProfile
 sdk taskTemplate
