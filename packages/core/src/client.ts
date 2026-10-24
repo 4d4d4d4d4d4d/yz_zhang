@@ -1326,8 +1326,9 @@ export class PlatformClient {
   publishContent(contentId: number) {
     return this.request<ContentItem>('POST', `/contents/${contentId}/publish`);
   }
+  /** CLI-083b（312 号 spec）服务端返回的是完整的内容行，声明以前只写了三个字段（客户端看不见其余的） */
   myDrafts(limit = 20) {
-    return this.request<Array<{ id: number; title: string; created_at: string }>>(
+    return this.request<ContentItem[]>(
       'GET', `/contents/mine?status=draft&limit=${limit}`,
     ).then(listOf);
   }
@@ -2658,8 +2659,10 @@ export class PlatformClient {
       'GET', `/knowledge/templates?category=${encodeURIComponent(category)}&q=${encodeURIComponent(q)}`,
     );
   }
+  /** CLI-083b（312 号 spec）以前声明成 open_tasks / suppliers，服务端从来给的是 open_demand / supply（还有供需比）；
+   *  旧名留作可选、恒为空，别再用 */
   categoryDemand() {
-    return this.request<Array<{ category: string; open_tasks: number; completed: number; gmv_cents: number; suppliers: number }>>(
+    return this.request<Array<{ category: string; open_demand: number; completed: number; gmv_cents: number; supply: number; demand_supply_ratio: number | null; open_tasks?: number; suppliers?: number }>>(
       'GET', '/knowledge/category-demand',
     ).then(listOf);
   }
