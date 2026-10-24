@@ -527,7 +527,7 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       )}
       {/* SCN-166（297 号 spec）交付文件：原图放款完毕前锁着 */}
       {contract && <DeliverablesList client={client} contractId={contract.id} isExecutor={meId === contract.executor_id}
-                                     live={contract.status === 'funded' && !contract.frozen} />}
+                                     live={contract.status === 'funded' && !contract.frozen} stages={contract.milestones} />}
       {!!error && <Text style={styles.error}>{error}</Text>}
 
       {actions.includes('apply') && (

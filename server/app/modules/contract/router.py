@@ -224,6 +224,8 @@ class DeliverableIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ref: str = Field(min_length=8, max_length=80)
     kind: str = Field(pattern="^(preview|original)$")
+    # SC-017（304 号 spec）可选：挂到第几期。不写 = 整份合约（与 V324 一样）
+    milestone_idx: int | None = Field(default=None, ge=1, le=100)
 
 
 def _party(db: Session, contract_id: int, user: User) -> Contract:
@@ -235,11 +237,25 @@ def _party(db: Session, contract_id: int, user: User) -> Contract:
     return contract
 
 
-def _deliverable_row(c: Contract, d, viewer_id: int) -> dict:
-    unlocked = d.kind == "preview" or viewer_id == c.executor_id or c.status == "released"
-    return {"id": d.id, "kind": d.kind, "created_at": iso(d.created_at), "locked": not unlocked,
-            "url": (f"/api/v1/files/{d.file_name}" if d.kind == "preview"
-                    else f"/api/v1/contracts/{c.id}/deliverables/{d.id}/file") if unlocked else None}
+def _released_idxs(db: Session, c: Contract) -> set[int]:
+    return {i for (i,) in db.query(Milestone.idx).filter(Milestone.contract_id == c.id,
+                                                          Milestone.status == "released")}
+
+
+def _original_unlocked(c: Contract, d, viewer_id: int, released: set[int]) -> bool:
+    """执行方随时能取；发布方要等合约放款完毕，或者（SC-017）这份文件挂的那一期已经放款。"""
+    return (viewer_id == c.executor_id or c.status == "released"
+            or (d.milestone_idx is not None and d.milestone_idx in released))
+
+
+def _deliverable_row(c: Contract, d, viewer_id: int, released: set[int] = frozenset()) -> dict:
+    unlocked = d.kind == "preview" or _original_unlocked(c, d, viewer_id, released)
+    row = {"id": d.id, "kind": d.kind, "created_at": iso(d.created_at), "locked": not unlocked,
+           "url": (f"/api/v1/files/{d.file_name}" if d.kind == "preview"
+                   else f"/api/v1/contracts/{c.id}/deliverables/{d.id}/file") if unlocked else None}
+    if d.milestone_idx is not None:
+        row["milestone_idx"] = d.milestone_idx
+    return row
 
 
 @router.post("/{contract_id}/deliverables", status_code=201)
@@ -260,10 +276,18 @@ def add_deliverable(contract_id: int, body: DeliverableIn, user: User = Depends(
         raise bad_request("没有找到你上传的这张图：先上传，再挂到合约上", "deliverable_file_not_found")
     if db.query(ContractDeliverable).filter(ContractDeliverable.contract_id == contract.id).count() >= DELIVERABLES_MAX:
         raise bad_request(f"一份合约最多挂 {DELIVERABLES_MAX} 个交付文件", "deliverables_full")
+    if body.milestone_idx is not None:
+        m = (db.query(Milestone).filter(Milestone.contract_id == contract.id, Milestone.idx == body.milestone_idx)
+             .first())
+        if m is None:
+            raise bad_request(f"这份合约没有第 {body.milestone_idx} 期：刷新一下再选", "milestone_not_found")
+        if m.status == "released":
+            raise conflict(f"第 {m.idx} 期已经放款了，不能再往上挂文件：挂到还没放款的那一期", "invalid_milestone_state")
     if body.kind == "original":
         f.sensitive = True        # 原图不再走匿名能力链接（CERT-010 的同一道门）
         db.add(f)
-    d = ContractDeliverable(contract_id=contract.id, file_name=f.name, kind=body.kind)
+    d = ContractDeliverable(contract_id=contract.id, file_name=f.name, kind=body.kind,
+                            milestone_idx=body.milestone_idx)
     db.add(d)
     db.flush()
     return _deliverable_row(contract, d, user.id)
@@ -277,7 +301,8 @@ def list_deliverables(contract_id: int, user: User = Depends(get_current_user),
     contract = _party(db, contract_id, user)
     rows = (db.query(ContractDeliverable).filter(ContractDeliverable.contract_id == contract.id)
             .order_by(ContractDeliverable.id).all())
-    return [_deliverable_row(contract, d, user.id) for d in rows]
+    released = _released_idxs(db, contract)
+    return [_deliverable_row(contract, d, user.id, released) for d in rows]
 
 
 @router.get("/{contract_id}/deliverables/{deliverable_id}/file")
@@ -295,7 +320,7 @@ def read_deliverable(contract_id: int, deliverable_id: int, user: User = Depends
     d = db.get(ContractDeliverable, deliverable_id)
     if d is None or d.contract_id != contract.id:
         raise not_found("没有这个交付文件")
-    if d.kind == "original" and user.id != contract.executor_id and contract.status != "released":
+    if d.kind == "original" and not _original_unlocked(contract, d, user.id, _released_idxs(db, contract)):
         raise forbidden("原图在验收放款后才能下载：先看预览图，验收没问题就放款", "deliverable_locked")
     name = d.file_name
     vendor_base.release(db)  # CONC-067 读存储前放掉连接

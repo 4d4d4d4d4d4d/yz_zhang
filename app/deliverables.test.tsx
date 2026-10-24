@@ -68,3 +68,41 @@ describe('SCN-166 App 交付文件', () => {
     expect(screen.queryByText('上传原图')).toBeNull();
   });
 });
+
+describe('SC-017 App 上挂到某一期', () => {
+  const STAGES = [{ idx: 1, title: '设计', status: 'released' as const }, { idx: 2, title: '施工', status: 'pending' as const }];
+
+  it('执行方选了第 2 期：上传后挂到第 2 期；已放款的期不在可选里', async () => {
+    const calls: Array<{ method: string; path: string; body: unknown }> = [];
+    const fetchImpl = (async (url: string, init?: { method?: string; body?: string }) => {
+      const path = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+      const method = init?.method ?? 'GET';
+      calls.push({ method, path, body: init?.body ? JSON.parse(init.body) : null });
+      const body = path === '/files' ? { url: '/api/v1/files/n', ref: 'newref123' } : method === 'POST' ? { ...O, id: 10 } : [];
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    }) as unknown as typeof fetch;
+    const c = new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl });
+    const perm = jest.spyOn(ImagePicker, 'requestMediaLibraryPermissionsAsync').mockResolvedValue({ status: 'granted' } as never);
+    const pick = jest.spyOn(ImagePicker, 'launchImageLibraryAsync')
+      .mockResolvedValue({ canceled: false, assets: [{ base64: 'iVBORw0KGgo=', mimeType: 'image/png' }] } as never);
+    try {
+      render(<DeliverablesList client={c} contractId={3} isExecutor live stages={STAGES} />);
+      expect(await screen.findByText('整份合约')).toBeTruthy();
+      expect(screen.queryByText('第 1 期 设计')).toBeNull();
+      fireEvent.press(screen.getByText('第 2 期 施工'));
+      fireEvent.press(screen.getByText('上传原图'));
+      await waitFor(() => expect(calls.find((x) => x.method === 'POST' && x.path === '/contracts/3/deliverables')?.body)
+        .toEqual({ ref: 'newref123', kind: 'original', milestone_idx: 2 }));
+    } finally {
+      perm.mockRestore(); pick.mockRestore();
+    }
+  });
+
+  it('锁着的原图说清各等哪一期；只有一期时不出选择', async () => {
+    render(<DeliverablesList client={client([{ ...P, milestone_idx: 2 }, { ...O, milestone_idx: 2 }, { ...O, id: 11 }])} contractId={3}
+                             isExecutor live stages={[{ idx: 1, title: '全款', status: 'pending' }]} />);
+    expect(await screen.findByLabelText('预览（第 2 期）')).toBeTruthy();
+    expect(screen.getByText('原图 2 张：第 2 期 1 张在这一期放款后可以下载；其余 1 张全部放款后可以下载')).toBeTruthy();
+    expect(screen.queryByText('整份合约')).toBeNull();
+  });
+});

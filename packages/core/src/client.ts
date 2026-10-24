@@ -1239,8 +1239,10 @@ export class PlatformClient {
     return this.request<Contract>('POST', `/contracts/${contractId}/milestones/${idx}/deliver`);
   }
   /** SCN-166（297 号 spec）交付文件托管：执行方把已上传的图片挂到合约上（`ref` 是上传返回的 ref） */
-  addDeliverable(contractId: number, ref: string, kind: ContractDeliverable['kind']) {
-    return this.request<ContractDeliverable>('POST', `/contracts/${contractId}/deliverables`, { ref, kind });
+  /** SC-017（304 号 spec）`milestoneIdx` 可选：挂到第几期；不写挂整份合约（V324 的行为） */
+  addDeliverable(contractId: number, ref: string, kind: ContractDeliverable['kind'], milestoneIdx?: number) {
+    // 没选期数时 milestone_idx 为 undefined，序列化时不发
+    return this.request<ContractDeliverable>('POST', `/contracts/${contractId}/deliverables`, { ref, kind, milestone_idx: milestoneIdx || undefined });
   }
   contractDeliverables(contractId: number) {
     return this.request<ContractDeliverable[]>('GET', `/contracts/${contractId}/deliverables`).then(listOf);

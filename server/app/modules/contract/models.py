@@ -130,3 +130,6 @@ class ContractDeliverable(Base):
     file_name: Mapped[str] = mapped_column(String(80))       # uploaded_files.name
     kind: Mapped[str] = mapped_column(String(10))            # preview / original
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # SC-017（304 号 spec）挂到哪一期（idx）；None = 整份合约（V324 的行为：放款完毕才解锁）。
+    # 挂到某一期的原图，那一期放款后就解锁，不用等整份合约放完
+    milestone_idx: Mapped[int | None] = mapped_column(Integer, nullable=True)

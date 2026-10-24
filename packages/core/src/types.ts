@@ -399,6 +399,8 @@ export interface ContractDeliverable {
   created_at: string;
   locked: boolean;
   url: string | null;
+  /** SC-017（304 号 spec）挂到第几期；那一期放款后原图解锁。挂整份合约的不出这个字段 */
+  milestone_idx?: number;
 }
 
 export type IpAssignment =

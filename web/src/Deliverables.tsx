@@ -1,6 +1,6 @@
 // SCN-166（297 号 spec）交付文件托管在平台：执行方传预览图（自己加水印或缩小）和原图；
 // 发布方马上能看预览，原图在合约放款完毕后才能下载——「先交片后不付」「付了不交片」两头都堵上。
-import { apiErrorText, type ContractDeliverable } from '@platform/core';
+import { apiErrorText, deliverableLockedText, deliverableStageTag, type ContractDeliverable, type Milestone } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from './store';
 
@@ -16,9 +16,17 @@ export function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export default function DeliverablesBlock({ contractId, isExecutor, live }: { contractId: number; isExecutor: boolean; live: boolean }) {
+const lockedText = deliverableLockedText;
+const stageTag = deliverableStageTag;
+
+export default function DeliverablesBlock({ contractId, isExecutor, live, stages }: {
+  contractId: number; isExecutor: boolean; live: boolean;
+  /** SC-017 合约的分期；多于一期时执行方可以选「挂到哪一期」 */
+  stages?: Pick<Milestone, 'idx' | 'title' | 'status'>[];
+}) {
   const { client } = useApp();
   const [rows, setRows] = useState<ContractDeliverable[]>([]);
+  const [stage, setStage] = useState(0);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
@@ -34,7 +42,7 @@ export default function DeliverablesBlock({ contractId, isExecutor, live }: { co
     setBusy(true);
     try {
       const r = await client.uploadImage(file.type, await fileToBase64(file));
-      await client.addDeliverable(contractId, r.ref, kind);
+      await client.addDeliverable(contractId, r.ref, kind, stage || undefined);
       await load();
     } catch (e) { setError(apiErrorText(e)); } finally { setBusy(false); }
   }
@@ -49,21 +57,30 @@ export default function DeliverablesBlock({ contractId, isExecutor, live }: { co
   const previews = rows.filter((d) => d.kind === 'preview');
   const originals = rows.filter((d) => d.kind === 'original');
   const locked = originals.filter((d) => d.locked);
+  const openStages = (stages ?? []).filter((m) => m.status !== 'released');
   if (rows.length === 0 && !(isExecutor && live)) return null;
   return (
     <div aria-label="交付文件" style={{ marginTop: 10 }}>
       <h4>交付文件</h4>
       {previews.length > 0 && (
         <div className="row" style={{ gap: 6 }}>
-          {previews.map((d) => d.url && <img key={d.id} src={d.url} alt="预览" width={96} height={96} style={{ objectFit: 'cover', borderRadius: 8 }} />)}
+          {previews.map((d) => d.url && <img key={d.id} src={d.url} alt={`预览${stageTag(d)}`} width={96} height={96} style={{ objectFit: 'cover', borderRadius: 8 }} />)}
         </div>
       )}
-      {locked.length > 0 && <p className="muted" data-testid="originals-locked">原图 {locked.length} 张：验收放款后可以下载</p>}
+      {locked.length > 0 && <p className="muted" data-testid="originals-locked">{lockedText(locked)}</p>}
       {originals.filter((d) => !d.locked).map((d) => (
-        <button key={d.id} className="ghost" onClick={() => void download(d)}>下载原图 #{d.id}</button>
+        <button key={d.id} className="ghost" onClick={() => void download(d)}>下载原图 #{d.id}{stageTag(d)}</button>
       ))}
       {isExecutor && live && (
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          {(stages?.length ?? 0) > 1 && openStages.length > 0 && (
+            <label className="muted">挂到哪一期
+              <select aria-label="挂到哪一期" value={stage} onChange={(e) => setStage(Number(e.target.value))}>
+                <option value={0}>整份合约（全部放款后才能下载原图）</option>
+                {openStages.map((m) => <option key={m.idx} value={m.idx}>第 {m.idx} 期 {m.title}（这一期放款后就能下载）</option>)}
+              </select>
+            </label>
+          )}
           <label className="muted">上传预览图（建议自己加水印或缩小）
             <input type="file" accept="image/jpeg,image/png,image/webp" aria-label="上传预览图" disabled={busy}
                    onChange={(e) => void upload('preview', e.target.files)} />

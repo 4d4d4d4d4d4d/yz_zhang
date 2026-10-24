@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 304 | 每一期挂各自的交付附件 | [304-milestone-deliverables.md](./304-milestone-deliverables.md) | P0 |
 | 303 | 发单时拦下没驾照找人陪练学车 | [303-unlicensed-driving-practice.md](./303-unlicensed-driving-practice.md) | P0 |
 | 302 | 第十二轮场景发掘：数码维修与旧机回收、陪驾 | [302-scenario-round-12.md](./302-scenario-round-12.md) | P0 |
 | 301 | 其余板块里的按钮逐个登记进按钮权限表 | [301-admin-actions-rest.md](./301-admin-actions-rest.md) | P0 |
