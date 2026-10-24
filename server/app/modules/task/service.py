@@ -28,12 +28,16 @@ SEED_CATEGORIES = [
 MINOR_CARE_CERT = "无犯罪记录证明"
 # SCN-154（274 号 spec）接触直接入口食品的人每年体检、取得健康证明后方可上岗（食品安全法第四十五条）
 HEALTH_CERT = "健康证明"
+# SCN-160（286 号 spec）2 米以上可能坠落处的作业属特种作业，须持特种作业操作证（高处作业）上岗
+HEIGHT_WORK_CERT = "高处作业操作证"
 ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助老陪伴"},
                     {"name": "陪练看护", "required_cert": MINOR_CARE_CERT},
                     # 「翻译」——第七轮场景发掘的自由译者服务包的发单模板与去处（259 号 spec，V286）
                     {"name": "翻译"},
                     # 「整理收纳」「上门做饭」——第八轮场景发掘（274 号 spec，V298）；上门做饭要审核通过的健康证明
-                    {"name": "整理收纳"}, {"name": "上门做饭", "required_cert": HEALTH_CERT}]
+                    {"name": "整理收纳"}, {"name": "上门做饭", "required_cert": HEALTH_CERT},
+                    # 「家电清洗」「空调外机拆装（高处作业）」——第九轮场景发掘（286 号 spec，V313）；后者要高处作业证
+                    {"name": "家电清洗"}, {"name": "空调外机拆装（高处作业）", "required_cert": HEIGHT_WORK_CERT}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 

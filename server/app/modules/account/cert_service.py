@@ -68,6 +68,14 @@ def submit(db: Session, user: User, *, name: str, holder_name: str, cert_number:
             raise bad_request("健康证明要填有效期（按证明上写的，最长一年）", "certificate_expiry_required")
         if expires_at > utcnow() + timedelta(days=366):
             raise bad_request("健康证明的有效期最长一年：按证明上写的到期日填", "certificate_expiry_too_far")
+    # SCN-160（286 号 spec）高处作业属特种作业，操作证有效期 6 年、每 3 年复审：有效期必填、最长 6 年
+    from app.modules.task.service import HEIGHT_WORK_CERT
+
+    if name == HEIGHT_WORK_CERT:
+        if expires_at is None:
+            raise bad_request("高处作业操作证要填有效期（按证上写的，最长 6 年）", "certificate_expiry_required")
+        if expires_at > utcnow() + timedelta(days=366 * 6):
+            raise bad_request("高处作业操作证的有效期最长 6 年：按证上写的到期日填", "certificate_expiry_too_far")
     # CERT-012 同一资质不能堆待审申请
     dup = (
         db.query(CertificationApplication)
