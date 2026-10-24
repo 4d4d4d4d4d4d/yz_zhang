@@ -19,7 +19,7 @@ from app.modules.dispute.models import Dispute
 from app.modules.task.models import Task
 
 from .models import AdminAudit, Report
-from app.core.timefmt import UtcDatetime, iso
+from app.core.timefmt import UtcDatetime, day, iso
 from app.core.admin_roles import ANY, require_role
 
 router = APIRouter(tags=["admin"])
@@ -395,7 +395,7 @@ class SupportHolidayIn(BaseModel):
 
 
 def _holiday_row(h) -> dict:
-    return {"id": h.id, "day": h.day.isoformat(), "kind": h.kind, "as_weekday": h.as_weekday, "label": h.label}
+    return {"id": h.id, "day": day(h.day), "kind": h.kind, "as_weekday": h.as_weekday, "label": h.label}
 
 
 @router.get("/admin/support/holidays")
@@ -416,13 +416,13 @@ def add_support_holiday(body: SupportHolidayIn, admin: User = Depends(require_ro
     if body.kind == "workday" and body.as_weekday is None:
         raise bad_request("调休上班要写按周几的排班算（例如按周五）", "holiday_weekday_required")
     if db.query(SupportHoliday).filter(SupportHoliday.day == body.day).first() is not None:
-        raise conflict(f"{body.day.isoformat()} 已经录过了：先删掉再重录", "holiday_exists")
+        raise conflict(f"{day(body.day)} 已经录过了：先删掉再重录", "holiday_exists")
     h = SupportHoliday(day=body.day, kind=body.kind, as_weekday=body.as_weekday if body.kind == "workday" else None,
                        label=body.label.strip(), created_by=admin.id)
     db.add(h)
     db.flush()
     record_audit(db, admin.id, "support_holiday_add", "support_holiday", h.id,
-                 f"{body.day.isoformat()} {'放假' if body.kind == 'off' else '调休上班'} {body.label}".strip())
+                 f"{day(body.day)} {'放假' if body.kind == 'off' else '调休上班'} {body.label}".strip())
     return _holiday_row(h)
 
 
@@ -434,7 +434,7 @@ def delete_support_holiday(holiday_id: int, admin: User = Depends(require_role("
     h = db.get(SupportHoliday, holiday_id)
     if h is None:
         raise not_found("没有这一天")
-    record_audit(db, admin.id, "support_holiday_delete", "support_holiday", h.id, h.day.isoformat())
+    record_audit(db, admin.id, "support_holiday_delete", "support_holiday", h.id, day(h.day))
     db.delete(h)
     return {"id": holiday_id, "deleted": True}
 

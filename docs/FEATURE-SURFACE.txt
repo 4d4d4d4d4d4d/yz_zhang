@@ -631,6 +631,7 @@ app recipient
 app rights
 app sandbox
 app search
+app showcase
 app spaces
 app supportTickets
 app teamInvites
