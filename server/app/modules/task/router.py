@@ -1093,6 +1093,8 @@ def list_applications(
     task = _get_task(db, task_id)
     if task.creator_id != user.id:
         raise forbidden()
+    from app.modules.task.promises import APPLICATION_FLAG, has_result_promise
+
     rows = db.query(Application).filter(Application.task_id == task_id).all()
     out = []
     for r in rows:
@@ -1107,6 +1109,8 @@ def list_applications(
                 "bid_cents": r.bid_cents,
                 "message": r.message,
                 "status": r.status,
+                # SCN-185（311 号 spec）留言里承诺了结果才带
+                **({"promise_flag": APPLICATION_FLAG} if has_result_promise(r.message) else {}),
             }
         )
     return out

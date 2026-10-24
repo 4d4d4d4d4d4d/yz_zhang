@@ -140,6 +140,10 @@ def task_profile(db: Session, t: dict) -> dict:
     if is_k12_subject_tutoring(text):          # SCN-145 发出去会被拒（213 号），写的时候就先说
         risks.append({"kind": "k12", "text": "中小学学科类有偿家教平台不承接，发布时会被拒绝：需要学科辅导请找有办学资质的机构；"
                                              "钢琴、游泳这类非学科陪练可以照常发"})
+    from app.modules.task.promises import PROMISE_HINT, has_result_promise
+
+    if has_result_promise(text):             # SCN-185（311 号 spec）结果承诺：不拦，写的时候就提醒
+        risks.append({"kind": "result_promise", "text": PROMISE_HINT})
     if budget >= 500_000:
         risks.append({"kind": "large_amount", "text": "金额较大：建议分期（里程碑）托管，每期交付后再放款"})
 

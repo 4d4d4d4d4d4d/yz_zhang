@@ -10,7 +10,7 @@ import PhotoPicker from '../PhotoPicker';
 import { useApp } from '../store';
 import DeliverablesBlock from '../Deliverables';
 
-type AppRow = { id: number; applicant_id: number; nickname: string; credit_score: number; rating_avg: number; bid_cents: number; message: string; status: string };
+type AppRow = { id: number; applicant_id: number; nickname: string; credit_score: number; rating_avg: number; bid_cents: number; message: string; status: string; promise_flag?: string };
 
 export default function TaskDetail() {
   const { id } = useParams();
@@ -290,6 +290,8 @@ export default function TaskDetail() {
                   <div>
                     <strong>{a.nickname}</strong> <span className="muted">信用 {a.credit_score} · 评分 {a.rating_avg}</span>
                     <p className="muted">{a.message} · 报价 {fmtYuan(a.bid_cents)}</p>
+                    {/* SCN-185（311 号 spec）留言里承诺了结果：不拦，提醒发单人 */}
+                    {a.promise_flag && <p className="error" data-testid={`promise-${a.id}`}>⚠️ {a.promise_flag}</p>}
                   </div>
                   {a.status === 'pending' && (
                     <button onClick={() => act(async () => {

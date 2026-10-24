@@ -542,6 +542,8 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>{a.nickname} · 信用 {a.credit_score}</Text>
                 <Text style={styles.mutedLeft}>报价 {fmtYuan(a.bid_cents)} · {a.message || '（无留言）'}</Text>
+                {/* SCN-185（311 号 spec）留言里承诺了结果：不拦，提醒发单人 */}
+                {!!a.promise_flag && <Text style={styles.error}>⚠ {a.promise_flag}</Text>}
               </View>
               {a.status === 'pending' && (
                 <Button title="选TA成交" onPress={() => act(() => client.acceptApplication(a.id))} />

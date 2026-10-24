@@ -661,7 +661,8 @@ export class PlatformClient {
     });
   }
   listApplications(taskId: number) {
-    return this.request<Array<{ id: number; applicant_id: number; nickname: string; credit_score: number; rating_avg: number; bid_cents: number; message: string; status: string }>>(
+    // SCN-185（311 号 spec）promise_flag：留言里承诺了结果（保 offer、包过之类）才有
+    return this.request<Array<{ id: number; applicant_id: number; nickname: string; credit_score: number; rating_avg: number; bid_cents: number; message: string; status: string; promise_flag?: string }>>(
       'GET', `/tasks/${taskId}/applications`,
     ).then(listOf);
   }
