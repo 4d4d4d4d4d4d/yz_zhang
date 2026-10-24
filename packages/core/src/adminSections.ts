@@ -61,3 +61,36 @@ export function canSeeAdminSection(me: Pick<Me, 'is_admin' | 'admin_roles'> | nu
 export function hiddenAdminSections(me: Pick<Me, 'is_admin' | 'admin_roles'> | null | undefined): string[] {
   return (Object.keys(ADMIN_SECTIONS) as AdminSectionKey[]).filter((k) => !canSeeAdminSection(me, k)).map((k) => ADMIN_SECTIONS[k].label);
 }
+
+// SEC-061h 板块里的按钮级权限（295 号 spec）：一个板块里有的按钮要另一个角色（用户管理里的封禁要合规、
+// 工单里的指派要超级管理员）。和板块一样记下它调的接口（probe）与角色，闸门 test_admin_sections.py 核对
+// roles 恰好等于服务端给那个接口的角色；按不了的按钮不显示，换成一句「这件事要谁来做」。
+export interface AdminAction {
+  label: string;
+  probe: string;
+  roles: readonly AdminRoleKey[];
+}
+
+export const ADMIN_ACTIONS = {
+  banUser: { label: '封禁用户', probe: 'POST /admin/users/{user_id}/ban', roles: ['compliance'] },
+  unbanUser: { label: '解封用户', probe: 'POST /admin/users/{user_id}/unban', roles: ['compliance'] },
+  assignTicket: { label: '指派工单', probe: 'POST /admin/tickets/{ticket_id}/assign', roles: ['super'] },
+} satisfies Record<string, AdminAction>;
+
+export type AdminActionKey = keyof typeof ADMIN_ACTIONS;
+
+const ROLE_LABELS: Record<AdminRoleKey, string> = {
+  super: '超级管理员', support: '客服', arbiter: '仲裁', compliance: '合规', finance: '财务', ops: '运营',
+};
+
+export function canDoAdminAction(me: Pick<Me, 'is_admin' | 'admin_roles'> | null | undefined, key: AdminActionKey): boolean {
+  const mine = adminRolesOf(me);
+  const roles: readonly AdminRoleKey[] = ADMIN_ACTIONS[key].roles;
+  return mine.includes('super') || roles.some((r) => mine.includes(r));
+}
+
+/** 按不了的按钮换成的那句话：「封禁用户要合规来做」 */
+export function adminActionHint(key: AdminActionKey): string {
+  const a = ADMIN_ACTIONS[key];
+  return `${a.label}要${a.roles.map((r) => ROLE_LABELS[r]).join('或')}来做`;
+}

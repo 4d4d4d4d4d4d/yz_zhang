@@ -254,6 +254,12 @@ def resolve_report(
         elif report.target_type == "task":
             detail = admin_service.takedown_task(db, admin.id, report.target_id, reason)
     elif body.action == "ban_user":
+        # SEC-061h（295 号 spec）直接封禁要「合规」（POST /admin/users/{id}/ban）；从举报里封禁不能绕过这一条
+        from app.core.admin_roles import has_role, labels, roles_of
+
+        if not has_role(admin, "compliance"):
+            raise forbidden(f"从举报里封禁用户要「合规」角色的管理员来做（与直接封禁同一条规矩）；你的角色是"
+                            f"「{labels(sorted(roles_of(admin)))}」，可以驳回或下架内容，封禁请转给合规", "admin_role_required")
         target_user_id = report.target_id
         if report.target_type == "content":
             content = db.get(Content, report.target_id)

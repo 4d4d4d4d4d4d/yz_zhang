@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, copyScheduleDay, parseHolidayNotice, type HolidayDraft, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementCurveCompareRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type TaxRemitRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, adminActionHint, canDoAdminAction, canSeeAdminSection, copyScheduleDay, parseHolidayNotice, type HolidayDraft, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementCurveCompareRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type TaxRemitRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -125,8 +125,11 @@ export default function Admin() {
                           onClick={async () => { await client.resolveReport(r.id, 'dismiss'); await load(); }}>驳回</button>
                   <button style={{ padding: '2px 8px' }}
                           onClick={async () => { await client.resolveReport(r.id, 'remove_content'); await load(); }}>下架</button>
-                  <button className="danger" style={{ padding: '2px 8px' }}
-                          onClick={async () => { await client.resolveReport(r.id, 'ban_user'); await load(); }}>封禁</button>
+                  {/* SEC-061h（295 号 spec）封禁要合规；客服能驳回、下架，封禁换成一句话 */}
+                  {canDoAdminAction(me, 'banUser')
+                    ? <button className="danger" style={{ padding: '2px 8px' }}
+                              onClick={async () => { await client.resolveReport(r.id, 'ban_user'); await load(); }}>封禁</button>
+                    : <span className="muted" data-testid={`report-ban-hint-${r.id}`}>{adminActionHint('banUser')}</span>}
                 </td>
               </tr>
             ))}
@@ -148,13 +151,14 @@ export default function Admin() {
                 <td>{u.credit_score}</td><td>{u.tasks_completed}</td>
                 <td>{u.is_banned ? <span className="badge bad">已封禁</span> : u.is_verified ? <span className="badge ok">实名</span> : <span className="badge">正常</span>}</td>
                 <td>
-                  {u.is_banned ? (
+                  {/* SEC-061h（295 号 spec）封禁、解封要合规 */}
+                  {u.is_banned ? (canDoAdminAction(me, 'unbanUser') ? (
                     <button className="ghost" style={{ padding: '2px 8px' }}
                             onClick={async () => { await client.unbanUser(u.id); await load(); }}>解封</button>
-                  ) : (
+                  ) : <span className="muted" data-testid={`unban-hint-${u.id}`}>{adminActionHint('unbanUser')}</span>) : (canDoAdminAction(me, 'banUser') ? (
                     <button className="danger" style={{ padding: '2px 8px' }}
                             onClick={() => setBanning(u.id)}>封禁</button>
-                  )}
+                  ) : <span className="muted" data-testid={`ban-hint-${u.id}`}>{adminActionHint('banUser')}</span>)}
                 </td>
               </tr>
             ))}
@@ -1657,7 +1661,7 @@ function TicketQueue() {
               if (reason && reason.trim().length >= 2) void client.setTicketPriority(t.id, next, reason.trim()).then(() => load()).catch((e) => setError(apiErrorText(e)));
             }}>{t.priority === 'urgent' ? '改回一般' : '改成加急'}</button>
             <button className="ghost" onClick={() => void replyOnly(t.id)}>先回一句</button>
-            {isSuper && agents.length > 0 && (
+            {canDoAdminAction(me, 'assignTicket') && agents.length > 0 && (
               <select aria-label={`指派工单 ${t.id}`} value="" onChange={(e) => { if (e.target.value) void assign(t.id, Number(e.target.value)); }}>
                 <option value="">指派给…</option>
                 {agents.map((a) => <option key={a.user_id} value={a.user_id}>{a.nickname || `#${a.user_id}`}</option>)}
