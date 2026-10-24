@@ -15,6 +15,12 @@ const USERS = [
   { id: 6, nickname: '乙', phone: '138****0006', credit_score: 60, tasks_completed: 0, is_banned: true, is_verified: true },
 ];
 
+// 工单台没有工单时整块不显示，给一张
+const TICKET = { id: 7, user_id: 9, subject: '钱没到账', body: '', created_at: '2026-10-13T00:00:00Z', assignee_id: null,
+  assignee_nickname: '', escalation_level: 0, escalation_label: '', waited_hours: 1, sla_hours: 4, overdue_hours: 0,
+  first_responded: false, first_response_hours: 1, first_response_overdue: false, replies_count: 0,
+  last_user_reply: '', last_user_reply_at: null, awaiting_staff: false, category: 'funds', priority: 'urgent', priority_label: '加急' };
+
 function open(roles: string[]) {
   localStorage.setItem('token', 'tok');
   const fetchImpl = vi.fn(async (url: string) => {
@@ -22,7 +28,8 @@ function open(roles: string[]) {
     const body = u === '/users/me' ? me(roles)
       : u === '/admin/reports' ? [{ id: 1, reporter_id: 2, target_type: 'user', target_id: 5, reason: '骚扰', created_at: '2026-10-24T00:00:00Z' }]
       : u === '/admin/users' ? USERS
-      : u === '/admin/support/my-categories' ? { categories: [], declared: false, labels: {} } : [];
+      : u === '/admin/support/my-categories' ? { categories: [], declared: false, labels: {} }
+      : u === '/admin/tickets' ? [TICKET] : [];
     return { ok: true, status: 200, text: async () => JSON.stringify(body), headers: { get: () => null } };
   }) as unknown as typeof fetch;
   render(<MemoryRouter initialEntries={['/admin']}><AppProvider client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })}><App /></AppProvider></MemoryRouter>);
@@ -46,5 +53,16 @@ describe('SEC-061h 按钮按角色', () => {
     expect(await within(reports).findByText('封禁')).toBeTruthy();
     expect(await screen.findByText('解封')).toBeTruthy();
     expect(screen.queryByTestId('ban-hint-5')).toBeNull();
+  });
+
+  it('SEC-061l 客服看得到工单，但看不到「看客服状态」；超级管理员看得到', async () => {
+    open(['support']);
+    expect(await screen.findByLabelText('待处理工单')).toBeTruthy();
+    expect(screen.queryByText('看客服状态')).toBeNull();
+  });
+
+  it('SEC-061l 超级管理员看得到「看客服状态」', async () => {
+    open(['super']);
+    expect(await screen.findByText('看客服状态')).toBeTruthy();
   });
 });

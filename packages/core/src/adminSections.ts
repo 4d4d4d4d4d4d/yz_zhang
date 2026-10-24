@@ -75,6 +75,8 @@ export const ADMIN_ACTIONS = {
   banUser: { label: '封禁用户', probe: 'POST /admin/users/{user_id}/ban', roles: ['compliance'] },
   unbanUser: { label: '解封用户', probe: 'POST /admin/users/{user_id}/unban', roles: ['compliance'] },
   assignTicket: { label: '指派工单', probe: 'POST /admin/tickets/{ticket_id}/assign', roles: ['super'] },
+  // SEC-061l（301 号 spec）工单板块里的「看客服状态」：客服状态、替人暂停 / 恢复、节假日日历都在这一块
+  supportBoard: { label: '管理客服排班与状态', probe: 'GET /admin/support/agents', roles: ['super'] },
 } satisfies Record<string, AdminAction>;
 
 export type AdminActionKey = keyof typeof ADMIN_ACTIONS;

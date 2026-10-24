@@ -23,4 +23,11 @@ describe('SEC-061h 按钮按角色', () => {
     expect(adminActionHint('banUser')).toBe('封禁用户要合规来做');
     expect(adminActionHint('assignTicket')).toBe('指派工单要超级管理员来做');
   });
+
+  it('SEC-061l 管理客服排班与状态只给超级管理员；客服看得到工单板块但看不到这一块', () => {
+    expect(canDoAdminAction(admin(['support']), 'supportBoard')).toBe(false);
+    expect(canDoAdminAction(admin(['super']), 'supportBoard')).toBe(true);
+    expect(canDoAdminAction(admin([]), 'supportBoard')).toBe(true);
+    expect(adminActionHint('supportBoard')).toBe('管理客服排班与状态要超级管理员来做');
+  });
 });

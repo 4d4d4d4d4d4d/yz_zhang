@@ -1461,13 +1461,14 @@ function TicketQueue() {
   const { client, me } = useApp();
   const [rows, setRows] = useState<AdminTicketRow[]>([]);
   // ESCA-054（157 号 spec）主管（超级管理员，含未分级）可以把工单指派给某位客服
-  const isSuper = !!me && (!(me.admin_roles?.length) || me.admin_roles.includes('super'));
+  // SEC-061h / SEC-061l（295、301 号 spec）按钮权限走共享 SDK 的登记表，不在页面里自己判断角色
+  const canAssign = canDoAdminAction(me, 'assignTicket');
   const [agents, setAgents] = useState<AdminRow[]>([]);
   useEffect(() => {
-    if (!isSuper) return;
+    if (!canAssign) return;
     void client.listAdmins().then((r) => setAgents((r.admins ?? []).filter((a) => a.unclassified || a.roles.includes('support') || a.roles.includes('super'))))
       .catch(() => setAgents([]));
-  }, [client, isSuper]);
+  }, [client, canAssign]);
   const [error, setError] = useState('');
   // PAY-045 分页：此前上限写死、offset 被忽略，队列一长后面的就在界面上不存在
   const PAGE = 20;
@@ -1607,7 +1608,7 @@ function TicketQueue() {
           <SupportScheduleEditor scope={scope} onSaved={(x) => { setScope(x); setScopeNote(''); }} />
         </div>
       )}
-      {isSuper && <SupportAgentBoard />}
+      {canDoAdminAction(me, 'supportBoard') && <SupportAgentBoard />}
       {error && <p className="error">{error}</p>}
       {rows.length === 0 && <p className="muted">没有符合条件的工单。</p>}
       <div className="list" style={{ marginTop: 8 }}>
