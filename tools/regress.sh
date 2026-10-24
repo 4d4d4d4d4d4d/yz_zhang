@@ -16,7 +16,8 @@ fi
 for d in node_modules web/node_modules app/node_modules packages/core/node_modules; do
   [ -e "$W/$d" ] || ln -s "$REPO/$d" "$W/$d"
 done
-rm -rf "$W/reg.db" "$W/be.txt" "$W/fe.txt" "$W/counts"
+# 每一轮的库都从空开始：sbx.db 以前没删，上一轮留下的旧表结构让沙箱自检撞上新加的列（V334 的 categories.extra_certs）
+rm -rf "$W/reg.db" "$W/sbx.db" "$W/mig.db" "$W/be.txt" "$W/fe.txt" "$W/counts"
 echo "回归 $SHA 于 $W"
 # LINT-005（280 号 spec）全量回归里静态检查不许因为没装 ruff 而静默跳过
 ( cd "$W/server" && PLATFORM_REQUIRE_RUFF=1 PLATFORM_DATABASE_URL="sqlite:///$W/reg.db" python -m pytest -q -p no:cacheprovider 2>&1 | tail -3 > "$W/be.txt" )
