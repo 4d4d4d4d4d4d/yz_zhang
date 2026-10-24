@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, copyScheduleDay, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementCurveCompareRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, copyScheduleDay, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementCurveCompareRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type TaxRemitRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -382,6 +382,7 @@ function PlatformFinance() {
       {notice && <p role="status">{notice}</p>}
       {error && <p className="error">{error}</p>}
       <SettleRequests onChanged={() => void load()} />
+      <TaxRemits />
       <p className="muted">结算只动平台自己的收入；代扣税款在独立专户，不与佣金混同。</p>
       <FinancePeriods />
     </div>
@@ -418,6 +419,46 @@ function SettleRequests({ onChanged }: { onChanged: () => void }) {
               const reason = prompt('驳回理由（发起人自己撤回可以不写）：');
               if (reason !== null) void act(() => client.rejectSettle(r.id, reason));
             }}>驳回 / 撤回</button>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** PAY-042d（287 号 spec）待确认的缴库：大额待缴税款由 job 生成草稿，财务与申报数核对后确认才划出；对不上就驳回写原因 */
+function TaxRemits() {
+  const { client } = useApp();
+  const [rows, setRows] = useState<TaxRemitRequestRow[]>([]);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const load = useCallback(async () => {
+    const r = await client.taxRemits().catch(() => []);
+    setRows(Array.isArray(r) ? r : []);
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+  if (rows.length === 0 && !error && !notice) return null;
+  async function act(fn: () => Promise<string>) {
+    setError(''); setNotice('');
+    try { setNotice(await fn()); await load(); } catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <div aria-label="待确认的缴库">
+      <h4>待确认的缴库（{rows.length}）</h4>
+      {notice && <p role="status">{notice}</p>}
+      {error && <p className="error">{error}</p>}
+      {rows.map((r) => (
+        <div className="task-item" key={r.id}>
+          <div>{fmtYuan(r.amount_cents)} <span className="muted">缴库草稿 #{r.id}，{formatDateTime(r.created_at)} 生成；请与本期申报数核对，确认前钱还在税款专户</span></div>
+          <span className="row">
+            <button onClick={() => void act(async () => {
+              const c = await client.confirmTaxRemit(r.id);
+              return `已确认缴库 ${fmtYuan(c.amount_cents)}，专户余额 ${fmtYuan(c.balance_cents)}`;
+            })}>核对无误，确认缴库</button>
+            <button className="danger" onClick={() => {
+              const reason = prompt('哪里对不上？（必填，下一次缴库会重新生成草稿）');
+              if (reason !== null) void act(async () => { await client.rejectTaxRemit(r.id, reason); return '已驳回，钱没有动'; });
+            }}>驳回</button>
           </span>
         </div>
       ))}

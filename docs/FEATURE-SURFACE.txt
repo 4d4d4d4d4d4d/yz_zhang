@@ -130,6 +130,7 @@ api GET /api/v1/files/{name}/secure
 api GET /api/v1/finance/invoices
 api GET /api/v1/finance/my-tax
 api GET /api/v1/finance/tax-ledger
+api GET /api/v1/finance/tax-remits
 api GET /api/v1/friends
 api GET /api/v1/friends/requests
 api GET /api/v1/friends/worked-with
@@ -436,6 +437,8 @@ api POST /api/v1/files
 api POST /api/v1/files/sign-upload
 api POST /api/v1/finance/invoices
 api POST /api/v1/finance/jobs/remit-tax
+api POST /api/v1/finance/tax-remits/{request_id}/confirm
+api POST /api/v1/finance/tax-remits/{request_id}/reject
 api POST /api/v1/friends/requests
 api POST /api/v1/friends/requests/{req_id}/decide
 api POST /api/v1/gig/jobs/purge-expired
@@ -762,6 +765,7 @@ sdk cockpit
 sdk commentContent
 sdk confirmContribution
 sdk confirmDecomposition
+sdk confirmTaxRemit
 sdk confirmXappStep
 sdk contentComments
 sdk contentFeed
@@ -998,6 +1002,7 @@ sdk rejectChangeOrder
 sdk rejectDelivery
 sdk rejectFinanceCorrection
 sdk rejectSettle
+sdk rejectTaxRemit
 sdk relatedNotes
 sdk releaseDelivered
 sdk removeCircleMember
@@ -1094,6 +1099,7 @@ sdk taskProfile
 sdk taskTemplate
 sdk taskTree
 sdk taskVisits
+sdk taxRemits
 sdk team
 sdk teamInviteLinks
 sdk teamInvitePreview

@@ -51,3 +51,21 @@ class InvoiceRequest(Base):
     status: Mapped[str] = mapped_column(String(12), default="pending", index=True)
     note: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class TaxRemitRequest(Base):
+    """PAY-042d 缴库草稿（287 号 spec）：大额待缴税款由 job 生成草稿，财务核对申报数后确认才真的划出。
+
+    确认的是草稿上的数（人看过的那个数），之后新代扣的留到下一次。
+    """
+
+    __tablename__ = "tax_remit_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    # awaiting_confirm / remitted / rejected
+    status: Mapped[str] = mapped_column(String(16), default="awaiting_confirm", index=True)
+    decided_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    decision_reason: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

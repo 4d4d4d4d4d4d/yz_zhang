@@ -120,6 +120,8 @@ import type {
   PlatformSettleApproved,
   PlatformSettlePending,
   PlatformSettleRequestRow,
+  TaxRemitConfirmed,
+  TaxRemitRequestRow,
   TeamInviteCreated,
   TeamInviteLink,
   TeamInvitePreview,
@@ -936,6 +938,16 @@ export class PlatformClient {
   }
   rejectSettle(requestId: number, reason = '') {
     return this.request<PlatformSettleRequestRow>('POST', `/admin/platform-finance/settle-requests/${requestId}/reject`, { reason });
+  }
+  /** PAY-042d（287 号 spec）缴库草稿 */
+  taxRemits(status: 'awaiting_confirm' | 'remitted' | 'rejected' = 'awaiting_confirm') {
+    return this.request<TaxRemitRequestRow[]>('GET', `/finance/tax-remits?status=${status}`).then(listOf);
+  }
+  confirmTaxRemit(requestId: number) {
+    return this.request<TaxRemitConfirmed>('POST', `/finance/tax-remits/${requestId}/confirm`);
+  }
+  rejectTaxRemit(requestId: number, reason: string) {
+    return this.request<TaxRemitRequestRow>('POST', `/finance/tax-remits/${requestId}/reject`, { reason });
   }
   withdrawApplication(applicationId: number) {
     return this.request<{ id: number; status: string }>('POST', `/applications/${applicationId}/withdraw`);

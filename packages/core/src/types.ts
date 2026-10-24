@@ -54,6 +54,20 @@ export interface PlatformSettleRequestRow {
 export interface PlatformSettleApproved extends PlatformSettleRequestRow {
   balance_cents: number;
 }
+/** PAY-042d（287 号 spec）缴库草稿：大额待缴税款由 job 生成，财务核对申报数后确认才划出 */
+export interface TaxRemitRequestRow {
+  id: number;
+  amount_cents: number;
+  status: 'awaiting_confirm' | 'remitted' | 'rejected';
+  decided_by: number | null;
+  decision_reason: string;
+  created_at: string;
+  decided_at: string | null;
+}
+/** 确认后：多一个划出后的税款专户余额 */
+export interface TaxRemitConfirmed extends TaxRemitRequestRow {
+  balance_cents: number;
+}
 
 /** TEAM-066 团队邀请链接（147 号 spec） */
 export interface TeamInviteLink {

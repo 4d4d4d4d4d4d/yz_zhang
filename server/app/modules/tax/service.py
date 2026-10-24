@@ -78,10 +78,41 @@ def remit(db) -> dict:
     amount = acct.available_cents
     if amount <= 0:
         return {"remitted_cents": 0, "note": "专户无待缴余额"}
-    acct.available_cents = 0
-    wallet._log(db, TAX_USER_ID, "tax_remit", -amount, None, "代扣税款缴库")
+    # PAY-042d（287 号 spec）大额先出草稿、人确认：钱与申报，AI 和 job 都只出草稿
+    if amount >= settings.TAX_REMIT_CONFIRM_CENTS:
+        from .models import TaxRemitRequest
+
+        pending = db.query(TaxRemitRequest).filter(TaxRemitRequest.status == "awaiting_confirm").first()
+        if pending is None:
+            pending = TaxRemitRequest(amount_cents=amount)
+            db.add(pending)
+            db.flush()
+            _notify_finance(db, "有一笔代扣税款等你确认缴库",
+                            f"缴库草稿 #{pending.id}：¥{amount / 100:.2f}。请与本期申报数核对后，"
+                            "在管理后台「平台收支 → 待确认的缴库」确认划出；对不上就驳回并写明原因。")
+        return {"remitted_cents": 0, "pending_request_id": pending.id, "pending_cents": pending.amount_cents,
+                "note": f"待缴税款达到 ¥{settings.TAX_REMIT_CONFIRM_CENTS / 100:.2f}，已生成缴库草稿，"
+                        "等财务核对申报数后确认才会划出"}
+    remit_amount(db, acct, amount)
     return {"remitted_cents": amount,
             "note": "已划出待缴税款；真实环境此处对应向税务专户的实际划款与申报"}
+
+
+def remit_amount(db, acct, amount: int) -> None:
+    acct.available_cents -= amount
+    wallet._log(db, TAX_USER_ID, "tax_remit", -amount, None, "代扣税款缴库")
+
+
+def _notify_finance(db, title: str, body: str) -> int:
+    from app.core.admin_roles import has_role
+    from app.modules.account.models import User
+    from app.modules.notification.service import notify
+
+    ids = [u.id for u in db.query(User).filter(User.is_admin.is_(True), User.is_banned.is_(False)).order_by(User.id)
+           if has_role(u, "finance")]
+    for uid in ids:
+        notify(db, uid, "system", title, body)
+    return len(ids)
 
 
 def account_balance(db) -> int:

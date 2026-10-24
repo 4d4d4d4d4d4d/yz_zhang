@@ -50,6 +50,8 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
     (r"^\w+ /contracts/", "party",
      "合约只对发布方与执行方开放（管理员在纠纷场景另有入口）。"
      "第三方读到的是金额、条款与分账明细；写到的是托管与放款"),
+    (r"^\w+ /finance/tax-remits/", "admin",
+     "PAY-042d（287 号 spec）缴库草稿是平台税款专户的事，只有财务角色的管理员能看、能确认或驳回（require_role）"),
     (r"^\w+ /wallet/withdraw-requests/", "admin",
      "提现复核是运营动作，且大额出款要四眼原则（V99）——两个不同管理员先后确认"),
     (r"^\w+ /anchors/contracts/", "party",

@@ -1,13 +1,13 @@
 """TAX-021~024 代扣明细、缴库、开票与台账。"""
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.deps import get_current_user, require_job_auth
-from app.core.errors import bad_request, forbidden, not_found
+from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.core.locks import job_slot
-from app.modules.account.models import User
+from app.modules.account.models import User, utcnow
 
 from . import service
 from .models import InvoiceRequest
@@ -28,6 +28,72 @@ def remit_tax(db: Session = Depends(get_db, scope="function"), _=Depends(require
               __=Depends(job_slot("remit_tax"), scope="function")):
     """TAX-013 代扣税款缴库。"""
     return service.remit(db)
+
+
+def _remit_row(r) -> dict:
+    return {"id": r.id, "amount_cents": r.amount_cents, "status": r.status, "decided_by": r.decided_by,
+            "decision_reason": r.decision_reason, "created_at": iso(r.created_at), "decided_at": iso(r.decided_at)}
+
+
+@router.get("/tax-remits")
+def tax_remits(status: str = Query(default="awaiting_confirm", pattern="^(awaiting_confirm|remitted|rejected)$"),
+               admin: User = Depends(require_role("finance")), db: Session = Depends(get_db, scope="function")):
+    """PAY-042d（287 号 spec）缴库草稿：默认列等确认的。"""
+    from .models import TaxRemitRequest
+
+    rows = (db.query(TaxRemitRequest).filter(TaxRemitRequest.status == status)
+            .order_by(TaxRemitRequest.id.desc()).limit(100).all())
+    return [_remit_row(r) for r in rows]
+
+
+def _pending_remit(db: Session, request_id: int):
+    from .models import TaxRemitRequest
+
+    req = db.query(TaxRemitRequest).filter(TaxRemitRequest.id == request_id).with_for_update().first()
+    if req is None:
+        raise not_found("没有这笔缴库草稿")
+    if req.status != "awaiting_confirm":
+        raise conflict("这笔缴库草稿已经处理过了", "tax_remit_already_decided")
+    return req
+
+
+class RemitDecisionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(default="", max_length=200)
+
+
+@router.post("/tax-remits/{request_id}/confirm")
+def confirm_tax_remit(request_id: int, admin: User = Depends(require_role("finance")),
+                      db: Session = Depends(get_db, scope="function")):
+    """财务核对申报数后确认：只划草稿上的那个数（人看过的数），之后新代扣的留到下一次。"""
+    from app.modules.admin.router import record_audit
+    from app.modules.wallet import service as wallet
+
+    req = _pending_remit(db, request_id)
+    acct = wallet.get_or_create(db, service.TAX_USER_ID)
+    if acct.available_cents < req.amount_cents:
+        raise conflict(f"专户余额 ¥{acct.available_cents / 100:.2f} 不足草稿上的 ¥{req.amount_cents / 100:.2f}："
+                       "请先查对账（代扣与缴库流水），驳回这份草稿后等下一次重新生成", "tax_remit_insufficient")
+    service.remit_amount(db, acct, req.amount_cents)
+    req.status, req.decided_by, req.decided_at = "remitted", admin.id, utcnow()
+    record_audit(db, admin.id, "tax_remit_confirm", "tax_remit", req.id, f"确认缴库 {req.amount_cents} 分")
+    return {**_remit_row(req), "balance_cents": acct.available_cents}
+
+
+@router.post("/tax-remits/{request_id}/reject")
+def reject_tax_remit(request_id: int, body: RemitDecisionIn, admin: User = Depends(require_role("finance")),
+                     db: Session = Depends(get_db, scope="function")):
+    """对不上就驳回（要写原因）：不动钱，下一次缴库 job 按当时的余额重新生成草稿。"""
+    from app.modules.admin.router import record_audit
+
+    req = _pending_remit(db, request_id)
+    if len(body.reason.strip()) < 2:
+        raise bad_request("驳回缴库草稿要写明哪里对不上", "reason_required")
+    req.status, req.decided_by, req.decided_at = "rejected", admin.id, utcnow()
+    req.decision_reason = body.reason.strip()
+    record_audit(db, admin.id, "tax_remit_reject", "tax_remit", req.id,
+                 f"驳回缴库草稿 {req.amount_cents} 分：{req.decision_reason}")
+    return _remit_row(req)
 
 
 @router.get("/tax-ledger")
