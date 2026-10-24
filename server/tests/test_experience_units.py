@@ -124,6 +124,9 @@ def test_only_platform_scope_until_units_have_an_owner(client):
     for scope in ("private", "project"):
         r = _distill(client, admin, cid, scope=scope)
         assert r.status_code == 400 and r.json()["detail"]["code"] == "unit_scope_invalid"
+        # KB-093（309 号 spec）说清为什么、去哪里：只想自己用的去个人知识库 / 我的方法；项目内还不开放
+        msg = r.json()["detail"]["message"]
+        assert ("个人知识库" in msg and "我的方法" in msg) if scope == "private" else ("协作空间还是母任务" in msg and "全平台" in msg)
 
 
 # ------------------------------------------------------------------ KB-083/084 计量与回流

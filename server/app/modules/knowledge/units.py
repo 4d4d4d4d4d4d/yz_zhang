@@ -105,9 +105,14 @@ def distill(db: Session, cluster_id: int, kind: str, title: str, applicability: 
         raise bad_request("必须写明排除条件：什么情况下**不该**用这个单元", "unit_exclusions_required")
     if scope != "platform":
         # 「仅自己 / 项目内」要先有归属对象（谁的、哪个项目的）才能被执行，而单元表里还没有这两个字段。
-        # 收下却执行不了的范围，等于把私有单元公开给所有人——所以这一批只开放全平台
-        raise bad_request("这一批只开放「全平台」范围：仅自己 / 项目内的单元还没有归属对象，无法限定谁能用",
-                          "unit_scope_invalid")
+        # 收下却执行不了的范围，等于把私有单元公开给所有人——所以只开放全平台。
+        # KB-093（309 号 spec）定下来：单元是从多人的样本里蒸馏的，「仅自己」没有归属对象，也不需要——
+        # 只想自己用的经验本来就有地方放（个人知识库、「我的方法」，只有本人能看）；「项目内」等项目的定义（KB-093b）
+        if scope == "private":
+            raise bad_request("经验单元是从多人的样本里蒸馏出来给大家复用的，没有「仅自己」这一档：只想自己用的经验，"
+                              "请记在个人知识库（笔记）或「我的方法」里，那里本来就只有你能看", "unit_scope_invalid")
+        raise bad_request("「项目内」范围还不开放（要先定项目指协作空间还是母任务）：先选「全平台」，"
+                          "或者先不注册这个单元", "unit_scope_invalid")
     samples = _consented_samples(db, cluster.id)
     if not samples:
         raise conflict("这个子类里没有双方都同意经验复用的样本——没有可回溯的来源，不能注册单元",

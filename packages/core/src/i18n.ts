@@ -178,7 +178,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   // KB-080~089 / AGT-080~083 可复用单元与经验工具（V135）
   unit_kind_invalid: '单元类型只能是：报价提示 / 验收清单 / 分解流程 / 可执行工具',
   unit_exclusions_required: '必须写明排除条件：什么情况下不该用这个单元',
-  unit_scope_invalid: '这一批只开放「全平台」范围',
+  unit_scope_invalid: '经验单元只开放「全平台」：只想自己用的经验请记在个人知识库或「我的方法」里',
   unit_no_consented_source: '这个子类里没有双方都同意经验复用的样本，不能注册单元',
   unit_too_few_samples: '这个子类样本太少，不能产出报价提示',
   unit_no_consensus: '这个子类还没有共识流程，产不出清单或流程',
