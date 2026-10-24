@@ -22,6 +22,8 @@ K_ANON = 3              # 雷达里任何来自用户行为的信号，至少要
 RADAR_DAYS = 30
 STUCK_DAYS = 3
 MIN_ASKS = 5            # 指标少于这么多次不下结论
+# SCN-161（289 号 spec）知识到期前这么多天就进雷达，让运营赶在过期前对照最新通报或法规更新
+EXPIRING_DAYS = 30
 
 
 # ------------------------------------------------------------------ 读取
@@ -458,6 +460,10 @@ def radar(db: Session) -> list[dict]:
         expired = [k.title for k in definition(p).knowledge if k.valid_until and k.valid_until < today]
         if expired:
             reasons.append(f"{len(expired)} 条知识已过有效期：{'、'.join(expired[:3])}")
+        soon = [k.title for k in definition(p).knowledge
+                if k.valid_until and today <= k.valid_until <= today + timedelta(days=EXPIRING_DAYS)]
+        if soon:
+            reasons.append(f"{len(soon)} 条知识 {EXPIRING_DAYS} 天内到期：{'、'.join(soon[:3])}（到期前对照最新通报或法规更新）")
         if reasons:
             out.append({"source": "pack_gap", "key": p.key, "title": f"场景包「{p.title}」要复核",
                         "evidence": "；".join(reasons), "people": x.get("active", 0), "suggested": {}})

@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 289 | 防诈骗知识按通报定期更新 | [289-knowledge-expiring.md](./289-knowledge-expiring.md) | P0 |
 | 288 | 按国务院放假通知一键导入全年放假与调休 | [288-holiday-notice-import.md](./288-holiday-notice-import.md) | P0 |
 | 287 | 税款缴库前的人工确认 | [287-tax-remit-confirm.md](./287-tax-remit-confirm.md) | P0 |
 | 286 | 第九轮场景发掘：教老人用手机、家电清洗 | [286-scenario-round-9.md](./286-scenario-round-9.md) | P0 |
