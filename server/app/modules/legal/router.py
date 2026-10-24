@@ -169,6 +169,12 @@ def legal_ask(body: AskIn, user: User = Depends(get_current_user), db: Session =
     客户端要能真的把人送到那儿去——这是 66 号 spec 那条规矩
     （服务端叫他做 X，客户端上就得做得到 X）在问答上的一次应用。
     """
+    # SCN-170（298 号 spec）想伤害自己的说法先给心理援助热线（形状与人身安全那条相同，只是话不同）
+    from app.core.crisis import CRISIS_ANSWER, is_self_harm
+
+    if is_self_harm(body.question):
+        return {"answer": CRISIS_ANSWER, "disclaimer": DISCLAIMER, "refused": True,
+                "refused_reason": "high_risk", "remedy": None, "source": ""}
     if any(kw in body.question for kw in HIGH_RISK_KEYWORDS):
         return {
             "answer": "该问题涉及人身安全或刑事风险，请立即拨打 110 报警或联系专业机构，平台 AI 不提供此类解答。",

@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 298 | 第十一轮场景发掘：情绪陪伴、上门私教 | [298-scenario-round-11.md](./298-scenario-round-11.md) | P0 |
 | 297 | 跟拍成片交付走平台：原图放款完毕前锁着 | [297-contract-deliverables.md](./297-contract-deliverables.md) | P0 |
 | 296 | 执行方一次交付多期 | [296-batch-deliver.md](./296-batch-deliver.md) | P0 |
 | 295 | 后台板块内的按钮级权限隐藏 | [295-admin-actions-by-role.md](./295-admin-actions-by-role.md) | P0 |

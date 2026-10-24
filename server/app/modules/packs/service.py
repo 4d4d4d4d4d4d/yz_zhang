@@ -214,6 +214,12 @@ def ask(db: Session, user_id: int, pack: ScenarioPack, akey: str, q: str) -> dic
     gates = [schema.GATES[g] for g in a.human_gates if g in schema.GATES]
     base = {"assistant": a.name, "gates": gates,
             "gate_notice": "这些事助手只给草稿，必须你本人确认后再做：" + "；".join(gates)}
+    # SCN-170（298 号 spec）想伤害自己的说法先给心理援助热线，再说别的
+    from app.core.crisis import CRISIS_ANSWER, is_self_harm
+
+    if is_self_harm(q):
+        event(db, pack, user_id, "ask")
+        return {**base, "refused": True, "answer": CRISIS_ANSWER, "citations": [], "remedy": None, "crisis": True}
     if any(kw in q for kw in HIGH_RISK_KEYWORDS):
         event(db, pack, user_id, "ask")
         return {**base, "refused": True, "answer": "这个问题涉及人身安全或刑事风险，请立即拨打 110 或联系专业机构。",

@@ -2759,6 +2759,8 @@ export interface PackAnswer {
   answer: string;
   citations: PackCitation[];
   remedy: PackRemedy | null;
+  /** SCN-170（298 号 spec）问题里有想伤害自己的说法：回答是心理援助热线，界面应把它放在最显眼处 */
+  crisis?: boolean;
 }
 export interface PackMetrics {
   active: number;
