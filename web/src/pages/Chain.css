@@ -1,0 +1,23 @@
+.chain-page { max-width: 1120px; }
+.chain-hero { display:grid; grid-template-columns:1fr 190px; gap:40px; padding:36px 12px 46px; }
+.chain-eyebrow { font-size:11px; letter-spacing:.2em; color:#a56738; }
+.chain-hero h1 { font-size:clamp(32px,4vw,54px); line-height:1.2; font-weight:600; letter-spacing:-.04em; margin:20px 0; }
+.chain-hero p { max-width:510px; line-height:1.9; color:#627276; }
+.chain-flow { border:1px solid #d9e1dd; border-radius:80px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:25px; background:linear-gradient(160deg,#f1e5d5,#edf4ee); color:#204e4e; }
+.chain-flow span { font-size:14px; font-weight:600; }.chain-flow i { color:#a0aaa5; margin:8px 0; font-style:normal; }
+.chain-network,.chain-toolbar { display:flex; gap:14px; align-items:center; flex-wrap:wrap; }.chain-network { justify-content:space-between; }
+.chain-page h2 { font-size:20px; margin-top:0; }.chain-page code,.chain-page dd { overflow-wrap:anywhere; word-break:break-word; }
+.chain-stats { display:flex; flex-wrap:wrap; gap:30px; align-items:center; padding:22px 0; }.chain-stats small { display:block; color:#738181; margin-bottom:8px; }.chain-stats strong { font-size:22px; font-weight:500; }
+.chain-fields { display:grid; grid-template-columns:1fr 1fr; gap:16px; }.chain-form label,.chain-toolbar label { display:flex; flex-direction:column; gap:8px; font-size:13px; margin-bottom:14px; }.chain-form input { width:100%; box-sizing:border-box; }.chain-terms { display:grid; grid-template-columns:145px minmax(0,1fr); gap:14px; font-size:13px; }.chain-terms dt { color:#788381; }.chain-terms dd { margin:0; }
+.chain-milestones { list-style:none; padding:0; margin:26px 0; }.chain-milestones li { border-left:2px solid #dae2dd; padding:18px 20px; margin-bottom:10px; background:#f7f8f5; border-radius:0 12px 12px 0; }.chain-milestones li.active { border-color:#b57943; background:#f5eee4; }.chain-milestones li>div { display:flex; gap:14px; justify-content:space-between; }.chain-milestones p { font-size:12px; margin-bottom:0; color:#6c7774; }
+.chain-proposal { padding:16px; border:1px solid #ddc7a6; border-radius:12px; margin:20px 0; }.chain-footnote { font-size:12px; line-height:1.8; color:#79827e; margin:24px 0; }.chain-form summary,.chain-network summary { cursor:pointer; margin:16px 0; }
+@media(max-width:650px) { .chain-hero { grid-template-columns:1fr; gap:10px; padding:22px 0; }.chain-flow { flex-direction:row; border-radius:16px; gap:12px; padding:18px 8px; }.chain-flow i { transform:rotate(-90deg); }.chain-flow span { font-size:12px; }.chain-fields { grid-template-columns:1fr; gap:0; }.chain-terms { grid-template-columns:1fr; gap:7px; }.chain-terms dd { margin-bottom:10px; }.chain-stats { gap:20px; }.chain-stats strong { font-size:18px; } }
+@media(prefers-reduced-motion:no-preference) { .chain-flow { animation:chain-arrive .8s ease-out both; } @keyframes chain-arrive { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } } }
+/* Match the platform's dark palette; keep document hashes readable on small screens. */
+.chain-hero p,.chain-stats small,.chain-terms dt,.chain-footnote { color:var(--muted); }
+.chain-eyebrow { color:var(--brand); }
+.chain-milestones li { color:var(--text); background:#172b30; border-color:var(--line); }
+.chain-milestones li.active { background:#26312e; border-color:var(--brand); }
+.chain-milestones p { color:var(--muted); }
+.chain-page,.chain-page .card,.chain-network>div,.chain-form { min-width:0; }
+.chain-toolbar label { min-width:0; }

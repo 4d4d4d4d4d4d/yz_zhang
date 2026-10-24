@@ -1,0 +1,305 @@
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from app.core.db import get_db
+from app.core.deps import get_current_user
+from app.core.errors import bad_request, conflict, forbidden, not_found
+from app.modules.account.models import User
+
+from . import service
+from .models import Conversation, Message
+from app.core.timefmt import iso
+
+router = APIRouter(tags=["im"])
+
+
+class DirectIn(BaseModel):
+    user_id: int
+
+
+class MessageIn(BaseModel):
+    content: str = Field(min_length=1, max_length=5000)
+
+
+class QuoteCardIn(BaseModel):
+    """IM-009 报价卡：结构化消息，可直达报名。"""
+
+    task_id: int
+    price_cents: int = Field(gt=0)
+    note: str = Field(default="", max_length=200)
+
+
+def _dump_conv(c: Conversation) -> dict:
+    return {"id": c.id, "kind": c.kind, "task_id": c.task_id, "participants": c.participants}
+
+
+def _read_cursor(db: Session, conv_id: int, user_id: int) -> int:
+    from .models import ConversationRead
+
+    row = (
+        db.query(ConversationRead)
+        .filter(ConversationRead.conversation_id == conv_id,
+                ConversationRead.user_id == user_id)
+        .first()
+    )
+    return (row.last_read_message_id or 0) if row else 0
+
+
+def _conv_titles(db: Session, rows: list, me: int) -> dict[int, str]:
+    """IM-060 会话列表上写「在和谁聊」：私聊是对方的昵称，任务会话是任务标题，群是群名。
+
+    V140 真浏览器演示里，列表上只有「私聊 #2」「任务会话 #1」，发起会话还要填对方的用户 ID——
+    用户不知道自己在和谁说话。名字一次取齐（与会话数无关的两条查询，115 号闸门守着）。
+    """
+    from app.modules.task.models import Task
+
+    peers = {c.id: next((p for p in c.participants if p != me), me) for c in rows if c.kind == "direct"}
+    names = {u.id: ("已注销用户" if u.is_deleted else u.nickname)
+             for u in db.query(User).filter(User.id.in_(set(peers.values()) or [-1]))}
+    tasks = dict(db.query(Task.id, Task.title).filter(Task.id.in_({c.task_id for c in rows if c.task_id} or [-1])))
+    out = {}
+    for c in rows:
+        if c.kind == "direct":
+            out[c.id] = names.get(peers[c.id], "对方")
+        elif c.task_id:
+            out[c.id] = f"任务：{tasks.get(c.task_id, c.task_id)}"
+        else:
+            out[c.id] = c.name or "群聊"
+    return out
+
+
+@router.get("/conversations")
+def my_conversations(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """IM-010 会话列表附未读数与最后一条消息预览（聊天列表标配）。"""
+    from sqlalchemy import func, select
+
+    # CONC-066 改造前：读出全平台所有会话、在 Python 里挑自己的，再对每个会话各查两次（未读、最后一条）。
+    # 现在：成员表按 user_id 走索引；未读与最后一条各一次分组查询。条数与会话数无关
+    from .models import ConversationMember, ConversationRead
+
+    rows = (db.query(Conversation)
+            .join(ConversationMember, ConversationMember.conversation_id == Conversation.id)
+            .filter(ConversationMember.user_id == user.id)
+            .order_by(Conversation.id.desc()).all())
+    ids = [c.id for c in rows] or [-1]
+    unread = dict(
+        db.query(Message.conversation_id, func.count(Message.id))
+        .outerjoin(ConversationRead, (ConversationRead.conversation_id == Message.conversation_id)
+                   & (ConversationRead.user_id == user.id))
+        .filter(Message.conversation_id.in_(ids), Message.sender_id != user.id,  # 自己发的不算未读
+                Message.id > func.coalesce(ConversationRead.last_read_message_id, 0))
+        .group_by(Message.conversation_id).all())
+    last_ids = (select(func.max(Message.id)).where(Message.conversation_id.in_(ids))
+                .group_by(Message.conversation_id))
+    lasts = {m.conversation_id: m for m in db.query(Message).filter(Message.id.in_(last_ids))}
+    titles = _conv_titles(db, rows, user.id)
+    out = []
+    for c in rows:
+        last = lasts.get(c.id)
+        out.append({
+            **_dump_conv(c),
+            "title": titles[c.id],
+            "unread_count": int(unread.get(c.id, 0)),
+            "last_message": None if not last else {
+                "id": last.id, "sender_id": last.sender_id, "kind": last.kind,
+                "content": "[消息已撤回]" if last.recalled else last.content[:100],
+                "created_at": iso(last.created_at),
+            },
+        })
+    # 有未读的会话优先，其次按最后消息时间倒序（业界聊天列表排序）
+    out.sort(key=lambda x: (x["unread_count"] == 0,
+                            -(x["last_message"]["id"] if x["last_message"] else 0)))
+    return out
+
+
+@router.get("/conversations/unread-count")
+def im_unread_count(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """IM-010 全局未读消息数（聊天 Tab 红点）。"""
+    from sqlalchemy import func
+
+    # CONC-066 同会话列表：此前读出全平台所有会话、逐个各查一次未读
+    from .models import ConversationMember, ConversationRead
+
+    total = (
+        db.query(func.count(Message.id))
+        .join(ConversationMember, (ConversationMember.conversation_id == Message.conversation_id)
+              & (ConversationMember.user_id == user.id))
+        .outerjoin(ConversationRead, (ConversationRead.conversation_id == Message.conversation_id)
+                   & (ConversationRead.user_id == user.id))
+        .filter(Message.sender_id != user.id,
+                Message.id > func.coalesce(ConversationRead.last_read_message_id, 0))
+        .scalar()
+    ) or 0
+    return {"unread": total}
+
+
+@router.post("/conversations/{conv_id}/read")
+def mark_conversation_read(
+    conv_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
+    """IM-010 标记会话已读（推进已读位点到最新一条）。"""
+    from app.modules.account.models import utcnow
+
+    from .models import ConversationRead
+
+    _get_conv(db, conv_id, user)  # 复用参与者鉴权
+    last = (
+        db.query(Message).filter(Message.conversation_id == conv_id)
+        .order_by(Message.id.desc()).first()
+    )
+    last_id = last.id if last else 0
+    row = (
+        db.query(ConversationRead)
+        .filter(ConversationRead.conversation_id == conv_id,
+                ConversationRead.user_id == user.id)
+        .first()
+    )
+    if not row:
+        row = ConversationRead(conversation_id=conv_id, user_id=user.id, last_read_message_id=0)
+    row.last_read_message_id = max(row.last_read_message_id or 0, last_id)
+    row.updated_at = utcnow()
+    db.add(row)
+    return {"conversation_id": conv_id, "last_read_message_id": row.last_read_message_id}
+
+
+@router.post("/conversations/direct")
+def open_direct(body: DirectIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    if body.user_id == user.id:
+        raise forbidden("不能和自己聊天")
+    if not db.get(User, body.user_id):
+        raise not_found("用户不存在")
+    from app.modules.account.service import is_blocked_between
+
+    if is_blocked_between(db, user.id, body.user_id):  # ACC-033
+        raise forbidden("对方不可用", "blocked")
+    return _dump_conv(service.get_or_create_direct(db, user.id, body.user_id))
+
+
+ADMIN_REASON_MIN = 8
+
+
+def _get_conv(db: Session, conv_id: int, user: User, admin_reason: str | None = None) -> Conversation:
+    """会话鉴权。**参与者**能读能写；管理员**只能读**，而且必须写明理由、进审计（SEC-061）。
+
+    改造前这里是「参与者或管理员」一句话放行：任何管理员都能读任何人的私聊（连撤回的内容一起），
+    还能**往别人的私聊里发消息**，而且不留任何痕迹。授权总表（docs/AUTHZ-MATRIX.md）对这一项的明文是：
+    默认不可；仅在纠纷举证、举报核查、法定调取时由管理员写明理由读取，每一次都进审计。
+    `admin_reason=None` 表示这是一个写操作：非参与者一律拒绝，管理员也不例外。
+    """
+    conv = db.get(Conversation, conv_id)
+    if not conv:
+        raise not_found("会话不存在")
+    if user.id in conv.participants:
+        return conv
+    if not user.is_admin or admin_reason is None:
+        raise forbidden()
+    # SEC-061b 事前按角色拦（141 号 spec）：只有仲裁（纠纷举证）与合规（举报核查、法定调取）能读
+    from app.core.admin_roles import has_role
+
+    if not has_role(user, "arbiter", "compliance"):
+        raise forbidden("查看他人私聊只有「仲裁」或「合规」角色的管理员可以（写明理由、进审计）", "admin_role_required")
+    reason = admin_reason.strip()
+    if len(reason) < ADMIN_REASON_MIN:
+        raise forbidden("管理员查看他人私聊必须写明理由（纠纷举证 / 举报核查 / 法定调取），并会记入审计",
+                        "admin_access_reason_required")
+    from app.modules.admin.router import record_audit
+
+    record_audit(db, user.id, "read_private_conversation", "conversation", conv.id, reason)
+    return conv
+
+
+@router.post("/conversations/{conv_id}/messages", status_code=201)
+def send_message(
+    conv_id: int, body: MessageIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
+    conv = _get_conv(db, conv_id, user)
+    # IM-003 禁言必须在这里生效。只把名单存进 `muted` 而不在发消息处读它，
+    # 就是「建好了没接上」——群主以为禁言了，被禁言的人照发不误。
+    if conv.kind == "group" and user.id in (conv.muted or []):
+        raise forbidden("你已被群主禁言", "muted_in_group")
+    if conv.kind == "direct":
+        from app.modules.account.service import is_blocked_between
+
+        other = next((p for p in conv.participants if p != user.id), None)
+        if other and is_blocked_between(db, user.id, other):
+            raise forbidden("对方不可用", "blocked")
+    msg = service.send(db, conv, user.id, body.content)
+    return {
+        "id": msg.id,
+        "risk_flagged": msg.risk_flagged,
+        # IM-006 命中风控时给发送方提示（教育型而非拦截型）
+        "warning": "请勿引导站外交易，脱离平台交易将失去资金保障" if msg.risk_flagged else None,
+    }
+
+
+@router.post("/conversations/{conv_id}/quote-cards", status_code=201)
+def send_quote_card(
+    conv_id: int, body: QuoteCardIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
+    """IM-009 发送报价卡（结构化 JSON 内容，前端渲染为卡片）。
+
+    V144 两端接上之前补的校验：报价对应的任务必须真实存在、且与这次对话有关——
+    发布方报自己的单（「我出这个价请你做」），或者对方是这单的发布方（「这单我报这个价」）；
+    后一种要求任务还在招募。卡片里存一份任务标题与发起方角色的快照，两端不用再查一次就能画出来。
+    """
+    import json
+
+    from app.modules.task.models import Task
+
+    conv = _get_conv(db, conv_id, user)
+    task = db.get(Task, body.task_id)
+    if task is None:
+        raise not_found("任务不存在")
+    from_creator = task.creator_id == user.id
+    if not from_creator:
+        if task.creator_id not in conv.participants:
+            raise bad_request("报价要发给这单的发布方", "quote_wrong_party")
+        # 这单自己的任务会话里不限状态（成交后为追加的活报价是原有用法，保留）；在别处报价要求还在招募
+        if conv.task_id != task.id and task.status != "published":
+            raise conflict("这单已经不在招募中", "task_closed")
+    payload = json.dumps(
+        {"task_id": body.task_id, "price_cents": body.price_cents, "note": body.note,
+         "title": task.title, "from_creator": from_creator},
+        ensure_ascii=False,
+    )
+    msg = service.send(db, conv, user.id, payload, kind="quote")
+    return {"id": msg.id, "kind": "quote"}
+
+
+@router.get("/conversations/{conv_id}/messages")
+def list_messages(conv_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
+                  reason: str = Query(default="", max_length=300)):
+    conv = _get_conv(db, conv_id, user, admin_reason=reason)
+    # IM-004 撤回消息展示层隐藏；只有**走审计的管理员读取**（不是参与者）能看到原文——
+    # 此前按 is_admin 判断：一个管理员在**自己的**私聊里能看到对方撤回的内容
+    audited = user.id not in conv.participants
+    rows = db.query(Message).filter(Message.conversation_id == conv.id).order_by(Message.id).all()
+    return [
+        {"id": m.id, "sender_id": m.sender_id, "kind": m.kind,
+         "content": "[消息已撤回]" if m.recalled and not audited else m.content,
+         "recalled": m.recalled,
+         "risk_flagged": m.risk_flagged, "created_at": iso(m.created_at)}
+        for m in rows
+    ]
+
+
+@router.post("/messages/{message_id}/recall")
+def recall_message(message_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """IM-004：发送者 2 分钟内可撤回；任务会话保留后台审计副本。"""
+    from datetime import timedelta
+
+    from app.modules.account.models import utcnow
+
+    msg = db.get(Message, message_id)
+    if not msg:
+        raise not_found("消息不存在")
+    if msg.sender_id != user.id:
+        raise forbidden("仅发送者可撤回")
+    if msg.recalled:
+        raise forbidden("已撤回", "already_recalled")
+    if utcnow() - msg.created_at > timedelta(minutes=2):
+        raise forbidden("超过 2 分钟不可撤回", "recall_window_expired")
+    msg.recalled = True
+    db.add(msg)
+    return {"ok": True}
