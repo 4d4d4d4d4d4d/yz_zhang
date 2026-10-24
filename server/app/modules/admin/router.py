@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_job_auth
 from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.core.locks import job_slot
 from app.modules.account.models import User, utcnow
@@ -2150,6 +2150,15 @@ def run_escalate_tickets(_triggered_by: int = Depends(_job_or_admin),
     from app.modules.support.escalation import escalate_overdue
 
     return escalate_overdue(db)
+
+
+@router.post("/admin/jobs/remind-holiday-import")
+def run_remind_holiday_import(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                              __=Depends(job_slot("holiday_import_reminders"), scope="function")):
+    """ESCA-074（293 号 spec）每年 11 月到次年 1 月，下一年的放假安排还没录时每周提醒主管导入。"""
+    from app.modules.support.escalation import remind_holiday_import
+
+    return remind_holiday_import(db)
 
 
 # ------------------------------------------------------------------ SEC-061b 管理员与角色（141 号 spec）

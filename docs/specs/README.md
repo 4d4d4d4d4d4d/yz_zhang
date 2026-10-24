@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 293 | 每年 11 月前后提醒主管导入放假通知 | [293-holiday-import-reminder.md](./293-holiday-import-reminder.md) | P0 |
 | 292 | 知识临期时直接通知写这个包的运营 | [292-pack-expiry-reminders.md](./292-pack-expiry-reminders.md) | P0 |
 | 291 | 缴库草稿等确认超过 3 天提醒财务 | [291-tax-remit-reminders.md](./291-tax-remit-reminders.md) | P0 |
 | 290 | 测试 fixture 由 conftest 共享，F811 扩到 tests | [290-shared-fixtures.md](./290-shared-fixtures.md) | P0 |

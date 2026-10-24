@@ -56,3 +56,43 @@ def test_bulk_is_all_or_nothing_and_only_for_supervisors(client):
     assert client.post(BULK, json={"items": []}, headers=auth(boss)).status_code == 422
     off_with_wd = client.post(BULK, json={"items": [{**ITEMS[0], "as_weekday": 2}]}, headers=auth(boss))
     assert off_with_wd.json()["created"][0]["as_weekday"] is None, "放假的那天不带按周几"
+
+
+# ---------------------------------------------------------------- ESCA-074（293 号 spec，V320）
+def test_supervisors_are_reminded_in_nov_to_jan_when_next_year_is_empty(client):
+    from datetime import date, datetime, timedelta
+
+    from app.modules.notification.models import Notification
+    from app.modules.support.escalation import remind_holiday_import
+    from tests.conftest import JOB_HEADERS
+    from tests.test_support_schedule import SCHED
+
+    boss = _admin(client, "13800380011", ["super"])
+    agent = _admin(client, "13800380012", ["support"])
+    nov = datetime(2026, 10, 31, 17, 0)                          # UTC 还是 10 月，北京时间已是 11-01 01:00
+
+    def run(now):
+        with SessionLocal() as db:
+            r = remind_holiday_import(db, now)
+            db.commit()
+            return r
+
+    assert run(nov)["reason"] == "没有客服设排班，节假日不影响派单"
+    client.put(SCHED, json={"windows": [{"weekday": 0, "start": "09:00", "end": "18:00"}]}, headers=auth(agent))
+    assert run(datetime(2026, 10, 31, 15, 0))["reason"] == "不在提醒的月份", "UTC 10-31 15:00 是北京时间 10-31 23:00，还没到 11 月"
+    assert run(datetime(2026, 2, 3, 2, 0))["reason"] == "不在提醒的月份"
+    r = run(nov)
+    assert r == {"reminded": 1, "year": 2027}
+    with SessionLocal() as db:
+        n = db.query(Notification).filter(Notification.title == "该导入 2027 年的放假安排了").one()
+        assert n.user_id == boss["id"] and "按国务院放假通知导入" in n.body, "只提醒主管（客服不收）"
+        n.created_at = nov                                           # 让站内信的时间与这里的「现在」对齐
+        db.commit()
+    assert run(nov + timedelta(days=3))["reason"] == "这周已经提醒过"
+    assert run(datetime(2027, 1, 10, 2, 0))["year"] == 2027, "1 月提醒的是当年"
+    with SessionLocal() as db:
+        db.add(SupportHoliday(day=date(2027, 1, 1), kind="off", label="元旦", created_by=boss["id"]))
+        db.commit()
+    assert run(datetime(2027, 1, 20, 2, 0))["reason"] == "2027 年已经录过"
+    assert client.post(f"{API}/admin/jobs/remind-holiday-import").status_code == 403, "没有 job 密钥被拒"
+    assert client.post(f"{API}/admin/jobs/remind-holiday-import", headers=JOB_HEADERS).status_code == 200

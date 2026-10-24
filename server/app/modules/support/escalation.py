@@ -129,6 +129,44 @@ def holidays(db: Session) -> dict:
     return {h.day: (h.kind, h.as_weekday) for h in db.query(SupportHoliday).all()}
 
 
+# ESCA-074（293 号 spec）国务院一般在每年 11 月前后发下一年的放假通知；11 月到次年 1 月之间，
+# 目标年份一天都没录、又有客服设了排班时，每周提醒一次主管去导入
+HOLIDAY_REMIND_MONTHS = (11, 12, 1)
+HOLIDAY_REMIND_TITLE = "该导入 {year} 年的放假安排了"
+
+
+def remind_holiday_import(db: Session, now: datetime | None = None) -> dict:
+    from datetime import date, timedelta
+
+    from app.modules.notification.models import Notification
+    from app.modules.notification.service import notify
+    from app.modules.workbench.service import local
+
+    from .models import SupportAgentScope, SupportHoliday
+
+    now = now or utcnow()
+    today = local(now).date()
+    if today.month not in HOLIDAY_REMIND_MONTHS:
+        return {"reminded": 0, "reason": "不在提醒的月份"}
+    year = today.year + 1 if today.month >= 11 else today.year
+    if db.query(SupportHoliday.id).filter(SupportHoliday.day >= date(year, 1, 1),
+                                          SupportHoliday.day <= date(year, 12, 31)).first() is not None:
+        return {"reminded": 0, "reason": f"{year} 年已经录过"}
+    if not any(s.schedule for s in db.query(SupportAgentScope).all()):
+        return {"reminded": 0, "reason": "没有客服设排班，节假日不影响派单"}
+    title = HOLIDAY_REMIND_TITLE.format(year=year)
+    if db.query(Notification.id).filter(Notification.title == title,
+                                        Notification.created_at >= now - timedelta(days=7)).first() is not None:
+        return {"reminded": 0, "reason": "这周已经提醒过"}
+    bosses = [u.id for u in db.query(User).filter(User.is_admin.is_(True), User.is_banned.is_(False)).order_by(User.id)
+              if "super" in roles_of(u)]
+    for uid in bosses:
+        notify(db, uid, "system", title,
+               f"{year} 年的节假日 / 调休还一天都没录，放假那天排了班的客服会照常被派单。国务院的放假通知发布后，"
+               "到管理后台「客服状态 → 节假日日历 → 按国务院放假通知导入」贴原文、核对后保存。")
+    return {"reminded": len(bosses), "year": year}
+
+
 def off_duty(scope, now: datetime, hol: dict | None = None) -> bool:
     """ESCA-065 暂停中，或 ESCA-068（260 号 spec）设了排班而现在（北京时间）不在任何一段里。"""
     if scope.paused_until is not None and scope.paused_until > now:

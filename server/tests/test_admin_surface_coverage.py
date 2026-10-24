@@ -198,6 +198,7 @@ ADMIN_EXEMPT: dict[str, str] = {
     "/admin/jobs/escalate-tickets": "工单超时升级由调度器按调度表每小时执行（150 号），不该由界面触发",
     "/admin/jobs/send-scheduled-announcements": "定时公告由调度器每 5 分钟发出（151 号），不该由界面触发",
     "/admin/jobs/remind-legal-reviews": "法律条目复核提醒由调度器每天发出（169 号），不该由界面触发",
+    "/admin/jobs/remind-holiday-import": "放假安排导入提醒由调度器每天检查、每周最多发一次（293 号），不该由界面触发",
     "/admin/jobs/anchor-audit-head": "审计链头每天由调度器写进存证链（156 号），不该由界面触发",
     "/admin/matching-config": "匹配权重是调参，不调用默认值，不卡任何人",
     "/admin/cities/{x}": "停用城市是收缩动作；开通（createCity）才是会卡住人的那一半",
