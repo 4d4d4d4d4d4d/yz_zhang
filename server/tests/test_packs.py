@@ -310,7 +310,9 @@ def test_responses_match_sdk_types(client, admins, requester):
     validation = client.post(f"{API}/admin/packs/validate", json={"definition": SEED}, headers=auth(a)).json()
     imported = client.post(f"{API}/admin/packs/import-seeds", headers=auth(a)).json()
     rows = client.get(f"{API}/admin/packs", headers=auth(a)).json()
-    pid = rows[0]["id"]
+    # 按 key 取，不按位置：种子包按 key 排序，新包的 key 排在 collab-basics 前面时 rows[0] 就不是它了
+    # （V313 的 appliance-cleaning、V337 的 career-coaching 都踩过）
+    pid = next(r["id"] for r in rows if r["key"] == "collab-basics")
     updated = client.put(f"{API}/admin/packs/{pid}", json={"definition": SEED}, headers=auth(a)).json()
     submitted = client.post(f"{API}/admin/packs/{pid}/submit", headers=auth(a)).json()
     rejected = client.post(f"{API}/admin/packs/{pid}/reject", headers=auth(b)).json()

@@ -48,7 +48,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     {"name": "数码维修与回收"}, {"name": "陪驾", "required_cert": DRIVER_CERT},
                     # 「搬家」「母婴护理」——第十三轮场景发掘（306 号 spec，V333）；母婴护理要审核通过的健康证明
                     # SCN-181（307 号 spec）母婴护理照护的是新生儿：还要无犯罪记录证明（与陪练看护同一道关）
-                    {"name": "搬家"}, {"name": "母婴护理", "required_cert": HEALTH_CERT, "extra_certs": [MINOR_CARE_CERT]}]
+                    {"name": "搬家"}, {"name": "母婴护理", "required_cert": HEALTH_CERT, "extra_certs": [MINOR_CARE_CERT]},
+                    # 「管道疏通」「求职辅导」——第十四轮场景发掘（310 号 spec，V337）
+                    {"name": "管道疏通"}, {"name": "求职辅导"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
