@@ -200,7 +200,7 @@ def validate_publishable(task: Task, db: Session | None = None, reviewed: bool =
     assert_no_k12_tutoring(f"{task.title} {task.description}")   # SCN-143 中小学学科类家教不承接
     from app.modules.task.errand import assert_no_restricted_errand
 
-    assert_no_restricted_errand(f"{task.title} {task.description}")   # SCN-164 代开处方药、倒卖号源不承接
+    assert_no_restricted_errand(f"{task.title} {task.description}")   # SCN-164 代开处方药、倒卖号源，SCN-177 无证陪练学车不承接
     if not reviewed:
         hit = machine_review(task.title + " " + task.description, db)
         if hit:
