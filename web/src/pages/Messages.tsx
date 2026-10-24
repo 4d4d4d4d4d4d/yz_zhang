@@ -12,6 +12,8 @@ export default function Messages() {
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [warning, setWarning] = useState<string | null>(null);
+  // SCN-172（299 号 spec）只给发送的人看的心理援助热线
+  const [support, setSupport] = useState('');
   const [peer, setPeer] = useState('');
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export default function Messages() {
     });
     if (res) {
       setWarning(res.warning);
+      setSupport(res.support ?? '');
       setText('');
       setMsgs(await client.messages(active.id));
     }
@@ -108,6 +111,7 @@ export default function Messages() {
               ))}
             </div>
             {warning && <p className="error">⚠️ {warning}</p>}
+            {support && <p role="status" className="badge warn" data-testid="crisis-support">{support}</p>}
             <div className="row" style={{ marginTop: 8 }}>
               <input className="grow" value={text} onChange={(e) => setText(e.target.value)}
                      onKeyDown={(e) => e.key === 'Enter' && void send()} placeholder="输入消息…" />

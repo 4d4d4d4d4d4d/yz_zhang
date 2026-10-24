@@ -105,6 +105,10 @@ def create_ticket(body: TicketIn, user: User = Depends(get_current_user), db: Se
     from .escalation import auto_assign
 
     auto_assign(db, ticket)
+    # SCN-172（299 号 spec）工单里写下想伤害自己的话：给提单人一条热线（客服照常处理工单）
+    from app.core.crisis import nudge
+
+    nudge(db, user.id, f"{body.subject} {body.body}")
     # ESCA-060（229 号 spec）自选加急、而最近多数被改回一般的：照旧加急，回一句提示
     from .escalation import urgent_downgrades, urgent_hint
 

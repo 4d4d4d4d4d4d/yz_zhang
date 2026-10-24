@@ -429,11 +429,21 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
             service.transition(db, slot, "published")
         out = dump_task(task, user)
         out["slots"] = [dump_task(s, user) for s in slots]
+        _crisis_nudge(db, user.id, body)
         return out
     if body.publish_now:
         service.validate_publishable(task, db, reviewed=True)
         service.transition(db, task, "published")
+    _crisis_nudge(db, user.id, body)
     return dump_task(task, user)
+
+
+def _crisis_nudge(db: Session, user_id: int, body) -> None:
+    """SCN-172（299 号 spec）发单里写下想伤害自己的话：只给发单的人一条热线（不拦）。放在机审之后——
+    审核要调外部供应商，之前写库会把事务挂过外部调用（CONC-067）。"""
+    from app.core.crisis import nudge
+
+    nudge(db, user_id, f"{body.title} {body.description}")
 
 
 MAX_SLOTS = 50

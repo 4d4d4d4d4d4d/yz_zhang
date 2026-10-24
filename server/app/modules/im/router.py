@@ -225,11 +225,16 @@ def send_message(
         if other and is_blocked_between(db, user.id, other):
             raise forbidden("对方不可用", "blocked")
     msg = service.send(db, conv, user.id, body.content)
+    # SCN-172（299 号 spec）写下想伤害自己的话：只给发送的人一条热线（不拦、不告诉对方），响应多一句
+    from app.core.crisis import CRISIS_ANSWER, nudge
+
+    crisis = nudge(db, user.id, body.content)
     return {
         "id": msg.id,
         "risk_flagged": msg.risk_flagged,
         # IM-006 命中风控时给发送方提示（教育型而非拦截型）
         "warning": "请勿引导站外交易，脱离平台交易将失去资金保障" if msg.risk_flagged else None,
+        **({"support": CRISIS_ANSWER} if crisis else {}),
     }
 
 

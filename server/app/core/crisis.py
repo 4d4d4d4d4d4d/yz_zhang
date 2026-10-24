@@ -14,3 +14,25 @@ CRISIS_ANSWER = ("如果你或身边的人现在有伤害自己的念头，请�
 
 def is_self_harm(text: str) -> bool:
     return bool(SELF_HARM.search(text or ""))
+
+
+NUDGE_TITLE = "需要的话，有人可以陪你聊聊"
+
+
+def nudge(db, user_id: int, text: str) -> bool:
+    """SCN-172（299 号 spec）发单、私聊、提工单时写下想伤害自己的话：只给写的这个人发一条站内信（热线），
+    不拦、不告诉对方、不上报；一天最多一次，免得反复打扰。"""
+    if not is_self_harm(text):
+        return False
+    from datetime import timedelta
+
+    from app.modules.account.models import utcnow
+    from app.modules.notification.models import Notification
+    from app.modules.notification.service import notify
+
+    recent = (db.query(Notification.id)
+              .filter(Notification.user_id == user_id, Notification.title == NUDGE_TITLE,
+                      Notification.created_at >= utcnow() - timedelta(hours=24)).first())
+    if recent is None:
+        notify(db, user_id, "system", NUDGE_TITLE, CRISIS_ANSWER)
+    return True

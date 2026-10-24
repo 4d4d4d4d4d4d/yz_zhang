@@ -1203,7 +1203,8 @@ export class PlatformClient {
     return this.request<Message[]>('GET', `/conversations/${convId}/messages`).then(listOf);
   }
   sendMessage(convId: number, content: string) {
-    return this.request<{ id: number; risk_flagged: boolean; warning: string | null }>(
+    // SCN-172（299 号 spec）`support`：发送的人写下想伤害自己的话时，只给他看的热线（只在这时出现）
+    return this.request<{ id: number; risk_flagged: boolean; warning: string | null; support?: string }>(
       'POST', `/conversations/${convId}/messages`, { content },
     );
   }

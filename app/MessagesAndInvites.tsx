@@ -85,6 +85,7 @@ function Thread({ client, convId, onBack }: {
   const [rows, setRows] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [warning, setWarning] = useState<string | null>(null);
+  const [support, setSupport] = useState('');
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -139,18 +140,21 @@ function Thread({ client, convId, onBack }: {
       ))}
       <TextInput style={s.input} value={text} onChangeText={setText} placeholder="说点什么" />
       <Button title="发送" onPress={async () => {
-        setError(''); setWarning(null);
+        setError(''); setWarning(null); setSupport('');
         try {
           const r = await client.sendMessage(convId, text);
           setText('');
           // IM-006 服务端的提醒原样显示，不自己编一句
           setWarning(r.warning);
+          // SCN-172（299 号 spec）只给发送的人看的心理援助热线
+          setSupport(r.support ?? '');
           await load();
         } catch (e) {
           setError(apiErrorText(e));
         }
       }} />
       {!!warning && <Text style={s.error}>⚠️ {warning}</Text>}
+      {!!support && <Text accessibilityLabel="心理援助热线" style={s.support}>{support}</Text>}
       {!!error && <Text style={s.error}>{error}</Text>}
     </ScrollView>
   );
@@ -252,6 +256,7 @@ const s = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 10, padding: 12, gap: 4 },
   muted: { color: '#6b7280', fontSize: 13 },
   error: { color: '#dc2626' },
+  support: { color: '#92400e', backgroundColor: '#fef3c7', borderRadius: 8, padding: 10 },
   link: { color: '#2f6fed', paddingVertical: 8 },
   input: { backgroundColor: '#fff', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#e5e7eb' },
 });
