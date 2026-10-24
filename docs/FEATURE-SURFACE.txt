@@ -276,6 +276,7 @@ api GET /api/v1/xapp/runs
 api GET /api/v1/xapp/runs/{run_id}
 api GET /docs
 api GET /docs/oauth2-redirect
+api GET /errorz
 api GET /healthz
 api GET /jobz
 api GET /metrics

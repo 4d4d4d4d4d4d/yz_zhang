@@ -47,12 +47,30 @@ def req(method: str, path: str, body=None, token: str = "", headers=None):
         sys.exit(2)
 
 
+def server_errors_text(limit: int = 3) -> str:
+    """DRILL-034（308 号 spec）断言失败时顺手取服务端最近的未处理异常：报的不再只是 `None == 18400`。
+    取不到（老版本没有 /errorz、令牌不对、连不上）时说清楚，不让这一步本身把失败信息盖掉。"""
+    try:
+        status, body = req("GET", BASE + f"/errorz?limit={limit}", headers={"X-Job-Token": JOB_TOKEN})
+    except SystemExit:
+        return "    （取不到服务端最近的错误：连不上）"
+    if status != 200 or not isinstance(body, dict):
+        return f"    （取不到服务端最近的错误：/errorz 返回 {status}）"
+    rows = body.get("errors") or []
+    if not rows:
+        return "    服务端最近没有未处理的异常（多半是业务校验没过，看上面的响应）"
+    return "\n".join(f"    {r.get('ts', '')} {r.get('method', '')} {r.get('path', '')} → {r.get('error', '')}: "
+                     f"{r.get('message', '')}（{r.get('where', '')}，request_id {r.get('request_id', '')}）" for r in rows)
+
+
 def step(name: str, ok: bool, detail=""):
     text = str(detail)
     if len(text) > 300:
         text = text[:300] + "…"
     print(f"  {'✓' if ok else '✗'} {name}{'  ' + text if text else ''}")
     if not ok:
+        print("  服务端最近的错误：")
+        print(server_errors_text())
         sys.exit(1)
 
 

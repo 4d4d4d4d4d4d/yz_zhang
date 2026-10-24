@@ -137,6 +137,35 @@ def _route_of(request) -> str:
     return getattr(route, "path", None) or UNMATCHED
 
 
+# DRILL-034（308 号 spec）最近的未处理异常（进程内、最多 RECENT_MAX 条、全部过脱敏）：闭环脚本断言失败时取来打印，
+# 不用再去翻 uvicorn 日志才看得出病因。只存类型、过脱敏的一句话与出错位置，不存请求体。
+RECENT_MAX = 20
+_recent_errors: list[dict] = []
+
+
+def record_error(exc: BaseException, method: str, path: str) -> None:
+    import traceback
+
+    from pathlib import Path
+
+    # 出错位置：最深的一帧本仓代码（第三方库不在 server/ 下，自然不算），写成相对 server/ 的路径
+    root = str(Path(__file__).resolve().parents[2]) + "/"
+    frames = traceback.extract_tb(exc.__traceback__)
+    where = next((f"{f.filename[len(root):]}:{f.lineno}" for f in reversed(frames)
+                  if f.filename.startswith(root)), "")
+    _recent_errors.append({
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "request_id": request_id_var.get(""),
+        "method": method, "path": path, "error": type(exc).__name__,
+        "message": redact(str(exc))[:300], "where": where,
+    })
+    del _recent_errors[:-RECENT_MAX]
+
+
+def recent_errors(limit: int = RECENT_MAX) -> list[dict]:
+    """新的在前。"""
+    return list(reversed(_recent_errors[-limit:]))
+
+
 class ObservabilityMiddleware(BaseHTTPMiddleware):
     """DEP-041 request_id 贯穿：入站生成或透传，随响应头返回。"""
 
@@ -150,11 +179,12 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
             status = response.status_code
             response.headers["X-Request-Id"] = rid
             return response
-        except Exception:
+        except Exception as exc:
             # 未处理异常在这里记一次：带 request_id、过脱敏、**带堆栈**。
             # uvicorn 随后那条不带 request_id 的重复记录由 _DropServerDuplicate 去掉
             logging.getLogger("app.error").exception(
                 "unhandled exception", extra={"path": _route_of(request), "method": request.method})
+            record_error(exc, request.method, _route_of(request))
             raise
         finally:
             elapsed = time.perf_counter() - started

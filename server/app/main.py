@@ -258,6 +258,14 @@ def create_app() -> FastAPI:
 
         return {"jobs": job_health(db)}
 
+    @app.get("/errorz")
+    def errorz(limit: int = 5, _=Depends(require_job_auth)):
+        """DRILL-034（308 号 spec）最近的未处理异常（新的在前、过脱敏）。与 /jobz 同一把令牌：
+        冒烟与闭环脚本断言失败时取来打印；进程重启即清空，不是日志的替代。"""
+        from app.core.observability import recent_errors
+
+        return {"errors": recent_errors(max(1, min(limit, 20)))}
+
     @app.get("/healthz")
     def healthz():
         """DEP-010 存活探针：不查任何外部依赖，永远快速返回。"""

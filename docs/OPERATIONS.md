@@ -137,7 +137,7 @@ python -m scripts.loadtest --concurrency 16 --requests 600 --scenario read
 python -m scripts.loadtest --concurrency 16 --requests 400 --scenario write
 ```
 
-这套组合已被 **2426 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
+这套组合已被 **2431 个测试**覆盖，其中 `test_concurrency_guards.py` 专门验证
 「重复接受报名 / 重复托管 / 重复交付 / 重复验收 / 重复里程碑放款」全部拒绝且零副作用。
 
 ### 2.2 多副本并发安全（V42 已补齐，见 [18-concurrency.md](specs/18-concurrency.md)）
@@ -440,6 +440,7 @@ cd server && python -m scripts.scrub_experience             # 真的改，逐条
 | `/version` | git sha / 版本 / 环境 | 无 |
 | `/metrics` | Prometheus：请求量、延迟分位、**托管中金额 / 待提现 / 未结纠纷** | `X-Job-Token` |
 | `/jobz` | 各 job 上次成功时间与最近错误 | `X-Job-Token` |
+| `/errorz` | 最近的未处理异常（过脱敏、最多 20 条、进程重启清空；冒烟失败时自动打印，308 号） | `X-Job-Token` |
 | `/api/v1/events/health` | 待补做与死信的事件投递数（按 handler 聚合） | `X-Job-Token` |
 | `/api/v1/events/dead-letters` | 需人工处理的投递明细 | 管理员登录 |
 
@@ -662,7 +663,7 @@ Postgres 双引擎迁移检查与部署验收。
 **已经很扎实的**：交易闭环、资金安全与守恒、纠纷程序正义、账号安全、审计留痕、
 多副本并发安全、外部供应商可替换性、事件投递的失败隔离与可补做、
 个税代扣的资金隔离与可对账、反洗钱的可疑识别与保密、边界防护的跨副本一致性、
-定时任务编排的完整性、处置动作的一致性。这些有 2426 个测试钉着。
+定时任务编排的完整性、处置动作的一致性。这些有 2431 个测试钉着。
 
 **离真正上线还差的**（按紧迫度）：
 1. ~~Postgres + 行锁/乐观锁~~ —— **V42 已完成**（切库只改环境变量）

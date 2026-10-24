@@ -50,6 +50,20 @@ def _free(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) != 0
 
 
+def _server_errors(limit: int = 3) -> list[str]:
+    """DRILL-034（308 号 spec）服务端最近的未处理异常（过脱敏）：失败时与浏览器侧的结论一起打印，
+    不用再去翻 uvicorn 日志。取不到时返回一句说明，不让这一步把失败本身盖掉。"""
+    token = os.environ.get("PLATFORM_JOB_TOKEN", "dev-job-token-change-me")
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{API_PORT}/errorz?limit={limit}", headers={"X-Job-Token": token})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            rows = json.loads(resp.read().decode()).get("errors") or []
+    except Exception as exc:  # noqa: BLE001 - 取不到就说取不到
+        return [f"（取不到服务端最近的错误：{type(exc).__name__}）"]
+    return [f"{r.get('method', '')} {r.get('path', '')} → {r.get('error', '')}: {r.get('message', '')}"
+            f"（{r.get('where', '')}）" for r in rows] or ["服务端没有未处理的异常"]
+
+
 def _wait(url: str, timeout: float = 60) -> None:
     end = time.time() + timeout
     while time.time() < end:
@@ -473,6 +487,8 @@ def main() -> int:
                     if r.status >= 400 else None)
             results = _checks(page, f"139{int(time.time()) % 100000000:08d}")
             browser.close()
+        # 服务端关掉之前先取：进程一退，最近的错误就没了
+        server_errors = _server_errors()
     finally:
         httpd.shutdown()
         api.terminate()
@@ -506,6 +522,10 @@ def main() -> int:
         # 记下来而不判失败：不说出来的话，真正的问题就藏在这堆噪音里
         print("  · 其他 4xx（可能是正常的「没有这条记录」）："
               + json.dumps(sorted(set(noted))[:4], ensure_ascii=False))
+    if bad:
+        print("  服务端最近的错误：")
+        for line in server_errors:
+            print(f"    {line}")
     print("联调通过：构建产物与真服务端能对接。" if not bad else f"{bad} 项未通过。")
     return 1 if bad else 0
 
