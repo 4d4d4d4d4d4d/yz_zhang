@@ -1,5 +1,6 @@
 // SCN-166（297 号 spec）App 上的交付文件：先看预览，原图锁着时说几张、放款后提示去网页版下载。
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { PlatformClient } from '@platform/core';
 import { DeliverablesList } from './deliverables';
 
@@ -30,5 +31,40 @@ describe('SCN-166 App 交付文件', () => {
     render(<DeliverablesList client={c} contractId={4} />);
     await waitFor(() => expect(spy).toHaveBeenCalledWith(4));
     expect(screen.queryByLabelText('交付文件')).toBeNull();
+  });
+
+  it('SCN-168 执行方在托管期间：原图按原质量上传后挂到合约上；超 2MB 本地先拦', async () => {
+    const calls: Array<{ method: string; path: string; body: unknown }> = [];
+    const fetchImpl = (async (url: string, init?: { method?: string; body?: string }) => {
+      const path = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+      const method = init?.method ?? 'GET';
+      calls.push({ method, path, body: init?.body ? JSON.parse(init.body) : null });
+      const body = path === '/files' ? { url: '/api/v1/files/n', ref: 'newref123' }
+        : method === 'POST' ? { ...O, id: 10 } : [];
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    }) as unknown as typeof fetch;
+    const c = new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl });
+    const perm = jest.spyOn(ImagePicker, 'requestMediaLibraryPermissionsAsync').mockResolvedValue({ status: 'granted' } as never);
+    const pick = jest.spyOn(ImagePicker, 'launchImageLibraryAsync')
+      .mockResolvedValueOnce({ canceled: false, assets: [{ base64: 'A'.repeat(4 * 1024 * 1024), mimeType: 'image/jpeg' }] } as never)
+      .mockResolvedValueOnce({ canceled: false, assets: [{ base64: 'iVBORw0KGgo=', mimeType: 'image/png' }] } as never);
+    try {
+      render(<DeliverablesList client={c} contractId={3} isExecutor live />);
+      fireEvent.press(await screen.findByText('上传原图'));
+      expect(await screen.findByText('单个文件最大 2MB：请压缩后再传')).toBeTruthy();
+      expect(calls.some((x) => x.path === '/files')).toBe(false);
+      fireEvent.press(screen.getByText('上传原图'));
+      await waitFor(() => expect(calls.find((x) => x.method === 'POST' && x.path === '/contracts/3/deliverables')?.body)
+        .toEqual({ ref: 'newref123', kind: 'original' }));
+      expect(pick.mock.calls[1][0]).toMatchObject({ quality: 1, base64: true });
+    } finally {
+      perm.mockRestore(); pick.mockRestore();
+    }
+  });
+
+  it('不是执行方或合约不在托管中时没有上传按钮', async () => {
+    render(<DeliverablesList client={client([P])} contractId={3} isExecutor={false} live />);
+    await screen.findByLabelText('预览');
+    expect(screen.queryByText('上传原图')).toBeNull();
   });
 });
