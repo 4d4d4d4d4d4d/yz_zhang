@@ -2362,39 +2362,50 @@ def grant_temporary_role(user_id: int, body: TempRoleIn, admin: User = Depends(r
 
     不能临时给「超级管理员」（那是能再分配角色的权限，要长期、明确地给）；只能加在至少有一个长期角色的人身上——
     否则到期后他的角色列表变空，会被当成「未分级」。"""
-    from datetime import timedelta
-
-    from app.core.admin_roles import ROLES, temporary_expired
-    from app.core.timefmt import iso
-    from app.modules.notification.service import notify
-
     target = db.get(User, user_id)
     if target is None or not target.is_admin or target.is_deleted:
         raise not_found("这个用户不是管理员：管理员身份由运维开通，这里只分配角色", "admin_target_not_admin")
-    if body.role not in ROLES:
-        raise bad_request(f"不认识的角色：{body.role}", "admin_role_unknown")
-    if body.role == "super":
+    _check_temp_role(target, body.role)
+    _grant_temp(db, admin, target, body.role, body.hours, body.reason.strip())
+    db.commit()
+    return _admin_row(target)
+
+
+def _check_temp_role(target: User, role: str) -> None:
+    """SEC-061e 临时角色的规则（直接授予与 SEC-061i 申请共用一份）。"""
+    from app.core.admin_roles import ROLES
+
+    if role not in ROLES:
+        raise bad_request(f"不认识的角色：{role}", "admin_role_unknown")
+    if role == "super":
         raise bad_request("超级管理员不能临时给：它能再分配角色，要长期、明确地给", "admin_temp_super_forbidden")
     until = dict(target.admin_role_until or {})
     permanent = [r for r in (target.admin_roles or []) if r in ROLES and r not in until]
     if not permanent:
         raise conflict("临时角色只能加在已经分好级的管理员身上（至少一个长期角色），否则到期后他会被当成未分级",
                        "admin_temp_needs_permanent")
-    if body.role in permanent:
+    if role in permanent:
         raise conflict("他已经长期有这个角色了", "admin_role_already_permanent")
-    expires = utcnow() + timedelta(hours=body.hours)
+
+
+def _grant_temp(db: Session, admin: User, target: User, role: str, hours: int, reason: str) -> None:
+    from datetime import timedelta
+
+    from app.core.admin_roles import ROLES, temporary_expired
+    from app.core.timefmt import iso
+    from app.modules.notification.service import notify
+
+    until = dict(target.admin_role_until or {})
+    expires = utcnow() + timedelta(hours=hours)
     roles = [r for r in (target.admin_roles or []) if not (r in until and temporary_expired(target, r))]
-    if body.role not in roles:
-        roles.append(body.role)
+    if role not in roles:
+        roles.append(role)
     until = {r: v for r, v in until.items() if r in roles and not temporary_expired(target, r)}
-    until[body.role] = iso(expires)
+    until[role] = iso(expires)
     target.admin_roles, target.admin_role_until = sorted(roles), until
-    record_audit(db, admin.id, "grant_temporary_role", "user", target.id,
-                 f"{body.role} 到 {iso(expires)}：{body.reason.strip()}")
-    notify(db, target.id, "system", f"你被临时授予「{ROLES[body.role].split('：')[0]}」角色",
-           f"到 {iso(expires)} 自动失效。理由：{body.reason.strip()}")
-    db.commit()
-    return _admin_row(target)
+    record_audit(db, admin.id, "grant_temporary_role", "user", target.id, f"{role} 到 {iso(expires)}：{reason}")
+    notify(db, target.id, "system", f"你被临时授予「{ROLES[role].split('：')[0]}」角色",
+           f"到 {iso(expires)} 自动失效。理由：{reason}")
 
 
 @router.post("/admin/admins/{user_id}/temporary-roles/{role}/revoke")
@@ -2413,4 +2424,109 @@ def revoke_temporary_role(user_id: int, role: str, admin: User = Depends(require
     record_audit(db, admin.id, "revoke_temporary_role", "user", target.id, role)
     db.commit()
     return _admin_row(target)
+
+
+# ------------------------------------------------------------------ SEC-061i 临时角色的申请与审批（315 号 spec）
+class RoleRequestIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    role: str = Field(min_length=2, max_length=20)
+    hours: int = Field(ge=1, le=TEMP_MAX_HOURS)
+    reason: str = Field(min_length=2, max_length=200)
+
+
+class RoleRequestRejectIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    note: str = Field(min_length=2, max_length=200)
+
+
+def _role_request_row(db: Session, r) -> dict:
+    who = db.get(User, r.user_id)
+    row = {"id": r.id, "user_id": r.user_id, "nickname": who.nickname if who else "", "role": r.role, "hours": r.hours,
+           "reason": r.reason, "status": r.status, "created_at": iso(r.created_at)}
+    if r.status != "pending":
+        row.update({"decided_by": r.decided_by, "decided_at": iso(r.decided_at) if r.decided_at else None,
+                    "decision_note": r.decision_note})
+    return row
+
+
+@router.post("/admin/role-requests", status_code=201)
+def request_temporary_role(body: RoleRequestIn, user: User = Depends(require_role(*ANY)),
+                           db: Session = Depends(get_db, scope="function")):
+    """值班、顶岗要用别的角色：本人申请、写理由，另一位超级管理员批了才生效（与直接授予同一套规则）。"""
+    from app.core.admin_roles import ROLES, roles_of
+    from app.modules.notification.service import notify
+
+    from .models import AdminRoleRequest
+
+    _check_temp_role(user, body.role)
+    if db.query(AdminRoleRequest).filter(AdminRoleRequest.user_id == user.id, AdminRoleRequest.role == body.role,
+                                         AdminRoleRequest.status == "pending").first():
+        raise conflict("这个角色你已经申请过、还在等批：等超级管理员处理，或者请他直接授予", "role_request_pending")
+    r = AdminRoleRequest(user_id=user.id, role=body.role, hours=body.hours, reason=body.reason.strip())
+    db.add(r)
+    db.flush()
+    record_audit(db, user.id, "request_temporary_role", "admin_role_request", r.id,
+                 f"{body.role} {body.hours} 小时：{r.reason}")
+    label = ROLES[body.role].split("：")[0]
+    for u in db.query(User).filter(User.is_admin.is_(True), User.is_deleted.is_(False), User.id != user.id):
+        if "super" in roles_of(u):
+            notify(db, u.id, "system", f"{user.nickname} 申请临时「{label}」角色",
+                   f"{body.hours} 小时。理由：{r.reason}。去「管理员与角色」批准或驳回。")
+    return _role_request_row(db, r)
+
+
+@router.get("/admin/role-requests")
+def list_role_requests(user: User = Depends(require_role(*ANY)), db: Session = Depends(get_db, scope="function")):
+    """超级管理员看全部（待批的在前，再加最近处理过的 20 条）；其他管理员只看自己的。"""
+    from app.core.admin_roles import roles_of
+
+    from .models import AdminRoleRequest
+
+    q = db.query(AdminRoleRequest)
+    if "super" not in roles_of(user):
+        q = q.filter(AdminRoleRequest.user_id == user.id)
+    pending = q.filter(AdminRoleRequest.status == "pending").order_by(AdminRoleRequest.id).all()
+    done = q.filter(AdminRoleRequest.status != "pending").order_by(AdminRoleRequest.id.desc()).limit(20).all()
+    return [_role_request_row(db, r) for r in [*pending, *done]]
+
+
+def _pending_request(db: Session, request_id: int, admin: User):
+    from .models import AdminRoleRequest
+
+    r = db.get(AdminRoleRequest, request_id)
+    if r is None:
+        raise not_found("没有这条申请")
+    if r.status != "pending":
+        raise conflict("这条申请已经处理过了", "role_request_decided")
+    if r.user_id == admin.id:
+        raise forbidden("不能批自己的申请：请另一位超级管理员来处理", "role_request_self")
+    return r
+
+
+@router.post("/admin/role-requests/{request_id}/approve")
+def approve_role_request(request_id: int, admin: User = Depends(require_role("super")),
+                         db: Session = Depends(get_db, scope="function")):
+    """批准：按申请的角色与时长临时授予（同一套规则、同一条审计），从批准这一刻起算。"""
+    r = _pending_request(db, request_id, admin)
+    target = db.get(User, r.user_id)
+    if target is None or not target.is_admin or target.is_deleted:
+        raise not_found("申请人已经不是管理员了", "admin_target_not_admin")
+    _check_temp_role(target, r.role)          # 申请之后情况可能变了（比如已经长期给了）
+    _grant_temp(db, admin, target, r.role, r.hours, f"申请 #{r.id}：{r.reason}")
+    r.status, r.decided_by, r.decided_at = "approved", admin.id, utcnow()
+    db.commit()
+    return _role_request_row(db, r)
+
+
+@router.post("/admin/role-requests/{request_id}/reject")
+def reject_role_request(request_id: int, body: RoleRequestRejectIn, admin: User = Depends(require_role("super")),
+                        db: Session = Depends(get_db, scope="function")):
+    from app.modules.notification.service import notify
+
+    r = _pending_request(db, request_id, admin)
+    r.status, r.decided_by, r.decided_at, r.decision_note = "rejected", admin.id, utcnow(), body.note.strip()
+    record_audit(db, admin.id, "reject_role_request", "admin_role_request", r.id, r.decision_note)
+    notify(db, r.user_id, "system", "你的临时角色申请没有通过", f"理由：{r.decision_note}")
+    db.commit()
+    return _role_request_row(db, r)
 

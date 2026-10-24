@@ -1,5 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
+  AdminRoleRequest,
   Category,
   AssistantContract, SkillConceptAdminView, SkillConceptList, SkillConceptRow, SkillNormalizeResult, Cockpit, CapabilityProfile, SandboxModelAdminRow, SandboxModelInput, SandboxModelList, SandboxState, InfluenceLeaderboard, InfluenceMine, InfluenceLatestSnapshot, InfluenceProof, InfluencePublic, InfluenceVouchInput, InfluenceVouchRow, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, GigRouteInput, GigRouteView, VentureSentInvitation, AdminTicketDetail, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarKnowledgeDraft, RadarSignal, LegalFaqInput, LegalFaqRow, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineHealth, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbRunStatus, WbStatus, WbStep,
   CommercialReadiness,
@@ -1692,6 +1693,20 @@ export class PlatformClient {
   }
   revokeTemporaryAdminRole(userId: number, role: AdminRoleKey) {
     return this.request<AdminRow>('POST', `/admin/admins/${userId}/temporary-roles/${role}/revoke`);
+  }
+  /** SEC-061i（315 号 spec）申请临时角色：写理由，另一位超级管理员批准后生效 */
+  requestTemporaryAdminRole(role: AdminRoleKey, hours: number, reason: string) {
+    return this.request<AdminRoleRequest>('POST', '/admin/role-requests', { role, hours, reason });
+  }
+  /** 超级管理员看全部（待批的在前）；其他管理员只看自己的 */
+  adminRoleRequests() {
+    return this.request<AdminRoleRequest[]>('GET', '/admin/role-requests').then(listOf);
+  }
+  approveAdminRoleRequest(requestId: number) {
+    return this.request<AdminRoleRequest>('POST', `/admin/role-requests/${requestId}/approve`);
+  }
+  rejectAdminRoleRequest(requestId: number, note: string) {
+    return this.request<AdminRoleRequest>('POST', `/admin/role-requests/${requestId}/reject`, { note });
   }
   /** FIN-061 按期间的平台财务（144 号 spec） */
   platformFinancePeriods(params: PeriodQuery = {}) {

@@ -1,4 +1,4 @@
-import { apiErrorText, formatDateTime, type AdminList, type AdminRoleCatalog, type AdminRoleKey } from '@platform/core';
+import { apiErrorText, formatDateTime, type AdminList, type AdminRoleCatalog, type AdminRoleKey, type AdminRoleRequest } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from './store';
 
@@ -91,6 +91,69 @@ export function AdminRolesPanel() {
           </table>
         </>
       )}
+      <RoleRequests catalog={catalog} onChanged={() => void load()} />
+    </div>
+  );
+}
+
+const STATUS_LABEL: Record<AdminRoleRequest['status'], string> = { pending: '等批', approved: '已批准', rejected: '已驳回' };
+
+/** SEC-061i（315 号 spec）临时角色的申请与审批：本人申请、写理由；另一位超级管理员批准后才生效，驳回要写理由 */
+function RoleRequests({ catalog, onChanged }: { catalog: AdminRoleCatalog; onChanged: () => void }) {
+  const { client } = useApp();
+  const [rows, setRows] = useState<AdminRoleRequest[]>([]);
+  const [role, setRole] = useState('');
+  const [hours, setHours] = useState('48');
+  const [reason, setReason] = useState('');
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const isSuper = catalog.mine.includes('super');
+  const label = (k: string) => catalog.roles.find((r) => r.key === k)?.label ?? k;
+  const load = useCallback(async () => {
+    setRows(await client.adminRoleRequests().catch(() => []));
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+  async function act(fn: () => Promise<unknown>, done: string) {
+    setError(''); setNotice('');
+    try { await fn(); setNotice(done); await load(); onChanged(); } catch (e) { setError(apiErrorText(e)); }
+  }
+  // 能申请的：不是超级管理员、自己还没有的角色
+  const askable = catalog.roles.filter((r) => r.key !== 'super' && !catalog.mine.includes(r.key));
+  return (
+    <div aria-label="临时角色申请" style={{ marginTop: 12 }}>
+      <h4>临时角色申请</h4>
+      {askable.length > 0 && !isSuper && (
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <select aria-label="申请哪个角色" value={role} onChange={(e) => setRole(e.target.value)}>
+            <option value="">— 选角色 —</option>
+            {askable.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+          </select>
+          <input aria-label="多少小时" type="number" min={1} max={720} value={hours} onChange={(e) => setHours(e.target.value)} />
+          <input aria-label="申请理由" placeholder="为什么要（会给超级管理员看，也进审计）" value={reason} onChange={(e) => setReason(e.target.value)} />
+          <button disabled={!role || reason.trim().length < 2} onClick={() => void act(async () => {
+            await client.requestTemporaryAdminRole(role as AdminRoleKey, parseInt(hours, 10) || 1, reason.trim());
+            setRole(''); setReason('');
+          }, `已提交：等另一位超级管理员批准后，「${label(role)}」才生效`)}>提交申请</button>
+        </div>
+      )}
+      {notice && <p role="status">{notice}</p>}
+      {error && <p className="error">{error}</p>}
+      {rows.length === 0 && <p className="muted">{isSuper ? '没有待批的申请' : '你还没有申请过'}</p>}
+      {rows.map((r) => (
+        <div key={r.id} className="row" data-testid={`role-request-${r.id}`}>
+          <span className="grow">{isSuper ? `${r.nickname || `#${r.user_id}`} 申请` : '申请'}「{label(r.role)}」{r.hours} 小时：{r.reason}
+            <span className="muted"> · {STATUS_LABEL[r.status]}{r.decision_note ? `（${r.decision_note}）` : ''}</span></span>
+          {isSuper && r.status === 'pending' && (
+            <>
+              <button className="ghost" onClick={() => void act(() => client.approveAdminRoleRequest(r.id), `已批准：「${label(r.role)}」${r.hours} 小时后自动失效`)}>批准</button>
+              <button className="text-link" onClick={() => {
+                const note = window.prompt('驳回理由（会告诉申请人）');
+                if (note && note.trim().length >= 2) void act(() => client.rejectAdminRoleRequest(r.id, note.trim()), '已驳回，已告诉申请人');
+              }}>驳回</button>
+            </>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

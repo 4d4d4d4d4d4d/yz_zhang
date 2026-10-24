@@ -137,3 +137,21 @@ class PlatformSettleRequest(Base):
     decision_reason: Mapped[str] = mapped_column(String(200), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AdminRoleRequest(Base):
+    """SEC-061i（315 号 spec）临时角色的申请：本人申请、写理由，另一位超级管理员批准后才生效（与四眼同一思路）。
+    批准时走与「临时授予」同一套规则与审计；驳回要写理由。"""
+
+    __tablename__ = "admin_role_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)              # 申请人
+    role: Mapped[str] = mapped_column(String(20))
+    hours: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(12), default="pending")     # pending / approved / rejected
+    decided_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    decision_note: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

@@ -277,6 +277,21 @@ export interface AdminRoleCatalog {
   roles: AdminRoleDef[];
   mine: AdminRoleKey[];
 }
+/** SEC-061i（315 号 spec）临时角色的申请：本人申请、另一位超级管理员批准后才生效 */
+export interface AdminRoleRequest {
+  id: number;
+  user_id: number;
+  nickname: string;
+  role: AdminRoleKey;
+  hours: number;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  /** 处理过的才有 */
+  decided_by?: number;
+  decided_at?: string | null;
+  decision_note?: string;
+}
 export interface AdminRow {
   user_id: number;
   nickname: string;

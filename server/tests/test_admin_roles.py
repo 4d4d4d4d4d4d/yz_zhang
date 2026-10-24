@@ -97,6 +97,10 @@ ROUTE_ROLES = {
     "POST /admin/tickets/{ticket_id}/priority": ('support',),
     # SEC-061e（171 号 spec）临时授予与提前收回
     "POST /admin/admins/{user_id}/temporary-roles": ('super',),
+    "POST /admin/role-requests": ANY,                              # SEC-061i（315 号 spec）谁都能申请
+    "GET /admin/role-requests": ANY,                               # 超管看全部，其他人只看自己的
+    "POST /admin/role-requests/{request_id}/approve": ('super',),
+    "POST /admin/role-requests/{request_id}/reject": ('super',),
     "POST /admin/admins/{user_id}/temporary-roles/{role}/revoke": ('super',),
     "GET /admin/platform-finance": ('finance',),
     "GET /admin/queues": ANY,

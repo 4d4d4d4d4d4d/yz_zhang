@@ -384,6 +384,9 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   holiday_exists: '这一天已经录过了：先删掉再重录',
   holiday_weekday_required: '调休上班要写按周几的排班算（例如按周五）',
   holiday_region_required: '要写是哪个地区的假日，写法与给客服设的地区一样（如「新疆」）',
+  role_request_pending: '这个角色你已经申请过、还在等批：等超级管理员处理',
+  role_request_decided: '这条申请已经处理过了：刷新一下',
+  role_request_self: '不能批自己的申请：请另一位超级管理员来处理',
   too_many_certs: '一个类目最多再要 5 张资质：删掉几张再保存',
   cert_name_too_long: '资质名最多 30 个字：写短一点再保存',
   // ESCA-072（288 号 spec）

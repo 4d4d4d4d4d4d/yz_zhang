@@ -131,6 +131,9 @@ REACHED_BY: dict[str, str] = {
     "/admin/legal/faqs/{x}/renew": "adminRenewLegalFaq",
     "/admin/tickets/{x}/priority": "setTicketPriority",
     "/admin/admins/{x}/temporary-roles": "grantTemporaryAdminRole",
+    "/admin/role-requests": "requestTemporaryAdminRole",            # SEC-061i（315 号 spec）
+    "/admin/role-requests/{x}/approve": "approveAdminRoleRequest",
+    "/admin/role-requests/{x}/reject": "rejectAdminRoleRequest",
     "/admin/admins/{x}/temporary-roles/{x}/revoke": "revokeTemporaryAdminRole",
     "/admin/packs/validate": "adminValidatePack",
     "/admin/packs/{x}": "adminUpdatePack",
