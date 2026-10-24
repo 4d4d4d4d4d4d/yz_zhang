@@ -12,15 +12,23 @@ const POSITION: Record<string, string> = {
 };
 
 /** KB-095（267 号 spec）App 发单页「查参考价」：与 Web 同一句话（含 V293 的按发布方去重提示）；点了才查 */
-export function PriceRefBlock({ client, category }: { client: PlatformClient; category: string }) {
+export function PriceRefBlock({ client, category, defaultCity = '' }: { client: PlatformClient; category: string; defaultCity?: string }) {
   const [line, setLine] = useState('');
   const [error, setError] = useState('');
+  // KB-096（314 号 spec）按城市查：同一类活各地价差很大；留空查全国（与以前一样）
+  const [city, setCity] = useState(defaultCity);
   return (
     <View accessibilityLabel="参考价">
+      <TextInput style={s.cityInput} accessibilityLabel="参考价城市" placeholder="按哪个城市查（留空查全国）"
+                 value={city} onChangeText={setCity} />
       <Button title="查参考价" onPress={() => {
         setError('');
-        Promise.resolve().then(() => client.priceReference(category))
-          .then((r) => setLine(priceReferenceLine(r) || '暂时查不到参考价')).catch((e) => setError(apiErrorText(e)));
+        const where = city.trim();
+        Promise.resolve().then(() => client.priceReference(category, where || undefined))
+          .then((r) => {
+            const text = priceReferenceLine(r);
+            setLine(text ? (where ? `${where}：${text}` : text) : '暂时查不到参考价');
+          }).catch((e) => setError(apiErrorText(e)));
       }} />
       {!!line && <Text style={s.muted}>{line}</Text>}
       {!!error && <Text style={s.muted}>{error}</Text>}
@@ -154,6 +162,7 @@ export function SkillsScreen({ client }: { client: PlatformClient }) {
 
 const s = StyleSheet.create({
   box: { gap: 8 },
+  cityInput: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   card: { borderWidth: 1, borderColor: '#eee', borderRadius: 10, padding: 10, gap: 4, alignSelf: 'stretch' },
   title: { fontSize: 15, fontWeight: '600' },
   muted: { color: '#777' },

@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 314 | App 发单页按城市查参考价 | [314-app-price-reference-city.md](./314-app-price-reference-city.md) | P0 |
 | 313 | 第十五轮场景发掘：老人上门助浴、上门理发 | [313-scenario-round-15.md](./313-scenario-round-15.md) | P0 |
 | 312 | 响应形状棘轮收紧并再验一批调用点 | [312-shape-ratchet-tighten.md](./312-shape-ratchet-tighten.md) | P0 |
 | 311 | 发单与报价里出现结果承诺时提示 | [311-result-promise-hint.md](./311-result-promise-hint.md) | P0 |

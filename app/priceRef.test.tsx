@@ -31,4 +31,18 @@ describe('KB-095 App 查参考价', () => {
     fireEvent.press(screen.getByText('查参考价'));
     expect(await screen.findByText('暂无同类闭环数据，建议参考平台模板报价')).toBeTruthy();
   });
+
+  it('KB-096 按城市查：城市带进请求、结果前面标城市；留空照旧查全国', async () => {
+    const paths: string[] = [];
+    render(<PublishScreen client={makeClient({ sample_size: 3, p50_cents: 30000, min_cents: 20000, max_cents: 40000 }, paths)}
+                          onDone={() => undefined} category="保洁" />);
+    fireEvent.changeText(screen.getByLabelText('参考价城市'), ' 杭州 ');
+    fireEvent.press(screen.getByText('查参考价'));
+    expect(await screen.findByText(/^杭州：同类闭环任务 3 单：中位价 ¥300.00/)).toBeTruthy();
+    expect(paths.find((p) => p.startsWith('/knowledge/price-reference'))).toContain(`city=${encodeURIComponent('杭州')}`);
+    fireEvent.changeText(screen.getByLabelText('参考价城市'), '');
+    fireEvent.press(screen.getByText('查参考价'));
+    await screen.findByText(/^同类闭环任务 3 单/);
+    expect(paths.filter((p) => p.startsWith('/knowledge/price-reference'))[1]).not.toContain('city=');
+  });
 });
