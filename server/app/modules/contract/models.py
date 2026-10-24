@@ -67,6 +67,8 @@ class Milestone(Base):
     amount_cents: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending/delivered/released
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # SC-015（296 号 spec）一次交付多期时写的交付说明（几期共用一份）；逐期交付不写，照旧为空
+    delivery_note: Mapped[str] = mapped_column(String(500), default="")
 
 
 class ChangeOrder(Base):

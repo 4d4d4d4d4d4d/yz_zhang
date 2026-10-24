@@ -62,7 +62,9 @@ def _dump(c: Contract, db: Session | None = None) -> dict:
             db.query(Milestone).filter(Milestone.contract_id == c.id).order_by(Milestone.idx).all()
         )
         out["milestones"] = [
-            {"idx": m.idx, "title": m.title, "amount_cents": m.amount_cents, "status": m.status}
+            {"idx": m.idx, "title": m.title, "amount_cents": m.amount_cents, "status": m.status,
+             # SC-015（296 号 spec）一次交付多期时写的说明；没写的期不出这个字段（与以前一样）
+             **({"delivery_note": m.delivery_note} if m.delivery_note else {})}
             for m in rows
         ]
     return out
@@ -194,6 +196,23 @@ def deliver_milestone(
 ):
     contract = _get(db, contract_id, user)
     service.deliver_milestone(db, contract, user.id, _milestone(db, contract, idx))
+    return _dump(contract, db)
+
+
+class BatchDeliverIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    idxs: list[int] = Field(min_length=1, max_length=50)
+    note: str = Field(default="", max_length=500)
+
+
+@router.post("/{contract_id}/milestones/deliver-batch")
+def deliver_milestones(
+    contract_id: int, body: BatchDeliverIn, user: User = Depends(get_current_user),
+    db: Session = Depends(get_db, scope="function"),
+):
+    """SC-015（296 号 spec）执行方一次交付多期（连着做完的几期不用点好几次）。"""
+    contract = _get(db, contract_id, user)
+    service.deliver_milestones(db, contract, user.id, body.idxs, body.note)
     return _dump(contract, db)
 
 

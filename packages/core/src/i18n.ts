@@ -287,6 +287,8 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   invalid_kind: '非法内容类型',
   invalid_member: 'AI 助理、合作体与团队账号不能作为团队成员',
   invalid_milestone_state: '该里程碑已交付或已放款',
+  // SC-015（296 号 spec）
+  duplicate_milestone: '同一期写了两次：每期只写一次',
   invalid_outcome: '非法核验结论',
   invalid_payload: '回调参数不完整',
   invalid_percent: '折扣比例必须小于 100%',

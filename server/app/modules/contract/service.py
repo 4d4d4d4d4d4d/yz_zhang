@@ -445,6 +445,36 @@ def deliver_milestone(db: Session, contract: Contract, user_id: int, milestone: 
     return milestone
 
 
+def deliver_milestones(db: Session, contract: Contract, user_id: int, idxs: list[int], note: str = "") -> list[Milestone]:
+    """SC-015（296 号 spec）执行方一次交付多期：要么全交、要么一期不动；几期共用一份交付说明，通知发布方一次。"""
+    if user_id != contract.executor_id:
+        raise bad_request("仅执行方可提交里程碑交付", "not_party")
+    if contract.status != "funded" or contract.frozen:
+        raise conflict("合约不在执行中", "not_active")
+    if len(set(idxs)) != len(idxs):
+        raise bad_request("同一期写了两次：每期只写一次", "duplicate_milestone")
+    rows = {m.idx: m for m in db.query(Milestone).filter(Milestone.contract_id == contract.id)}
+    missing = sorted(i for i in idxs if i not in rows)
+    if missing:
+        raise bad_request(f"没有第 {'、'.join(map(str, missing))} 期", "milestone_not_found")
+    done = sorted(i for i in idxs if rows[i].status != "pending")
+    if done:
+        raise conflict(f"第 {'、'.join(map(str, done))} 期已经交付或放款过了：去掉它们再交", "invalid_milestone_state")
+    picked = [rows[i] for i in sorted(idxs)]
+    for m in picked:
+        m.status = "delivered"
+        m.delivery_note = note.strip()
+        db.add(m)
+    from app.modules.notification.service import notify
+
+    total = sum(m.amount_cents for m in picked)
+    notify(db, contract.requester_id, "contract", "执行方交付了几期，等你验收",
+           f"合约 #{contract.id}：第 {'、'.join(str(m.idx) for m in picked)} 期已交付（共 ¥{total / 100:.2f}）"
+           + (f"，交付说明：{note.strip()[:100]}" if note.strip() else "")
+           + "。请逐期验收，或一次放款已交付的几期。")
+    return picked
+
+
 def release_milestone(db: Session, contract: Contract, user_id: int, milestone: Milestone) -> Milestone:
     """SC-004/005 分期验收放款；全部放完 → 合约终结。"""
     lock_contract_funds(db, contract)  # CONC-012

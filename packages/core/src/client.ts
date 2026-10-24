@@ -1236,6 +1236,10 @@ export class PlatformClient {
   deliverMilestone(contractId: number, idx: number) {
     return this.request<Contract>('POST', `/contracts/${contractId}/milestones/${idx}/deliver`);
   }
+  /** SC-015（296 号 spec）执行方一次交付多期：要么全交、要么一期不动；`note` 是几期共用的交付说明 */
+  deliverMilestones(contractId: number, idxs: number[], note = '') {
+    return this.request<Contract>('POST', `/contracts/${contractId}/milestones/deliver-batch`, { idxs, note });
+  }
   acceptMilestone(contractId: number, idx: number) {
     return this.request<Contract>('POST', `/contracts/${contractId}/milestones/${idx}/accept`);
   }

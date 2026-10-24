@@ -369,6 +369,18 @@ export default function TaskDetail() {
               }}>放款已交付的 {delivered.length} 期（共 {fmtYuan(sum)}）</button>
             );
           })()}
+          {/* SC-015（296 号 spec）执行方一次交付进行中的几期：列清楚、可写一份交付说明 */}
+          {isExecutor && contract.status === 'funded' && !contract.frozen && (() => {
+            const pending = (contract.milestones ?? []).filter((m) => m.status === 'pending');
+            if (pending.length < 2) return null;
+            return (
+              <button className="ghost" style={{ marginTop: 10 }} onClick={() => {
+                const note = prompt(`一次交付这 ${pending.length} 期：\n${pending.map((m) => `第 ${m.idx} 期 ${m.title} ${fmtYuan(m.amount_cents)}`).join('\n')}\n\n交付说明（几期共用，可不写）：`);
+                if (note === null) return;
+                void act(async () => setContract(await client.deliverMilestones(contract.id, pending.map((m) => m.idx), note.trim())));
+              }}>一次交付进行中的 {pending.length} 期</button>
+            );
+          })()}
           {/* SC-004 里程碑分期 */}
           {contract.milestones && contract.milestones.length > 1 && (
             <table style={{ marginTop: 10 }}>
@@ -376,7 +388,7 @@ export default function TaskDetail() {
               <tbody>
                 {contract.milestones.map((m) => (
                   <tr key={m.idx}>
-                    <td>{m.idx}. {m.title}</td>
+                    <td>{m.idx}. {m.title}{m.delivery_note && <div className="muted" data-testid={`ms-note-${m.idx}`}>交付说明：{m.delivery_note}</div>}</td>
                     <td>{fmtYuan(m.amount_cents)}</td>
                     <td><span className={`badge ${m.status === 'released' ? 'ok' : m.status === 'delivered' ? 'warn' : ''}`}>
                       {m.status === 'released' ? '已放款' : m.status === 'delivered' ? '待验收' : '进行中'}

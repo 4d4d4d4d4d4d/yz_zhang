@@ -389,6 +389,8 @@ export interface Milestone {
   title: string;
   amount_cents: number;
   status: 'pending' | 'delivered' | 'released';
+  /** SC-015（296 号 spec）一次交付多期时写的交付说明；没写的期不出这个字段 */
+  delivery_note?: string;
 }
 
 export type IpAssignment =

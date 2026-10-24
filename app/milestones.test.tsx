@@ -70,4 +70,24 @@ describe('SC-016 App 批量放款带幂等键', () => {
     expect(keys[0]).toMatch(/^[0-9a-f]{32}$/);
     expect(keys[1]).toBe(keys[0]);
   });
+
+  it('SC-015 执行方：进行中两期以上可以一次交付，先列清楚、写交付说明再确认；一期时不出', async () => {
+    const calls: Call[] = [];
+    const onChanged = jest.fn();
+    const after = C(['released', 'delivered', 'delivered']);
+    (after.milestones ?? []).forEach((m) => { if (m.status === 'delivered') m.delivery_note = '图纸在附件'; });
+    const client = makeClient({ '/contracts/7/milestones/deliver-batch': after }, calls);
+    const { rerender } = render(<MilestonesBlock client={client} contract={C(['released', 'pending', 'pending'])} isCreator={false} isExecutor onChanged={onChanged} />);
+    fireEvent.press(screen.getByText('一次交付进行中的 2 期'));
+    expect(screen.getByText('一次交付这 2 期')).toBeTruthy();
+    expect(calls).toHaveLength(0);
+    fireEvent.changeText(screen.getByLabelText('交付说明'), ' 图纸在附件 ');
+    fireEvent.press(screen.getByText('确认交付'));
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    expect(calls[0]).toEqual({ method: 'POST', path: '/contracts/7/milestones/deliver-batch', body: { idxs: [2, 3], note: '图纸在附件' } });
+    rerender(<MilestonesBlock client={client} contract={after} isCreator isExecutor={false} onChanged={() => undefined} />);
+    expect(screen.getAllByText(/交付说明：图纸在附件/)).toHaveLength(2);
+    rerender(<MilestonesBlock client={client} contract={C(['released', 'delivered', 'pending'])} isCreator={false} isExecutor onChanged={() => undefined} />);
+    expect(screen.queryByText(/一次交付进行中的/)).toBeNull();
+  });
 });

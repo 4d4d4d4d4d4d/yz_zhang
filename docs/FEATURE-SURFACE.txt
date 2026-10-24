@@ -405,6 +405,7 @@ api POST /api/v1/contracts/{contract_id}/change-orders/{order_id}/accept
 api POST /api/v1/contracts/{contract_id}/change-orders/{order_id}/reject
 api POST /api/v1/contracts/{contract_id}/fund
 api POST /api/v1/contracts/{contract_id}/milestones
+api POST /api/v1/contracts/{contract_id}/milestones/deliver-batch
 api POST /api/v1/contracts/{contract_id}/milestones/release-delivered
 api POST /api/v1/contracts/{contract_id}/milestones/{idx}/accept
 api POST /api/v1/contracts/{contract_id}/milestones/{idx}/deliver
@@ -827,6 +828,7 @@ sdk deleteWorkbenchProject
 sdk deleteWorkbenchRoutine
 sdk deliver
 sdk deliverMilestone
+sdk deliverMilestones
 sdk disablePack
 sdk discardMissionDraft
 sdk discardToolDraft
