@@ -37,7 +37,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「整理收纳」「上门做饭」——第八轮场景发掘（274 号 spec，V298）；上门做饭要审核通过的健康证明
                     {"name": "整理收纳"}, {"name": "上门做饭", "required_cert": HEALTH_CERT},
                     # 「家电清洗」「空调外机拆装（高处作业）」——第九轮场景发掘（286 号 spec，V313）；后者要高处作业证
-                    {"name": "家电清洗"}, {"name": "空调外机拆装（高处作业）", "required_cert": HEIGHT_WORK_CERT}]
+                    {"name": "家电清洗"}, {"name": "空调外机拆装（高处作业）", "required_cert": HEIGHT_WORK_CERT},
+                    # 「活动跟拍」——第十轮场景发掘（294 号 spec，V321）
+                    {"name": "活动跟拍"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
@@ -190,6 +192,9 @@ def validate_publishable(task: Task, db: Session | None = None, reviewed: bool =
     from app.modules.task.k12 import assert_no_k12_tutoring
 
     assert_no_k12_tutoring(f"{task.title} {task.description}")   # SCN-143 中小学学科类家教不承接
+    from app.modules.task.errand import assert_no_restricted_errand
+
+    assert_no_restricted_errand(f"{task.title} {task.description}")   # SCN-164 代开处方药、倒卖号源不承接
     if not reviewed:
         hit = machine_review(task.title + " " + task.description, db)
         if hit:

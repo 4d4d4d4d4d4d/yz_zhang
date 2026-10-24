@@ -250,6 +250,10 @@ def _validate_ip_and_pricing(body: "TaskIn") -> None:
     from app.modules.task.k12 import assert_no_k12_tutoring
 
     assert_no_k12_tutoring(f"{body.title} {body.description}")
+    # SCN-164（294 号 spec）代开处方药、倒卖号源同理
+    from app.modules.task.errand import assert_no_restricted_errand
+
+    assert_no_restricted_errand(f"{body.title} {body.description}")
 
     if body.ip_assignment not in IP_ASSIGNMENTS:
         raise bad_request(

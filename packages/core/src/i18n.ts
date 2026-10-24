@@ -118,6 +118,8 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   gig_need_location: '先打开「现在有空」，或者带上当前位置',
   gig_need_destination: '选一个目的地（常用地点）',
   k12_subject_tutoring: '平台不承接中小学学科类有偿家教：需要学科辅导请找有办学资质的培训机构；钢琴、游泳这类非学科陪练可以照常发单',
+  // SCN-164（294 号 spec）
+  errand_restricted: '平台不承接代开、代买处方药与精神类药品，也不承接加价倒卖号源、门票；代买非处方药、正常代排队可以照常发单',
   guardian_without_minor: '只有服务对象是未成年人时才选监护人安排：勾上「服务对象是未成年人」，或把这几项清空',
   minor_needs_guardian_mode: '服务对象是未成年人时，选「监护人在场」或「在公开场所」：平台不允许和孩子单独相处的安排',
   guardian_required: '服务对象是未成年人时，要由监护人本人发单或经监护人同意：确认后勾选再发',
