@@ -1255,7 +1255,9 @@ export class PlatformClient {
   async downloadDeliverable(contractId: number, deliverableId: number): Promise<Blob> {
     const doFetch = this.opts.fetchImpl ?? fetch;
     const token = this.opts.getToken();
-    const res = await doFetch(`${this.opts.baseUrl}/api/v1/contracts/${contractId}/deliverables/${deliverableId}/file`, {
+    // 路径单独写成字面量：契约覆盖闸门（CLI-060）按 SDK 里的路径字面量判断「端上够得到」
+    const path = `/contracts/${contractId}/deliverables/${deliverableId}/file`;
+    const res = await doFetch(`${this.opts.baseUrl}/api/v1${path}`, {
       method: 'GET', headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) {
