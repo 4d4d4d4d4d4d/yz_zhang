@@ -1814,6 +1814,12 @@ export interface SupportHoliday {
   as_weekday: number | null;
   label: string;
 }
+/** ESCA-072（288 号 spec）按通知一次导入：已经录过的日子跳过，不覆盖 */
+export interface SupportHolidayBulkResult {
+  created: SupportHoliday[];
+  /** 跳过的日期 YYYY-MM-DD */
+  skipped: string[];
+}
 /** ESCA-068 设排班的结果 */
 export interface SupportScheduleResult {
   schedule: SupportScheduleWindow[];

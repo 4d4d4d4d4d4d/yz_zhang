@@ -362,6 +362,7 @@ api POST /api/v1/admin/skill-concepts/{concept_id}/retire
 api POST /api/v1/admin/subsidy-pool/fund
 api POST /api/v1/admin/support/agents/{user_id}/pause
 api POST /api/v1/admin/support/holidays
+api POST /api/v1/admin/support/holidays/bulk
 api POST /api/v1/admin/support/my-pause
 api POST /api/v1/admin/teams/{team_id}/verify
 api POST /api/v1/admin/tickets/{ticket_id}/assign
@@ -660,6 +661,7 @@ sdk addOpcEntry
 sdk addOrganizationRecord
 sdk addProgress
 sdk addSupportHoliday
+sdk addSupportHolidaysBulk
 sdk addTeamMember
 sdk addWorkbenchChildren
 sdk addWorkbenchLog

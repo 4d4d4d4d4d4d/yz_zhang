@@ -150,6 +150,7 @@ import type {
   SupportScheduleWindow,
   SupportScheduleResult,
   SupportHoliday,
+  SupportHolidayBulkResult,
   ApiAccountQuotaRow,
   TeamSpendReturned,
   TeamReturnAsked,
@@ -1878,6 +1879,10 @@ export class PlatformClient {
   }
   deleteSupportHoliday(id: number) {
     return this.request<{ id: number; deleted: boolean }>('DELETE', `/admin/support/holidays/${id}`);
+  }
+  /** ESCA-072（288 号 spec）主管核对过通知解析出的草稿（`parseHolidayNotice`）后一次保存；要么全存、要么一条不存 */
+  addSupportHolidaysBulk(items: Array<{ day: string; kind: SupportHoliday['kind']; label: string; as_weekday: number | null }>) {
+    return this.request<SupportHolidayBulkResult>('POST', '/admin/support/holidays/bulk', { items });
   }
   /** ESCA-065 提前恢复接单 */
   resumeMySupport() {

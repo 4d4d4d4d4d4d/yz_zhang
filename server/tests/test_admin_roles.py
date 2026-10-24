@@ -47,6 +47,7 @@ ROUTE_ROLES = {
     "GET /admin/support/holidays": ('support',),                       # ESCA-070（276 号 spec）
     "POST /admin/support/holidays": ('super',),
     "DELETE /admin/support/holidays/{holiday_id}": ('super',),
+    "POST /admin/support/holidays/bulk": ('super',),                   # ESCA-072（288 号 spec）
     "GET /admin/api-quota-requests": ('ops',),
     "GET /admin/platform-finance/gmv-tax": ('finance',),        # FIN-062（242 号 spec）
     "GET /admin/platform-finance/gmv-tax/export": ('finance',),  # FIN-066（249 号 spec）                  # API-057（241 号 spec）

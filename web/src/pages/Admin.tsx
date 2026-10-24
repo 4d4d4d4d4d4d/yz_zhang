@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, copyScheduleDay, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementCurveCompareRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type TaxRemitRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, canSeeAdminSection, copyScheduleDay, parseHolidayNotice, type HolidayDraft, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementCurveCompareRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type TaxRemitRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -1260,6 +1260,63 @@ function SupportHolidays() {
         })}>录入</button>
       </div>
       {error && <p className="error">{error}</p>}
+      <HolidayNoticeImport onSaved={() => void load()} />
+    </div>
+  );
+}
+
+/** ESCA-072（288 号 spec）贴国务院放假通知原文 → 解析成草稿 → 主管逐条核对（调休按周几、删错的）→ 一次保存 */
+function HolidayNoticeImport({ onSaved }: { onSaved: () => void }) {
+  const { client } = useApp();
+  const [text, setText] = useState('');
+  const [year, setYear] = useState(new Date().getFullYear() + 1);
+  const [draft, setDraft] = useState<HolidayDraft[] | null>(null);
+  const [unparsed, setUnparsed] = useState<string[]>([]);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  function parse() {
+    setNotice(''); setError('');
+    const r = parseHolidayNotice(text, year);
+    setDraft(r.items); setUnparsed(r.unparsed);
+  }
+  async function save(items: HolidayDraft[]) {
+    setError('');
+    try {
+      const r = await client.addSupportHolidaysBulk(items);
+      setNotice(`已导入 ${r.created.length} 天${r.skipped.length ? `；${r.skipped.join('、')} 已经录过，跳过` : ''}`);
+      setDraft(null); setText(''); onSaved();
+    } catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <div aria-label="按通知导入">
+      <h4>按国务院放假通知导入</h4>
+      <textarea aria-label="通知原文" rows={4} placeholder="把「国务院办公厅关于部分节假日安排的通知」原文整段贴进来" value={text} onChange={(e) => setText(e.target.value)} />
+      <div className="row">
+        <input type="number" aria-label="年份" value={year} onChange={(e) => setYear(Number(e.target.value))} />
+        <button className="ghost" disabled={!text.trim()} onClick={parse}>解析成草稿</button>
+      </div>
+      {notice && <p role="status">{notice}</p>}
+      {error && <p className="error">{error}</p>}
+      {unparsed.length > 0 && <p className="badge warn">这几条没认出日期，请手工录入：{unparsed.join('；')}</p>}
+      {draft && draft.length === 0 && <p className="muted">没认出任何日期：请贴通知原文（「一、元旦：1月1日放假……」那几条）</p>}
+      {draft && draft.length > 0 && (
+        <>
+          <p className="muted">请逐条核对：通知里不写调休上班按哪天的排班，默认按周五，可以改；解析错的删掉。</p>
+          {draft.map((h, k) => (
+            <div key={h.day} className="row" data-testid={`draft-${h.day}`}>
+              <span className="grow">{h.day} {h.kind === 'off' ? '放假' : '调休上班'} {h.label}</span>
+              {h.kind === 'workday' && (
+                <select aria-label={`${h.day} 按周几的排班`} value={h.as_weekday ?? 4}
+                  onChange={(e) => setDraft(draft.map((x, j) => (j === k ? { ...x, as_weekday: Number(e.target.value) } : x)))}>
+                  {WEEKDAYS.map((d, w) => <option key={d} value={w}>按{d}</option>)}
+                </select>
+              )}
+              <button className="text-link" onClick={() => setDraft(draft.filter((_, j) => j !== k))}>删掉</button>
+            </div>
+          ))}
+          <button onClick={() => void save(draft)}>保存这 {draft.length} 天</button>
+        </>
+      )}
     </div>
   );
 }

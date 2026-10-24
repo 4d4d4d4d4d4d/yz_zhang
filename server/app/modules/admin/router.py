@@ -426,6 +426,41 @@ def add_support_holiday(body: SupportHolidayIn, admin: User = Depends(require_ro
     return _holiday_row(h)
 
 
+class SupportHolidayBulkIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[SupportHolidayIn] = Field(min_length=1, max_length=60)
+
+
+@router.post("/admin/support/holidays/bulk")
+def add_support_holidays_bulk(body: SupportHolidayBulkIn, admin: User = Depends(require_role("super")),
+                              db: Session = Depends(get_db, scope="function")):
+    """ESCA-072（288 号 spec）主管核对过「贴通知原文解析出的草稿」后一次保存：要么全存、要么一条不存；
+    已经录过的日子跳过（不覆盖手工录的），在 `skipped` 里告诉主管。"""
+    from app.modules.support.models import SupportHoliday
+
+    seen: set[date] = set()
+    for it in body.items:
+        if it.day in seen:
+            raise bad_request(f"{day(it.day)} 在这次导入里出现了两次：删掉一条再保存", "holiday_duplicate_in_batch")
+        seen.add(it.day)
+        if it.kind == "workday" and it.as_weekday is None:
+            raise bad_request(f"{day(it.day)} 是调休上班，要写按周几的排班算（例如按周五）", "holiday_weekday_required")
+    existing = {h.day for h in db.query(SupportHoliday).filter(SupportHoliday.day.in_(seen))}
+    created = []
+    for it in sorted(body.items, key=lambda x: x.day):
+        if it.day in existing:
+            continue
+        h = SupportHoliday(day=it.day, kind=it.kind, as_weekday=it.as_weekday if it.kind == "workday" else None,
+                           label=it.label.strip(), created_by=admin.id)
+        db.add(h)
+        created.append(h)
+    db.flush()
+    skipped = sorted(day(d) for d in existing)
+    record_audit(db, admin.id, "support_holiday_bulk_add", "support_holiday", created[0].id if created else None,
+                 f"按通知导入 {len(created)} 天，跳过已录的 {len(skipped)} 天")
+    return {"created": [_holiday_row(h) for h in created], "skipped": skipped}
+
+
 @router.delete("/admin/support/holidays/{holiday_id}")
 def delete_support_holiday(holiday_id: int, admin: User = Depends(require_role("super")),
                            db: Session = Depends(get_db, scope="function")):

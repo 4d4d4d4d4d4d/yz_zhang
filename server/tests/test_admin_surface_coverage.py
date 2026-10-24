@@ -58,6 +58,7 @@ REACHED_BY: dict[str, str] = {
     "/admin/support/my-schedule": "setMySupportSchedule",
     "/admin/support/holidays": "addSupportHoliday",
     "/admin/support/holidays/{x}": "deleteSupportHoliday",
+    "/admin/support/holidays/bulk": "addSupportHolidaysBulk",
     # ESCA-066（248 号 spec）工单台「客服状态」（主管）
     "/admin/support/agents": "supportAgents",
     # NTF-071（252 号 spec）发过的公告「分类目看阅读率」

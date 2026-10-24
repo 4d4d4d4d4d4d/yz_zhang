@@ -374,6 +374,8 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   showcase_task_not_completed: '这一单完成验收后才能授权展示',
   holiday_exists: '这一天已经录过了：先删掉再重录',
   holiday_weekday_required: '调休上班要写按周几的排班算（例如按周五）',
+  // ESCA-072（288 号 spec）
+  holiday_duplicate_in_batch: '这次导入里同一天出现了两次：删掉一条再保存',
   support_schedule_overlap: '同一天的两段排班时间重叠了：请改成首尾相接或分开',
   support_schedule_bad_window: '排班的结束时间要晚于开始时间；跨午夜请拆成两段（如 22:00–24:00 与次日 00:00–06:00）',
   team_assignee_not_approver: '只能改派给能批这笔的人：团队所有者或管理员，且不能是发起人',
