@@ -289,6 +289,10 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   invalid_milestone_state: '该里程碑已交付或已放款',
   // SC-015（296 号 spec）
   duplicate_milestone: '同一期写了两次：每期只写一次',
+  // SCN-166（297 号 spec）
+  deliverable_locked: '原图在验收放款后才能下载：先看预览图，验收没问题就放款',
+  deliverable_file_not_found: '没有找到你上传的这张图：先上传，再挂到合约上',
+  deliverables_full: '一份合约最多挂 50 个交付文件',
   invalid_outcome: '非法核验结论',
   invalid_payload: '回调参数不完整',
   invalid_percent: '折扣比例必须小于 100%',

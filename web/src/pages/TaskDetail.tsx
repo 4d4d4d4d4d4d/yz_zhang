@@ -8,6 +8,7 @@ import { DisputePanel } from '../DisputePanel';
 import { ExperienceTools } from '../ExperienceUnits';
 import PhotoPicker from '../PhotoPicker';
 import { useApp } from '../store';
+import DeliverablesBlock from '../Deliverables';
 
 type AppRow = { id: number; applicant_id: number; nickname: string; credit_score: number; rating_avg: number; bid_cents: number; message: string; status: string };
 
@@ -369,6 +370,8 @@ export default function TaskDetail() {
               }}>放款已交付的 {delivered.length} 期（共 {fmtYuan(sum)}）</button>
             );
           })()}
+          {/* SCN-166（297 号 spec）交付文件托管：原图放款完毕前锁着 */}
+          <DeliverablesBlock contractId={contract.id} isExecutor={!!isExecutor} live={contract.status === 'funded' && !contract.frozen} />
           {/* SC-015（296 号 spec）执行方一次交付进行中的几期：列清楚、可写一份交付说明 */}
           {isExecutor && contract.status === 'funded' && !contract.frozen && (() => {
             const pending = (contract.milestones ?? []).filter((m) => m.status === 'pending');

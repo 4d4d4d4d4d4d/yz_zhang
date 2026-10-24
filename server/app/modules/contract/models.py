@@ -117,3 +117,16 @@ class ContractSignature(Base):
     provider: Mapped[str] = mapped_column(String(32), default="platform")
     extra: Mapped[dict] = mapped_column(JSON, default=dict)
     signed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ContractDeliverable(Base):
+    """SCN-166（297 号 spec）交付文件托管在平台：执行方传预览图（自己加水印或缩小）与原图；
+    原图在合约放款完毕前只有执行方能取，发布方验收放款后才能下载——「先交片后不付」与「付了不交片」两头都堵上。"""
+
+    __tablename__ = "contract_deliverables"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    contract_id: Mapped[int] = mapped_column(Integer, index=True)
+    file_name: Mapped[str] = mapped_column(String(80))       # uploaded_files.name
+    kind: Mapped[str] = mapped_column(String(10))            # preview / original
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

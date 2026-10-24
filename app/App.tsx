@@ -2,6 +2,7 @@ import { TeamReturnsBlock } from './teamReturns';
 import { ChainEntry } from './ChainEntry';
 import { EvidenceExportButton, InvoicesBlock } from './appGaps';
 import { MilestonesBlock } from './milestones';
+import { DeliverablesList } from './deliverables';
 import { DraftHints, PriceRefBlock, TaskProfileBlock } from './profiles';
 import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
@@ -524,6 +525,8 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
         <MilestonesBlock client={client} contract={contract} isCreator={meId === contract.requester_id}
                          isExecutor={meId === contract.executor_id} onChanged={(c) => { setContract(c); void reload(); }} />
       )}
+      {/* SCN-166（297 号 spec）交付文件：原图放款完毕前锁着 */}
+      {contract && <DeliverablesList client={client} contractId={contract.id} />}
       {!!error && <Text style={styles.error}>{error}</Text>}
 
       {actions.includes('apply') && (

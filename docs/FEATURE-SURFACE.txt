@@ -105,6 +105,8 @@ api GET /api/v1/contracts/by-task/{task_id}
 api GET /api/v1/contracts/{contract_id}
 api GET /api/v1/contracts/{contract_id}/change-orders
 api GET /api/v1/contracts/{contract_id}/coupons
+api GET /api/v1/contracts/{contract_id}/deliverables
+api GET /api/v1/contracts/{contract_id}/deliverables/{deliverable_id}/file
 api GET /api/v1/contracts/{contract_id}/export
 api GET /api/v1/contracts/{contract_id}/settlements
 api GET /api/v1/contracts/{contract_id}/signatures
@@ -403,6 +405,7 @@ api POST /api/v1/contracts/jobs/expire-unsigned
 api POST /api/v1/contracts/{contract_id}/change-orders
 api POST /api/v1/contracts/{contract_id}/change-orders/{order_id}/accept
 api POST /api/v1/contracts/{contract_id}/change-orders/{order_id}/reject
+api POST /api/v1/contracts/{contract_id}/deliverables
 api POST /api/v1/contracts/{contract_id}/fund
 api POST /api/v1/contracts/{contract_id}/milestones
 api POST /api/v1/contracts/{contract_id}/milestones/deliver-batch
@@ -657,6 +660,7 @@ sdk acceptMilestone
 sdk acceptPerson
 sdk acceptSettlement
 sdk acceptTeamInvite
+sdk addDeliverable
 sdk addDisputeStatement
 sdk addGigPlace
 sdk addGigRoute
@@ -776,6 +780,7 @@ sdk confirmXappStep
 sdk contentComments
 sdk contentFeed
 sdk contractAnchors
+sdk contractDeliverables
 sdk contractSettlements
 sdk contractSignatures
 sdk conversations

@@ -392,6 +392,14 @@ export interface Milestone {
   /** SC-015（296 号 spec）一次交付多期时写的交付说明；没写的期不出这个字段 */
   delivery_note?: string;
 }
+/** SCN-166（297 号 spec）托管在平台的交付文件：原图在合约放款完毕前对发布方锁着（`url` 为 null） */
+export interface ContractDeliverable {
+  id: number;
+  kind: 'preview' | 'original';
+  created_at: string;
+  locked: boolean;
+  url: string | null;
+}
 
 export type IpAssignment =
   | 'assign'                 // 著作权转让给发布方

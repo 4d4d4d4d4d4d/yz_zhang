@@ -41,6 +41,7 @@ import type {
   MarketCell,
   MyCoupon,
   Contract,
+  ContractDeliverable,
   Decomposition,
   KnowledgeAdminOverview,
   KnowledgeCalibrationPair,
@@ -1235,6 +1236,28 @@ export class PlatformClient {
   }
   deliverMilestone(contractId: number, idx: number) {
     return this.request<Contract>('POST', `/contracts/${contractId}/milestones/${idx}/deliver`);
+  }
+  /** SCN-166（297 号 spec）交付文件托管：执行方把已上传的图片挂到合约上（`ref` 是上传返回的 ref） */
+  addDeliverable(contractId: number, ref: string, kind: ContractDeliverable['kind']) {
+    return this.request<ContractDeliverable>('POST', `/contracts/${contractId}/deliverables`, { ref, kind });
+  }
+  contractDeliverables(contractId: number) {
+    return this.request<ContractDeliverable[]>('GET', `/contracts/${contractId}/deliverables`).then(listOf);
+  }
+  /** 下载交付文件（原图要登录态，`<img src>` 带不了 Authorization，所以拿 Blob 再给界面做下载链接）；
+   *  发布方在放款完毕前会收到 403 `deliverable_locked` */
+  async downloadDeliverable(contractId: number, deliverableId: number): Promise<Blob> {
+    const doFetch = this.opts.fetchImpl ?? fetch;
+    const token = this.opts.getToken();
+    const res = await doFetch(`${this.opts.baseUrl}/api/v1/contracts/${contractId}/deliverables/${deliverableId}/file`, {
+      method: 'GET', headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      const detail = (text ? JSON.parse(text) : null)?.detail;
+      throw new ApiError(res.status, detail?.code ?? 'error', detail?.message ?? '下载失败');
+    }
+    return res.blob();
   }
   /** SC-015（296 号 spec）执行方一次交付多期：要么全交、要么一期不动；`note` 是几期共用的交付说明 */
   deliverMilestones(contractId: number, idxs: number[], note = '') {

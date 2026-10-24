@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.locks import job_slot
 from app.core.deps import get_current_user, require_job_auth
-from app.core.errors import forbidden, not_found
+from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.modules.account.models import User
 from app.modules.task.models import Task
 from app.modules.task.service import transition
@@ -214,6 +214,98 @@ def deliver_milestones(
     contract = _get(db, contract_id, user)
     service.deliver_milestones(db, contract, user.id, body.idxs, body.note)
     return _dump(contract, db)
+
+
+# ---------- SCN-166（297 号 spec）交付文件托管：放款完毕前原图锁着 ----------
+DELIVERABLES_MAX = 50
+
+
+class DeliverableIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    ref: str = Field(min_length=8, max_length=80)
+    kind: str = Field(pattern="^(preview|original)$")
+
+
+def _party(db: Session, contract_id: int, user: User) -> Contract:
+    contract = db.get(Contract, contract_id)
+    if not contract:
+        raise not_found("合约不存在")
+    if user.id not in (contract.requester_id, contract.executor_id):
+        raise forbidden("交付文件只对合约双方开放")
+    return contract
+
+
+def _deliverable_row(c: Contract, d, viewer_id: int) -> dict:
+    unlocked = d.kind == "preview" or viewer_id == c.executor_id or c.status == "released"
+    return {"id": d.id, "kind": d.kind, "created_at": iso(d.created_at), "locked": not unlocked,
+            "url": (f"/api/v1/files/{d.file_name}" if d.kind == "preview"
+                    else f"/api/v1/contracts/{c.id}/deliverables/{d.id}/file") if unlocked else None}
+
+
+@router.post("/{contract_id}/deliverables", status_code=201)
+def add_deliverable(contract_id: int, body: DeliverableIn, user: User = Depends(get_current_user),
+                    db: Session = Depends(get_db, scope="function")):
+    """执行方把已上传的图片挂到合约上：预览图发布方马上能看；原图放款完毕前锁着（匿名链接也随之失效）。"""
+    from app.modules.files.models import UploadedFile
+
+    from .models import ContractDeliverable
+
+    contract = _party(db, contract_id, user)
+    if user.id != contract.executor_id:
+        raise forbidden("只有执行方能上传交付文件", "not_party")
+    if contract.status != "funded" or contract.frozen:
+        raise conflict("合约不在执行中：交付文件要在托管期间上传", "not_active")
+    f = db.get(UploadedFile, body.ref)
+    if f is None or f.owner_id != user.id:
+        raise bad_request("没有找到你上传的这张图：先上传，再挂到合约上", "deliverable_file_not_found")
+    if db.query(ContractDeliverable).filter(ContractDeliverable.contract_id == contract.id).count() >= DELIVERABLES_MAX:
+        raise bad_request(f"一份合约最多挂 {DELIVERABLES_MAX} 个交付文件", "deliverables_full")
+    if body.kind == "original":
+        f.sensitive = True        # 原图不再走匿名能力链接（CERT-010 的同一道门）
+        db.add(f)
+    d = ContractDeliverable(contract_id=contract.id, file_name=f.name, kind=body.kind)
+    db.add(d)
+    db.flush()
+    return _deliverable_row(contract, d, user.id)
+
+
+@router.get("/{contract_id}/deliverables")
+def list_deliverables(contract_id: int, user: User = Depends(get_current_user),
+                      db: Session = Depends(get_db, scope="function")):
+    from .models import ContractDeliverable
+
+    contract = _party(db, contract_id, user)
+    rows = (db.query(ContractDeliverable).filter(ContractDeliverable.contract_id == contract.id)
+            .order_by(ContractDeliverable.id).all())
+    return [_deliverable_row(contract, d, user.id) for d in rows]
+
+
+@router.get("/{contract_id}/deliverables/{deliverable_id}/file")
+def read_deliverable(contract_id: int, deliverable_id: int, user: User = Depends(get_current_user),
+                     db: Session = Depends(get_db, scope="function")):
+    """执行方随时能取；发布方要等合约放款完毕（released）。"""
+    from fastapi import Response
+
+    from app.vendors import base as vendor_base
+    from app.vendors.registry import get_provider
+
+    from .models import ContractDeliverable
+
+    contract = _party(db, contract_id, user)
+    d = db.get(ContractDeliverable, deliverable_id)
+    if d is None or d.contract_id != contract.id:
+        raise not_found("没有这个交付文件")
+    if d.kind == "original" and user.id != contract.executor_id and contract.status != "released":
+        raise forbidden("原图在验收放款后才能下载：先看预览图，验收没问题就放款", "deliverable_locked")
+    name = d.file_name
+    vendor_base.release(db)  # CONC-067 读存储前放掉连接
+    got = getattr(get_provider("storage"), "read", lambda _n: None)(name)
+    if not got:
+        raise not_found("文件不存在")
+    data, content_type = got
+    return Response(content=data, media_type=content_type, headers={
+        "Cache-Control": "no-store, private", "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": f'inline; filename="{name}"', "Content-Security-Policy": "default-src 'none'; sandbox"})
 
 
 @router.post("/{contract_id}/milestones/{idx}/accept")
