@@ -45,7 +45,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「情绪陪伴」「上门私教」——第十一轮场景发掘（298 号 spec，V325）
                     {"name": "情绪陪伴"}, {"name": "上门私教"},
                     # 「数码维修与回收」「陪驾」——第十二轮场景发掘（302 号 spec，V329）；陪驾要审核通过的驾驶证
-                    {"name": "数码维修与回收"}, {"name": "陪驾", "required_cert": DRIVER_CERT}]
+                    {"name": "数码维修与回收"}, {"name": "陪驾", "required_cert": DRIVER_CERT},
+                    # 「搬家」「母婴护理」——第十三轮场景发掘（306 号 spec，V333）；母婴护理要审核通过的健康证明
+                    {"name": "搬家"}, {"name": "母婴护理", "required_cert": HEALTH_CERT}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
