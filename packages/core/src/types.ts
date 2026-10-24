@@ -753,6 +753,15 @@ export interface DecompositionNode {
   task_id: number | null;
 }
 
+/** OPS-004 任务类目；SCN-181（307 号 spec）要多张资质的类目多 `extra_certs`（张张都要有） */
+export interface Category {
+  id: number;
+  name: string;
+  /** 准入资质；空 = 不限 */
+  required_cert: string;
+  extra_certs?: string[];
+}
+
 export interface Decomposition {
   id: number;
   task_id: number;

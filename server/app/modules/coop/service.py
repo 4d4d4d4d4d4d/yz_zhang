@@ -232,7 +232,10 @@ def compliance_for(db: Session, venture: Venture) -> dict:
     required_cert = ""
     if venture.category:
         cat = get_category(db, venture.category)
-        required_cert = cat.required_cert if cat else ""
+        from app.modules.task.service import category_certs
+
+        # SCN-181（307 号 spec）多张资质时标题写成「甲」「乙」职业资质；单张与以前一样
+        required_cert = "」「".join(category_certs(cat))
     path = cpath.evaluate(
         member_count=len(members(db, venture.user_id)),
         has_funds=acct.available_cents > 0,

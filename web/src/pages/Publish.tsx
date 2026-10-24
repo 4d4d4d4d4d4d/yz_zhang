@@ -1,4 +1,4 @@
-import { GUARDIAN_MODE_LABEL, minorPayload, type GuardianMode, apiErrorText, IP_ASSIGNMENT_LABEL, dayLabel, dayShiftsPayload, priceReferenceLine, localInputToServerTime, type IpAssignment, type PriceReference, type Task } from '@platform/core';
+import { categoryCertsText, type Category, GUARDIAN_MODE_LABEL, minorPayload, type GuardianMode, apiErrorText, IP_ASSIGNMENT_LABEL, dayLabel, dayShiftsPayload, priceReferenceLine, localInputToServerTime, type IpAssignment, type PriceReference, type Task } from '@platform/core';
 import { DraftHints } from '../Profiles';
 import { useEffect, useState, type FormEvent } from 'react';
 import type { DayShiftInput } from '@platform/core';
@@ -39,7 +39,7 @@ export default function Publish() {
     // 替发布方猜归属，对执行方不公平，对含第三方素材的交付物直接就是错的。
     ip_assignment: '',
   });
-  const [categories, setCategories] = useState<Array<{ name: string; required_cert: string }>>([]);
+  const [categories, setCategories] = useState<Array<Pick<Category, 'name' | 'required_cert' | 'extra_certs'>>>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [checklist, setChecklist] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -173,8 +173,9 @@ export default function Publish() {
               </select>
             </label>
           </div>
-          {categories.find((c) => c.name === form.category)?.required_cert && (
-            <p className="muted">⚠️ 该类目为受限类目，仅持「{categories.find((c) => c.name === form.category)!.required_cert}」资质的执行者可接单</p>
+          {/* SCN-181（307 号 spec）要多张资质的类目全部列出（张张都要有） */}
+          {categoryCertsText(categories.find((c) => c.name === form.category)) && (
+            <p className="muted">⚠️ 该类目为受限类目，仅持{categoryCertsText(categories.find((c) => c.name === form.category))}资质的执行者可接单</p>
           )}
           <div className="row">
             <label className="grow">预算（元）

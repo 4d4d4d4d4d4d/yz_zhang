@@ -127,8 +127,11 @@ def task_profile(db: Session, t: dict) -> dict:
             "small" if budget < mid * 0.5 else "large" if budget > mid * 2 else "medium")
 
     risks = []
-    if cat is not None and cat.required_cert:
-        risks.append({"kind": "cert", "text": f"这个类目要求「{cat.required_cert}」资质，没有的人报不了名"})
+    from app.modules.task.service import category_certs
+
+    certs = category_certs(cat)
+    if certs:
+        risks.append({"kind": "cert", "text": f"这个类目要求{''.join(f'「{c}」' for c in certs)}资质，没有的人报不了名"})
     for kind, (pat, msg) in RISK_WORDS.items():
         if pat.search(text) and not (kind == "onsite_home" and remote):
             risks.append({"kind": kind, "text": msg})

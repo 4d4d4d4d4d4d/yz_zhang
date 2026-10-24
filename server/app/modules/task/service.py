@@ -47,7 +47,8 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「数码维修与回收」「陪驾」——第十二轮场景发掘（302 号 spec，V329）；陪驾要审核通过的驾驶证
                     {"name": "数码维修与回收"}, {"name": "陪驾", "required_cert": DRIVER_CERT},
                     # 「搬家」「母婴护理」——第十三轮场景发掘（306 号 spec，V333）；母婴护理要审核通过的健康证明
-                    {"name": "搬家"}, {"name": "母婴护理", "required_cert": HEALTH_CERT}]
+                    # SCN-181（307 号 spec）母婴护理照护的是新生儿：还要无犯罪记录证明（与陪练看护同一道关）
+                    {"name": "搬家"}, {"name": "母婴护理", "required_cert": HEALTH_CERT, "extra_certs": [MINOR_CARE_CERT]}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
@@ -92,23 +93,43 @@ def get_category(db: Session, name: str):
     return db.query(Category).filter(Category.name == name).first()
 
 
+def category_certs(category) -> list[str]:
+    """SCN-181（307 号 spec）这个类目要的全部资质：required_cert 在前，再加 extra_certs（去空、去重）。"""
+    if category is None:
+        return []
+    out: list[str] = []
+    for c in [category.required_cert or "", *(category.extra_certs or [])]:
+        c = (c or "").strip()
+        if c and c not in out:
+            out.append(c)
+    return out
+
+
 def check_category_qualification(db: Session, task, user) -> None:
-    """ACC-022 受限类目准入（读类目表，运营后台可配）。"""
+    """ACC-022 受限类目准入（读类目表，运营后台可配）。SCN-181 类目可以要多张，张张都要有。"""
     category = get_category(db, task.category)
-    required = category.required_cert if category else ""
+    required = category_certs(category)
     if not required and getattr(task, "minor_involved", False):
-        required = MINOR_CARE_CERT          # SCN-144 服务对象是未成年人的单，不论哪个类目都要这份证明
+        required = [MINOR_CARE_CERT]        # SCN-144 服务对象是未成年人的单，不论哪个类目都要这份证明
     if not required:
         return
     # CERT-001/005 读的是**已核准且未过期**的资质，不是 user.certifications 里
     # 有没有这个名字。改造前那个字段是用户自己 POST 进去的，这道门一直是虚的。
     from app.modules.account import cert_service
 
-    if not cert_service.has_certification(db, user.id, required):
+    missing = [c for c in required if not cert_service.has_certification(db, user.id, c)]
+    if not missing:
+        return
+    if len(required) == 1:
         raise bad_request(
-            f"该类目需「{required}」职业资质，请提交证件影像并通过平台核验后接单",
+            f"该类目需「{required[0]}」职业资质，请提交证件影像并通过平台核验后接单",
             "certification_required",
         )
+    raise bad_request(
+        f"该类目需{''.join(f'「{c}」' for c in required)}{len(required)} 项职业资质，你还缺"
+        f"{''.join(f'「{c}」' for c in missing)}：请提交证件影像并通过平台核验后接单",
+        "certification_required",
+    )
 
 
 def check_executor_capacity(db: Session, user_id: int) -> None:

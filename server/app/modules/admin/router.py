@@ -1118,6 +1118,19 @@ def unban_user(user_id: int, admin: User = Depends(require_role("compliance")), 
 class CategoryIn(BaseModel):
     name: str = Field(min_length=1, max_length=50)
     required_cert: str = ""
+    # SCN-181（307 号 spec）还要的资质（张张都要有）
+    extra_certs: list[str] = Field(default_factory=list, max_length=5)
+
+
+def _cert_list(items) -> list[str]:
+    out: list[str] = []
+    for c in items:
+        c = (c or "").strip()
+        if len(c) > 30:
+            raise bad_request(f"资质名「{c[:10]}…」太长：最多 30 个字", "cert_name_too_long")
+        if c and c not in out:
+            out.append(c)
+    return out
 
 
 @router.post("/admin/categories", status_code=201)
@@ -1126,7 +1139,8 @@ def create_category(body: CategoryIn, admin: User = Depends(require_role("ops"))
 
     if db.query(Category).filter(Category.name == body.name).first():
         raise bad_request("类目已存在", "category_exists")
-    row = Category(name=body.name, required_cert=body.required_cert)
+    row = Category(name=body.name, required_cert=body.required_cert,
+                   extra_certs=[c for c in _cert_list(body.extra_certs) if c != body.required_cert.strip()])
     db.add(row)
     db.flush()
     return {"id": row.id, "name": row.name}
@@ -1135,6 +1149,7 @@ def create_category(body: CategoryIn, admin: User = Depends(require_role("ops"))
 @router.patch("/admin/categories/{category_id}")
 def update_category(
     category_id: int, active: bool | None = None, required_cert: str | None = None,
+    extra_certs: str | None = None,
     admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function"),
 ):
     from app.modules.task.models import Category
@@ -1146,8 +1161,19 @@ def update_category(
         row.active = active
     if required_cert is not None:
         row.required_cert = required_cert
+    if extra_certs is not None:
+        # SCN-181（307 号 spec）用顿号或逗号分隔；空字符串 = 只要 required_cert
+        import re as _re
+
+        items = _cert_list(_re.split(r"[、,，]", extra_certs))
+        if len(items) > 5:
+            raise bad_request("一个类目最多再要 5 张资质", "too_many_certs")
+        row.extra_certs = [c for c in items if c != (row.required_cert or "").strip()]
     db.add(row)
-    return {"id": row.id, "name": row.name, "active": row.active, "required_cert": row.required_cert}
+    out = {"id": row.id, "name": row.name, "active": row.active, "required_cert": row.required_cert}
+    if row.extra_certs:
+        out["extra_certs"] = list(row.extra_certs)
+    return out
 
 
 # ---------- 匹配策略配置（MATCH-008） ----------

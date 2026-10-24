@@ -26,3 +26,4 @@ export * from './priceReference';
 export * from './supportSchedule';
 export * from './holidayNotice';
 export * from './deliverables';
+export * from './categoryCerts';

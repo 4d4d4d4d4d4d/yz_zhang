@@ -138,6 +138,8 @@ class Category(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     required_cert: Mapped[str] = mapped_column(String(30), default="")  # ACC-022 准入资质
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # SCN-181（307 号 spec）除 required_cert 外还要的资质（都要有）；空 = 只要 required_cert（与以前一样）
+    extra_certs: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
 
 
 class Application(Base):

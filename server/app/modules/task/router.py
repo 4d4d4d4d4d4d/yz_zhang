@@ -703,7 +703,9 @@ def list_categories(db: Session = Depends(get_db, scope="function")):
     from .models import Category
 
     rows = db.query(Category).filter(Category.active.is_(True)).order_by(Category.id).all()
-    return [{"id": c.id, "name": c.name, "required_cert": c.required_cert} for c in rows]
+    # SCN-181（307 号 spec）要多张资质的类目才带 extra_certs
+    return [{"id": c.id, "name": c.name, "required_cert": c.required_cert,
+             **({"extra_certs": list(c.extra_certs)} if c.extra_certs else {})} for c in rows]
 
 
 @router.get("/task-templates")

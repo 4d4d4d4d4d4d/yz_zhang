@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, adminActionHint, canDoAdminAction, canSeeAdminSection, copyScheduleDay, parseHolidayNotice, type HolidayDraft, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type SupportLocalHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementCurveCompareRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type TaxRemitRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { categoryCerts, type Category, apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, adminActionHint, canDoAdminAction, canSeeAdminSection, copyScheduleDay, parseHolidayNotice, type HolidayDraft, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type SupportLocalHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementCurveCompareRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type TaxRemitRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -1795,7 +1795,7 @@ function SecurityBoard() {
 function CityAndCategory() {
   const { client } = useApp();
   const [cities, setCities] = useState<Array<{ id: number; name: string }>>([]);
-  const [cats, setCats] = useState<Array<{ id: number; name: string; required_cert: string }>>([]);
+  const [cats, setCats] = useState<Category[]>([]);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -1834,10 +1834,16 @@ function CityAndCategory() {
           {cats.map((c) => (
             <tr key={c.id}>
               <td>{c.name}</td>
-              <td>{c.required_cert || '不限'}</td>
+              <td>{categoryCerts(c).join('、') || '不限'}</td>
               <td>
                 <button className="ghost" style={{ padding: '2px 8px' }}
                         onClick={() => void act(() => client.updateCategory(c.id, { active: false }))}>停用</button>
+                {/* SCN-181（307 号 spec）主资质之外还要的资质（张张都要有） */}
+                {c.required_cert && <button className="text-link" onClick={() => {
+                  const v = prompt(`「${c.name}」除了「${c.required_cert}」还要哪些资质？（用顿号分隔，留空 = 只要「${c.required_cert}」）`,
+                    (c.extra_certs ?? []).join('、'));
+                  if (v !== null) void act(() => client.updateCategory(c.id, { extra_certs: v.trim() }));
+                }}>其余资质</button>}
               </td>
             </tr>
           ))}

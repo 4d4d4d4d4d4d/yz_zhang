@@ -1,5 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
+  Category,
   AssistantContract, SkillConceptAdminView, SkillConceptList, SkillConceptRow, SkillNormalizeResult, Cockpit, CapabilityProfile, SandboxModelAdminRow, SandboxModelInput, SandboxModelList, SandboxState, InfluenceLeaderboard, InfluenceMine, InfluenceLatestSnapshot, InfluenceProof, InfluencePublic, InfluenceVouchInput, InfluenceVouchRow, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, GigRouteInput, GigRouteView, VentureSentInvitation, AdminTicketDetail, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarKnowledgeDraft, RadarSignal, LegalFaqInput, LegalFaqRow, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineHealth, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbRunStatus, WbStatus, WbStep,
   CommercialReadiness,
   AgentProfileView,
@@ -1449,7 +1450,7 @@ export class PlatformClient {
     );
   }
   categories() {
-    return this.request<Array<{ id: number; name: string; required_cert: string }>>('GET', '/categories').then(listOf);
+    return this.request<Category[]>('GET', '/categories').then(listOf);
   }
   cities() {
     return this.request<Array<{ id: number; name: string }>>('GET', '/cities').then(listOf);
@@ -1980,17 +1981,19 @@ export class PlatformClient {
       'PATCH', `/admin/cities/${cityId}?active=${active}`,
     );
   }
-  createCategory(name: string, requiredCert = '') {
+  createCategory(name: string, requiredCert = '', extraCerts: string[] = []) {
+    // SCN-181（307 号 spec）没有其余资质时不发 extra_certs（与以前的请求体一样）
     return this.request<{ id: number; name: string }>('POST', '/admin/categories', {
-      name, required_cert: requiredCert,
+      name, required_cert: requiredCert, extra_certs: extraCerts.length ? extraCerts : undefined,
     });
   }
-  updateCategory(categoryId: number, params: { active?: boolean; required_cert?: string } = {}) {
+  /** SCN-181 `extra_certs` 用顿号分隔；空字符串 = 只要 required_cert */
+  updateCategory(categoryId: number, params: { active?: boolean; required_cert?: string; extra_certs?: string } = {}) {
     const qs = Object.entries(params)
       .filter(([, v]) => v !== undefined)
       .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
       .join('&');
-    return this.request<{ id: number; name: string; active: boolean; required_cert: string }>(
+    return this.request<{ id: number; name: string; active: boolean; required_cert: string; extra_certs?: string[] }>(
       'PATCH', `/admin/categories/${categoryId}${qs ? `?${qs}` : ''}`,
     );
   }
