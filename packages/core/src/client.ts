@@ -152,6 +152,8 @@ import type {
   SupportScheduleResult,
   SupportHoliday,
   SupportHolidayBulkResult,
+  SupportLocalHoliday,
+  SupportRegionResult,
   ApiAccountQuotaRow,
   TeamSpendReturned,
   TeamReturnAsked,
@@ -1913,6 +1915,21 @@ export class PlatformClient {
   /** ESCA-072（288 号 spec）主管核对过通知解析出的草稿（`parseHolidayNotice`）后一次保存；要么全存、要么一条不存 */
   addSupportHolidaysBulk(items: Array<{ day: string; kind: SupportHoliday['kind']; label: string; as_weekday: number | null }>) {
     return this.request<SupportHolidayBulkResult>('POST', '/admin/support/holidays/bulk', { items });
+  }
+  /** ESCA-073（305 号 spec）地区性假日（客服都能看） */
+  supportLocalHolidays() {
+    return this.request<SupportLocalHoliday[]>('GET', '/admin/support/local-holidays').then(listOf);
+  }
+  /** ESCA-073 主管录入某地区放假的一天：只对所在地区相同的客服起作用 */
+  addSupportLocalHoliday(day: string, region: string, label = '') {
+    return this.request<SupportLocalHoliday>('POST', '/admin/support/local-holidays', { day, region, label });
+  }
+  deleteSupportLocalHoliday(id: number) {
+    return this.request<{ id: number; deleted: boolean }>('DELETE', `/admin/support/local-holidays/${id}`);
+  }
+  /** ESCA-073 主管给客服设所在地区；传空字符串 = 不分地区 */
+  setSupportAgentRegion(userId: number, region: string) {
+    return this.request<SupportRegionResult>('PUT', `/admin/support/agents/${userId}/region`, { region });
   }
   /** ESCA-065 提前恢复接单 */
   resumeMySupport() {

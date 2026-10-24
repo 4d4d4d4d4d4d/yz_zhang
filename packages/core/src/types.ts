@@ -1828,6 +1828,21 @@ export interface SupportHoliday {
   as_weekday: number | null;
   label: string;
 }
+/** ESCA-073（305 号 spec）地区性假日：只对所在地区相同、设了排班的客服起作用 */
+export interface SupportLocalHoliday {
+  id: number;
+  /** 北京时间的日期 YYYY-MM-DD */
+  day: string;
+  region: string;
+  label: string;
+  /** 这个地区现在有几位客服（0 = 还没给谁设这个地区，录了也不起作用） */
+  agents: number;
+}
+/** ESCA-073 主管给客服设所在地区的结果；不分地区为 null */
+export interface SupportRegionResult {
+  user_id: number;
+  region: string | null;
+}
 /** ESCA-072（288 号 spec）按通知一次导入：已经录过的日子跳过，不覆盖 */
 export interface SupportHolidayBulkResult {
   created: SupportHoliday[];
@@ -3618,6 +3633,8 @@ export interface SupportAgentStatus {
   on_duty: boolean;
   /** ESCA-068 排班；没设为空数组 */
   schedule: SupportScheduleWindow[];
+  /** ESCA-073（305 号 spec）所在地区；没设不出这个字段 */
+  region?: string;
 }
 
 /** AGT-100（251 号 spec）这次编排对「我的方法」的备注修改建议（草稿） */

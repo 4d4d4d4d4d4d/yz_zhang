@@ -123,10 +123,13 @@ def paused_agents(db: Session) -> set[int]:
 
 
 def holidays(db: Session) -> dict:
-    """ESCA-070（276 号 spec）节假日 / 调休日历：{日期: (kind, as_weekday)}。只在设了排班的客服身上起作用。"""
-    from .models import SupportHoliday
+    """ESCA-070（276 号 spec）节假日 / 调休日历：{日期: (kind, as_weekday)}。只在设了排班的客服身上起作用。
+    ESCA-073（305 号 spec）地区性假日的键是 (日期, 地区)，只对所在地区相同的客服起作用。"""
+    from .models import SupportHoliday, SupportLocalHoliday
 
-    return {h.day: (h.kind, h.as_weekday) for h in db.query(SupportHoliday).all()}
+    out: dict = {h.day: (h.kind, h.as_weekday) for h in db.query(SupportHoliday).all()}
+    out.update({(h.day, h.region): ("off", None) for h in db.query(SupportLocalHoliday).all()})
+    return out
 
 
 # ESCA-074（293 号 spec）国务院一般在每年 11 月前后发下一年的放假通知；11 月到次年 1 月之间，
@@ -181,6 +184,10 @@ def off_duty(scope, now: datetime, hol: dict | None = None) -> bool:
     weekday = t.weekday()
     # ESCA-070（276 号 spec）放假整天不在岗；调休上班按指定那天的排班
     kind, as_weekday = (hol or {}).get(t.date(), (None, None))
+    # ESCA-073（305 号 spec）所在地区放假这天也整天不在岗（哪怕全国是调休上班）
+    region = getattr(scope, "region", None)
+    if region and (t.date(), region) in (hol or {}):
+        return True
     if kind == "off":
         return True
     if kind == "workday" and as_weekday is not None:

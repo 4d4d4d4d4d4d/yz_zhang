@@ -86,6 +86,8 @@ class SupportAgentScope(Base):
     # ESCA-068（260 号 spec）排班：[{weekday 0~6（周一为 0）, start "09:00", end "18:00"}]，北京时间；
     # 设了排班的人在排班以外的时间算「不在岗」（与暂停同样处理）；不设 = 一直在岗（与以前一样）
     schedule: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
+    # ESCA-073（305 号 spec）所在地区（如「新疆」「宁夏」），由主管设置；地区性假日只对这个地区的客服起作用。空 = 不分地区
+    region: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
 
 class SupportHoliday(Base):
@@ -99,6 +101,22 @@ class SupportHoliday(Base):
     day: Mapped[date] = mapped_column(Date, unique=True)
     kind: Mapped[str] = mapped_column(String(8), default="off")          # off / workday
     as_weekday: Mapped[int | None] = mapped_column(Integer, nullable=True)  # workday 时按周几的排班（0=周一）
+    label: Mapped[str] = mapped_column(String(40), default="")
+    created_by: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class SupportLocalHoliday(Base):
+    """ESCA-073（305 号 spec）地区性假日：民族自治地方的节日（如新疆、宁夏的古尔邦节）、地方规定的假日。
+    只对「所在地区」设成这个地区的客服起作用：那天他整天不在岗（与全国放假一样处理），别的地区照常排班。
+    公司自定的全员假期（年会日等）照旧录在全国日历里（support_holidays，说明写清是什么假）。"""
+
+    __tablename__ = "support_local_holidays"
+    __table_args__ = (UniqueConstraint("day", "region"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    day: Mapped[date] = mapped_column(Date)
+    region: Mapped[str] = mapped_column(String(20))
     label: Mapped[str] = mapped_column(String(40), default="")
     created_by: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

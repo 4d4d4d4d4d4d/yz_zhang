@@ -383,6 +383,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   showcase_task_not_completed: '这一单完成验收后才能授权展示',
   holiday_exists: '这一天已经录过了：先删掉再重录',
   holiday_weekday_required: '调休上班要写按周几的排班算（例如按周五）',
+  holiday_region_required: '要写是哪个地区的假日，写法与给客服设的地区一样（如「新疆」）',
   // ESCA-072（288 号 spec）
   holiday_duplicate_in_batch: '这次导入里同一天出现了两次：删掉一条再保存',
   support_schedule_overlap: '同一天的两段排班时间重叠了：请改成首尾相接或分开',

@@ -2,6 +2,7 @@
 api DELETE /api/v1/admin/api-accounts/{user_id}/quota
 api DELETE /api/v1/admin/support/agents/{user_id}/pause
 api DELETE /api/v1/admin/support/holidays/{holiday_id}
+api DELETE /api/v1/admin/support/local-holidays/{holiday_id}
 api DELETE /api/v1/admin/support/my-pause
 api DELETE /api/v1/contents/{content_id}
 api DELETE /api/v1/conversations/{conv_id}/members/{member_id}
@@ -74,6 +75,7 @@ api GET /api/v1/admin/settlements/verify
 api GET /api/v1/admin/skill-concepts
 api GET /api/v1/admin/support/agents
 api GET /api/v1/admin/support/holidays
+api GET /api/v1/admin/support/local-holidays
 api GET /api/v1/admin/support/my-categories
 api GET /api/v1/admin/teams/pending
 api GET /api/v1/admin/tickets
@@ -366,6 +368,7 @@ api POST /api/v1/admin/subsidy-pool/fund
 api POST /api/v1/admin/support/agents/{user_id}/pause
 api POST /api/v1/admin/support/holidays
 api POST /api/v1/admin/support/holidays/bulk
+api POST /api/v1/admin/support/local-holidays
 api POST /api/v1/admin/support/my-pause
 api POST /api/v1/admin/teams/{team_id}/verify
 api POST /api/v1/admin/tickets/{ticket_id}/assign
@@ -597,6 +600,7 @@ api PUT /api/v1/admin/api-accounts/{user_id}/quota
 api PUT /api/v1/admin/legal/faqs/{faq_id}
 api PUT /api/v1/admin/matching-config
 api PUT /api/v1/admin/packs/{pack_id}
+api PUT /api/v1/admin/support/agents/{user_id}/region
 api PUT /api/v1/admin/support/my-categories
 api PUT /api/v1/admin/support/my-schedule
 api PUT /api/v1/developer/api-keys/{key_id}/quota
@@ -671,6 +675,7 @@ sdk addOrganizationRecord
 sdk addProgress
 sdk addSupportHoliday
 sdk addSupportHolidaysBulk
+sdk addSupportLocalHoliday
 sdk addTeamMember
 sdk addWorkbenchChildren
 sdk addWorkbenchLog
@@ -827,6 +832,7 @@ sdk deleteMethod
 sdk deleteNote
 sdk deleteOpcEntry
 sdk deleteSupportHoliday
+sdk deleteSupportLocalHoliday
 sdk deleteWebhook
 sdk deleteWorkbenchItem
 sdk deleteWorkbenchMemory
@@ -1086,6 +1092,7 @@ sdk setMySupportCategories
 sdk setMySupportSchedule
 sdk setNotificationPref
 sdk setSandbox
+sdk setSupportAgentRegion
 sdk setTeamApprovalMode
 sdk setTeamBudget
 sdk setTicketPriority
@@ -1108,6 +1115,7 @@ sdk subscribeCategory
 sdk supplyHint
 sdk supportAgents
 sdk supportHolidays
+sdk supportLocalHolidays
 sdk taskDraftProfile
 sdk taskProfile
 sdk taskTemplate

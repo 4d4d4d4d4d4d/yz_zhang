@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, adminActionHint, canDoAdminAction, canSeeAdminSection, copyScheduleDay, parseHolidayNotice, type HolidayDraft, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementCurveCompareRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type TaxRemitRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, adminActionHint, canDoAdminAction, canSeeAdminSection, copyScheduleDay, parseHolidayNotice, type HolidayDraft, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type SupportLocalHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementCurveCompareRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type TaxRemitRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -1267,6 +1267,48 @@ function SupportHolidays() {
       </div>
       {error && <p className="error">{error}</p>}
       <HolidayNoticeImport onSaved={() => void load()} />
+      <LocalHolidays />
+    </div>
+  );
+}
+
+/** ESCA-073（305 号 spec）地区性假日：民族自治地方的节日等只在当地放假，只对「设地区」设成这个地区的客服起作用 */
+function LocalHolidays() {
+  const { client } = useApp();
+  const [rows, setRows] = useState<SupportLocalHoliday[]>([]);
+  const [day, setDay] = useState('');
+  const [region, setRegion] = useState('');
+  const [label, setLabel] = useState('');
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setRows(asList<SupportLocalHoliday>(await client.supportLocalHolidays().catch(() => [])));
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+  async function act(fn: () => Promise<unknown>) {
+    setError('');
+    try { await fn(); await load(); } catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <div aria-label="地区性假日" style={{ marginTop: 8 }}>
+      <p className="muted">地区性假日（如新疆、宁夏的古尔邦节）：只对在上面「设地区」设成这个地区、又设了排班的客服起作用，别的地区照常。公司自定的全员假期录在上面的全国日历里。</p>
+      {rows.map((h) => (
+        <div key={h.id} className="row" data-testid={`local-holiday-${h.id}`}>
+          <span className="grow">{h.day} {h.region} 放假 {h.label}
+            {h.agents === 0 ? <span className="error"> · 还没有客服设为「{h.region}」，这一天不起作用</span>
+              : <span className="muted"> · 影响 {h.agents} 位客服</span>}</span>
+          <button className="text-link" onClick={() => void act(() => client.deleteSupportLocalHoliday(h.id))}>删掉</button>
+        </div>
+      ))}
+      <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+        <input type="date" aria-label="地区假日日期" value={day} onChange={(e) => setDay(e.target.value)} />
+        <input aria-label="地区" placeholder="如：新疆" value={region} onChange={(e) => setRegion(e.target.value)} />
+        <input aria-label="地区假日说明" placeholder="如：古尔邦节" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <button className="ghost" disabled={!day || !region.trim()} onClick={() => void act(async () => {
+          await client.addSupportLocalHoliday(day, region.trim(), label.trim());
+          setDay(''); setLabel('');
+        })}>录入地区假日</button>
+      </div>
+      {error && <p className="error">{error}</p>}
     </div>
   );
 }
@@ -1341,7 +1383,7 @@ function SupportAgentBoard() {
   return (
     <div aria-label="客服状态">
       <table>
-        <thead><tr><th>客服</th><th>负责</th><th>自动分配</th><th>状态</th><th>手上未结</th><th /></tr></thead>
+        <thead><tr><th>客服</th><th>负责</th><th>自动分配</th><th>状态</th><th>手上未结</th><th>地区</th><th /></tr></thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.user_id} data-testid={`agent-${r.user_id}`}>
@@ -1353,6 +1395,18 @@ function SupportAgentBoard() {
                 : r.on_duty === false ? '不在排班里' : '在岗'}
                 {!!r.schedule?.length && <span className="muted"> · 排班 {scheduleText(r.schedule)}</span>}</td>
               <td>{r.open_tickets}</td>
+              {/* ESCA-073（305 号 spec）所在地区：地区性假日只对这个地区的客服起作用 */}
+              <td>{r.region ?? <span className="muted">不分地区</span>}
+                <button className="text-link" onClick={async () => {
+                  const v = window.prompt(`${r.nickname || `#${r.user_id}`} 在哪个地区？（与地区性假日的写法一样，如「新疆」；留空 = 不分地区）`, r.region ?? '');
+                  if (v === null) return;
+                  setError(''); setNotice('');
+                  try {
+                    const res = await client.setSupportAgentRegion(r.user_id, v.trim());
+                    setNotice(res.region ? `已把 ${r.nickname || `#${r.user_id}`} 设为「${res.region}」：当地放假那天他不在岗` : `${r.nickname || `#${r.user_id}`} 已改为不分地区`);
+                    await load();
+                  } catch (e) { setError(apiErrorText(e)); }
+                }}>设地区</button></td>
               <td>{!r.paused_until && <button className="ghost" onClick={async () => {
                 const hours = Number(window.prompt(`给 ${r.nickname || `#${r.user_id}`} 暂停接单几小时？（1~720）`, '8') ?? '');
                 if (!hours) return;

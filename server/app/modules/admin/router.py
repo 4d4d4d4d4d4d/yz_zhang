@@ -480,6 +480,94 @@ def delete_support_holiday(holiday_id: int, admin: User = Depends(require_role("
     return {"id": holiday_id, "deleted": True}
 
 
+class SupportLocalHolidayIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    day: date
+    region: str = Field(min_length=1, max_length=20)
+    label: str = Field(default="", max_length=40)
+
+
+def _local_holiday_row(h, agents: int) -> dict:
+    return {"id": h.id, "day": day(h.day), "region": h.region, "label": h.label, "agents": agents}
+
+
+def _region_agents(db: Session) -> dict[str, int]:
+    from sqlalchemy import func
+
+    from app.modules.support.models import SupportAgentScope
+
+    return dict(db.query(SupportAgentScope.region, func.count(SupportAgentScope.id))
+                .filter(SupportAgentScope.region.isnot(None)).group_by(SupportAgentScope.region).all())
+
+
+@router.get("/admin/support/local-holidays")
+def support_local_holidays(admin: User = Depends(require_role("support")), db: Session = Depends(get_db, scope="function")):
+    """ESCA-073（305 号 spec）地区性假日（客服都能看）：每一天带上这个地区现在有几位客服（0 位说明还没给谁设地区）。"""
+    from app.modules.support.models import SupportLocalHoliday
+
+    n = _region_agents(db)
+    return [_local_holiday_row(h, n.get(h.region, 0))
+            for h in db.query(SupportLocalHoliday).order_by(SupportLocalHoliday.day, SupportLocalHoliday.region)]
+
+
+@router.post("/admin/support/local-holidays", status_code=201)
+def add_support_local_holiday(body: SupportLocalHolidayIn, admin: User = Depends(require_role("super")),
+                              db: Session = Depends(get_db, scope="function")):
+    """ESCA-073 主管按当地的规定录入：这天所在地区设成这个地区、又设了排班的客服整天不在岗，别的地区照常。"""
+    from app.modules.support.models import SupportLocalHoliday
+
+    region = body.region.strip()
+    if not region:
+        raise bad_request("要写是哪个地区的假日（与给客服设的地区写法一样，如「新疆」）", "holiday_region_required")
+    if db.query(SupportLocalHoliday).filter(SupportLocalHoliday.day == body.day,
+                                            SupportLocalHoliday.region == region).first() is not None:
+        raise conflict(f"{region} 的 {day(body.day)} 已经录过了：先删掉再重录", "holiday_exists")
+    h = SupportLocalHoliday(day=body.day, region=region, label=body.label.strip(), created_by=admin.id)
+    db.add(h)
+    db.flush()
+    record_audit(db, admin.id, "support_local_holiday_add", "support_local_holiday", h.id,
+                 f"{region} {day(body.day)} 放假 {h.label}".strip())
+    return _local_holiday_row(h, _region_agents(db).get(region, 0))
+
+
+@router.delete("/admin/support/local-holidays/{holiday_id}")
+def delete_support_local_holiday(holiday_id: int, admin: User = Depends(require_role("super")),
+                                 db: Session = Depends(get_db, scope="function")):
+    from app.modules.support.models import SupportLocalHoliday
+
+    h = db.get(SupportLocalHoliday, holiday_id)
+    if h is None:
+        raise not_found("没有这一天")
+    record_audit(db, admin.id, "support_local_holiday_delete", "support_local_holiday", h.id, f"{h.region} {day(h.day)}")
+    db.delete(h)
+    return {"id": holiday_id, "deleted": True}
+
+
+class SupportRegionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    region: str = Field(default="", max_length=20)
+
+
+@router.put("/admin/support/agents/{user_id}/region")
+def set_support_agent_region(user_id: int, body: SupportRegionIn, admin: User = Depends(require_role("super")),
+                             db: Session = Depends(get_db, scope="function")):
+    """ESCA-073（305 号 spec）主管给客服设所在地区（空字符串 = 不分地区）：地区性假日只对这个地区的客服起作用。"""
+    from app.core.admin_roles import has_role
+    from app.modules.support.escalation import CATEGORIES
+    from app.modules.support.models import SupportAgentScope
+
+    target = db.get(User, user_id)
+    if target is None or not target.is_admin or target.is_banned or not has_role(target, "support"):
+        raise bad_request("只能给能处理工单的客服设置地区", "assignee_not_support")
+    row = db.query(SupportAgentScope).filter(SupportAgentScope.user_id == user_id).first()
+    if row is None:
+        row = SupportAgentScope(user_id=user_id, categories=list(CATEGORIES))
+    row.region = body.region.strip() or None
+    db.add(row)
+    record_audit(db, admin.id, "support_region", "user", user_id, f"所在地区 {row.region}" if row.region else "不分地区")
+    return {"user_id": user_id, "region": row.region}
+
+
 @router.put("/admin/support/my-schedule")
 def set_my_support_schedule(body: SupportScheduleIn, admin: User = Depends(require_role("support")),
                             db: Session = Depends(get_db, scope="function")):
@@ -601,7 +689,9 @@ def support_agents(admin: User = Depends(require_role("super")), db: Session = D
                     "auto_assign": bool(sc.auto_assign) if sc else False,
                     "paused_until": iso(sc.paused_until) if paused else None, "open_tickets": int(load.get(u.id, 0)),
                     # ESCA-068（260 号 spec）现在是否在岗（暂停或排班以外为否）与排班
-                    "on_duty": not off_duty(sc, now, hol) if sc else True, "schedule": list(sc.schedule or []) if sc else []})
+                    "on_duty": not off_duty(sc, now, hol) if sc else True, "schedule": list(sc.schedule or []) if sc else [],
+                    # ESCA-073（305 号 spec）设了地区才带
+                    **({"region": sc.region} if sc is not None and sc.region else {})})
     return out
 
 
