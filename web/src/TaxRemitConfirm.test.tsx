@@ -10,7 +10,7 @@ const ADMIN = { id: 1, phone: '138****0001', nickname: '财务', bio: '', city: 
   is_verified: true, is_admin: true, admin_roles: ['finance'], credit_score: 100, rating_avg: 0, tasks_completed: 0,
   certifications: [], credit_level: '普通', referral_code: 'r1' };
 const DRAFT = { id: 9, amount_cents: 12345600, status: 'awaiting_confirm', decided_by: null, decision_reason: '',
-  created_at: '2026-10-24T00:00:00Z', decided_at: null };
+  created_at: '2026-10-24T00:00:00Z', decided_at: null, waited_days: 0 };
 
 function open(calls: Array<{ method: string; path: string; body: unknown }>, pending: unknown[]) {
   localStorage.setItem('token', 'tok');
@@ -60,5 +60,12 @@ describe('PAY-042d 待确认的缴库', () => {
     fireEvent.click(within(box).getByText('驳回'));
     await waitFor(() => expect(calls.find((c) => c.path === '/finance/tax-remits/9/reject')?.body).toEqual({ reason: '与申报表差 12 元' }));
     ask.mockRestore();
+  });
+
+  it('PAY-042f 等了 3 天以上的标出来，没到 3 天的不标', async () => {
+    open([], [DRAFT, { ...DRAFT, id: 10, waited_days: 4 }]);
+    const box = await screen.findByLabelText('待确认的缴库');
+    expect((await within(box).findByTestId('remit-waited-10')).textContent).toBe('已等 4 天，请尽快核对');
+    expect(within(box).queryByTestId('remit-waited-9')).toBeNull();
   });
 });

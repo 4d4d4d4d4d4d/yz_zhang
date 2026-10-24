@@ -75,6 +75,8 @@ JOBS: tuple[ScheduledJob, ...] = (
                  "SECEV-006 安全事件保留期清理"),
     ScheduledJob("/finance/jobs/remit-tax", 86400, "remit_tax",
                  "TAX-013 代扣税款缴库，与申报周期对齐"),
+    ScheduledJob("/finance/jobs/remind-tax-remits", 3600, "tax_remit_reminders",
+                 "PAY-042f 缴库草稿等确认超过 3 天催财务（每笔一天一次）"),
     ScheduledJob("/knowledge/jobs/reindex", 3600, "kb_reindex",
                  "KB-011 向量索引增量重建：只补没有向量或模型已换的行"),
     ScheduledJob("/knowledge/jobs/cluster", 3600, "kb_cluster",

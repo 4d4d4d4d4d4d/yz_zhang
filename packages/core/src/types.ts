@@ -63,6 +63,8 @@ export interface TaxRemitRequestRow {
   decision_reason: string;
   created_at: string;
   decided_at: string | null;
+  /** PAY-042f（291 号 spec）等了几天：等确认的算到现在，处理过的算到处理时 */
+  waited_days: number;
 }
 /** 确认后：多一个划出后的税款专户余额 */
 export interface TaxRemitConfirmed extends TaxRemitRequestRow {

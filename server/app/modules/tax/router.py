@@ -31,8 +31,11 @@ def remit_tax(db: Session = Depends(get_db, scope="function"), _=Depends(require
 
 
 def _remit_row(r) -> dict:
+    # PAY-042f（291 号 spec）等了几天：等确认的算到现在，处理过的算到处理时
+    waited = ((r.decided_at or utcnow()) - r.created_at).days
     return {"id": r.id, "amount_cents": r.amount_cents, "status": r.status, "decided_by": r.decided_by,
-            "decision_reason": r.decision_reason, "created_at": iso(r.created_at), "decided_at": iso(r.decided_at)}
+            "decision_reason": r.decision_reason, "created_at": iso(r.created_at), "decided_at": iso(r.decided_at),
+            "waited_days": waited}
 
 
 @router.get("/tax-remits")
@@ -94,6 +97,13 @@ def reject_tax_remit(request_id: int, body: RemitDecisionIn, admin: User = Depen
     record_audit(db, admin.id, "tax_remit_reject", "tax_remit", req.id,
                  f"驳回缴库草稿 {req.amount_cents} 分：{req.decision_reason}")
     return _remit_row(req)
+
+
+@router.post("/jobs/remind-tax-remits")
+def run_remind_tax_remits(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                          __=Depends(job_slot("tax_remit_reminders"), scope="function")):
+    """PAY-042f（291 号 spec）等确认太久的缴库草稿催财务。"""
+    return service.remind_remits(db)
 
 
 @router.get("/tax-ledger")

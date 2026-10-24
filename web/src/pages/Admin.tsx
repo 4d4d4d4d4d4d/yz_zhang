@@ -449,7 +449,9 @@ function TaxRemits() {
       {error && <p className="error">{error}</p>}
       {rows.map((r) => (
         <div className="task-item" key={r.id}>
-          <div>{fmtYuan(r.amount_cents)} <span className="muted">缴库草稿 #{r.id}，{formatDateTime(r.created_at)} 生成；请与本期申报数核对，确认前钱还在税款专户</span></div>
+          <div>{fmtYuan(r.amount_cents)} <span className="muted">缴库草稿 #{r.id}，{formatDateTime(r.created_at)} 生成；请与本期申报数核对，确认前钱还在税款专户</span>
+            {/* PAY-042f（291 号 spec）超过 3 天每天催财务 */}
+            {r.waited_days >= 3 && <span className="badge warn" data-testid={`remit-waited-${r.id}`}>已等 {r.waited_days} 天，请尽快核对</span>}</div>
           <span className="row">
             <button onClick={() => void act(async () => {
               const c = await client.confirmTaxRemit(r.id);

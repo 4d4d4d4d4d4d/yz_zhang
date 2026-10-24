@@ -98,6 +98,36 @@ def remit(db) -> dict:
             "note": "已划出待缴税款；真实环境此处对应向税务专户的实际划款与申报"}
 
 
+# PAY-042f（291 号 spec）缴库草稿等确认超过这么多天，每天催一次财务
+TAX_REMIT_REMIND_DAYS = 3
+
+
+def remind_remits(db) -> dict:
+    """等确认超过 3 天的缴库草稿：催财务，一天最多一次；处理了就不催。"""
+    from datetime import timedelta
+
+    from app.modules.account.models import utcnow
+
+    from .models import TaxRemitRequest
+
+    now = utcnow()
+    due = (db.query(TaxRemitRequest)
+           .filter(TaxRemitRequest.status == "awaiting_confirm",
+                   TaxRemitRequest.created_at <= now - timedelta(days=TAX_REMIT_REMIND_DAYS))
+           .order_by(TaxRemitRequest.id).all())
+    due = [r for r in due if r.reminded_at is None or r.reminded_at <= now - timedelta(hours=24)]
+    if not due:
+        return {"reminded": 0}
+    for r in due:
+        days = (now - r.created_at).days
+        _notify_finance(db, "缴库草稿还没确认",
+                        f"缴库草稿 #{r.id}（¥{r.amount_cents / 100:.2f}）已经等了 {days} 天。代扣的税款要按期申报缴纳，"
+                        "请在管理后台「平台收支 → 待确认的缴库」与申报数核对后确认；对不上就驳回并写明原因。")
+        r.reminded_at = now
+        db.add(r)
+    return {"reminded": len(due)}
+
+
 def remit_amount(db, acct, amount: int) -> None:
     acct.available_cents -= amount
     wallet._log(db, TAX_USER_ID, "tax_remit", -amount, None, "代扣税款缴库")

@@ -69,3 +69,5 @@ class TaxRemitRequest(Base):
     decision_reason: Mapped[str] = mapped_column(String(200), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # PAY-042f（291 号 spec）上次催财务的时间：一天最多催一次
+    reminded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

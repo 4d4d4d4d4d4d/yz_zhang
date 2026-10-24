@@ -437,6 +437,7 @@ api POST /api/v1/events/jobs/purge-security
 api POST /api/v1/files
 api POST /api/v1/files/sign-upload
 api POST /api/v1/finance/invoices
+api POST /api/v1/finance/jobs/remind-tax-remits
 api POST /api/v1/finance/jobs/remit-tax
 api POST /api/v1/finance/tax-remits/{request_id}/confirm
 api POST /api/v1/finance/tax-remits/{request_id}/reject

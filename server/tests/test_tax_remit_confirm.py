@@ -108,3 +108,52 @@ def test_below_the_line_the_job_still_remits_in_one_step(client, requester, work
     before = _balance()
     r = client.post(JOB, headers=JOB_HEADERS).json()
     assert r["remitted_cents"] == before and "pending_request_id" not in r, "线下响应与以前一样"
+
+
+# ---------------------------------------------------------------- PAY-042f（291 号 spec，V318）
+REMIND = f"{API}/finance/jobs/remind-tax-remits"
+
+
+def test_drafts_waiting_over_3_days_nag_finance_once_a_day(client, requester, worker, withholding, low_line):
+    from datetime import timedelta
+
+    from app.modules.account.models import utcnow
+    from app.modules.tax.models import TaxRemitRequest
+
+    fin = _admin(client, "13800370005", ["finance"])
+    ops = _admin(client, "13800370006", ["ops"])
+    run_loop(client, requester, worker)
+    rid = client.post(JOB, headers=JOB_HEADERS).json()["pending_request_id"]
+
+    def age(days=0, reminded_hours=None):
+        with SessionLocal() as db:
+            r = db.get(TaxRemitRequest, rid)
+            r.created_at = utcnow() - timedelta(days=days, minutes=1)
+            r.reminded_at = None if reminded_hours is None else utcnow() - timedelta(hours=reminded_hours)
+            db.commit()
+
+    def nags():
+        with SessionLocal() as db:
+            return [(n.user_id, n.body) for n in db.query(Notification).filter(Notification.title == "缴库草稿还没确认")]
+
+    age(days=2)
+    assert client.post(REMIND, headers=JOB_HEADERS).json() == {"reminded": 0}, "不到 3 天不催"
+    row = client.get(R, headers=auth(fin)).json()[0]
+    assert row["waited_days"] == 2
+    age(days=3)
+    assert client.post(REMIND, headers=JOB_HEADERS).json() == {"reminded": 1}
+    got = nags()
+    assert [u for u, _ in got] == [fin["id"]] and ops["id"] not in [u for u, _ in got], "只催财务"
+    assert f"#{rid}" in got[0][1] and "等了 3 天" in got[0][1]
+    assert client.post(REMIND, headers=JOB_HEADERS).json() == {"reminded": 0}, "一天只催一次"
+    age(days=4, reminded_hours=25)
+    assert client.post(REMIND, headers=JOB_HEADERS).json() == {"reminded": 1}, "过一天再催"
+    assert client.post(f"{R}/{rid}/confirm", headers=auth(fin)).status_code == 200
+    with SessionLocal() as db:
+        db.get(TaxRemitRequest, rid).decided_at = utcnow() - timedelta(days=1)
+        db.commit()
+    done = client.get(f"{R}?status=remitted", headers=auth(fin)).json()[0]
+    assert done["waited_days"] == 3, "处理过的算到处理时（4 天前生成、1 天前处理）"
+    age(days=9, reminded_hours=48)
+    assert client.post(REMIND, headers=JOB_HEADERS).json() == {"reminded": 0}, "处理了就不催"
+    assert client.post(REMIND).status_code == 403, "没有 job 密钥被拒"
