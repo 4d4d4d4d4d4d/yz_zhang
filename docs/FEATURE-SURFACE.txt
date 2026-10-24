@@ -628,6 +628,7 @@ app availability
 app certifications
 app collaborators
 app decompose
+app deliverables
 app experience
 app gig
 app influence
@@ -845,6 +846,7 @@ sdk distillKnowledgeUnit
 sdk distillMethod
 sdk distillMissionMethod
 sdk distributeVenture
+sdk downloadDeliverable
 sdk editContent
 sdk editDecomposition
 sdk editDecompositionNode
