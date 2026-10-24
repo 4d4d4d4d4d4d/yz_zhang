@@ -27,9 +27,11 @@ OBS = os.path.join(SERVER, "app", "core", "observability.py")
 # 语法层面的 yield/return/break 误用。风格类一条不开（理由同前端 APPB-052b）
 # LINT-004（262 号 spec，V289）例外：未用导入（F401）。清到 0 之后它只会在新代码里出现、改一行就好，
 # 不会逼人加 --quiet；留着它，读代码的人会以为那个名字在这里有用（V168 的 func 就是反过来的同一类错）
-RULES = "F821,F822,F823,F632,F601,F7,F401,F841"
+RULES = "F821,F822,F823,F632,F601,F7,F401,F841,F811"
 # LINT-007（270 号 spec，V297）只查 app/ 与 scripts/ 的规则：重复定义（F811）在测试里会误报
 # ——按名字注入的 pytest fixture 从别的文件导进来、再作为参数出现，就是 F811 的样子
+# LINT-008（290 号 spec，V317）跨文件共用的 fixture 挪进 conftest 后，F811 也进了上面四个目录的 RULES；
+# 这一组仍单独跑一遍 app/ 与 scripts/（只增不减）
 APP_ONLY_RULES = "F811"
 
 

@@ -9,9 +9,8 @@
 
 两条合起来才是那个闭环：AI 参与执行 → 人核验 → 结论回流 → 下次做得更好。
 """
-import pytest
 
-from app.modules.agent.runner import RunResult, set_runner
+from app.modules.agent.runner import RunResult
 from tests.conftest import auth, make_admin, topup
 from tests.test_agent_execution import make_agent
 
@@ -33,12 +32,7 @@ class RecordingRunner:
         return RunResult(self.output, self.confidence_bps, 12)
 
 
-@pytest.fixture()
-def runner():
-    r = RecordingRunner()
-    set_runner(r)
-    yield r
-    set_runner(None)
+# `runner`（换上 RecordingRunner）在 conftest（LINT-008，290 号 spec）
 
 
 def make_mission(client, owner, *, allow_agents=False, cap=60000, category="软件开发"):

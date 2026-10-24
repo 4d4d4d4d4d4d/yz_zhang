@@ -7,7 +7,6 @@ import copy
 import json
 from datetime import timedelta
 
-import pytest
 
 from app.core.db import SessionLocal
 from app.modules.account.models import User, utcnow
@@ -19,7 +18,7 @@ from app.modules.packs import service as svc
 from app.modules.packs.models import PackEnrollment, PackEvent
 from app.modules.task.models import Task
 from app.modules.workbench.models import WbRoutine
-from tests.conftest import auth, make_admin, register
+from tests.conftest import auth, register
 
 SEED = json.loads((svc.SEEDS / "collab-basics.json").read_text(encoding="utf-8"))
 API = "/api/v1"
@@ -31,9 +30,7 @@ def _def(**over):
     return d
 
 
-@pytest.fixture()
-def admins(client):
-    return make_admin(client, "13900000101", "运营甲"), make_admin(client, "13900000102", "运营乙")
+# `admins`（两位运营）在 conftest（LINT-008，290 号 spec）
 
 
 def _publish(client, admins, definition=None):

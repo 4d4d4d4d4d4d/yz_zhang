@@ -21,16 +21,7 @@ from .conftest import JOB_HEADERS, auth, register, topup
 from .test_task_flow import match_and_fund, publish_task
 
 
-@pytest.fixture()
-def withholding(monkeypatch):
-    """切到「平台代扣 + 劳务报酬预扣预缴」。"""
-    from app.core.config import settings
-
-    monkeypatch.setattr(settings, "TAX_MODE", "withholding")
-    monkeypatch.setattr(settings, "TAX_PROVIDER", "labor_income")
-    registry.reset()
-    yield
-    registry.reset()
+# `withholding`（切到平台代扣）在 conftest（LINT-008，290 号 spec）
 
 
 @pytest.fixture()

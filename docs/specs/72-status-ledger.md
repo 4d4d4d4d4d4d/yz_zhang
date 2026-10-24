@@ -366,7 +366,7 @@
 | LINT-004 | 后端风格类 lint 未开（150 余条未用导入等） | 已做第一步（V289：app/ 与 scripts/ 的未用导入清零，ruff 闸门加 F401，262 号）；tests/ 与 migrations/ 拆成 LINT-006 |
 | LINT-006 | tests/ 与 migrations/ 的未用导入（107 处）与检查范围 | 已做（V291：107 处清零、测试数前后都是 2334，ruff 闸门范围加 tests/ 与 migrations/，264 号） |
 | LINT-007 | 未用的局部变量（F841）与重复定义（F811）是否打开 | 已做（V297：F841 四个目录都开（4 处清零），F811 只对 app/ 与 scripts/ 开（测试里是 fixture 误报），270 号） |
-| LINT-008 | 测试 fixture 改由 conftest 共享后把 F811 扩到 tests/ | 欠 |
+| LINT-008 | 测试 fixture 改由 conftest 共享后把 F811 扩到 tests/ | 已做（V317：admins / withholding / runner 挪进 conftest，F811 进四个目录的静态检查，290 号） |
 | LINT-005 | 本机没装 ruff 时静态检查跳过 | 已做（V308：CI 与全量回归里没装 ruff 就失败并写明怎么装，本机随手跑才跳过，280 号） |
 | SCN-106 | 发单时不提示设计类需求九项 | 已做（V166：任务画像多 `brief`，两端发布页提示没写的项，140 号） |
 | SCN-110 | 任务详情上不给接单的人看九项 | 已做（V221：共享 `briefHint` 按看的人换说法，两端任务详情，194 号） |

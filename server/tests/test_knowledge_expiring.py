@@ -7,7 +7,7 @@ from datetime import date, timedelta
 
 from app.modules.packs import service
 from tests.conftest import auth
-from tests.test_packs import SEED, _def, _publish, admins  # noqa: F401 —— admins 是 fixture
+from tests.test_packs import SEED, _def, _publish
 from tests.test_v286_packs import _load
 
 API = "/api/v1"

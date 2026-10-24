@@ -9,7 +9,7 @@ from app.core.db import SessionLocal
 from app.modules.admin.models import AdminAudit
 from app.modules.packs import schema
 from tests.conftest import auth, register
-from tests.test_packs import SEED, _publish, admins  # noqa: F401 —— admins 是 fixture
+from tests.test_packs import SEED, _publish
 
 API = "/api/v1"
 URL = f"{API}/admin/packs/radar/draft-knowledge"

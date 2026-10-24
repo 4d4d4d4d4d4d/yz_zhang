@@ -150,3 +150,39 @@ def ban_user_row(user_id: int) -> None:
         user.is_banned = True
         db.add(user)
         db.commit()
+
+
+# ---------------------------------------------------------------- 跨文件共用的 fixture（LINT-008，290 号 spec）
+# 以前别的测试文件「from tests.test_x import 某 fixture」再作为参数出现——pytest 按名字注入能用，
+# 但在静态检查看来就是重复定义（F811），只好让 F811 不查 tests/。挪到这里后各文件不用再导入。
+
+@pytest.fixture()
+def admins(client):
+    """两位运营（场景包要四眼：一位写、另一位批）。原在 test_packs。"""
+    return make_admin(client, "13900000101", "运营甲"), make_admin(client, "13900000102", "运营乙")
+
+
+@pytest.fixture()
+def withholding(monkeypatch):
+    """切到「平台代扣 + 劳务报酬预扣预缴」。原在 test_tax_withholding。"""
+    from app.core.config import settings
+    from app.vendors import registry
+
+    monkeypatch.setattr(settings, "TAX_MODE", "withholding")
+    monkeypatch.setattr(settings, "TAX_PROVIDER", "labor_income")
+    registry.reset()
+    yield
+    registry.reset()
+
+
+@pytest.fixture()
+def runner():
+    """把 agent 执行器换成记下每次提示词的假实现（`RecordingRunner`，在 test_orchestrator_agents）。
+    原在 test_orchestrator_agents；定义了自己的 `runner` 的测试文件照旧用自己的。"""
+    from app.modules.agent.runner import set_runner
+    from tests.test_orchestrator_agents import RecordingRunner
+
+    r = RecordingRunner()
+    set_runner(r)
+    yield r
+    set_runner(None)

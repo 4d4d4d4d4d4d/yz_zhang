@@ -173,10 +173,9 @@ def test_kb060_identical_lessons_are_not_repeated_in_the_prompt(client):
     assert prompt.count("没有拍完工照片") == 1, "同一条经验被重复喂了多次"
 
 
-# `runner` 是 test_orchestrator_agents 里的 fixture（把 agent 执行器换成
-# 一个记录提示词的假实现）。pytest 的 fixture 不跨文件自动可见，显式导进来——
-# 比在这里再写一个假执行器好：**第二份实现必然抄漏**
-from tests.test_orchestrator_agents import runner  # noqa: F401,E402
+# `runner` 是 conftest 里的 fixture（把 agent 执行器换成 test_orchestrator_agents 的
+# RecordingRunner，一个记录提示词的假实现）——比在这里再写一个假执行器好：**第二份实现必然抄漏**。
+# LINT-008（290 号 spec）以前从 test_orchestrator_agents 显式导入，静态检查会把它当重复定义
 
 
 def test_kb060_personal_text_never_reaches_a_real_agent_prompt(client, requester, runner):

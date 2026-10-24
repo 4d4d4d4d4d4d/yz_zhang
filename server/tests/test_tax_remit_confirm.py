@@ -12,7 +12,7 @@ from app.modules.notification.models import Notification
 from app.modules.tax import service as tax
 from tests.conftest import JOB_HEADERS, auth
 from tests.test_client_shape_alignment import _assert_shape
-from tests.test_tax_withholding import run_loop, withholding  # noqa: F401  （pytest fixture 按名字注入）
+from tests.test_tax_withholding import run_loop
 from tests.test_ticket_assign_reply import _admin
 
 API = "/api/v1"
