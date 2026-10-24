@@ -34,6 +34,8 @@ class ScenarioPack(Base):
     retired_reason: Mapped[str] = mapped_column(String(300), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # SCN-163（292 号 spec）上次提醒「知识快到期了」的时间：同一个包一周最多提醒一次
+    expiry_reminded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class PackEnrollment(Base):

@@ -6,10 +6,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_job_auth
 from app.core.errors import bad_request, conflict, not_found
 from app.core.timefmt import day, iso
 from app.core.admin_roles import require_role
+from app.core.locks import job_slot
 from app.modules.account.models import User, utcnow
 
 from . import schema
@@ -395,3 +396,10 @@ def admin_import_seeds(admin: User = Depends(require_role("ops")), db: Session =
             continue
         created.append(_admin_row(_new_version(db, d, admin))["key"])
     return {"created": created, "skipped": skipped, "invalid": invalid}
+
+
+@router.post("/packs/jobs/remind-expiring")
+def run_remind_expiring(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                        __=Depends(job_slot("pack_expiry_reminders"), scope="function")):
+    """SCN-163（292 号 spec）知识 30 天内到期的场景包：直接提醒写这个包的运营（一周一次）。"""
+    return svc.remind_expiring_knowledge(db)

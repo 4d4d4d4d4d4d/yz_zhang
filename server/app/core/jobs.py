@@ -77,6 +77,8 @@ JOBS: tuple[ScheduledJob, ...] = (
                  "TAX-013 代扣税款缴库，与申报周期对齐"),
     ScheduledJob("/finance/jobs/remind-tax-remits", 3600, "tax_remit_reminders",
                  "PAY-042f 缴库草稿等确认超过 3 天催财务（每笔一天一次）"),
+    ScheduledJob("/packs/jobs/remind-expiring", 86400, "pack_expiry_reminders",
+                 "SCN-163 场景包知识 30 天内到期时直接提醒写包的运营（每个包一周一次）"),
     ScheduledJob("/knowledge/jobs/reindex", 3600, "kb_reindex",
                  "KB-011 向量索引增量重建：只补没有向量或模型已换的行"),
     ScheduledJob("/knowledge/jobs/cluster", 3600, "kb_cluster",

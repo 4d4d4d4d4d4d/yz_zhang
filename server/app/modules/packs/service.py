@@ -460,14 +460,60 @@ def radar(db: Session) -> list[dict]:
         expired = [k.title for k in definition(p).knowledge if k.valid_until and k.valid_until < today]
         if expired:
             reasons.append(f"{len(expired)} 条知识已过有效期：{'、'.join(expired[:3])}")
-        soon = [k.title for k in definition(p).knowledge
-                if k.valid_until and today <= k.valid_until <= today + timedelta(days=EXPIRING_DAYS)]
+        soon = [k.title for k in expiring_knowledge(definition(p), today)]
         if soon:
             reasons.append(f"{len(soon)} 条知识 {EXPIRING_DAYS} 天内到期：{'、'.join(soon[:3])}（到期前对照最新通报或法规更新）")
         if reasons:
             out.append({"source": "pack_gap", "key": p.key, "title": f"场景包「{p.title}」要复核",
                         "evidence": "；".join(reasons), "people": x.get("active", 0), "suggested": {}})
     return out
+
+
+def expiring_knowledge(d, today: date) -> list:
+    """SCN-161 / SCN-163 今天到 30 天后（含）到期的知识；已过期的不算在这里。"""
+    return [k for k in d.knowledge if k.valid_until and today <= k.valid_until <= today + timedelta(days=EXPIRING_DAYS)]
+
+
+# SCN-163（292 号 spec）同一个包一周最多提醒一次
+EXPIRY_REMIND_EVERY_DAYS = 7
+
+
+def remind_expiring_knowledge(db: Session) -> dict:
+    """SCN-163 已上线的包里有知识 30 天内到期：直接通知写这个包的运营（雷达要有人去看，这里推过去）。
+
+    写包的人已不是管理员、被封或没有运营角色时，通知全部运营，免得提醒落空。
+    """
+    from app.core.admin_roles import has_role
+    from app.modules.account.models import User, utcnow
+    from app.modules.notification.service import notify
+
+    now = utcnow()
+    today = date.today()
+    ops = None
+    sent = 0
+    for p in db.query(ScenarioPack).filter(ScenarioPack.status == "published").order_by(ScenarioPack.id):
+        soon = expiring_knowledge(definition(p), today)
+        if not soon:
+            continue
+        if p.expiry_reminded_at and p.expiry_reminded_at > now - timedelta(days=EXPIRY_REMIND_EVERY_DAYS):
+            continue
+        author = db.get(User, p.created_by)
+        if author is not None and author.is_admin and not author.is_banned and has_role(author, "ops"):
+            to = [author.id]
+        else:
+            if ops is None:
+                ops = [u.id for u in db.query(User).filter(User.is_admin.is_(True), User.is_banned.is_(False))
+                       .order_by(User.id) if has_role(u, "ops")]
+            to = ops
+        items = "；".join(f"「{k.title}」{day(k.valid_until)} 到期" for k in soon[:5])
+        for uid in to:
+            notify(db, uid, "system", f"场景包「{p.title}」有知识快到期了",
+                   f"{len(soon)} 条知识 {EXPIRING_DAYS} 天内到期：{items}。请对照最新通报或法规更新后建新版本、"
+                   "交另一位管理员审核上线；过期后助手回答会标「已过有效期」。")
+        p.expiry_reminded_at = now
+        db.add(p)
+        sent += 1
+    return {"reminded": sent}
 
 
 def radar_knowledge_draft(signal: dict, taken: set) -> dict:

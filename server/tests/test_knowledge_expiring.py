@@ -43,3 +43,69 @@ def test_anti_fraud_knowledge_carries_a_review_date_and_says_where_to_check():
     k = {x["key"]: x for x in _load("elder-phone-teaching")["knowledge"]}["anti-fraud"]
     assert k["valid_until"], "防诈骗知识要写有效期（按季度复核）"
     assert "最新通报" in k["source"] and "96110" in k["body"]
+
+
+# ---------------------------------------------------------------- SCN-163（292 号 spec，V319）
+JOB = f"{API}/packs/jobs/remind-expiring"
+
+
+def _reminders():
+    from app.core.db import SessionLocal
+    from app.modules.notification.models import Notification
+
+    with SessionLocal() as db:
+        return [(n.user_id, n.body) for n in db.query(Notification).filter(Notification.title.like("场景包「%」有知识快到期了"))]
+
+
+def test_author_is_told_directly_once_a_week_while_knowledge_is_due(client, admins):
+    from app.core.db import SessionLocal
+    from app.modules.account.models import utcnow
+    from app.modules.packs.models import ScenarioPack
+    from tests.conftest import JOB_HEADERS
+
+    ks = SEED["knowledge"]
+    due = {**ks[0], "valid_until": (date.today() + timedelta(days=10)).isoformat()}
+    pub = _publish(client, admins, _def(knowledge=[due, *ks[1:]]))
+    assert client.post(JOB, headers=JOB_HEADERS).json() == {"reminded": 1}
+    got = _reminders()
+    assert [u for u, _ in got] == [admins[0]["id"]], "只提醒写这个包的人，不提醒批的人"
+    assert f"「{due['title']}」{due['valid_until']} 到期" in got[0][1] and "建新版本" in got[0][1]
+    assert client.post(JOB, headers=JOB_HEADERS).json() == {"reminded": 0}, "一周只提醒一次"
+    with SessionLocal() as db:
+        db.get(ScenarioPack, pub["id"]).expiry_reminded_at = utcnow() - timedelta(days=8)
+        db.commit()
+    assert client.post(JOB, headers=JOB_HEADERS).json() == {"reminded": 1}, "过了一周还没更新就再提醒"
+    assert client.post(JOB).status_code == 403, "没有 job 密钥被拒"
+
+
+def test_nothing_due_means_no_reminder(client, admins):
+    from tests.conftest import JOB_HEADERS
+
+    far = [{**k, "valid_until": (date.today() + timedelta(days=service.EXPIRING_DAYS + 1)).isoformat()} for k in SEED["knowledge"]]
+    gone = {**SEED["knowledge"][0], "valid_until": (date.today() - timedelta(days=1)).isoformat()}
+    _publish(client, admins, _def(knowledge=[gone, *far[1:]]))
+    assert client.post(JOB, headers=JOB_HEADERS).json() == {"reminded": 0}, "已过期的走雷达与回答里的标注，不算「快到期」"
+    soon = {**SEED["knowledge"][0], "valid_until": (date.today() + timedelta(days=5)).isoformat()}
+    draft = client.post(f"{API}/admin/packs", json={"definition": _def(knowledge=[soon, *far[1:]])}, headers=auth(admins[0]))
+    assert draft.status_code == 201, draft.text
+    assert client.post(JOB, headers=JOB_HEADERS).json() == {"reminded": 0}, "还没上线的草稿不提醒"
+
+
+
+def test_when_the_author_no_longer_runs_ops_every_ops_admin_is_told(client, admins):
+    from app.core.db import SessionLocal
+    from app.modules.account.models import User
+    from tests.conftest import JOB_HEADERS
+    from tests.test_ticket_assign_reply import _admin
+
+    due = {**SEED["knowledge"][0], "valid_until": (date.today() + timedelta(days=1)).isoformat()}
+    _publish(client, admins, _def(knowledge=[due, *SEED["knowledge"][1:]]))
+    with SessionLocal() as db:
+        db.get(User, admins[0]["id"]).admin_roles = ["finance"]
+        db.get(User, admins[1]["id"]).admin_roles = ["finance"]
+        db.commit()
+    ops = _admin(client, "13800390001", ["ops"])
+    fin = _admin(client, "13800390002", ["finance"])
+    assert client.post(JOB, headers=JOB_HEADERS).json() == {"reminded": 1}
+    got = {u for u, _ in _reminders()}
+    assert ops["id"] in got and admins[0]["id"] not in got and fin["id"] not in got
