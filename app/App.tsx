@@ -8,11 +8,12 @@ import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, dayLabel, dayShiftsPayload, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, isAuthRejection, shiftLabel, templatePrefill, GUARDIAN_MODE_LABEL, minorPayload, minorTaskLine, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type DayShiftInput, type LedgerRow, type Me, type PackTaskTemplateBrief, type GuardianMode, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
+import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, canReboostTask, dayLabel, dayShiftsPayload, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, isAuthRejection, shiftLabel, templatePrefill, GUARDIAN_MODE_LABEL, minorPayload, minorTaskLine, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type DayShiftInput, type LedgerRow, type Me, type PackTaskTemplateBrief, type GuardianMode, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { isSandbox, loadSandbox } from './sandboxState';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
 import { VisitsBlock, hasVisits } from './visits';
+import { TaskReboostBlock } from './taskReboost';
 import { ScreenBoundary } from './ScreenBoundary';
 import { RecipientEditorBlock, canChangeRecipient } from './recipient';
 import { ShowcaseConsentBlock, canGrantShowcase } from './showcase';
@@ -537,6 +538,8 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
         <View style={{ gap: 8 }}>
           <Text style={styles.cardTitle}>报名列表（{apps.length}）</Text>
           {apps.length === 0 && <Text style={styles.mutedLeft}>暂无报名，可稍后下拉刷新</Text>}
+          {/* AI-DEC-023（320 号 spec）一个报名都没有：一键再推一次，可选加价 */}
+          {canReboostTask(task, apps.length) && <TaskReboostBlock client={client} taskId={task.id} onDone={() => void reload()} />}
           {apps.map((a) => (
             <View key={a.id} style={styles.cardRow}>
               <View style={{ flex: 1 }}>

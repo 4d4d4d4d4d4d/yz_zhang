@@ -24,6 +24,7 @@ import type {
   TaskVisits,
   ApplyDaysResult,
   ReboostDayResult,
+  TaskReboostResult,
   DayShiftChangeResult,
   DayApplicant,
   AcceptPersonResult,
@@ -708,6 +709,10 @@ export class PlatformClient {
     // SCN-137 invite > 0 时顺带邀请几个那天有空、做过这类活的人（最多 5 个）
     return this.request<ReboostDayResult>('POST', `/tasks/${taskId}/days/${date}/reboost`,
       { raise_cents: raiseCents, ...(invite > 0 ? { invite } : {}) });
+  }
+  /** AI-DEC-023 没人报名的单一键再推一次，可选加价（分，只许上调）；6 小时内一次；一单多天的请按天补招 */
+  reboostTask(taskId: number, raiseCents = 0) {
+    return this.request<TaskReboostResult>('POST', `/tasks/${taskId}/reboost`, { raise_cents: raiseCents });
   }
   applyDays(taskId: number, dates: string[], message = '') {
     return this.request<ApplyDaysResult>('POST', `/tasks/${taskId}/apply-days`, { dates, message });

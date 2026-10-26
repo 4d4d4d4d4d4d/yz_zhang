@@ -882,6 +882,12 @@ export interface DayShiftKept {
 }
 
 /** SCN-121 一天的补招结果：哪几个名额再推了一次、加价后各自的预算 */
+/** AI-DEC-023（320 号 spec）没人报名的单再推一次 */
+export interface TaskReboostResult {
+  task_id: number;
+  raise_cents: number;
+  budget_cents: number;
+}
 export interface ReboostDayResult {
   date: string;
   slot_ids: number[];

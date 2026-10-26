@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { OperationKey, minorTaskLine, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { OperationKey, minorTaskLine, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, canReboostTask, taskReboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -285,6 +285,8 @@ export default function TaskDetail() {
             <h3>报名列表（{apps.length}）{task.pricing === 'bidding' && <span className="badge warn">竞价比选：按报价升序</span>}</h3>
             <div className="list">
               {apps.length === 0 && <p className="muted">暂无报名</p>}
+              {/* AI-DEC-023（320 号 spec）一个报名都没有：一键再推一次，可选加价 */}
+              {canReboostTask(task, apps.length) && <TaskReboostBox taskId={taskId} onDone={() => void load()} />}
               {(task.pricing === 'bidding' ? [...apps].sort((a, b) => a.bid_cents - b.bid_cents) : apps).map((a) => (
                 <div className="task-item" key={a.id}>
                   <div>
@@ -580,6 +582,32 @@ function DayShiftEditor({ taskId, days, onDone }: { taskId: number; days: string
         <input type="time" aria-label="这天几点结束" value={end} onChange={(e) => setEnd(e.target.value)} />
         <label><input type="checkbox" checked={propose} onChange={(e) => setPropose(e.target.checked)} /> 已经有人接的，顺带给对方发变更单</label>
         <button onClick={() => void submit()}>改这天的时段</button>
+      </div>
+      {msg && <p className="muted">{msg}</p>}
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
+/** AI-DEC-023 发单人：没人报名的单再推一次，可选加价（只许上调；钱在签约托管时才冻结） */
+function TaskReboostBox({ taskId, onDone }: { taskId: number; onDone: () => void }) {
+  const { client } = useApp();
+  const [yuan, setYuan] = useState('');
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+  async function submit() {
+    setError(''); setMsg('');
+    const cents = raiseToCents(yuan);
+    if (cents === null) { setError('加价写一个正数（元），最多两位小数；不加价就空着'); return; }
+    try { setMsg(taskReboostLine(await client.reboostTask(taskId, cents))); setYuan(''); onDone(); }
+    catch (e) { setError(apiErrorText(e)); }
+  }
+  return (
+    <div aria-label="再推一次" style={{ marginTop: 8 }}>
+      <p className="muted">还没人报名？再推一次给附近有空、订阅了这个类目的人；加一点价更容易有人来。</p>
+      <div className="row">
+        <input aria-label="加价（元）" placeholder="加价（元，可不填）" value={yuan} onChange={(e) => setYuan(e.target.value)} />
+        <button onClick={() => void submit()}>再推一次</button>
       </div>
       {msg && <p className="muted">{msg}</p>}
       {error && <p className="error">{error}</p>}

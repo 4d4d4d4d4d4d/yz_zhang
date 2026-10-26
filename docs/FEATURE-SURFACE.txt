@@ -520,6 +520,7 @@ api POST /api/v1/tasks/jobs/deadline-alerts
 api POST /api/v1/tasks/jobs/expire-tasks
 api POST /api/v1/tasks/jobs/purge-locations
 api POST /api/v1/tasks/jobs/remind-acceptance
+api POST /api/v1/tasks/jobs/remind-stale-recruits
 api POST /api/v1/tasks/jobs/settle-reviews
 api POST /api/v1/tasks/{task_id}/accept-delivery
 api POST /api/v1/tasks/{task_id}/accept-person
@@ -538,6 +539,7 @@ api POST /api/v1/tasks/{task_id}/experience-post
 api POST /api/v1/tasks/{task_id}/invitations
 api POST /api/v1/tasks/{task_id}/progress
 api POST /api/v1/tasks/{task_id}/publish
+api POST /api/v1/tasks/{task_id}/reboost
 api POST /api/v1/tasks/{task_id}/reject-delivery
 api POST /api/v1/tasks/{task_id}/reviews
 api POST /api/v1/tasks/{task_id}/showcase-consent
@@ -657,6 +659,7 @@ app search
 app showcase
 app spaces
 app supportTickets
+app taskReboost
 app teamInvites
 app teamReturns
 app ventureInvites
@@ -1024,6 +1027,7 @@ sdk publishTask
 sdk pushOpened
 sdk reassignTeamSpend
 sdk reboostDay
+sdk reboostTask
 sdk recallMessage
 sdk recommendations
 sdk register

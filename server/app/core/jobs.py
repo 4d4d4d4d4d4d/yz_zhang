@@ -79,6 +79,8 @@ JOBS: tuple[ScheduledJob, ...] = (
                  "PAY-042f 缴库草稿等确认超过 3 天催财务（每笔一天一次）"),
     ScheduledJob("/admin/jobs/remind-holiday-import", 86400, "holiday_import_reminders",
                  "ESCA-074 11 月到次年 1 月下一年放假安排没录时每周提醒主管导入"),
+    ScheduledJob("/tasks/jobs/remind-stale-recruits", 86400, "stale_recruit_reminders",
+                 "AI-DEC-023 招募超过 3 天没人报名时提醒发单人再推一次或改说明（同一单每 3 天一次）"),
     ScheduledJob("/packs/jobs/remind-expiring", 86400, "pack_expiry_reminders",
                  "SCN-163 场景包知识 30 天内到期时直接提醒写包的运营（每个包一周一次）"),
     ScheduledJob("/knowledge/jobs/reindex", 3600, "kb_reindex",

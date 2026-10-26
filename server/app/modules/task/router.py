@@ -1055,6 +1055,51 @@ def reboost_day(task_id: int, work_date: date, body: ReboostIn, user: User = Dep
             "budget_cents": [s.budget_cents for s in slots], "invited": invited}
 
 
+class TaskReboostIn(BaseModel):
+    """AI-DEC-023（320 号 spec）单个任务再推一次：可选顺带加价（分）。"""
+    model_config = ConfigDict(extra="forbid")
+    raise_cents: int = Field(default=0, ge=0, le=100000)
+
+
+@router.post("/tasks/{task_id}/reboost")
+def reboost_task(task_id: int, body: TaskReboostIn, user: User = Depends(get_current_user),
+                 db: Session = Depends(get_db, scope="function")):
+    """AI-DEC-023 的安全一半（320 号 spec）：没人报名的单一键再推一次，可选加价。
+
+    加价与按天补招同一套规则（只许上调、通知已报名的人；钱在签约托管时才冻结，这里不碰钱）；6 小时内只推一次。
+    一单多天的母任务请按天补招。"""
+    from app.core.events import publish
+    from app.modules.notification.service import notify
+
+    from .stale import has_children
+
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden("只有发单的人能再推一次")
+    if has_children(task):
+        # 一单多人、项目：报名都在名额、子任务上，加价也该加在那里
+        raise bad_request("这单的报名都在名额或子任务上：请在没人报名的那一个上「再推一次」，或在缺人的那天点「补招」",
+                          "use_day_reboost")
+    if task.status != "published" or task.executor_id is not None:
+        raise conflict("任务不在招募中", "not_recruiting")
+    last = (db.query(ProgressLog).filter(ProgressLog.task_id == task.id, ProgressLog.kind == "reboost")
+            .order_by(ProgressLog.id.desc()).first())
+    if last is not None and last.created_at > utcnow() - timedelta(hours=REBOOST_COOLDOWN_HOURS):
+        nxt = last.created_at + timedelta(hours=REBOOST_COOLDOWN_HOURS)
+        raise conflict(f"{REBOOST_COOLDOWN_HOURS} 小时内刚推过，{iso(nxt)} 之后可以再推；想让更多人看到，可以先加价",
+                       "reboost_too_soon")
+    if body.raise_cents:
+        task.budget_cents += body.raise_cents
+        for a in db.query(Application).filter(Application.task_id == task.id, Application.status == "pending"):
+            notify(db, a.applicant_id, "task", "报名的任务有更新",
+                   f"《{task.title}》发布方上调了预算至 {task.budget_cents / 100:.2f} 元，请留意。")
+    db.add(task)
+    publish(db, "task.published", {"task_id": task.id, "reboost": True})
+    extra = f"，加价 {body.raise_cents / 100:.2f} 元" if body.raise_cents else ""
+    db.add(ProgressLog(task_id=task.id, user_id=user.id, kind="reboost", content=f"再推一次{extra}"))
+    return {"task_id": task.id, "raise_cents": body.raise_cents, "budget_cents": task.budget_cents}
+
+
 def _reboost_invites(db: Session, parent: Task, slots: list[Task], work_date: date, user: User, limit: int) -> list[dict]:
     """SCN-137 补招时挑人发邀约：按推荐排序（已排除黑名单、没实名、暂停接单的人），只要
     ① 本人设的每周时段盖住那天的时段（没写时段的名额：那天有空就行）② 做完过这个类目的单；
@@ -1652,6 +1697,15 @@ def _complete_task(db: Session, task: Task) -> None:
             risk.flag_pair(db, task)
         else:
             credit.record_task_completed(db, task.executor_id)
+
+
+@router.post("/tasks/jobs/remind-stale-recruits")
+def run_remind_stale_recruits(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                              __=Depends(job_slot("stale_recruit_reminders"), scope="function")):
+    """AI-DEC-023（320 号 spec）招募超过 3 天没人报名时提醒发单人（同一单每 3 天最多一次）。"""
+    from app.modules.task.stale import remind_stale_recruits
+
+    return remind_stale_recruits(db)
 
 
 @router.post("/tasks/jobs/deadline-alerts")
