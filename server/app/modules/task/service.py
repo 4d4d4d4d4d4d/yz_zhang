@@ -34,6 +34,8 @@ HEIGHT_WORK_CERT = "高处作业操作证"
 DRIVER_CERT = "驾驶证（三年以上驾龄）"
 # SCN-194（319 号 spec）多地开锁业按特种行业管理，要到公安机关登记备案；上门开锁类目要审核通过的备案证明
 LOCKSMITH_CERT = "开锁备案证明"
+# SCN-199（325 号 spec）电工作业属特种作业：上门接电工活要审核通过的低压电工作业操作证
+ELECTRICIAN_CERT = "低压电工作业操作证"
 ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助老陪伴"},
                     {"name": "陪练看护", "required_cert": MINOR_CARE_CERT},
                     # 「翻译」——第七轮场景发掘的自由译者服务包的发单模板与去处（259 号 spec，V286）
@@ -60,7 +62,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「防水补漏」「上门开锁」——第十七轮场景发掘（319 号 spec，V346）；开锁要审核通过的备案证明
                     {"name": "防水补漏"}, {"name": "上门开锁", "required_cert": LOCKSMITH_CERT},
                     # 「陪诊」「家具安装」——第十八轮场景发掘（322 号 spec，V349）
-                    {"name": "陪诊"}, {"name": "家具安装"}]
+                    {"name": "陪诊"}, {"name": "家具安装"},
+                    # 「水电维修」「短视频剪辑」——第十九轮场景发掘（325 号 spec，V352）；水电维修要低压电工作业操作证
+                    {"name": "水电维修", "required_cert": ELECTRICIAN_CERT}, {"name": "短视频剪辑"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 

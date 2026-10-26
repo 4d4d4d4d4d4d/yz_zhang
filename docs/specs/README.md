@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 325 | 第十九轮场景发掘：水电小修、短视频剪辑 | [325-scenario-round-19.md](./325-scenario-round-19.md) | P0 |
 | 324 | 经验质量过滤 | [324-lesson-quality.md](./324-lesson-quality.md) | P0 |
 | 323 | 经验时效加权 | [323-experience-freshness.md](./323-experience-freshness.md) | P0 |
 | 322 | 第十八轮场景发掘：陪诊、家具安装 | [322-scenario-round-18.md](./322-scenario-round-18.md) | P0 |
