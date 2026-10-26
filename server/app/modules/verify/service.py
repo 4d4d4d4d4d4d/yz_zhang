@@ -1,4 +1,5 @@
 """VER 核验单的资金、准入与结论处理（49 号 spec）。"""
+import re
 from datetime import timedelta
 
 from sqlalchemy.orm import Session
@@ -276,6 +277,23 @@ LESSON_OUTCOMES = ("revised", "rejected")
 # KB-062（323 号 spec）经验的时效：一年以前的核验结论不再喂给 agent——一年前的做法、价格、平台规则
 # 可能都变了，而它和上周的结论在提示词里分不出先后。12 个月是两轮季节（装修旺季、节假日）都覆盖到的最短窗口
 LESSON_FRESH_DAYS = 365
+# KB-063（324 号 spec）什么算一条有用的经验：说得出「哪里不对」或「怎么改」。去掉标点空白后不到 6 个字、
+# 或者只是「不行」「不满意」这类空话的，对下一单没有指导价值，还占提示词的位置、带偏判断，不喂
+LESSON_MIN_CHARS = 6
+VAGUE_LESSONS = {"不行", "不好", "不对", "不满意", "不合格", "不通过", "差", "太差", "很差", "一般", "还行", "还可以",
+                 "重做", "再改改", "不符合要求", "有问题", "质量不行", "质量差", "不太行", "凑合",
+                 # 够 6 个字却仍然没说哪里不对的空话：只看长度会放过它们
+                 "做得不好请重做", "完全不符合要求", "没达到我的要求", "不满意请重新做", "质量不行重新做", "效果不好再改改",
+                 "和预期不一样", "不是我想要的"}
+_NOISE = re.compile(r"[\s\W_]+", re.UNICODE)
+
+
+def lesson_useful(reason: str, revision: str = "") -> bool:
+    """KB-063 判据：理由或修正方向至少一处是具体的（够长、且不是一句空话）。"""
+    def specific(text: str) -> bool:
+        t = _NOISE.sub("", text or "")
+        return len(t) >= LESSON_MIN_CHARS and t not in VAGUE_LESSONS
+    return specific(reason) or specific(revision)
 
 
 def lessons_for(db: Session, category: str, limit: int = LESSON_LIMIT) -> list[VerificationLesson]:
@@ -289,15 +307,16 @@ def lessons_for(db: Session, category: str, limit: int = LESSON_LIMIT) -> list[V
 
     from app.modules.account.models import utcnow
 
-    return (
+    rows = (
         db.query(VerificationLesson)
         .filter(VerificationLesson.category == category,
                 VerificationLesson.outcome.in_(LESSON_OUTCOMES),
                 VerificationLesson.created_at >= utcnow() - timedelta(days=LESSON_FRESH_DAYS))
         .order_by(VerificationLesson.id.desc())
-        .limit(limit)
+        .limit(limit * 4)           # KB-063 多取几条再筛，空话被筛掉后仍能凑够 limit 条
         .all()
     )
+    return [r for r in rows if lesson_useful(r.reason, r.revision_summary)][:limit]
 
 
 def lessons_prompt(rows: list[VerificationLesson]) -> str:
