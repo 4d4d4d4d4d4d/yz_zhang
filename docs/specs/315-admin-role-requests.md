@@ -49,6 +49,8 @@
 
 新写的 `_pending_request` 与 API 配额申请那边已有的同名函数撞了，后定义的盖掉了前一个，配额申请的批准 / 驳回全部 500（回归 442e1a3 红 5 条）。改名为 `_pending_role_request`；ruff 的 F811 只抓「没用过的名字被重定义」，所以另加闸门 `server/tests/test_no_duplicate_defs.py`（LINT-009）按语法树查同一模块的同名顶层定义，红验：改回原名 → 红。
 
+第二轮回归（4fc8e30）又红了一条：`test_never_accepted_fields`（SEC-067）要求每个收「role」这类敏感字段的请求体写明谁定、谁约束，`RoleRequestIn.role` 没登记。已补登记（提交时不生效、另一位超管批准、批准时按授予规则再查、不能申请超级管理员），闸门转绿。
+
 ## 7. 没做的
 
 无新增欠账。
