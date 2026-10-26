@@ -705,7 +705,9 @@ def list_categories(db: Session = Depends(get_db, scope="function")):
     rows = db.query(Category).filter(Category.active.is_(True)).order_by(Category.id).all()
     # SCN-181（307 号 spec）要多张资质的类目才带 extra_certs
     return [{"id": c.id, "name": c.name, "required_cert": c.required_cert,
-             **({"extra_certs": list(c.extra_certs)} if c.extra_certs else {})} for c in rows]
+             **({"extra_certs": list(c.extra_certs)} if c.extra_certs else {}),
+             # KB-062b（327 号 spec）运营按类目设了经验时效的才带
+             **({"experience_fresh_days": c.experience_fresh_days} if c.experience_fresh_days else {})} for c in rows]
 
 
 @router.get("/task-templates")

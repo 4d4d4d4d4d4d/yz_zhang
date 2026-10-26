@@ -231,6 +231,18 @@ def record_use(db: Session, unit: ReusableUnit, scenario: str, caller_id: int,
 
 # KB-062（323 号 spec）经验的时效：子类最近一条样本（没有就看单元本身）在 12 个月以内的算「新」
 FRESH_DAYS = 365
+# KB-062b（327 号 spec）运营按类目调的范围：最短一个月，最长十年
+FRESH_DAYS_MIN, FRESH_DAYS_MAX = 30, 3650
+
+
+def fresh_days_for(db: Session, category: str | None) -> int:
+    """这个类目的经验多久算旧：运营在后台按类目设的，没设就是平台默认 365 天。"""
+    if not category:
+        return FRESH_DAYS
+    from app.modules.task.models import Category
+
+    row = db.query(Category).filter(Category.name == category).first()
+    return row.experience_fresh_days if row is not None and row.experience_fresh_days else FRESH_DAYS
 
 
 def last_seen(db: Session, unit: ReusableUnit):
@@ -246,7 +258,13 @@ def is_stale(db: Session, unit: ReusableUnit, now=None) -> bool:
     from app.modules.account.models import utcnow
 
     seen = last_seen(db, unit)
-    return seen is not None and seen < (now or utcnow()) - timedelta(days=FRESH_DAYS)
+    category = (unit.applicability or {}).get("category")
+    if not category and unit.cluster_id:
+        from .models import KnowledgeCluster
+
+        c = db.get(KnowledgeCluster, unit.cluster_id)
+        category = c.category if c is not None else None
+    return seen is not None and seen < (now or utcnow()) - timedelta(days=fresh_days_for(db, category))
 
 
 def best_procedure(db: Session, category: str, city: str, budget_cents: int) -> ReusableUnit | None:

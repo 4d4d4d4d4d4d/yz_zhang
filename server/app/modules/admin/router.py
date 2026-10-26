@@ -1149,7 +1149,7 @@ def create_category(body: CategoryIn, admin: User = Depends(require_role("ops"))
 @router.patch("/admin/categories/{category_id}")
 def update_category(
     category_id: int, active: bool | None = None, required_cert: str | None = None,
-    extra_certs: str | None = None,
+    extra_certs: str | None = None, experience_fresh_days: int | None = None,
     admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function"),
 ):
     from app.modules.task.models import Category
@@ -1169,10 +1169,23 @@ def update_category(
         if len(items) > 5:
             raise bad_request("一个类目最多再要 5 张资质", "too_many_certs")
         row.extra_certs = [c for c in items if c != (row.required_cert or "").strip()]
+    if experience_fresh_days is not None:
+        # KB-062b（327 号 spec）这个类目的经验多久算旧；0 = 回到平台默认
+        from app.modules.knowledge.units import FRESH_DAYS_MAX, FRESH_DAYS_MIN
+
+        if experience_fresh_days and not FRESH_DAYS_MIN <= experience_fresh_days <= FRESH_DAYS_MAX:
+            raise bad_request(f"经验时效要在 {FRESH_DAYS_MIN}~{FRESH_DAYS_MAX} 天之间；填 0 回到平台默认（365 天）",
+                              "fresh_days_out_of_range")
+        before = row.experience_fresh_days
+        row.experience_fresh_days = experience_fresh_days or None
+        record_audit(db, admin.id, "category_fresh_days", "category", row.id,
+                     detail=f"{row.name}：{before or '默认'} → {row.experience_fresh_days or '默认'}")
     db.add(row)
     out = {"id": row.id, "name": row.name, "active": row.active, "required_cert": row.required_cert}
     if row.extra_certs:
         out["extra_certs"] = list(row.extra_certs)
+    if row.experience_fresh_days:
+        out["experience_fresh_days"] = row.experience_fresh_days
     return out
 
 

@@ -775,6 +775,8 @@ export interface Category {
   /** 准入资质；空 = 不限 */
   required_cert: string;
   extra_certs?: string[];
+  /** KB-062b（327 号 spec）运营设了才有：这个类目的经验多久算旧（天）；没有 = 平台默认 365 天 */
+  experience_fresh_days?: number;
 }
 
 export interface Decomposition {

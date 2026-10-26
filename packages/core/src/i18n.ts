@@ -386,6 +386,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   holiday_region_required: '要写是哪个地区的假日，写法与给客服设的地区一样（如「新疆」）',
   use_day_reboost: '这单的报名都在名额或子任务上：请在没人报名的那一个上「再推一次」，或在缺人的那天点「补招」',
   not_delivered: '这一步还没交付：交了之后再开放给下一步',
+  fresh_days_out_of_range: '经验时效要在 30~3650 天之间；填 0 回到平台默认（365 天）',
   share_not_next_step: '只能开给依赖这一步的那几步（同一个项目下、写明要等这一步的）',
   role_request_pending: '这个角色你已经申请过、还在等批：等超级管理员处理',
   role_request_decided: '这条申请已经处理过了：刷新一下',

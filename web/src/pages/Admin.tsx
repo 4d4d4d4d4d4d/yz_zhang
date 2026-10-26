@@ -1834,7 +1834,9 @@ function CityAndCategory() {
           {cats.map((c) => (
             <tr key={c.id}>
               <td>{c.name}</td>
-              <td>{categoryCerts(c).join('、') || '不限'}</td>
+              <td>{categoryCerts(c).join('、') || '不限'}
+                {/* KB-062b（327 号 spec）这个类目的经验多久算旧 */}
+                <span className="muted"> · 经验时效 {c.experience_fresh_days ?? 365} 天{c.experience_fresh_days ? '' : '（默认）'}</span></td>
               <td>
                 <button className="ghost" style={{ padding: '2px 8px' }}
                         onClick={() => void act(() => client.updateCategory(c.id, { active: false }))}>停用</button>
@@ -1844,6 +1846,14 @@ function CityAndCategory() {
                     (c.extra_certs ?? []).join('、'));
                   if (v !== null) void act(() => client.updateCategory(c.id, { extra_certs: v.trim() }));
                 }}>其余资质</button>}
+                <button className="text-link" onClick={() => {
+                  const v = prompt(`「${c.name}」的经验多久算旧？填天数（30~3650），填 0 回到平台默认 365 天`,
+                    String(c.experience_fresh_days ?? 365));
+                  if (v === null) return;
+                  const n = Number(v.trim());
+                  if (v.trim() === '' || !Number.isInteger(n) || n < 0) { setError('经验时效填一个整数天数（30~3650），或 0 回到默认'); return; }
+                  void act(() => client.updateCategory(c.id, { experience_fresh_days: n }));
+                }}>经验时效</button>
               </td>
             </tr>
           ))}

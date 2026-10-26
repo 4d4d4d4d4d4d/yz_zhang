@@ -142,6 +142,8 @@ class Category(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     # SCN-181（307 号 spec）除 required_cert 外还要的资质（都要有）；空 = 只要 required_cert（与以前一样）
     extra_certs: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
+    # KB-062b（327 号 spec）这个类目的经验多久算「旧」（天）；空 = 平台默认 365 天
+    experience_fresh_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class Application(Base):

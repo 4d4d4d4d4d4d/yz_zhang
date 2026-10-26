@@ -296,6 +296,13 @@ def lesson_useful(reason: str, revision: str = "") -> bool:
     return specific(reason) or specific(revision)
 
 
+def _fresh_days(db: Session, category: str) -> int:
+    """KB-062b（327 号 spec）运营按类目设了窗口就用它，没设就是 LESSON_FRESH_DAYS。"""
+    from app.modules.knowledge.units import fresh_days_for
+
+    return fresh_days_for(db, category) if category else LESSON_FRESH_DAYS
+
+
 def lessons_for(db: Session, category: str, limit: int = LESSON_LIMIT) -> list[VerificationLesson]:
     """同类目最近的非通过核验结论。
 
@@ -311,7 +318,7 @@ def lessons_for(db: Session, category: str, limit: int = LESSON_LIMIT) -> list[V
         db.query(VerificationLesson)
         .filter(VerificationLesson.category == category,
                 VerificationLesson.outcome.in_(LESSON_OUTCOMES),
-                VerificationLesson.created_at >= utcnow() - timedelta(days=LESSON_FRESH_DAYS))
+                VerificationLesson.created_at >= utcnow() - timedelta(days=_fresh_days(db, category)))
         .order_by(VerificationLesson.id.desc())
         .limit(limit * 4)           # KB-063 多取几条再筛，空话被筛掉后仍能凑够 limit 条
         .all()
