@@ -970,8 +970,10 @@ const DISPUTE_STATUS_LABEL: Record<string, string> = {
  * 漏一个字段在 `Partial<Task>` 面前不是类型错误。
  * 现在它是了（SDK 里改成必需参数），这段代码漏掉它就编译不过。
  */
-export function PublishScreen({ client, onDone, category = '跑腿', allowProject = false, template }: {
+export function PublishScreen({ client, onDone, category = '跑腿', allowProject = false, template, locate = currentPosition }: {
   client: PlatformClient; onDone: (created?: Task) => void;
+  /** APP-102（318 号 spec）发线下单时取当前位置；拿不到时返回 0,0 */
+  locate?: () => Promise<{ lat: number; lng: number }>;
   /** SCN-133（211 号 spec）从服务包的发单模板过来：预填标题、说明、上门次数与清单（只是预填，发不发由人定） */
   template?: PackTaskTemplateBrief;
   /** APP-077 「这是一个要拆开做的项目」。只在合作入口给：从「不懂就问」带着类目来的，是一单具体的活 */
@@ -981,6 +983,11 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
   category?: string;
 }) {
   const prefill = template ? templatePrefill(template) : null;
+  // APP-102（318 号 spec）线下单：城市、地址提示（小区或街道，门牌接单后才给）、当前位置
+  const [offline, setOffline] = useState(false);
+  const [city, setCity] = useState('');
+  const [addressHint, setAddressHint] = useState('');
+  const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [title, setTitle] = useState(prefill?.title ?? '');
   const [budget, setBudget] = useState('200');
   // 没有默认值是有意的（IPC-001）：替发布方猜归属，对执行方不公平，
@@ -1027,7 +1034,7 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
       <TextInput style={styles.input} placeholder="预算（元）" value={budget} onChangeText={setBudget} keyboardType="numeric" />
       <PriceRefBlock client={client} category={category} />
       {/* PROF-101 边写边提示还缺什么（126 号 spec） */}
-      <DraftHints client={client} draft={{ title, category, budget_cents: Math.round(parseFloat(budget || '0') * 100), is_remote: true }} />
+      <DraftHints client={client} draft={{ title, category, budget_cents: Math.round(parseFloat(budget || '0') * 100), is_remote: !offline }} />
       {!project && (
         <>
           <TextInput style={styles.input} accessibilityLabel="需要几个人" placeholder="需要几个人" value={people} onChangeText={setPeople} keyboardType="numeric" />
@@ -1115,9 +1122,29 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
         </TouchableOpacity>
       ))}
       {!!error && <Text style={styles.error}>{error}</Text>}
-      <Button title={project ? '创建并开始拆解' : '发布（线上任务）'} onPress={async () => {
+      {!project && (
+        <TouchableOpacity onPress={() => setOffline((v) => !v)} accessibilityRole="checkbox" accessibilityLabel="线下（要上门）"
+                          accessibilityState={{ checked: offline }}>
+          <Text style={styles.option}>{offline ? '☑ ' : '☐ '}线下（要上门）</Text>
+        </TouchableOpacity>
+      )}
+      {!project && offline && (
+        <>
+          <TextInput style={styles.input} accessibilityLabel="城市" placeholder="城市（如：上海）" value={city} onChangeText={setCity} />
+          <TextInput style={styles.input} accessibilityLabel="地址提示" placeholder="小区或街道（门牌接单后才给）"
+                     value={addressHint} onChangeText={setAddressHint} />
+          <Button title={pos ? '已取到位置，重新取' : '用我现在的位置'} onPress={async () => {
+            setError('');
+            const p = await locate();
+            if (!p.lat && !p.lng) { setPos(null); setError('没拿到定位：请在系统设置里允许定位后再取，或者到了地方再发'); return; }
+            setPos(p);
+          }} />
+        </>
+      )}
+      <Button title={project ? '创建并开始拆解' : offline ? '发布（线下任务）' : '发布（线上任务）'} onPress={async () => {
         setError('');
         if (!ip) { setError('请选择交付成果的知识产权归属'); return; }
+        if (!project && offline && (!city.trim() || !pos)) { setError('线下单要写城市、取一次当前位置'); return; }
         try {
           const created = await client.createTask({
             title, category, task_type: project ? 'project' : 'event',
@@ -1133,7 +1160,10 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
             ...(onBehalf ? { on_behalf: true, recipient_label: recipient, onsite_contact: onsite, recipient_consented: consented } : {}),
             ...minorPayload(minor, guardianMode, guardianOk),
             // 项目先存草稿：拆好、说清每一步谁来做之后，只有能开工的步骤发布出去
-            is_remote: true, publish_now: !project,
+            ...(!project && offline && pos
+              ? { is_remote: false, city: city.trim(), address_hint: addressHint.trim(), lat: pos.lat, lng: pos.lng }
+              : { is_remote: true }),
+            publish_now: !project,
           });
           onDone(created);
         } catch (e) {
