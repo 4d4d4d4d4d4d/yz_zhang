@@ -58,7 +58,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「废品回收」「电动车维修」——第十六轮场景发掘（316 号 spec，V343）
                     {"name": "废品回收"}, {"name": "电动车维修"},
                     # 「防水补漏」「上门开锁」——第十七轮场景发掘（319 号 spec，V346）；开锁要审核通过的备案证明
-                    {"name": "防水补漏"}, {"name": "上门开锁", "required_cert": LOCKSMITH_CERT}]
+                    {"name": "防水补漏"}, {"name": "上门开锁", "required_cert": LOCKSMITH_CERT},
+                    # 「陪诊」「家具安装」——第十八轮场景发掘（322 号 spec，V349）
+                    {"name": "陪诊"}, {"name": "家具安装"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
