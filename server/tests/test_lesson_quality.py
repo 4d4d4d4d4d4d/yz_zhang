@@ -48,3 +48,17 @@ def test_vague_lessons_are_dropped_and_still_five_useful_ones_reach_the_agent(cl
     assert all("踢脚线" in r.reason for r in rows)
     for vague in ("：不行", "：不满意", "：质量差", "：一般", "：重做"):
         assert vague not in prompt
+
+
+def test_the_client_hint_uses_the_same_judgment_as_the_server():
+    """KB-063b（326 号 spec）核验页的提醒与喂模型前的筛选必须是同一条判据：空话表与字数线两边逐字相同。"""
+    import re
+    from pathlib import Path
+
+    from app.modules.verify.service import LESSON_MIN_CHARS, VAGUE_LESSONS
+
+    ts = (Path(__file__).resolve().parents[2] / "packages/core/src/lessons.ts").read_text(encoding="utf-8")
+    block = re.search(r"VAGUE_LESSONS: readonly string\[\] = \[(.*?)\];", ts, re.S)
+    assert block, "lessons.ts 里找不到 VAGUE_LESSONS（闸门扫不到时自己先红）"
+    assert set(re.findall(r"'([^']+)'", block.group(1))) == VAGUE_LESSONS
+    assert re.search(rf"LESSON_MIN_CHARS = {LESSON_MIN_CHARS};", ts)

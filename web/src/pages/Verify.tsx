@@ -1,5 +1,5 @@
 import {
-  apiErrorText, fmtYuan,
+  apiErrorText, fmtYuan, lessonSpecific, VAGUE_LESSON_HINT,
   type VerificationOrderDetail, type VerificationOrderView,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -139,8 +139,13 @@ function OrderDetail({ detail, onDone }: { detail: VerificationOrderDetail; onDo
           </label>
         ))}
       </div>
-      <textarea placeholder="核验说明（发布方与平台都会看到）" value={comment}
+      <textarea placeholder={outcome === 'approved' ? '核验说明（发布方与平台都会看到）'
+                               : '哪里不对、要怎么改（发布方与平台都会看到，也会成为下一单的经验）'} value={comment}
                 onChange={(e) => setComment(e.target.value)} />
+      {/* KB-063b（326 号 spec）没通过时理由写得太空就当场提醒（不拦提交）：空话不会进经验库 */}
+      {outcome !== 'approved' && comment.trim() !== '' && !lessonSpecific(comment, revised) && (
+        <p className="error" data-testid="vague-lesson">{VAGUE_LESSON_HINT}</p>
+      )}
       {outcome === 'revised' && (
         <>
           <textarea placeholder="修正稿正文（它会成为交付物，而不是 AI 的原始产出）"

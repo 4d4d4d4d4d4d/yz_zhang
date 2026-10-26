@@ -11,6 +11,7 @@ export * from './xapp';
 export * from './adminSections';
 export * from './brief';
 export * from './reboost';
+export * from './lessons';
 export * from './dayShifts';
 export * from './depart';
 export * from './packTemplates';
