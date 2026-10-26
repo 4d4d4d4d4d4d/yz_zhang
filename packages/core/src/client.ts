@@ -47,6 +47,8 @@ import type {
   MyCoupon,
   Contract,
   ContractDeliverable,
+  ContractLicenseItem,
+  LicenseKind,
   Decomposition,
   KnowledgeAdminOverview,
   KnowledgeCalibrationPair,
@@ -1279,6 +1281,19 @@ export class PlatformClient {
   addDeliverable(contractId: number, ref: string, kind: ContractDeliverable['kind'], milestoneIdx?: number) {
     // 没选期数时 milestone_idx 为 undefined，序列化时不发
     return this.request<ContractDeliverable>('POST', `/contracts/${contractId}/deliverables`, { ref, kind, milestone_idx: milestoneIdx || undefined });
+  }
+  /** SCN-202 交付附授权清单（合约双方都看得到） */
+  contractLicenses(contractId: number) {
+    return this.request<ContractLicenseItem[]>('GET', `/contracts/${contractId}/licenses`).then(listOf);
+  }
+  /** SCN-202 执行方在托管期间逐项登记；返回整张清单 */
+  addContractLicense(contractId: number, item: { kind: LicenseKind; title: string; source: string; scope?: string }) {
+    return this.request<ContractLicenseItem[]>('POST', `/contracts/${contractId}/licenses`,
+      { kind: item.kind, title: item.title, source: item.source, scope: item.scope ?? '' });
+  }
+  /** SCN-202 执行方在托管期间删掉登记错的一项；返回整张清单 */
+  removeContractLicense(contractId: number, itemId: number) {
+    return this.request<ContractLicenseItem[]>('DELETE', `/contracts/${contractId}/licenses/${itemId}`);
   }
   contractDeliverables(contractId: number) {
     return this.request<ContractDeliverable[]>('GET', `/contracts/${contractId}/deliverables`).then(listOf);

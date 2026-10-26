@@ -333,6 +333,74 @@ def read_deliverable(contract_id: int, deliverable_id: int, user: User = Depends
         "Content-Disposition": f'inline; filename="{name}"', "Content-Security-Policy": "default-src 'none'; sandbox"})
 
 
+# ------------------------------------------------ SCN-202（329 号 spec）交付附授权清单
+LICENSE_KINDS = ("music", "footage", "font", "template", "image", "other")
+LICENSES_MAX = 50
+
+
+class LicenseItemIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: str = Field(pattern="^(music|footage|font|template|image|other)$")
+    title: str = Field(min_length=1, max_length=80)
+    source: str = Field(min_length=2, max_length=120)
+    scope: str = Field(default="", max_length=120)
+
+
+def _license_rows(db: Session, contract_id: int) -> list[dict]:
+    from .models import ContractLicenseItem
+
+    rows = (db.query(ContractLicenseItem).filter(ContractLicenseItem.contract_id == contract_id)
+            .order_by(ContractLicenseItem.id).all())
+    return [{"id": r.id, "kind": r.kind, "title": r.title, "source": r.source, "scope": r.scope,
+             "created_at": iso(r.created_at)} for r in rows]
+
+
+@router.get("/{contract_id}/licenses")
+def list_licenses(contract_id: int, user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db, scope="function")):
+    """合约双方都看得到：交付物里用了什么、凭什么能用、能用在哪。"""
+    contract = _party(db, contract_id, user)
+    return _license_rows(db, contract.id)
+
+
+@router.post("/{contract_id}/licenses", status_code=201)
+def add_license(contract_id: int, body: LicenseItemIn, user: User = Depends(get_current_user),
+                db: Session = Depends(get_db, scope="function")):
+    """执行方逐项登记（托管期间）；返回整张清单。"""
+    from .models import ContractLicenseItem
+
+    contract = _party(db, contract_id, user)
+    if user.id != contract.executor_id:
+        raise forbidden("授权清单由执行方登记：用了什么、授权从哪来，他最清楚", "not_party")
+    if contract.status != "funded" or contract.frozen:
+        raise conflict("合约不在执行中：授权清单要在托管期间登记", "not_active")
+    if db.query(ContractLicenseItem).filter(ContractLicenseItem.contract_id == contract.id).count() >= LICENSES_MAX:
+        raise bad_request(f"一份合约最多登记 {LICENSES_MAX} 项授权", "licenses_full")
+    db.add(ContractLicenseItem(contract_id=contract.id, kind=body.kind, title=body.title.strip(),
+                               source=body.source.strip(), scope=body.scope.strip()))
+    db.flush()
+    return _license_rows(db, contract.id)
+
+
+@router.delete("/{contract_id}/licenses/{item_id}")
+def remove_license(contract_id: int, item_id: int, user: User = Depends(get_current_user),
+                   db: Session = Depends(get_db, scope="function")):
+    """执行方在托管期间可以删掉登记错的一项；放款以后清单就定了。"""
+    from .models import ContractLicenseItem
+
+    contract = _party(db, contract_id, user)
+    if user.id != contract.executor_id:
+        raise forbidden("授权清单由执行方登记：用了什么、授权从哪来，他最清楚", "not_party")
+    if contract.status != "funded" or contract.frozen:
+        raise conflict("合约不在执行中：放款以后授权清单就定了", "not_active")
+    row = db.get(ContractLicenseItem, item_id)
+    if row is None or row.contract_id != contract.id:
+        raise not_found("没有这一项")
+    db.delete(row)
+    db.flush()
+    return _license_rows(db, contract.id)
+
+
 @router.post("/{contract_id}/milestones/{idx}/accept")
 def accept_milestone(
     contract_id: int, idx: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")

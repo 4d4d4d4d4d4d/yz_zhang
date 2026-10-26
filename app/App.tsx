@@ -15,6 +15,7 @@ import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
 import { VisitsBlock, hasVisits } from './visits';
 import { TaskReboostBlock } from './taskReboost';
 import { PreviousStepInputsBlock, ShareToNextStepsBlock } from './subtaskShares';
+import { LicensesList } from './licenses';
 import { ScreenBoundary } from './ScreenBoundary';
 import { RecipientEditorBlock, canChangeRecipient } from './recipient';
 import { ShowcaseConsentBlock, canGrantShowcase } from './showcase';
@@ -534,6 +535,9 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       {/* SCN-166（297 号 spec）交付文件：原图放款完毕前锁着 */}
       {contract && <DeliverablesList client={client} contractId={contract.id} isExecutor={meId === contract.executor_id}
                                      live={contract.status === 'funded' && !contract.frozen} stages={contract.milestones} />}
+      {/* SCN-202（329 号 spec）交付附授权清单 */}
+      {contract && <LicensesList client={client} contractId={contract.id} isExecutor={meId === contract.executor_id}
+                                 live={contract.status === 'funded' && !contract.frozen} />}
       {!!error && <Text style={styles.error}>{error}</Text>}
 
       {actions.includes('apply') && (

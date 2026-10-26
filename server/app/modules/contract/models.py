@@ -133,3 +133,20 @@ class ContractDeliverable(Base):
     # SC-017（304 号 spec）挂到哪一期（idx）；None = 整份合约（V324 的行为：放款完毕才解锁）。
     # 挂到某一期的原图，那一期放款后就解锁，不用等整份合约放完
     milestone_idx: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class ContractLicenseItem(Base):
+    """SCN-202（329 号 spec）交付附授权清单：执行方逐项登记用到的音乐、素材、字体、模板与授权来源。
+
+    剪辑、建站这类活的交付物里夹着别人的作品，授权写在聊天里查不到、对不上；登记成一项一项，
+    发单人在交付文件旁边就看得到用了什么、凭什么能用、能用在哪。"""
+
+    __tablename__ = "contract_license_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    contract_id: Mapped[int] = mapped_column(Integer, index=True)
+    kind: Mapped[str] = mapped_column(String(12))        # music / footage / font / template / image / other
+    title: Mapped[str] = mapped_column(String(80))
+    source: Mapped[str] = mapped_column(String(120))     # 授权来源：客户提供 / 某曲库商用授权 / 开源 MIT ……
+    scope: Mapped[str] = mapped_column(String(120), default="")   # 授权范围：仅某平台 / 商用 / 期限……
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

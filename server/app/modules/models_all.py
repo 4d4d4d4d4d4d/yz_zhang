@@ -14,6 +14,7 @@ from app.modules.content.models import Comment, Content, Follow, Like  # noqa: F
 from app.modules.contract.models import (  # noqa: F401
     ChangeOrder,
     Contract,
+    ContractLicenseItem,
     ContractSignature,
     Milestone,
 )

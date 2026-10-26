@@ -408,6 +408,18 @@ export interface Milestone {
   delivery_note?: string;
 }
 /** SCN-166（297 号 spec）托管在平台的交付文件：原图在合约放款完毕前对发布方锁着（`url` 为 null） */
+/** SCN-202（329 号 spec）交付附授权清单的一项 */
+export type LicenseKind = 'music' | 'footage' | 'font' | 'template' | 'image' | 'other';
+export interface ContractLicenseItem {
+  id: number;
+  kind: LicenseKind;
+  title: string;
+  /** 授权来源：客户提供 / 某曲库商用授权 / 开源 MIT …… */
+  source: string;
+  /** 授权范围：仅某平台 / 商用 / 期限……；没写是空串 */
+  scope: string;
+  created_at: string;
+}
 export interface ContractDeliverable {
   id: number;
   kind: 'preview' | 'original';

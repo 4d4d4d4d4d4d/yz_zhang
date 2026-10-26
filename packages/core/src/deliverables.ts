@@ -1,6 +1,6 @@
 // SC-017（304 号 spec）交付文件挂到某一期：两端共用的文案。挂到某一期的原图，那一期放款后就能下载；
 // 不挂期数的（V324 的行为）全部放款后才能下载，文案与以前一字不差。
-import type { ContractDeliverable } from './types';
+import type { ContractDeliverable, ContractLicenseItem, LicenseKind } from './types';
 
 /** 原图锁着时说清每一张等哪一期 */
 export function deliverableLockedText(locked: Pick<ContractDeliverable, 'milestone_idx'>[]): string {
@@ -16,3 +16,14 @@ export function deliverableLockedText(locked: Pick<ContractDeliverable, 'milesto
 /** 挂到某一期的文件在名字后面标「（第 N 期）」；整份合约的不标 */
 export const deliverableStageTag = (d: Pick<ContractDeliverable, 'milestone_idx'>) =>
   (d.milestone_idx ? `（第 ${d.milestone_idx} 期）` : '');
+
+/** SCN-202（329 号 spec）授权清单的类别中文名。两端同一份。 */
+export const LICENSE_KIND_LABEL: Record<LicenseKind, string> = {
+  music: '音乐', footage: '视频素材', font: '字体', template: '模板', image: '图片', other: '其他',
+};
+
+/** 授权清单一项的一句话：「音乐：《某某》——某曲库商用授权（仅限抖音）」 */
+export function licenseLine(i: Pick<ContractLicenseItem, 'kind' | 'title' | 'source' | 'scope'>): string {
+  const scope = i.scope ? `（${i.scope}）` : '';
+  return `${LICENSE_KIND_LABEL[i.kind] ?? '其他'}：${i.title}——${i.source}${scope}`;
+}

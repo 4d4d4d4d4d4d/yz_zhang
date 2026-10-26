@@ -5,6 +5,7 @@ api DELETE /api/v1/admin/support/holidays/{holiday_id}
 api DELETE /api/v1/admin/support/local-holidays/{holiday_id}
 api DELETE /api/v1/admin/support/my-pause
 api DELETE /api/v1/contents/{content_id}
+api DELETE /api/v1/contracts/{contract_id}/licenses/{item_id}
 api DELETE /api/v1/conversations/{conv_id}/members/{member_id}
 api DELETE /api/v1/decompositions/{dec_id}/nodes/{node_id}
 api DELETE /api/v1/developer/api-keys/{key_id}
@@ -112,6 +113,7 @@ api GET /api/v1/contracts/{contract_id}/coupons
 api GET /api/v1/contracts/{contract_id}/deliverables
 api GET /api/v1/contracts/{contract_id}/deliverables/{deliverable_id}/file
 api GET /api/v1/contracts/{contract_id}/export
+api GET /api/v1/contracts/{contract_id}/licenses
 api GET /api/v1/contracts/{contract_id}/settlements
 api GET /api/v1/contracts/{contract_id}/signatures
 api GET /api/v1/conversations
@@ -418,6 +420,7 @@ api POST /api/v1/contracts/{contract_id}/change-orders/{order_id}/accept
 api POST /api/v1/contracts/{contract_id}/change-orders/{order_id}/reject
 api POST /api/v1/contracts/{contract_id}/deliverables
 api POST /api/v1/contracts/{contract_id}/fund
+api POST /api/v1/contracts/{contract_id}/licenses
 api POST /api/v1/contracts/{contract_id}/milestones
 api POST /api/v1/contracts/{contract_id}/milestones/deliver-batch
 api POST /api/v1/contracts/{contract_id}/milestones/release-delivered
@@ -649,6 +652,7 @@ app deliverables
 app experience
 app gig
 app influence
+app licenses
 app milestones
 app missions
 app motion
@@ -680,6 +684,7 @@ sdk acceptMilestone
 sdk acceptPerson
 sdk acceptSettlement
 sdk acceptTeamInvite
+sdk addContractLicense
 sdk addDeliverable
 sdk addDisputeStatement
 sdk addGigPlace
@@ -805,6 +810,7 @@ sdk contentComments
 sdk contentFeed
 sdk contractAnchors
 sdk contractDeliverables
+sdk contractLicenses
 sdk contractSettlements
 sdk contractSignatures
 sdk conversations
@@ -1047,6 +1053,7 @@ sdk rejectTaxRemit
 sdk relatedNotes
 sdk releaseDelivered
 sdk removeCircleMember
+sdk removeContractLicense
 sdk removeFriend
 sdk removeFromGroup
 sdk removeTeamMember
