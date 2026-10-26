@@ -2490,7 +2490,7 @@ def list_role_requests(user: User = Depends(require_role(*ANY)), db: Session = D
     return [_role_request_row(db, r) for r in [*pending, *done]]
 
 
-def _pending_request(db: Session, request_id: int, admin: User):
+def _pending_role_request(db: Session, request_id: int, admin: User):
     from .models import AdminRoleRequest
 
     r = db.get(AdminRoleRequest, request_id)
@@ -2507,7 +2507,7 @@ def _pending_request(db: Session, request_id: int, admin: User):
 def approve_role_request(request_id: int, admin: User = Depends(require_role("super")),
                          db: Session = Depends(get_db, scope="function")):
     """批准：按申请的角色与时长临时授予（同一套规则、同一条审计），从批准这一刻起算。"""
-    r = _pending_request(db, request_id, admin)
+    r = _pending_role_request(db, request_id, admin)
     target = db.get(User, r.user_id)
     if target is None or not target.is_admin or target.is_deleted:
         raise not_found("申请人已经不是管理员了", "admin_target_not_admin")
@@ -2523,7 +2523,7 @@ def reject_role_request(request_id: int, body: RoleRequestRejectIn, admin: User 
                         db: Session = Depends(get_db, scope="function")):
     from app.modules.notification.service import notify
 
-    r = _pending_request(db, request_id, admin)
+    r = _pending_role_request(db, request_id, admin)
     r.status, r.decided_by, r.decided_at, r.decision_note = "rejected", admin.id, utcnow(), body.note.strip()
     record_audit(db, admin.id, "reject_role_request", "admin_role_request", r.id, r.decision_note)
     notify(db, r.user_id, "system", "你的临时角色申请没有通过", f"理由：{r.decision_note}")

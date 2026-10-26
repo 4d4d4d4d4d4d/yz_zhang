@@ -45,6 +45,10 @@
 
 变异脚本：`scratchpad/mut342.py`（11 处全红）。
 
+## 6.1 回归发现的问题（已修）
+
+新写的 `_pending_request` 与 API 配额申请那边已有的同名函数撞了，后定义的盖掉了前一个，配额申请的批准 / 驳回全部 500（回归 442e1a3 红 5 条）。改名为 `_pending_role_request`；ruff 的 F811 只抓「没用过的名字被重定义」，所以另加闸门 `server/tests/test_no_duplicate_defs.py`（LINT-009）按语法树查同一模块的同名顶层定义，红验：改回原名 → 红。
+
 ## 7. 没做的
 
 无新增欠账。
