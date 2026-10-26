@@ -273,6 +273,9 @@ LESSON_REVISION_CHARS = 400
 # 只取「没通过」的：`approved` 说的是「这次做对了」，对下一次没有指导价值，
 # 而提示词长度是有成本的。
 LESSON_OUTCOMES = ("revised", "rejected")
+# KB-062（323 号 spec）经验的时效：一年以前的核验结论不再喂给 agent——一年前的做法、价格、平台规则
+# 可能都变了，而它和上周的结论在提示词里分不出先后。12 个月是两轮季节（装修旺季、节假日）都覆盖到的最短窗口
+LESSON_FRESH_DAYS = 365
 
 
 def lessons_for(db: Session, category: str, limit: int = LESSON_LIMIT) -> list[VerificationLesson]:
@@ -282,10 +285,15 @@ def lessons_for(db: Session, category: str, limit: int = LESSON_LIMIT) -> list[V
     """
     if not category:
         return []
+    from datetime import timedelta
+
+    from app.modules.account.models import utcnow
+
     return (
         db.query(VerificationLesson)
         .filter(VerificationLesson.category == category,
-                VerificationLesson.outcome.in_(LESSON_OUTCOMES))
+                VerificationLesson.outcome.in_(LESSON_OUTCOMES),
+                VerificationLesson.created_at >= utcnow() - timedelta(days=LESSON_FRESH_DAYS))
         .order_by(VerificationLesson.id.desc())
         .limit(limit)
         .all()
@@ -318,7 +326,9 @@ def lessons_prompt(rows: list[VerificationLesson]) -> str:
         seen.add(key)
         # **不再带任务标题**：标题是发布方打的字，对「下次别再犯」这个用途
         # 没有必要（类目已经限定了同类），而它是这条链上最脏的一段
-        lines.append(f"{len(seen)}. 同类任务{verdict}：{reason}")
+        # KB-062 标上年月：模型看得出哪条是新的
+        when = f"（{row.created_at:%Y-%m}）" if row.created_at else ""
+        lines.append(f"{len(seen)}. 同类任务{verdict}{when}：{reason}")
         if row.revision_summary:
             lines.append("   核验人给出的修正方向："
                          + scrub_text(row.revision_summary[:LESSON_REVISION_CHARS]))

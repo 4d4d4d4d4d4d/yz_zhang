@@ -229,13 +229,35 @@ def record_use(db: Session, unit: ReusableUnit, scenario: str, caller_id: int,
     return inv
 
 
+# KB-062（323 号 spec）经验的时效：子类最近一条样本（没有就看单元本身）在 12 个月以内的算「新」
+FRESH_DAYS = 365
+
+
+def last_seen(db: Session, unit: ReusableUnit):
+    from .models import KnowledgeCluster
+
+    c = db.get(KnowledgeCluster, unit.cluster_id) if unit.cluster_id else None
+    return (c.last_sample_at if c is not None and c.last_sample_at else None) or unit.created_at
+
+
+def is_stale(db: Session, unit: ReusableUnit, now=None) -> bool:
+    from datetime import timedelta
+
+    from app.modules.account.models import utcnow
+
+    seen = last_seen(db, unit)
+    return seen is not None and seen < (now or utcnow()) - timedelta(days=FRESH_DAYS)
+
+
 def best_procedure(db: Session, category: str, city: str, budget_cents: int) -> ReusableUnit | None:
-    """AI-DEC-012 分解的模板来源：适用的、可复用的、已验证的优先。"""
+    """AI-DEC-012 分解的模板来源：适用的、可复用的、已验证的优先。
+
+    KB-062（323 号 spec）近 12 个月还有样本的排在前面：一年以前验证过的做法，不如上个月刚用过的可靠。"""
     rows = [u for u in db.query(ReusableUnit).filter(ReusableUnit.kind == "procedure",
                                                      ReusableUnit.status == "active").all()
             if usable(u) and applies_to(u, category, city, budget_cents)]
     rank = {"validated": 0, "unvalidated": 1}
-    rows.sort(key=lambda u: (rank.get((u.validation or {}).get("status"), 2), -u.id))
+    rows.sort(key=lambda u: (is_stale(db, u), rank.get((u.validation or {}).get("status"), 2), -u.id))
     return rows[0] if rows else None
 
 

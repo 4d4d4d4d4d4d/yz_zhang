@@ -297,12 +297,21 @@ def _experience_citations(db: Session, q: str, k: int = 2) -> list[dict]:
         body = " ".join(str(x) for x in [content.get("summary", ""), *(content.get("steps") or []), *(content.get("checklist") or [])])
         s = score(SimpleNamespace(title=u.title, body=body, tags=[], url=""), ts)
         if s >= MIN_RELATED:
-            scored.append((s, u, body))
-    scored.sort(key=lambda x: -x[0])
+            scored.append((s, u, body, units.is_stale(db, u)))
+    # KB-062（323 号 spec）一年以前的经验排在后面，引用时写明「可能已过时」
+    scored.sort(key=lambda x: (x[3], -x[0]))
     status = {"validated": "已验证", "unvalidated": "未验证"}
+
+    def source(u, stale: bool) -> str:
+        base = f"平台经验（第 {u.version} 版，{status.get((u.validation or {}).get('status'), '未验证')}"
+        if stale:
+            seen = units.last_seen(db, u)
+            return base + f"；最近一次是 {seen:%Y-%m}，一年以前的经验，价格与做法可能已过时）"
+        return base + "）"
+
     return [{"kind": "experience", "title": u.title, "snippet": snippet(body or u.title, ts),
-             "source": f"平台经验（第 {u.version} 版，{status.get((u.validation or {}).get('status'), '未验证')}）",
-             "valid_until": None, "expired": False, "note_id": None} for _, u, body in scored[:k]]
+             "source": source(u, stale),
+             "valid_until": None, "expired": False, "note_id": None} for _, u, body, stale in scored[:k]]
 
 
 CALENDAR_DAYS = 120
