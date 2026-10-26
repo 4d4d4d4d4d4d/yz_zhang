@@ -32,6 +32,8 @@ HEALTH_CERT = "健康证明"
 HEIGHT_WORK_CERT = "高处作业操作证"
 # SCN-176（302 号 spec）实习期上高速须由持相应驾驶证三年以上的驾驶人陪同；陪驾类目要审核通过的驾驶证
 DRIVER_CERT = "驾驶证（三年以上驾龄）"
+# SCN-194（319 号 spec）多地开锁业按特种行业管理，要到公安机关登记备案；上门开锁类目要审核通过的备案证明
+LOCKSMITH_CERT = "开锁备案证明"
 ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助老陪伴"},
                     {"name": "陪练看护", "required_cert": MINOR_CARE_CERT},
                     # 「翻译」——第七轮场景发掘的自由译者服务包的发单模板与去处（259 号 spec，V286）
@@ -54,7 +56,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「老人助浴」「上门理发」——第十五轮场景发掘（313 号 spec，V340）；助浴要审核通过的健康证明
                     {"name": "老人助浴", "required_cert": HEALTH_CERT}, {"name": "上门理发"},
                     # 「废品回收」「电动车维修」——第十六轮场景发掘（316 号 spec，V343）
-                    {"name": "废品回收"}, {"name": "电动车维修"}]
+                    {"name": "废品回收"}, {"name": "电动车维修"},
+                    # 「防水补漏」「上门开锁」——第十七轮场景发掘（319 号 spec，V346）；开锁要审核通过的备案证明
+                    {"name": "防水补漏"}, {"name": "上门开锁", "required_cert": LOCKSMITH_CERT}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
