@@ -175,6 +175,9 @@ class ProgressLog(Base):
     # SCN-124 打卡 / 带位置的上门回报离任务地点多远（米）。坐标在任务结束后清掉（GEO），距离留着当履约证据
     distance_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # SCN-192（317 号 spec）发单人对这一次上门回报的确认 / 异议（称重读数、做了什么，当场说清）；都空 = 还没表态
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    objection: Mapped[str] = mapped_column(String(300), default="", server_default="")
 
 
 class Review(Base):

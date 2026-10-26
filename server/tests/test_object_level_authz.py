@@ -100,6 +100,8 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
     (r"^PATCH /tasks/.*/recipient$", "party", "改服务对象是发单人的动作（197 号 spec；test_change_recipient 行为验，非发单人 403）"),
     (r"^POST /tasks/.*/visits$", "party", "上门回报只有接单的人能交（176 号 spec；test_task_visits 行为验）"),
     (r"^GET /tasks/.*/visits$", "party", "上门回报（含照片）只给成交双方与管理员（176 号 spec；test_task_visits 行为验）"),
+    (r"^POST /tasks/.*/visits/.*/(confirm|object)$", "party",
+     "只有这单的发单人能对上门回报表态，回报要属于这单（317 号 spec；test_visit_confirmation 行为验）"),
     (r"^POST /tasks/.*/(applications|reviews|disputes|bookmark|apply-days)$", "party",
      "报名与评价要满足身份条件（评价限当事人、报名限非发布方）"),
     (r"^DELETE /tasks/.*/bookmark$", "self", "取消的是自己的收藏：task_id 是收藏对象，收藏记录按调用者自己的 id 存"),

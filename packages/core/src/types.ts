@@ -848,6 +848,10 @@ export interface TaskVisit {
   images: string[];
   /** SCN-124 这次回报带了位置时离任务地点多远（米）；没带是 null */
   at_site_m: number | null;
+  /** SCN-192（317 号 spec）发单人确认了才有 */
+  confirmed_at?: string;
+  /** SCN-192 发单人提了异议才有（哪里不对） */
+  objection?: string;
 }
 
 /** SCN-120 这单的上门回报：计划几次、回报了几次、一共漏了几项 */

@@ -694,8 +694,28 @@ function VisitsPanel({ task, isExecutor }: { task: Task; isExecutor: boolean }) 
             {v.note ? ` · ${v.note}` : ''}{v.images.length ? ` · ${v.images.length} 张照片` : ''}
             {typeof v.at_site_m === 'number' ? ` · 到场（距 ${v.at_site_m} 米）` : ''}
           </span>
+          {/* SCN-192（317 号 spec）发单人当场表态：对得上就确认，对不上写清哪里不对 */}
+          {v.confirmed_at && <span className="muted" data-testid={`visit-ok-${v.id}`}> · 发单人已确认</span>}
+          {v.objection && <span className="error" data-testid={`visit-objection-${v.id}`}> · 有异议：{v.objection}</span>}
+          {!isExecutor && (
+            <span>
+              {!v.confirmed_at && <button className="text-link" onClick={() => void (async () => {
+                setError('');
+                try { setData(await client.confirmVisit(task.id, v.id)); } catch (e) { setError(apiErrorText(e)); }
+              })()}>对得上</button>}
+              <button className="text-link" onClick={() => {
+                const reason = window.prompt('哪里对不上？（会告诉接单人）') ?? '';
+                if (reason.trim().length < 2) return;
+                void (async () => {
+                  setError('');
+                  try { setData(await client.objectVisit(task.id, v.id, reason.trim())); } catch (e) { setError(apiErrorText(e)); }
+                })();
+              }}>有异议</button>
+            </span>
+          )}
         </div>
       ))}
+      {!isExecutor && error && <p className="error">{error}</p>}
       {isExecutor && task.status === 'in_progress' && (
         <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
           {checklist.map((item) => (

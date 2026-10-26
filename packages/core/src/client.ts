@@ -737,6 +737,14 @@ export class PlatformClient {
   taskVisits(taskId: number) {
     return this.request<TaskVisits>('GET', `/tasks/${taskId}/visits`);
   }
+  /** SCN-192（317 号 spec）发单人确认这一次上门回报对得上（不碰钱、不等于验收）；会撤回之前的异议 */
+  confirmVisit(taskId: number, visitId: number) {
+    return this.request<TaskVisits>('POST', `/tasks/${taskId}/visits/${visitId}/confirm`);
+  }
+  /** SCN-192 对这一次回报提出异议（写清哪里不对），通知接单人；会撤回之前的确认 */
+  objectVisit(taskId: number, visitId: number, reason: string) {
+    return this.request<TaskVisits>('POST', `/tasks/${taskId}/visits/${visitId}/object`, { reason });
+  }
   checkin(taskId: number, lat: number, lng: number) {
     return this.request<{ ok: boolean; distance_m: number }>('POST', `/tasks/${taskId}/checkin`, { lat, lng });
   }

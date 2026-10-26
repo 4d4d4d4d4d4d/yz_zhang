@@ -23,6 +23,9 @@ export function VisitsBlock({ client, task, isExecutor, locate }: {
   const [note, setNote] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [error, setError] = useState('');
+  // SCN-192（317 号 spec）发单人对某一次回报提异议时写的理由
+  const [objecting, setObjecting] = useState<number | null>(null);
+  const [reason, setReason] = useState('');
   const load = useCallback(() => { client.taskVisits(task.id).then(setData).catch(() => setData(null)); }, [client, task.id]);
   useEffect(() => { load(); }, [load]);
   const checklist = task.visit_checklist ?? [];
@@ -60,12 +63,39 @@ export function VisitsBlock({ client, task, isExecutor, locate }: {
       {/* SCN-136 几次回报带了到场打卡 */}
       {!!visitPresence(data) && <Text accessibilityLabel="到场次数">{visitPresence(data)}</Text>}
       {!!data && Array.isArray(data.visits) && data.visits.map((v) => (
-        <Text key={v.id} style={styles.row}>
-          第 {v.n} 次 · {formatDateTime(v.created_at)}：{v.done.length ? `已做：${v.done.join('、')}` : '清单没勾'}
-          {v.missed.length ? `；没做：${v.missed.join('、')}` : ''}{v.note ? ` · ${v.note}` : ''}{v.images.length ? ` · ${v.images.length} 张照片` : ''}
-          {typeof v.at_site_m === 'number' ? ` · 到场（距 ${v.at_site_m} 米）` : ''}
-        </Text>
+        <View key={v.id}>
+          <Text style={styles.row}>
+            第 {v.n} 次 · {formatDateTime(v.created_at)}：{v.done.length ? `已做：${v.done.join('、')}` : '清单没勾'}
+            {v.missed.length ? `；没做：${v.missed.join('、')}` : ''}{v.note ? ` · ${v.note}` : ''}{v.images.length ? ` · ${v.images.length} 张照片` : ''}
+            {typeof v.at_site_m === 'number' ? ` · 到场（距 ${v.at_site_m} 米）` : ''}
+            {v.confirmed_at ? ' · 发单人已确认' : ''}
+          </Text>
+          {!!v.objection && <Text style={styles.warn}>有异议：{v.objection}</Text>}
+          {!isExecutor && (
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              {!v.confirmed_at && (
+                <TouchableOpacity onPress={() => void (async () => {
+                  setError('');
+                  try { setData(await client.confirmVisit(task.id, v.id)); } catch (e) { setError(apiErrorText(e)); }
+                })()}><Text style={styles.link}>对得上</Text></TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={() => { setObjecting(v.id); setReason(''); }}><Text style={styles.link}>有异议</Text></TouchableOpacity>
+            </View>
+          )}
+          {objecting === v.id && (
+            <View style={{ gap: 6 }}>
+              <TextInput style={styles.input} accessibilityLabel="哪里对不上" placeholder="哪里对不上？（会告诉接单人）"
+                         value={reason} onChangeText={setReason} />
+              <TouchableOpacity onPress={() => void (async () => {
+                if (reason.trim().length < 2) { setError('写清哪里对不上（至少两个字）'); return; }
+                setError('');
+                try { setData(await client.objectVisit(task.id, v.id, reason.trim())); setObjecting(null); } catch (e) { setError(apiErrorText(e)); }
+              })()}><Text style={styles.link}>提交异议</Text></TouchableOpacity>
+            </View>
+          )}
+        </View>
       ))}
+      {!isExecutor && !!error && <Text style={styles.error}>{error}</Text>}
       {isExecutor && task.status === 'in_progress' && (
         <>
           {checklist.map((item) => (

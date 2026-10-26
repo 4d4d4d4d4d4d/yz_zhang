@@ -1339,9 +1339,15 @@ def _visit_view(task: Task, logs: list[ProgressLog]) -> dict:
     visits = []
     for n, r in enumerate(logs, start=1):
         done = [i for i in checklist if i in (r.checked or [])]
-        visits.append({"n": n, "id": r.id, "created_at": iso(r.created_at), "done": done,
-                       "missed": [i for i in checklist if i not in done], "note": r.content, "images": r.images or [],
-                       "at_site_m": r.distance_m})
+        row = {"n": n, "id": r.id, "created_at": iso(r.created_at), "done": done,
+               "missed": [i for i in checklist if i not in done], "note": r.content, "images": r.images or [],
+               "at_site_m": r.distance_m}
+        # SCN-192（317 号 spec）发单人表了态才带
+        if r.confirmed_at is not None:
+            row["confirmed_at"] = iso(r.confirmed_at)
+        if r.objection:
+            row["objection"] = r.objection
+        visits.append(row)
     # SCN-136（204 号 spec）几次回报带了到场打卡；线上单或没有任务坐标时打不了卡，是 null（不是 0 次）
     at_site = None if task.is_remote or task.lat is None else sum(1 for v in visits if v["at_site_m"] is not None)
     return {"task_id": task.id, "planned": task.visits_planned or 0, "checklist": checklist, "reported": len(visits),
@@ -1403,6 +1409,51 @@ def _visit_distance(db: Session, task: Task, user: User, body: VisitIn) -> float
     if distance > settings.CHECKIN_RADIUS_M:
         raise bad_request(f"距任务地点 {distance:.0f} 米，超出打卡范围：到了再交，或者先不带位置交回报", "too_far")
     return distance
+
+
+class VisitObjectionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(min_length=2, max_length=300)
+
+
+def _creator_visit(db: Session, task_id: int, visit_id: int, user: User) -> tuple[Task, ProgressLog]:
+    task = _get_task(db, task_id)
+    if user.id != task.creator_id:
+        raise forbidden("只有发单人能确认或提出异议")
+    log = db.get(ProgressLog, visit_id)
+    if log is None or log.task_id != task.id or log.kind != "visit":
+        raise not_found("没有这一次上门回报")
+    return task, log
+
+
+@router.post("/tasks/{task_id}/visits/{visit_id}/confirm")
+def confirm_visit(task_id: int, visit_id: int, user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db, scope="function")):
+    """SCN-192（317 号 spec）发单人确认这一次回报（称了多少、做了什么）对得上：当场留个凭据，事后不用再争。
+    不碰钱、不等于验收；之前提过的异议随之撤回。"""
+    task, log = _creator_visit(db, task_id, visit_id, user)
+    log.confirmed_at, log.objection = utcnow(), ""
+    db.flush()
+    logs = (db.query(ProgressLog).filter(ProgressLog.task_id == task.id, ProgressLog.kind == "visit")
+            .order_by(ProgressLog.id).all())
+    return _visit_view(task, logs)
+
+
+@router.post("/tasks/{task_id}/visits/{visit_id}/object")
+def object_visit(task_id: int, visit_id: int, body: VisitObjectionIn, user: User = Depends(get_current_user),
+                 db: Session = Depends(get_db, scope="function")):
+    """SCN-192 对这一次回报有异议（重量对不上、清单没做）：写清哪里不对，通知接单人；之前的确认随之撤回。"""
+    from app.modules.notification.service import notify
+
+    task, log = _creator_visit(db, task_id, visit_id, user)
+    log.objection, log.confirmed_at = body.reason.strip(), None
+    db.flush()
+    if task.executor_id:
+        notify(db, task.executor_id, "task", "发单人对一次上门回报有异议",
+               f"《{task.title}》：{log.objection[:80]}。说清楚或补一张照片，别等到验收时再争。")
+    logs = (db.query(ProgressLog).filter(ProgressLog.task_id == task.id, ProgressLog.kind == "visit")
+            .order_by(ProgressLog.id).all())
+    return _visit_view(task, logs)
 
 
 @router.get("/tasks/{task_id}/visits")

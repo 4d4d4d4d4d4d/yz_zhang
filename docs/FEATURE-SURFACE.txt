@@ -545,6 +545,8 @@ api POST /api/v1/tasks/{task_id}/sos
 api POST /api/v1/tasks/{task_id}/trip-share
 api POST /api/v1/tasks/{task_id}/verification
 api POST /api/v1/tasks/{task_id}/visits
+api POST /api/v1/tasks/{task_id}/visits/{visit_id}/confirm
+api POST /api/v1/tasks/{task_id}/visits/{visit_id}/object
 api POST /api/v1/team-invites/{token}/accept
 api POST /api/v1/teams
 api POST /api/v1/teams/jobs/remind-approvals
@@ -789,6 +791,7 @@ sdk commentContent
 sdk confirmContribution
 sdk confirmDecomposition
 sdk confirmTaxRemit
+sdk confirmVisit
 sdk confirmXappStep
 sdk contentComments
 sdk contentFeed
@@ -985,6 +988,7 @@ sdk notificationPrefs
 sdk notifications
 sdk oauthLogin
 sdk oauthProviders
+sdk objectVisit
 sdk opcCalendar
 sdk opcEntries
 sdk opcProfile
