@@ -52,7 +52,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「管道疏通」「求职辅导」——第十四轮场景发掘（310 号 spec，V337）
                     {"name": "管道疏通"}, {"name": "求职辅导"},
                     # 「老人助浴」「上门理发」——第十五轮场景发掘（313 号 spec，V340）；助浴要审核通过的健康证明
-                    {"name": "老人助浴", "required_cert": HEALTH_CERT}, {"name": "上门理发"}]
+                    {"name": "老人助浴", "required_cert": HEALTH_CERT}, {"name": "上门理发"},
+                    # 「废品回收」「电动车维修」——第十六轮场景发掘（316 号 spec，V343）
+                    {"name": "废品回收"}, {"name": "电动车维修"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
