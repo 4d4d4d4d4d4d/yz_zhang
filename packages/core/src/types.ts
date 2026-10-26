@@ -882,6 +882,39 @@ export interface DayShiftKept {
 }
 
 /** SCN-121 一天的补招结果：哪几个名额再推了一次、加价后各自的预算 */
+/** AI-DEC-024（321 号 spec）依赖这一步的后一步：交付人开没开给它 */
+export interface SubtaskNextStep {
+  task_id: number;
+  title: string;
+  status: TaskStatus;
+  executor_nickname: string | null;
+  shared: boolean;
+  /** 开着的才有：收回时用 */
+  share_id?: number;
+}
+/** AI-DEC-024 前一步的交付人看：交了没有、依赖它的有哪几步 */
+export interface SubtaskShareView {
+  task_id: number;
+  delivered: boolean;
+  next_steps: SubtaskNextStep[];
+}
+export interface SubtaskInputDelivery {
+  content: string;
+  images: string[];
+  created_at: string;
+}
+export interface SubtaskInputPreview {
+  id: number;
+  url: string;
+}
+/** AI-DEC-024 后一步的执行者看：前一步的交付人开放给这一步的交付说明与预览图（原图不在里面） */
+export interface SubtaskInput {
+  from_task_id: number;
+  title: string;
+  shared_at: string;
+  deliveries: SubtaskInputDelivery[];
+  previews: SubtaskInputPreview[];
+}
 /** AI-DEC-023（320 号 spec）没人报名的单再推一次 */
 export interface TaskReboostResult {
   task_id: number;

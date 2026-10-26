@@ -66,6 +66,7 @@ from app.modules.task.models import (  # noqa: F401
     City,
     ProgressLog,
     Review,
+    SubtaskShare,
     Task,
 )
 from app.modules.wallet.models import FinancePeriodLock, LedgerEntry, WalletAccount  # noqa: F401

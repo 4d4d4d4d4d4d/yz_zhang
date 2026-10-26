@@ -151,6 +151,7 @@ def create_app() -> FastAPI:
     from app.modules.eventops.router import router as eventops_router
     from app.modules.tax.router import router as tax_router
     from app.modules.task.router import router as task_router
+    from app.modules.task.shares import router as task_shares_router
     from app.modules.wallet.router import router as wallet_router
 
     for router in (
@@ -167,6 +168,7 @@ def create_app() -> FastAPI:
         skills_router,
         wallet_router,
         task_router,
+        task_shares_router,
         contract_router,
         decompose_router,
         knowledge_router,

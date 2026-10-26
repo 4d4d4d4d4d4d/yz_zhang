@@ -9,6 +9,7 @@ import { ExperienceTools } from '../ExperienceUnits';
 import PhotoPicker from '../PhotoPicker';
 import { useApp } from '../store';
 import DeliverablesBlock from '../Deliverables';
+import { PreviousStepInputs, ShareToNextSteps } from '../SubtaskShares';
 
 type AppRow = { id: number; applicant_id: number; nickname: string; credit_score: number; rating_avg: number; bid_cents: number; message: string; status: string; promise_flag?: string };
 
@@ -465,6 +466,9 @@ export default function TaskDetail() {
         && !['draft', 'published'].includes(task.status) && (
         <VisitsPanel task={task} isExecutor={!!isExecutor} />
       )}
+      {/* AI-DEC-024（321 号 spec）项目里的一步：交付人把成果开放给要等它的下一步；下一步的执行者看前一步开放的成果 */}
+      {isExecutor && task.parent_id !== null && !['draft', 'published'].includes(task.status) && <ShareToNextSteps taskId={taskId} />}
+      {isExecutor && task.parent_id !== null && <PreviousStepInputs taskId={taskId} />}
       {/* GEO-023/022 安全区块。服务端两条都早就实现了——`sos` 的注释甚至
           为了让按钮**不被合规弹窗挡住**特意去查了 PIPL 第十三条第(四)项——
           而这个按钮在任何一个端上都不存在。 */}

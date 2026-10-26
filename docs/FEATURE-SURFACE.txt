@@ -21,6 +21,7 @@ api DELETE /api/v1/notifications/devices/{token}
 api DELETE /api/v1/opc/entries/{entry_id}
 api DELETE /api/v1/subscriptions/{sub_id}
 api DELETE /api/v1/tasks/{task_id}/bookmark
+api DELETE /api/v1/tasks/{task_id}/shares/{share_id}
 api DELETE /api/v1/tasks/{task_id}/showcase-consent
 api DELETE /api/v1/teams/{team_id}/members/{member_user_id}
 api DELETE /api/v1/users/{user_id}/follow
@@ -215,10 +216,12 @@ api GET /api/v1/tasks/{task_id}/decomposition
 api GET /api/v1/tasks/{task_id}/dispute
 api GET /api/v1/tasks/{task_id}/eligible-agents
 api GET /api/v1/tasks/{task_id}/final-report
+api GET /api/v1/tasks/{task_id}/inputs
 api GET /api/v1/tasks/{task_id}/profile
 api GET /api/v1/tasks/{task_id}/progress
 api GET /api/v1/tasks/{task_id}/recommendations
 api GET /api/v1/tasks/{task_id}/reviews
+api GET /api/v1/tasks/{task_id}/shares
 api GET /api/v1/tasks/{task_id}/tree
 api GET /api/v1/tasks/{task_id}/trip
 api GET /api/v1/tasks/{task_id}/visits
@@ -542,6 +545,7 @@ api POST /api/v1/tasks/{task_id}/publish
 api POST /api/v1/tasks/{task_id}/reboost
 api POST /api/v1/tasks/{task_id}/reject-delivery
 api POST /api/v1/tasks/{task_id}/reviews
+api POST /api/v1/tasks/{task_id}/shares
 api POST /api/v1/tasks/{task_id}/showcase-consent
 api POST /api/v1/tasks/{task_id}/sos
 api POST /api/v1/tasks/{task_id}/trip-share
@@ -658,6 +662,7 @@ app sandbox
 app search
 app showcase
 app spaces
+app subtaskShares
 app supportTickets
 app taskReboost
 app teamInvites
@@ -1079,6 +1084,7 @@ sdk revokeApiKey
 sdk revokeCertification
 sdk revokeConsent
 sdk revokeSession
+sdk revokeSubtaskShare
 sdk revokeTeamInviteLink
 sdk revokeTemporaryAdminRole
 sdk revokeXappGrant
@@ -1116,6 +1122,7 @@ sdk setTicketPriority
 sdk setTripShare
 sdk settlePlatform
 sdk settleRequests
+sdk shareToNextStep
 sdk signContract
 sdk signVideoUpload
 sdk skillConcepts
@@ -1129,6 +1136,8 @@ sdk submitContribution
 sdk submitTeamCompany
 sdk submitVerificationOutcome
 sdk subscribeCategory
+sdk subtaskInputs
+sdk subtaskShares
 sdk supplyHint
 sdk supportAgents
 sdk supportHolidays

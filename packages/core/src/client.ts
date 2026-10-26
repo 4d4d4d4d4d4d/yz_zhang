@@ -25,6 +25,8 @@ import type {
   ApplyDaysResult,
   ReboostDayResult,
   TaskReboostResult,
+  SubtaskShareView,
+  SubtaskInput,
   DayShiftChangeResult,
   DayApplicant,
   AcceptPersonResult,
@@ -713,6 +715,22 @@ export class PlatformClient {
   /** AI-DEC-023 没人报名的单一键再推一次，可选加价（分，只许上调）；6 小时内一次；一单多天的请按天补招 */
   reboostTask(taskId: number, raiseCents = 0) {
     return this.request<TaskReboostResult>('POST', `/tasks/${taskId}/reboost`, { raise_cents: raiseCents });
+  }
+  /** AI-DEC-024 前一步的交付人（与发单人）看：依赖这一步的有哪几步、开没开给它们 */
+  subtaskShares(taskId: number) {
+    return this.request<SubtaskShareView>('GET', `/tasks/${taskId}/shares`);
+  }
+  /** AI-DEC-024 交付人把交付说明与预览图开放给依赖这一步的那一步（交了之后才能开；再点一次不重复开） */
+  shareToNextStep(taskId: number, toTaskId: number) {
+    return this.request<SubtaskShareView>('POST', `/tasks/${taskId}/shares`, { to_task_id: toTaskId });
+  }
+  /** AI-DEC-024 交付人随时收回 */
+  revokeSubtaskShare(taskId: number, shareId: number) {
+    return this.request<SubtaskShareView>('DELETE', `/tasks/${taskId}/shares/${shareId}`);
+  }
+  /** AI-DEC-024 后一步的执行者（与发单人）看：前一步开放给这一步的成果 */
+  subtaskInputs(taskId: number) {
+    return this.request<SubtaskInput[]>('GET', `/tasks/${taskId}/inputs`);
   }
   applyDays(taskId: number, dates: string[], message = '') {
     return this.request<ApplyDaysResult>('POST', `/tasks/${taskId}/apply-days`, { dates, message });

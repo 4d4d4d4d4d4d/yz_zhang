@@ -208,3 +208,19 @@ class Bookmark(Base):
     user_id: Mapped[int] = mapped_column(Integer, index=True)
     task_id: Mapped[int] = mapped_column(Integer, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class SubtaskShare(Base):
+    """AI-DEC-024（321 号 spec）跨子任务产出共享：前一步的交付人把交付说明与预览图开放给后一步的执行者。
+
+    开不开放是交付人的权利，不是流程的便利：默认谁也看不到，交付人点了才开，随时可以收回（revoked_at）。
+    开放给的是「后一步这个任务的执行者」这个位置：换了人，新的执行者看得到，交付人在列表里看得见现在是谁。"""
+
+    __tablename__ = "subtask_shares"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    from_task_id: Mapped[int] = mapped_column(Integer, index=True)
+    to_task_id: Mapped[int] = mapped_column(Integer, index=True)
+    granted_by: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

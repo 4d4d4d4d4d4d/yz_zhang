@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
 import { VisitsBlock, hasVisits } from './visits';
 import { TaskReboostBlock } from './taskReboost';
+import { PreviousStepInputsBlock, ShareToNextStepsBlock } from './subtaskShares';
 import { ScreenBoundary } from './ScreenBoundary';
 import { RecipientEditorBlock, canChangeRecipient } from './recipient';
 import { ShowcaseConsentBlock, canGrantShowcase } from './showcase';
@@ -467,6 +468,10 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
         && !['draft', 'published'].includes(task.status) && (
         <VisitsBlock client={client} task={task} isExecutor={meId === task.executor_id} locate={currentPosition} />
       )}
+      {/* AI-DEC-024（321 号 spec）项目里的一步：交付人开放给下一步；下一步的执行者看前一步开放的成果 */}
+      {meId !== null && meId === task.executor_id && task.parent_id !== null && !['draft', 'published'].includes(task.status)
+        && <ShareToNextStepsBlock client={client} taskId={task.id} />}
+      {meId !== null && meId === task.executor_id && task.parent_id !== null && <PreviousStepInputsBlock client={client} taskId={task.id} />}
       {/* PROF-103 这单的画像（126 号 spec） */}
       {task.status !== 'draft' && <TaskProfileBlock client={client} taskId={task.id} isCreator={task.creator_id === me?.id}
         onApplyWithQuestions={actions.includes('apply') ? (m) => void act(() => client.apply(task.id, m)) : undefined} />}
