@@ -64,7 +64,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「陪诊」「家具安装」——第十八轮场景发掘（322 号 spec，V349）
                     {"name": "陪诊"}, {"name": "家具安装"},
                     # 「水电维修」「短视频剪辑」——第十九轮场景发掘（325 号 spec，V352）；水电维修要低压电工作业操作证
-                    {"name": "水电维修", "required_cert": ELECTRICIAN_CERT}, {"name": "短视频剪辑"}]
+                    {"name": "水电维修", "required_cert": ELECTRICIAN_CERT}, {"name": "短视频剪辑"},
+                    # 「上门跟妆」「网站小程序搭建」——第二十轮场景发掘（328 号 spec，V355）
+                    {"name": "上门跟妆"}, {"name": "网站小程序搭建"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
