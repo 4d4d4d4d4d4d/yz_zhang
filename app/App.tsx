@@ -16,6 +16,7 @@ import { VisitsBlock, hasVisits } from './visits';
 import { TaskReboostBlock } from './taskReboost';
 import { PreviousStepInputsBlock, ShareToNextStepsBlock } from './subtaskShares';
 import { LicensesList } from './licenses';
+import { HandoverList } from './handover';
 import { ScreenBoundary } from './ScreenBoundary';
 import { RecipientEditorBlock, canChangeRecipient } from './recipient';
 import { ShowcaseConsentBlock, canGrantShowcase } from './showcase';
@@ -538,6 +539,9 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       {/* SCN-202（329 号 spec）交付附授权清单 */}
       {contract && <LicensesList client={client} contractId={contract.id} isExecutor={meId === contract.executor_id}
                                  live={contract.status === 'funded' && !contract.frozen} />}
+      {/* SCN-205（330 号 spec）账号交接清单 */}
+      {contract && <HandoverList client={client} contractId={contract.id} isExecutor={meId === contract.executor_id}
+                                 isRequester={meId === contract.requester_id} live={contract.status === 'funded' && !contract.frozen} />}
       {!!error && <Text style={styles.error}>{error}</Text>}
 
       {actions.includes('apply') && (

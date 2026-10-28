@@ -150,3 +150,18 @@ class ContractLicenseItem(Base):
     source: Mapped[str] = mapped_column(String(120))     # 授权来源：客户提供 / 某曲库商用授权 / 开源 MIT ……
     scope: Mapped[str] = mapped_column(String(120), default="")   # 授权范围：仅某平台 / 商用 / 期限……
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ContractHandoverItem(Base):
+    """SCN-205（330 号 spec）建站交付的账号交接清单：域名、小程序、服务器、支付商户号逐项登记，
+    发单人逐项确认「已在我名下」。账号卡在开发方手里是建站最常见的纠纷，口头说「都给你了」对不上。"""
+
+    __tablename__ = "contract_handover_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    contract_id: Mapped[int] = mapped_column(Integer, index=True)
+    kind: Mapped[str] = mapped_column(String(12))        # domain / miniapp / server / merchant / other
+    name: Mapped[str] = mapped_column(String(80))        # 例：example.com、某某小店小程序
+    note: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

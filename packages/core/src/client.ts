@@ -48,6 +48,8 @@ import type {
   Contract,
   ContractDeliverable,
   ContractLicenseItem,
+  ContractHandoverItem,
+  HandoverKind,
   LicenseKind,
   Decomposition,
   KnowledgeAdminOverview,
@@ -1281,6 +1283,23 @@ export class PlatformClient {
   addDeliverable(contractId: number, ref: string, kind: ContractDeliverable['kind'], milestoneIdx?: number) {
     // 没选期数时 milestone_idx 为 undefined，序列化时不发
     return this.request<ContractDeliverable>('POST', `/contracts/${contractId}/deliverables`, { ref, kind, milestone_idx: milestoneIdx || undefined });
+  }
+  /** SCN-205 账号交接清单（合约双方都看得到） */
+  contractHandover(contractId: number) {
+    return this.request<ContractHandoverItem[]>('GET', `/contracts/${contractId}/handover`).then(listOf);
+  }
+  /** SCN-205 执行方在托管期间逐项登记要交接的账号；返回整张清单 */
+  addContractHandover(contractId: number, item: { kind: HandoverKind; name: string; note?: string }) {
+    return this.request<ContractHandoverItem[]>('POST', `/contracts/${contractId}/handover`,
+      { kind: item.kind, name: item.name, note: item.note ?? '' });
+  }
+  /** SCN-205 执行方删掉登记错的一项（发单人已确认的不能删） */
+  removeContractHandover(contractId: number, itemId: number) {
+    return this.request<ContractHandoverItem[]>('DELETE', `/contracts/${contractId}/handover/${itemId}`);
+  }
+  /** SCN-205 发单人确认这一项「已在我名下」 */
+  confirmContractHandover(contractId: number, itemId: number) {
+    return this.request<ContractHandoverItem[]>('POST', `/contracts/${contractId}/handover/${itemId}/confirm`);
   }
   /** SCN-202 交付附授权清单（合约双方都看得到） */
   contractLicenses(contractId: number) {

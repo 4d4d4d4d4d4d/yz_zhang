@@ -1,6 +1,6 @@
 // SC-017（304 号 spec）交付文件挂到某一期的文案
 import { describe, expect, it } from 'vitest';
-import { deliverableLockedText, deliverableStageTag, licenseLine } from './deliverables';
+import { deliverableLockedText, deliverableStageTag, handoverSummary, licenseLine } from './deliverables';
 
 describe('SC-017 交付文件按期解锁的文案', () => {
   it('全是整份合约的：与以前一字不差', () => {
@@ -19,5 +19,13 @@ describe('SCN-202 licenseLine', () => {
     expect(licenseLine({ kind: 'music', title: '《夏日》', source: '某曲库商用授权', scope: '仅限抖音' }))
       .toBe('音乐：《夏日》——某曲库商用授权（仅限抖音）');
     expect(licenseLine({ kind: 'font', title: '思源黑体', source: '开源 OFL', scope: '' })).toBe('字体：思源黑体——开源 OFL');
+  });
+});
+
+describe('SCN-205 handoverSummary', () => {
+  it('全部确认、还差几项、一项都没有', () => {
+    expect(handoverSummary([{ confirmed_at: 'x' }, { confirmed_at: 'y' }])).toBe('2 项账号都已确认在发单人名下');
+    expect(handoverSummary([{ confirmed_at: 'x' }, { confirmed_at: null }, { confirmed_at: null }])).toBe('3 项账号里还有 2 项没确认在发单人名下');
+    expect(handoverSummary([])).toBe('');
   });
 });

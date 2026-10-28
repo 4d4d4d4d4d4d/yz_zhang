@@ -10,6 +10,7 @@ import PhotoPicker from '../PhotoPicker';
 import { useApp } from '../store';
 import DeliverablesBlock from '../Deliverables';
 import LicensesBlock from '../Licenses';
+import HandoverBlock from '../Handover';
 import { PreviousStepInputs, ShareToNextSteps } from '../SubtaskShares';
 
 type AppRow = { id: number; applicant_id: number; nickname: string; credit_score: number; rating_avg: number; bid_cents: number; message: string; status: string; promise_flag?: string };
@@ -381,6 +382,9 @@ export default function TaskDetail() {
                              stages={contract.milestones} />
           {/* SCN-202（329 号 spec）交付附授权清单 */}
           <LicensesBlock contractId={contract.id} isExecutor={!!isExecutor} live={contract.status === 'funded' && !contract.frozen} />
+          {/* SCN-205（330 号 spec）账号交接清单 */}
+          <HandoverBlock contractId={contract.id} isExecutor={!!isExecutor} isRequester={!!isCreator}
+                         live={contract.status === 'funded' && !contract.frozen} />
           {/* SC-015（296 号 spec）执行方一次交付进行中的几期：列清楚、可写一份交付说明 */}
           {isExecutor && contract.status === 'funded' && !contract.frozen && (() => {
             const pending = (contract.milestones ?? []).filter((m) => m.status === 'pending');

@@ -5,6 +5,7 @@ api DELETE /api/v1/admin/support/holidays/{holiday_id}
 api DELETE /api/v1/admin/support/local-holidays/{holiday_id}
 api DELETE /api/v1/admin/support/my-pause
 api DELETE /api/v1/contents/{content_id}
+api DELETE /api/v1/contracts/{contract_id}/handover/{item_id}
 api DELETE /api/v1/contracts/{contract_id}/licenses/{item_id}
 api DELETE /api/v1/conversations/{conv_id}/members/{member_id}
 api DELETE /api/v1/decompositions/{dec_id}/nodes/{node_id}
@@ -113,6 +114,7 @@ api GET /api/v1/contracts/{contract_id}/coupons
 api GET /api/v1/contracts/{contract_id}/deliverables
 api GET /api/v1/contracts/{contract_id}/deliverables/{deliverable_id}/file
 api GET /api/v1/contracts/{contract_id}/export
+api GET /api/v1/contracts/{contract_id}/handover
 api GET /api/v1/contracts/{contract_id}/licenses
 api GET /api/v1/contracts/{contract_id}/settlements
 api GET /api/v1/contracts/{contract_id}/signatures
@@ -420,6 +422,8 @@ api POST /api/v1/contracts/{contract_id}/change-orders/{order_id}/accept
 api POST /api/v1/contracts/{contract_id}/change-orders/{order_id}/reject
 api POST /api/v1/contracts/{contract_id}/deliverables
 api POST /api/v1/contracts/{contract_id}/fund
+api POST /api/v1/contracts/{contract_id}/handover
+api POST /api/v1/contracts/{contract_id}/handover/{item_id}/confirm
 api POST /api/v1/contracts/{contract_id}/licenses
 api POST /api/v1/contracts/{contract_id}/milestones
 api POST /api/v1/contracts/{contract_id}/milestones/deliver-batch
@@ -651,6 +655,7 @@ app decompose
 app deliverables
 app experience
 app gig
+app handover
 app influence
 app licenses
 app milestones
@@ -684,6 +689,7 @@ sdk acceptMilestone
 sdk acceptPerson
 sdk acceptSettlement
 sdk acceptTeamInvite
+sdk addContractHandover
 sdk addContractLicense
 sdk addDeliverable
 sdk addDisputeStatement
@@ -801,6 +807,7 @@ sdk claimVerificationOrder
 sdk clarify
 sdk cockpit
 sdk commentContent
+sdk confirmContractHandover
 sdk confirmContribution
 sdk confirmDecomposition
 sdk confirmTaxRemit
@@ -810,6 +817,7 @@ sdk contentComments
 sdk contentFeed
 sdk contractAnchors
 sdk contractDeliverables
+sdk contractHandover
 sdk contractLicenses
 sdk contractSettlements
 sdk contractSignatures
@@ -1053,6 +1061,7 @@ sdk rejectTaxRemit
 sdk relatedNotes
 sdk releaseDelivered
 sdk removeCircleMember
+sdk removeContractHandover
 sdk removeContractLicense
 sdk removeFriend
 sdk removeFromGroup

@@ -420,6 +420,18 @@ export interface ContractLicenseItem {
   scope: string;
   created_at: string;
 }
+/** SCN-205（330 号 spec）建站交付的账号交接清单的一项 */
+export type HandoverKind = 'domain' | 'miniapp' | 'server' | 'merchant' | 'other';
+export interface ContractHandoverItem {
+  id: number;
+  kind: HandoverKind;
+  /** 例：example.com、某某小店小程序 */
+  name: string;
+  note: string;
+  created_at: string;
+  /** 发单人确认「已在我名下」的时间；没确认是 null */
+  confirmed_at: string | null;
+}
 export interface ContractDeliverable {
   id: number;
   kind: 'preview' | 'original';

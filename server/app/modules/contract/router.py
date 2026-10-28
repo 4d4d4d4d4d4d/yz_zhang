@@ -401,6 +401,97 @@ def remove_license(contract_id: int, item_id: int, user: User = Depends(get_curr
     return _license_rows(db, contract.id)
 
 
+# ------------------------------------------------ SCN-205（330 号 spec）账号交接清单
+HANDOVER_MAX = 30
+
+
+class HandoverItemIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: str = Field(pattern="^(domain|miniapp|server|merchant|other)$")
+    name: str = Field(min_length=1, max_length=80)
+    note: str = Field(default="", max_length=120)
+
+
+def _handover_rows(db: Session, contract_id: int) -> list[dict]:
+    from .models import ContractHandoverItem
+
+    rows = (db.query(ContractHandoverItem).filter(ContractHandoverItem.contract_id == contract_id)
+            .order_by(ContractHandoverItem.id).all())
+    return [{"id": r.id, "kind": r.kind, "name": r.name, "note": r.note, "created_at": iso(r.created_at),
+             "confirmed_at": iso(r.confirmed_at) if r.confirmed_at else None} for r in rows]
+
+
+@router.get("/{contract_id}/handover")
+def list_handover(contract_id: int, user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db, scope="function")):
+    """合约双方都看得到：要交接的账号，哪些发单人已经确认在自己名下。"""
+    contract = _party(db, contract_id, user)
+    return _handover_rows(db, contract.id)
+
+
+@router.post("/{contract_id}/handover", status_code=201)
+def add_handover(contract_id: int, body: HandoverItemIn, user: User = Depends(get_current_user),
+                 db: Session = Depends(get_db, scope="function")):
+    """执行方在托管期间逐项登记要交接的账号；返回整张清单。"""
+    from .models import ContractHandoverItem
+
+    contract = _party(db, contract_id, user)
+    if user.id != contract.executor_id:
+        raise forbidden("交接清单由执行方登记：哪些账号要交给你，他最清楚", "not_party")
+    if contract.status != "funded" or contract.frozen:
+        raise conflict("合约不在执行中：交接清单要在托管期间登记", "not_active")
+    if db.query(ContractHandoverItem).filter(ContractHandoverItem.contract_id == contract.id).count() >= HANDOVER_MAX:
+        raise bad_request(f"一份合约最多登记 {HANDOVER_MAX} 个要交接的账号", "handover_full")
+    db.add(ContractHandoverItem(contract_id=contract.id, kind=body.kind, name=body.name.strip(), note=body.note.strip()))
+    db.flush()
+    return _handover_rows(db, contract.id)
+
+
+@router.delete("/{contract_id}/handover/{item_id}")
+def remove_handover(contract_id: int, item_id: int, user: User = Depends(get_current_user),
+                    db: Session = Depends(get_db, scope="function")):
+    """执行方在托管期间删掉登记错的一项；发单人已经确认的不能删。"""
+    from .models import ContractHandoverItem
+
+    contract = _party(db, contract_id, user)
+    if user.id != contract.executor_id:
+        raise forbidden("交接清单由执行方登记：哪些账号要交给你，他最清楚", "not_party")
+    if contract.status != "funded" or contract.frozen:
+        raise conflict("合约不在执行中：放款以后交接清单就定了", "not_active")
+    row = db.get(ContractHandoverItem, item_id)
+    if row is None or row.contract_id != contract.id:
+        raise not_found("没有这一项")
+    if row.confirmed_at is not None:
+        raise conflict("发单人已经确认这一项在他名下，不能再删", "handover_confirmed")
+    db.delete(row)
+    db.flush()
+    return _handover_rows(db, contract.id)
+
+
+@router.post("/{contract_id}/handover/{item_id}/confirm")
+def confirm_handover(contract_id: int, item_id: int, user: User = Depends(get_current_user),
+                     db: Session = Depends(get_db, scope="function")):
+    """发单人确认这一项「已在我名下」（放款后也能确认）；通知执行方。"""
+    from app.modules.account.models import utcnow as _now
+    from app.modules.notification.service import notify
+
+    from .models import ContractHandoverItem
+
+    contract = _party(db, contract_id, user)
+    if user.id != contract.requester_id:
+        raise forbidden("只有发单人能确认账号已在自己名下", "not_party")
+    row = db.get(ContractHandoverItem, item_id)
+    if row is None or row.contract_id != contract.id:
+        raise not_found("没有这一项")
+    if row.confirmed_at is None:
+        row.confirmed_at = _now()
+        db.add(row)
+        notify(db, contract.executor_id, "contract", "发单人确认了一项账号交接",
+               f"「{row.name}」已确认在发单人名下。")
+    db.flush()
+    return _handover_rows(db, contract.id)
+
+
 @router.post("/{contract_id}/milestones/{idx}/accept")
 def accept_milestone(
     contract_id: int, idx: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
