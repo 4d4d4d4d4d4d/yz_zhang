@@ -7,6 +7,12 @@
 - SCN-177（303 号 spec）：给没有驾照的人陪练学车。没有驾驶证在道路上驾驶是无证驾驶；学车只能在驾校教练车上、
   由有资格的教练随车指导。已经拿到驾照、找人陪着练胆或实习期上高速（V329「陪驾」）不在此列；去驾校报名学车也不在此列。
 
+- SCN-210（331 号 spec）：代写学位论文、代考。教育部《学位论文作假行为处理办法》把购买、出售、由他人代写、为他人
+  代写学位论文都列为作假行为，组织或参与买卖、代写的个人与网站由主管机关查处；替考、代考扰乱考试秩序。
+  文案、简历、公众号文章这类普通代写不在此列；论文的润色建议、查资料、讲解方法也不在此列。
+- SCN-211（331 号 spec）：刷单、刷好评、写虚假评价。组织虚假交易、编造用户评价帮人做虚假宣传，违反《反不正当竞争法》
+  《电子商务法》。真实用户写真实体验的内容合作（写明是合作）不在此列。
+
 和 k12.py 一样：纯文本规则，只看词同时出现，不调模型；拿不准的由运营人工复核。
 """
 from __future__ import annotations
@@ -26,6 +32,19 @@ NO_LICENSE = re.compile(r"没有?驾照|无驾照|没有?驾驶证|无驾驶证|
 PRACTICE = re.compile(r"陪练|练车|学车|教我开|教开车|教我驾驶|陪我开|上路练|练手")
 SCHOOL = re.compile(r"驾校|教练车")
 SKIP_SCHOOL = re.compile(r"不(?:去|报|上|想去|想报|用去|用报)驾校|绕过驾校|比驾校便宜|代替驾校|不走驾校")
+# SCN-210 代写学位论文、代考
+GHOST = re.compile(r"(?:代写|代做|代笔|帮我写|替我写|枪手)[^。；\n]{0,8}(?:毕业论文|学位论文|硕士论文|博士论文|本科论文|毕业设计|毕设|论文)|"
+                   r"(?:毕业论文|学位论文|硕士论文|博士论文|毕设|论文)[^。；\n]{0,6}(?:代写|代做|包过|包查重)|"
+                   r"代考|替考|替我考|帮我考试|枪手考")
+# SCN-211 刷单、刷好评、虚假评价
+FAKE_REVIEW = re.compile(r"刷单|刷好评|刷评价|刷销量|刷五星|买好评|虚假好评|虚假评价|假好评|编好评|代写好评|写好评返现|好评返现")
+# 命中词前面紧挨着否定词的不算：「不代写学位论文」「不是代写，只要润色」「不刷单」
+_NEGATED = re.compile(r"(?:不|不是|不要|不会|不能|不接|禁止|严禁|拒绝|非)(?:写|做|接|搞|帮|找人|参与)?\W{0,1}$")
+
+
+def _affirmed(pattern: re.Pattern, text: str) -> bool:
+    """有一处命中、且它前面 4 个字以内不是否定说法，才算。"""
+    return any(not _NEGATED.search(text[max(0, m.start() - 4):m.start()]) for m in pattern.finditer(text))
 
 
 def restricted_errand(text: str) -> str | None:
@@ -36,6 +55,10 @@ def restricted_errand(text: str) -> str | None:
         return "resale"
     if NO_LICENSE.search(t) and PRACTICE.search(t) and (not SCHOOL.search(t) or SKIP_SCHOOL.search(t)):
         return "learner"
+    if _affirmed(GHOST, t):
+        return "ghostwrite"
+    if _affirmed(FAKE_REVIEW, t):
+        return "fake_review"
     return None
 
 
@@ -59,4 +82,16 @@ def assert_no_restricted_errand(text: str) -> None:
             "平台不承接给没有驾照的人陪练学车：没有驾驶证在道路上开车属于无证驾驶，学车只能在驾校的教练车上、"
             "由有资格的教练随车指导。请先到驾校报名学车；已经拿到驾照、想找人陪着练胆或实习期上高速的，可以照常发「陪驾」单。",
             "unlicensed_driving_practice",
+        )
+    if kind == "ghostwrite":
+        raise bad_request(
+            "平台不承接代写学位论文、代考：购买或由他人代写学位论文是论文作假，参与代写的人也会被查处，替考扰乱考试秩序。"
+            "论文的润色建议、查资料、讲解研究方法可以照常发单，写清是辅导而不是代写；文案、简历这类普通写作也可以。",
+            "academic_ghostwriting",
+        )
+    if kind == "fake_review":
+        raise bad_request(
+            "平台不承接刷单、刷好评、编写虚假评价：组织虚假交易、编造评价属于虚假宣传，违反反不正当竞争法与电子商务法。"
+            "想让更多人看到真实体验，可以发「探店」「试用」类的内容合作，写明是合作、按真实体验写。",
+            "fake_review",
         )
