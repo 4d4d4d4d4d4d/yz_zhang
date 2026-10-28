@@ -28,8 +28,23 @@ def active_certifications(db: Session, user_id: int) -> list[str]:
     })
 
 
+# SCN-212（332 号 spec）同一张证的不同叫法：种子类目「电工维修」一直写的是「电工」，V352 的「水电维修」写的是
+# 证上的正式名称「低压电工作业操作证」。持任一个名字的证，两个类目都能接；已经持有其中一个，不能再重复申请另一个。
+CERT_ALIAS_GROUPS: tuple[frozenset[str], ...] = (
+    frozenset({"电工", "低压电工作业操作证"}),
+)
+
+
+def cert_aliases(name: str) -> set[str]:
+    """这个资质名，加上与它是同一张证的别的叫法。"""
+    for group in CERT_ALIAS_GROUPS:
+        if name in group:
+            return set(group)
+    return {name}
+
+
 def has_certification(db: Session, user_id: int, name: str) -> bool:
-    return name in active_certifications(db, user_id)
+    return bool(cert_aliases(name) & set(active_certifications(db, user_id)))
 
 
 def submit(db: Session, user: User, *, name: str, holder_name: str, cert_number: str,
@@ -81,7 +96,7 @@ def submit(db: Session, user: User, *, name: str, holder_name: str, cert_number:
     dup = (
         db.query(CertificationApplication)
         .filter(CertificationApplication.user_id == user.id,
-                CertificationApplication.name == name,
+                CertificationApplication.name.in_(cert_aliases(name)),   # SCN-212 同一张证的别的叫法也算
                 CertificationApplication.status == "pending")
         .first()
     )
