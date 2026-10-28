@@ -13,6 +13,9 @@
 - SCN-211（331 号 spec）：刷单、刷好评、写虚假评价。组织虚假交易、编造用户评价帮人做虚假宣传，违反《反不正当竞争法》
   《电子商务法》。真实用户写真实体验的内容合作（写明是合作）不在此列。
 
+- SCN-218（335 号 spec）：刷粉刷量、买卖租借账号。网信办「清朗」系列专项行动持续打击流量造假、网络水军、
+  批量账号与账号买卖，并要求「一人一号、一企两号」。做内容、投正规广告涨粉不在此列。
+
 和 k12.py 一样：纯文本规则，只看词同时出现，不调模型；拿不准的由运营人工复核。
 """
 from __future__ import annotations
@@ -38,13 +41,17 @@ GHOST = re.compile(r"(?:代写|代做|代笔|帮我写|替我写|枪手)[^。；
                    r"代考|替考|替我考|帮我考试|枪手考")
 # SCN-211 刷单、刷好评、虚假评价
 FAKE_REVIEW = re.compile(r"刷单|刷好评|刷评价|刷销量|刷五星|买好评|虚假好评|虚假评价|假好评|编好评|代写好评|写好评返现|好评返现")
-# 命中词前面紧挨着否定词的不算：「不代写学位论文」「不是代写，只要润色」「不刷单」
-_NEGATED = re.compile(r"(?:不|不是|不要|不会|不能|不接|禁止|严禁|拒绝|非)(?:写|做|接|搞|帮|找人|参与)?\W{0,1}$")
+# SCN-218 刷粉刷量、买卖租借账号
+FAKE_TRAFFIC = re.compile(r"刷粉|买粉|涨粉套餐|僵尸粉|刷量|刷播放|刷阅读|刷点赞|刷关注|刷流量|"
+                          r"(?:买|卖|收|租|借|收购|出租)[^。；，,\n]{0,8}?(?:账号|帐号)|(?:买|卖|租)号(?!码)")
+# 命中词前面 6 个字以内有否定词、且中间没有句读断开的不算：「不代写学位论文」「不是代写，只要润色」
+# 「不刷单」「不刷粉刷量」（顿号、并列不算断开）；「不想自己写，代写毕业论文」中间有逗号，照拦
+_NEGATED = re.compile(r"(?:不|禁止|严禁|拒绝|非)[^。；;，,！!？?\n]{0,4}$")
 
 
 def _affirmed(pattern: re.Pattern, text: str) -> bool:
-    """有一处命中、且它前面 4 个字以内不是否定说法，才算。"""
-    return any(not _NEGATED.search(text[max(0, m.start() - 4):m.start()]) for m in pattern.finditer(text))
+    """有一处命中、且它前面 6 个字以内不是否定说法，才算。"""
+    return any(not _NEGATED.search(text[max(0, m.start() - 6):m.start()]) for m in pattern.finditer(text))
 
 
 def restricted_errand(text: str) -> str | None:
@@ -59,6 +66,8 @@ def restricted_errand(text: str) -> str | None:
         return "ghostwrite"
     if _affirmed(FAKE_REVIEW, t):
         return "fake_review"
+    if _affirmed(FAKE_TRAFFIC, t):
+        return "fake_traffic"
     return None
 
 
@@ -94,4 +103,10 @@ def assert_no_restricted_errand(text: str) -> None:
             "平台不承接刷单、刷好评、编写虚假评价：组织虚假交易、编造评价属于虚假宣传，违反反不正当竞争法与电子商务法。"
             "想让更多人看到真实体验，可以发「探店」「试用」类的内容合作，写明是合作、按真实体验写。",
             "fake_review",
+        )
+    if kind == "fake_traffic":
+        raise bad_request(
+            "平台不承接刷粉刷量、买卖或租借账号：流量造假、网络水军与账号买卖是网信部门持续整治的对象，"
+            "账号也可能被平台封禁。想涨粉可以发内容策划、拍摄剪辑、账号代运营（账号在你名下）的单。",
+            "fake_traffic",
         )
