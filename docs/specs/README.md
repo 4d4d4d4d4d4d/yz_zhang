@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 334 | 资质别名在后台维护（四眼） | [334-cert-alias-admin.md](./334-cert-alias-admin.md) | P0 |
 | 333 | 第二十二轮场景发掘：证件照拍摄与修图、上门洗车 | [333-scenario-round-22.md](./333-scenario-round-22.md) | P0 |
 | 332 | 资质名别名：同一张证的两个叫法互认 | [332-cert-aliases.md](./332-cert-aliases.md) | P0 |
 | 331 | 第二十一轮场景发掘：文案代写、上门装监控，拦下代写论文与刷单 | [331-scenario-round-21.md](./331-scenario-round-21.md) | P0 |

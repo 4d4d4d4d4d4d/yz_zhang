@@ -432,6 +432,23 @@ export interface ContractHandoverItem {
   /** 发单人确认「已在我名下」的时间；没确认是 null */
   confirmed_at: string | null;
 }
+/** SCN-213（334 号 spec）后台配的资质别名（四眼） */
+export interface CertAliasItem {
+  id: number;
+  a: string;
+  b: string;
+  reason: string;
+  status: 'pending' | 'active' | 'revoked';
+  proposed_by: number;
+  /** 确认的人；还没确认的没有 */
+  approved_by?: number;
+  created_at: string;
+}
+export interface CertAliasList {
+  /** 代码里写死的几组（后台收不回） */
+  builtin: string[][];
+  items: CertAliasItem[];
+}
 export interface ContractDeliverable {
   id: number;
   kind: 'preview' | 'original';

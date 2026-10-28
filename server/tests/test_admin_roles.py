@@ -49,6 +49,10 @@ ROUTE_ROLES = {
     "DELETE /admin/support/holidays/{holiday_id}": ('super',),
     "POST /admin/support/holidays/bulk": ('super',),                   # ESCA-072（288 号 spec）
     "GET /admin/support/local-holidays": ('support',),                 # ESCA-073（305 号 spec）
+    "GET /admin/cert-aliases": ('ops',),                                 # SCN-213（334 号 spec）资质别名，四眼
+    "POST /admin/cert-aliases": ('ops',),
+    "POST /admin/cert-aliases/{alias_id}/approve": ('ops',),
+    "POST /admin/cert-aliases/{alias_id}/revoke": ('ops',),
     "POST /admin/support/local-holidays": ('super',),
     "DELETE /admin/support/local-holidays/{holiday_id}": ('super',),
     "PUT /admin/support/agents/{user_id}/region": ('super',),

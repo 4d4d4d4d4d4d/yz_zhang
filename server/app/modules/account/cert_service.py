@@ -35,16 +35,32 @@ CERT_ALIAS_GROUPS: tuple[frozenset[str], ...] = (
 )
 
 
-def cert_aliases(name: str) -> set[str]:
-    """这个资质名，加上与它是同一张证的别的叫法。"""
+def cert_aliases(name: str, db: Session | None = None) -> set[str]:
+    """这个资质名，加上与它是同一张证的别的叫法。
+
+    SCN-213（334 号 spec）给了 db 时，再并上运营在后台配好、另一位管理员确认过的别名（按连通块算：
+    甲=乙、乙=丙，则甲丙也是同一张）。没给 db 的老调用只看代码里写死的那几组，行为不变。"""
+    pairs: list[tuple[str, str]] = []
     for group in CERT_ALIAS_GROUPS:
-        if name in group:
-            return set(group)
-    return {name}
+        g = sorted(group)
+        pairs += [(g[0], x) for x in g[1:]]
+    if db is not None:
+        from .models_cert import CertAlias
+
+        pairs += [(a, b) for a, b in db.query(CertAlias.name_a, CertAlias.name_b).filter(CertAlias.status == "active")]
+    out, frontier = {name}, [name]
+    while frontier:
+        cur = frontier.pop()
+        for a, b in pairs:
+            for x, y in ((a, b), (b, a)):
+                if x == cur and y not in out:
+                    out.add(y)
+                    frontier.append(y)
+    return out
 
 
 def has_certification(db: Session, user_id: int, name: str) -> bool:
-    return bool(cert_aliases(name) & set(active_certifications(db, user_id)))
+    return bool(cert_aliases(name, db) & set(active_certifications(db, user_id)))
 
 
 def submit(db: Session, user: User, *, name: str, holder_name: str, cert_number: str,
@@ -96,7 +112,7 @@ def submit(db: Session, user: User, *, name: str, holder_name: str, cert_number:
     dup = (
         db.query(CertificationApplication)
         .filter(CertificationApplication.user_id == user.id,
-                CertificationApplication.name.in_(cert_aliases(name)),   # SCN-212 同一张证的别的叫法也算
+                CertificationApplication.name.in_(cert_aliases(name, db)),   # SCN-212 同一张证的别的叫法也算
                 CertificationApplication.status == "pending")
         .first()
     )

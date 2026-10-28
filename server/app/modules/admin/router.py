@@ -1189,6 +1189,91 @@ def update_category(
     return out
 
 
+# ---------- SCN-213（334 号 spec）资质别名：四眼 ----------
+class CertAliasIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    a: str = Field(min_length=1, max_length=30)
+    b: str = Field(min_length=1, max_length=30)
+    reason: str = Field(min_length=4, max_length=200)
+
+
+def _cert_alias_row(r) -> dict:
+    out = {"id": r.id, "a": r.name_a, "b": r.name_b, "reason": r.reason, "status": r.status,
+           "proposed_by": r.proposed_by, "created_at": iso(r.created_at)}
+    if r.approved_by is not None:
+        out["approved_by"] = r.approved_by
+    return out
+
+
+@router.get("/admin/cert-aliases")
+def list_cert_aliases(admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
+    """代码里写死的几组（后台收不回）+ 后台配的（待确认 / 生效 / 已收回）。"""
+    from app.modules.account.cert_service import CERT_ALIAS_GROUPS
+    from app.modules.account.models_cert import CertAlias
+
+    rows = db.query(CertAlias).order_by(CertAlias.id.desc()).limit(200).all()
+    return {"builtin": [sorted(g) for g in CERT_ALIAS_GROUPS], "items": [_cert_alias_row(r) for r in rows]}
+
+
+@router.post("/admin/cert-aliases", status_code=201)
+def propose_cert_alias(body: CertAliasIn, admin: User = Depends(require_role("ops")),
+                       db: Session = Depends(get_db, scope="function")):
+    """一位管理员提出「这两个名字是同一张证」，写明理由；另一位确认才生效。"""
+    from app.modules.account.cert_service import cert_aliases
+    from app.modules.account.models_cert import CertAlias
+
+    a, b = sorted((body.a.strip(), body.b.strip()))
+    if not a or not b or a == b:
+        raise bad_request("写两个不同的资质名", "cert_alias_same")
+    if b in cert_aliases(a, db):
+        raise conflict(f"「{a}」与「{b}」已经算同一张证了", "cert_alias_exists")
+    if db.query(CertAlias).filter(CertAlias.name_a == a, CertAlias.name_b == b, CertAlias.status == "pending").first():
+        raise conflict("这一对已经有人提出、在等确认", "cert_alias_pending")
+    row = CertAlias(name_a=a, name_b=b, reason=body.reason.strip(), proposed_by=admin.id)
+    db.add(row)
+    db.flush()
+    record_audit(db, admin.id, "cert_alias_propose", "cert_alias", row.id, detail=f"{a} = {b}：{row.reason}")
+    return _cert_alias_row(row)
+
+
+@router.post("/admin/cert-aliases/{alias_id}/approve")
+def approve_cert_alias(alias_id: int, admin: User = Depends(require_role("ops")),
+                       db: Session = Depends(get_db, scope="function")):
+    """另一位管理员确认后生效：从这一刻起持任一名字的证，两个名字的类目都能接。"""
+    from app.modules.account.models import utcnow as _now
+    from app.modules.account.models_cert import CertAlias
+
+    row = db.get(CertAlias, alias_id)
+    if row is None:
+        raise not_found("没有这一对")
+    if row.status != "pending":
+        raise conflict("这一对已经处理过了", "cert_alias_decided")
+    if row.proposed_by == admin.id:
+        raise forbidden("不能确认自己提出的别名：配错等于放松准入，要另一位管理员看一眼", "cert_alias_self")
+    row.status, row.approved_by, row.decided_at = "active", admin.id, _now()
+    db.add(row)
+    record_audit(db, admin.id, "cert_alias_approve", "cert_alias", row.id, detail=f"{row.name_a} = {row.name_b}")
+    return _cert_alias_row(row)
+
+
+@router.post("/admin/cert-aliases/{alias_id}/revoke")
+def revoke_cert_alias(alias_id: int, admin: User = Depends(require_role("ops")),
+                      db: Session = Depends(get_db, scope="function")):
+    """收回一对（待确认或已生效的都可以）：收紧准入一个人就够。"""
+    from app.modules.account.models import utcnow as _now
+    from app.modules.account.models_cert import CertAlias
+
+    row = db.get(CertAlias, alias_id)
+    if row is None:
+        raise not_found("没有这一对")
+    if row.status == "revoked":
+        raise conflict("这一对已经处理过了", "cert_alias_decided")
+    row.status, row.decided_at = "revoked", _now()
+    db.add(row)
+    record_audit(db, admin.id, "cert_alias_revoke", "cert_alias", row.id, detail=f"{row.name_a} = {row.name_b}")
+    return _cert_alias_row(row)
+
+
 # ---------- 匹配策略配置（MATCH-008） ----------
 class WeightsIn(BaseModel):
     skill: float = Field(ge=0, le=1)

@@ -60,6 +60,9 @@ REACHED_BY: dict[str, str] = {
     "/admin/support/holidays/{x}": "deleteSupportHoliday",
     "/admin/support/holidays/bulk": "addSupportHolidaysBulk",
     "/admin/support/local-holidays": "addSupportLocalHoliday",          # ESCA-073（305 号 spec）
+    "/admin/cert-aliases": "proposeCertAlias",                          # SCN-213（334 号 spec）
+    "/admin/cert-aliases/{x}/approve": "approveCertAlias",
+    "/admin/cert-aliases/{x}/revoke": "revokeCertAlias",
     "/admin/support/local-holidays/{x}": "deleteSupportLocalHoliday",
     "/admin/support/agents/{x}/region": "setSupportAgentRegion",
     # ESCA-066（248 号 spec）工单台「客服状态」（主管）

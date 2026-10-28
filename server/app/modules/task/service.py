@@ -144,7 +144,7 @@ def check_category_qualification(db: Session, task, user) -> None:
         return
     if len(required) == 1:
         # SCN-212 同一张证有别的叫法的，说一声持那个名字的也行（没有别名的类目一字不变）
-        others = sorted(cert_service.cert_aliases(required[0]) - {required[0]})
+        others = sorted(cert_service.cert_aliases(required[0], db) - {required[0]})
         alias = f"（持{''.join(f'「{c}」' for c in others)}也可以）" if others else ""
         raise bad_request(
             f"该类目需「{required[0]}」职业资质{alias}，请提交证件影像并通过平台核验后接单",

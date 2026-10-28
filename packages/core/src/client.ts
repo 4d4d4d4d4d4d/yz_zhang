@@ -49,6 +49,8 @@ import type {
   ContractDeliverable,
   ContractLicenseItem,
   ContractHandoverItem,
+  CertAliasItem,
+  CertAliasList,
   HandoverKind,
   LicenseKind,
   Decomposition,
@@ -2070,6 +2072,22 @@ export class PlatformClient {
     return this.request<{ id: number; name: string }>('POST', '/admin/categories', {
       name, required_cert: requiredCert, extra_certs: extraCerts.length ? extraCerts : undefined,
     });
+  }
+  /** SCN-213 资质别名：代码里写死的几组 + 后台配的 */
+  certAliases() {
+    return this.request<CertAliasList>('GET', '/admin/cert-aliases');
+  }
+  /** SCN-213 提出「这两个名字是同一张证」（写理由），另一位管理员确认才生效 */
+  proposeCertAlias(a: string, b: string, reason: string) {
+    return this.request<CertAliasItem>('POST', '/admin/cert-aliases', { a, b, reason });
+  }
+  /** SCN-213 另一位管理员确认（不能确认自己提出的） */
+  approveCertAlias(id: number) {
+    return this.request<CertAliasItem>('POST', `/admin/cert-aliases/${id}/approve`);
+  }
+  /** SCN-213 收回（待确认或已生效的都可以） */
+  revokeCertAlias(id: number) {
+    return this.request<CertAliasItem>('POST', `/admin/cert-aliases/${id}/revoke`);
   }
   /** SCN-181 `extra_certs` 用顿号分隔；空字符串 = 只要 required_cert。
    * KB-062b `experience_fresh_days` 30~3650 天，0 = 回到平台默认 */

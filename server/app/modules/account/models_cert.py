@@ -45,3 +45,22 @@ class CertificationApplication(Base):
     decided_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class CertAlias(Base):
+    """SCN-213（334 号 spec）运营在后台配的资质别名：两个名字是同一张证。
+
+    配错等于放松准入（把两张不同的证当成一张），所以四眼：一位管理员提出（写理由），另一位确认才生效；
+    任何一位都可以收回。代码里写死的别名（CERT_ALIAS_GROUPS）照旧生效、后台收不回。"""
+
+    __tablename__ = "cert_aliases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name_a: Mapped[str] = mapped_column(String(30))
+    name_b: Mapped[str] = mapped_column(String(30))
+    reason: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(10), default="pending")   # pending / active / revoked
+    proposed_by: Mapped[int] = mapped_column(Integer)
+    approved_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

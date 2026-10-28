@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { categoryCerts, type Category, apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, adminActionHint, canDoAdminAction, canSeeAdminSection, copyScheduleDay, parseHolidayNotice, type HolidayDraft, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type SupportLocalHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementCurveCompareRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type TaxRemitRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { categoryCerts, type Category, type CertAliasList, apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, adminActionHint, canDoAdminAction, canSeeAdminSection, copyScheduleDay, parseHolidayNotice, type HolidayDraft, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type SupportLocalHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementCurveCompareRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type TaxRemitRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -1859,6 +1859,52 @@ function CityAndCategory() {
           ))}
         </tbody>
       </table>
+      <CertAliases />
+    </div>
+  );
+}
+
+/** SCN-213（334 号 spec）资质别名：一位管理员提出「这两个名字是同一张证」，另一位确认才生效；随时可以收回。 */
+function CertAliases() {
+  const { client, me } = useApp();
+  const [view, setView] = useState<CertAliasList | null>(null);
+  const [a, setA] = useState('');
+  const [b, setB] = useState('');
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    const v = await client.certAliases().catch(() => null);
+    setView(v && Array.isArray(v.items) ? v : null);
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+  async function act(fn: () => Promise<unknown>) {
+    setError('');
+    try { await fn(); await load(); } catch (e) { setError(apiErrorText(e)); }
+  }
+  if (!view) return null;
+  const label = { pending: '待另一位确认', active: '已生效', revoked: '已收回' } as const;
+  return (
+    <div aria-label="资质别名" style={{ marginTop: 12 }}>
+      <h4>资质别名（同一张证的不同叫法）</h4>
+      <p className="muted">配错等于放松准入：一位提出、另一位确认才生效。系统内置：{(Array.isArray(view.builtin) ? view.builtin : []).map((g) => g.join(' = ')).join('；') || '无'}</p>
+      <ul>
+        {view.items.map((r) => (
+          <li key={r.id}>{r.a} = {r.b} <span className="muted">（{r.reason}）{label[r.status] ?? r.status}</span>
+            {r.status === 'pending' && me?.id !== r.proposed_by && (
+              <button className="text-link" onClick={() => void act(() => client.approveCertAlias(r.id))}>确认</button>
+            )}
+            {r.status !== 'revoked' && <button className="text-link" onClick={() => void act(() => client.revokeCertAlias(r.id))}>收回</button>}
+          </li>
+        ))}
+      </ul>
+      <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+        <input aria-label="资质名甲" placeholder="资质名（如 焊工证）" value={a} onChange={(e) => setA(e.target.value)} />
+        <input aria-label="资质名乙" placeholder="另一个叫法（证上的正式名称）" value={b} onChange={(e) => setB(e.target.value)} />
+        <input aria-label="理由" placeholder="为什么是同一张证" value={reason} onChange={(e) => setReason(e.target.value)} />
+        <button disabled={!a.trim() || !b.trim() || reason.trim().length < 4}
+                onClick={() => void act(async () => { await client.proposeCertAlias(a.trim(), b.trim(), reason.trim()); setA(''); setB(''); setReason(''); })}>提出</button>
+      </div>
+      {error && <p className="error">{error}</p>}
     </div>
   );
 }
