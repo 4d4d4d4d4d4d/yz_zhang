@@ -250,7 +250,8 @@ def validate_publishable(task: Task, db: Session | None = None, reviewed: bool =
     assert_no_k12_tutoring(f"{task.title} {task.description}")   # SCN-143 中小学学科类家教不承接
     from app.modules.task.errand import assert_no_restricted_errand
 
-    assert_no_restricted_errand(f"{task.title} {task.description}")   # SCN-164 代开处方药、倒卖号源，SCN-177 无证陪练学车不承接
+    # SCN-219 运营复核通过的这段文字放行一单（发出去就记在这一单上）
+    assert_no_restricted_errand(f"{task.title} {task.description}", db, task.creator_id, task.id)   # SCN-164 代开处方药、倒卖号源，SCN-177 无证陪练学车不承接
     if not reviewed:
         hit = machine_review(task.title + " " + task.description, db)
         if hit:
@@ -265,6 +266,11 @@ def validate_publishable(task: Task, db: Session | None = None, reviewed: bool =
             deadline = deadline.replace(tzinfo=None)
         if deadline <= utcnow():
             raise bad_request("截止时间必须晚于当前时间", "deadline_in_past")
+    if db is not None:
+        # SCN-219 所有校验都过了、要发出去了，才把复核记在这一单上（写库放在调审核供应商之后：CONC-067）
+        from app.modules.task.errand_reviews import bind_review
+
+        bind_review(db, task.creator_id, f"{task.title} {task.description}", task.id)
 
 
 def retime_slot(task: Task, start: str, end: str) -> None:

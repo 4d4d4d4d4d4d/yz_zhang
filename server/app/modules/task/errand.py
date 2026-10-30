@@ -71,8 +71,38 @@ def restricted_errand(text: str) -> str | None:
     return None
 
 
-def assert_no_restricted_errand(text: str) -> None:
+# SCN-219（336 号 spec）拦截只看文字、会误拦：每条提示后面都告诉对方有复核这条路
+REVIEW_HINT = "觉得拦错了：可以写一句说明申请人工复核，运营通过后这段文字可以发一单。"
+
+
+def errand_fingerprint(text: str) -> str:
+    """同一个人、一字不差的同一段文字才认复核结果：改一个字就是另一段文字。"""
+    import hashlib
+
+    return hashlib.sha256((text or "").strip().encode("utf-8")).hexdigest()
+
+
+def assert_no_restricted_errand(text: str, db=None, user_id: int | None = None, task_id: int | None = None) -> None:
+    """不给 db / user_id 的老调用照旧：命中就拦。给了的，先看这段文字有没有运营通过的复核（SCN-219）。"""
     kind = restricted_errand(text)
+    if kind is None:
+        return
+    if db is not None and user_id is not None:
+        from app.modules.task.errand_reviews import reviewed_pass
+
+        if reviewed_pass(db, user_id, text, task_id):
+            return
+    try:
+        _raise_for(kind)
+    except Exception as e:   # bad_request 返回的 HTTPException：补一句复核的出路
+        detail = getattr(e, "detail", None)
+        if isinstance(detail, dict):
+            detail["message"] = detail["message"] + REVIEW_HINT
+            detail["review"] = "errand_review"
+        raise
+
+
+def _raise_for(kind: str) -> None:
     if kind == "rx":
         raise bad_request(
             "平台不承接替人代开、代买处方药或安眠药等精神类药品：这类药要患者本人面诊、凭处方购买，"

@@ -15,6 +15,7 @@ import { AdminRolesPanel } from '../AdminRoles';
 import { useApp } from '../store';
 import { TicketImages } from './Support';
 import { ApiQuotasAdmin } from '../AdminApiQuotas';
+import { ErrandReviews } from '../ErrandReview';
 import PhotoPicker from '../PhotoPicker';
 
 type Metrics = {
@@ -1860,6 +1861,7 @@ function CityAndCategory() {
         </tbody>
       </table>
       <CertAliases />
+      <ErrandReviews />
     </div>
   );
 }

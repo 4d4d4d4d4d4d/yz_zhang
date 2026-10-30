@@ -51,6 +51,8 @@ import type {
   ContractHandoverItem,
   CertAliasItem,
   CertAliasList,
+  ErrandReviewAdminItem,
+  ErrandReviewItem,
   HandoverKind,
   LicenseKind,
   Decomposition,
@@ -2088,6 +2090,26 @@ export class PlatformClient {
   /** SCN-213 收回（待确认或已生效的都可以） */
   revokeCertAlias(id: number) {
     return this.request<CertAliasItem>('POST', `/admin/cert-aliases/${id}/revoke`);
+  }
+  /** SCN-219 被发单拦截挡下：写一句说明申请人工复核（title / description 要与被拦的一字不差） */
+  requestErrandReview(title: string, description: string, explanation: string) {
+    return this.request<ErrandReviewItem>('POST', '/tasks/errand-reviews', { title, description, explanation });
+  }
+  /** SCN-219 我申请过的复核（最近 50 条） */
+  myErrandReviews() {
+    return this.request<ErrandReviewItem[]>('GET', '/tasks/errand-reviews');
+  }
+  /** SCN-219 运营：发单复核列表（默认只看在等的，等得最久的在前） */
+  errandReviews(status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending') {
+    return this.request<ErrandReviewAdminItem[]>('GET', `/admin/errand-reviews?status=${status}`);
+  }
+  /** SCN-219 运营：通过（放行这段文字发一单），说明可不写 */
+  approveErrandReview(id: number, note = '') {
+    return this.request<ErrandReviewItem>('POST', `/admin/errand-reviews/${id}/approve`, { note });
+  }
+  /** SCN-219 运营：维持拦截，要写理由（对方会看到） */
+  rejectErrandReview(id: number, note: string) {
+    return this.request<ErrandReviewItem>('POST', `/admin/errand-reviews/${id}/reject`, { note });
   }
   /** SCN-181 `extra_certs` 用顿号分隔；空字符串 = 只要 required_cert。
    * KB-062b `experience_fresh_days` 30~3650 天，0 = 回到平台默认 */

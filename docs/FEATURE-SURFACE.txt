@@ -51,6 +51,7 @@ api GET /api/v1/admin/certifications
 api GET /api/v1/admin/certifications/pending
 api GET /api/v1/admin/client-errors
 api GET /api/v1/admin/coupons
+api GET /api/v1/admin/errand-reviews
 api GET /api/v1/admin/funnels
 api GET /api/v1/admin/knowledge/overview
 api GET /api/v1/admin/knowledge/thresholds/{category}/pairs
@@ -211,6 +212,7 @@ api GET /api/v1/support/tickets
 api GET /api/v1/support/tickets/urgent-hint
 api GET /api/v1/task-templates
 api GET /api/v1/tasks
+api GET /api/v1/tasks/errand-reviews
 api GET /api/v1/tasks/mine
 api GET /api/v1/tasks/{task_id}
 api GET /api/v1/tasks/{task_id}/agent-runs
@@ -336,6 +338,8 @@ api POST /api/v1/admin/certifications/{application_id}/revoke
 api POST /api/v1/admin/cities
 api POST /api/v1/admin/coupons
 api POST /api/v1/admin/coupons/{coupon_id}/pause
+api POST /api/v1/admin/errand-reviews/{review_id}/approve
+api POST /api/v1/admin/errand-reviews/{review_id}/reject
 api POST /api/v1/admin/jobs/anchor-audit-head
 api POST /api/v1/admin/jobs/escalate-tickets
 api POST /api/v1/admin/jobs/reconcile
@@ -529,6 +533,7 @@ api POST /api/v1/support/tickets
 api POST /api/v1/support/tickets/{ticket_id}/escalate-to-dispute
 api POST /api/v1/support/tickets/{ticket_id}/replies
 api POST /api/v1/tasks
+api POST /api/v1/tasks/errand-reviews
 api POST /api/v1/tasks/jobs/auto-accept
 api POST /api/v1/tasks/jobs/deadline-alerts
 api POST /api/v1/tasks/jobs/expire-tasks
@@ -657,6 +662,7 @@ app certifications
 app collaborators
 app decompose
 app deliverables
+app errandReview
 app experience
 app gig
 app handover
@@ -770,6 +776,7 @@ sdk approveAdminRoleRequest
 sdk approveApiQuotaRequest
 sdk approveCertAlias
 sdk approveCircleMember
+sdk approveErrandReview
 sdk approveFinanceCorrection
 sdk approveSettle
 sdk askNotebook
@@ -897,6 +904,7 @@ sdk editDecompositionNode
 sdk editTask
 sdk eligibleAgents
 sdk enablePack
+sdk errandReviews
 sdk escalateTicket
 sdk executeTeamSpend
 sdk expandDecomposition
@@ -988,6 +996,7 @@ sdk myCapability
 sdk myCertifications
 sdk myCoupons
 sdk myDrafts
+sdk myErrandReviews
 sdk myInfluence
 sdk myInfluenceProof
 sdk myInvitations
@@ -1062,6 +1071,7 @@ sdk rejectAdminRoleRequest
 sdk rejectApiQuotaRequest
 sdk rejectChangeOrder
 sdk rejectDelivery
+sdk rejectErrandReview
 sdk rejectFinanceCorrection
 sdk rejectSettle
 sdk rejectTaxRemit
@@ -1080,6 +1090,7 @@ sdk report
 sdk reportRenderError
 sdk reportVisit
 sdk requestApiQuota
+sdk requestErrandReview
 sdk requestFinanceCorrection
 sdk requestInvoice
 sdk requestTeamSpend

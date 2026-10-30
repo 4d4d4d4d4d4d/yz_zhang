@@ -232,7 +232,7 @@ def _get_task(db: Session, task_id: int) -> Task:
 
 # ---------- 发布（TASK-001/004/005）----------
 
-def _validate_ip_and_pricing(body: "TaskIn") -> None:
+def _validate_ip_and_pricing(body: "TaskIn", db: Session | None = None, user_id: int | None = None) -> None:
     """IPC-001 / OUT-001~003 发布环节的硬校验。
 
     放在发布环节而不是成交环节：归属与计价是**双方要事先知道**的东西，
@@ -253,7 +253,7 @@ def _validate_ip_and_pricing(body: "TaskIn") -> None:
     # SCN-164（294 号 spec）代开处方药、倒卖号源同理；SCN-177（303 号）无证陪练学车也是
     from app.modules.task.errand import assert_no_restricted_errand
 
-    assert_no_restricted_errand(f"{body.title} {body.description}")
+    assert_no_restricted_errand(f"{body.title} {body.description}", db, user_id)   # SCN-219 复核通过的放行
 
     if body.ip_assignment not in IP_ASSIGNMENTS:
         raise bad_request(
@@ -352,7 +352,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
     from app.modules.agent import criteria as agent_criteria
 
     body.acceptance_criteria = agent_criteria.validate(body.acceptance_criteria)
-    _validate_ip_and_pricing(body)
+    _validate_ip_and_pricing(body, db, user.id)
     if body.visibility == "circle":
         # TASK-008/CIR-005 圈层定向任务：发布者必须是活跃成员
         from app.modules.circle.router import active_member

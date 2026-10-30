@@ -764,6 +764,14 @@ def _export_quota_requests(db: Session, user_id: int) -> dict:
     return {"api_quota_requests": [quota_request_row(r) for r in rows]} if rows else {}
 
 
+def _export_errand_reviews(db: Session, user_id: int) -> dict:
+    from app.modules.task.errand_reviews import review_row
+    from app.modules.task.models import ErrandReview
+
+    rows = db.query(ErrandReview).filter(ErrandReview.user_id == user_id).order_by(ErrandReview.id).all()
+    return {"errand_reviews": [review_row(r) for r in rows]} if rows else {}
+
+
 def _export_tickets(db: Session, user_id: int) -> list[dict]:
     from app.modules.support.models import Ticket, TicketReply
 
@@ -823,6 +831,8 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
         "gig": _export_gig(db, user.id),
         # API-057（241 号 spec）开放 API 提额申请：有才带（没申请过的导出与以前一样）
         **_export_quota_requests(db, user.id),
+        # SCN-219（336 号 spec）发单拦截的复核申请：有才带
+        **_export_errand_reviews(db, user.id),
         "real_name": user.real_name,
         "tasks": [{"id": t.id, "title": t.title, "status": t.status, "budget_cents": t.budget_cents,
                    "role": "creator" if t.creator_id == user.id else "executor",

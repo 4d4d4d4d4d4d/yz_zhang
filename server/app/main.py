@@ -152,6 +152,7 @@ def create_app() -> FastAPI:
     from app.modules.tax.router import router as tax_router
     from app.modules.task.router import router as task_router
     from app.modules.task.shares import router as task_shares_router
+    from app.modules.task.errand_reviews import router as errand_reviews_router
     from app.modules.wallet.router import router as wallet_router
 
     for router in (
@@ -167,6 +168,7 @@ def create_app() -> FastAPI:
         sandbox_router,
         skills_router,
         wallet_router,
+        errand_reviews_router,   # 先于 task_router：GET /tasks/errand-reviews 不能被 /tasks/{task_id} 截走
         task_router,
         task_shares_router,
         contract_router,

@@ -449,6 +449,28 @@ export interface CertAliasList {
   builtin: string[][];
   items: CertAliasItem[];
 }
+/** SCN-219（336 号 spec）被发单拦截挡下时申请的人工复核 */
+export interface ErrandReviewItem {
+  id: number;
+  /** 拦下时的那一类：rx / resale / learner / ghostwrite / fake_review / fake_traffic */
+  kind: string;
+  kind_label: string;
+  title: string;
+  description: string;
+  explanation: string;
+  status: 'pending' | 'approved' | 'rejected';
+  /** 运营写的说明；维持拦截时必填 */
+  decision_note: string;
+  /** 通过后用这段文字发出去的那一单；还没用的为 null */
+  task_id: number | null;
+  created_at: string;
+  decided_at: string | null;
+}
+export interface ErrandReviewAdminItem extends ErrandReviewItem {
+  user_id: number;
+  nickname: string;
+  waited_hours: number;
+}
 export interface ContractDeliverable {
   id: number;
   kind: 'preview' | 'original';

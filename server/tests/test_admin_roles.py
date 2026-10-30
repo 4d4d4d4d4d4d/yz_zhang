@@ -53,6 +53,9 @@ ROUTE_ROLES = {
     "POST /admin/cert-aliases": ('ops',),
     "POST /admin/cert-aliases/{alias_id}/approve": ('ops',),
     "POST /admin/cert-aliases/{alias_id}/revoke": ('ops',),
+    "GET /admin/errand-reviews": ('ops',),                               # SCN-219（336 号 spec）发单拦截的人工复核
+    "POST /admin/errand-reviews/{review_id}/approve": ('ops',),
+    "POST /admin/errand-reviews/{review_id}/reject": ('ops',),
     "POST /admin/support/local-holidays": ('super',),
     "DELETE /admin/support/local-holidays/{holiday_id}": ('super',),
     "PUT /admin/support/agents/{user_id}/region": ('super',),

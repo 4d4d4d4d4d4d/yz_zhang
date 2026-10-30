@@ -66,6 +66,7 @@ from app.modules.task.models import (  # noqa: F401
     Application,
     Category,
     City,
+    ErrandReview,
     ProgressLog,
     Review,
     SubtaskShare,

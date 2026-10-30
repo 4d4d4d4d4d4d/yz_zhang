@@ -1,5 +1,6 @@
-import { categoryCertsText, type Category, GUARDIAN_MODE_LABEL, minorPayload, type GuardianMode, apiErrorText, IP_ASSIGNMENT_LABEL, dayLabel, dayShiftsPayload, priceReferenceLine, localInputToServerTime, type IpAssignment, type PriceReference, type Task } from '@platform/core';
+import { ApiError, canRequestErrandReview, categoryCertsText, type Category, GUARDIAN_MODE_LABEL, minorPayload, type GuardianMode, apiErrorText, IP_ASSIGNMENT_LABEL, dayLabel, dayShiftsPayload, priceReferenceLine, localInputToServerTime, type IpAssignment, type PriceReference, type Task } from '@platform/core';
 import { DraftHints } from '../Profiles';
+import { ErrandReviewRequest } from '../ErrandReview';
 import { useEffect, useState, type FormEvent } from 'react';
 import type { DayShiftInput } from '@platform/core';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -43,6 +44,8 @@ export default function Publish() {
   const [cities, setCities] = useState<string[]>([]);
   const [checklist, setChecklist] = useState<string[]>([]);
   const [error, setError] = useState('');
+  // SCN-219 被发单拦截挡下：记下被拦的那段原文，给「申请人工复核」
+  const [blocked, setBlocked] = useState<{ title: string; description: string } | null>(null);
   const [priceRef, setPriceRef] = useState<PriceReference | null>(null);
   const [feasibility, setFeasibility] = useState<Feasibility>(null);
 
@@ -135,6 +138,8 @@ export default function Publish() {
       }
     } catch (err) {
       setError(apiErrorText(err));
+      setBlocked(err instanceof ApiError && canRequestErrandReview(err.code)
+        ? { title: form.title, description: form.description } : null);
     }
   }
 
@@ -344,6 +349,9 @@ export default function Publish() {
             </div>
           )}
           {error && <p className="error">{error}</p>}
+          {error && blocked && blocked.title === form.title && blocked.description === form.description && (
+            <ErrandReviewRequest key={`${blocked.title}\n${blocked.description}`} title={blocked.title} description={blocked.description} />
+          )}
           <button type="submit">{form.task_type === 'project' ? '创建并让 AI 分解' : '发布任务'}</button>
         </form>
       </div>

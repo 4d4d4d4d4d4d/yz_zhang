@@ -226,3 +226,26 @@ class SubtaskShare(Base):
     granted_by: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class ErrandReview(Base):
+    """SCN-219（336 号 spec）被发单拦截挡下时申请人工复核：拦截只看文字，会误拦（「代写」可能是写文案、
+    「号源」可能是自己排队）。用户写一句说明，运营在后台通过或维持；通过的放行这一段文字发一单。
+
+    只认「同一个人、一字不差的同一段文字」（fingerprint）：改了说明就是另一段文字，要重新判断。"""
+
+    __tablename__ = "errand_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    kind: Mapped[str] = mapped_column(String(20))                 # 拦下时的那一类（rx / ghostwrite / fake_traffic ……）
+    title: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(Text, default="")
+    fingerprint: Mapped[str] = mapped_column(String(64), index=True)
+    explanation: Mapped[str] = mapped_column(String(300))
+    status: Mapped[str] = mapped_column(String(10), default="pending")   # pending / approved / rejected
+    decided_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    decision_note: Mapped[str] = mapped_column(String(300), default="")
+    task_id: Mapped[int | None] = mapped_column(Integer, nullable=True)   # 通过后用它发出的那一单
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

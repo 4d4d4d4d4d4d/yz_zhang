@@ -63,6 +63,9 @@ REACHED_BY: dict[str, str] = {
     "/admin/cert-aliases": "proposeCertAlias",                          # SCN-213（334 号 spec）
     "/admin/cert-aliases/{x}/approve": "approveCertAlias",
     "/admin/cert-aliases/{x}/revoke": "revokeCertAlias",
+    "/admin/errand-reviews": "errandReviews",                           # SCN-219（336 号 spec）
+    "/admin/errand-reviews/{x}/approve": "approveErrandReview",
+    "/admin/errand-reviews/{x}/reject": "rejectErrandReview",
     "/admin/support/local-holidays/{x}": "deleteSupportLocalHoliday",
     "/admin/support/agents/{x}/region": "setSupportAgentRegion",
     # ESCA-066（248 号 spec）工单台「客服状态」（主管）

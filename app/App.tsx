@@ -8,7 +8,7 @@ import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
-import { DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, TASK_STATUS_LABEL, apiErrorText, canReboostTask, dayLabel, dayShiftsPayload, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, isAuthRejection, shiftLabel, templatePrefill, GUARDIAN_MODE_LABEL, minorPayload, minorTaskLine, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type DayShiftInput, type LedgerRow, type Me, type PackTaskTemplateBrief, type GuardianMode, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
+import { ApiError, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, canRequestErrandReview, TASK_STATUS_LABEL, apiErrorText, canReboostTask, dayLabel, dayShiftsPayload, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, isAuthRejection, shiftLabel, templatePrefill, GUARDIAN_MODE_LABEL, minorPayload, minorTaskLine, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type DayShiftInput, type LedgerRow, type Me, type PackTaskTemplateBrief, type GuardianMode, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { isSandbox, loadSandbox } from './sandboxState';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
@@ -17,6 +17,7 @@ import { TaskReboostBlock } from './taskReboost';
 import { PreviousStepInputsBlock, ShareToNextStepsBlock } from './subtaskShares';
 import { LicensesList } from './licenses';
 import { HandoverList } from './handover';
+import { ErrandReviewRequest, MyErrandReviews } from './errandReview';
 import { ScreenBoundary } from './ScreenBoundary';
 import { RecipientEditorBlock, canChangeRecipient } from './recipient';
 import { ShowcaseConsentBlock, canGrantShowcase } from './showcase';
@@ -1033,6 +1034,9 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
   const [visits, setVisits] = useState(prefill?.visits ?? '');
   const [checklist, setChecklist] = useState(prefill?.checklist ?? '');
   const [error, setError] = useState('');
+  // SCN-219 被发单拦截挡下：记下被拦的那段原文，给「申请人工复核」
+  const [blocked, setBlocked] = useState<{ title: string; description: string } | null>(null);
+  const [reviewsTick, setReviewsTick] = useState(0);
   const nDays = parseInt(days, 10) || 1;
   const nPeople = parseInt(people, 10) || 1;
   return (
@@ -1184,8 +1188,15 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
           onDone(created);
         } catch (e) {
           setError(apiErrorText(e));
+          setBlocked(e instanceof ApiError && canRequestErrandReview(e.code)
+            ? { title, description: prefill?.description ?? '' } : null);
         }
       }} />
+      {!!error && blocked && blocked.title === title && (
+        <ErrandReviewRequest key={blocked.title} client={client} title={blocked.title} description={blocked.description}
+                             onSent={() => setReviewsTick((n) => n + 1)} />
+      )}
+      <MyErrandReviews client={client} refresh={reviewsTick} />
     </ScrollView>
   );
 }
