@@ -89,7 +89,9 @@ describe('PACK-100 服务包', () => {
     open('/admin', {
       '/users/me': { ...ME, is_admin: true },
       'GET /admin/packs': [row(1, 'review', 2), row(2, 'review', 9)],
-      '/admin/packs/radar': [{ source: 'search_gap', key: '宠物上门喂养', title: '有人在找「宠物上门喂养」，平台上没有', evidence: '近 30 天 4 个不同的人搜过', people: 4, suggested: {} }],
+      '/admin/packs/radar': [{ source: 'search_gap', key: '宠物上门喂养', title: '有人在找「宠物上门喂养」，平台上没有', evidence: '近 30 天 4 个不同的人搜过', people: 4, suggested: {} },
+        // SCN-221（340 号 spec）发单拦截某一类复核通过得多
+        { source: 'errand_gap', key: '代写学位论文代考', title: '发单拦截「代写学位论文代考」可能拦得太宽', evidence: '近 30 天这一类复核处理了 4 条，通过 3 条', people: 3, suggested: {} }],
       'POST /admin/packs/validate': { ok: false, problems: ['助手「财税助手」服务高风险人群（opc），钱、签署、申报都必须是人工关口'], score: null },
       'POST /admin/packs/2/approve': row(2, 'published', 9),
     }, calls, { ...ME, is_admin: true });
@@ -104,6 +106,7 @@ describe('PACK-100 服务包', () => {
     fireEvent.click(screen.getByRole('button', { name: '校验' }));
     expect((await screen.findByLabelText('校验问题')).textContent).toContain('钱、签署、申报都必须是人工关口');
     expect(panel.textContent).toContain('近 30 天 4 个不同的人搜过');
+    expect(screen.getByText('发单拦截「代写学位论文代考」可能拦得太宽').closest('tr')!.textContent).toContain('发单拦截可能误拦');
   });
 
   it('雷达一键起草知识条目：进选中的服务包草稿，编辑器打开它并提示把「【待填写】」写完', async () => {

@@ -10,7 +10,8 @@ const STATUS: Record<string, string> = {
   draft: '草稿', review: '待审核', published: '已上线', superseded: '旧版本', retired: '已下线',
 };
 // SCN-108（153 号 spec）起多两路：法律问答答不上的主题、客服没接住的工单主题
-const SOURCE: Record<string, string> = { search_gap: '搜了没有', stuck_demand: '有需求没人接', pack_gap: '服务包要复核', legal_gap: '法律问答答不上', support_gap: '客服没接住' };
+const SOURCE: Record<string, string> = { search_gap: '搜了没有', stuck_demand: '有需求没人接', pack_gap: '服务包要复核', legal_gap: '法律问答答不上', support_gap: '客服没接住',
+  errand_gap: '发单拦截可能误拦' };
 
 export function PacksAdmin() {
   const { client, me } = useApp();

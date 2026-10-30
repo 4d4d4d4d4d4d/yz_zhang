@@ -431,7 +431,8 @@ def radar(db: Session) -> list[dict]:
     2. 有需求没人接：同一类目近 60 天有 ≥3 单招募超过 3 天还没人报名；
     3. 已上线的包没接住：答不上的比例 ≥30%、或觉得没用的比例 ≥50%（样本 ≥5）、或知识过了有效期；
     4. 法律问答答不上的问题按粗主题（153 号 spec，原文不落库）；
-    5. 客服没接住的工单（超时或升级过）按标题归到粗主题（153 号 spec，只出主题与人数）。
+    5. 客服没接住的工单（超时或升级过）按标题归到粗主题（153 号 spec，只出主题与人数）；
+    6. 发单拦截的人工复核按拦截类别：通过的多，说明这一类误拦多、词表该收窄（340 号 spec，只出类别与人数）。
     """
     from app.modules.analytics.models import SearchQuery
     from app.modules.task.models import Application, Task
@@ -459,7 +460,7 @@ def radar(db: Session) -> list[dict]:
         out.append({"source": "stuck_demand", "key": category, "title": f"「{category}」有需求没人接",
                     "evidence": f"{n} 单招募超过 {STUCK_DAYS} 天还没人报名（来自至少 {K_ANON} 个发布方）",
                     "people": n, "suggested": {"coverage": _level(n), "frequency": _level(n)}})
-    out += _legal_gaps(db, now) + _support_gaps(db, now)
+    out += _legal_gaps(db, now) + _support_gaps(db, now) + _errand_gaps(db, now)
     live = db.query(ScenarioPack).filter(ScenarioPack.status == "published").all()
     m = metrics(db, [p.key for p in live])
     today = date.today()
@@ -550,6 +551,39 @@ def radar_knowledge_draft(signal: dict, taken: set) -> dict:
     return {"key": f"radar-{src.replace('_', '-')}-{n}", "title": title[:200], "body": body[:5000],
             "kind": "rule" if src == "legal_gap" else "howto",
             "source": f"{PLACEHOLDER}出处：法规名与条号、官网链接或平台规则", "tags": [key[:20], "雷达起草"]}
+
+
+ERRAND_GAP_RATE = 0.5   # SCN-221 近 30 天处理过的复核里，通过的至少一半才报
+
+
+def _errand_gaps(db: Session, now) -> list[dict]:
+    """SCN-221（340 号 spec）发单拦截按类别看复核结果：通过的来自至少 3 个不同的人、且占处理过的一半以上，
+    说明这一类拦得太宽。只出类别、条数与人数，不出原文与说明（运营要看原文去「发单复核」）。"""
+    from app.modules.task.errand_reviews import KIND_LABEL
+    from app.modules.task.models import ErrandReview
+
+    rows = (db.query(ErrandReview.kind, ErrandReview.status, ErrandReview.user_id)
+            .filter(ErrandReview.status.in_(("approved", "rejected")),
+                    ErrandReview.decided_at >= now - timedelta(days=RADAR_DAYS)).all())
+    by_kind: dict[str, dict] = {}
+    for kind, status, uid in rows:
+        k = by_kind.setdefault(kind, {"approved": 0, "rejected": 0, "people": set()})
+        k[status] += 1
+        if status == "approved":
+            k["people"].add(uid)
+    out = []
+    for kind, k in sorted(by_kind.items(), key=lambda kv: -kv[1]["approved"]):
+        decided = k["approved"] + k["rejected"]
+        n = len(k["people"])
+        if n < K_ANON or k["approved"] < decided * ERRAND_GAP_RATE:
+            continue
+        label = KIND_LABEL.get(kind, kind)
+        out.append({"source": "errand_gap", "key": label, "title": f"发单拦截「{label}」可能拦得太宽",
+                    "evidence": f"近 {RADAR_DAYS} 天这一类复核处理了 {decided} 条，通过 {k['approved']} 条"
+                                f"（{round(k['approved'] * 100 / decided)}%，来自 {n} 个不同的人）、维持 {k['rejected']} 条；"
+                                "到「发单复核」看通过的原文，考虑收窄这一类的词表",
+                    "people": n, "suggested": {}})
+    return out
 
 
 def _legal_gaps(db: Session, now) -> list[dict]:
