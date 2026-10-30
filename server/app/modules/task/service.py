@@ -36,6 +36,8 @@ DRIVER_CERT = "驾驶证（三年以上驾龄）"
 LOCKSMITH_CERT = "开锁备案证明"
 # SCN-199（325 号 spec）电工作业属特种作业：上门接电工活要审核通过的低压电工作业操作证
 ELECTRICIAN_CERT = "低压电工作业操作证"
+# SCN-227（341 号 spec）医疗护理员培训合格后上岗（国家卫生健康委等 2019 年通知）；住院护工类目要审核通过的证明
+CAREGIVER_CERT = "医疗护理员培训合格证明"
 ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助老陪伴"},
                     {"name": "陪练看护", "required_cert": MINOR_CARE_CERT},
                     # 「翻译」——第七轮场景发掘的自由译者服务包的发单模板与去处（259 号 spec，V286）
@@ -76,7 +78,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「插画约稿」「代驾」——第二十四轮场景发掘（337 号 spec，V364）；代驾与陪驾一样要审核通过的驾驶证
                     {"name": "插画约稿"}, {"name": "代驾", "required_cert": DRIVER_CERT},
                     # 「派对布置」「除甲醛治理」——第二十五轮场景发掘（339 号 spec，V366）
-                    {"name": "派对布置"}, {"name": "除甲醛治理"}]
+                    {"name": "派对布置"}, {"name": "除甲醛治理"},
+                    # 「住院护工」「家电维修」——第二十六轮场景发掘（341 号 spec，V368）
+                    {"name": "住院护工", "required_cert": CAREGIVER_CERT}, {"name": "家电维修"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
