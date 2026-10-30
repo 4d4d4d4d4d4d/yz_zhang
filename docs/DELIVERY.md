@@ -1,7 +1,7 @@
 # 交付总览（Final Delivery Overview）
 
 > 历史 MVP + V1~V139 的功能交付不能视为商业运营获批。
-> 当前后端 **2626 tests**、Web 680、SDK 208、App **518** 项通过；最新证据、原生验收边界见 CHANGELOG-2026-10-07.md。
+> 当前后端 **2643 tests**、Web 680、SDK 208、App **518** 项通过；最新证据、原生验收边界见 CHANGELOG-2026-10-07.md。
 > 现状一页看清：[72-status-ledger.md](specs/72-status-ledger.md)；上线流程见 [GO-LIVE.md](GO-LIVE.md)；
 > **全系统体检（数据库怎么搭 / 跑起来有什么问题）见 [SYSTEM-CHECK.md](SYSTEM-CHECK.md)**。
 > 本文档是对 [docs/specs/](specs/README.md)（功能拆分）与
