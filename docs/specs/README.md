@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 339 | 第二十五轮场景发掘：派对布置、除甲醛治理 | [339-scenario-round-25.md](./339-scenario-round-25.md) | P0 |
 | 338 | 发单复核等太久提醒运营 | [338-errand-review-reminders.md](./338-errand-review-reminders.md) | P0 |
 | 337 | 第二十四轮场景发掘：插画约稿、代驾 | [337-scenario-round-24.md](./337-scenario-round-24.md) | P0 |
 | 336 | 被发单拦截挡下时申请人工复核 | [336-errand-review.md](./336-errand-review.md) | P0 |
