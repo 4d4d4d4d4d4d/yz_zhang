@@ -54,6 +54,7 @@ export function ErrandReviews() {
         {rows.map((r) => (
           <li key={r.id}>
             <strong>{r.title}</strong> <span className="muted">（{r.kind_label} · {r.nickname || `用户 ${r.user_id}`} · 等了 {r.waited_hours} 小时）</span>
+            {r.overdue && <span className="badge bad">已超 {r.sla_hours} 小时</span>}
             <div className="muted">{r.description}</div>
             <div>说明：{r.explanation}</div>
             {r.user_id === me?.id ? <span className="muted">自己提出的，请另一位运营处理</span> : (

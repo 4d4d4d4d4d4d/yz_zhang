@@ -13,7 +13,7 @@ const USER = { id: 2, phone: '138****0002', nickname: '我', bio: '', city: '', 
 const OPS = { ...USER, id: 3, nickname: '运营', is_admin: true, admin_roles: ['ops'] };
 const ROW = { id: 5, kind: 'ghostwrite', kind_label: '代写学位论文代考', title: '论文集出版宣传', description: '写推介文案',
   explanation: '是宣传文案不是代写论文', status: 'pending', decision_note: '', task_id: null,
-  created_at: '2026-10-30T00:00:00Z', decided_at: null, user_id: 9, nickname: '小王', waited_hours: 2 };
+  created_at: '2026-10-30T00:00:00Z', decided_at: null, user_id: 9, nickname: '小王', waited_hours: 2, sla_hours: 24, overdue: false };
 type Call = { method: string; path: string; body?: Record<string, unknown> };
 
 function open(path: string, me: object, calls: Call[], extra: (method: string, p: string) => unknown = () => undefined) {
@@ -61,12 +61,14 @@ describe('SCN-219 发单复核', () => {
   it('后台：通过不用写理由；维持要写够理由；自己提出的不给按钮', async () => {
     const calls: Call[] = [];
     open('/admin', OPS, calls, (m, p) => (m === 'GET' && p === '/admin/errand-reviews'
-      ? [ROW, { ...ROW, id: 6, title: '我自己发的', user_id: 3 }]
+      ? [ROW, { ...ROW, id: 6, title: '我自己发的', user_id: 3, waited_hours: 30, overdue: true }]
       : p.startsWith('/admin/errand-reviews/') ? ROW : undefined));
     const box = await screen.findByLabelText('发单复核', {}, { timeout: 3000 });
     expect(box.textContent).toContain('是宣传文案不是代写论文');
     const own = within(box).getByText('我自己发的').closest('li')!;
     expect(within(own).queryByText('通过')).toBeNull();
+    expect(within(own).getByText('已超 24 小时')).toBeTruthy();   // SCN-220 超过时限的标出来
+    expect(within(box).getAllByText(/已超/)).toHaveLength(1);
     const row = within(box).getByText('论文集出版宣传').closest('li')!;
     const keep = within(row).getByText('维持拦截') as HTMLButtonElement;
     expect(keep.disabled).toBe(true);

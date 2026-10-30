@@ -53,6 +53,9 @@ JOBS: tuple[ScheduledJob, ...] = (
     ScheduledJob("/openapi/jobs/remind-quota-requests", 3600, "quota_request_reminders",
                  "API-058 待批超过 48 小时的提额申请催运营（每笔一天一次）——接入方配额用完就 429，"
                  "申请躺着没人看等于业务停着（247 号 spec）"),
+    ScheduledJob("/tasks/jobs/remind-errand-reviews", 3600, "errand_review_reminders",
+                 "SCN-220 在等超过 24 小时的发单复核催运营（每条一天一次）——申请了没人看，"
+                 "发单人那一单一直发不出去（338 号 spec）"),
     ScheduledJob("/openapi/jobs/deliver-webhooks", 60, "deliver_webhooks",
                  "HOOK-002 Webhook 投递与指数退避重试；连续失败自动停用并通知拥有者"),
     ScheduledJob("/verify/jobs/expire-orders", 3600, "expire_verifications",

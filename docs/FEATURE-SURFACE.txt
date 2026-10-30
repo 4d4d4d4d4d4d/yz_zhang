@@ -539,6 +539,7 @@ api POST /api/v1/tasks/jobs/deadline-alerts
 api POST /api/v1/tasks/jobs/expire-tasks
 api POST /api/v1/tasks/jobs/purge-locations
 api POST /api/v1/tasks/jobs/remind-acceptance
+api POST /api/v1/tasks/jobs/remind-errand-reviews
 api POST /api/v1/tasks/jobs/remind-stale-recruits
 api POST /api/v1/tasks/jobs/settle-reviews
 api POST /api/v1/tasks/{task_id}/accept-delivery

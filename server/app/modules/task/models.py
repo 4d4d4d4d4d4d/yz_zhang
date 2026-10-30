@@ -249,3 +249,4 @@ class ErrandReview(Base):
     task_id: Mapped[int | None] = mapped_column(Integer, nullable=True)   # 通过后用它发出的那一单
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reminded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)   # SCN-220 上次催运营的时间

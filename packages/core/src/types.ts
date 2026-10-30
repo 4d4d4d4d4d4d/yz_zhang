@@ -470,6 +470,10 @@ export interface ErrandReviewAdminItem extends ErrandReviewItem {
   user_id: number;
   nickname: string;
   waited_hours: number;
+  /** SCN-220 处理时限（小时）；在等超过的会每天催运营 */
+  sla_hours: number;
+  /** SCN-220 在等、且已超过时限 */
+  overdue: boolean;
 }
 export interface ContractDeliverable {
   id: number;

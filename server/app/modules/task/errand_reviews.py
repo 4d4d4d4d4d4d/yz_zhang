@@ -17,7 +17,8 @@ from sqlalchemy.orm import Session
 
 from app.core.admin_roles import require_role
 from app.core.db import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_job_auth
+from app.core.locks import job_slot
 from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.core.timefmt import iso
 from app.modules.account.models import User, utcnow
@@ -28,6 +29,7 @@ from .models import ErrandReview
 router = APIRouter(tags=["task"])
 
 MAX_PENDING = 5
+REMIND_HOURS = 24   # SCN-220 在等超过这么久还没人处理，每天催一次运营
 EXPLANATION_MIN = 6
 KIND_LABEL = {
     "rx": "代开处方药", "resale": "倒卖号源门票", "learner": "无证陪练学车",
@@ -139,8 +141,44 @@ def admin_errand_reviews(status: str = Query(default="pending", pattern="^(pendi
     rows = q.order_by(ErrandReview.id if status == "pending" else ErrandReview.id.desc()).limit(200).all()
     names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_([r.user_id for r in rows] or [-1]))}
     now = utcnow()
-    return [{**review_row(r), "user_id": r.user_id, "nickname": names.get(r.user_id, ""),
-             "waited_hours": int(((r.decided_at or now) - r.created_at).total_seconds() // 3600)} for r in rows]
+    out = []
+    for r in rows:
+        waited = int(((r.decided_at or now) - r.created_at).total_seconds() // 3600)
+        # SCN-220 写明时限，超过的标出来（已处理的按处理时算）
+        out.append({**review_row(r), "user_id": r.user_id, "nickname": names.get(r.user_id, ""), "waited_hours": waited,
+                    "sla_hours": REMIND_HOURS, "overdue": r.status == "pending" and waited >= REMIND_HOURS})
+    return out
+
+
+def remind_errand_reviews(db: Session) -> dict:
+    """SCN-220（338 号 spec）在等超过 24 小时的发单复核催运营：每条一天最多一次，处理了就不再催。
+    申请了没人看，等于没有这条路——发单人那一单一直发不出去。"""
+    from datetime import timedelta
+
+    from app.modules.openapi.router import _notify_ops
+
+    now = utcnow()
+    due = (db.query(ErrandReview)
+           .filter(ErrandReview.status == "pending", ErrandReview.created_at <= now - timedelta(hours=REMIND_HOURS))
+           .order_by(ErrandReview.id).all())
+    due = [r for r in due if r.reminded_at is None or r.reminded_at <= now - timedelta(hours=24)]
+    if not due:
+        return {"reminded": 0}
+    longest = max(int((now - r.created_at).total_seconds() // 3600) for r in due)
+    _notify_ops(db, "发单复核等待处理",
+                f"有 {len(due)} 条发单复核等了 {REMIND_HOURS} 小时以上还没处理（最久 {longest} 小时）："
+                + "、".join(f"#{r.id}" for r in due[:10]) + "。发单人的单一直发不出去，请到后台「发单复核」通过或维持。")
+    for r in due:
+        r.reminded_at = now
+        db.add(r)
+    return {"reminded": len(due)}
+
+
+@router.post("/tasks/jobs/remind-errand-reviews")
+def run_remind_errand_reviews(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                              __=Depends(job_slot("errand_review_reminders"), scope="function")):
+    """SCN-220 在等太久的发单复核催运营。"""
+    return remind_errand_reviews(db)
 
 
 def _pending(db: Session, review_id: int, admin: User) -> ErrandReview:
