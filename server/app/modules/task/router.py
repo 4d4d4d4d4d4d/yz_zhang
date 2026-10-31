@@ -1,0 +1,1963 @@
+import re
+from datetime import date, datetime, timedelta
+
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.core.db import get_db
+from app.core.locks import job_slot
+from app.core.deps import get_current_user, require_job_auth, require_verified
+from app.core.errors import bad_request, conflict, forbidden, not_found
+from app.core.events import publish
+from app.core.geoutil import haversine_m
+from app.modules.account import service as credit
+from app.modules.account.models import User, utcnow
+from app.modules.contract import service as contract_service
+from app.modules.contract.models import Contract
+from app.modules.matching import service as matching
+
+from . import service
+from .models import TASK_TYPES, Application, ProgressLog, Review, Task
+from app.core.timefmt import UtcDatetime, day, iso
+
+router = APIRouter(tags=["task"])
+
+
+# ---------- schemas ----------
+class DayShiftIn(BaseModel):
+    """SCN-127 某一天单独的时段（北京时间 HH:MM）。"""
+    model_config = ConfigDict(extra="forbid")
+    start: str = Field(max_length=8)
+    end: str = Field(max_length=8)
+
+
+class TaskIn(BaseModel):
+    title: str = Field(min_length=2, max_length=120)
+    description: str = ""
+    category: str = Field(min_length=1, max_length=50)
+    task_type: str = "service"
+    required_skills: list[str] = []
+    budget_cents: int = 0
+    pricing: str = "fixed"
+    deposit_cents: int = 0
+    is_remote: bool = False
+    city: str = ""
+    lat: float | None = None
+    lng: float | None = None
+    address_hint: str = ""
+    address_exact: str = ""
+    # TZ-062 带偏移的时间**换算**到 UTC，不是把偏移丢掉。
+    # 改造前 "2030-01-01T10:00:00+08:00" 直接存成 10:00，差了整整 8 小时且不报错。
+    deadline: UtcDatetime | None = None
+    visibility: str = "public"
+    circle_id: int | None = None
+    recurrence: str = "none"
+    people_needed: int = Field(default=1, ge=1, le=50)
+    # SCN-107（167 号 spec）连续几天、从哪天开始（北京时间的日期）。名额 = 人数 × 天数，最多 50 个
+    days: int = Field(default=1, ge=1, le=14)
+    start_date: date | None = None
+    # SCN-117（178 号 spec）每天几点到几点（北京时间 HH:MM）；两个一起写或都不写
+    shift_start: str = Field(default="", max_length=8)   # 可带首尾空白，去掉后存 HH:MM
+    shift_end: str = Field(default="", max_length=8)
+    # SCN-127（201 号 spec）多天单每天不同时段：按天给，长度等于天数；某天给 null 就沿用上面统一的时段
+    day_shifts: list[DayShiftIn | None] = Field(default_factory=list, max_length=14)
+    # AGT-030 结构化验收标准。auto 项由平台判定，不由执行方自报。
+    acceptance_criteria: list[dict] = []
+    # IPC-001 **无默认值**：不选不让发。替当事人猜归属是这条最容易犯的错。
+    ip_assignment: str = ""
+    # OUT-002 浮动对价的确定上限
+    bonus_cents: int = Field(default=0, ge=0)
+    publish_now: bool = True
+    # SCN-119（175 号 spec）替别人发单：服务对象怎么称呼、到场时联系谁、问过本人没有
+    on_behalf: bool = False
+    recipient_label: str = Field(default="", max_length=20)
+    onsite_contact: str = Field(default="", max_length=40)
+    recipient_consented: bool = False
+    # SCN-120（176 号 spec）一单多次上门：要上门几次、每次要做的事（最多 8 项，每项最多 20 字）
+    visits_planned: int = Field(default=0, ge=0, le=60)
+    visit_checklist: list[str] = Field(default_factory=list, max_length=8)
+    # SCN-144（214 号 spec）服务对象是未成年人：监护人安排方式（guardian_present / public_place）与监护人确认
+    minor_involved: bool = False
+    guardian_mode: str = Field(default="", max_length=20)
+    guardian_consented: bool = False
+
+
+class DeliverIn(BaseModel):
+    """交付说明。浮动对价任务必填——判据得有个判的对象。"""
+
+    note: str = Field(default="", max_length=5000)
+
+
+class ApplyIn(BaseModel):
+    bid_cents: int = 0
+    message: str = ""
+
+
+class VisitIn(BaseModel):
+    """SCN-120 一次上门回报：清单里做了哪几项、备注、照片。"""
+    model_config = ConfigDict(extra="forbid")
+    done: list[str] = Field(default_factory=list, max_length=8)
+    note: str = Field(default="", max_length=500)
+    images: list[str] = Field(default_factory=list, max_length=9)
+    # SCN-124（195 号 spec）顺带到场打卡：给了就按打卡的规则校验（位置同意、打卡半径），不给照旧
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+
+
+class ProgressIn(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
+    # MOB-021 图片凭证：由 POST /files 上传后回填的相对 URL
+    images: list[str] = Field(default_factory=list, max_length=9)
+
+
+class CheckinIn(BaseModel):
+    lat: float
+    lng: float
+
+
+class RejectIn(BaseModel):
+    reason: str = Field(min_length=2, max_length=500)
+
+
+class ReviewIn(BaseModel):
+    stars: int = Field(ge=1, le=5)
+    tags: list[str] = []
+    comment: str = ""
+
+
+def dump_task(task: Task, viewer: User | None = None) -> dict:
+    is_party = viewer and viewer.id in (task.creator_id, task.executor_id)
+    return {
+        "id": task.id,
+        "creator_id": task.creator_id,
+        "executor_id": task.executor_id,
+        "parent_id": task.parent_id,
+        "depends_on": task.depends_on,
+        "title": task.title,
+        "description": task.description,
+        "category": task.category,
+        "task_type": task.task_type,
+        "required_skills": task.required_skills,
+        "budget_cents": task.budget_cents,
+        "pricing": task.pricing,
+        # OUT-002 浮动上限**必须给到要靠它决策的那个人**。
+        # 改造前只回了 `pricing: "outcome"`：执行方看到「浮动对价」四个字，
+        # 却看不到浮动部分有多少——而平台托管时已经按 budget+bonus 全额锁了钱，
+        # 只有他不知道这笔钱存在。一个没给到当事人的「确定上限」，对他不成立。
+        "bonus_cents": task.bonus_cents,
+        # IPC-001 V77 强制发布方选归属，理由是「替他猜对执行方不公平」；
+        # 但**不返回这个字段**，执行方在报名前照样不知道自己做的东西归谁——
+        # 他能看到的最早时点是签约时的合同条款，而那时他已经决定接了。
+        # 「必须选」和「看得见」是两件事，只做前一件，公平没有兑现。
+        "ip_assignment": task.ip_assignment,
+        "deposit_cents": task.deposit_cents,
+        "is_remote": task.is_remote,
+        "city": task.city,
+        "lat": task.lat,
+        "lng": task.lng,
+        "address_hint": task.address_hint,
+        # GEO-004 位置脱敏：精确地址仅成交双方可见
+        "address_exact": task.address_exact if is_party else "",
+        "visibility": task.visibility,
+        "circle_id": task.circle_id,
+        "recurrence": task.recurrence,
+        # SCN-107（167 号 spec）
+        "days": task.days or 1, "work_date": day(task.work_date) if task.work_date else None,
+        # SCN-117 每天几点到几点（北京时间）
+        "shift_start": task.shift_start or "", "shift_end": task.shift_end or "",
+        # SCN-116（174 号 spec）：几个人（TASK-007 早就存了、没给出去）；客户端据此知道这是装名额的母任务
+        "people_needed": task.people_needed or 1,
+        # SCN-119 替别人发单：谁都看得到「这是替别人发的」；服务对象的称呼与在场联系方式只给成交双方
+        "on_behalf": bool(task.on_behalf),
+        "recipient_label": task.recipient_label if is_party else "",
+        "onsite_contact": task.onsite_contact if is_party else "",
+        # SCN-120 一单多次上门：要上门几次、每次要做的事（公开：这是活的一部分）
+        "visits_planned": task.visits_planned or 0,
+        "visit_checklist": list(task.visit_checklist or []),
+        # SCN-144 服务对象是未成年人：公开（接单前就要知道要求什么证明、在什么场合）；不含孩子的任何信息
+        "minor_involved": bool(task.minor_involved),
+        "guardian_mode": task.guardian_mode or "",
+        "recurred_from_id": task.recurred_from_id,
+        "status": task.status,
+        "deadline": iso(task.deadline),
+        "reject_count": task.reject_count,
+        "created_at": iso(task.created_at),
+        # SCN-156（278 号 spec）作品展示授权：只给成交双方、授权了才带
+        **({"showcase_consent_at": iso(task.showcase_consent_at)} if is_party and task.showcase_consent_at else {}),
+    }
+
+
+@router.post("/tasks/{task_id}/showcase-consent")
+def grant_showcase_consent(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """SCN-156（278 号 spec）发单人同意接单人把这一单放进作品集（前后对比照、成品照）。
+    只有发单人能授权，只有已完成的单能授权；随时可以撤回，撤回后接单人空间里关联这一单的作品不再公开。"""
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden("只有发单人能授权展示这一单")
+    if task.status != "completed" or task.executor_id is None:
+        raise bad_request("这一单完成验收后才能授权展示", "showcase_task_not_completed")
+    if task.showcase_consent_at is None:
+        task.showcase_consent_at = utcnow()
+        # SCN-158（279 号 spec）告诉接单人：可以把这一单放进作品集了
+        from app.modules.notification.service import notify
+
+        notify(db, task.executor_id, "task", "可以展示这一单了",
+               f"《{task.title}》的发单人允许你把这一单放进作品集：在空间编辑里给作品填任务编号 {task.id} 即可。")
+    return {"task_id": task.id, "showcase_consent_at": iso(task.showcase_consent_at)}
+
+
+@router.delete("/tasks/{task_id}/showcase-consent")
+def withdraw_showcase_consent(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden("只有发单人能撤回展示授权")
+    if task.showcase_consent_at is not None and task.executor_id is not None:
+        # SCN-158（279 号 spec）撤回不能静默：接单人空间里关联这一单的作品不再公开，要告诉他为什么
+        from app.modules.notification.service import notify
+
+        notify(db, task.executor_id, "task", "展示授权已撤回",
+               f"《{task.title}》的发单人撤回了展示授权：你空间里关联这一单的作品已不再公开（编辑页里还在，可以删掉或等对方重新授权）。")
+    task.showcase_consent_at = None
+    return {"task_id": task.id, "showcase_consent_at": None}
+
+
+def _get_task(db: Session, task_id: int) -> Task:
+    task = db.get(Task, task_id)
+    if not task:
+        raise not_found("任务不存在")
+    return task
+
+
+# ---------- 发布（TASK-001/004/005）----------
+
+def _validate_ip_and_pricing(body: "TaskIn", db: Session | None = None, user_id: int | None = None) -> None:
+    """IPC-001 / OUT-001~003 发布环节的硬校验。
+
+    放在发布环节而不是成交环节：归属与计价是**双方要事先知道**的东西，
+    等成交后才发现「原来源码不归我」，那已经晚了。
+    """
+    from app.modules.contract.clauses import IP_ASSIGNMENTS
+    from app.modules.finance.compliance import assert_no_finance_offer, check_pricing
+
+    # **顺序有意**：金融红线先判。一个「按利润分红」的任务是平台根本不能做的
+    # 业务，这时回一句「请选择知识产权归属」既没用又误导——
+    # 他会以为选完就能发。
+    check_pricing(body.pricing)
+    assert_no_finance_offer(f"{body.title} {body.description}")
+    # SCN-143（213 号 spec）同样是平台不能做的业务，草稿也不收：先说清楚，免得写完了才发现发不出去
+    from app.modules.task.k12 import assert_no_k12_tutoring
+
+    assert_no_k12_tutoring(f"{body.title} {body.description}")
+    # SCN-164（294 号 spec）代开处方药、倒卖号源同理；SCN-177（303 号）无证陪练学车也是
+    from app.modules.task.errand import assert_no_restricted_errand
+
+    assert_no_restricted_errand(f"{body.title} {body.description}", db, user_id)   # SCN-219 复核通过的放行
+
+    if body.ip_assignment not in IP_ASSIGNMENTS:
+        raise bad_request(
+            "请选择交付成果的知识产权归属（转让 / 独占许可 / 普通许可 / 执行方保留）。"
+            "不选的话，按《著作权法》著作权默认归执行方——这通常不是发布方想要的。",
+            "ip_assignment_required",
+        )
+    if body.pricing == "outcome":
+        # OUT-002 浮动部分必须是确定的正数上限
+        if body.bonus_cents <= 0:
+            raise bad_request("浮动对价必须给出确定的加付上限金额",
+                              "bonus_required")
+        if body.bonus_cents > body.budget_cents:
+            raise bad_request("浮动部分不得超过基础报酬，超出请改为提高基础报酬",
+                              "bonus_too_large")
+        # OUT-001 必须挂在**本任务的客观判据**上，不能挂外部经营指标
+        if not body.acceptance_criteria:
+            raise bad_request(
+                "浮动对价必须绑定本任务的验收指标——"
+                "没有判据的「做得好多给钱」是一句无法执行的承诺。",
+                "criteria_required_for_outcome",
+            )
+        if not any(c.get("kind") == "auto" for c in body.acceptance_criteria):
+            raise bad_request(
+                "浮动对价至少需要一条由平台判定的客观指标，"
+                "否则达标与否完全由发布方说了算。",
+                "auto_criterion_required",
+            )
+    elif body.bonus_cents:
+        raise bad_request("仅 outcome 计价支持浮动对价", "bonus_not_allowed")
+
+
+def _validate_visits(body: TaskIn) -> None:
+    """SCN-120 每次要做的事：去空白、去重、每项最多 20 字（太长的不是一项，是一段说明）。"""
+    items: list[str] = []
+    for raw in body.visit_checklist:
+        item = raw.strip()
+        if not item or item in items:
+            continue
+        if len(item) > 20:
+            raise bad_request(f"每次要做的事，每项最多 20 个字：「{item[:20]}…」太长了，拆成几项或写进说明",
+                              "visit_item_too_long")
+        items.append(item)
+    body.visit_checklist = items
+
+
+GUARDIAN_MODES = ("guardian_present", "public_place")
+
+
+def _validate_minor(body: TaskIn) -> None:
+    """SCN-144 服务对象是未成年人：监护人确认 + 监护人在场或公开场所，不允许单独相处的安排（212 号 G2）。"""
+    if not body.minor_involved:
+        if body.guardian_mode or body.guardian_consented:
+            raise bad_request("只有服务对象是未成年人时才选监护人安排：勾上「服务对象是未成年人」，或把这几项清空",
+                              "guardian_without_minor")
+        return
+    if body.guardian_mode not in GUARDIAN_MODES:
+        raise bad_request("服务对象是未成年人时，选「监护人在场」或「在公开场所」：平台不允许和孩子单独相处的安排",
+                          "minor_needs_guardian_mode")
+    if not body.guardian_consented:
+        raise bad_request("服务对象是未成年人时，要由监护人本人发单或经监护人同意：确认后勾选再发", "guardian_required")
+    # SCN-146（216 号 spec）线下的单至少按一次上门回报：每次上门都留一条记录给监护人看（212 号 G2 的最后一项）
+    if not body.is_remote and body.visits_planned < 1:
+        body.visits_planned = 1
+
+
+def _validate_on_behalf(body: TaskIn) -> None:
+    """SCN-119 替别人发单（175 号 spec）：说清替谁、问过本人。没勾「替别人发」时这几项一律不收，免得悄悄带上别人的信息。"""
+    body.recipient_label, body.onsite_contact = body.recipient_label.strip(), body.onsite_contact.strip()
+    if not body.on_behalf:
+        if body.recipient_label or body.onsite_contact or body.recipient_consented:
+            raise bad_request("只有替别人发单时才填服务对象：勾上「替别人发」，或把这几项清空", "recipient_without_on_behalf")
+        return
+    if not body.recipient_label:
+        raise bad_request("替别人发单要写服务对象怎么称呼（例如「我妈」「王阿姨」），接单的人到了才知道找谁",
+                          "recipient_label_required")
+    if not body.recipient_consented:
+        raise bad_request("替别人发单前要先问过本人：问过之后勾选「已经问过本人」再发", "recipient_consent_required")
+
+
+@router.post("/tasks", status_code=201)
+def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    # LAW-030 协议更新后，关键动作前必须重新同意（只拦关键动作，不拦全站）
+    from app.modules.legal import consent
+
+    consent.require_current_agreement(db, user.id)
+    if body.task_type not in TASK_TYPES:
+        raise bad_request("非法任务类型", "invalid_type")
+    if body.visibility not in ("public", "circle"):
+        raise bad_request("非法可见范围", "invalid_visibility")
+    if body.recurrence not in ("none", "weekly", "monthly"):
+        raise bad_request("非法周期设置", "invalid_recurrence")
+    service.validate_category(db, body.category)  # OPS-004 类目启停校验
+    # AGT-030 判据在**发布环节**校验：写错的判据要在开工前发现，
+    # 而不是等 agent 跑完才报错
+    from app.modules.agent import criteria as agent_criteria
+
+    body.acceptance_criteria = agent_criteria.validate(body.acceptance_criteria)
+    _validate_ip_and_pricing(body, db, user.id)
+    if body.visibility == "circle":
+        # TASK-008/CIR-005 圈层定向任务：发布者必须是活跃成员
+        from app.modules.circle.router import active_member
+
+        if not body.circle_id or not active_member(db, body.circle_id, user.id):
+            raise forbidden("需先加入该圈层", "not_circle_member")
+    _validate_days(body)
+    _validate_shift(body)
+    _validate_day_shifts(body)
+    _validate_on_behalf(body)
+    _validate_visits(body)
+    _validate_minor(body)
+    multi = body.people_needed > 1 or body.days > 1
+    publishing = body.publish_now or multi
+    if publishing:
+        # CONC-067 先审后写：机审是一次外部调用，不能挂着刚写进去的任务行等它
+        from app.modules.finance.compliance import assert_no_finance_offer
+
+        assert_no_finance_offer(f"{body.title} {body.description}")
+        service.review_or_reject(db, body.title + " " + body.description)
+    task = Task(creator_id=user.id, **body.model_dump(exclude={"publish_now", "start_date", "recipient_consented", "day_shifts",
+                                                               "guardian_consented"}))
+    if task.on_behalf:
+        task.recipient_consent_at = utcnow()
+    if task.minor_involved:
+        task.guardian_consent_at = utcnow()
+    if body.days > 1:
+        task.work_date = body.start_date
+        task.deadline = _day_end_utc(body.start_date + timedelta(days=body.days - 1))
+    db.add(task)
+    db.flush()
+    # TASK-007 多人任务：母任务为容器（不进广场），生成 N 个名额子任务分别招募
+    # SCN-107 多天：每天每人一个名额，名额写明第几天、哪一天，截止到那天结束
+    if multi:
+        service.validate_publishable(task, db, reviewed=True)
+        total = body.people_needed * body.days
+        per_slot = body.budget_cents // total
+        if per_slot <= 0:
+            raise bad_request("预算不足以拆分名额", "budget_too_small")
+        # 预算守恒：整除余数并入末位名额，保证 Σ名额预算 == 母任务预算
+        remainder = body.budget_cents - per_slot * total
+        slots = []
+        for d in range(body.days):
+            day_ = body.start_date + timedelta(days=d) if body.days > 1 else None
+            for i in range(body.people_needed):
+                last = d == body.days - 1 and i == body.people_needed - 1
+                slot_budget = per_slot + (remainder if last else 0)
+                own = body.day_shifts[d] if body.day_shifts else None   # SCN-127 这一天单独的时段
+                s_start, s_end = (own.start, own.end) if own else (task.shift_start, task.shift_end)
+                shift = f" {s_start}–{s_end}" if s_start else ""
+                label = (f"第{d + 1}天（{day_.month:02d}-{day_.day:02d}{shift}）· 名额{i + 1}/{body.people_needed}" if day_
+                         else f"名额{i + 1}/{body.people_needed}")
+                slot = Task(
+                    creator_id=user.id, parent_id=task.id,
+                    title=f"{task.title} · {label}",
+                    description=task.description, category=task.category,
+                    task_type=task.task_type, required_skills=task.required_skills,
+                    budget_cents=slot_budget, pricing=task.pricing, deposit_cents=task.deposit_cents,
+                    is_remote=task.is_remote, city=task.city, lat=task.lat, lng=task.lng,
+                    address_hint=task.address_hint, address_exact=task.address_exact,
+                    on_behalf=task.on_behalf, recipient_label=task.recipient_label,
+                    onsite_contact=task.onsite_contact, recipient_consent_at=task.recipient_consent_at,
+                    visits_planned=task.visits_planned, visit_checklist=task.visit_checklist,
+                    minor_involved=task.minor_involved, guardian_mode=task.guardian_mode,
+                    guardian_consent_at=task.guardian_consent_at,
+                    visibility=task.visibility, circle_id=task.circle_id,
+                    work_date=day_, deadline=_day_end_utc(day_) if day_ else None,
+                    shift_start=s_start, shift_end=s_end,
+                )
+                db.add(slot)
+                slots.append(slot)
+        db.flush()
+        for slot in slots:
+            service.transition(db, slot, "published")
+        out = dump_task(task, user)
+        out["slots"] = [dump_task(s, user) for s in slots]
+        _crisis_nudge(db, user.id, body)
+        return out
+    if body.publish_now:
+        service.validate_publishable(task, db, reviewed=True)
+        service.transition(db, task, "published")
+    _crisis_nudge(db, user.id, body)
+    return dump_task(task, user)
+
+
+def _crisis_nudge(db: Session, user_id: int, body) -> None:
+    """SCN-172（299 号 spec）发单里写下想伤害自己的话：只给发单的人一条热线（不拦）。放在机审之后——
+    审核要调外部供应商，之前写库会把事务挂过外部调用（CONC-067）。"""
+    from app.core.crisis import nudge
+
+    nudge(db, user_id, f"{body.title} {body.description}")
+
+
+MAX_SLOTS = 50
+START_WITHIN_DAYS = 60
+
+
+def _beijing_today() -> date:
+    return (utcnow() + timedelta(hours=8)).date()
+
+
+def _day_end_utc(d: date) -> datetime:
+    """北京时间那天 23:59:59 对应的 UTC（库里存 UTC）。"""
+    return datetime(d.year, d.month, d.day, 23, 59, 59) - timedelta(hours=8)
+
+
+def _validate_shift(body: "TaskIn") -> None:
+    """SCN-117 每天的时段：两个一起写、格式 HH:MM、结束晚于开始（不跨夜：夜班拆成两天写）。"""
+    s, e = body.shift_start.strip(), body.shift_end.strip()
+    if not s and not e:
+        body.shift_start = body.shift_end = ""
+        return
+    if not s or not e:
+        raise bad_request("每天的时段要把开始和结束一起写（例如 09:00 到 18:00），或者都不写", "shift_incomplete")
+    pat = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
+    if not pat.fullmatch(s) or not pat.fullmatch(e):
+        raise bad_request("时间按 24 小时制写成 HH:MM（例如 09:00、18:30）", "shift_invalid")
+    if e <= s:
+        raise bad_request("结束时间要晚于开始时间；跨夜的班请拆成两天写", "shift_order")
+    body.shift_start, body.shift_end = s, e
+
+
+def _validate_day_shifts(body: "TaskIn") -> None:
+    """SCN-127 每天不同时段：只给多天单；长度等于天数；每天的规则与统一时段相同（成对、HH:MM、结束晚于开始）。"""
+    if not body.day_shifts:
+        return
+    if body.days <= 1:
+        raise bad_request("只有连续几天的活才分天写时段；一天的活写上面的时段就行", "day_shifts_without_days")
+    if len(body.day_shifts) != body.days:
+        raise bad_request(f"分天的时段要每天一项（一共 {body.days} 天）；哪天沿用统一时段就留空", "day_shifts_length")
+    pat = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
+    for n, ds in enumerate(body.day_shifts, start=1):
+        if ds is None:
+            continue
+        ds.start, ds.end = ds.start.strip(), ds.end.strip()
+        if not ds.start and not ds.end:
+            body.day_shifts[n - 1] = None
+            continue
+        if not ds.start or not ds.end:
+            raise bad_request(f"第 {n} 天的时段要把开始和结束一起写，或者都不写（沿用统一时段）", "shift_incomplete")
+        if not pat.fullmatch(ds.start) or not pat.fullmatch(ds.end):
+            raise bad_request(f"第 {n} 天的时间按 24 小时制写成 HH:MM（例如 09:00、18:30）", "shift_invalid")
+        if ds.end <= ds.start:
+            raise bad_request(f"第 {n} 天的结束时间要晚于开始时间；跨夜的班请拆成两天写", "shift_order")
+
+
+def _validate_days(body: "TaskIn") -> None:
+    """SCN-107 多天的规则：要写从哪天开始、不能早于今天、不能太远；名额总数有上限；周期任务与多天不同时用。"""
+    if body.days == 1:
+        return
+    if body.start_date is None:
+        raise bad_request("连续几天的活要写从哪天开始（start_date）", "start_date_required")
+    today = _beijing_today()
+    if body.start_date < today:
+        raise bad_request("开始日期不能早于今天", "start_date_in_past")
+    if body.start_date > today + timedelta(days=START_WITHIN_DAYS):
+        raise bad_request(f"开始日期最多提前 {START_WITHIN_DAYS} 天", "start_date_too_far")
+    if body.people_needed * body.days > MAX_SLOTS:
+        raise bad_request(f"人数 × 天数最多 {MAX_SLOTS} 个名额：现在是 {body.people_needed} × {body.days}，"
+                          "请减少人数或天数，或分两次发", "too_many_slots")
+    if body.recurrence != "none":
+        raise bad_request("连续几天与「每周 / 每月重复」不能同时用：选一种", "days_with_recurrence")
+
+
+@router.post("/tasks/{task_id}/publish")
+def publish_task(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden()
+    service.validate_publishable(task, db)
+    service.transition(db, task, "published")
+    return dump_task(task, user)
+
+
+class TaskEditIn(BaseModel):
+    title: str | None = Field(default=None, min_length=2, max_length=120)
+    description: str | None = None
+    budget_cents: int | None = Field(default=None, gt=0)
+    required_skills: list[str] | None = None
+    address_hint: str | None = None
+    address_exact: str | None = None
+    deadline: UtcDatetime | None = None
+
+
+# 已发布任务上「实质性」字段（影响报名者决策），有人报名后受保护（TASK-014 防调包）
+_MATERIAL_FIELDS = {"budget_cents", "required_skills"}
+
+
+@router.patch("/tasks/{task_id}")
+def edit_task(
+    task_id: int, body: TaskEditIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
+    """TASK-014 任务编辑 + 防调包（bait-and-switch）保护。
+
+    draft 阶段可自由改；已发布后一旦有人报名，实质性条款（预算、技能要求）
+    受保护：预算只可上调不可下调，技能要求锁定——防止「高价招人、低价成交」；
+    非实质字段（标题/描述/地址提示）始终可改。实质变更会通知已报名者。
+    """
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden()
+    if task.status not in ("draft", "published"):
+        raise conflict("任务已进入执行阶段，不可编辑（请走合约变更单）", "not_editable")
+    changes = body.model_dump(exclude_none=True)
+    if not changes:
+        return dump_task(task, user)
+
+    has_applicants = db.query(Application).filter(
+        Application.task_id == task_id, Application.status == "pending"
+    ).count() > 0
+    protected = task.status == "published" and has_applicants
+    material_changed = False
+
+    for field, value in changes.items():
+        if field == "budget_cents" and value != task.budget_cents:
+            if protected and value < task.budget_cents:
+                raise conflict("已有报名者，预算不可下调（防调包），只能上调", "budget_locked")
+            material_changed = material_changed or field in _MATERIAL_FIELDS
+        if field == "required_skills" and value != task.required_skills:
+            if protected:
+                raise conflict("已有报名者，技能要求已锁定", "skills_locked")
+            material_changed = material_changed or field in _MATERIAL_FIELDS
+        setattr(task, field, value)
+    db.add(task)
+
+    # 实质性上调 → 通知已报名者，可重新评估（业界惯例：透明变更）
+    if protected and material_changed:
+        from app.modules.notification.service import notify
+
+        apps = db.query(Application).filter(
+            Application.task_id == task_id, Application.status == "pending"
+        ).all()
+        for a in apps:
+            notify(db, a.applicant_id, "task", "报名的任务有更新",
+                   f"《{task.title}》发布方上调了预算至 {task.budget_cents / 100:.2f} 元，请留意。")
+    return dump_task(task, user)
+
+
+class RecipientIn(BaseModel):
+    """SCN-123 发单后改服务对象：换了人、换了联系方式，都要重新问过本人。"""
+    model_config = ConfigDict(extra="forbid")
+    recipient_label: str = Field(min_length=1, max_length=20)
+    onsite_contact: str = Field(default="", max_length=40)
+    recipient_consented: bool = False
+
+
+@router.patch("/tasks/{task_id}/recipient")
+def change_recipient(task_id: int, body: RecipientIn, user: User = Depends(get_current_user),
+                     db: Session = Depends(get_db, scope="function")):
+    """SCN-123（197 号 spec）替别人发的单，发单后改服务对象或到场联系方式：不用取消重发。
+
+    换人、改联系方式都要重新勾「已经问过本人」（与发单时同一条规则，PIPL 第十三条），同意时间刷新；
+    多天单同步到所有没结束的名额；接单的人收到通知（只写称呼，联系方式在任务详情里看）。"""
+    from app.modules.notification.service import notify
+
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden("只有发单的人能改服务对象")
+    if not task.on_behalf:
+        raise bad_request("这单不是替别人发的，没有服务对象可改", "not_on_behalf")
+    if task.status in ("completed", "cancelled", "disputed"):
+        raise conflict("这单已经结束或在纠纷中，服务对象不能再改", "recipient_locked")
+    label, contact = body.recipient_label.strip(), body.onsite_contact.strip()
+    if not label:
+        raise bad_request("替别人发单要写服务对象怎么称呼（例如「我妈」「王阿姨」），接单的人到了才知道找谁",
+                          "recipient_label_required")
+    if not body.recipient_consented:
+        raise bad_request("改了服务对象或联系方式，要先问过本人：问过之后勾选「已经问过本人」再改", "recipient_consent_required")
+    targets = [task] + (db.query(Task).filter(Task.parent_id == task.id,
+                                              Task.status.notin_(["completed", "cancelled", "disputed"])).all()
+                        if task.parent_id is None else [])
+    now = utcnow()
+    told = set()
+    for t in targets:
+        t.recipient_label, t.onsite_contact, t.recipient_consent_at = label, contact, now
+        db.add(t)
+        if t.executor_id and t.executor_id not in told:
+            told.add(t.executor_id)
+            notify(db, t.executor_id, "task", "服务对象有变化",
+                   f"《{t.title}》发单人改了服务对象：现在找「{label}」。到场联系方式在任务详情里看。")
+    db.add(ProgressLog(task_id=task.id, user_id=user.id, kind="note",
+                       content=f"发单人改了服务对象：「{label}」（已确认问过本人）"))
+    return dump_task(task, user)
+
+
+@router.get("/tasks/mine")
+def my_tasks(
+    role: str = Query(default="all", pattern="^(all|posted|working)$"),
+    status: str | None = None,
+    limit: int = Query(default=20, le=100),
+    offset: int = Query(default=0, ge=0),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
+):
+    """TASK-016 我的任务：我发布的（posted）/ 我执行的（working）/ 全部（all），可按状态筛选。
+
+    广场只展示 published+public，用户无法在其中看到自己的草稿/执行中/已完成任务，
+    此端点补齐个人任务中心（订单页）能力。含多人任务的名额子任务。
+    """
+    from sqlalchemy import or_
+
+    query = db.query(Task)
+    if role == "posted":
+        query = query.filter(Task.creator_id == user.id)
+    elif role == "working":
+        query = query.filter(Task.executor_id == user.id)
+    else:
+        query = query.filter(or_(Task.creator_id == user.id, Task.executor_id == user.id))
+    if status:
+        query = query.filter(Task.status == status)
+    rows = query.order_by(Task.id.desc()).offset(offset).limit(limit).all()
+    return [dump_task(t, user) for t in rows]
+
+
+@router.get("/users/me/applications")
+def my_applications(
+    status: str | None = None,
+    limit: int = Query(default=20, le=100),
+    offset: int = Query(default=0, ge=0),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function"),
+):
+    """MATCH-010 我的报名：列出本人投出的报名及所报任务的当前状态。
+
+    /tasks/mine?role=working 只含已成交单，等待选人的报名无处可查——此端点补齐。
+    """
+    query = db.query(Application).filter(Application.applicant_id == user.id)
+    if status:
+        query = query.filter(Application.status == status)
+    rows = query.order_by(Application.id.desc()).offset(offset).limit(limit).all()
+    task_ids = [a.task_id for a in rows]
+    tasks = {t.id: t for t in db.query(Task).filter(Task.id.in_(task_ids))} if task_ids else {}
+    out = []
+    for a in rows:
+        t = tasks.get(a.task_id)
+        out.append({
+            "application_id": a.id, "task_id": a.task_id, "status": a.status,
+            "bid_cents": a.bid_cents, "message": a.message,
+            "created_at": iso(a.created_at),
+            "task_title": t.title if t else None,
+            "task_status": t.status if t else None,
+            "task_budget_cents": t.budget_cents if t else None,
+        })
+    return out
+
+
+@router.get("/categories")
+def list_categories(db: Session = Depends(get_db, scope="function")):
+    """OPS-004 类目列表（公开，发布表单数据源）。"""
+    from .models import Category
+
+    rows = db.query(Category).filter(Category.active.is_(True)).order_by(Category.id).all()
+    # SCN-181（307 号 spec）要多张资质的类目才带 extra_certs
+    return [{"id": c.id, "name": c.name, "required_cert": c.required_cert,
+             **({"extra_certs": list(c.extra_certs)} if c.extra_certs else {}),
+             # KB-062b（327 号 spec）运营按类目设了经验时效的才带
+             **({"experience_fresh_days": c.experience_fresh_days} if c.experience_fresh_days else {})} for c in rows]
+
+
+@router.get("/task-templates")
+def task_templates(category: str, db: Session = Depends(get_db, scope="function")):
+    """TASK-003 任务模板库：模板 + 同类参考价一并返回。"""
+    from app.modules.knowledge import service as kb
+
+    template = service.TASK_TEMPLATES.get(category)
+    if not template:
+        raise not_found("该类目暂无模板")
+    return {"category": category, **template, "price_reference": kb.price_reference(db, category)}
+
+
+@router.get("/cities")
+def list_cities(db: Session = Depends(get_db, scope="function")):
+    """GEO-030 已开通城市列表。"""
+    from .models import City
+
+    rows = db.query(City).filter(City.active.is_(True)).order_by(City.id).all()
+    return [{"id": c.id, "name": c.name} for c in rows]
+
+
+# ---------- 广场 / 搜索 / LBS（TASK-040/041, GEO-010/011）----------
+@router.get("/tasks")
+def list_tasks(
+    db: Session = Depends(get_db, scope="function"),
+    q: str | None = None,
+    category: str | None = None,
+    task_type: str | None = None,
+    city: str | None = None,
+    status: str = "published",
+    lat: float | None = None,
+    lng: float | None = None,
+    max_km: float = Query(default=0, ge=0),
+    limit: int = Query(default=20, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    # 公开广场不展示圈层定向任务（TASK-008）；
+    # 也不展示被封禁/已注销发布者的任务——他们无法选人，留着只会让工人白报名（OPS-013）
+    banned_ids = [
+        u.id for u in db.query(User.id).filter(
+            (User.is_banned.is_(True)) | (User.is_deleted.is_(True))
+        )
+    ]
+    query = db.query(Task).filter(Task.status == status, Task.visibility == "public")
+    if banned_ids:
+        query = query.filter(Task.creator_id.notin_(banned_ids))
+    if q:
+        query = query.filter(Task.title.contains(q) | Task.description.contains(q))
+    if category:
+        query = query.filter(Task.category == category)
+    if task_type:
+        query = query.filter(Task.task_type == task_type)
+    if city:
+        query = query.filter(Task.city == city)
+    query = query.order_by(Task.id.desc())
+    # 非地理浏览：DB 层 offset/limit 分页，可翻至任意页且不拉全表（TASK-003）
+    if lat is None or lng is None:
+        rows = query.offset(offset).limit(limit).all()
+        return [dump_task(t) | {"distance_m": None} for t in rows]
+    # LAW-031 广场是匿名可访问的，这里拿不到身份，也就无从记录同意。
+    # 之所以不必记录：坐标只用于本次排序，**不落库、不关联到人**——
+    # 需要单独同意的是「处理并留存」，不是这种一次性计算。落库的只有打卡（见 checkin）。
+    # 地理检索：取候选窗口按距离过滤+排序后再分页（规模化替换为空间索引）
+    rows = query.limit(500).all()
+    items = []
+    for task in rows:
+        distance_m = None
+        if task.lat is not None:
+            distance_m = round(haversine_m(lat, lng, task.lat, task.lng))
+            if max_km and distance_m > max_km * 1000:
+                continue
+        item = dump_task(task)
+        item["distance_m"] = distance_m
+        items.append(item)
+    items.sort(key=lambda x: (x["distance_m"] is None, x["distance_m"] or 0))
+    return items[offset:offset + limit]
+
+
+@router.get("/tasks/{task_id}")
+def get_task(task_id: int, db: Session = Depends(get_db, scope="function"), user: User = Depends(get_current_user)):
+    """TASK-017 任务详情附「我与此任务的关系」上下文：是否已报名/收藏，
+    发布者可见报名数——避免用户重复报名后才被 409 拒绝的糟糕体验。"""
+    from sqlalchemy import func
+
+    task = _get_task(db, task_id)
+    out = dump_task(task, user)
+    from .models import Bookmark
+
+    my_app = (
+        db.query(Application)
+        .filter(Application.task_id == task_id, Application.applicant_id == user.id)
+        .order_by(Application.id.desc()).first()
+    )
+    out["my_application_status"] = my_app.status if my_app else None
+    out["bookmarked"] = db.query(Bookmark).filter(
+        Bookmark.user_id == user.id, Bookmark.task_id == task_id
+    ).first() is not None
+    if task.creator_id == user.id:
+        out["applications_count"] = (
+            db.query(func.count(Application.id))
+            .filter(Application.task_id == task_id, Application.status == "pending")
+            .scalar()
+        )
+    return out
+
+
+# ---------- 报名与推荐（MATCH-001/002）----------
+@router.post("/tasks/{task_id}/applications", status_code=201)
+def apply(
+    task_id: int,
+    body: ApplyIn,
+    user: User = Depends(require_verified),
+    db: Session = Depends(get_db, scope="function"),
+):
+    from app.modules.legal import consent
+
+    consent.require_current_agreement(db, user.id)  # LAW-030
+    app_row = _apply_one(db, _get_task(db, task_id), user, body)
+    return {"id": app_row.id, "status": app_row.status}
+
+
+def _apply_one(db: Session, task: Task, user: User, body: ApplyIn) -> Application:
+    """报名的全部规则（单个报名与 SCN-118 一次报多天共用一份，不各写各的）。"""
+    task_id = task.id
+    if task.status != "published":
+        raise conflict("任务不在招募中", "not_recruiting")
+    if task.creator_id == user.id:
+        raise bad_request("不能报名自己发布的任务", "self_apply")
+    creator = db.get(User, task.creator_id)  # OPS-013 发布方已封禁/注销则无人能选人
+    if creator and (creator.is_banned or creator.is_deleted):
+        raise conflict("该任务发布方账号已失效，无法报名", "creator_unavailable")
+    service.check_category_qualification(db, task, user)  # ACC-022 受限类目准入
+    service.check_executor_capacity(db, user.id)  # TASK-011 并发接单上限
+    from app.modules.account.service import is_blocked_between
+
+    if is_blocked_between(db, user.id, task.creator_id):  # ACC-033
+        raise forbidden("无法报名该任务", "blocked")
+    dup = (
+        db.query(Application)
+        .filter(Application.task_id == task_id, Application.applicant_id == user.id,
+                Application.status != "withdrawn")  # TASK-012 撤回后允许重新报名
+        .first()
+    )
+    if dup:
+        raise conflict("已报名过该任务", "already_applied")
+    app_row = Application(
+        task_id=task_id,
+        applicant_id=user.id,
+        bid_cents=body.bid_cents or task.budget_cents,
+        message=body.message,
+    )
+    db.add(app_row)
+    db.flush()
+    return app_row
+
+
+class ApplyDaysIn(BaseModel):
+    """SCN-118 一次报多天：在多天母任务上选几天，每天报一个还在招的名额。"""
+    model_config = ConfigDict(extra="forbid")
+    dates: list[date] = Field(min_length=1, max_length=14)
+    message: str = Field(default="", max_length=500)
+
+
+@router.post("/tasks/{task_id}/apply-days", status_code=201)
+def apply_days(task_id: int, body: ApplyDaysIn, user: User = Depends(require_verified),
+               db: Session = Depends(get_db, scope="function")):
+    """SCN-118（177 号 spec）一个人一次报多天：每个日期挑一个还在招、自己没报过的名额，按同一套报名规则报。
+
+    一天只报一个名额（一个人一天只能顶一个人的活）；哪天没名额了、哪天已经报过，逐日说清，其余照报。
+    每个名额仍是独立的报名：发单人逐个选人，选了谁就和谁签那一天的合约。"""
+    from app.modules.legal import consent
+
+    consent.require_current_agreement(db, user.id)  # LAW-030
+    parent = _get_task(db, task_id)
+    if parent.parent_id is not None or (parent.days or 1) <= 1:
+        raise bad_request("这不是一单多天的活：直接在名额上报名", "not_multi_day")
+    # 自己报自己的单由 _apply_one 拦（self_apply），与单个报名同一处
+    slots = (db.query(Task).filter(Task.parent_id == parent.id, Task.work_date.isnot(None))
+             .order_by(Task.work_date, Task.id).all())
+    mine = {a.task_id for a in db.query(Application).filter(
+        Application.applicant_id == user.id, Application.status != "withdrawn",
+        Application.task_id.in_([s.id for s in slots] or [0]))}
+    applied, skipped = [], []
+    for d in sorted(set(body.dates)):
+        today = [s for s in slots if s.work_date == d]
+        if not today:
+            skipped.append({"date": day(d), "reason": "这单没有这一天"})
+            continue
+        if any(s.id in mine for s in today):
+            skipped.append({"date": day(d), "reason": "这一天你已经报过了"})
+            continue
+        open_slot = next((s for s in today if s.status == "published"), None)
+        if open_slot is None:
+            skipped.append({"date": day(d), "reason": "这一天的名额已经招满或停招了"})
+            continue
+        row = _apply_one(db, open_slot, user, ApplyIn(message=body.message))
+        applied.append({"date": day(d), "task_id": open_slot.id, "application_id": row.id})
+    if not applied:
+        raise conflict("选的这几天都报不了：" + "；".join(f"{s['date']} {s['reason']}" for s in skipped),
+                       "no_day_available")
+    return {"applied": applied, "skipped": skipped}
+
+
+class DayShiftChangeIn(BaseModel):
+    """SCN-138 发布后改某一天的时段；两个都空 = 那天不写时段。"""
+    model_config = ConfigDict(extra="forbid")
+    shift_start: str = Field(default="", max_length=8)
+    shift_end: str = Field(default="", max_length=8)
+    # SCN-139（207 号 spec）已经有人接的名额：顺带给对方发一张改时段的变更单（对方同意才生效）
+    propose_change: bool = False
+
+
+@router.patch("/tasks/{task_id}/days/{work_date}/shift")
+def change_day_shift(task_id: int, work_date: date, body: DayShiftChangeIn, user: User = Depends(get_current_user),
+                     db: Session = Depends(get_db, scope="function")):
+    """SCN-138（202 号 spec）发布后改某一天的时段：只改那天还在招的名额（时段与标题一起改，通知已报名的人）。
+
+    已经有人接的名额不动——时间是双方签过的条款，单方面改不了，要走合约变更单；返回里逐个写明。"""
+    from app.modules.notification.service import notify
+
+    parent = _get_task(db, task_id)
+    if parent.creator_id != user.id:
+        raise forbidden("只有发单的人能改时段")
+    if parent.parent_id is not None or (parent.days or 1) <= 1:
+        raise bad_request("这不是一单多天的活：直接在任务上改", "not_multi_day")
+    if work_date < _beijing_today():
+        raise conflict("这一天已经过去了", "day_passed")
+    s, e = body.shift_start.strip(), body.shift_end.strip()
+    if s or e:
+        if not s or not e:
+            raise bad_request("时段要把开始和结束一起写（例如 09:00 到 18:00），或者都不写", "shift_incomplete")
+        pat = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
+        if not pat.fullmatch(s) or not pat.fullmatch(e):
+            raise bad_request("时间按 24 小时制写成 HH:MM（例如 09:00、18:30）", "shift_invalid")
+        if e <= s:
+            raise bad_request("结束时间要晚于开始时间；跨夜的班请拆成两天写", "shift_order")
+    slots = (db.query(Task).filter(Task.parent_id == parent.id, Task.work_date == work_date,
+                                   Task.status.notin_(["completed", "cancelled"])).order_by(Task.id).all())
+    if not slots:
+        raise conflict("这单没有这一天，或者这一天的名额都结束了", "day_full")
+    from app.modules.task.service import retime_slot
+
+    changed, kept = [], []
+    for slot in slots:
+        if slot.executor_id is not None or slot.status != "published":
+            kept.append(_kept_slot(db, slot, user, s, e, body.propose_change))
+            continue
+        retime_slot(slot, s, e)
+        db.add(slot)
+        changed.append(slot.id)
+        for a in db.query(Application).filter(Application.task_id == slot.id, Application.status == "pending"):
+            notify(db, a.applicant_id, "task", "报名的任务有更新",
+                   f"《{slot.title}》发布方改了时段：{(s + '–' + e) if s else '不限时段'}，请看看还来不来得了。")
+    return {"date": day(work_date), "changed": changed, "kept": kept, "shift_start": s, "shift_end": e}
+
+
+def _kept_slot(db: Session, slot: Task, user: User, s: str, e: str, propose: bool) -> dict:
+    """SCN-139 有人接的名额不单方面改：写明为什么；发单人勾了「顺带发变更单」且合约能变更时，替他发一张，对方同意才生效。"""
+    from app.modules.contract import service as contract_service
+    from app.modules.contract.models import ChangeOrder, Contract
+
+    out = {"task_id": slot.id, "reason": "已经有人接了：改时间要和对方走合约变更单", "change_order_id": None}
+    if not propose:
+        return out
+    c = db.query(Contract).filter(Contract.task_id == slot.id).order_by(Contract.id.desc()).first()
+    if c is None or c.status not in ("signed", "funded") or c.frozen:
+        out["reason"] = "已经有人接了、还没签好合约：先和对方商量好，签约后再发变更单"
+        return out
+    if db.query(ChangeOrder).filter(ChangeOrder.contract_id == c.id, ChangeOrder.status == "pending").first():
+        out["reason"] = "这份合约已经有一张待对方处理的变更单：等对方处理完再发"
+        return out
+    when = f"{s}–{e}" if s else "不限时段"
+    was = f"{slot.shift_start}–{slot.shift_end}" if slot.shift_start else "不限时段"
+    order = contract_service.propose_change(db, c, user.id, None, "发单人改了这一天的时段",
+                                            scope_change=f"{day(slot.work_date)} 的时段由 {was} 改为 {when}")
+    order.new_shift_start, order.new_shift_end = s, e
+    db.add(order)
+    out.update(reason="已经有人接了：已给对方发了改时段的变更单，对方同意后生效", change_order_id=order.id)
+    return out
+
+
+# 补招时一次最多邀请几个人：邀约会直接推到对方手机上，多了就是群发
+REBOOST_INVITE_MAX = 5
+
+
+class ReboostIn(BaseModel):
+    """SCN-121 缺人的那天补招：每个还在招的名额加多少（分）；0 = 只再推一次。"""
+    model_config = ConfigDict(extra="forbid")
+    raise_cents: int = Field(default=0, ge=0, le=100000)
+    # SCN-137（206 号 spec）顺带邀请几个那天有空、做过这类活的人；0 = 不邀请
+    invite: int = Field(default=0, ge=0, le=REBOOST_INVITE_MAX)
+
+
+# 同一天两次补招至少隔这么久：再推一次会叫醒「现在有空」的人，推得太勤就是骚扰
+REBOOST_COOLDOWN_HOURS = 6
+
+
+@router.post("/tasks/{task_id}/days/{work_date}/reboost")
+def reboost_day(task_id: int, work_date: date, body: ReboostIn, user: User = Depends(get_current_user),
+                db: Session = Depends(get_db, scope="function")):
+    """SCN-121（196 号 spec）缺人的那天一键补招：把那天还在招的名额再推一次，可选一起加价。
+
+    加价走的是已发布任务本来就有的规则（只许上调、通知已报名的人）——钱在签约托管时才冻结，这里不碰钱。
+    同一天 6 小时内只补招一次。"""
+    from app.core.events import publish
+    from app.modules.notification.service import notify
+
+    parent = _get_task(db, task_id)
+    if parent.creator_id != user.id:
+        raise forbidden("只有发单的人能补招")
+    if parent.parent_id is not None or (parent.days or 1) <= 1:
+        raise bad_request("这不是一单多天的活：在任务页上直接改预算或重新发布", "not_multi_day")
+    if work_date < _beijing_today():
+        raise conflict("这一天已经过去了，补招也来不及了", "day_passed")
+    slots = (db.query(Task).filter(Task.parent_id == parent.id, Task.work_date == work_date,
+                                   Task.status == "published", Task.executor_id.is_(None))
+             .order_by(Task.id).all())
+    if not slots:
+        raise conflict("这一天没有还在招的名额：都招到人了，或者已经停招", "day_full")
+    marker = f"补招 {day(work_date)}"
+    last = (db.query(ProgressLog).filter(ProgressLog.task_id == parent.id, ProgressLog.kind == "reboost",
+                                         ProgressLog.content.startswith(marker))
+            .order_by(ProgressLog.id.desc()).first())
+    if last is not None and last.created_at > utcnow() - timedelta(hours=REBOOST_COOLDOWN_HOURS):
+        nxt = last.created_at + timedelta(hours=REBOOST_COOLDOWN_HOURS)
+        raise conflict(f"这一天 {REBOOST_COOLDOWN_HOURS} 小时内刚补招过，{iso(nxt)} 之后可以再推；"
+                       "想让更多人看到，可以先加价", "reboost_too_soon")
+    for s in slots:
+        if body.raise_cents:
+            s.budget_cents += body.raise_cents
+            for a in db.query(Application).filter(Application.task_id == s.id, Application.status == "pending"):
+                notify(db, a.applicant_id, "task", "报名的任务有更新",
+                       f"《{s.title}》发布方上调了预算至 {s.budget_cents / 100:.2f} 元，请留意。")
+        db.add(s)
+        publish(db, "task.published", {"task_id": s.id, "reboost": True})
+    if body.raise_cents:
+        parent.budget_cents += body.raise_cents * len(slots)
+        db.add(parent)
+    extra = f"，每个名额加价 {body.raise_cents / 100:.2f} 元" if body.raise_cents else ""
+    invited = _reboost_invites(db, parent, slots, work_date, user, body.invite) if body.invite else []
+    if invited:
+        extra += f"，邀请了 {len(invited)} 个那天有空、做过这类活的人"
+    db.add(ProgressLog(task_id=parent.id, user_id=user.id, kind="reboost",
+                       content=f"{marker}：{len(slots)} 个名额再推一次{extra}"))
+    return {"date": day(work_date), "slot_ids": [s.id for s in slots], "raise_cents": body.raise_cents,
+            "budget_cents": [s.budget_cents for s in slots], "invited": invited}
+
+
+class TaskReboostIn(BaseModel):
+    """AI-DEC-023（320 号 spec）单个任务再推一次：可选顺带加价（分）。"""
+    model_config = ConfigDict(extra="forbid")
+    raise_cents: int = Field(default=0, ge=0, le=100000)
+
+
+@router.post("/tasks/{task_id}/reboost")
+def reboost_task(task_id: int, body: TaskReboostIn, user: User = Depends(get_current_user),
+                 db: Session = Depends(get_db, scope="function")):
+    """AI-DEC-023 的安全一半（320 号 spec）：没人报名的单一键再推一次，可选加价。
+
+    加价与按天补招同一套规则（只许上调、通知已报名的人；钱在签约托管时才冻结，这里不碰钱）；6 小时内只推一次。
+    一单多天的母任务请按天补招。"""
+    from app.core.events import publish
+    from app.modules.notification.service import notify
+
+    from .stale import has_children
+
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden("只有发单的人能再推一次")
+    if has_children(task):
+        # 一单多人、项目：报名都在名额、子任务上，加价也该加在那里
+        raise bad_request("这单的报名都在名额或子任务上：请在没人报名的那一个上「再推一次」，或在缺人的那天点「补招」",
+                          "use_day_reboost")
+    if task.status != "published" or task.executor_id is not None:
+        raise conflict("任务不在招募中", "not_recruiting")
+    last = (db.query(ProgressLog).filter(ProgressLog.task_id == task.id, ProgressLog.kind == "reboost")
+            .order_by(ProgressLog.id.desc()).first())
+    if last is not None and last.created_at > utcnow() - timedelta(hours=REBOOST_COOLDOWN_HOURS):
+        nxt = last.created_at + timedelta(hours=REBOOST_COOLDOWN_HOURS)
+        raise conflict(f"{REBOOST_COOLDOWN_HOURS} 小时内刚推过，{iso(nxt)} 之后可以再推；想让更多人看到，可以先加价",
+                       "reboost_too_soon")
+    if body.raise_cents:
+        task.budget_cents += body.raise_cents
+        for a in db.query(Application).filter(Application.task_id == task.id, Application.status == "pending"):
+            notify(db, a.applicant_id, "task", "报名的任务有更新",
+                   f"《{task.title}》发布方上调了预算至 {task.budget_cents / 100:.2f} 元，请留意。")
+    db.add(task)
+    publish(db, "task.published", {"task_id": task.id, "reboost": True})
+    extra = f"，加价 {body.raise_cents / 100:.2f} 元" if body.raise_cents else ""
+    db.add(ProgressLog(task_id=task.id, user_id=user.id, kind="reboost", content=f"再推一次{extra}"))
+    return {"task_id": task.id, "raise_cents": body.raise_cents, "budget_cents": task.budget_cents}
+
+
+def _reboost_invites(db: Session, parent: Task, slots: list[Task], work_date: date, user: User, limit: int) -> list[dict]:
+    """SCN-137 补招时挑人发邀约：按推荐排序（已排除黑名单、没实名、暂停接单的人），只要
+    ① 本人设的每周时段盖住那天的时段（没写时段的名额：那天有空就行）② 做完过这个类目的单；
+    那天已经报过名、或已经被邀过的人不再打扰。邀约落在那天第一个还在招的名额上，理由里不写对方的日程。"""
+    from app.modules.matching.models import Invitation
+    from app.modules.matching.service import recommend, shift_fit
+    from app.modules.notification.service import notify
+
+    first = slots[0]
+    day_ids = [t.id for t in db.query(Task.id).filter(Task.parent_id == parent.id, Task.work_date == work_date)]
+    touched = {a.applicant_id for a in db.query(Application.applicant_id).filter(Application.task_id.in_(day_ids))}
+    touched |= {i.invitee_id for i in db.query(Invitation.invitee_id).filter(Invitation.task_id.in_(day_ids))}
+    ranked = [r for r in recommend(db, first, limit=50) if r["user_id"] not in touched]
+    done_here = {uid for (uid,) in db.query(Task.executor_id).filter(
+        Task.executor_id.in_([r["user_id"] for r in ranked] or [-1]), Task.status == "completed",
+        Task.category == parent.category).distinct()}
+    out: list[dict] = []
+    for r in ranked:
+        if len(out) >= limit:
+            break
+        u = db.get(User, r["user_id"])
+        fit = shift_fit(u.weekly_slots or [], work_date, first.shift_start or "00:00", first.shift_end or "24:00")
+        if u.id not in done_here or fit == "none" or (first.shift_start and fit != "covers"):
+            continue
+        db.add(Invitation(task_id=first.id, inviter_id=user.id, invitee_id=u.id, message="补招：那天还缺人"))
+        notify(db, u.id, "task", "收到任务邀约",
+               f"《{first.title}》还缺人，邀请你接单，报酬 {first.budget_cents / 100:.2f} 元")
+        out.append({"user_id": u.id, "nickname": u.nickname, "task_id": first.id})
+    return out
+
+
+@router.get("/tasks/{task_id}/applications")
+def list_applications(
+    task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden()
+    from app.modules.task.promises import APPLICATION_FLAG, has_result_promise
+
+    rows = db.query(Application).filter(Application.task_id == task_id).all()
+    out = []
+    for r in rows:
+        applicant = db.get(User, r.applicant_id)
+        out.append(
+            {
+                "id": r.id,
+                "applicant_id": r.applicant_id,
+                "nickname": applicant.nickname if applicant else "",
+                "credit_score": applicant.credit_score if applicant else 0,
+                "rating_avg": applicant.rating_avg if applicant else 0,
+                "bid_cents": r.bid_cents,
+                "message": r.message,
+                "status": r.status,
+                # SCN-185（311 号 spec）留言里承诺了结果才带
+                **({"promise_flag": APPLICATION_FLAG} if has_result_promise(r.message) else {}),
+            }
+        )
+    return out
+
+
+@router.get("/tasks/{task_id}/recommendations")
+def recommendations(
+    task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden()
+    return matching.recommend(db, task)
+
+
+@router.post("/applications/{application_id}/accept")
+def accept_application(
+    application_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
+    """TASK-020 双方确认成交 → 生成合约（SC-001），任务 → matched。"""
+    app_row = db.get(Application, application_id)
+    if not app_row:
+        raise not_found("报名不存在")
+    task = _get_task(db, app_row.task_id)
+    if task.creator_id != user.id:
+        raise forbidden()
+    contract = _accept_one(db, task, app_row)
+    return {"contract_id": contract.id, "task": dump_task(task, user)}
+
+
+def _accept_one(db: Session, task: Task, app_row: Application):
+    """选人的全部规则（单个选人与 SCN-126 一次选一个人的多天共用一份）。"""
+    if task.status != "published":
+        raise conflict("任务不在招募中", "not_recruiting")
+    if app_row.status != "pending":  # TASK-012 已撤回/已拒的报名不可成交（防替人签约）
+        raise conflict("该报名已撤回或已处理", "application_closed")
+    service.check_executor_capacity(db, app_row.applicant_id)  # TASK-011 成交时复核在途上限
+    app_row.status = "accepted"
+    task.executor_id = app_row.applicant_id
+    db.add_all([app_row, task])
+    contract = contract_service.generate(db, task, app_row.applicant_id, app_row.bid_cents)
+    service.transition(db, task, "matched", {"executor_id": app_row.applicant_id})
+    if task.parent_id and task.work_date:
+        _move_to_same_day_slots(db, task, app_row)
+    db.query(Application).filter(
+        Application.task_id == task.id, Application.id != app_row.id
+    ).update({"status": "rejected"})
+    return contract
+
+
+def _move_to_same_day_slots(db: Session, task: Task, chosen: Application) -> None:
+    """SCN-126（181 号 spec）多天名额选了一个人后，同一天还有空名额时，这个名额上其他人的报名挪到那天下一个还在招的名额，
+    不拒——一次报多天的人都先落在那天第一个名额上（177 号），拒掉就等于让后报的人白报。挪不了的照旧拒。"""
+    pending = db.query(Application).filter(Application.task_id == task.id, Application.id != chosen.id,
+                                           Application.status == "pending").all()
+    if not pending:
+        return
+    siblings = (db.query(Task).filter(Task.parent_id == task.parent_id, Task.work_date == task.work_date,
+                                      Task.id != task.id, Task.status == "published").order_by(Task.id).all())
+    for a in pending:
+        taken = {x.task_id for x in db.query(Application.task_id).filter(
+            Application.applicant_id == a.applicant_id, Application.status != "withdrawn")}
+        nxt = next((s for s in siblings if s.id not in taken), None)
+        if nxt is not None:
+            a.task_id = nxt.id
+    db.flush()
+
+
+class AcceptPersonIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    applicant_id: int
+
+
+@router.get("/tasks/{task_id}/applicants")
+def applicants_by_person(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """SCN-126 多天母任务：按人看谁报了哪几天（只给发单人）。"""
+    parent = _get_task(db, task_id)
+    if parent.creator_id != user.id:
+        raise forbidden()
+    slots = {s.id: s for s in db.query(Task).filter(Task.parent_id == parent.id, Task.work_date.isnot(None))}
+    rows = (db.query(Application).filter(Application.task_id.in_(list(slots) or [0]), Application.status == "pending")
+            .order_by(Application.id).all())
+    people: dict[int, list] = {}
+    for a in rows:
+        people.setdefault(a.applicant_id, []).append(
+            {"date": day(slots[a.task_id].work_date), "task_id": a.task_id, "application_id": a.id})
+    names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_(list(people) or [0]))}
+    return [{"applicant_id": uid, "nickname": names.get(uid, ""), "days": sorted(ds, key=lambda x: x["date"])}
+            for uid, ds in sorted(people.items(), key=lambda kv: (-len(kv[1]), kv[0]))]
+
+
+@router.post("/tasks/{task_id}/accept-person")
+def accept_person(task_id: int, body: AcceptPersonIn, user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db, scope="function")):
+    """SCN-126（181 号 spec）一次选同一个人的多天：把他在这单各天的报名逐个按同一套规则选上。
+    每个名额各生成一份合约（签署、托管照旧逐份由人确认）；选不上的那天（例如他的在途单到了上限）逐日说清。"""
+    from fastapi import HTTPException
+
+    parent = _get_task(db, task_id)
+    if parent.creator_id != user.id:
+        raise forbidden()
+    slots = {s.id: s for s in db.query(Task).filter(Task.parent_id == parent.id, Task.work_date.isnot(None))}
+    apps = sorted(db.query(Application).filter(Application.task_id.in_(list(slots) or [0]),
+                                               Application.applicant_id == body.applicant_id,
+                                               Application.status == "pending").all(),
+                  key=lambda a: (slots[a.task_id].work_date, a.id))
+    accepted, skipped = [], []
+    for a in apps:
+        slot = slots[a.task_id]
+        try:
+            contract = _accept_one(db, slot, a)
+        except HTTPException as e:
+            detail = e.detail if isinstance(e.detail, dict) else {"message": str(e.detail)}
+            skipped.append({"date": day(slot.work_date), "reason": detail.get("message", "")})
+            continue
+        accepted.append({"date": day(slot.work_date), "task_id": slot.id, "contract_id": contract.id})
+    if not accepted:
+        raise conflict("这个人没有可以选的那几天：" + ("；".join(f"{s['date']} {s['reason']}" for s in skipped) or "他没有在等你选的报名"),
+                       "nothing_to_accept")
+    return {"accepted": accepted, "skipped": skipped}
+
+
+# ---------- TASK-013 收藏 ----------
+@router.post("/tasks/{task_id}/bookmark", status_code=201)
+def add_bookmark(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    from .models import Bookmark
+
+    _get_task(db, task_id)  # 任务需存在
+    dup = db.query(Bookmark).filter(
+        Bookmark.user_id == user.id, Bookmark.task_id == task_id
+    ).first()
+    if dup:
+        return {"ok": True, "already": True}  # 幂等
+    db.add(Bookmark(user_id=user.id, task_id=task_id))
+    return {"ok": True}
+
+
+@router.delete("/tasks/{task_id}/bookmark")
+def remove_bookmark(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    from .models import Bookmark
+
+    db.query(Bookmark).filter(
+        Bookmark.user_id == user.id, Bookmark.task_id == task_id
+    ).delete()
+    return {"ok": True}
+
+
+@router.get("/users/me/bookmarks")
+def my_bookmarks(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    from .models import Bookmark
+
+    rows = (
+        db.query(Bookmark).filter(Bookmark.user_id == user.id)
+        .order_by(Bookmark.id.desc()).limit(100).all()
+    )
+    ids = [r.task_id for r in rows]
+    tasks = {t.id: t for t in db.query(Task).filter(Task.id.in_(ids))} if ids else {}
+    return [dump_task(tasks[i], user) for i in ids if i in tasks]
+
+
+@router.post("/applications/{application_id}/withdraw")
+def withdraw_application(
+    application_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
+    """TASK-012 报名撤回（业界标配）：仅本人、仅 pending 可撤；撤回后可重新报名。"""
+    app_row = db.get(Application, application_id)
+    if not app_row:
+        raise not_found("报名不存在")
+    if app_row.applicant_id != user.id:
+        raise forbidden()
+    if app_row.status != "pending":
+        raise conflict("该报名已处理，不可撤回", "application_closed")
+    app_row.status = "withdrawn"
+    db.add(app_row)
+    return {"id": app_row.id, "status": "withdrawn"}
+
+
+# ---------- 执行留痕（TASK-022, GEO-020）----------
+@router.post("/tasks/{task_id}/progress", status_code=201)
+def add_progress(
+    task_id: int, body: ProgressIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
+    task = _get_task(db, task_id)
+    if user.id not in (task.creator_id, task.executor_id):
+        raise forbidden()
+    if task.status not in ("in_progress", "pending_acceptance"):
+        raise conflict("任务不在执行中", "not_in_progress")
+    for url in body.images:  # 只接受本平台上传返回的相对路径，杜绝外链与 XSS
+        if not url.startswith("/api/v1/files/"):
+            raise bad_request("图片地址不合法，请通过上传接口获取", "invalid_image_url")
+    log = ProgressLog(task_id=task_id, user_id=user.id, kind="note",
+                      content=body.content, images=body.images)
+    db.add(log)
+    return {"ok": True}
+
+
+@router.post("/tasks/{task_id}/checkin", status_code=201)
+def checkin(
+    task_id: int, body: CheckinIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
+    task = _get_task(db, task_id)
+    if user.id != task.executor_id:
+        raise forbidden("仅执行者可打卡")
+    if task.status != "in_progress":
+        raise conflict("任务不在执行中", "not_in_progress")
+    if task.is_remote or task.lat is None:
+        raise bad_request("线上任务无需到场打卡", "no_checkin_needed")
+    # LAW-031 精确位置是敏感个人信息：打卡动作即单独同意；撤回后拒绝继续处理
+    from app.modules.legal import consent
+
+    consent.ensure(db, user.id, "location")
+    distance = haversine_m(task.lat, task.lng, body.lat, body.lng)
+    if distance > settings.CHECKIN_RADIUS_M:
+        raise bad_request(f"距任务地点 {distance:.0f} 米，超出打卡范围", "too_far")
+    db.add(
+        ProgressLog(
+            task_id=task_id, user_id=user.id, kind="checkin",
+            content=f"到场打卡（距离 {distance:.0f} 米）", lat=body.lat, lng=body.lng, distance_m=round(distance),
+        )
+    )
+    return {"ok": True, "distance_m": round(distance)}
+
+
+def _visit_view(task: Task, logs: list[ProgressLog]) -> dict:
+    checklist = list(task.visit_checklist or [])
+    visits = []
+    for n, r in enumerate(logs, start=1):
+        done = [i for i in checklist if i in (r.checked or [])]
+        row = {"n": n, "id": r.id, "created_at": iso(r.created_at), "done": done,
+               "missed": [i for i in checklist if i not in done], "note": r.content, "images": r.images or [],
+               "at_site_m": r.distance_m}
+        # SCN-192（317 号 spec）发单人表了态才带
+        if r.confirmed_at is not None:
+            row["confirmed_at"] = iso(r.confirmed_at)
+        if r.objection:
+            row["objection"] = r.objection
+        visits.append(row)
+    # SCN-136（204 号 spec）几次回报带了到场打卡；线上单或没有任务坐标时打不了卡，是 null（不是 0 次）
+    at_site = None if task.is_remote or task.lat is None else sum(1 for v in visits if v["at_site_m"] is not None)
+    return {"task_id": task.id, "planned": task.visits_planned or 0, "checklist": checklist, "reported": len(visits),
+            "missed_total": sum(len(v["missed"]) for v in visits), "at_site": at_site, "visits": visits}
+
+
+@router.post("/tasks/{task_id}/visits", status_code=201)
+def report_visit(task_id: int, body: VisitIn, user: User = Depends(get_current_user),
+                 db: Session = Depends(get_db, scope="function")):
+    """SCN-120 一次上门回报（176 号 spec）：接单人每上门一次交一条，勾做了清单里的哪几项，可附照片。
+    发单人收到通知：第几次、做了什么、哪几项没做。不碰钱，不替发单人验收。"""
+    task = _get_task(db, task_id)
+    if user.id != task.executor_id:
+        raise forbidden("只有接单的人能交上门回报")
+    if task.status != "in_progress":
+        raise conflict("任务不在执行中", "not_in_progress")
+    checklist = list(task.visit_checklist or [])
+    unknown = [i for i in body.done if i not in checklist]
+    if unknown:
+        raise bad_request(f"「{unknown[0]}」不在这单的清单里：只勾发单人写的那几项，别的写进备注", "visit_item_unknown")
+    for url in body.images:
+        if not url.startswith("/api/v1/files/"):
+            raise bad_request("图片地址不合法，请通过上传接口获取", "invalid_image_url")
+    if not body.done and not body.note.strip() and not body.images:
+        raise bad_request("这次上门做了什么：勾清单、写一句备注或附一张照片", "visit_empty")
+    distance = _visit_distance(db, task, user, body)
+    n = db.query(ProgressLog).filter(ProgressLog.task_id == task_id, ProgressLog.kind == "visit").count() + 1
+    done = [i for i in checklist if i in body.done]
+    missed = [i for i in checklist if i not in done]
+    log = ProgressLog(task_id=task_id, user_id=user.id, kind="visit", content=body.note.strip(),
+                      images=body.images, checked=done, lat=body.lat, lng=body.lng,
+                      distance_m=round(distance) if distance is not None else None)
+    db.add(log)
+    db.flush()
+    from app.modules.notification.service import notify
+
+    planned = f"/{task.visits_planned}" if task.visits_planned else ""
+    text = (f"已做：{'、'.join(done)}" if done else "清单一项都没勾") + (f"；没做：{'、'.join(missed)}" if missed else "")
+    if distance is not None:
+        text += f"；到场打卡（距任务地点 {distance:.0f} 米）"
+    notify(db, task.creator_id, "task", f"第 {n}{planned} 次上门回报", f"《{task.title}》{text}" +
+           (f"。备注：{body.note.strip()[:60]}" if body.note.strip() else ""))
+    return {"n": n, "id": log.id, "done": done, "missed": missed,
+            "at_site_m": round(distance) if distance is not None else None}
+
+
+def _visit_distance(db: Session, task: Task, user: User, body: VisitIn) -> float | None:
+    """SCN-124 回报带了位置：与打卡同一套规则。没带返回 None（照旧只是回报，不算到场）。"""
+    if body.lat is None and body.lng is None:
+        return None
+    if body.lat is None or body.lng is None:
+        raise bad_request("位置要经度、纬度一起给；不想带位置就都不填", "visit_location_incomplete")
+    if task.is_remote or task.lat is None:
+        raise bad_request("线上任务无需到场打卡", "no_checkin_needed")
+    from app.modules.legal import consent
+
+    consent.ensure(db, user.id, "location")
+    distance = haversine_m(task.lat, task.lng, body.lat, body.lng)
+    if distance > settings.CHECKIN_RADIUS_M:
+        raise bad_request(f"距任务地点 {distance:.0f} 米，超出打卡范围：到了再交，或者先不带位置交回报", "too_far")
+    return distance
+
+
+class VisitObjectionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(min_length=2, max_length=300)
+
+
+def _creator_visit(db: Session, task_id: int, visit_id: int, user: User) -> tuple[Task, ProgressLog]:
+    task = _get_task(db, task_id)
+    if user.id != task.creator_id:
+        raise forbidden("只有发单人能确认或提出异议")
+    log = db.get(ProgressLog, visit_id)
+    if log is None or log.task_id != task.id or log.kind != "visit":
+        raise not_found("没有这一次上门回报")
+    return task, log
+
+
+@router.post("/tasks/{task_id}/visits/{visit_id}/confirm")
+def confirm_visit(task_id: int, visit_id: int, user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db, scope="function")):
+    """SCN-192（317 号 spec）发单人确认这一次回报（称了多少、做了什么）对得上：当场留个凭据，事后不用再争。
+    不碰钱、不等于验收；之前提过的异议随之撤回。"""
+    task, log = _creator_visit(db, task_id, visit_id, user)
+    log.confirmed_at, log.objection = utcnow(), ""
+    db.flush()
+    logs = (db.query(ProgressLog).filter(ProgressLog.task_id == task.id, ProgressLog.kind == "visit")
+            .order_by(ProgressLog.id).all())
+    return _visit_view(task, logs)
+
+
+@router.post("/tasks/{task_id}/visits/{visit_id}/object")
+def object_visit(task_id: int, visit_id: int, body: VisitObjectionIn, user: User = Depends(get_current_user),
+                 db: Session = Depends(get_db, scope="function")):
+    """SCN-192 对这一次回报有异议（重量对不上、清单没做）：写清哪里不对，通知接单人；之前的确认随之撤回。"""
+    from app.modules.notification.service import notify
+
+    task, log = _creator_visit(db, task_id, visit_id, user)
+    log.objection, log.confirmed_at = body.reason.strip(), None
+    db.flush()
+    if task.executor_id:
+        notify(db, task.executor_id, "task", "发单人对一次上门回报有异议",
+               f"《{task.title}》：{log.objection[:80]}。说清楚或补一张照片，别等到验收时再争。")
+    logs = (db.query(ProgressLog).filter(ProgressLog.task_id == task.id, ProgressLog.kind == "visit")
+            .order_by(ProgressLog.id).all())
+    return _visit_view(task, logs)
+
+
+@router.get("/tasks/{task_id}/visits")
+def list_visits(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """SCN-120 计划几次、回报了几次、每次做了什么和漏了什么（只给成交双方与管理员）。"""
+    task = _get_task(db, task_id)
+    if user.id not in (task.creator_id, task.executor_id) and not user.is_admin:
+        raise forbidden()
+    logs = (db.query(ProgressLog).filter(ProgressLog.task_id == task_id, ProgressLog.kind == "visit")
+            .order_by(ProgressLog.id).all())
+    return _visit_view(task, logs)
+
+
+@router.get("/tasks/{task_id}/progress")
+def list_progress(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    task = _get_task(db, task_id)
+    if user.id not in (task.creator_id, task.executor_id) and not user.is_admin:
+        raise forbidden()
+    rows = db.query(ProgressLog).filter(ProgressLog.task_id == task_id).order_by(ProgressLog.id).all()
+    return [
+        {"id": r.id, "user_id": r.user_id, "kind": r.kind, "content": r.content,
+         "images": r.images or [], "created_at": iso(r.created_at)}
+        for r in rows
+    ]
+
+
+# ---------- GEO 安全件（GEO-021/023/024）----------
+@router.post("/tasks/{task_id}/trip-share")
+def toggle_trip_share(
+    task_id: int, enabled: bool, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
+    """GEO-021 行程共享开关（执行者，仅执行中）。"""
+    task = _get_task(db, task_id)
+    if user.id != task.executor_id:
+        raise forbidden("仅执行者可设置行程共享")
+    if task.status != "in_progress":
+        raise conflict("任务不在执行中", "not_in_progress")
+    task.trip_share_enabled = enabled
+    db.add(task)
+    return {"trip_share_enabled": enabled}
+
+
+@router.get("/tasks/{task_id}/trip")
+def get_trip(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """发布者查看执行者最近打卡位置（需执行者开启共享，任务结束即失效）。"""
+    task = _get_task(db, task_id)
+    if user.id not in (task.creator_id, task.executor_id):
+        raise forbidden()
+    if not task.trip_share_enabled or task.status != "in_progress":
+        raise forbidden("行程共享未开启或任务已结束", "trip_share_disabled")
+    last = (
+        db.query(ProgressLog)
+        .filter(ProgressLog.task_id == task_id, ProgressLog.kind == "checkin",
+                ProgressLog.lat.isnot(None))
+        .order_by(ProgressLog.id.desc())
+        .first()
+    )
+    if not last:
+        return {"lat": None, "lng": None, "at": None}
+    return {"lat": last.lat, "lng": last.lng, "at": iso(last.created_at)}
+
+
+@router.post("/tasks/{task_id}/sos", status_code=201)
+def sos(task_id: int, body: CheckinIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """GEO-023 紧急求助：留痕 + 通知对方与平台（生产联动 110/紧急联系人）。
+
+    LAW-031 这里**刻意不做**位置同意校验：PIPL 第十三条第(四)项把
+    「紧急情况下为保护自然人的生命健康所必需」列为无需同意的处理情形。
+    让求助按钮卡在合规弹窗上，是把合规做成了事故。
+    """
+    task = _get_task(db, task_id)
+    if user.id not in (task.creator_id, task.executor_id):
+        raise forbidden()
+    db.add(ProgressLog(task_id=task_id, user_id=user.id, kind="sos",
+                       content="紧急求助", lat=body.lat, lng=body.lng))
+    from app.modules.notification.service import notify
+
+    other = task.executor_id if user.id == task.creator_id else task.creator_id
+    if other:
+        notify(db, other, "system", "对方发出紧急求助",
+               f"任务《{task.title}》的另一方发出紧急求助，请立即联系确认安全")
+    return {"ok": True, "guidance": "已通知平台与任务对方；如遇危险请立即拨打 110"}
+
+
+@router.post("/tasks/jobs/purge-locations")
+def purge_locations(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("purge_locations"), scope="function")):
+    """GEO-024 位置保留策略：已结束任务超过 30 天，清除打卡精确坐标。"""
+    from datetime import timedelta
+
+    cutoff = utcnow() - timedelta(days=30)
+    closed_ids = [
+        t.id for t in db.query(Task)
+        .filter(Task.status.in_(["completed", "cancelled"]), Task.completed_at.isnot(None),
+                Task.completed_at <= cutoff)
+        .all()
+    ]
+    purged = contacts = 0
+    if closed_ids:
+        purged = (
+            db.query(ProgressLog)
+            .filter(ProgressLog.task_id.in_(closed_ids), ProgressLog.lat.isnot(None))
+            .update({"lat": None, "lng": None}, synchronize_session=False)
+        )
+        # SCN-119（175 号 spec）：替别人发单的在场联系方式是第三人的个人信息，结束 30 天后同样清掉（称呼留着，账单与纠纷要认得是哪一单）
+        contacts = (
+            db.query(Task)
+            .filter(Task.id.in_(closed_ids), Task.onsite_contact != "")
+            .update({"onsite_contact": ""}, synchronize_session=False)
+        )
+    return {"purged_logs": purged, "purged_contacts": contacts}
+
+
+# ---------- 交付与验收（TASK-030/031/033）----------
+@router.post("/tasks/{task_id}/deliver")
+def deliver(task_id: int, body: DeliverIn | None = None,
+            user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    task = _get_task(db, task_id)
+    if user.id != task.executor_id:
+        raise forbidden("仅执行者可提交验收")
+    note = (body.note if body else "") or ""
+    # OUT-004 浮动对价要按客观判据判，而判据得有个判的对象。
+    # 交付说明就是那个对象——没有它，执行方没有任何地方声明「我交付了什么」。
+    if task.pricing == "outcome" and not note.strip():
+        raise bad_request(
+            "该任务为浮动对价，提交验收时必须填写交付说明（浮动部分按它对照验收指标判定）",
+            "delivery_note_required",
+        )
+    # AGT-013/031 agent 执行的任务：判据没过、置信度不足、还没跑完，都不许交付。
+    # 与客户端按钮读同一个 delivery_block（单一判断来源）。
+    from app.modules.agent import service as agent_service
+
+    block = agent_service.delivery_block(db, task)
+    if block:
+        raise conflict(block, "agent_delivery_blocked")
+    task.delivered_at = utcnow()
+    db.add(ProgressLog(task_id=task_id, user_id=user.id, kind="delivery",
+                       content=note.strip() or "提交验收"))
+    service.transition(db, task, "pending_acceptance")
+    return dump_task(task, user)
+
+
+@router.post("/tasks/{task_id}/accept-delivery")
+def accept_delivery(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden()
+    _complete_task(db, task)
+    return dump_task(task, user)
+
+
+@router.post("/tasks/{task_id}/reject-delivery")
+def reject_delivery(
+    task_id: int, body: RejectIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden()
+    # TASK-033 驳回上限：超过后禁止再单方驳回，须验收或发起纠纷仲裁（防无限返工变相欠薪）
+    if task.reject_count >= settings.MAX_REJECT_ROUNDS:
+        raise conflict(
+            f"已达驳回上限（{settings.MAX_REJECT_ROUNDS} 次），请验收或发起纠纷仲裁",
+            "reject_limit_reached",
+        )
+    task.reject_count += 1
+    db.add(ProgressLog(task_id=task_id, user_id=user.id, kind="note", content=f"验收驳回：{body.reason}"))
+    service.transition(db, task, "in_progress")
+    # 通知执行者被驳回原因，避免其不知情空等（TASK-033）
+    if task.executor_id:
+        from app.modules.notification.service import notify
+
+        notify(db, task.executor_id, "task", "交付被驳回",
+               f"《{task.title}》第 {task.reject_count} 次验收未通过：{body.reason[:80]}。"
+               f"剩余可驳回 {settings.MAX_REJECT_ROUNDS - task.reject_count} 次，超限后须验收或仲裁。")
+    return dump_task(task, user)
+
+
+def _complete_task(db: Session, task: Task) -> None:
+    """验收通过：放款（SC-005）→ 完成 → 信用更新 → task.completed 事件（经验入库等）。
+
+    RISK-003：同对手方短期高频闭环判定为刷单嫌疑 —— 正常放款（资金无损），
+    但不累计信用与完成单数，并自动生成风控工单进入人审队列。
+    """
+    from app.modules.risk import service as risk
+
+    contract = db.query(Contract).filter(Contract.task_id == task.id).first()
+    if contract:
+        contract_service.release(db, contract)
+    task.completed_at = utcnow()
+    suspicious = bool(
+        task.executor_id and risk.is_suspicious_pair(db, task.creator_id, task.executor_id)
+    )
+    service.transition(db, task, "completed")
+    if task.executor_id:
+        if suspicious:
+            risk.flag_pair(db, task)
+        else:
+            credit.record_task_completed(db, task.executor_id)
+
+
+@router.post("/tasks/jobs/remind-stale-recruits")
+def run_remind_stale_recruits(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                              __=Depends(job_slot("stale_recruit_reminders"), scope="function")):
+    """AI-DEC-023（320 号 spec）招募超过 3 天没人报名时提醒发单人（同一单每 3 天最多一次）。"""
+    from app.modules.task.stale import remind_stale_recruits
+
+    return remind_stale_recruits(db)
+
+
+@router.post("/tasks/jobs/deadline-alerts")
+def run_deadline_alerts(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("deadline_alerts"), scope="function")):
+    """AI-DEC-022 逾期预警 job。"""
+    from app.modules.decompose.resilience import deadline_alerts
+
+    return {"alerted": deadline_alerts(db, utcnow())}
+
+
+@router.post("/tasks/jobs/settle-reviews")
+def run_settle_reviews(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("settle_reviews"), scope="function")):
+    """CRED-002 评价窗口结算 job：窗口到期的未入账评分统一聚合并公开，
+    保证即使无人读取，评分也会在窗口到期后按时入账（真双盲的兜底结算）。"""
+    cutoff = utcnow() - timedelta(days=settings.REVIEW_WINDOW_DAYS)
+    expired_task_ids = [
+        t.id for t in db.query(Task).filter(
+            Task.status == "completed", Task.completed_at <= cutoff
+        )
+    ]
+    settled = 0
+    if expired_task_ids:
+        pending = db.query(Review).filter(
+            Review.task_id.in_(expired_task_ids), Review.rating_applied.is_(False)
+        ).all()
+        _settle_reviews(db, pending)
+        settled = len(pending)
+    return {"settled": settled}
+
+
+@router.post("/tasks/jobs/expire-tasks")
+def run_expire_tasks(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("expire_tasks"), scope="function")):
+    """TASK-015 过期任务自动下架：已发布但过了截止时间仍无人成交的任务自动关闭。
+
+    发布时校验了 deadline 必须在未来，但发布后从不执行——僵尸挂单会永远占据广场。
+    此 job 把过期未成交的 published 任务转 cancelled，并通知发布者与全部待处理报名者。
+    """
+    now = utcnow()
+    rows = (
+        db.query(Task)
+        .filter(Task.status == "published", Task.deadline.isnot(None), Task.deadline <= now)
+        .all()
+    )
+    from app.modules.notification.service import notify
+
+    for task in rows:
+        service.transition(db, task, "cancelled", {"cancelled_by": "system_expired"})
+        notify(db, task.creator_id, "task", "任务已过期下架",
+               f"《{task.title}》已过截止时间仍无人成交，已自动下架，可重新发布。")
+        apps = db.query(Application).filter(
+            Application.task_id == task.id, Application.status == "pending"
+        ).all()
+        for a in apps:
+            a.status = "rejected"
+            db.add(a)
+            notify(db, a.applicant_id, "task", "报名的任务已下架",
+                   f"《{task.title}》已过期下架，你的报名已自动关闭。")
+    return {"expired": len(rows)}
+
+
+@router.post("/tasks/jobs/auto-accept")
+def run_auto_accept(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("auto_accept"), scope="function")):
+    """TASK-031 超时自动验收（生产为定时任务，这里同时暴露为可调用 job）。"""
+    cutoff = utcnow() - timedelta(days=settings.AUTO_ACCEPT_DAYS)
+    rows = (
+        db.query(Task)
+        .filter(Task.status == "pending_acceptance", Task.delivered_at <= cutoff)
+        .all()
+    )
+    for task in rows:
+        _complete_task(db, task)
+    return {"auto_accepted": len(rows)}
+
+
+@router.post("/tasks/jobs/remind-acceptance")
+def run_remind_acceptance(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+        __=Depends(job_slot("remind_acceptance"), scope="function")):
+    """NTF-063 自动放款前的最后一次提醒（75 号 spec）。
+
+    交付时那条「请在 N 天内验收」是**开始时的闹钟**：三天里没有任何一句
+    「还有几小时」，然后钱就放给对方了，而放款不可逆。
+
+    提前量按 `AUTO_ACCEPT_DAYS / 4` 算，**不写死小时数**：天数是可配置的，
+    写死「到期前 18 小时」在把它调成 1 天的部署里几乎没有提前量。
+    这是 DSPC-012 硬编码 48 小时的同类错误，`remind_response` 已经犯过一次。
+    """
+    from app.modules.notification.service import notify
+
+    now = utcnow()
+    days = settings.AUTO_ACCEPT_DAYS
+    lead = timedelta(days=days) / 4
+    rows = (
+        db.query(Task)
+        .filter(Task.status == "pending_acceptance",
+                Task.delivered_at.isnot(None),
+                Task.acceptance_reminded.is_(False))
+        .all()
+    )
+    reminded = 0
+    for task in rows:
+        due = task.delivered_at + timedelta(days=days)
+        if now < due - lead or now >= due:
+            continue        # 还早，或者已经过线（钱都放了，再提醒只是噪音）
+        hours = max(1, int((due - now).total_seconds() // 3600))
+        notify(db, task.creator_id, "task", "验收即将到期",
+               f"任务《{task.title}》将在约 {hours} 小时后自动验收并放款给执行方。"
+               f"放款后不可撤回；如有问题请在此之前验收、驳回或发起纠纷。")
+        task.acceptance_reminded = True
+        db.add(task)
+        reminded += 1
+    return {"reminded": reminded}
+
+
+# ---------- 取消（TASK-026 / SC-006）----------
+@router.post("/tasks/{task_id}/cancel")
+def cancel_task(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    task = _get_task(db, task_id)
+    if user.id not in (task.creator_id, task.executor_id):
+        raise forbidden()
+    if task.status == "pending_acceptance":
+        raise conflict("待验收阶段不可单方取消，请验收或发起纠纷", "not_cancellable")
+    result = {}
+    contract = db.query(Contract).filter(Contract.task_id == task.id).first()
+    if contract and contract.status not in ("cancelled", "refunded", "released", "split"):
+        result = contract_service.cancel(db, contract, user.id)
+        # 托管后执行者违约取消 → 信用惩罚（CRED-004）
+        if result.get("cancelled_by") == "executor":
+            credit.adjust_credit(db, user.id, credit.CREDIT_CANCEL_PENALTY)
+    service.transition(db, task, "cancelled", {"cancelled_by": result.get("cancelled_by", "")})
+    return {"task": dump_task(task, user), **result}
+
+
+# ---------- 双向评价（TASK-034 / CRED-002）----------
+@router.post("/tasks/{task_id}/reviews", status_code=201)
+def create_review(
+    task_id: int, body: ReviewIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
+    task = _get_task(db, task_id)
+    if task.status != "completed":
+        raise conflict("任务完成后才能评价", "not_completed")
+    if user.id not in (task.creator_id, task.executor_id):
+        raise forbidden()
+    # CRED-002 评价窗口：结项后 N 天内可评，到期不可补评（业界惯例）
+    if task.completed_at and utcnow() > task.completed_at + timedelta(days=settings.REVIEW_WINDOW_DAYS):
+        raise conflict("评价期已过", "review_window_closed")
+    target_id = task.executor_id if user.id == task.creator_id else task.creator_id
+    dup = db.query(Review).filter(Review.task_id == task_id, Review.reviewer_id == user.id).first()
+    if dup:
+        raise conflict("已评价过", "already_reviewed")
+    review = Review(
+        task_id=task_id, reviewer_id=user.id, target_id=target_id,
+        stars=body.stars, tags=body.tags, comment=body.comment,
+    )
+    db.add(review)
+    db.flush()
+    # CRED-002 真双盲：评分聚合延迟到公开时点，避免对方通过 rating_avg/信用分变化
+    # 反推我打了几星后在窗口内报复。此处仅在双方都评完时才结算两条。
+    rows = db.query(Review).filter(Review.task_id == task_id).all()
+    if len(rows) >= 2:
+        _settle_reviews(db, rows)
+    publish(db, "review.submitted", {"task_id": task_id, "target_id": target_id, "stars": body.stars})
+    return {"ok": True}
+
+
+def _settle_reviews(db: Session, rows: list[Review]) -> None:
+    """把尚未入账的评分聚合到目标用户（幂等：rating_applied 去重）。"""
+    for r in rows:
+        if not r.rating_applied:
+            credit.record_review(db, r.target_id, r.stars)
+            r.rating_applied = True
+            db.add(r)
+
+
+@router.get("/users/{user_id}/reviews")
+def user_reviews(
+    user_id: int,
+    limit: int = Query(default=20, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db, scope="function"),
+):
+    """CRED-006 用户收到的评价（口碑消费端）。
+
+    此前评语/标签只写不读：主页仅有 rating_avg 聚合，选人时看不到「为什么是 4.5 分」。
+    严格复用双盲揭晓规则——盲窗内（双方未评完且未到窗口期）的评价一律不返回，
+    避免绕过 /tasks/{id}/reviews 的保护从用户维度偷看。
+    """
+    rows = (
+        db.query(Review).filter(Review.target_id == user_id)
+        .order_by(Review.id.desc()).all()
+    )
+    if not rows:
+        return {"total": 0, "tag_counts": {}, "items": []}
+    task_ids = {r.task_id for r in rows}
+    tasks = {t.id: t for t in db.query(Task).filter(Task.id.in_(task_ids))}
+    counts: dict[int, int] = {}
+    for r in db.query(Review).filter(Review.task_id.in_(task_ids)):
+        counts[r.task_id] = counts.get(r.task_id, 0) + 1
+
+    now = utcnow()
+    visible = []
+    for r in rows:
+        t = tasks.get(r.task_id)
+        window_expired = bool(
+            t and t.completed_at
+            and now > t.completed_at + timedelta(days=settings.REVIEW_WINDOW_DAYS)
+        )
+        if counts.get(r.task_id, 0) >= 2 or window_expired:  # 与单任务视图同一揭晓条件
+            visible.append(r)
+
+    tag_counts: dict[str, int] = {}
+    for r in visible:
+        for tag in (r.tags or []):
+            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+    page = visible[offset:offset + limit]
+    return {
+        "total": len(visible),
+        "tag_counts": tag_counts,
+        "items": [
+            {"task_id": r.task_id, "reviewer_id": r.reviewer_id, "stars": r.stars,
+             "tags": r.tags, "comment": r.comment, "created_at": iso(r.created_at)}
+            for r in page
+        ],
+    }
+
+
+@router.get("/tasks/{task_id}/reviews")
+def list_reviews(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """双盲互评（CRED-002）：双方都评完或窗口到期前，评价只有作者本人（和管理员）
+    可见——包括对第三方隐藏，否则换个账号即可偷看，盲评失效。"""
+    task = _get_task(db, task_id)
+    rows = db.query(Review).filter(Review.task_id == task_id).all()
+    both_done = len(rows) >= 2
+    window_expired = bool(
+        task.completed_at
+        and utcnow() > task.completed_at + timedelta(days=settings.REVIEW_WINDOW_DAYS)
+    )
+    revealed = both_done or window_expired
+    # 窗口到期公开时：把单边评价补记入账（真双盲下评分同样延迟到公开时点）
+    if revealed:
+        _settle_reviews(db, rows)
+    out = []
+    for r in rows:
+        if not revealed and r.reviewer_id != user.id and not user.is_admin:
+            continue
+        out.append(
+            {"reviewer_id": r.reviewer_id, "target_id": r.target_id, "stars": r.stars,
+             "tags": r.tags, "comment": r.comment, "revealed": revealed}
+        )
+    return out

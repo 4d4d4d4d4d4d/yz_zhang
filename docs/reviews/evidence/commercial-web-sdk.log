@@ -1,0 +1,55 @@
+
+> build:web
+> npm run build -w web
+
+
+> web@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 77 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   1.07 kB │ gzip:   0.57 kB
+dist/assets/index-DLiHANYu.css    6.37 kB │ gzip:   2.18 kB
+dist/assets/index--qSww0CW.js   361.54 kB │ gzip: 110.49 kB
+✓ built in 584ms
+
+> lint
+> eslint packages/core/src web/src app
+
+
+> test
+> npm run test --workspaces --if-present
+
+
+> @platform/core@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.1 /Users/wen/Documents/ChatGPT/workdesktop/yz_zhang/packages/core
+
+
+ Test Files  4 passed (4)
+      Tests  56 passed (56)
+   Start at  01:21:22
+   Duration  149ms (transform 66%, tests 17%, import 14%, worker 4%)
+
+
+> web@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.1 /Users/wen/Documents/ChatGPT/workdesktop/yz_zhang/web
+
+
+ Test Files  15 passed (15)
+      Tests  84 passed (84)
+   Start at  01:21:23
+   Duration  2.29s (environment 43%, import 22%, tests 20%, transform 15%, worker 1%)
+
+Environment  jsdom was created 15 times · 7.39s total, 43% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
