@@ -171,6 +171,11 @@ def decide(db: Session, app_row: CertificationApplication, admin: User,
         # 两处不一致时以申请表为准——快照漂了不会放行任何人。
         user.certifications = active_certifications(db, user.id)
         db.add(user)
+    if approve:
+        # CERT-053（348 号 spec）核准后抽检：高风险资质全抽、其他按比例，交另一位审核员复看
+        from .cert_spot import maybe_sample
+
+        maybe_sample(db, app_row)
     return app_row
 
 

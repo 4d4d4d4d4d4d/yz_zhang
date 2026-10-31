@@ -47,6 +47,7 @@ api GET /api/v1/admin/audit-log/export
 api GET /api/v1/admin/audit-log/verify
 api GET /api/v1/admin/campaigns
 api GET /api/v1/admin/cert-aliases
+api GET /api/v1/admin/cert-spot-checks
 api GET /api/v1/admin/certifications
 api GET /api/v1/admin/certifications/pending
 api GET /api/v1/admin/client-errors
@@ -333,6 +334,8 @@ api POST /api/v1/admin/categories
 api POST /api/v1/admin/cert-aliases
 api POST /api/v1/admin/cert-aliases/{alias_id}/approve
 api POST /api/v1/admin/cert-aliases/{alias_id}/revoke
+api POST /api/v1/admin/cert-spot-checks/{spot_id}/confirm
+api POST /api/v1/admin/cert-spot-checks/{spot_id}/overturn
 api POST /api/v1/admin/certifications/{application_id}/decide
 api POST /api/v1/admin/certifications/{application_id}/revoke
 api POST /api/v1/admin/cities
@@ -803,6 +806,7 @@ sdk captchaConfig
 sdk categories
 sdk categoryDemand
 sdk certAliases
+sdk certSpotChecks
 sdk changeDayShift
 sdk changeOrders
 sdk changePassword
@@ -821,6 +825,7 @@ sdk claimVerificationOrder
 sdk clarify
 sdk cockpit
 sdk commentContent
+sdk confirmCertSpotCheck
 sdk confirmContractHandover
 sdk confirmContribution
 sdk confirmDecomposition
@@ -1035,6 +1040,7 @@ sdk openDirect
 sdk openDispute
 sdk openVerificationOrders
 sdk organizationRecords
+sdk overturnCertSpotCheck
 sdk ownSpace
 sdk packFeedback
 sdk pauseMySupport

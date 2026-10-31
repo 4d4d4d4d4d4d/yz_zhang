@@ -51,6 +51,8 @@ import type {
   ContractHandoverItem,
   CertAliasItem,
   CertAliasList,
+  CertSpotCheckItem,
+  CertSpotCheckList,
   ErrandReviewAdminItem,
   ErrandReviewItem,
   HandoverKind,
@@ -2090,6 +2092,18 @@ export class PlatformClient {
   /** SCN-213 收回（待确认或已生效的都可以） */
   revokeCertAlias(id: number) {
     return this.request<CertAliasItem>('POST', `/admin/cert-aliases/${id}/revoke`);
+  }
+  /** CERT-053 资质审核抽检列表（默认只看在等的）与每位审核员被推翻的次数 */
+  certSpotChecks(status: 'pending' | 'confirmed' | 'overturned' | 'all' = 'pending') {
+    return this.request<CertSpotCheckList>('GET', `/admin/cert-spot-checks?status=${status}`);
+  }
+  /** CERT-053 复看维持（不能复看自己审的） */
+  confirmCertSpotCheck(id: number, note = '') {
+    return this.request<CertSpotCheckItem>('POST', `/admin/cert-spot-checks/${id}/confirm`, { note });
+  }
+  /** CERT-053 复看推翻：要写理由，资质立刻撤销、通知持证人 */
+  overturnCertSpotCheck(id: number, note: string) {
+    return this.request<CertSpotCheckItem>('POST', `/admin/cert-spot-checks/${id}/overturn`, { note });
   }
   /** SCN-219 被发单拦截挡下：写一句说明申请人工复核（title / description 要与被拦的一字不差） */
   requestErrandReview(title: string, description: string, explanation: string) {

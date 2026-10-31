@@ -475,6 +475,34 @@ export interface ErrandReviewAdminItem extends ErrandReviewItem {
   /** SCN-220 在等、且已超过时限 */
   overdue: boolean;
 }
+/** CERT-053（348 号 spec）资质审核抽检的一条 */
+export interface CertSpotCheckItem {
+  id: number;
+  application_id: number;
+  user_id: number;
+  name: string;
+  reviewer_id: number;
+  /** 原审核员昵称；复看后返回的单条里为空 */
+  reviewer_nickname: string;
+  /** high_risk（高风险资质全抽）/ random（按比例抽到） */
+  reason: string;
+  status: 'pending' | 'confirmed' | 'overturned';
+  checked_by: number | null;
+  note: string;
+  created_at: string;
+  checked_at: string | null;
+}
+export interface CertSpotReviewerStat {
+  reviewer_id: number;
+  nickname: string;
+  sampled: number;
+  overturned: number;
+}
+export interface CertSpotCheckList {
+  items: CertSpotCheckItem[];
+  /** 每位审核员被抽了多少、被推翻多少（推翻多的在前） */
+  reviewers: CertSpotReviewerStat[];
+}
 export interface ContractDeliverable {
   id: number;
   kind: 'preview' | 'original';

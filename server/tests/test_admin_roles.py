@@ -53,6 +53,9 @@ ROUTE_ROLES = {
     "POST /admin/cert-aliases": ('ops',),
     "POST /admin/cert-aliases/{alias_id}/approve": ('ops',),
     "POST /admin/cert-aliases/{alias_id}/revoke": ('ops',),
+    "GET /admin/cert-spot-checks": ('compliance',),                      # CERT-053（348 号 spec）资质审核抽检
+    "POST /admin/cert-spot-checks/{spot_id}/confirm": ('compliance',),
+    "POST /admin/cert-spot-checks/{spot_id}/overturn": ('compliance',),
     "GET /admin/errand-reviews": ('ops',),                               # SCN-219（336 号 spec）发单拦截的人工复核
     "POST /admin/errand-reviews/{review_id}/approve": ('ops',),
     "POST /admin/errand-reviews/{review_id}/reject": ('ops',),

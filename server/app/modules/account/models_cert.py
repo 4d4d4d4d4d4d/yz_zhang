@@ -64,3 +64,24 @@ class CertAlias(Base):
     approved_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class CertSpotCheck(Base):
+    """CERT-053（348 号 spec）资质审核抽检：核准后按比例（高风险资质全部）抽一份给另一位审核员复看。
+
+    资质一核准就生效，抽检是事后的第二双眼：维持就结束；推翻就撤销资质、通知持证人。
+    每位审核员被抽到多少、被推翻多少，后台看得到——放水不再只能靠事后翻审计日志。"""
+
+    __tablename__ = "cert_spot_checks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    application_id: Mapped[int] = mapped_column(Integer, unique=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)          # 持证人
+    name: Mapped[str] = mapped_column(String(30))
+    reviewer_id: Mapped[int] = mapped_column(Integer, index=True)       # 原审核员
+    reason: Mapped[str] = mapped_column(String(12))                     # high_risk / random
+    status: Mapped[str] = mapped_column(String(12), default="pending", index=True)   # pending / confirmed / overturned
+    checked_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    note: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

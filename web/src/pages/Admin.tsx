@@ -16,6 +16,7 @@ import { useApp } from '../store';
 import { TicketImages } from './Support';
 import { ApiQuotasAdmin } from '../AdminApiQuotas';
 import { ErrandReviews } from '../ErrandReview';
+import { CertSpotChecks } from '../CertSpotChecks';
 import PhotoPicker from '../PhotoPicker';
 
 type Metrics = {
@@ -108,6 +109,7 @@ export default function Admin() {
       {see('skills') && <SkillConceptsAdmin />}
       {see('teams') && <TeamVerifyQueue />}
       {see('certifications') && <CertificationQueue />}
+      {see('certifications') && <CertSpotChecks />}
       {see('uploads') && <UploadQueue />}
       {see('tickets') && <TicketQueue />}
       {see('reports') && <div className="card" aria-label="举报处置">
