@@ -484,7 +484,7 @@ export interface CertSpotCheckItem {
   reviewer_id: number;
   /** 原审核员昵称；复看后返回的单条里为空 */
   reviewer_nickname: string;
-  /** high_risk（高风险资质全抽）/ random（按比例抽到） */
+  /** high_risk（高风险资质全抽）/ new_reviewer（新审核员全抽）/ watch（重点看的审核员）/ random（按比例抽到） */
   reason: string;
   status: 'pending' | 'confirmed' | 'overturned';
   checked_by: number | null;
@@ -497,6 +497,8 @@ export interface CertSpotReviewerStat {
   nickname: string;
   sampled: number;
   overturned: number;
+  /** CERT-054 new（核准不满 20 份，全抽）/ watch（被推翻两成以上，抽五成）/ normal */
+  grade: 'new' | 'watch' | 'normal';
 }
 export interface CertSpotCheckList {
   items: CertSpotCheckItem[];

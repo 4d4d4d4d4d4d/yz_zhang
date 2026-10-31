@@ -12,7 +12,7 @@ const ME = { id: 2, phone: '138****0002', nickname: '合规乙', bio: '', city: 
 const ITEM = { id: 5, application_id: 40, user_id: 9, name: '驾驶证（三年以上驾龄）', reviewer_id: 3, reviewer_nickname: '合规甲',
   reason: 'high_risk', status: 'pending', checked_by: null, note: '', created_at: '2026-10-31T00:00:00Z', checked_at: null };
 const LIST = { items: [ITEM, { ...ITEM, id: 6, application_id: 41, reviewer_id: 2, reviewer_nickname: '合规乙', reason: 'random' }],
-  reviewers: [{ reviewer_id: 3, nickname: '合规甲', sampled: 4, overturned: 1 }] };
+  reviewers: [{ reviewer_id: 3, nickname: '合规甲', sampled: 4, overturned: 1, grade: 'watch' }] };
 type Call = { method: string; path: string; body?: Record<string, unknown> };
 
 function open(calls: Call[]) {
@@ -34,7 +34,7 @@ describe('CERT-053 资质抽检', () => {
     const calls: Call[] = [];
     open(calls);
     const box = await screen.findByLabelText('资质抽检', {}, { timeout: 3000 });
-    expect(box.textContent).toContain('合规甲 抽 4 推翻 1');
+    expect(box.textContent).toContain('合规甲（重点看） 抽 4 推翻 1');   // CERT-054 分级写出来
     expect(box.textContent).toContain('高风险资质全抽');
     const mine = within(box).getByText(/申请 #41/).closest('li')!;
     expect(within(mine).queryByText('维持')).toBeNull();

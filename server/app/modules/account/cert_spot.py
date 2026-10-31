@@ -7,6 +7,8 @@
 - 抽到的给另一位合规审核员复看：维持就结束；推翻要写理由，资质立刻撤销、通知持证人、进审计。
 - 原审核员不能复看自己审的。每位审核员被抽了多少、被推翻多少，列表里一起给出。
 - 抽检不拦已生效的资质（准入照常），只是事后复核。
+- CERT-054（350 号 spec）审核员分级：新审核员（核准不满 20 份）的核准全部抽；复看过至少 5 份、被推翻两成以上的
+  审核员列入「重点看」，抽检比例提到五成。新人和放水多的人最需要第二双眼。
 """
 from __future__ import annotations
 
@@ -28,6 +30,10 @@ from .models_cert import CertificationApplication, CertSpotCheck
 router = APIRouter(tags=["admin"])
 
 SPOT_CHECK_RATE = 0.1
+NEW_REVIEWER_APPROVALS = 20     # CERT-054 核准不满这么多份的算新审核员，全抽
+WATCH_MIN_CHECKED = 5           # 复看过至少这么多份才算推翻率
+WATCH_OVERTURN_RATE = 0.2       # 推翻率到这个数列入「重点看」
+WATCH_SPOT_RATE = 0.5
 
 
 def high_risk_certs() -> set[str]:
@@ -36,16 +42,41 @@ def high_risk_certs() -> set[str]:
     return {ts.MINOR_CARE_CERT, ts.DRIVER_CERT, ts.CAREGIVER_CERT, ts.ELECTRICIAN_CERT, ts.HEIGHT_WORK_CERT, ts.LOCKSMITH_CERT}
 
 
-def _sampled(application_id: int) -> bool:
+def _sampled(application_id: int, rate: float | None = None) -> bool:
     h = hashlib.sha256(f"{settings.JWT_SECRET}:cert-spot:{application_id}".encode()).digest()
-    return int.from_bytes(h[:4], "big") / 2 ** 32 < SPOT_CHECK_RATE
+    return int.from_bytes(h[:4], "big") / 2 ** 32 < (SPOT_CHECK_RATE if rate is None else rate)
+
+
+def reviewer_grade(db: Session, reviewer_id: int) -> str:
+    """CERT-054 new（核准不满 20 份）/ watch（复看过 ≥5 份、被推翻 ≥20%）/ normal。
+
+    核准份数按审计记录数（撤销会改写申请上的 decided_by，审计不会）；核准当下这一份的审计还没写，所以抽检时
+    数的是「之前」的份数：第 1~20 份都算新人。"""
+    from app.modules.admin.models import AdminAudit
+
+    approvals = (db.query(AdminAudit.id)
+                 .filter(AdminAudit.admin_id == reviewer_id, AdminAudit.action == "certification_decide",
+                         AdminAudit.detail.like("通过%")).count())
+    if approvals < NEW_REVIEWER_APPROVALS:
+        return "new"
+    checked = (db.query(CertSpotCheck.status)
+               .filter(CertSpotCheck.reviewer_id == reviewer_id, CertSpotCheck.status != "pending").all())
+    over = sum(1 for (st,) in checked if st == "overturned")
+    if len(checked) >= WATCH_MIN_CHECKED and over >= len(checked) * WATCH_OVERTURN_RATE:
+        return "watch"
+    return "normal"
 
 
 def maybe_sample(db: Session, row: CertificationApplication) -> CertSpotCheck | None:
     """核准后调用：高风险资质全抽，其他按比例抽。已经抽过的不重复。"""
     if row.status != "approved" or row.decided_by is None:
         return None
-    reason = "high_risk" if row.name in high_risk_certs() else ("random" if _sampled(row.id) else "")
+    if row.name in high_risk_certs():
+        reason = "high_risk"
+    else:
+        grade = reviewer_grade(db, row.decided_by)
+        reason = ("new_reviewer" if grade == "new" else "watch" if grade == "watch" and _sampled(row.id, WATCH_SPOT_RATE)
+                  else "random" if _sampled(row.id) else "")
     if not reason or db.query(CertSpotCheck.id).filter(CertSpotCheck.application_id == row.id).first():
         return None
     s = CertSpotCheck(application_id=row.id, user_id=row.user_id, name=row.name, reviewer_id=row.decided_by,
@@ -78,7 +109,7 @@ def list_spot_checks(status: str = Query(default="pending", pattern="^(pending|c
     ids = {r.reviewer_id for r in rows} | set(stats)
     names = {u.id: u.nickname for u in db.query(User).filter(User.id.in_(ids or [-1]))}
     return {"items": [spot_row(r, names) for r in rows],
-            "reviewers": [{"reviewer_id": rid, "nickname": names.get(rid, ""), **x}
+            "reviewers": [{"reviewer_id": rid, "nickname": names.get(rid, ""), **x, "grade": reviewer_grade(db, rid)}
                           for rid, x in sorted(stats.items(), key=lambda kv: (-kv[1]["overturned"], kv[0]))]}
 
 

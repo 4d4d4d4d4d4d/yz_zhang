@@ -3,7 +3,8 @@ import { apiErrorText, type CertSpotCheckList } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from './store';
 
-const REASON: Record<string, string> = { high_risk: '高风险资质全抽', random: '按比例抽到' };
+const REASON: Record<string, string> = { high_risk: '高风险资质全抽', new_reviewer: '新审核员全抽', watch: '重点看的审核员', random: '按比例抽到' };
+const GRADE: Record<string, string> = { new: '新人', watch: '重点看', normal: '' };
 
 export function CertSpotChecks() {
   const { client, me } = useApp();
@@ -26,7 +27,7 @@ export function CertSpotChecks() {
       <h3>资质抽检（{view.items.length} 条待复看）</h3>
       <p className="muted">资质核准即生效；这里是第二双眼。不能复看自己审的；推翻要写理由，资质立刻撤销并通知持证人。</p>
       {reviewers.length > 0 && (
-        <p className="muted">审核员被抽检：{reviewers.map((r) => `${r.nickname || `#${r.reviewer_id}`} 抽 ${r.sampled} 推翻 ${r.overturned}`).join('；')}</p>
+        <p className="muted">审核员被抽检：{reviewers.map((r) => `${r.nickname || `#${r.reviewer_id}`}${GRADE[r.grade] ? `（${GRADE[r.grade]}）` : ''} 抽 ${r.sampled} 推翻 ${r.overturned}`).join('；')}</p>
       )}
       <ul>
         {view.items.map((s) => (

@@ -33,6 +33,7 @@ def test_high_risk_certs_are_always_sampled_and_a_second_reviewer_confirms(clien
     from tests.test_client_shape_alignment import _assert_shape
 
     monkeypatch.setattr(cert_spot, "SPOT_CHECK_RATE", 0.0)
+    monkeypatch.setattr(cert_spot, "NEW_REVIEWER_APPROVALS", 0)   # 本条只看高风险与比例；新审核员全抽另有一条
     a, b = _admin(client, "13600003751", ["compliance"]), _admin(client, "13600003752", ["compliance"])
     w = make_verified(client, "13600003753")
     app_id = _approve(client, a, w, DRIVER_CERT)
@@ -81,6 +82,7 @@ def test_random_sampling_rate_and_who_can_see_it(client, monkeypatch):
     a = _admin(client, "13600003758", ["compliance"])
     ops = _admin(client, "13600003759", ["ops"])
     monkeypatch.setattr(cert_spot, "SPOT_CHECK_RATE", 1.0)
+    monkeypatch.setattr(cert_spot, "NEW_REVIEWER_APPROVALS", 0)
     app_id = _approve(client, a, make_verified(client, "13600003760"), "健身教练证")
     items = client.get(S, headers=auth(a)).json()["items"]
     assert [(x["application_id"], x["reason"]) for x in items] == [(app_id, "random")], "按比例抽到的标 random"
@@ -96,3 +98,28 @@ def test_random_sampling_rate_and_who_can_see_it(client, monkeypatch):
     picks = [cert_spot._sampled(i) for i in range(1, 2001)]
     assert 100 < sum(picks) < 300, "约一成"
     assert picks == [cert_spot._sampled(i) for i in range(1, 2001)], "同一份申请结果固定"
+
+
+def test_cert054_new_reviewers_are_fully_sampled_and_often_overturned_ones_are_watched(client, monkeypatch):
+    """CERT-054（350 号 spec）新审核员（核准不满 NEW_REVIEWER_APPROVALS 份）全抽；被推翻两成以上的抽五成。"""
+    monkeypatch.setattr(cert_spot, "SPOT_CHECK_RATE", 0.0)
+    monkeypatch.setattr(cert_spot, "NEW_REVIEWER_APPROVALS", 2)
+    monkeypatch.setattr(cert_spot, "WATCH_MIN_CHECKED", 2)
+    a, b = _admin(client, "13600003762", ["compliance"]), _admin(client, "13600003763", ["compliance"])
+    for i in range(3):   # 驳回不算核准份数：只驳回过的仍是新人
+        rid = apply_cert(client, make_verified(client, f"1360000378{i}"), name="健身教练证").json()["id"]
+        client.post(f"{API}/admin/certifications/{rid}/decide", json={"approve": False, "reason": "照片看不清"}, headers=auth(a))
+    ids = [_approve(client, a, make_verified(client, f"1360000377{i}"), "健身教练证") for i in range(3)]
+    items = {x["application_id"]: x for x in client.get(f"{S}?status=all", headers=auth(b)).json()["items"]}
+    assert [items[i]["reason"] for i in ids[:2]] == ["new_reviewer", "new_reviewer"], "新人前两份全抽"
+    assert ids[2] not in items, "满了以后按比例（这里为 0）"
+    grades = {x["reviewer_id"]: x["grade"] for x in client.get(f"{S}?status=all", headers=auth(b)).json()["reviewers"]}
+    assert grades[a["id"]] == "normal"
+    for i in ids[:2]:
+        client.post(f"{S}/{items[i]['id']}/overturn", json={"note": "证号查不到"}, headers=auth(b))
+    grades = {x["reviewer_id"]: x["grade"] for x in client.get(f"{S}?status=all", headers=auth(b)).json()["reviewers"]}
+    assert grades[a["id"]] == "watch", "被推翻多的列入重点看"
+    monkeypatch.setattr(cert_spot, "WATCH_SPOT_RATE", 1.0)
+    nxt = _approve(client, a, make_verified(client, "13600003779"), "健身教练证")
+    items = {x["application_id"]: x for x in client.get(f"{S}?status=all", headers=auth(b)).json()["items"]}
+    assert items[nxt]["reason"] == "watch", "重点看的审核员按更高比例抽"
