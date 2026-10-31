@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 344 | 发单拦下未经授权的 AI 声音克隆 | [344-voice-clone-guard.md](./344-voice-clone-guard.md) | P0 |
 | 343 | 第二十八轮场景发掘：配音、私房烘焙 | [343-scenario-round-28.md](./343-scenario-round-28.md) | P0 |
 | 342 | 第二十七轮场景发掘：宠物洗护、代办年检，拦下年检包过 | [342-scenario-round-27.md](./342-scenario-round-27.md) | P0 |
 | 341 | 第二十六轮场景发掘：住院护工、家电上门维修 | [341-scenario-round-26.md](./341-scenario-round-26.md) | P0 |

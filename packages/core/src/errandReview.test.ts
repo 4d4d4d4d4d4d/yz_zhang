@@ -13,6 +13,7 @@ describe('SCN-219 发单拦截的人工复核', () => {
     expect(canRequestErrandReview('errand_restricted')).toBe(true);
     expect(canRequestErrandReview('fake_traffic')).toBe(true);
     expect(canRequestErrandReview('fake_inspection')).toBe(true);   // SCN-231（342 号 spec）
+    expect(canRequestErrandReview('voice_clone')).toBe(true);       // SCN-234（344 号 spec）
     expect(canRequestErrandReview('k12_tutoring_not_allowed')).toBe(false);
     expect(canRequestErrandReview('content_rejected')).toBe(false);
     expect(canRequestErrandReview(undefined)).toBe(false);
