@@ -86,7 +86,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「宠物美容」「代办年检」——第二十七轮场景发掘（342 号 spec，V369）；代办年检要开别人的车，要审核通过的驾驶证
                     {"name": "宠物美容"}, {"name": "代办年检", "required_cert": DRIVER_CERT},
                     # 「配音」「私房烘焙」——第二十八轮场景发掘（343 号 spec，V370）；私房烘焙要经营许可（或小作坊登记）与健康证明
-                    {"name": "配音"}, {"name": "私房烘焙", "required_cert": BAKERY_CERT, "extra_certs": [HEALTH_CERT]}]
+                    {"name": "配音"}, {"name": "私房烘焙", "required_cert": BAKERY_CERT, "extra_certs": [HEALTH_CERT]},
+                    # 「地推传单」「汽车贴膜」——第二十九轮场景发掘（345 号 spec，V372）
+                    {"name": "地推传单"}, {"name": "汽车贴膜"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
