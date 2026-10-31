@@ -19,6 +19,8 @@
 - SCN-234（344 号 spec）：未经本人授权用 AI 克隆、复刻某个人的声音。自然人的声音参照肖像权保护（《民法典》
   第一千零二十三条），2024 年北京互联网法院判了全国首例 AI 生成声音人格权侵权案。克隆自己的声音、写明已取得
   本人授权的、真人按风格配音的不在此列。
+- SCN-243（351 号 spec）：帮人篡改里程表（调表）。调表卖车是欺诈（《消费者权益保护法》第五十五条），
+  也是二手车交易里最常见的坑。请人帮忙核对里程、识别调表（二手车陪验）不在此列。
 - SCN-218（335 号 spec）：刷粉刷量、买卖租借账号。网信办「清朗」系列专项行动持续打击流量造假、网络水军、
   批量账号与账号买卖，并要求「一人一号、一企两号」。做内容、投正规广告涨粉不在此列。
 
@@ -58,6 +60,24 @@ FAKE_PASS = re.compile(r"包过|保过|包通过|不上线|不用上线|不验�
 # 克隆自己的声音、写明取得本人授权的放行
 VOICE_CLONE = re.compile(r"(?:克隆|复刻|仿制)[^。；\n]{0,10}(?:声音|嗓音|声线|音色)|(?:声音|嗓音|声线|音色)[^。；\n]{0,4}(?:克隆|复刻)")
 OWN_OR_AUTHORIZED = re.compile(r"(?:我|自己|本人)(?:自己)?的(?:声音|嗓音|声线|音色)|本人授权|本人同意|经授权|已授权|授权书|取得授权|获得授权")
+# SCN-243 篡改里程表：「调 / 改 / 篡改……里程 / 公里数 / 码表」或「里程……调回 / 改小 / 清零」；俚语「调表 / 改表」
+# 只在说到车的时候算（「帮我调表」也可能是调手表）。前面是「警惕 / 防止 / 查 / 有没有 / 怀疑」这类识别说法的不算
+ODO_DIRECT = re.compile(r"(?:调|改|修改|篡改|改小|调小|往回调)[^。；\n]{0,3}(?:里程|公里数|码表)|"
+                        r"(?:里程|公里数|码表)[^。；\n]{0,4}(?:调回|改回|调小|改小|往回调|清零)")
+ODO_SLANG = re.compile(r"调表|改表|调码表")
+CAR_CONTEXT = re.compile(r"车|里程|公里|仪表|码表")
+_DETECTING = re.compile(r"(?:警惕|防止|防|识别|鉴别|查|看看|是否|有没有|有无|怀疑|检测)[^。；;，,！!？?\n]{0,4}$")
+
+
+def _odometer(t: str) -> bool:
+    for pat in ([ODO_DIRECT, ODO_SLANG] if CAR_CONTEXT.search(t) else [ODO_DIRECT]):
+        for m in pat.finditer(t):
+            before = t[max(0, m.start() - 6):m.start()]
+            if not _NEGATED.search(before) and not _DETECTING.search(before):
+                return True
+    return False
+
+
 # 命中词前面 6 个字以内有否定词、且中间没有句读断开的不算：「不代写学位论文」「不是代写，只要润色」
 # 「不刷单」「不刷粉刷量」（顿号、并列不算断开）；「不想自己写，代写毕业论文」中间有逗号，照拦
 _NEGATED = re.compile(r"(?:不|禁止|严禁|拒绝|非)[^。；;，,！!？?\n]{0,4}$")
@@ -86,6 +106,8 @@ def restricted_errand(text: str) -> str | None:
         return "fake_inspection"
     if _affirmed(VOICE_CLONE, t) and not OWN_OR_AUTHORIZED.search(t):
         return "voice_clone"
+    if _odometer(t):
+        return "odometer_fraud"
     return None
 
 
@@ -169,4 +191,10 @@ def _raise_for(kind: str) -> None:
             "平台不承接没有本人授权的 AI 声音克隆：能听出是谁的声音就受法律保护，未经同意克隆、复刻会构成侵权。"
             "可以发「配音」单请真人按风格来；克隆你自己的声音，或者已经取得本人书面授权的，在说明里写清楚再发。",
             "voice_clone",
+        )
+    if kind == "odometer_fraud":
+        raise bad_request(
+            "平台不承接篡改里程表（调表）：把里程调小再卖车是欺诈，买家可以要求三倍赔偿，帮忙调的人也脱不了干系。"
+            "想买二手车怕被坑，可以发「二手车陪验」单请人帮你核对里程、识别调表。",
+            "odometer_fraud",
         )

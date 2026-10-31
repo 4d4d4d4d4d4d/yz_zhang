@@ -6,6 +6,8 @@ export const ERRAND_REVIEW_CODES = [
   'errand_restricted', 'unlicensed_driving_practice', 'academic_ghostwriting', 'fake_review', 'fake_traffic',
   // SCN-231（342 号 spec）、SCN-234（344 号 spec）
   'fake_inspection', 'voice_clone',
+  // SCN-243（351 号 spec）
+  'odometer_fraud',
 ] as const;
 
 export const ERRAND_REVIEW_MIN_EXPLANATION = 6;
