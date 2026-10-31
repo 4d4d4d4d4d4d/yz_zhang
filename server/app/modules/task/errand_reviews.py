@@ -34,6 +34,7 @@ EXPLANATION_MIN = 6
 KIND_LABEL = {
     "rx": "代开处方药", "resale": "倒卖号源门票", "learner": "无证陪练学车",
     "ghostwrite": "代写学位论文代考", "fake_review": "刷单虚假评价", "fake_traffic": "刷粉刷量买卖账号",
+    "fake_inspection": "年检包过不上线",
 }
 
 

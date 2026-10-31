@@ -80,7 +80,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「派对布置」「除甲醛治理」——第二十五轮场景发掘（339 号 spec，V366）
                     {"name": "派对布置"}, {"name": "除甲醛治理"},
                     # 「住院护工」「家电维修」——第二十六轮场景发掘（341 号 spec，V368）
-                    {"name": "住院护工", "required_cert": CAREGIVER_CERT}, {"name": "家电维修"}]
+                    {"name": "住院护工", "required_cert": CAREGIVER_CERT}, {"name": "家电维修"},
+                    # 「宠物美容」「代办年检」——第二十七轮场景发掘（342 号 spec，V369）；代办年检要开别人的车，要审核通过的驾驶证
+                    {"name": "宠物美容"}, {"name": "代办年检", "required_cert": DRIVER_CERT}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 

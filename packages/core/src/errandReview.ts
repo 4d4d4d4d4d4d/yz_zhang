@@ -4,6 +4,8 @@ import type { ErrandReviewItem } from './types';
 /** 这几类拦截只看文字、会误拦：挡下时给「申请人工复核」。金融、学科类家教这类业务红线不在其中。 */
 export const ERRAND_REVIEW_CODES = [
   'errand_restricted', 'unlicensed_driving_practice', 'academic_ghostwriting', 'fake_review', 'fake_traffic',
+  // SCN-231（342 号 spec）
+  'fake_inspection',
 ] as const;
 
 export const ERRAND_REVIEW_MIN_EXPLANATION = 6;
