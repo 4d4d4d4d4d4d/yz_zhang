@@ -88,7 +88,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「配音」「私房烘焙」——第二十八轮场景发掘（343 号 spec，V370）；私房烘焙要经营许可（或小作坊登记）与健康证明
                     {"name": "配音"}, {"name": "私房烘焙", "required_cert": BAKERY_CERT, "extra_certs": [HEALTH_CERT]},
                     # 「地推传单」「汽车贴膜」——第二十九轮场景发掘（345 号 spec，V372）
-                    {"name": "地推传单"}, {"name": "汽车贴膜"}]
+                    {"name": "地推传单"}, {"name": "汽车贴膜"},
+                    # 「上门宴席」「网店客服」——第三十轮场景发掘（346 号 spec，V373）；办宴席要健康证明
+                    {"name": "上门宴席", "required_cert": HEALTH_CERT}, {"name": "网店客服"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
