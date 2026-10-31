@@ -38,6 +38,8 @@ LOCKSMITH_CERT = "开锁备案证明"
 ELECTRICIAN_CERT = "低压电工作业操作证"
 # SCN-227（341 号 spec）医疗护理员培训合格后上岗（国家卫生健康委等 2019 年通知）；住院护工类目要审核通过的证明
 CAREGIVER_CERT = "医疗护理员培训合格证明"
+# SCN-233（343 号 spec）卖食品要有食品经营许可或当地的小作坊登记（《食品安全法》第三十五条），另要健康证明（第四十五条）
+BAKERY_CERT = "食品经营许可证或小作坊登记证"
 ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助老陪伴"},
                     {"name": "陪练看护", "required_cert": MINOR_CARE_CERT},
                     # 「翻译」——第七轮场景发掘的自由译者服务包的发单模板与去处（259 号 spec，V286）
@@ -82,7 +84,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「住院护工」「家电维修」——第二十六轮场景发掘（341 号 spec，V368）
                     {"name": "住院护工", "required_cert": CAREGIVER_CERT}, {"name": "家电维修"},
                     # 「宠物美容」「代办年检」——第二十七轮场景发掘（342 号 spec，V369）；代办年检要开别人的车，要审核通过的驾驶证
-                    {"name": "宠物美容"}, {"name": "代办年检", "required_cert": DRIVER_CERT}]
+                    {"name": "宠物美容"}, {"name": "代办年检", "required_cert": DRIVER_CERT},
+                    # 「配音」「私房烘焙」——第二十八轮场景发掘（343 号 spec，V370）；私房烘焙要经营许可（或小作坊登记）与健康证明
+                    {"name": "配音"}, {"name": "私房烘焙", "required_cert": BAKERY_CERT, "extra_certs": [HEALTH_CERT]}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
