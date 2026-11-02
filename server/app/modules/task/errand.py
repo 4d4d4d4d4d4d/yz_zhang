@@ -88,6 +88,15 @@ def _affirmed(pattern: re.Pattern, text: str) -> bool:
     return any(not _NEGATED.search(text[max(0, m.start() - 6):m.start()]) for m in pattern.finditer(text))
 
 
+# SCN-248（354 号 spec）拦截类别 → 错误码的登记表。新加一类要同时登记四处：这里、i18n、复核类别名（errand_reviews.KIND_LABEL）、
+# SDK 的可复核清单（packages/core/src/errandReview.ts）。tests/test_errand_registry.py 逐一核对，漏一处就红
+KIND_CODES = {
+    "rx": "errand_restricted", "resale": "errand_restricted", "learner": "unlicensed_driving_practice",
+    "ghostwrite": "academic_ghostwriting", "fake_review": "fake_review", "fake_traffic": "fake_traffic",
+    "fake_inspection": "fake_inspection", "voice_clone": "voice_clone", "odometer_fraud": "odometer_fraud",
+}
+
+
 def restricted_errand(text: str) -> str | None:
     t = text or ""
     if RX_DRUG.search(t):

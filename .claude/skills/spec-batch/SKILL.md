@@ -33,6 +33,8 @@ description: Run one spec-driven batch in this repo end to end — pick the next
 - 注销处置与数据导出：`app/modules/account/deletion.py`、`/users/me/export`
 - 定时任务：`app/core/jobs.py`
 - SDK 方法分诊：两端都还没调用的，进 `server/tests/test_sdk_method_triage.py`
+- 发单拦截新类别（354 号 spec）：`errand.KIND_CODES`、i18n 文案、复核类别名 `errand_reviews.KIND_LABEL`、
+  SDK `ERRAND_REVIEW_CODES` 四处一起登记，`server/tests/test_errand_registry.py` 核对
 
 ## 6. 文档
 - spec 状态改成「本批实现（V1xx）」；`docs/BACKLOG.md` 勾掉；台账（72 号）对应 ID 改成「已做」；
