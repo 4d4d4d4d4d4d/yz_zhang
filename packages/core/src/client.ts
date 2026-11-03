@@ -1,5 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
+  PublicProfileExtras,
   AmlStats,
   ConversationListItem,
   MyTeamRow,
@@ -318,7 +319,7 @@ export class PlatformClient {
     return this.request<import('./types').OwnSpace>('PUT', '/spaces/me', body);
   }
   publicProfile(userId: number) {
-    return this.request<Partial<Me>>('GET', `/users/${userId}`);
+    return this.request<Partial<Me> & PublicProfileExtras>('GET', `/users/${userId}`);
   }
 
   /** SPACE-024 合作驾驶舱：树、关键路径、预算账、预警（只给母任务发布方） */

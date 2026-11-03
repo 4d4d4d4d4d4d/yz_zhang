@@ -182,7 +182,11 @@ def _element_decl(decl: str) -> str | None:
 
 
 def _object_fields(part: str) -> dict[str, str] | None:
-    """一个类型声明对应的字段表：内联字面量，或者具名 interface。"""
+    """一个类型声明对应的字段表：内联字面量，或者具名 interface（`Partial<X>` 即 X 的字段全部可选）。"""
+    pm = re.fullmatch(r"Partial<\s*(\w+)\s*>", part.strip())
+    if pm and pm.group(1) in INTERFACES:
+        types, _ = _typed(pm.group(1))
+        return {k + "?": v for k, v in types.items()}
     inline = _inline_fields(part)
     if inline is not None:
         return inline
@@ -934,7 +938,10 @@ def test_cli083b_intersection_types_merge_their_parts():
     assert {"id", "kind", "task_id", "participants", "title", "unread_count?"} <= set(got)
     arr = _inline_fields("Array<Conversation & { title: string }>")
     assert arr is not None and "title" in arr and "participants" in arr
-    assert _inline_fields("Partial<Me> & { extra: number }") is None
+    # V390（363 号 spec）写明的行为变化：Partial<X> 现在认得（X 的字段全部可选），原来这里断言的是「读不出」
+    partial = _inline_fields("Partial<Me> & { extra: number }")
+    assert partial is not None and partial["extra"] == "number" and "nickname?" in partial and "id?" in partial
+    assert _inline_fields("Omit<Me, 'id'> & { extra: number }") is None
     assert _inline_fields("NoSuchInterface & { x: number }") is None
 
 
@@ -1004,25 +1011,63 @@ def _response_decl(method: str) -> str:
     return src[i:j - 1].strip()
 
 
-def _assert_inline_shape(payload: dict, method: str):
-    """真实响应 vs SDK 的**内联**响应声明。三个方向与 `_assert_shape` 同一套政策。"""
-    decl = _response_decl(method)
-    elem = _element_decl(decl)
-    fields = _inline_fields(elem or decl)
-    assert fields, f"{method} 的响应声明解析不了（不是内联字面量？）：{decl[:80]}"
+def _shape_variants(decl: str) -> list[dict[str, str]]:
+    """一个响应声明可能的几种对象形状（CLI-083b，V390，363 号 spec）。
+
+    - `X | null`：去掉 null，按 X 比（值是 null 时另行放过）；
+    - `A | B`：两个对象的联合，值符合其中一种就算对；
+    - `Partial<X>`：X 的字段全部可选。
+    认不出的部分就不列为候选；一个候选都没有，调用方会报「解析不了」。
+    """
+    out: list[dict[str, str]] = []
+    for part in _split_top_level(_strip_ts_comments(decl).strip(), "|"):
+        if part in ("null", "undefined"):
+            continue
+        pm = re.fullmatch(r"Partial<\s*(\w+)\s*>", part)
+        if pm and pm.group(1) in INTERFACES:
+            types, _ = _typed(pm.group(1))
+            out.append({k + "?": v for k, v in types.items()})
+            continue
+        fields = _inline_fields(part)
+        if fields is None and part in INTERFACES:
+            fields = _object_fields(part)
+        if fields:
+            out.append(fields)
+    return out
+
+
+def _inline_problems(fields: dict[str, str], payload: dict, method: str) -> list[str]:
     declared = {k.rstrip("?"): v for k, v in fields.items()}
     optional = {k.rstrip("?") for k in fields if k.endswith("?")}
     actual = set(payload)
     missing = set(declared) - actual - optional
+    if missing:
+        return [f"{method} 声明了服务端没给的字段：{sorted(missing)}"]
     extra = actual - set(declared)
-    assert not missing, f"{method} 声明了服务端没给的字段：{sorted(missing)}"
-    assert not extra, f"服务端给了 {method} 没声明的字段（客户端看不见它）：{sorted(extra)}"
+    if extra:
+        return [f"服务端给了 {method} 没声明的字段（客户端看不见它）：{sorted(extra)}"]
     wrong = [
         f"{k}: 声明 {declared[k]}，实际 {type(v).__name__}={v!r}"
         for k, v in payload.items()
         if k in declared and not _matches(declared[k], v)
     ]
-    assert not wrong, f"{method} 的字段类型对不上：{wrong}"
+    return [f"{method} 的字段类型对不上：{wrong}"] if wrong else []
+
+
+def _assert_inline_shape(payload: dict, method: str):
+    """真实响应 vs SDK 的**内联**响应声明。三个方向与 `_assert_shape` 同一套政策。
+
+    V390 起也认 `X | null`、两个对象的联合、`Partial<X>`：值符合其中一种形状就算对。"""
+    decl = _response_decl(method)
+    target = _element_decl(decl) or decl
+    variants = _shape_variants(target)
+    assert variants, f"{method} 的响应声明解析不了（不是内联字面量？）：{decl[:80]}"
+    if payload is None and "null" in _split_top_level(target, "|"):
+        return
+    problems = [_inline_problems(f, payload, method) for f in variants]
+    if any(not p for p in problems):
+        return
+    assert False, problems[0][0] if len(problems) == 1 else "；".join(p[0] for p in problems)
 
 
 def test_cli067_inline_shape_checker_actually_catches_a_mismatch():

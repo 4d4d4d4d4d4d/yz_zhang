@@ -521,6 +521,13 @@ export interface RecipientProgress {
   last_arrival_at: string | null;
   expires_at: string;
 }
+/** ACC-013 别人的名片页多给的三项（服务定价、可接单时间、在不在接单）。档案不公开、已注销或封禁时不给。
+ *  CLI-083b（363 号 spec）：服务端一直在给，此前 SDK 只声明了 Partial<Me>，客户端看不见 */
+export interface PublicProfileExtras {
+  service_rate_cents?: number;
+  available_times?: string;
+  accepting_orders?: boolean;
+}
 /** CERT-053（348 号 spec）资质审核抽检的一条 */
 export interface CertSpotCheckItem {
   id: number;

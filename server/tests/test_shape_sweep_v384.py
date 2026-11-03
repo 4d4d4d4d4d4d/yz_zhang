@@ -307,3 +307,112 @@ def test_content_comment_and_template_shapes(client, requester, worker):
     _assert_inline_shape(_first(comments), "contentComments")
     templates = client.get(f"{API}/knowledge/templates?category=保洁", headers=auth(requester)).json()
     _assert_inline_shape(templates, "decompositionTemplate")
+
+
+# ------------------------------------------------------------------ V390（363 号 spec）第五批：null / 联合 / Partial
+def test_agent_run_and_verification_order_shapes(client, requester):
+    from app.modules.agent.runner import set_runner
+    from tests.test_agent_delivery_closure import agent_task
+    from tests.test_agent_execution import FakeRunner, make_agent
+    from tests.test_verification_escalation import make_verifier
+
+    runner = FakeRunner()
+    set_runner(runner)
+    try:
+        admin = make_admin(client, "13800039001")
+        agent_id = make_agent(client, admin, confidence_threshold_bps=9000)
+        task, _, _ = agent_task(client, requester, admin, agent_id=agent_id)
+        runner.confidence_bps = 4000
+        r = client.post(f"{API}/tasks/{task['id']}/agent-run", headers=auth(requester))
+        assert r.status_code == 201, r.text
+        ran = r.json()
+        _assert_inline_shape(ran, "runAgent")
+        order = client.post(f"{API}/tasks/{task['id']}/verification", headers=auth(requester)).json()
+        verifier = make_verifier(client, "13800039002")
+        open_orders = client.get(f"{API}/verification-orders", headers=auth(verifier)).json()
+        _assert_inline_shape(_first(open_orders), "openVerificationOrders")
+        detail = client.get(f"{API}/verification-orders/{order['id']}", headers=auth(requester)).json()
+        _assert_shape(detail, "VerificationOrderDetail")
+        client.post(f"{API}/verification-orders/{order['id']}/claim", headers=auth(verifier))
+        out = client.post(f"{API}/verification-orders/{order['id']}/outcome",
+                          json={"outcome": "approved", "comment": "抽查三处，结论无误"}, headers=auth(verifier))
+        assert out.status_code == 200, out.text
+        outcome = out.json()
+        _assert_inline_shape(outcome, "submitVerificationOutcome")
+    finally:
+        set_runner(None)
+
+
+def test_appeal_profile_and_platform_settle_shapes(client, requester, worker):
+    from tests.conftest import topup
+    from tests.test_dispute_client_loop import open_dispute
+    from tests.test_task_flow import match_and_fund, publish_task
+
+    admin = make_admin(client, "13800039003")
+    _task, dispute = open_dispute(client, requester, worker)
+    did = dispute["id"]
+    client.post(f"{API}/disputes/{did}/statements", json={"content": "我方陈述如下。"}, headers=auth(worker))
+    client.post(f"{API}/disputes/{did}/verdict", json={"executor_share_bps": 3000, "reason": "交付部分达标"}, headers=auth(admin))
+    a = client.post(f"{API}/disputes/{did}/appeal", headers=auth(worker))
+    assert a.status_code == 200, a.text
+    appealed = a.json()
+    _assert_inline_shape(appealed, "appealDispute")
+    profile = client.get(f"{API}/users/{worker['id']}", headers=auth(requester)).json()
+    _assert_inline_shape(profile, "publicProfile")
+    # 一单闭环产生佣金，平台才有钱可结算
+    topup(client, requester, 40000)
+    t = publish_task(client, requester)
+    match_and_fund(client, requester, worker, t)
+    client.post(f"{API}/tasks/{t['id']}/deliver", headers=auth(worker))
+    client.post(f"{API}/tasks/{t['id']}/accept-delivery", headers=auth(requester))
+    s = client.post(f"{API}/admin/platform-finance/settle", json={"amount_cents": 100, "memo": "测试结算"}, headers=auth(admin))
+    assert s.status_code == 200, s.text
+    settled = s.json()
+    _assert_inline_shape(settled, "settlePlatform")
+
+
+def test_pending_team_and_empty_mandate_shapes(client):
+    from tests.test_machine_delegation import setup
+    from tests.test_team_accounts import make_team, make_user
+
+    owner = make_user(client, "13300039001", "老板")
+    team_id = make_team(client, owner)
+    client.post(f"{API}/teams/{team_id}/company", json={"company_name": "某某科技有限公司", "tax_number": "91310000MA1K00000X",
+                                                       "license_images": ["lic-90.png"]}, headers=auth(owner))
+    admin = make_admin(client, "13300039009")
+    pending = client.get(f"{API}/admin/teams/pending", headers=auth(admin)).json()
+    _assert_shape(_first(pending), "PendingTeamRow")
+    user, _key, _ = setup(client)
+    # 一把从没授权过的 Key：GET 授权返回 null（MachineMandateView | null 的 null 那一半）
+    fresh = client.post(f"{API}/developer/api-keys", headers=auth(user), json={"name": "只读", "scopes": ["tasks:read"]}).json()
+    none = client.get(f"{API}/developer/api-keys/{fresh['id']}/mandate", headers=auth(user)).json()
+    assert none is None
+    _assert_inline_shape(none, "machineMandate")
+
+
+def test_knowledge_calibration_and_retract_shapes(client, monkeypatch):
+    from app.vendors import registry
+    from tests.test_knowledge_clusters import SemanticStub, _card, _run, _threshold
+
+    monkeypatch.setitem(registry._instances, "embedding", SemanticStub())
+    try:
+        admin = make_admin(client, "13800039004")
+        hz = [_card(city="杭州") for _ in range(3)]
+        sh = [_card(city="上海") for _ in range(2)]
+        bj = [_card(city="北京") for _ in range(2)]
+        pairs = [{"a": hz[0], "b": hz[1], "same": True}, {"a": hz[1], "b": hz[2], "same": True},
+                 {"a": hz[0], "b": sh[0], "same": True}, {"a": sh[0], "b": sh[1], "same": True},
+                 {"a": hz[0], "b": bj[0], "same": False}, {"a": sh[1], "b": bj[1], "same": False}]
+        r = client.post(f"{API}/admin/knowledge/thresholds/跑腿/calibrate", json={"pairs": pairs}, headers=auth(admin))
+        assert r.status_code == 200, r.text
+        got = client.get(f"{API}/admin/knowledge/thresholds/跑腿/pairs", headers=auth(admin)).json()
+        _assert_shape(_first(got), "KnowledgeCalibrationPair")
+        _threshold()
+        _card(city="杭州", task_id=779001)
+        _run(client)
+        rr = client.post(f"{API}/admin/knowledge/tasks/779001/retract", json={"reason": "事后确认刷单"}, headers=auth(admin))
+        assert rr.status_code == 200, rr.text
+        retracted = rr.json()
+        _assert_inline_shape(retracted, "retractKnowledgeTask")
+    finally:
+        registry._instances.pop("embedding", None)

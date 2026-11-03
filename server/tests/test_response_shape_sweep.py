@@ -39,6 +39,12 @@ EXEMPT: dict[str, str] = {
     "decideWithdraw":
         "路径最后一段是 `${decision}`（approve / reject），一个 SDK 方法对应两条路由；"
         "两条路由各自的形状由 test_aml / test_withdraw_review 的真实响应断言覆盖",
+    "searchSuggest":
+        "返回 string[]：没有字段可比，只有元素类型；联想词的内容与顺序由 test_growth_analytics 的真实响应断言覆盖"
+        "（V390，363 号 spec）",
+    "signVideoUpload":
+        "本地存储没有 CDN 时按设计拒绝直传（400 direct_upload_unsupported，test_blog_and_video 验）；"
+        "真实的签名响应要接对象存储（「外」）才拿得到（V390，363 号 spec）",
     "exportMyData":
         "数据可携导出按用户实际拥有的数据动态组装，刻意声明成 Record<string, unknown>；"
         "给它定死字段反而会让新加的数据类别在类型里不可见",
@@ -53,7 +59,9 @@ EXEMPT: dict[str, str] = {
 # V384（357 号 spec）收紧：78 → 44（test_shape_sweep_v384 补了 34 个调用点的真实响应断言）
 # V386（359 号 spec）收紧：44 → 22（改读语法树、认 import() 写法的接口名，再补 21 个调用点）
 # V388（361 号 spec）收紧：22 → 13（比较器认交叉类型，再补 9 个调用点）
-MAX_UNVERIFIED = 13
+# V390（363 号 spec）收紧：13 → 0（认 X | null、对象联合、Partial<X>，补 9 个调用点，两个写进豁免表）。
+# 从此新加的调用点没有任何形状检查就会红。
+MAX_UNVERIFIED = 0
 
 
 # ------------------------------------------------------------------ 解析
@@ -248,6 +256,8 @@ def _sweep():
             iface = (_element_decl(decl) or decl).strip()
             # CLI-083c：`import('./types').OwnSpace` 与 `OwnSpace` 是同一个接口
             iface = re.sub(r"^import\(['\"]\./types['\"]\)\.", "", iface)
+            # V390（363 号 spec）`X | null`：有值时就是 X
+            iface = re.sub(r"\s*\|\s*null$", "", iface)
             if meth in runtime or iface in runtime:
                 result["runtime"].append(meth)
             else:
