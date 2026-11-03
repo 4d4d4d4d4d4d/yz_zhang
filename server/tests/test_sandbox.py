@@ -115,7 +115,18 @@ def test_every_listed_route_exists_and_every_ai_route_is_listed():
     # 新加的「问 / 拆 / 起草 / 审阅」类接口必须决定进不进清单：名字像 AI 的写操作都要在清单里
     looks_ai = {(m, p) for m, p in paths if m == "POST" and re.search(r"/ask$|/breakdown$|/clarify$|/distill$|extract-todos$|"
                                                                       r"contract-review$|/legal/documents$|/invoke$", p)}
-    assert looks_ai <= set(CLOUD_AI_ROUTES), looks_ai - set(CLOUD_AI_ROUTES)
+    assert looks_ai - set(NOT_CLOUD_AI) <= set(CLOUD_AI_ROUTES), looks_ai - set(NOT_CLOUD_AI) - set(CLOUD_AI_ROUTES)
+    # 声明表不许留已经不存在的路由，也不许和清单两边都写
+    assert set(NOT_CLOUD_AI) <= paths, set(NOT_CLOUD_AI) - paths
+    assert not set(NOT_CLOUD_AI) & set(CLOUD_AI_ROUTES)
+
+
+# 名字像 AI、其实不调模型的接口：不进沙箱清单（沙箱里照常能用），每条写明理由。
+# 以后换成调模型的版本，就从这里挪进 CLOUD_AI_ROUTES（两端清单一起改）。
+NOT_CLOUD_AI: dict[tuple[str, str], str] = {
+    ("POST", "/tasks/clarify"): "AI-DEC-001（366 号 spec）规则版发单前追问：不调模型、不落库，只按规则回下一批问题；"
+                                "模型版是 AI-DEC-001b，做的时候进清单",
+}
 
 
 # ------------------------------------------------------------------ 端侧模型目录（SBX-106）
