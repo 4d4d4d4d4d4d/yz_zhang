@@ -154,6 +154,7 @@ def create_app() -> FastAPI:
     from app.modules.task.shares import router as task_shares_router
     from app.modules.task.errand_reviews import router as errand_reviews_router
     from app.modules.task.recipient_links import router as recipient_links_router
+    from app.modules.task.clarify import router as clarify_router
     from app.modules.account.cert_spot import router as cert_spot_router
     from app.modules.wallet.router import router as wallet_router
 
@@ -173,6 +174,7 @@ def create_app() -> FastAPI:
         cert_spot_router,
         errand_reviews_router,   # 先于 task_router：GET /tasks/errand-reviews 不能被 /tasks/{task_id} 截走
         recipient_links_router,
+        clarify_router,          # 先于 task_router：POST /tasks/clarify 不能被 /tasks/{task_id} 的路由截走
         task_router,
         task_shares_router,
         contract_router,

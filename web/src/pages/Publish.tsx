@@ -22,7 +22,7 @@ export default function Publish() {
     // PWB-008 从个人工作台「找人一起做」过来时带着标题和说明
     title: params.get('title') || '', description: params.get('description') || '', // TASK-090 类目与城市**不替人选**：V140 真浏览器演示里，发一个「咖啡店品牌升级」项目，
     // 默认值把它发成了「保洁 · 上海」。带着参数来的（补救入口、模板）照用参数
-    category: params.get('category') || '', budget_yuan: '200',
+    category: params.get('category') || '', budget_yuan: params.get('budget') || '200',
     task_type: 'service', pricing: 'fixed', recurrence: 'none',
     people_needed: '1', days: '1', start_date: '', shift_start: '', shift_end: '', deposit_yuan: '0', is_remote: false, city: params.get('city') || '',
     lat: '31.2304', lng: '121.4737', address_hint: '', address_exact: '',
@@ -149,6 +149,8 @@ export default function Publish() {
         <div className="row">
           <h3 className="grow">发布任务</h3>
           <button type="button" className="ghost" onClick={() => void applyTemplate()}>📋 用类目模板填充</button>
+          {/* AI-DEC-001（366 号 spec）不会写？说一句话，追问几句再回来 */}
+          <button type="button" className="ghost" onClick={() => nav('/publish/clarify')}>💬 说一句话，帮我问清楚</button>
         </div>
         {checklist.length > 0 && (
           <p className="muted">避坑清单：{checklist.join('；')}</p>

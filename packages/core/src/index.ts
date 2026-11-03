@@ -30,3 +30,4 @@ export * from './deliverables';
 export * from './categoryCerts';
 export * from './errandReview';
 export * from './recipientLink';
+export * from './clarify';

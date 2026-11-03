@@ -35,11 +35,12 @@ import { MissionsScreen } from './missions';
 import { TeamMembersBlock } from './appGaps';
 import { AvailabilityScreen } from './availability';
 import { RightsScreen } from './rights';
+import { ClarifyScreen } from './clarify';
 import { ApplicationsScreen, InvitationsScreen, MessagesScreen } from './MessagesAndInvites';
 import { Button, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export type SubScreen = 'messages' | 'invitations' | 'applications' | 'certifications'
-  | 'rights' | 'ask' | 'teams' | 'ventures' | 'developer' | 'workbench' | 'availability' | 'notebook' | 'packs' | 'opc' | 'gig' | 'capability' | 'influence' | 'sandbox' | 'missions' | 'skills' | 'support' | 'xapp';
+  | 'rights' | 'ask' | 'teams' | 'ventures' | 'developer' | 'workbench' | 'availability' | 'notebook' | 'packs' | 'opc' | 'gig' | 'capability' | 'influence' | 'sandbox' | 'missions' | 'skills' | 'support' | 'xapp' | 'clarify';
 
 export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   messages: '消息',
@@ -64,6 +65,7 @@ export const SUB_SCREEN_LABEL: Record<SubScreen, string> = {
   availability: '我的可用时间（时段 / 少量接单）',
   support: '客服与工单（提交 / 回复 / 处理进度）',
   xapp: '跨 App 助手（授权 / 逐步确认 / 叫停）',
+  clarify: '说一句话发单（追问几句帮你写清楚）',
 };
 
 export function SubScreenHost({ client, screen, onBack, onPublish, onPublishTemplate }: {
@@ -89,6 +91,8 @@ export function SubScreenHost({ client, screen, onBack, onPublish, onPublishTemp
       {screen === 'workbench' && <WorkbenchScreen client={client} />}
       {screen === 'notebook' && <NotebookScreen client={client} />}
       {screen === 'packs' && <PacksScreen client={client} onPublish={onPublish} onPublishTemplate={onPublishTemplate} />}
+      {/* AI-DEC-001（366 号 spec） */}
+      {screen === 'clarify' && <ClarifyScreen client={client} onUse={onPublishTemplate} />}
       {screen === 'opc' && <OpcScreen client={client} />}
       {screen === 'gig' && <GigScreen client={client} />}
       {screen === 'capability' && <CapabilityScreen client={client} />}

@@ -524,6 +524,38 @@ export interface RecipientProgress {
   eta_at: string | null;
   expires_at: string;
 }
+/** AI-DEC-001（366 号 spec）对话式需求澄清：下一批要问的一个问题 */
+export interface ClarifyQuestion {
+  /** category / where / when / scope / acceptance / budget / for_whom */
+  key: string;
+  ask: string;
+  /** 必答的答完才 ready；预算、服务对象是选答 */
+  required: boolean;
+  /** 只有 category 有：几个常见类目 */
+  options: string[];
+}
+/** 随答随长的草稿：带到发布页预填，发不发由人定 */
+export interface ClarifyDraft {
+  title: string;
+  description: string;
+  category: string;
+  is_remote: boolean;
+  budget_cents: number | null;
+  /** 说到爸妈、老人：提示发布页勾「替别人发」 */
+  on_behalf_hint: boolean;
+}
+/** 发单拦截或 K12 规则一开始就拦下的：说清为什么、能走什么路 */
+export interface ClarifyBlocked {
+  code: string;
+  message: string;
+}
+export interface ClarifyResult {
+  questions: ClarifyQuestion[];
+  draft: ClarifyDraft;
+  ready: boolean;
+  blocked: ClarifyBlocked | null;
+  remaining_required: number;
+}
 /** SCN-122c 接单人报「出发了」的结果；十分钟内再报一次只改预计时间（updated=true，不再发通知） */
 export interface DepartResult {
   id: number;

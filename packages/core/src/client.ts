@@ -1,5 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
+  ClarifyResult,
   DepartResult,
   PublicProfileExtras,
   AmlStats,
@@ -2121,6 +2122,10 @@ export class PlatformClient {
   /** SCN-122 这一单的服务对象进度链接状态：有没有、到哪天、被打开过几次 */
   recipientLink(taskId: number) {
     return this.request<RecipientLinkStatus>('GET', `/tasks/${taskId}/recipient-link`);
+  }
+  /** AI-DEC-001 发单前追问：把说过的话和答过的问题带上，回下一批问题与草稿（不落库、不发布） */
+  clarifyTask(text: string, answers: Record<string, string> = {}, category = '') {
+    return this.request<ClarifyResult>('POST', '/tasks/clarify', { text, answers, category });
   }
   /** SCN-122c 接单人报「出发了」：预计多少分钟后到（5~240）；发单人收到通知，服务对象的进度链接页也显示 */
   departTask(taskId: number, etaMinutes: number) {

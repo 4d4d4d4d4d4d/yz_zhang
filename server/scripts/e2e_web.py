@@ -195,6 +195,20 @@ def _checks(page, phone: str) -> list[tuple[str, bool, str]]:
     step("通知开关读到服务端的必达清单",
          page.locator("text=以下通知不受开关影响").count() > 0)
 
+    # AI-DEC-001（V394，366 号 spec）说一句话发单：真服务端上追问、回答一轮，问题要真的变少
+    page.goto(f"http://127.0.0.1:{WEB_PORT}/publish/clarify", wait_until="networkidle")
+    page.fill("textarea[aria-label='你要办什么事']", "家里要打扫一下")
+    page.get_by_role("button", name="开始").click()
+    page.wait_for_timeout(1200)
+    first_left = page.locator("[role=status]").inner_text() if page.locator("[role=status]").count() else ""
+    if page.locator("input[aria-label^='在哪里做']").count():
+        page.fill("input[aria-label^='在哪里做']", "上海浦东张江")
+        page.get_by_role("button", name="回答").click()
+        page.wait_for_timeout(1200)
+    later_left = page.locator("[role=status]").inner_text() if page.locator("[role=status]").count() else ""
+    step("说一句话发单：追问后还差的件数变少",
+         "还差 4 件" in first_left and "还差 3 件" in later_left, f"{first_left} → {later_left}")
+
     # 不懂就问（V122）：这一页的价值全在**三种结局不一样**，而那只有真浏览器
     # 打真服务端才看得出来——mock 掉 fetch 的测试里，三条分支都是我自己喂的载荷。
     # 这里问一个会命中知识库的问题，验免责声明真的渲染出来了。

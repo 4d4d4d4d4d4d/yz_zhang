@@ -24,6 +24,7 @@ import Developer from './pages/Developer';
 import Teams from './pages/Teams';
 import TeamJoin from './pages/TeamJoin';
 import { RecipientProgressPage } from './RecipientLink';
+import Clarify from './pages/Clarify';
 import Ventures from './pages/Ventures';
 import Verify from './pages/Verify';
 import Workbench from './pages/Workbench';
@@ -96,6 +97,8 @@ export default function App() {
         <Route path="/records" element={<Suspense fallback={<div className="page">正在加载企业档案…</div>}><Records /></Suspense>} />
         <Route path="/chain" element={<Suspense fallback={<div className="page">正在加载链上协作…</div>}><Chain /></Suspense>} />
         <Route path="/publish" element={hasToken ? <Publish /> : <Navigate to="/login" />} />
+        {/* AI-DEC-001（366 号 spec）说一句话发单：追问几句再带到发布页 */}
+        <Route path="/publish/clarify" element={hasToken ? <Clarify /> : <Navigate to="/login?next=/publish/clarify" />} />
         <Route path="/tasks/:id" element={hasToken ? <TaskDetail /> : <Navigate to="/login" />} />
         {/* AI-DEC-041 逐层拆解：拆到一半关掉页面，回来接着拆 */}
         <Route path="/tasks/:id/decompose" element={hasToken ? <Decompose /> : <Navigate to="/login" />} />
