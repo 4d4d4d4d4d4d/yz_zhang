@@ -41,6 +41,9 @@ def test_recipient_sees_who_is_coming_without_logging_in_and_nothing_private(cli
     assert r.status_code == 201, r.text
     link = r.json()
     assert link["state"] == "active" and link["path"] == f"/r/{link['token']}" and len(link["token"]) >= 32
+    from tests.test_client_shape_alignment import _assert_shape
+
+    _assert_shape(link, "RecipientLinkCreated")
     with SessionLocal() as db:
         row = db.query(RecipientLink).filter(RecipientLink.task_id == t["id"]).one()
         assert row.token_hash != link["token"] and link["token"] not in row.token_hash, "库里只存哈希"
@@ -111,6 +114,9 @@ def test_regenerating_revokes_the_old_link_and_revoke_closes_it(client, requeste
     assert _view(client, new).status_code == 200
     d = client.delete(f"{API}/tasks/{t['id']}/recipient-link", headers=auth(requester)).json()
     assert d["revoked"] == 1 and d["state"] == "revoked"
+    from tests.test_client_shape_alignment import _assert_shape
+
+    _assert_shape(d, "RecipientLinkRevoked")
     assert _view(client, new).json()["detail"]["code"] == "recipient_link_invalid"
     assert _view(client, "not-a-real-token").json()["detail"]["code"] == "recipient_link_invalid"
 
