@@ -149,3 +149,22 @@ def test_red_a_ledger_id_used_twice_in_the_same_section_is_caught(sandbox):
     ledger.write_text(text.replace("| PAY-047 |", "| PAY-044 |"), encoding="utf-8")
     problems = harness.check()
     assert any("PAY-044" in p and "撞号" in p and "逐条索引" in p for p in problems), problems
+
+
+def test_red_an_implemented_spec_whose_named_id_is_still_owed_is_caught(sandbox):
+    """DOC-021（V395，368 号 spec）：120 号做完驾驶舱，台账里 AI-DEC-021 却一直是「欠」，又被排成一批新活。"""
+    ledger = sandbox / "specs" / harness.LEDGER_NAME
+    text = ledger.read_text(encoding="utf-8")
+    row = next(ln for ln in text.splitlines() if ln.startswith("| AI-DEC-021 | 母任务驾驶舱 | 已做"))
+    ledger.write_text(text.replace(row, "| AI-DEC-021 | 母任务驾驶舱 | 欠 |"), encoding="utf-8")
+    problems = harness.check()
+    assert any("120-collaboration-cockpit.md" in p and "AI-DEC-021" in p and "欠" in p for p in problems), problems
+    # 只在「编号」后点名的也算；状态行里说没做的（「记为 XXX」「XXX 欠」）、区间写法都不算点名
+    _add_spec(sandbox, 992, "\n# 992 x\n\n> 状态：本批实现（V992）。编号 ZZQ-120（并新开 ZZQ-121 记在第 7 节）；ZZQ-122 欠。\n\n## 7. 没做的\n\n- 无\n")
+    _add_row(sandbox, "| V992 | x | 992 | done | x |")
+    ledger.write_text(ledger.read_text(encoding="utf-8") + "\n| ZZQ-120 | 甲 | 欠 |\n| ZZQ-121 | 乙 | 欠 |\n| ZZQ-122 | 丙 | 欠 |\n", encoding="utf-8")
+    hits = [p for p in harness.check() if "ZZQ-" in p]
+    assert len(hits) == 1 and "ZZQ-120" in hits[0], hits
+    # 还在设计的 spec 不查
+    (sandbox / "specs" / "992-x.md").write_text("\n# 992 x（ZZQ-120）\n\n> 状态：设计（V992）。编号 ZZQ-120。\n", encoding="utf-8")
+    assert not any("ZZQ-" in p for p in harness.check())

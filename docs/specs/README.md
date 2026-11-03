@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 368 | 母任务驾驶舱：排期冲突，以及台账「做了仍记欠」的闸门 | [368-cockpit-schedule-conflicts.md](./368-cockpit-schedule-conflicts.md) | P0 |
 | 367 | 第四十轮场景发掘：钢琴调律、闲置代卖 | [367-scenario-round-40.md](./367-scenario-round-40.md) | P0 |
 | 366 | 对话式需求澄清：说一句话，追问几句再发单 | [366-clarify-before-publish.md](./366-clarify-before-publish.md) | P0 |
 | 365 | 第三十九轮场景发掘：智能门锁安装、家用充电桩安装 | [365-scenario-round-39.md](./365-scenario-round-39.md) | P0 |

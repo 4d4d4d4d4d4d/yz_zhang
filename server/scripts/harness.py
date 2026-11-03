@@ -187,6 +187,7 @@ def check() -> list[str]:
             problems.append(f"skill 缺 frontmatter（name / description）：{d.name}")
     problems += _closeout_problems(rows)
     problems += _ledger_id_problems()
+    problems += _stale_owed_problems()
     if not CLAUDE.exists() or "BACKLOG" not in CLAUDE.read_text(encoding="utf-8"):
         problems.append("根目录 CLAUDE.md 缺失或没有指向 docs/BACKLOG.md")
     return problems
@@ -216,6 +217,42 @@ def _ledger_id_problems() -> list[str]:
             out.append(f"台账编号撞号：{m.group(1)} 在「{section}」里出现两次（第 {seen[key]} 行与第 {n} 行），给后加的那条换个没用过的号")
         else:
             seen[key] = n
+    return out
+
+
+# DOC-021（368 号 spec）一篇 spec 「点名」做了的编号：标题括号里的、状态行「编号 X」后紧跟的第一个
+_TITLE_IDS = re.compile(r"[（(]([^（）()]*)[）)]\s*$")
+_STATUS_ID = re.compile(r"编号\s*([A-Z][A-Z0-9-]*-\d+[a-z]?)(?![~～0-9a-z])")
+_ID = re.compile(r"(?<![A-Za-z0-9-])([A-Z][A-Z0-9]*(?:-[A-Z]+)?-\d{2,3}[a-z]?)(?![0-9a-z])")
+
+
+def _stale_owed_problems() -> list[str]:
+    """DOC-021（V395）spec 写着「本批实现」并在标题或「编号」里点名的编号，台账逐条索引里不许还是「欠」。
+
+    V145（120 号「合作驾驶舱（SPACE-024 / AI-DEC-021 / APP-007）」）做完后，SPACE-024 改成了已做，
+    AI-DEC-021 却一直记着「欠」，又被排成了一批新活（V395）。状态行里「XXX 欠」「记为 XXX-b」这类说没做的不算点名。
+    """
+    ledger = SPECS / LEDGER_NAME
+    if not ledger.exists():
+        return []
+    owed = {m.group(1) for m in re.finditer(r"^\| ([A-Z][A-Z0-9-]*-\d+[a-z]?) \| [^|]* \| 欠[^|]* \|$",
+                                            ledger.read_text(encoding="utf-8"), re.M)}
+    out = []
+    for p in spec_files():
+        status = _status_line(p)
+        if "实现" not in status:
+            continue
+        lines = p.read_text(encoding="utf-8").splitlines()
+        title = next((ln for ln in lines if ln.startswith("# ")), "")
+        named = set()
+        m = _TITLE_IDS.search(title)
+        if m:
+            named |= set(_ID.findall(m.group(1)))
+        m = _STATUS_ID.search(status)
+        if m:
+            named.add(m.group(1))
+        for i in sorted(named & owed):
+            out.append(f"{p.name} 写着本批实现并点名了 {i}，台账（{LEDGER_NAME}）里 {i} 却还是「欠」：改成「已做」，没做完的另起一个带后缀的编号")
     return out
 
 

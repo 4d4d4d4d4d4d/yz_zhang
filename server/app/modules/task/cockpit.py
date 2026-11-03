@@ -1,4 +1,5 @@
-"""SPACE-024 / AI-DEC-021 合作驾驶舱（120 号 spec）：一棵树、一条关键路径、一本预算账、一张预警单。
+"""SPACE-024 / AI-DEC-021 合作驾驶舱（120 号 spec）：一棵树、一条关键路径、一本预算账、一张预警单；
+AI-DEC-021b（368 号）预警单里加上排期冲突。
 
 母任务拆成十几步、分给几个人之后，发布方要回答四个问题：
 **现在做到哪了？卡在谁那里？钱花了多少？哪里要我出手？**
@@ -67,6 +68,24 @@ def critical_path(nodes: list[Task]) -> list[int]:
     return [i for i in best[1] if by_id[i].status not in DONE] if best[0] else []
 
 
+def _live(n: Task) -> bool:
+    return n.status not in DONE and n.status != "cancelled"
+
+
+def schedule_conflicts(nodes: list[Task]) -> dict[int, list[int]]:
+    """后一步的截止不晚于它依赖的前一步：{后一步 id: [前一步 id, ...]}。两步都还没完成、都填了截止才算。"""
+    by_id = {n.id: n for n in nodes}
+    out: dict[int, list[int]] = {}
+    for n in nodes:
+        if not _live(n) or not n.deadline:
+            continue
+        bad = [d for d in (n.depends_on or []) if d in by_id and _live(by_id[d]) and by_id[d].deadline
+               and n.deadline <= by_id[d].deadline]
+        if bad:
+            out[n.id] = bad
+    return out
+
+
 def cockpit(db: Session, parent: Task) -> dict:
     from app.core.timefmt import iso
     from app.modules.contract.models import Contract
@@ -114,6 +133,21 @@ def cockpit(db: Session, parent: Task) -> dict:
                            "text": f"「{n.title}」招募超过 {STALE_RECRUIT_DAYS} 天还没人报名：改价、改说明或主动邀约"})
         elif n.status == "pending_acceptance":
             alerts.append({"task_id": n.id, "kind": "to_accept", "text": f"「{n.title}」已交付，等你验收"})
+    # ---- AI-DEC-021b（368 号 spec）排期冲突：拆完以后各步截止时间是分别填的，最容易排错的两处——
+    # ① 后一步的截止不晚于它依赖的前一步（前一步做完才能开始，后一步不可能按时）；
+    # ② 某一步的截止晚于母任务的截止（这一步按时了，整件事也晚了）。只看还没完成、没取消的步骤
+    conflicts = schedule_conflicts(leaves)
+    by_id = {n.id: n for n in leaves}
+    for nid, deps in conflicts.items():
+        n = by_id[nid]
+        names = "、".join(f"「{by_id[d].title}」" for d in deps)
+        alerts.append({"task_id": nid, "kind": "schedule_conflict",
+                       "text": f"「{n.title}」的截止不晚于它要等的{names}：前一步做完才能开始，改一下这一步的截止"})
+    if parent.deadline:
+        for n in leaves:
+            if _live(n) and n.deadline and n.deadline > parent.deadline:
+                alerts.append({"task_id": n.id, "kind": "past_parent_deadline",
+                               "text": f"「{n.title}」的截止晚于整件事的截止：这一步按时了，整件事也会晚"})
     if planned and allocated > planned:
         alerts.append({"task_id": parent.id, "kind": "over_budget",
                        "text": f"各步骤预算合计 ¥{allocated / 100:.2f}，超出母任务预算 ¥{planned / 100:.2f}"})
@@ -139,5 +173,6 @@ def cockpit(db: Session, parent: Task) -> dict:
             "overdue": bool(n.deadline and n.deadline < now and n.status not in DONE + ("cancelled",)),
             "on_critical_path": n.id in path,
             "in_dispute": n.id in disputes,
+            "schedule_conflicts": conflicts.get(n.id, []),
         } for n in nodes],
     }

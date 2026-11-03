@@ -213,3 +213,24 @@ describe('SPACE-024 App 上的合作驾驶舱（移动简化版）', () => {
     expect(screen.getByText('关键路径：需求梳理 → 页面开发')).toBeTruthy();
   });
 });
+
+describe('AI-DEC-021b App 驾驶舱的排期冲突（368 号 spec）', () => {
+  it('排期冲突与晚于整件事的预警用警示样式，等你验收的不用', async () => {
+    const node = (id: number, title: string) => ({ id, parent_id: 20, title, status: 'published', status_name: '招募中',
+      budget_cents: 200000, is_container: false, depends_on: [], blocked_by: [], executor_id: null, executor_nickname: null,
+      deadline: null, overdue: false, on_critical_path: false, in_dispute: false, schedule_conflicts: [] });
+    const client = makeClient({ '/tasks/20/cockpit': {
+      task_id: 20, title: '公司官网', status: 'draft', progress_pct: 0, steps_total: 2, steps_done: 0,
+      budget: { planned_cents: 400000, allocated_cents: 400000, committed_cents: 0, paid_cents: 0, remaining_cents: 400000 },
+      critical_path: [], alerts: [
+        { task_id: 22, kind: 'schedule_conflict', text: '「页面开发」的截止不晚于它要等的「需求梳理」' },
+        { task_id: 21, kind: 'past_parent_deadline', text: '「需求梳理」的截止晚于整件事的截止' },
+        { task_id: 22, kind: 'to_accept', text: '「页面开发」已交付，等你验收' }],
+      nodes: [node(21, '需求梳理'), { ...node(22, '页面开发'), schedule_conflicts: [21] }] } });
+    render(<CockpitBlock client={client} taskId={20} />);
+    const warn = (await screen.findByText('• 「页面开发」的截止不晚于它要等的「需求梳理」')).props.style;
+    expect(warn.fontWeight).toBe('600');
+    expect(screen.getByText('• 「需求梳理」的截止晚于整件事的截止').props.style.fontWeight).toBe('600');
+    expect(screen.getByText('• 「页面开发」已交付，等你验收').props.style.fontWeight).toBeUndefined();
+  });
+});

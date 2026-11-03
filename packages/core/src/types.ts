@@ -2844,7 +2844,8 @@ export interface CockpitBudget {
 }
 export interface CockpitAlert {
   task_id: number;
-  kind: 'dispute' | 'overdue' | 'no_applicants' | 'to_accept' | 'over_budget';
+  /** schedule_conflict / past_parent_deadline：AI-DEC-021b 排期冲突（368 号 spec） */
+  kind: 'dispute' | 'overdue' | 'no_applicants' | 'to_accept' | 'over_budget' | 'schedule_conflict' | 'past_parent_deadline';
   text: string;
 }
 export interface CockpitNode {
@@ -2864,6 +2865,8 @@ export interface CockpitNode {
   overdue: boolean;
   on_critical_path: boolean;
   in_dispute: boolean;
+  /** AI-DEC-021b：截止不晚于这几步（它要等的前一步），排不开 */
+  schedule_conflicts: number[];
 }
 export interface Cockpit {
   task_id: number;

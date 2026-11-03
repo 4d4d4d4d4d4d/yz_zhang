@@ -74,3 +74,47 @@ def test_critical_path_counts_only_unfinished_steps():
     assert critical_path([n(1, [], "completed")]) == []
     # 环（脏数据）不死循环
     assert critical_path([n(1, [2]), n(2, [1])]) in ([1, 2], [2, 1])
+
+
+def test_schedule_conflicts_are_flagged_and_clear_when_fixed(client, requester):
+    """AI-DEC-021b（368 号 spec）：后一步的截止不晚于它要等的前一步、某一步晚于整件事的截止，都进「需要你出手」。"""
+    from tests.test_client_shape_alignment import _assert_shape
+
+    t = _confirmed(client, requester)
+    url = f"/api/v1/tasks/{t['id']}/cockpit"
+    cp = client.get(url, headers=auth(requester)).json()
+    first, second = cp["critical_path"][0], cp["critical_path"][1]
+    others = [n["id"] for n in cp["nodes"] if not n["is_container"] and n["id"] not in (first, second)]
+    assert not any(a["kind"] in ("schedule_conflict", "past_parent_deadline") for a in cp["alerts"])
+    now = utcnow()
+    with SessionLocal() as db:
+        db.get(Task, first).deadline = now + timedelta(days=5)
+        db.get(Task, second).deadline = now + timedelta(days=5)      # 同一天也不行：前一步做完才能开始
+        db.get(Task, t["id"]).deadline = now + timedelta(days=10)
+        db.get(Task, others[0]).deadline = now + timedelta(days=12)  # 晚于整件事
+        db.commit()
+    cp = client.get(url, headers=auth(requester)).json()
+    by = {n["id"]: n for n in cp["nodes"]}
+    assert by[second]["schedule_conflicts"] == [first] and by[first]["schedule_conflicts"] == []
+    _assert_shape(by[second], "CockpitNode")
+    conflict = [a for a in cp["alerts"] if a["kind"] == "schedule_conflict"]
+    assert [a["task_id"] for a in conflict] == [second] and by[first]["title"] in conflict[0]["text"]
+    late = [a for a in cp["alerts"] if a["kind"] == "past_parent_deadline"]
+    assert [a["task_id"] for a in late] == [others[0]] and "整件事" in late[0]["text"]
+    # 改对以后预警消失；前一步已经做完的，也不再算冲突
+    with SessionLocal() as db:
+        db.get(Task, second).deadline = now + timedelta(days=8)
+        db.get(Task, others[0]).deadline = now + timedelta(days=9)
+        db.commit()
+    cp = client.get(url, headers=auth(requester)).json()
+    assert not any(a["kind"] in ("schedule_conflict", "past_parent_deadline") for a in cp["alerts"])
+    with SessionLocal() as db:
+        db.get(Task, second).deadline = now + timedelta(days=2)
+        db.commit()
+    assert any(a["kind"] == "schedule_conflict" for a in client.get(url, headers=auth(requester)).json()["alerts"])
+    with SessionLocal() as db:
+        db.get(Task, first).status = "completed"
+        db.commit()
+    cp = client.get(url, headers=auth(requester)).json()
+    assert not any(a["kind"] == "schedule_conflict" for a in cp["alerts"])
+    assert {n["id"]: n for n in cp["nodes"]}[second]["schedule_conflicts"] == []

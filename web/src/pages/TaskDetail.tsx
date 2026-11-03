@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { OperationKey, minorTaskLine, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, canReboostTask, taskReboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { OperationKey, minorTaskLine, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, canReboostTask, taskReboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, isUrgentCockpitAlert, scheduleConflictNote, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -1015,7 +1015,7 @@ function CockpitPanel({ taskId }: { taskId: number }) {
       </div>
       {data.alerts.length > 0 && (
         <ul className="list" aria-label="需要你出手">
-          {data.alerts.map((a, i) => <li key={i} className={a.kind === 'dispute' || a.kind === 'overdue' ? 'error' : ''}>
+          {data.alerts.map((a, i) => <li key={i} className={isUrgentCockpitAlert(a) ? 'error' : ''}>
             <Link to={`/tasks/${a.task_id}`}>{a.text}</Link></li>)}
         </ul>
       )}
@@ -1034,7 +1034,7 @@ function CockpitPanel({ taskId }: { taskId: number }) {
               <td>{n.executor_nickname ?? <span className="muted">还没人</span>}</td>
               <td>{n.in_dispute ? '纠纷中' : n.status_name}</td>
               <td>{fmtYuan(n.budget_cents)}</td>
-              <td className={n.overdue ? 'error' : ''}>{n.deadline ? formatDateTime(n.deadline) : '—'}{n.overdue ? '（已逾期）' : ''}</td>
+              <td className={n.overdue || scheduleConflictNote(n, title) ? 'error' : ''}>{n.deadline ? formatDateTime(n.deadline) : '—'}{n.overdue ? '（已逾期）' : ''}{scheduleConflictNote(n, title)}</td>
               <td>{n.blocked_by.length ? n.blocked_by.map(title).join('、') : '—'}</td>
             </tr>
           ))}

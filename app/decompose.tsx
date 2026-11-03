@@ -6,7 +6,7 @@
 // 「判不了」的步骤就地给去处，没说清之前不让确认。
 import {
   LEAF_CRITERION_LABEL, TASK_STATUS_LABEL, apiErrorText, childrenOf, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine,
-  decompositionSourceLabel, executorLabel, fmtYuan, isOpenEnd, type Decomposition, type DecompositionNode,
+  decompositionSourceLabel, executorLabel, fmtYuan, isOpenEnd, isUrgentCockpitAlert, type Decomposition, type DecompositionNode,
   type Cockpit, type DayApplicant, type DecompositionNodePatch, type PlatformClient, type Task, type TaskTree,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -375,7 +375,7 @@ export function CockpitBlock({ client, taskId }: { client: PlatformClient; taskI
       <Text style={styles.title}>合作驾驶舱 · {data.steps_done}/{data.steps_total} 步完成</Text>
       <Text style={styles.muted}>计划 {fmtYuan(b.planned_cents)} · 已托管 {fmtYuan(b.committed_cents)} · 已付 {fmtYuan(b.paid_cents)} · 还剩 {fmtYuan(b.remaining_cents)}</Text>
       {data.alerts.map((a, i) => (
-        <Text key={i} style={a.kind === 'dispute' || a.kind === 'overdue' ? styles.warn : styles.row}>• {a.text}</Text>
+        <Text key={i} style={isUrgentCockpitAlert(a) ? styles.warn : styles.row}>• {a.text}</Text>
       ))}
       {data.critical_path.length > 0 && (
         <Text style={styles.small}>关键路径：{data.critical_path.map(title).join(' → ')}</Text>
