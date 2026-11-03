@@ -742,11 +742,16 @@ export interface LedgerRow {
 /** MOD-060 封禁影响面。**封禁前就要看见**：这个人手上有几笔在途合约、
  *  多少托管资金会受影响、几个招募中的任务会被下架。
  *  V58 专门算了这些，而管理后台此前直接调 `banUser`——**管理员在盲封**。 */
+/** BanImpactView 里一份在途合约（CLI-083b 拆成具名接口：多行内联数组形状闸门读不出） */
+export interface BanImpactContract {
+  contract_id: number;
+  task_id: number;
+  status: string;
+  amount_cents: number;
+  counterparty_id: number;
+}
 export interface BanImpactView {
-  in_flight_contracts: Array<{
-    contract_id: number; task_id: number; status: string;
-    amount_cents: number; counterparty_id: number;
-  }>;
+  in_flight_contracts: BanImpactContract[];
   in_flight_count: number;
   escrow_at_risk_cents: number;
   open_task_ids: number[];
@@ -1128,6 +1133,21 @@ export interface Conversation {
   kind: 'direct' | 'task';
   task_id: number | null;
   participants: number[];
+}
+/** 会话列表里最后一条消息（CLI-083b 拆成具名接口，形状闸门才读得出） */
+export interface ConversationLastMessage {
+  id: number;
+  sender_id: number;
+  kind: string;
+  content: string;
+  created_at: string;
+}
+/** 会话列表的一行 */
+export interface ConversationListItem extends Conversation {
+  /** IM-060 在和谁聊：私聊是对方昵称、任务会话是任务标题、群是群名 */
+  title: string;
+  unread_count: number;
+  last_message: ConversationLastMessage | null;
 }
 
 export interface Message {
@@ -1618,6 +1638,10 @@ export interface RiskDisclosure {
 
 export type ContributionKind = 'time' | 'money' | 'ip' | 'resource' | 'other';
 
+/** 我参与的合作体一行：多一个我在里面的身份（CLI-083b 具名，原为交叉类型） */
+export interface MyVentureRow extends VentureView {
+  role: string;
+}
 export interface VentureView {
   id: number;
   name: string;
@@ -1677,6 +1701,11 @@ export interface CompliancePath {
   disclaimer: string;
 }
 
+/** 我所在的团队一行：多我的档位与额度（CLI-083b 具名，原为交叉类型） */
+export interface MyTeamRow extends TeamView {
+  my_role: string;
+  my_spend_limit_cents: number;
+}
 export interface TeamView {
   id: number;
   name: string;
@@ -2333,8 +2362,24 @@ export interface SpaceTrackRecord {
   top_tags: string[];
   recent_reviews: SpaceReview[];
 }
-export interface PersonalSpace { user_id: number; nickname: string; headline: string; introduction: string; theme: 'clay' | 'moss' | 'ink'; kind: 'person' | 'agent' | 'organization'; items: SpaceItem[]; items_count: number; accepting_orders: boolean; track_record?: SpaceTrackRecord }
-export interface OwnSpace extends PersonalSpace { revision: number; published: boolean; profile_public: boolean }
+// CLI-083b（357 号 spec）一行一个字段：形状闸门按行解析，原来写成一行的接口闸门读不出任何字段
+export interface PersonalSpace {
+  user_id: number;
+  nickname: string;
+  headline: string;
+  introduction: string;
+  theme: 'clay' | 'moss' | 'ink';
+  kind: 'person' | 'agent' | 'organization';
+  items: SpaceItem[];
+  items_count: number;
+  accepting_orders: boolean;
+  track_record?: SpaceTrackRecord;
+}
+export interface OwnSpace extends PersonalSpace {
+  revision: number;
+  published: boolean;
+  profile_public: boolean;
+}
 export interface SpaceSummary extends Omit<PersonalSpace, 'introduction' | 'items'> { preview: SpaceItem[] }
 
 // ---- KB-070~076 经验子类（108 号 spec）----

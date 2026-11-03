@@ -1,5 +1,8 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
+  ConversationListItem,
+  MyTeamRow,
+  MyVentureRow,
   AdminRoleRequest,
   Category,
   AssistantContract, SkillConceptAdminView, SkillConceptList, SkillConceptRow, SkillNormalizeResult, Cockpit, CapabilityProfile, SandboxModelAdminRow, SandboxModelInput, SandboxModelList, SandboxState, InfluenceLeaderboard, InfluenceMine, InfluenceLatestSnapshot, InfluenceProof, InfluencePublic, InfluenceVouchInput, InfluenceVouchRow, TaskDraftInput, TaskProfile, TaskProfileView, ContractReview, GigAlong, GigAvailabilityInput, GigAvailabilityView, GigNearby, GigPlaceRow, GigQuote, GigRouteInput, GigRouteView, VentureSentInvitation, AdminTicketDetail, OpcCalendar, OpcEntryInput, OpcEntryRow, OpcExport, OpcProfileInput, OpcProfileView, OpcSummary, PackAnswer, PackEnableResult, PackImportResult, PackValidation, RadarKnowledgeDraft, RadarSignal, LegalFaqInput, LegalFaqRow, ScenarioPackAdminListRow, ScenarioPackAdminRow, ScenarioPackCard, NbAnswer, NbExport, NbKind, NbMethod, NbMethodDraft, NbNote, NbNoteBrief, NbNoteInput, NbNotePatch, NbReference, NbStatus, NbSummary, NbTodoDraft, NbTodoInput, WbBreakdown, WbItem, WbItemDetail, WbItemInput, WbItemPatch, WbLog, WbMemory, WbOverview, WbProject, WbRoutine, WbRoutineHealth, WbRoutineInput, WbRoutinePatch, WbRoutineRun, WbRunStatus, WbStatus, WbStep,
@@ -806,7 +809,8 @@ export class PlatformClient {
     return this.request<{ ok: boolean }>('POST', `/tasks/${taskId}/reviews`, { stars, comment, tags });
   }
   listReviews(taskId: number) {
-    return this.request<Array<{ reviewer_id: number; target_id: number; stars: number; tags: string[]; comment: string }>>(
+    // CLI-083b（357 号 spec）revealed：双盲互评是否已揭晓——服务端一直在给，此前没声明
+    return this.request<Array<{ reviewer_id: number; target_id: number; stars: number; tags: string[]; comment: string; revealed: boolean }>>(
       'GET', `/tasks/${taskId}/reviews`,
     ).then(listOf);
   }
@@ -877,7 +881,8 @@ export class PlatformClient {
    *  哪条规则命中了。此前类型里没有这个字段，于是没有任何界面显示得了它。 */
   withdraw(amountCents: number, idempotencyKey: string) {
     // CONC-067（V138）出款两阶段：银行结果不明时是 processing——钱在冻结里，补偿 job 按同一个单号结
-    return this.request<{ status: 'done' | 'pending_review' | 'processing'; request_id?: number; message?: string; available_cents: number; frozen_cents: number }>(
+    // CLI-083b（357 号 spec）打款成功时服务端带回打款单号 payout_ref，此前没声明，客户端看不见
+    return this.request<{ status: 'done' | 'pending_review' | 'processing'; request_id?: number; message?: string; payout_ref?: string; available_cents: number; frozen_cents: number }>(
       'POST', '/wallet/withdraw', { amount_cents: amountCents },
       { 'Idempotency-Key': idempotencyKey },
     );
@@ -1180,12 +1185,7 @@ export class PlatformClient {
 
   // ---- im / notifications / support / dispute ----
   conversations() {
-    return this.request<Array<Conversation & {
-      /** IM-060 在和谁聊：私聊是对方昵称、任务会话是任务标题、群是群名 */
-      title: string;
-      unread_count: number;
-      last_message: { id: number; sender_id: number; kind: string; content: string; created_at: string } | null;
-    }>>('GET', '/conversations').then(listOf);
+    return this.request<ConversationListItem[]>('GET', '/conversations').then(listOf);
   }
   // ── GRW 增长运营（22 号 spec）────────────────────────────────
   /** 可领取的券（已领满/已领完的不返回）。 */
@@ -2360,7 +2360,7 @@ export class PlatformClient {
     });
   }
   myVentures() {
-    return this.request<Array<VentureView & { role: string }>>('GET', '/ventures/mine').then(listOf);
+    return this.request<MyVentureRow[]>('GET', '/ventures/mine').then(listOf);
   }
   venture(ventureId: number) {
     return this.request<VentureDetail>('GET', `/ventures/${ventureId}`);
@@ -2455,7 +2455,7 @@ export class PlatformClient {
     return this.request<TeamView>('POST', '/teams', { name });
   }
   myTeams() {
-    return this.request<Array<TeamView & { my_role: string; my_spend_limit_cents: number }>>('GET', '/teams/mine').then(listOf);
+    return this.request<MyTeamRow[]>('GET', '/teams/mine').then(listOf);
   }
   team(teamId: number) {
     return this.request<TeamDetail>('GET', `/teams/${teamId}`);
@@ -2646,7 +2646,7 @@ export class PlatformClient {
     return this.request<SosResult>('POST', `/tasks/${taskId}/sos`, { lat, lng });
   }
   circleMembers(circleId: number) {
-    return this.request<Array<{ user_id: number; nickname: string; credit_score: number }>>(
+    return this.request<Array<{ user_id: number; nickname: string; credit_score: number; role: string }>>(
       'GET', `/circles/${circleId}/members`,
     ).then(listOf);
   }
