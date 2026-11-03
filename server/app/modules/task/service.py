@@ -114,7 +114,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「燃气具安装」「外语陪练」——第三十八轮场景发掘（362 号 spec，V389）；燃气具安装要审核通过的从业资格证明
                     {"name": "燃气具安装", "required_cert": GAS_CERT}, {"name": "外语陪练"},
                     # 「智能门锁安装」「充电桩安装」——第三十九轮场景发掘（365 号 spec，V391）；充电桩动电，要审核通过的低压电工作业操作证
-                    {"name": "智能门锁安装"}, {"name": "充电桩安装", "required_cert": ELECTRICIAN_CERT}]
+                    {"name": "智能门锁安装"}, {"name": "充电桩安装", "required_cert": ELECTRICIAN_CERT},
+                    # 「钢琴调律」「闲置代卖」——第四十轮场景发掘（367 号 spec，V393）
+                    {"name": "钢琴调律"}, {"name": "闲置代卖"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
