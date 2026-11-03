@@ -192,6 +192,9 @@ def erase_personal_data(db: Session, user: User) -> dict:
     from app.modules.task.models import Task
     db.query(Task).filter(Task.creator_id == user.id, Task.on_behalf.is_(True)).update(
         {"recipient_label": "（已注销）", "onsite_contact": ""}, synchronize_session=False)
+    # SCN-122（356 号 spec）给服务对象的进度链接：注销即删除，链接立刻打不开
+    from app.modules.task.models import RecipientLink
+    db.query(RecipientLink).filter(RecipientLink.created_by == user.id).delete(synchronize_session=False)
     # 分析事件只要聚合数：去掉与人的关联（法律问答答不上的主题等，153 号 spec）
     from app.modules.analytics.models import AnalyticsEvent
     db.query(AnalyticsEvent).filter(AnalyticsEvent.user_id == user.id).update(

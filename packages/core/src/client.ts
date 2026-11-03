@@ -53,6 +53,10 @@ import type {
   CertAliasList,
   CertSpotCheckItem,
   CertSpotCheckList,
+  RecipientLinkCreated,
+  RecipientLinkRevoked,
+  RecipientLinkStatus,
+  RecipientProgress,
   ErrandReviewAdminItem,
   ErrandReviewItem,
   HandoverKind,
@@ -2104,6 +2108,22 @@ export class PlatformClient {
   /** CERT-053 复看推翻：要写理由，资质立刻撤销、通知持证人 */
   overturnCertSpotCheck(id: number, note: string) {
     return this.request<CertSpotCheckItem>('POST', `/admin/cert-spot-checks/${id}/overturn`, { note });
+  }
+  /** SCN-122 替别人发的单：给服务对象生成一条免登录只读进度链接（令牌只返回这一次；重新生成即作废旧的） */
+  createRecipientLink(taskId: number, days = 7) {
+    return this.request<RecipientLinkCreated>('POST', `/tasks/${taskId}/recipient-link`, { days });
+  }
+  /** SCN-122 这一单的服务对象进度链接状态：有没有、到哪天、被打开过几次 */
+  recipientLink(taskId: number) {
+    return this.request<RecipientLinkStatus>('GET', `/tasks/${taskId}/recipient-link`);
+  }
+  /** SCN-122 作废服务对象进度链接，立刻打不开 */
+  revokeRecipientLink(taskId: number) {
+    return this.request<RecipientLinkRevoked>('DELETE', `/tasks/${taskId}/recipient-link`);
+  }
+  /** SCN-122 服务对象打开链接看进度（免登录） */
+  recipientProgress(token: string) {
+    return this.request<RecipientProgress>('GET', `/recipient-progress/${encodeURIComponent(token)}`);
   }
   /** SCN-219 被发单拦截挡下：写一句说明申请人工复核（title / description 要与被拦的一字不差） */
   requestErrandReview(title: string, description: string, explanation: string) {

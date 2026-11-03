@@ -23,6 +23,7 @@ api DELETE /api/v1/notifications/devices/{token}
 api DELETE /api/v1/opc/entries/{entry_id}
 api DELETE /api/v1/subscriptions/{sub_id}
 api DELETE /api/v1/tasks/{task_id}/bookmark
+api DELETE /api/v1/tasks/{task_id}/recipient-link
 api DELETE /api/v1/tasks/{task_id}/shares/{share_id}
 api DELETE /api/v1/tasks/{task_id}/showcase-consent
 api DELETE /api/v1/teams/{team_id}/members/{member_user_id}
@@ -199,6 +200,7 @@ api GET /api/v1/open/v1/wallet
 api GET /api/v1/packs
 api GET /api/v1/packs/{key}
 api GET /api/v1/packs/{key}/assistants/{akey}/contract
+api GET /api/v1/recipient-progress/{token}
 api GET /api/v1/sandbox/models
 api GET /api/v1/search
 api GET /api/v1/search/suggest
@@ -227,6 +229,7 @@ api GET /api/v1/tasks/{task_id}/final-report
 api GET /api/v1/tasks/{task_id}/inputs
 api GET /api/v1/tasks/{task_id}/profile
 api GET /api/v1/tasks/{task_id}/progress
+api GET /api/v1/tasks/{task_id}/recipient-link
 api GET /api/v1/tasks/{task_id}/recommendations
 api GET /api/v1/tasks/{task_id}/reviews
 api GET /api/v1/tasks/{task_id}/shares
@@ -563,6 +566,7 @@ api POST /api/v1/tasks/{task_id}/invitations
 api POST /api/v1/tasks/{task_id}/progress
 api POST /api/v1/tasks/{task_id}/publish
 api POST /api/v1/tasks/{task_id}/reboost
+api POST /api/v1/tasks/{task_id}/recipient-link
 api POST /api/v1/tasks/{task_id}/reject-delivery
 api POST /api/v1/tasks/{task_id}/reviews
 api POST /api/v1/tasks/{task_id}/shares
@@ -680,6 +684,7 @@ app opc
 app packs
 app profiles
 app recipient
+app recipientLink
 app rights
 app sandbox
 app search
@@ -852,6 +857,7 @@ sdk createGroup
 sdk createMethod
 sdk createMission
 sdk createNote
+sdk createRecipientLink
 sdk createSandboxModel
 sdk createTask
 sdk createTeam
@@ -1071,6 +1077,8 @@ sdk reassignTeamSpend
 sdk reboostDay
 sdk reboostTask
 sdk recallMessage
+sdk recipientLink
+sdk recipientProgress
 sdk recommendations
 sdk register
 sdk registerDevice
@@ -1125,6 +1133,7 @@ sdk revokeApiKey
 sdk revokeCertAlias
 sdk revokeCertification
 sdk revokeConsent
+sdk revokeRecipientLink
 sdk revokeSession
 sdk revokeSubtaskShare
 sdk revokeTeamInviteLink
@@ -1287,6 +1296,7 @@ web /people/:id
 web /people/:id/follows
 web /profile
 web /publish
+web /r/:token
 web /records
 web /rewards
 web /sandbox

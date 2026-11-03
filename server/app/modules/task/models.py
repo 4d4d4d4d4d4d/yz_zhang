@@ -250,3 +250,22 @@ class ErrandReview(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     reminded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)   # SCN-220 上次催运营的时间
+
+
+class RecipientLink(Base):
+    """SCN-122（356 号 spec）替别人发单时，给服务对象（爸妈、家人）一条免登录的只读进度链接：谁来、几点、到没到。
+
+    令牌只在生成时返回一次，库里只存哈希；一单同时只有一条有效链接（重新生成即作废旧的）；到期失效、可随时作废。
+    链接页不给手机号、精确地址、价钱、聊天和照片。"""
+
+    __tablename__ = "recipient_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[int] = mapped_column(Integer, index=True)
+    created_by: Mapped[int] = mapped_column(Integer, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    view_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_viewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

@@ -23,6 +23,7 @@ import TaskDetail from './pages/TaskDetail';
 import Developer from './pages/Developer';
 import Teams from './pages/Teams';
 import TeamJoin from './pages/TeamJoin';
+import { RecipientProgressPage } from './RecipientLink';
 import Ventures from './pages/Ventures';
 import Verify from './pages/Verify';
 import Workbench from './pages/Workbench';
@@ -90,6 +91,8 @@ export default function App() {
         <Route path="/people/:id/follows" element={<FollowList />} />
         <Route path="/space/edit" element={hasToken ? <EditSpace /> : <Navigate to="/login?next=/space/edit" />} />
         <Route path="/login" element={<Login />} />
+        {/* SCN-122（356 号 spec）服务对象免登录看进度：令牌本身就是授权 */}
+        <Route path="/r/:token" element={<RecipientProgressPage />} />
         <Route path="/records" element={<Suspense fallback={<div className="page">正在加载企业档案…</div>}><Records /></Suspense>} />
         <Route path="/chain" element={<Suspense fallback={<div className="page">正在加载链上协作…</div>}><Chain /></Suspense>} />
         <Route path="/publish" element={hasToken ? <Publish /> : <Navigate to="/login" />} />

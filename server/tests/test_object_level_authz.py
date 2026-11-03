@@ -102,6 +102,11 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
     (r"^PATCH /tasks/.*/days/.*/shift$", "party", "改某一天的时段是发单人的动作（202 号 spec；test_change_day_shift 行为验，非发单人 403）"),
     (r"^(POST|DELETE) /tasks/.*/showcase-consent$", "party", "作品展示授权是发单人的动作（278 号 spec；test_showcase_consent 行为验，接单人 403）"),
     (r"^PATCH /tasks/.*/recipient$", "party", "改服务对象是发单人的动作（197 号 spec；test_change_recipient 行为验，非发单人 403）"),
+    (r"^(GET|POST|DELETE) /tasks/[^/]*/recipient-link$", "party",
+     "服务对象进度链接的生成、状态与作废只给发单人（356 号 spec；test_recipient_links 行为验，接单人三种方法都 403）"),
+    (r"^GET /recipient-progress/", "self",
+     "SCN-122（356 号 spec）免登录进度页：令牌本身就是授权——只存哈希、不可猜、有有效期、可作废、按 IP 限流；"
+     "只给称呼、进展、接单人昵称、时间与到达次数，不给电话、地址、价钱、照片与位置"),
     (r"^POST /tasks/.*/visits$", "party", "上门回报只有接单的人能交（176 号 spec；test_task_visits 行为验）"),
     (r"^GET /tasks/.*/visits$", "party", "上门回报（含照片）只给成交双方与管理员（176 号 spec；test_task_visits 行为验）"),
     (r"^POST /tasks/.*/visits/.*/(confirm|object)$", "party",

@@ -764,6 +764,15 @@ def _export_quota_requests(db: Session, user_id: int) -> dict:
     return {"api_quota_requests": [quota_request_row(r) for r in rows]} if rows else {}
 
 
+def _export_recipient_links(db: Session, user_id: int) -> dict:
+    """SCN-122（356 号 spec）发单人给服务对象生成过的进度链接：状态、有效期、打开次数（令牌本身不存，也就不导出）。"""
+    from app.modules.task.models import RecipientLink
+    from app.modules.task.recipient_links import link_row
+
+    rows = db.query(RecipientLink).filter(RecipientLink.created_by == user_id).order_by(RecipientLink.id).all()
+    return {"recipient_links": [link_row(r) for r in rows]} if rows else {}
+
+
 def _export_errand_reviews(db: Session, user_id: int) -> dict:
     from app.modules.task.errand_reviews import review_row
     from app.modules.task.models import ErrandReview
@@ -833,6 +842,7 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
         **_export_quota_requests(db, user.id),
         # SCN-219（336 号 spec）发单拦截的复核申请：有才带
         **_export_errand_reviews(db, user.id),
+        **_export_recipient_links(db, user.id),
         "real_name": user.real_name,
         "tasks": [{"id": t.id, "title": t.title, "status": t.status, "budget_cents": t.budget_cents,
                    "role": "creator" if t.creator_id == user.id else "executor",

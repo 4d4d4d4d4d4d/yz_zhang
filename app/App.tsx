@@ -20,6 +20,7 @@ import { HandoverList } from './handover';
 import { ErrandReviewRequest, MyErrandReviews } from './errandReview';
 import { ScreenBoundary } from './ScreenBoundary';
 import { RecipientEditorBlock, canChangeRecipient } from './recipient';
+import { RecipientLinkBlock, canShareRecipientLink } from './recipientLink';
 import { ShowcaseConsentBlock, canGrantShowcase } from './showcase';
 import { canRequestInvoice } from './invoiceEntry';
 import { DiscoverScreen } from './Discover';
@@ -505,6 +506,8 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       )}
       {/* SCN-123 发单后改服务对象（197 号 spec） */}
       {canChangeRecipient(task, meId) && <RecipientEditorBlock client={client} task={task} onChanged={onChanged} />}
+      {/* SCN-122（356 号 spec）给服务对象一条免登录只读进度链接 */}
+      {canShareRecipientLink(task, meId) && <RecipientLinkBlock client={client} taskId={task.id} />}
       {/* SCN-156（278 号 spec） */}
       {canGrantShowcase(task, meId) && <ShowcaseConsentBlock client={client} task={task} onChanged={onChanged} />}
       <ReportAndBlock client={client} task={task} meId={meId} />

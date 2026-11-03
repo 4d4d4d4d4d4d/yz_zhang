@@ -1611,7 +1611,11 @@ def purge_locations(db: Session = Depends(get_db, scope="function"), _=Depends(r
             .filter(Task.id.in_(closed_ids), Task.onsite_contact != "")
             .update({"onsite_contact": ""}, synchronize_session=False)
         )
-    return {"purged_logs": purged, "purged_contacts": contacts}
+    # SCN-122（356 号 spec）服务对象进度链接：过期或作废满 30 天的记录删掉
+    from .recipient_links import purge_expired
+
+    links = purge_expired(db)
+    return {"purged_logs": purged, "purged_contacts": contacts, "purged_recipient_links": links}
 
 
 # ---------- 交付与验收（TASK-030/031/033）----------

@@ -475,6 +475,52 @@ export interface ErrandReviewAdminItem extends ErrandReviewItem {
   /** SCN-220 在等、且已超过时限 */
   overdue: boolean;
 }
+/** SCN-122（356 号 spec）发单人看到的服务对象进度链接状态（不含令牌） */
+export interface RecipientLinkStatus {
+  /** none（没生成过）/ active / revoked（作废了）/ expired（过期了） */
+  state: 'none' | 'active' | 'revoked' | 'expired';
+  task_id: number | null;
+  created_at: string | null;
+  expires_at: string | null;
+  /** 被打开过几次 */
+  view_count: number;
+  last_viewed_at: string | null;
+}
+/** SCN-122 生成链接的响应：令牌只在这里出现一次 */
+export interface RecipientLinkCreated extends RecipientLinkStatus {
+  token: string;
+  /** 网页上的打开路径（/r/令牌） */
+  path: string;
+  hint: string;
+}
+/** SCN-122 作废的响应 */
+export interface RecipientLinkRevoked extends RecipientLinkStatus {
+  revoked: number;
+}
+/** SCN-122 链接页上的接单人：只给昵称与是否实名 */
+export interface RecipientProgressHelper {
+  name: string;
+  verified: boolean;
+  work_date: string | null;
+}
+/** SCN-122 服务对象免登录看到的进度：不含电话、地址、价钱、照片与位置 */
+export interface RecipientProgress {
+  recipient_label: string;
+  title: string;
+  /** waiting / assigned / working / done_pending / done / cancelled / paused */
+  phase: string;
+  phase_text: string;
+  helpers: RecipientProgressHelper[];
+  work_date: string | null;
+  days: number;
+  shift_start: string;
+  shift_end: string;
+  deadline: string | null;
+  visits_planned: number;
+  visits_reported: number;
+  last_arrival_at: string | null;
+  expires_at: string;
+}
 /** CERT-053（348 号 spec）资质审核抽检的一条 */
 export interface CertSpotCheckItem {
   id: number;
