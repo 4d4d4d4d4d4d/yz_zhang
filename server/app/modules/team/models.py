@@ -46,6 +46,9 @@ class Team(Base):
     # 预算池是总量（这个月团队总共花多少）。按人设额度解决不了
     # 「每个人都在自己额度内、加起来仍然爆表」。
     monthly_budget_cents: Mapped[int] = mapped_column(Integer, default=0)
+    # TEAM-056（370 号 spec）预算池按每月几号重置：1~28，1 = 原来的自然月。企业按自己的财务月结账，
+    # 只能按自然月重置的话，池子的「本期已用」和财务的账期对不上
+    budget_cycle_day: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     # TEAM-055 本月已经预警过没有（"2026-09" 这样的月份串，75 号 spec）。
     # 记月份而不是布尔：池子是按自然月重置的，布尔位需要另一个 job 去清，
     # 而那个 job 一旦没跑，预警就永久沉默。

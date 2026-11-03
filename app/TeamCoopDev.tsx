@@ -15,7 +15,7 @@ import { KeyUsageBlock, QuotaRequestsBlock } from './apiKeyUsage';
 // 按钮的可用性一律读服务端的判断（`can_decide` / `invoice_block`），
 // 客户端不重写：**第二份实现必然抄漏**（UI-075 立过这条）。
 import {
-  apiErrorText, fmtYuan, formatDateTime,
+  apiErrorText, budgetCycleLine, fmtYuan, formatDateTime, parseBudgetCycleDay,
   type ApiKeyView, type ContributionView, type ShareRow,
   type SpendRequestView, type TeamDetail, type TeamView, type VentureView,
   type PackTaskTemplateBrief, type PlatformClient,
@@ -167,6 +167,7 @@ function TeamDetailBlock({ client, teamId }: { client: PlatformClient; teamId: n
   const [purpose, setPurpose] = useState('');
   const [rejecting, setRejecting] = useState<number | null>(null);
   const [reason, setReason] = useState('');
+  const [cycleDay, setCycleDay] = useState('');
   const { error, notice, setNotice, act } = useAct();
 
   const load = useCallback(async () => {
@@ -193,6 +194,26 @@ function TeamDetailBlock({ client, teamId }: { client: PlatformClient; teamId: n
           ? `团队本月预算池 ${fmtYuan(team.monthly_budget_cents)}，已用 ${fmtYuan(team.month_spent_cents)}，剩余 ${fmtYuan(poolLeft)}`
           : `未设预算池（本月已花 ${fmtYuan(team.month_spent_cents)}）`}
       </Text>
+      {/* TEAM-056（370 号 spec）账期：每月几号重置；老服务端没有这个字段就不显示 */}
+      {budgetCycleLine(team) !== '' && (
+        <Text style={s.muted} accessibilityLabel="预算池账期">预算池账期：{budgetCycleLine(team)}</Text>
+      )}
+      {budgetCycleLine(team) !== '' && team.my_role === 'owner' && (
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <TextInput style={[s.input, { flex: 1 }]} keyboardType="numeric" value={cycleDay}
+                     onChangeText={setCycleDay} placeholder="每月几号重置（1~28）" />
+          <Button title="改账期" onPress={() => {
+            const day = parseBudgetCycleDay(cycleDay);
+            if (day === null) { setNotice('账期填 1~28 的整数：29~31 号不是每个月都有，要月底结账的选 28'); return; }
+            void act(async () => {
+              await client.setTeamBudget(teamId, team.monthly_budget_cents, day);
+              setNotice(`预算池改为每月 ${day} 日重置`);
+              setCycleDay('');
+              await load();
+            });
+          }} />
+        </View>
+      )}
 
       {/* TEAM-064（236 号 spec）审批通知方式：所有者可以改成轮流指派一人 */}
       {team.my_role === 'owner' && team.approval_mode && (

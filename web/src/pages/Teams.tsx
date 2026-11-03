@@ -1,5 +1,5 @@
 import {
-  apiErrorText, fmtYuan, formatDateTime, inviteJoinedLine, memberSourceLabel, teamHandoverDetail,
+  apiErrorText, budgetCycleLine, fmtYuan, formatDateTime, inviteJoinedLine, MAX_BUDGET_CYCLE_DAY, memberSourceLabel, teamHandoverDetail,
   type SpendRequestView, type TeamDetail, type TeamInviteLink, type TeamView,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -115,6 +115,23 @@ function TeamCard({ teamId }: { teamId: number }) {
             </button>
           )}
         </p>
+        {/* TEAM-056（370 号 spec）账期：每月几号重置；老服务端没有这个字段就不显示 */}
+        {budgetCycleLine(team) && (
+          <p className="muted" data-testid="team-budget-cycle">
+            预算池账期：{budgetCycleLine(team)}
+            {team.my_role === 'owner' && (
+              <select aria-label="预算池每月几号重置" style={{ marginLeft: 8 }} value={team.budget_cycle_day}
+                      onChange={(e) => {
+                        const day = Number(e.target.value);
+                        void act(() => client.setTeamBudget(teamId, team.monthly_budget_cents, day));
+                      }}>
+                {Array.from({ length: MAX_BUDGET_CYCLE_DAY }, (_, i) => i + 1).map((d) => (
+                  <option key={d} value={d}>{d === 1 ? '每月 1 日（自然月）' : `每月 ${d} 日`}</option>
+                ))}
+              </select>
+            )}
+          </p>
+        )}
         {/* TEAM-064（236 号 spec）审批通知：发给所有管理员（谁都收到 = 谁都不负责）或轮流指派一人 */}
         {team.my_role === 'owner' && team.approval_mode && (
           <label className="muted">审批通知：

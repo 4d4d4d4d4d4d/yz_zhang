@@ -48,6 +48,8 @@ class BudgetIn(BaseModel):
     # 0 = 不设池。允许调低到已用量之下：那表示「这个月不许再花了」，
     # 是一个合法的意思表示，不该被拦。
     monthly_budget_cents: int = Field(ge=0)
+    # TEAM-056（370 号 spec）每月几号重置；不传就不改（老客户端照旧只改金额）
+    budget_cycle_day: int | None = Field(default=None, ge=1, le=28)
 
 
 class CompanyIn(BaseModel):
@@ -174,7 +176,17 @@ def get_team(team_id: int, user: User = Depends(get_current_user),
         "approval_mode": team.approval_mode or "all",
         "month_spent_cents": service.team_spent_this_month(db, team_id),
         "my_month_spent_cents": service.member_spent_this_month(db, team_id, user.id),
+        **_cycle(team),
     }
+
+
+def _cycle(team) -> dict:
+    """TEAM-056（370 号 spec）账期：每月几号重置、这一期从哪天起、下次哪天重置。"""
+    from app.core.timefmt import iso
+
+    return {"budget_cycle_day": team.budget_cycle_day or 1,
+            "budget_cycle_starts_at": iso(service.cycle_start(team)),
+            "budget_cycle_resets_at": iso(service.cycle_resets_at(team))}
 
 
 # ------------------------------------------------------------------- 成员与权限
@@ -375,13 +387,16 @@ def set_budget(team_id: int, body: BudgetIn, user: User = Depends(get_current_us
     team = _get(db, team_id)
     service.require_role(db, team_id, user.id, "owner")
     team.monthly_budget_cents = body.monthly_budget_cents
+    if body.budget_cycle_day is not None:
+        team.budget_cycle_day = body.budget_cycle_day
     # TEAM-055 池子一改，「按当前池子快到顶了」这句话就不成立了，
     # 所以本月的预警标记要清掉：不清的话，调高预算后再次逼近上限
     # **不会有第二次预警**——那正是这一批要修的毛病本身。
     team.pool_warned_month = ""
     db.add(team)
+    db.flush()
     return {"id": team.user_id, "monthly_budget_cents": team.monthly_budget_cents,
-            "month_spent_cents": service.team_spent_this_month(db, team_id)}
+            "month_spent_cents": service.team_spent_this_month(db, team_id), **_cycle(team)}
 
 
 # --------------------------------------------------------------- 企业信息与发票

@@ -42,6 +42,7 @@ import type {
   ShareRow,
   SpendRequestView,
   TeamDetail,
+  TeamBudgetResult,
   TeamView,
   VentureDetail,
   VentureView,
@@ -2538,10 +2539,11 @@ export class PlatformClient {
   }
   /** TEAM-052 设团队月度预算池（0 = 不设池）。**只有 owner 能改**：
    *  让 admin 自己改池子，等于让他绕过自己受的约束。 */
-  setTeamBudget(teamId: number, monthlyBudgetCents: number) {
-    return this.request<{ id: number; monthly_budget_cents: number; month_spent_cents: number }>(
-      'POST', `/teams/${teamId}/budget`, { monthly_budget_cents: monthlyBudgetCents },
-    );
+  setTeamBudget(teamId: number, monthlyBudgetCents: number, cycleDay?: number) {
+    // TEAM-056（370 号 spec）cycleDay：每月几号重置（1~28）；不传就不改账期
+    const body: { monthly_budget_cents: number; budget_cycle_day?: number } = { monthly_budget_cents: monthlyBudgetCents };
+    if (cycleDay !== undefined) body.budget_cycle_day = cycleDay;
+    return this.request<TeamBudgetResult>('POST', `/teams/${teamId}/budget`, body);
   }
   /** TEAM-030 企业信息转人工核验（沿用 V76 那套：材料是敏感文件）。 */
   submitTeamCompany(teamId: number, companyName: string, taxNumber: string, licenseImages: string[] = []) {

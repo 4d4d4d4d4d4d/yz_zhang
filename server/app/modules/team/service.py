@@ -1,4 +1,6 @@
 """TEAM 权限、额度与审批（53 号 spec）。"""
+from datetime import timedelta
+
 from sqlalchemy.orm import Session
 
 from app.core.errors import bad_request, conflict, forbidden
@@ -43,6 +45,37 @@ def month_start(now=None):
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
+MAX_CYCLE_DAY = 28   # 29~31 号不是每个月都有；要「月底」结账的选 28 或 1
+
+
+def _cycle_day(team: Team | None) -> int:
+    d = getattr(team, "budget_cycle_day", None) or 1
+    return d if 1 <= d <= MAX_CYCLE_DAY else 1
+
+
+def cycle_start(team: Team | None, now=None):
+    """TEAM-056（370 号 spec）这一期的起点：每月 `budget_cycle_day` 号 00:00（UTC，与 `month_start` 同一口径）。
+
+    1 号就是 `month_start`，既有团队行为一字不变；今天还没到重置日的，起点是上个月的那一天。
+    """
+    now = now or utcnow()
+    d = _cycle_day(team)
+    if d == 1:
+        return month_start(now)
+    this = now.replace(day=d, hour=0, minute=0, second=0, microsecond=0)
+    if now >= this:
+        return this
+    prev = now.replace(day=1) - timedelta(days=1)
+    return prev.replace(day=d, hour=0, minute=0, second=0, microsecond=0)
+
+
+def cycle_resets_at(team: Team | None, now=None):
+    """下一次重置的时刻：本期起点的下一个月同一天。"""
+    start = cycle_start(team, now)
+    nxt = (start.replace(day=1) + timedelta(days=32)).replace(day=1)
+    return nxt.replace(day=_cycle_day(team))
+
+
 def _spent_since(db: Session, team_id: int, since, user_id: int | None = None) -> int:
     """TEAM-053 只算**已执行**的。
 
@@ -62,11 +95,12 @@ def _spent_since(db: Session, team_id: int, since, user_id: int | None = None) -
 
 
 def member_spent_this_month(db: Session, team_id: int, user_id: int) -> int:
-    return _spent_since(db, team_id, month_start(), user_id)
+    """名字沿用「本月」；TEAM-056 起是「本期」：团队设了账期就从账期起点算，没设就是自然月。"""
+    return _spent_since(db, team_id, cycle_start(db.get(Team, team_id)), user_id)
 
 
 def team_spent_this_month(db: Session, team_id: int) -> int:
-    return _spent_since(db, team_id, month_start())
+    return _spent_since(db, team_id, cycle_start(db.get(Team, team_id)))
 
 
 def pool_block(db: Session, team: Team, amount_cents: int) -> str:
@@ -329,7 +363,8 @@ def warn_pool(db: Session, team: Team | None) -> bool:
 
     if not team or team.monthly_budget_cents <= 0:
         return False               # 不设池 = 没有「快用完」这回事
-    month = utcnow().strftime("%Y-%m")
+    # TEAM-056 一期一次：记这一期起点所在的月份（一个月里只有一个起点，所以够区分）
+    month = cycle_start(team).strftime("%Y-%m")
     if team.pool_warned_month == month:
         return False               # 一个月一次就够；每笔都提醒会被当成噪音屏蔽掉
     used = team_spent_this_month(db, team.user_id)

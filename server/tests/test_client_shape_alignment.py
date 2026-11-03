@@ -584,6 +584,10 @@ def _resolve_body_keys(expr: str) -> tuple[set[str], bool]:
 
 # 解析不了的请求体 -> 为什么（值是**理由**，不是布尔）
 DYNAMIC_BODY: dict[tuple[str, str], str] = {
+    ("POST", "/teams/{x}/budget"): (
+        "TEAM-056（370 号 spec）改账期才带 budget_cycle_day（不传 = 只改金额，与原来一样）；服务端 BudgetIn 认 "
+        "monthly_budget_cents / budget_cycle_day"
+    ),
     ("POST", "/admin/support/holidays"): (
         "ESCA-070（276 号 spec）调休上班才带 as_weekday；服务端 SupportHolidayIn 认 day / kind / as_weekday / label，extra=forbid"
     ),

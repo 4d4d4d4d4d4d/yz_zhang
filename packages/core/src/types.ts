@@ -1797,6 +1797,21 @@ export interface TeamDetail extends TeamView {
   my_month_spent_cents: number;
   /** TEAM-064（236 号 spec）审批通知：all 发给所有管理员 / rotate 轮流指派一人（老服务端没有） */
   approval_mode?: 'all' | 'rotate';
+  /** TEAM-056（370 号 spec）预算池每月几号重置（1~28，1 = 自然月）；老服务端没有 */
+  budget_cycle_day?: number;
+  /** 这一期的起点与下次重置（UTC，带时区） */
+  budget_cycle_starts_at?: string;
+  budget_cycle_resets_at?: string;
+}
+
+/** TEAM-052 / TEAM-056 设预算池的返回 */
+export interface TeamBudgetResult {
+  id: number;
+  monthly_budget_cents: number;
+  month_spent_cents: number;
+  budget_cycle_day?: number;
+  budget_cycle_starts_at?: string;
+  budget_cycle_resets_at?: string;
 }
 
 export interface SpendRequestView {
