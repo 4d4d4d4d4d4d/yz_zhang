@@ -44,5 +44,8 @@ description: Run one spec-driven batch in this repo end to end — pick the next
 - `python -m scripts.harness check` 全绿。
 
 ## 7. 回归、提交、推送
+- **提交前**先跑一遍全局静态闸门（约 1 分钟），它们管的是「新代码有没有守全仓的规矩」，只跑本批测试看不出来：
+  `python -m pytest tests/test_doc_counts.py tests/test_vision_checklist.py tests/test_timezone.py tests/test_e2e_coverage.py tests/test_lint_gate.py tests/test_sdk_method_triage.py tests/test_i18n.py tests/test_feature_surface.py tests/test_object_level_authz.py tests/test_client_shape_alignment.py tests/test_response_shape_sweep.py -q`
+  （V383 漏过 `.isoformat()` 与新页面联调豁免，等到 40 分钟的全量回归才红。）
 - `tools/regress.sh`（skill `regression`），全绿才推。
 - 提交说明：`V1xx <一句话>（<spec 号>）` + 要点 + 规定的署名行。

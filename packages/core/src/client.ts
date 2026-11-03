@@ -2278,12 +2278,14 @@ export class PlatformClient {
     return this.request<Dispute & { appealed: boolean }>('POST', `/disputes/${disputeId}/appeal`);
   }
   proposeSettlement(disputeId: number, executorShareBps: number) {
-    return this.request<{ id: number }>('POST', `/disputes/${disputeId}/settlement`, {
+    // CLI-083b（361 号 spec）服务端返回整条争议记录（含刚提的 settlement_proposal），此前只声明了 { id }
+    return this.request<Dispute>('POST', `/disputes/${disputeId}/settlement`, {
       executor_share_bps: executorShareBps,
     });
   }
   acceptSettlement(disputeId: number) {
-    return this.request<{ id: number; status: string }>('POST', `/disputes/${disputeId}/settlement/accept`);
+    // CLI-083b（361 号 spec）同 proposeSettlement：服务端返回整条争议记录
+    return this.request<Dispute>('POST', `/disputes/${disputeId}/settlement/accept`);
   }
 
   // ==================================================================
@@ -2814,7 +2816,9 @@ export class PlatformClient {
     }>>('GET', `/knowledge/cards${q}`).then(listOf);
   }
   decompositionTemplate(category: string, q = '') {
-    return this.request<{ found: boolean; items: DecompositionItem[] }>(
+    // CLI-083b（361 号 spec）此前声明的 found 服务端从来不给（按它判断永远「没找到」）；实际是 category / items / source，
+    // 没有模板时 source 为 none、items 为空
+    return this.request<{ category: string; items: DecompositionItem[]; source: 'seed_template' | 'keyword_match' | 'closed_loop_experience' | 'none' }>(
       'GET', `/knowledge/templates?category=${encodeURIComponent(category)}&q=${encodeURIComponent(q)}`,
     );
   }

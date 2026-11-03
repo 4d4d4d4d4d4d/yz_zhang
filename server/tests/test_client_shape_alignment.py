@@ -145,6 +145,17 @@ def _inline_fields(decl: str) -> dict[str, str] | None:
         d = d[len("Array<"):-1].strip()
     if d.endswith("[]"):
         d = d[:-2].strip()
+    # CLI-083b（V388，361 号 spec）交叉类型 `Task & { slots?: Task[] }`：各部分的字段并起来。
+    # 任何一部分认不出（`Partial<…>`、未知名字）就整体放弃，与下面「有一项看不懂就不猜」同一条政策。
+    parts = _split_top_level(d, "&")
+    if len(parts) > 1:
+        merged: dict[str, str] = {}
+        for part in parts:
+            got = _object_fields(part)
+            if got is None:
+                return None
+            merged.update(got)
+        return merged or None
     if not (d.startswith("{") and d.endswith("}")):
         return None
     fields: dict[str, str] = {}
@@ -914,6 +925,17 @@ def test_cli071_nested_types_are_compared():
     assert _matches("{ available_cents: number }", {"available_cents": 200})
     # 具名 interface 作为嵌套类型时也展开比
     assert not _matches("Wallet", {"available_cents": "x", "escrow_cents": 0, "frozen_cents": 0})
+
+
+def test_cli083b_intersection_types_merge_their_parts():
+    """V388（361 号 spec）`A & { … }` = A 的字段加内联字段；有一部分认不出就整体放弃（不猜）。"""
+    got = _inline_fields("Conversation & { title: string; unread_count?: number }")
+    assert got is not None
+    assert {"id", "kind", "task_id", "participants", "title", "unread_count?"} <= set(got)
+    arr = _inline_fields("Array<Conversation & { title: string }>")
+    assert arr is not None and "title" in arr and "participants" in arr
+    assert _inline_fields("Partial<Me> & { extra: number }") is None
+    assert _inline_fields("NoSuchInterface & { x: number }") is None
 
 
 def test_cli071_stays_permissive_where_it_cannot_know():

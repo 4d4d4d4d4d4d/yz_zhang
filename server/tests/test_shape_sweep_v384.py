@@ -253,3 +253,57 @@ def test_machine_mandate_shapes(client):
     user, key, _ = setup(client)
     got = client.get(f"{API}/developer/api-keys/{key['id']}/mandate", headers=auth(user)).json()
     _assert_shape(got, "MachineMandateView")
+
+
+# ------------------------------------------------------------------ V388（361 号 spec）第四批：交叉类型
+def test_intersection_typed_task_and_contract_shapes(client, requester, worker):
+    from tests.conftest import topup
+    from tests.test_on_behalf import _post
+
+    created = _post(client, requester).json()
+    _assert_inline_shape(created, "createTask")
+    topup(client, requester, 40000)
+    app_id = client.post(f"{API}/tasks/{created['id']}/applications", json={"message": "有经验"}, headers=auth(worker)).json()["id"]
+    contract_id = client.post(f"{API}/applications/{app_id}/accept", headers=auth(requester)).json()["contract_id"]
+    for u in (requester, worker):
+        client.post(f"{API}/contracts/{contract_id}/sign", headers=auth(u))
+    f = client.post(f"{API}/contracts/{contract_id}/fund", headers=auth(requester))
+    assert f.status_code == 200, f.text
+    funded = f.json()
+    _assert_inline_shape(funded, "fundContract")
+
+
+def test_mission_shapes(client, requester, monkeypatch):
+    from tests.test_mission_method import _create
+
+    m = _create(client, requester)
+    assert m.status_code == 201, m.text
+    mid = m.json()["id"]
+    detail = client.get(f"{API}/missions/{mid}", headers=auth(requester)).json()
+    _assert_inline_shape(detail, "getMission")
+    ticked = client.post(f"{API}/missions/{mid}/tick", headers=auth(requester)).json()
+    _assert_shape(ticked, "MissionTickResult")
+    cancelled = client.post(f"{API}/missions/{mid}/cancel", headers=auth(requester)).json()
+    _assert_inline_shape(cancelled, "cancelMission")
+
+
+def test_dispute_settlement_shapes(client, requester, worker):
+    from tests.test_im_dispute_support import _open_dispute
+
+    _task, dispute = _open_dispute(client, requester, worker)
+    proposed = client.post(f"{API}/disputes/{dispute['id']}/settlement", json={"executor_share_bps": 5000},
+                           headers=auth(requester)).json()
+    _assert_shape(proposed, "Dispute")
+    accepted = client.post(f"{API}/disputes/{dispute['id']}/settlement/accept", headers=auth(worker)).json()
+    _assert_shape(accepted, "Dispute")
+
+
+def test_content_comment_and_template_shapes(client, requester, worker):
+    post = client.post(f"{API}/contents", json={"kind": "post", "body": "今天的作品"}, headers=auth(requester))
+    assert post.status_code == 201, post.text
+    cid = post.json()["id"]
+    client.post(f"{API}/contents/{cid}/comments", json={"body": "做得好"}, headers=auth(worker))
+    comments = client.get(f"{API}/contents/{cid}/comments", headers=auth(worker)).json()
+    _assert_inline_shape(_first(comments), "contentComments")
+    templates = client.get(f"{API}/knowledge/templates?category=保洁", headers=auth(requester)).json()
+    _assert_inline_shape(templates, "decompositionTemplate")
