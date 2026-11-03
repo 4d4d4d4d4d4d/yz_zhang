@@ -13,6 +13,7 @@ import LicensesBlock from '../Licenses';
 import HandoverBlock from '../Handover';
 import { PreviousStepInputs, ShareToNextSteps } from '../SubtaskShares';
 import { RecipientLinkPanel } from '../RecipientLink';
+import { DepartPanel, canDepart } from '../Depart';
 
 type AppRow = { id: number; applicant_id: number; nickname: string; credit_score: number; rating_avg: number; bid_cents: number; message: string; status: string; promise_flag?: string };
 
@@ -121,6 +122,8 @@ export default function TaskDetail() {
         )}
         {/* SCN-122（356 号 spec）给服务对象一条免登录只读进度链接 */}
         {task.on_behalf && isCreator && !['completed', 'cancelled'].includes(task.status) && <RecipientLinkPanel taskId={taskId} />}
+        {/* SCN-122c（364 号 spec）接单人报「出发了」 */}
+        {canDepart(task, me?.id) && <DepartPanel taskId={taskId} />}
         {/* SCN-156（278 号 spec）已完成的单：发单人允许接单人把这一单放进作品集，随时撤回 */}
         {task.status === 'completed' && isCreator && task.executor_id !== null && (
           <p aria-label="作品展示授权">

@@ -1,5 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
+  DepartResult,
   PublicProfileExtras,
   AmlStats,
   ConversationListItem,
@@ -2120,6 +2121,10 @@ export class PlatformClient {
   /** SCN-122 这一单的服务对象进度链接状态：有没有、到哪天、被打开过几次 */
   recipientLink(taskId: number) {
     return this.request<RecipientLinkStatus>('GET', `/tasks/${taskId}/recipient-link`);
+  }
+  /** SCN-122c 接单人报「出发了」：预计多少分钟后到（5~240）；发单人收到通知，服务对象的进度链接页也显示 */
+  departTask(taskId: number, etaMinutes: number) {
+    return this.request<DepartResult>('POST', `/tasks/${taskId}/depart`, { eta_minutes: etaMinutes });
   }
   /** SCN-122 作废服务对象进度链接，立刻打不开 */
   revokeRecipientLink(taskId: number) {

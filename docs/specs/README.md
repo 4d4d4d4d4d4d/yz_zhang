@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 364 | 接单人「出发了」：告诉发单人和服务对象预计几点到 | [364-depart-eta.md](./364-depart-eta.md) | P0 |
 | 363 | 形状闸门认 null / 联合 / Partial，未验证调用点清零 | [363-shape-ratchet-0.md](./363-shape-ratchet-0.md) | P0 |
 | 362 | 第三十八轮场景发掘：燃气灶与热水器安装、成人外语口语陪练 | [362-scenario-round-38.md](./362-scenario-round-38.md) | P0 |
 | 361 | 形状比较器认交叉类型、棘轮 22 → 13 | [361-shape-ratchet-13.md](./361-shape-ratchet-13.md) | P0 |

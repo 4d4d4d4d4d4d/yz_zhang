@@ -4,6 +4,8 @@ import { formatDateTime } from './time';
 import type { RecipientLinkStatus, RecipientProgress } from './types';
 
 export const RECIPIENT_LINK_DAYS = [1, 3, 7, 14] as const;
+/** SCN-122c 接单人报「出发了」时可选的预计分钟数 */
+export const DEPART_ETA_MINUTES = [15, 30, 45, 60, 90] as const;
 
 /** 发单人面板上一行说清链接现在怎样 */
 export function recipientLinkLine(s: RecipientLinkStatus | null | undefined): string {
@@ -38,6 +40,7 @@ export function recipientProgressLines(p: RecipientProgress): string[] {
   if (when) lines.push(`时间：${when}（北京时间）`);
   else if (p.deadline) lines.push(`最晚 ${formatDateTime(p.deadline)} 前`);
   if (Number(p.visits_planned) > 0) lines.push(`上门：计划 ${p.visits_planned} 次，已回报 ${p.visits_reported} 次`);
+  if (p.departed_at && p.eta_at) lines.push(`已出发，预计 ${formatDateTime(p.eta_at)} 到`);
   lines.push(p.last_arrival_at ? `最近一次到达：${formatDateTime(p.last_arrival_at)}` : '还没有到达记录');
   return lines;
 }

@@ -560,6 +560,7 @@ api POST /api/v1/tasks/{task_id}/checkin
 api POST /api/v1/tasks/{task_id}/days/{work_date}/reboost
 api POST /api/v1/tasks/{task_id}/decompositions
 api POST /api/v1/tasks/{task_id}/deliver
+api POST /api/v1/tasks/{task_id}/depart
 api POST /api/v1/tasks/{task_id}/disputes
 api POST /api/v1/tasks/{task_id}/experience-post
 api POST /api/v1/tasks/{task_id}/invitations
@@ -670,6 +671,7 @@ app certifications
 app collaborators
 app decompose
 app deliverables
+app depart
 app errandReview
 app experience
 app gig
@@ -898,6 +900,7 @@ sdk deleteWorkbenchRoutine
 sdk deliver
 sdk deliverMilestone
 sdk deliverMilestones
+sdk departTask
 sdk disablePack
 sdk discardMissionDraft
 sdk discardToolDraft

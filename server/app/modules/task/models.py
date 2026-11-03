@@ -182,6 +182,8 @@ class ProgressLog(Base):
     # SCN-192（317 号 spec）发单人对这一次上门回报的确认 / 异议（称重读数、做了什么，当场说清）；都空 = 还没表态
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     objection: Mapped[str] = mapped_column(String(300), default="", server_default="")
+    # SCN-122c（364 号 spec）接单人点「出发了」（kind=depart）时报的预计到达时间
+    eta_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Review(Base):

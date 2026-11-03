@@ -102,6 +102,8 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
     (r"^PATCH /tasks/.*/days/.*/shift$", "party", "改某一天的时段是发单人的动作（202 号 spec；test_change_day_shift 行为验，非发单人 403）"),
     (r"^(POST|DELETE) /tasks/.*/showcase-consent$", "party", "作品展示授权是发单人的动作（278 号 spec；test_showcase_consent 行为验，接单人 403）"),
     (r"^PATCH /tasks/.*/recipient$", "party", "改服务对象是发单人的动作（197 号 spec；test_change_recipient 行为验，非发单人 403）"),
+    (r"^POST /tasks/[^/]*/depart$", "party",
+     "报「出发了」只有接这一单的人能做（364 号 spec；test_depart 行为验，发单人 403）"),
     (r"^(GET|POST|DELETE) /tasks/[^/]*/recipient-link$", "party",
      "服务对象进度链接的生成、状态与作废只给发单人（356 号 spec；test_recipient_links 行为验，接单人三种方法都 403）"),
     (r"^GET /recipient-progress/", "self",

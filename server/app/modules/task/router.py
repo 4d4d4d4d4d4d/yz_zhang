@@ -117,6 +117,12 @@ class CheckinIn(BaseModel):
     lng: float
 
 
+class DepartIn(BaseModel):
+    """SCN-122c 接单人「出发了」：预计多少分钟后到。"""
+    model_config = ConfigDict(extra="forbid")
+    eta_minutes: int = Field(ge=5, le=240)
+
+
 class RejectIn(BaseModel):
     reason: str = Field(min_length=2, max_length=500)
 
@@ -1379,6 +1385,46 @@ def checkin(
         )
     )
     return {"ok": True, "distance_m": round(distance)}
+
+
+DEPART_MERGE_MINUTES = 10   # 十分钟内再点一次「出发了」只改预计时间，不再发一条通知
+
+
+@router.post("/tasks/{task_id}/depart", status_code=201)
+def depart(task_id: int, body: DepartIn, user: User = Depends(get_current_user),
+           db: Session = Depends(get_db, scope="function")):
+    """SCN-122c（364 号 spec）接单人点「出发了」：发单人收到「已出发、预计几点到」，服务对象的进度链接页也显示。
+
+    只记出发时间与预计到达，不记位置（位置共享走 GEO-021 的行程共享，要接单人自己开）。"""
+    from datetime import timedelta
+
+    from app.core.timefmt import export_time
+    from app.modules.notification.service import notify
+
+    task = _get_task(db, task_id)
+    if user.id != task.executor_id:
+        raise forbidden("只有接这一单的人能报「出发了」", "depart_not_executor")
+    if task.is_remote:
+        raise bad_request("线上任务不用上门，不用报「出发了」", "depart_remote_task")
+    if task.status not in ("matched", "in_progress"):
+        raise conflict("这一单现在不在待上门的状态，不用报「出发了」", "depart_not_active")
+    now = utcnow()
+    eta = now + timedelta(minutes=body.eta_minutes)
+    recent = (db.query(ProgressLog)
+              .filter(ProgressLog.task_id == task_id, ProgressLog.user_id == user.id, ProgressLog.kind == "depart",
+                      ProgressLog.created_at >= now - timedelta(minutes=DEPART_MERGE_MINUTES))
+              .order_by(ProgressLog.id.desc()).first())
+    hhmm = export_time(eta)[11:16]
+    text = f"已出发，预计 {hhmm} 到（北京时间）"
+    if recent:
+        recent.eta_at, recent.content = eta, text
+        db.flush()
+        return {"id": recent.id, "departed_at": iso(recent.created_at), "eta_at": iso(eta), "updated": True}
+    log = ProgressLog(task_id=task_id, user_id=user.id, kind="depart", content=text, eta_at=eta)
+    db.add(log)
+    db.flush()
+    notify(db, task.creator_id, "task", "接单人已出发", f"《{task.title}》{text}")
+    return {"id": log.id, "departed_at": iso(log.created_at), "eta_at": iso(eta), "updated": False}
 
 
 def _visit_view(task: Task, logs: list[ProgressLog]) -> dict:

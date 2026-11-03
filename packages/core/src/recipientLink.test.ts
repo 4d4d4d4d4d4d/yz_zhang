@@ -6,7 +6,7 @@ const base: RecipientProgress = {
   recipient_label: '我妈', title: '修水龙头', phase: 'assigned', phase_text: '已经定好人了',
   helpers: [{ name: '李师傅', verified: true, work_date: null }], work_date: '2026-11-05', days: 1,
   shift_start: '09:00', shift_end: '11:00', deadline: null, visits_planned: 0, visits_reported: 0,
-  last_arrival_at: null, expires_at: '2026-11-10T00:00:00Z',
+  last_arrival_at: null, departed_at: null, eta_at: null, expires_at: '2026-11-10T00:00:00Z',
 };
 
 describe('SCN-122 服务对象进度链接', () => {
@@ -45,5 +45,11 @@ describe('SCN-122 服务对象进度链接', () => {
     const noHelpers = recipientProgressLines({ ...base, helpers: undefined } as unknown as RecipientProgress);
     expect(noHelpers[0]).toBe('我妈，这一单已经定好人了');
     expect(noHelpers.some((l) => l.startsWith('来的人'))).toBe(false);
+  });
+
+  it('SCN-122c 出发了还没到：多一行「已出发，预计几点到」；没出发不显示', () => {
+    expect(recipientProgressLines(base).some((l) => l.startsWith('已出发'))).toBe(false);
+    const on = recipientProgressLines({ ...base, departed_at: '2026-11-05T00:30:00Z', eta_at: '2026-11-05T01:00:00Z' });
+    expect(on.some((l) => l.startsWith('已出发，预计 '))).toBe(true);
   });
 });

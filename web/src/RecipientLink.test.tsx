@@ -75,11 +75,12 @@ describe('SCN-122 服务对象进度链接', () => {
       recipient_label: '我妈', title: '装扶手', phase: 'assigned', phase_text: '已经定好人了',
       helpers: [{ name: '李师傅', verified: true, work_date: null }], work_date: '2026-11-05', days: 1,
       shift_start: '09:00', shift_end: '11:00', deadline: null, visits_planned: 0, visits_reported: 0,
-      last_arrival_at: null, expires_at: '2026-11-10T00:00:00Z' } : undefined), null);
+      last_arrival_at: null, departed_at: '2026-11-05T00:30:00Z', eta_at: '2026-11-05T01:00:00Z', expires_at: '2026-11-10T00:00:00Z' } : undefined), null);
     const page = await screen.findByLabelText('服务进度');
     expect(page.textContent).toContain('我妈，这一单已经定好人了');
     expect(page.textContent).toContain('李师傅（已实名）');
     expect(page.textContent).toContain('09:00~11:00');
+    expect(page.textContent).toContain('已出发，预计');   // SCN-122c（364 号 spec）
     expect(page.textContent).not.toContain('139');
     expect(calls.every((c) => c.path !== '/tasks/60/recipient-link')).toBe(true);
   });

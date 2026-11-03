@@ -519,7 +519,17 @@ export interface RecipientProgress {
   visits_planned: number;
   visits_reported: number;
   last_arrival_at: string | null;
+  /** SCN-122c（364 号 spec）最近一次「出发了」，之后还没到达才有；到了就是 null */
+  departed_at: string | null;
+  eta_at: string | null;
   expires_at: string;
+}
+/** SCN-122c 接单人报「出发了」的结果；十分钟内再报一次只改预计时间（updated=true，不再发通知） */
+export interface DepartResult {
+  id: number;
+  departed_at: string;
+  eta_at: string;
+  updated: boolean;
 }
 /** ACC-013 别人的名片页多给的三项（服务定价、可接单时间、在不在接单）。档案不公开、已注销或封禁时不给。
  *  CLI-083b（363 号 spec）：服务端一直在给，此前 SDK 只声明了 Partial<Me>，客户端看不见 */

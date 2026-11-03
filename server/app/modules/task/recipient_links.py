@@ -167,6 +167,12 @@ def recipient_progress(token: str, request: Request, db: Session = Depends(get_d
     logs = [lg for lg in db.query(ProgressLog).filter(ProgressLog.task_id.in_(ids), ProgressLog.kind.in_(("checkin", "visit")))
             if execs.get(lg.task_id) == lg.user_id]
     last = max((lg.created_at for lg in logs), default=None)
+    # SCN-122c（364 号 spec）最近一次「出发了」，且之后还没到达：显示「已出发，预计几点到」
+    departs = [lg for lg in db.query(ProgressLog).filter(ProgressLog.task_id.in_(ids), ProgressLog.kind == "depart")
+               if execs.get(lg.task_id) == lg.user_id]
+    dep = max(departs, key=lambda lg: lg.created_at, default=None)
+    if dep is not None and last is not None and last >= dep.created_at:
+        dep = None
     row.view_count = (row.view_count or 0) + 1
     row.last_viewed_at = utcnow()
     phase = _phase(task, slots)
@@ -179,6 +185,8 @@ def recipient_progress(token: str, request: Request, db: Session = Depends(get_d
         "visits_planned": sum(t.visits_planned or 0 for t in units),
         "visits_reported": sum(1 for lg in logs if lg.kind == "visit"),
         "last_arrival_at": iso(last) if last else None,
+        "departed_at": iso(dep.created_at) if dep else None,
+        "eta_at": iso(dep.eta_at) if dep and dep.eta_at else None,
         "expires_at": iso(row.expires_at),
     }
 
