@@ -9,11 +9,11 @@
 // - 助理不可用时**原样显示服务端算好的理由**（CLI-064）；邀请由发布方主动发，平台不自动派单；
 //   置信度写明是助理**自报**的（AGT-013）；交付被平台判据拦下时给出人工核验入口。
 import {
-  apiErrorText, fmtYuan, type AgentProfileView, type AgentRunView, type EligibleAgent,
+  apiErrorText, DESIGNATE_VERIFIER_HINT, fmtYuan, parseVerifierId, type AgentProfileView, type AgentRunView, type EligibleAgent,
   type PlatformClient, type Recommendation, type Task,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 /** MATCH-001/002 AI 推荐人选：发布方、已发布的任务。 */
 export function RecommendationsBlock({ client, task }: { client: PlatformClient; task: Task }) {
@@ -74,6 +74,8 @@ export function AgentBlock({ client, task, onChanged }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  // VER-050（372 号 spec）点名核验人：填对方的用户编号；空着就由平台派单
+  const [verifierInput, setVerifierInput] = useState('');
 
   const load = useCallback(async () => {
     const a = await client.agents().catch(() => []);
@@ -162,10 +164,18 @@ export function AgentBlock({ client, task, onChanged }: {
           {!!deliveryBlock && (
             <>
               <Text style={s.error} testID="delivery-block">{deliveryBlock}</Text>
+              <TextInput style={s.input} keyboardType="numeric" value={verifierInput} onChangeText={setVerifierInput}
+                         placeholder="点名核验人（用户编号，可不填）" />
               <TouchableOpacity style={[s.ghost, busy && s.disabled]} disabled={busy}
-                                onPress={() => act(() => client.requestVerification(task.id), '核验单已提交')}>
+                                onPress={() => {
+                                  const vid = parseVerifierId(verifierInput);
+                                  if (vid === null) { setError('用户编号填正整数；不点名就空着'); return; }
+                                  void act(() => client.requestVerification(task.id, vid),
+                                    vid === undefined ? '核验单已提交' : '核验单已提交，已通知你点名的核验人');
+                                }}>
                 <Text>申请人工核验</Text>
               </TouchableOpacity>
+              <Text style={s.muted}>{DESIGNATE_VERIFIER_HINT}</Text>
               {/* VER-002 谁付费不是细节 */}
               <Text style={s.muted}>置信度不足导致的升级由平台承担核验费；你主动核验一个已成功的结果，费用由你承担。</Text>
             </>
@@ -189,4 +199,5 @@ const s = StyleSheet.create({
   primary: { backgroundColor: '#275c52', borderRadius: 10, padding: 12, alignItems: 'center' },
   primaryText: { color: '#fff', fontWeight: '600' },
   disabled: { opacity: 0.4 },
+  input: { backgroundColor: '#fff', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#e5e7eb' },
 });

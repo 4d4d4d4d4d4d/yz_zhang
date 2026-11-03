@@ -1667,11 +1667,13 @@ export interface VerificationOrderView {
   task_id: number;
   /** open / claimed / done / cancelled / expired */
   status: string;
-  /** escalation 自动升级 / requested 发布方主动 */
+  /** escalation 自动升级 / requested 发布方主动 / designated 发布方点名（VER-050，发布方付） */
   trigger: string;
   fee_cents: number;
   payer_id: number;
   verifier_id: number | null;
+  /** VER-050（372 号 spec）发布方点名的核验人；只有他能接（老服务端没有） */
+  designated_verifier_id?: number | null;
   outcome: string;
   comment: string;
   revised_output: string;

@@ -33,3 +33,4 @@ export * from './recipientLink';
 export * from './clarify';
 export * from './cockpit';
 export * from './teamBudget';
+export * from './designatedVerifier';

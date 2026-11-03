@@ -26,7 +26,21 @@ def verifier_block(db: Session, task, order: VerificationOrder, user: User) -> s
     """VER-020/021 能不能接这一单核验；空串表示可以。
 
     单一判断来源：接单端点与「可接核验列表」读同一个函数。
+    VER-050：发单人点名了别人的，别人不能接；被点名的人免「本类目完成记录」这一条（发单人替他担保懂行），
+    其余（不是 AI、实名、没被封、不是当事人、不是付费方、信用分）一条不少。
     """
+    designated = getattr(order, "designated_verifier_id", None)
+    if designated and designated != user.id:
+        return "发单人点名了别的核验人"
+    return _eligibility(db, task, user, payer_id=order.payer_id, need_category=not designated)
+
+
+def designated_block(db: Session, task, user: User, payer_id: int) -> str:
+    """VER-050 发单人点名时就先查一遍：别等对方来接才发现接不了。"""
+    return _eligibility(db, task, user, payer_id=payer_id, need_category=False)
+
+
+def _eligibility(db: Session, task, user: User, *, payer_id: int, need_category: bool) -> str:
     # VER-020 **让 AI 核验 AI 的产出，是把同一个不确定性叠两遍，不是降低它。**
     # 整条升级链路的价值就建立在「最后有一个人负责」上。
     if user.is_agent:
@@ -38,11 +52,11 @@ def verifier_block(db: Session, task, order: VerificationOrder, user: User) -> s
     # VER-021 利益冲突不靠自觉
     if user.id in (task.creator_id, task.executor_id):
         return "本单当事人不能核验本单"
-    if order.payer_id == user.id:
+    if payer_id == user.id:
         return "付费方不能核验本单"
     if user.credit_score < settings.VERIFIER_MIN_CREDIT:
         return f"信用分需达到 {settings.VERIFIER_MIN_CREDIT}"
-    if not _has_completed_in_category(db, user.id, task.category):
+    if need_category and not _has_completed_in_category(db, user.id, task.category):
         return f"需有「{task.category}」类目的完成记录"
     return ""
 
@@ -60,7 +74,7 @@ def _has_completed_in_category(db: Session, user_id: int, category: str) -> bool
 
 
 def create_order(db: Session, task, *, trigger: str, agent_run_id: int | None,
-                 payer_id: int) -> VerificationOrder:
+                 payer_id: int, designated_verifier_id: int | None = None) -> VerificationOrder:
     """VER-010 下单即预扣。
 
     不走 escrow 三态：常见情形下付款方是平台自己，让平台对自己托管没有意义。
@@ -104,7 +118,7 @@ def create_order(db: Session, task, *, trigger: str, agent_run_id: int | None,
 
     order = VerificationOrder(
         task_id=task.id, agent_run_id=agent_run_id, payer_id=payer_id,
-        trigger=trigger, fee_cents=fee,
+        trigger=trigger, fee_cents=fee, designated_verifier_id=designated_verifier_id,
         deadline=utcnow() + timedelta(hours=settings.VERIFY_DEADLINE_HOURS),
     )
     db.add(order)

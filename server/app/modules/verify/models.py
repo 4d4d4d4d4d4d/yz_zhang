@@ -37,6 +37,8 @@ class VerificationOrder(Base):
     fee_cents: Mapped[int] = mapped_column(Integer, default=0)
 
     verifier_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    # VER-050（372 号 spec）发单人点名的核验人：有值时只有这个人能接；核验费由发单人付（trigger=designated）
+    designated_verifier_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     # open（待接单）/ claimed（已接单）/ done / cancelled / expired
     status: Mapped[str] = mapped_column(String(12), default="open", index=True)
 

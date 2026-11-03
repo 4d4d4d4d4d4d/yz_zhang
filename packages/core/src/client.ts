@@ -2339,8 +2339,10 @@ export class PlatformClient {
   // ---- VER 人类核验 ----
   /** VER-002 谁付费由服务端判断：置信度不足自动升级 → 平台付；
    *  主动核验一个已成功的 run → 发布方付。响应里的 `payer_id` 就是答案。 */
-  requestVerification(taskId: number) {
-    return this.request<VerificationOrderView>('POST', `/tasks/${taskId}/verification`);
+  requestVerification(taskId: number, verifierId?: number) {
+    // VER-050（372 号 spec）点名一位核验人：只有他能接，核验费由你付；不传就由平台派单
+    if (verifierId === undefined) return this.request<VerificationOrderView>('POST', `/tasks/${taskId}/verification`);
+    return this.request<VerificationOrderView>('POST', `/tasks/${taskId}/verification`, { verifier_id: verifierId });
   }
   /** 可接的核验单。不能接的带 `reason`——**只显示空列表，核验人不知道
    *  是资格不够还是真没单**。 */

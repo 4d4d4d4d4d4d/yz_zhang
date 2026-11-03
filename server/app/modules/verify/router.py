@@ -1,12 +1,12 @@
 """VER 核验单 + ESCA 争议升级阶梯（49 号 spec）。"""
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.deps import get_current_user, require_job_auth
 from app.core.locks import job_slot
-from app.core.errors import conflict, forbidden, not_found
+from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.modules.account.models import User
 from app.modules.wallet import service as wallet
 
@@ -15,6 +15,12 @@ from .models import VerificationOrder
 from app.core.timefmt import iso
 
 router = APIRouter(tags=["verify"])
+
+
+class VerifyRequestIn(BaseModel):
+    """VER-050（372 号 spec）发单人点名一位核验人；不传就和原来一样由平台派单。"""
+    model_config = ConfigDict(extra="forbid")
+    verifier_id: int | None = Field(default=None, ge=1)
 
 
 class OutcomeIn(BaseModel):
@@ -27,6 +33,7 @@ def _dump(o: VerificationOrder) -> dict:
     return {
         "id": o.id, "task_id": o.task_id, "status": o.status, "trigger": o.trigger,
         "fee_cents": o.fee_cents, "payer_id": o.payer_id, "verifier_id": o.verifier_id,
+        "designated_verifier_id": o.designated_verifier_id,
         "outcome": o.outcome, "comment": o.comment,
         "revised_output": o.revised_output, "criteria_results": o.criteria_results,
         "deadline": iso(o.deadline),
@@ -41,7 +48,7 @@ def _task(db: Session, task_id: int):
 
 
 @router.post("/tasks/{task_id}/verification", status_code=201)
-def request_verification(task_id: int, user: User = Depends(get_current_user),
+def request_verification(task_id: int, body: VerifyRequestIn | None = None, user: User = Depends(get_current_user),
                          db: Session = Depends(get_db, scope="function")):
     """下一张核验单。
 
@@ -65,6 +72,24 @@ def request_verification(task_id: int, user: User = Depends(get_current_user),
         raise conflict("执行中，请稍候", "agent_run_in_progress")
 
     escalated = run.status == "escalated"
+    designated = body.verifier_id if body else None
+    if designated:
+        # VER-050 点名的核验人：核验费由发单人付。平台付费的单任由发单人点人，
+        # 等于让他拿平台的钱给熟人发报酬；所以点名了就自己付，升级的单也一样（界面上说清楚）
+        target = db.get(User, designated)
+        if not target or target.is_deleted:
+            raise not_found("没有这个用户：请核对对方的用户编号", "verifier_not_found")
+        block = service.designated_block(db, task, target, payer_id=user.id)
+        if block:
+            raise bad_request(f"对方现在不能核验这一单：{block}", "verifier_not_eligible")
+        order = service.create_order(db, task, trigger="designated", agent_run_id=run.id,
+                                     payer_id=user.id, designated_verifier_id=target.id)
+        from app.modules.notification.service import notify
+
+        notify(db, target.id, "verify", "有人点名请你核验",
+               f"「{task.title}」的发单人请你核验 AI 的产出，报酬 ¥{order.fee_cents / 100:.2f}；"
+               f"请在核验台接单，截止前没接会自动退回给发单人")
+        return _dump(order)
     payer_id = wallet.PLATFORM_USER_ID if escalated else user.id
     order = service.create_order(
         db, task, trigger="escalation" if escalated else "requested",
@@ -86,6 +111,9 @@ def open_orders(user: User = Depends(get_current_user), db: Session = Depends(ge
     )
     out = []
     for o in rows:
+        # VER-050 点名了别人的单不出现在别人的列表里：接不了，也不该看到是谁家的单
+        if o.designated_verifier_id and o.designated_verifier_id != user.id:
+            continue
         task = _task(db, o.task_id)
         block = service.verifier_block(db, task, o, user)
         out.append({
@@ -104,6 +132,8 @@ def claim(order_id: int, user: User = Depends(get_current_user),
     if order.status != "open":
         raise conflict("该核验单已被接走或已结束", "not_claimable")
     task = _task(db, order.task_id)
+    if order.designated_verifier_id and order.designated_verifier_id != user.id:
+        raise forbidden("发单人点名了别的核验人，这一单只能由被点名的人接", "verifier_not_designated")
     block = service.verifier_block(db, task, order, user)
     if block:
         raise forbidden(block, "verifier_not_eligible")

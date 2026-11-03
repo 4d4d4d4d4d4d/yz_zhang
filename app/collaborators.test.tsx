@@ -110,3 +110,38 @@ describe('CLI-063/064 App：AI 助理', () => {
     expect(screen.getByText('重新执行')).toBeTruthy();
   });
 });
+
+describe('VER-050 App：点名核验人（372 号 spec）', () => {
+  const running = { ...TASK, status: 'in_progress', executor_id: 9 } as Task;
+  const routes = {
+    '/agents': [AGENT],
+    '/tasks/7/agent-runs': {
+      runs: [{ id: 1, task_id: 7, status: 'escalated', confidence_bps: 6200, output: '初稿', criteria_results: [], error: '',
+        moderation_status: 'pass', created_at: null, finished_at: null }],
+      delivery_block: '平台判据未通过：包含全部接口',
+    },
+    'POST /tasks/7/verification': { id: 2, status: 'open', trigger: 'designated', designated_verifier_id: 42 },
+  };
+  const posts = (calls: Call[]) => calls.filter((c) => c.method === 'POST' && c.path === '/tasks/7/verification');
+
+  it('填了编号带 verifier_id；乱填不发请求并说清；空着不带请求体', async () => {
+    const calls: Call[] = [];
+    render(<AgentBlock task={running} onChanged={() => undefined} client={makeClient(routes, calls)} />);
+    await screen.findByTestId('delivery-block');
+    expect(screen.getByText(/核验费由你付/)).toBeTruthy();
+    const input = screen.getByPlaceholderText('点名核验人（用户编号，可不填）');
+    fireEvent.changeText(input, 'abc');
+    fireEvent.press(screen.getByText('申请人工核验'));
+    expect(await screen.findByText('用户编号填正整数；不点名就空着')).toBeTruthy();
+    expect(posts(calls).length).toBe(0);
+    fireEvent.changeText(input, '42');
+    fireEvent.press(screen.getByText('申请人工核验'));
+    await waitFor(() => expect(posts(calls).length).toBe(1));
+    expect(posts(calls)[0].body).toEqual({ verifier_id: 42 });
+    expect(await screen.findByText('核验单已提交，已通知你点名的核验人')).toBeTruthy();
+    fireEvent.changeText(screen.getByPlaceholderText('点名核验人（用户编号，可不填）'), '');
+    fireEvent.press(screen.getByText('申请人工核验'));
+    await waitFor(() => expect(posts(calls).length).toBe(2));
+    expect(posts(calls)[1].body).toBeNull();
+  });
+});

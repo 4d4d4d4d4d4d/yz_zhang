@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 372 | 发单人点名核验人 | [372-designated-verifier.md](./372-designated-verifier.md) | P0 |
 | 371 | 第四十二轮场景发掘：老照片扫描修复、净水器安装与换滤芯 | [371-scenario-round-42.md](./371-scenario-round-42.md) | P0 |
 | 370 | 团队预算池自定义账期：按每月几号重置 | [370-team-budget-cycle.md](./370-team-budget-cycle.md) | P0 |
 | 369 | 第四十一轮场景发掘：墙面刷漆翻新、宠物善终 | [369-scenario-round-41.md](./369-scenario-round-41.md) | P0 |

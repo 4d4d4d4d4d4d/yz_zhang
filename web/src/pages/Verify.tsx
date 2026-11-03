@@ -1,5 +1,5 @@
 import {
-  apiErrorText, fmtYuan, lessonSpecific, VAGUE_LESSON_HINT,
+  apiErrorText, fmtYuan, lessonSpecific, VAGUE_LESSON_HINT, verifyTriggerLabel,
   type VerificationOrderDetail, type VerificationOrderView,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -59,7 +59,7 @@ export default function Verify() {
                 <strong>{o.task_title}</strong>{' '}
                 <span className="muted">{o.category} · 报酬 {fmtYuan(o.fee_cents)}</span>
                 <p className="muted">
-                  {o.trigger === 'escalation' ? '助理置信度不足，自动升级（平台付费）' : '发布方主动申请核验'}
+                  {verifyTriggerLabel(o.trigger)}
                 </p>
                 {/* CLI-064 不能接时把资格原因显示出来 */}
                 {!o.claimable && <p className="error" data-testid="verify-reason">{o.reason}</p>}

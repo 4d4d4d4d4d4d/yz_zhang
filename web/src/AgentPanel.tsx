@@ -1,5 +1,5 @@
 import {
-  apiErrorText, fmtYuan,
+  apiErrorText, DESIGNATE_VERIFIER_HINT, fmtYuan, parseVerifierId,
   type AgentProfileView, type AgentRunView, type EligibleAgent, type Task, asList,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -23,6 +23,8 @@ export function AgentPanel({ task, onChanged }: { task: Task; onChanged: () => v
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  // VER-050（372 号 spec）点名核验人：填对方的用户编号；空着就由平台派单
+  const [verifierInput, setVerifierInput] = useState('');
 
   const executorIsAgent = task.executor_id != null
     && agents.some((a) => a.user_id === task.executor_id);
@@ -117,11 +119,19 @@ export function AgentPanel({ task, onChanged }: { task: Task; onChanged: () => v
             <>
               <p className="error" style={{ marginTop: 8 }} data-testid="delivery-block">{deliveryBlock}</p>
               <div className="row">
+                <input aria-label="点名核验人的用户编号" placeholder="点名核验人（用户编号，可不填）" value={verifierInput}
+                       onChange={(e) => setVerifierInput(e.target.value)} style={{ maxWidth: 220 }} />
                 <button className="ghost" disabled={busy}
-                        onClick={() => act(() => client.requestVerification(task.id), '核验单已提交')}>
+                        onClick={() => {
+                          const vid = parseVerifierId(verifierInput);
+                          if (vid === null) { setError('用户编号填正整数；不点名就空着'); return; }
+                          void act(() => client.requestVerification(task.id, vid),
+                            vid === undefined ? '核验单已提交' : '核验单已提交，已通知你点名的核验人');
+                        }}>
                   申请人工核验
                 </button>
               </div>
+              <p className="muted">{DESIGNATE_VERIFIER_HINT}</p>
               {/* VER-002 谁付费不是细节：平台自有 agent 没把握是平台的问题 */}
               <p className="muted">
                 置信度不足导致的升级由平台承担核验费；你主动核验一个已成功的结果，费用由你承担。
