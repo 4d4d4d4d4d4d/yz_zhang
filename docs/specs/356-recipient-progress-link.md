@@ -98,3 +98,4 @@ d6f72f1 的全量回归红了两条全局闸门，都出自本批：
 
 - `test_tz061_no_bare_isoformat_in_modules`：链接页的 `work_date` 用了 `.isoformat()`。那是日期不是时刻、没有时区可言，改成 `str(date)`（输出一样是 YYYY-MM-DD）。
 - `test_e2e011_every_page_is_visited_or_exempt`：`/r/:token` 是动态令牌页，扫描器只认字面路径，照 `/teams/join/:token` 的先例写进豁免表并写明由哪些测试覆盖。
+- 01c65a9 的回归又红了 Web 的 `RoutesResilience`（APP-091 每一页都要进畸形响应探针）：把 `/r/abc` 加进探针后，**进度页在响应畸形时真的会白屏**（读 `helpers.length` 抛错）。修法：`recipientProgressLines` 对非对象、缺进展文字的响应返回空、接单人列表走 `asList`；页面拿到空行就显示「进度暂时看不了，请稍后再打开，或直接问发单的家人」。SDK 补一条测试，两处修正各自红验。

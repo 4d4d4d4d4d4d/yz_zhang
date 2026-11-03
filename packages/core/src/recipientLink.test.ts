@@ -38,4 +38,12 @@ describe('SCN-122 服务对象进度链接', () => {
     expect(noTime.some((l) => l.startsWith('最晚 '))).toBe(true);
     expect(noTime.some((l) => l.startsWith('来的人'))).toBe(false);
   });
+
+  it('响应畸形不抛错：不是对象、缺进展文字就一行都不给（页面据此显示「暂时看不了」），缺接单人列表照样出其余几行', () => {
+    expect(recipientProgressLines({} as unknown as RecipientProgress)).toEqual([]);
+    expect(recipientProgressLines(null as unknown as RecipientProgress)).toEqual([]);
+    const noHelpers = recipientProgressLines({ ...base, helpers: undefined } as unknown as RecipientProgress);
+    expect(noHelpers[0]).toBe('我妈，这一单已经定好人了');
+    expect(noHelpers.some((l) => l.startsWith('来的人'))).toBe(false);
+  });
 });

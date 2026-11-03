@@ -18,7 +18,7 @@ const ME = (admin: boolean) => ({ id: 1, phone: '138', nickname: '探针用户',
 const ROUTES = ['/', '/admin', '/ask', '/chain', '/circles', '/community', '/cooperate', '/developer', '/gig', '/influence',
   '/messages', '/missions', '/notebook', '/notifications', '/opc', '/opportunities', '/packs', '/people/1', '/people/1/follows',
   '/profile', '/publish', '/records', '/rewards', '/sandbox', '/search', '/space/edit', '/support', '/tasks/7/decompose',
-  '/teams', '/teams/join/abc', '/ventures', '/verify', '/wallet', '/workbench', '/xapp'];
+  '/r/abc', '/teams', '/teams/join/abc', '/ventures', '/verify', '/wallet', '/workbench', '/xapp'];
 describe('APP-091 Web 每一页：响应畸形时都不白屏（导航还在）', () => {
   for (const [label, body] of [['{}', {}], ['null', null], ['[]', []], ['x', 'x']] as Array<[string, unknown]>)
     for (const route of ROUTES)

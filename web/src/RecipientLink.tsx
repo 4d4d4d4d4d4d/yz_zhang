@@ -64,10 +64,13 @@ export function RecipientProgressPage() {
   }, [client, token]);
   if (error) return <div className="page"><p className="error" role="alert">{error}</p></div>;
   if (!p) return <div className="page"><p className="muted">正在加载进度…</p></div>;
+  const lines = recipientProgressLines(p);
+  // APP-091 响应畸形：说清看不了、找谁，不白屏
+  if (!lines.length) return <div className="page"><p className="error" role="alert">进度暂时看不了，请稍后再打开，或直接问发单的家人</p></div>;
   return (
     <div className="page" aria-label="服务进度" style={{ fontSize: '1.15em' }}>
       <h1>{p.title}</h1>
-      <ul>{recipientProgressLines(p).map((l) => <li key={l}>{l}</li>)}</ul>
+      <ul>{lines.map((l) => <li key={l}>{l}</li>)}</ul>
       <p className="muted">这是家人替你发的单。有疑问请直接联系发单的家人；不要把验证码、银行卡号告诉任何人。</p>
     </div>
   );
