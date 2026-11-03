@@ -806,6 +806,12 @@ export interface WithdrawRequestRow {
 
 /** AML-021 可疑活动。整条线**只对管理员开放**：可疑标记一旦出现在用户
  *  能看到的任何地方（包括数据导出）就构成 tipping-off。 */
+/** AML-022 可疑交易统计（CLI-083b：此前 SDK 声明成 Record<string, number>，服务端实际给的是这三项） */
+export interface AmlStats {
+  total: number;
+  by_status: Record<string, number>;
+  by_pattern: Record<string, number>;
+}
 export interface SuspiciousActivityRow {
   id: number;
   user_id: number;
@@ -1441,14 +1447,21 @@ export interface SignatureReport {
   reliability_note: string;
 }
 
+/** 一张第三方存证回执（CLI-083b 拆成具名接口：多行内联数组形状闸门读不出） */
+export interface AnchorReceipt {
+  seq_from: number;
+  seq_to: number;
+  receipt_no: string;
+  authority: string;
+  backed: boolean;
+  detail: string;
+  at: string;
+}
 export interface AnchorCoverage {
   total_entries: number;
   third_party_backed_to_seq: number;
   uncovered_entries: number;
-  receipts: Array<{
-    seq_from: number; seq_to: number; receipt_no: string;
-    authority: string; backed: boolean; detail: string; at: string;
-  }>;
+  receipts: AnchorReceipt[];
   note: string;
 }
 
@@ -2321,10 +2334,23 @@ export interface OrganizationRecordView {
   notice: string;
 }
 
+/** 分配提案上的一次同意（CLI-083b 拆成具名接口，原为一行多字段，形状闸门读不出） */
+export interface PayoutApproval {
+  user_id: number;
+  at: string;
+}
 export interface PayoutProposalView {
-  id: number; venture_id: number; created_by: number; amount_cents: number; memo: string;
-  member_ids: number[]; share_snapshot: ShareRow[]; approvals: Array<{user_id:number;at:string}>;
-  status: 'pending'|'rejected'|'executed'; distribution_id: number|null; expires_at: string;
+  id: number;
+  venture_id: number;
+  created_by: number;
+  amount_cents: number;
+  memo: string;
+  member_ids: number[];
+  share_snapshot: ShareRow[];
+  approvals: PayoutApproval[];
+  status: 'pending' | 'rejected' | 'executed';
+  distribution_id: number | null;
+  expires_at: string;
 }
 
 /** Configuration inventory, deliberately not a legal/commercial launch approval. */

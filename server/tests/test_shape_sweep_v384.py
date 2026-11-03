@@ -154,3 +154,102 @@ def test_my_teams_and_ventures_shapes(client):
     client.post(f"{API}/teams", json={"name": "咖啡队"}, headers=auth(founder))
     teams = client.get(f"{API}/teams/mine", headers=auth(founder)).json()
     _assert_shape(_first(teams), "MyTeamRow")
+
+
+# ------------------------------------------------------------------ V386（359 号 spec）第三批
+def test_compliance_and_moderation_shapes(client, requester):
+    from tests.test_aml import funded_user, withdraw
+
+    admin = make_admin(client, "13600038601")
+    h = auth(admin)
+    user = funded_user(client, "13900038601")
+    withdraw(client, user, 999900)
+    withdraw(client, user, 999900)
+    listing = client.get(f"{API}/admin/aml/activities", headers=h).json()
+    _assert_inline_shape(listing, "amlActivities")
+    _assert_shape(_first(listing["items"]), "SuspiciousActivityRow")
+    reviewed = client.post(f"{API}/admin/aml/activities/{listing['items'][0]['id']}/review",
+                           json={"decision": "to_report", "note": "已核实，报合规官"}, headers=h).json()
+    _assert_inline_shape(reviewed, "reviewAmlActivity")
+    stats = client.get(f"{API}/admin/aml/stats", headers=h).json()
+    _assert_shape(stats, "AmlStats")
+    banned = client.post(f"{API}/admin/users/{requester['id']}/ban", headers=h).json()
+    _assert_inline_shape(banned, "banUser")
+
+
+def test_certification_queue_shapes(client):
+    from tests.test_certification import apply_cert, make_verified
+
+    admin = make_admin(client, "13600038602")
+    w = make_verified(client, "13600038603")
+    apply_cert(client, w, name="健康证明")
+    pending = client.get(f"{API}/admin/certifications/pending", headers=auth(admin)).json()
+    _assert_shape(_first(pending), "PendingCertificationRow")
+    rows = client.get(f"{API}/admin/certifications?status=pending", headers=auth(admin)).json()
+    _assert_shape(_first(rows), "PendingCertificationRow")
+
+
+def test_anchor_shapes(client, requester, worker):
+    from tests.test_anchor_chain import _build_chain
+
+    contract_id = _build_chain(client, requester, worker)
+    verify = client.get(f"{API}/anchors/verify").json()
+    _assert_inline_shape(verify, "verifyAnchorChain")
+    coverage = client.get(f"{API}/anchors/coverage", headers=auth(requester)).json()
+    _assert_shape(coverage, "AnchorCoverage")
+    chain = client.get(f"{API}/anchors/blockchain", headers=auth(requester)).json()
+    _assert_inline_shape(chain, "blockchainStatus")
+    anchors = client.get(f"{API}/anchors/contracts/{contract_id}", headers=auth(requester)).json()
+    _assert_inline_shape(_first(anchors), "contractAnchors")
+
+
+def test_venture_governance_shapes(client):
+    from tests.test_organization_records import body
+    from tests.test_payout_governance import setup, vote
+
+    a, b, vid, base, proposal = setup(client)
+    _assert_shape(proposal, "PayoutProposalView")
+    voted = vote(client, base, b, proposal).json()
+    _assert_shape(voted, "PayoutProposalView")
+    proposals = client.get(f"{base}/payout-proposals", headers=auth(a)).json()
+    _assert_shape(_first(proposals), "PayoutProposalView")
+    rec = client.post(f"{base}/organization-records", headers=auth(a), json=body(a))
+    assert rec.status_code == 201, rec.text
+    record = rec.json()
+    _assert_shape(record, "OrganizationRecordView")
+    records = client.get(f"{base}/organization-records", headers=auth(a)).json()
+    _assert_shape(_first(records), "OrganizationRecordView")
+
+
+def test_new_venture_and_team_spend_shapes(client):
+    from tests.test_early_cooperation import VER, make_user
+    from tests.test_team_spend_return import _setup
+
+    founder = make_user(client, "13800238601", "阿青")
+    r = client.post(f"{API}/ventures", json={"name": "社区面包", "purpose": "一起做", "risk_disclosure_version": VER},
+                    headers=auth(founder))
+    assert r.status_code == 201, r.text
+    venture = r.json()
+    _assert_shape(venture, "VentureView")
+    owner, staff, team_id, _ = _setup(client, "86")
+    req = client.post(f"{API}/teams/{team_id}/spends", json={"amount_cents": 1000, "purpose": "打印"}, headers=auth(staff))
+    assert req.status_code == 201, req.text
+    spend = req.json()
+    _assert_inline_shape(spend, "requestTeamSpend")
+    # 超出额度的一笔：进审批 → 所有者批准 → 申请人执行
+    big = client.post(f"{API}/teams/{team_id}/spends", json={"amount_cents": 30000, "purpose": "采购"}, headers=auth(staff)).json()
+    assert big["needed_approval"] is True and big["reason"], big
+    _assert_inline_shape(big, "requestTeamSpend")
+    client.post(f"{API}/teams/{team_id}/spends/{big['id']}/decide", json={"approve": True, "reason": "同意"}, headers=auth(owner))
+    ex = client.post(f"{API}/teams/{team_id}/spends/{big['id']}/execute", headers=auth(staff))
+    assert ex.status_code == 200, ex.text
+    executed = ex.json()
+    _assert_inline_shape(executed, "executeTeamSpend")
+
+
+def test_machine_mandate_shapes(client):
+    from tests.test_machine_delegation import setup
+
+    user, key, _ = setup(client)
+    got = client.get(f"{API}/developer/api-keys/{key['id']}/mandate", headers=auth(user)).json()
+    _assert_shape(got, "MachineMandateView")

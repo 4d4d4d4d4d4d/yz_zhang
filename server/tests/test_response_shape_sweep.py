@@ -51,7 +51,8 @@ EXEMPT: dict[str, str] = {
 # 或者把 handler 改成返回字面量。降下来的时候请同步改小这个数。
 # V339（312 号 spec）收紧：103 → 78（当时实际已降到 95，又补了一批真实响应断言）
 # V384（357 号 spec）收紧：78 → 44（test_shape_sweep_v384 补了 34 个调用点的真实响应断言）
-MAX_UNVERIFIED = 44
+# V386（359 号 spec）收紧：44 → 22（改读语法树、认 import() 写法的接口名，再补 21 个调用点）
+MAX_UNVERIFIED = 22
 
 
 # ------------------------------------------------------------------ 解析
@@ -186,15 +187,44 @@ def _compare(declared: set[str], optional: set[str], shapes: list[set[str]]):
     return sorted((declared - optional) - inter), sorted(union - declared)
 
 
+def _is_skipped(fn: ast.FunctionDef) -> bool:
+    """`@pytest.mark.skip` / `@pytest.mark.skipif` / `@unittest.skip` 的测试不跑，它里面的断言不算覆盖。"""
+    for d in fn.decorator_list:
+        node = d.func if isinstance(d, ast.Call) else d
+        if isinstance(node, ast.Attribute) and node.attr in ("skip", "skipif"):
+            return True
+    return False
+
+
+def _runtime_checks_in(source: str) -> set[str]:
+    """一个测试文件里**真会被执行的**真实响应断言：接口名与内联方法名。
+
+    CLI-083c（V386，359 号 spec）：原来按文本正则数，两头都不准——
+    - 写在没被执行的地方（改了名的函数、被 skip 的测试）的断言也算覆盖；
+    - 第一个参数里有逗号（`client.get(url, headers=h).json()`）就认不出。
+    现在读语法树：只认 `test_` 开头、没被 skip 的函数里（含其中的嵌套函数）的
+    `_assert_shape(…, "名字")` / `_assert_inline_shape(…, "名字")`。"""
+    names: set[str] = set()
+    for fn in ast.walk(ast.parse(source)):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not fn.name.startswith("test_") or _is_skipped(fn):
+            continue
+        for c in ast.walk(fn):
+            if (isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+                    and c.func.id in ("_assert_shape", "_assert_inline_shape") and len(c.args) >= 2
+                    and isinstance(c.args[1], ast.Constant) and isinstance(c.args[1].value, str)):
+                names.add(c.args[1].value)
+    return names
+
+
 def _runtime_checked() -> set[str]:
     """已经被真实响应断言覆盖的：接口名与内联方法名。"""
     from pathlib import Path
 
     names: set[str] = set()
     for p in Path(__file__).parent.glob("test_*.py"):
-        text = p.read_text(encoding="utf-8")
-        names |= set(re.findall(r'_assert_shape\([^,]+,\s*"(\w+)"', text))
-        names |= set(re.findall(r'_assert_inline_shape\([^,]+,\s*"(\w+)"', text))
+        names |= _runtime_checks_in(p.read_text(encoding="utf-8"))
     return names
 
 
@@ -215,6 +245,8 @@ def _sweep():
         sdk = _sdk_fields(decl)
         if shapes is None:
             iface = (_element_decl(decl) or decl).strip()
+            # CLI-083c：`import('./types').OwnSpace` 与 `OwnSpace` 是同一个接口
+            iface = re.sub(r"^import\(['\"]\./types['\"]\)\.", "", iface)
             if meth in runtime or iface in runtime:
                 result["runtime"].append(meth)
             else:
@@ -299,6 +331,36 @@ def test_cli083_unverified_count_only_goes_down():
         "对照这次新加的 SDK 方法在下面找（全部未验证的，按名字排序）：\n  "
         + "\n  ".join(sorted(r["unverified"]))
     )
+
+
+def test_cli083c_only_assertions_that_actually_run_count():
+    """闸门自己的红验：改了名的函数、被 skip 的测试里的断言不算；参数里带逗号的照样认得出。"""
+    src = textwrap.dedent('''
+        import pytest
+
+        def test_runs(client):
+            _assert_shape(client.get("/x", headers=h).json(), "Counted")
+            def nested():
+                _assert_inline_shape(got, "nestedCounted")
+
+        def _off_renamed(client):
+            _assert_shape(got, "RenamedNotCounted")
+
+        def helper(got):
+            _assert_shape(got, "HelperNotCounted")
+
+        @pytest.mark.skip(reason="x")
+        def test_skipped(client):
+            _assert_shape(got, "SkippedNotCounted")
+
+        @pytest.mark.skipif(True, reason="x")
+        def test_skipped_if(client):
+            _assert_shape(got, "SkipIfNotCounted")
+
+        def test_docstring_only():
+            """_assert_shape(got, "DocNotCounted")"""
+    ''')
+    assert _runtime_checks_in(src) == {"Counted", "nestedCounted"}
 
 
 def test_cli083_exemptions_are_real_and_reasoned():

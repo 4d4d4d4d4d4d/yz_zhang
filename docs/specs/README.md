@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 359 | 响应形状扫除闸门改读语法树、棘轮 44 → 22 | [359-shape-ratchet-22.md](./359-shape-ratchet-22.md) | P0 |
 | 358 | 第三十六轮场景发掘：改衣裁缝、身后事办理协助 | [358-scenario-round-36.md](./358-scenario-round-36.md) | P0 |
 | 357 | 响应形状棘轮再降一批：78 → 44 | [357-shape-ratchet-44.md](./357-shape-ratchet-44.md) | P0 |
 | 356 | 服务对象自己看进度：免登录只读链接 | [356-recipient-progress-link.md](./356-recipient-progress-link.md) | P0 |

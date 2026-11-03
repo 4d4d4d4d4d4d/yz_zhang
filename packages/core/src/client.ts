@@ -1,5 +1,6 @@
 // 平台 API SDK：Web 与 App 共用（13 号 spec「两端共享同一 API/BFF」）
 import type {
+  AmlStats,
   ConversationListItem,
   MyTeamRow,
   MyVentureRow,
@@ -968,7 +969,7 @@ export class PlatformClient {
     );
   }
   amlStats() {
-    return this.request<Record<string, number>>('GET', '/admin/aml/stats');
+    return this.request<AmlStats>('GET', '/admin/aml/stats');
   }
   /** `decision`: cleared（复核无问题）/ to_report（待报送）/ reported（已报送）。 */
   reviewAmlActivity(activityId: number, decision: 'cleared' | 'to_report' | 'reported', note = '') {
@@ -1622,7 +1623,8 @@ export class PlatformClient {
     ).then(listOf);
   }
   verifyAnchorChain() {
-    return this.request<{ valid: boolean; total: number; broken_at_seq?: number }>('GET', '/anchors/verify');
+    // CLI-083b（359 号 spec）head：链完好时的链头哈希，服务端一直在给，此前没声明
+    return this.request<{ valid: boolean; total: number; broken_at_seq?: number; head?: string }>('GET', '/anchors/verify');
   }
 
   // ---- legal / reports ----
@@ -1855,7 +1857,8 @@ export class PlatformClient {
     ).then(listOf);
   }
   banUser(userId: number) {
-    return this.request<{ id: number; is_banned: boolean }>('POST', `/admin/users/${userId}/ban`);
+    // CLI-083b（359 号 spec）封禁时服务端一并返回当时的影响面 impact（在途合约、托管、开放任务），此前没声明
+    return this.request<{ id: number; is_banned: boolean; impact: BanImpactView }>('POST', `/admin/users/${userId}/ban`);
   }
   unbanUser(userId: number) {
     return this.request<{ id: number; is_banned: boolean }>('POST', `/admin/users/${userId}/unban`);
@@ -2495,7 +2498,8 @@ export class PlatformClient {
   /** 超出个人额度时服务端返回 `needed_approval`，不是直接失败——
    *  申请已经建好了，等的是审批。 */
   requestTeamSpend(teamId: number, amountCents: number, purpose = '', taskId?: number) {
-    return this.request<{ id: number; status: string; needed_approval: boolean; reason: string }>(
+    // CLI-083b（359 号 spec）额度内自动批准时没有 reason（只有进审批才有），两条路都有 amount_cents
+    return this.request<{ id: number; status: string; amount_cents: number; needed_approval: boolean; reason?: string }>(
       'POST', `/teams/${teamId}/spends`, { amount_cents: amountCents, purpose, task_id: taskId ?? null },
     );
   }
