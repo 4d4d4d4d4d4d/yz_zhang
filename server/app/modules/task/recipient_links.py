@@ -160,7 +160,8 @@ def recipient_progress(token: str, request: Request, db: Session = Depends(get_d
     units = slots or [task]
     ids = [t.id for t in units]
     users = {u.id: u for u in db.query(User).filter(User.id.in_([t.executor_id for t in units if t.executor_id]))}
-    helpers = [{**_helper(users.get(t.executor_id)), "work_date": t.work_date.isoformat() if t.work_date else None}
+    # work_date 是日期（北京时间的哪一天），没有时区可言：str(date) 就是 YYYY-MM-DD
+    helpers = [{**_helper(users.get(t.executor_id)), "work_date": str(t.work_date) if t.work_date else None}
                for t in units if t.executor_id and t.status != "cancelled"]
     execs = {t.id: t.executor_id for t in units}
     logs = [lg for lg in db.query(ProgressLog).filter(ProgressLog.task_id.in_(ids), ProgressLog.kind.in_(("checkin", "visit")))
@@ -172,7 +173,7 @@ def recipient_progress(token: str, request: Request, db: Session = Depends(get_d
     return {
         "recipient_label": task.recipient_label, "title": task.title, "phase": phase, "phase_text": PHASE_TEXT[phase],
         "helpers": helpers,
-        "work_date": task.work_date.isoformat() if task.work_date else None, "days": task.days or 1,
+        "work_date": str(task.work_date) if task.work_date else None, "days": task.days or 1,
         "shift_start": task.shift_start, "shift_end": task.shift_end,
         "deadline": iso(task.deadline) if task.deadline else None,
         "visits_planned": sum(t.visits_planned or 0 for t in units),
