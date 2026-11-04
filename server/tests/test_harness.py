@@ -168,3 +168,18 @@ def test_red_an_implemented_spec_whose_named_id_is_still_owed_is_caught(sandbox)
     # 还在设计的 spec 不查
     (sandbox / "specs" / "992-x.md").write_text("\n# 992 x（ZZQ-120）\n\n> 状态：设计（V992）。编号 ZZQ-120。\n", encoding="utf-8")
     assert not any("ZZQ-" in p for p in harness.check())
+
+
+def test_red_a_new_app_file_missing_from_the_feature_surface_is_caught(sandbox, monkeypatch):
+    """FEAT-002（382 号 spec）：V408 新增 App 子页 verifyDesk 忘了登记，等到全量回归才红。harness check 当场就报。"""
+    fs = sandbox / "FEATURE-SURFACE.txt"
+    text = harness.FEATURE_SURFACE.read_text(encoding="utf-8")
+    assert "app verifyDesk" in text
+    fs.write_text(text.replace("app verifyDesk\n", ""), encoding="utf-8")
+    monkeypatch.setattr(harness, "FEATURE_SURFACE", fs)
+    problems = harness.check()
+    assert any("app verifyDesk" in p and "feature_surface --write" in p for p in problems), problems
+    fs.write_text(text.replace("sdk declineVerificationOrder\n", ""), encoding="utf-8")
+    assert any("sdk declineVerificationOrder" in p for p in harness.check())
+    fs.write_text(text, encoding="utf-8")
+    assert not any("功能面清单" in p for p in harness.check())

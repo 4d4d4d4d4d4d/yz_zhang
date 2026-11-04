@@ -702,6 +702,7 @@ app taskReboost
 app teamInvites
 app teamReturns
 app ventureInvites
+app verifyDesk
 app visits
 app workbench
 app xapp

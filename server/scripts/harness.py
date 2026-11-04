@@ -22,6 +22,7 @@ SKILLS = REPO / ".claude" / "skills"
 CLAUDE = REPO / "CLAUDE.md"
 LEDGER_NAME = "72-status-ledger.md"
 VISION = REPO / "docs" / "VISION.md"
+FEATURE_SURFACE = REPO / "docs" / "FEATURE-SURFACE.txt"
 # 「没做的」里的编号：KB-110、SPACE-023b、APPB-050b……
 OPEN_ID = re.compile(r"\b([A-Z][A-Z0-9]{1,6}(?:-[A-Z]+)?-\d{2,3}[a-z]?)\b")
 STATUSES = ("todo", "doing", "done", "外")
@@ -188,6 +189,7 @@ def check() -> list[str]:
     problems += _closeout_problems(rows)
     problems += _ledger_id_problems()
     problems += _stale_owed_problems()
+    problems += _frontend_surface_problems()
     if not CLAUDE.exists() or "BACKLOG" not in CLAUDE.read_text(encoding="utf-8"):
         problems.append("根目录 CLAUDE.md 缺失或没有指向 docs/BACKLOG.md")
     return problems
@@ -218,6 +220,25 @@ def _ledger_id_problems() -> list[str]:
         else:
             seen[key] = n
     return out
+
+
+def _frontend_surface_problems() -> list[str]:
+    """FEAT-002（382 号 spec）网页路由、SDK 方法、App 文件这三类功能面，不用启动服务端也算得出来：
+    漏登记进 docs/FEATURE-SURFACE.txt 当场就报（V408 新增 App 子页忘了登记，等到 70 分钟的全量回归才红）。
+    接口那一类要导入 app 才算得出，仍由 tests/test_feature_surface.py 管。"""
+    if not FEATURE_SURFACE.exists():
+        return []
+    have = {ln.strip() for ln in FEATURE_SURFACE.read_text(encoding="utf-8").splitlines() if ln.strip() and not ln.startswith("#")}
+    want: set[str] = set()
+    for f in (REPO / "web" / "src").rglob("*.tsx"):
+        if ".test." not in f.name:
+            want.update(f"web {p}" for p in re.findall(r'path="([^"]+)"', f.read_text(encoding="utf-8")))
+    client = REPO / "packages" / "core" / "src" / "client.ts"
+    if client.exists():
+        want.update(f"sdk {m}" for m in re.findall(r"^  (?:async )?([a-zA-Z][a-zA-Z0-9]*)\(", client.read_text(encoding="utf-8"), re.M)
+                    if m != "constructor")
+    want.update(f"app {f.stem}" for f in (REPO / "app").glob("*.tsx") if ".test." not in f.name)
+    return [f"功能面清单漏登记：{item}（运行 `python -m scripts.feature_surface --write`）" for item in sorted(want - have)]
 
 
 # DOC-021（368 号 spec）一篇 spec 「点名」做了的编号：标题括号里的、状态行「编号 X」后紧跟的第一个
