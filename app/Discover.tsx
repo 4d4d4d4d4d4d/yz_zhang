@@ -22,7 +22,7 @@ import {
   RefreshControl, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useCallback, useEffect, useState } from 'react';
-import type { ContentItem, PlatformClient } from '@platform/core';
+import { mediaUri, type ContentItem, type PlatformClient } from '@platform/core';
 import { cardMediaTranslate, heroTitleOpacity, heroTransform, useReduceMotion, useScrollDriver } from './motion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -121,7 +121,8 @@ function ParallaxCard({ item, index, baseUrl, scrollY, reduceMotion, onPressAuth
   onPressAuthor: () => void;
   onToggleFollow: () => Promise<void>;
 }) {
-  const img = firstImage(item);
+  // APP-120（394 号 spec）地址统一走 mediaUri：畸形、外链协议的不画（原来是手写的「http 开头原样、否则拼上服务端地址」）
+  const img = mediaUri(baseUrl, firstImage(item));
   // 卡片大致的滚动区间。精确值要靠 onLayout 测，但那会引入每张卡一次
   // setState；这里用估算高度换取"零重渲染"——视差是观感，差几十像素无所谓。
   const CARD_H = img ? CARD_MEDIA_H + 120 : 120;
@@ -135,7 +136,7 @@ function ParallaxCard({ item, index, baseUrl, scrollY, reduceMotion, onPressAuth
         <View style={styles.mediaWindow}>
           <Animated.View style={{ transform: [{ translateY: mediaTranslate }] }}>
             <Image
-              source={{ uri: img.startsWith('http') ? img : baseUrl + img }}
+              source={{ uri: img }}
               style={styles.media}
               resizeMode="cover"
             />

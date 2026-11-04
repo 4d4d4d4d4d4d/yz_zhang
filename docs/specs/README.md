@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 394 | App 图片地址统一走 mediaUri，组件要的服务端地址一律传到 | [394-app-media-uri-gate.md](./394-app-media-uri-gate.md) | P0 |
 | 393 | 第五十二轮场景发掘：纱窗更换、地暖清洗 | [393-scenario-round-52.md](./393-scenario-round-52.md) | P0 |
 | 392 | 团队账期按团队选的时区 0 点起算 | [392-team-budget-timezone.md](./392-team-budget-timezone.md) | P0 |
 | 391 | 第五十一轮场景发掘：老人回忆录整理、陪同口译 | [391-scenario-round-51.md](./391-scenario-round-51.md) | P0 |

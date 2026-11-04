@@ -24,7 +24,7 @@ import {
   AccessibilityInfo, ActivityIndicator, Dimensions, FlatList,
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
-import type { ContentItem, PlatformClient } from '@platform/core';
+import { mediaUri, type ContentItem, type PlatformClient } from '@platform/core';
 
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get('window');
 const RATES = [1, 1.25, 1.5, 2];
@@ -35,7 +35,8 @@ const MIN_RESUME_MS = 3000;
 function videoUrl(c: ContentItem, baseUrl: string): string | null {
   const u = (c.media_urls ?? []).find((x) => /\.(mp4|mov|webm)$/i.test(x));
   if (!u) return null;
-  return u.startsWith('http') ? u : baseUrl + u;
+  // APP-120（394 号 spec）统一走 mediaUri：拼不出来的（畸形、外链协议）当没有视频
+  return mediaUri(baseUrl, u) || null;
 }
 
 async function loadPosition(id: number): Promise<number> {

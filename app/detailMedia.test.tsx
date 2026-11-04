@@ -31,3 +31,17 @@ describe('TASK-022d 详情页的图片地址', () => {
     expect(photo.props.source.uri).toMatch(/^https?:\/\/[^/]+\/api\/v1\/files\/p1$/);
   });
 });
+
+describe('APP-120 前一步的预览图（394 号 spec）', () => {
+  it('项目里的一步：接单人看到的前一步预览图拼上了服务端地址', async () => {
+    const step = { ...TASK, id: 71, parent_id: 70, creator_id: 9, executor_id: 2, title: '修图' } as unknown as Task;
+    const client = makeClient({
+      '/tasks/71/inputs': [{ from_task_id: 70, title: '拍主图', shared_at: '2026-11-04T08:00:00Z', deliveries: [{ content: '原片已传' }],
+        previews: [{ id: 5, url: '/api/v1/files/prev1' }, { id: 6, url: 'javascript:alert(1)' }] }],
+    });
+    render(<TaskDetailScreen client={client} me={{ id: 2, nickname: '修图师' } as never} task={step} onBack={() => {}} onChanged={async () => {}} />);
+    const imgs = await screen.findAllByLabelText('前一步的预览图');
+    expect(imgs).toHaveLength(1);
+    expect(imgs[0].props.source.uri).toMatch(/^https?:\/\/[^/]+\/api\/v1\/files\/prev1$/);
+  });
+});

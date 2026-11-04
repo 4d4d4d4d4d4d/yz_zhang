@@ -1,6 +1,6 @@
 // AI-DEC-024 App 上的跨子任务产出共享（321 号 spec）：交付人把成果开放给要等它的下一步、随时收回；
 // 下一步的执行者看前一步开放的交付说明与预览图（原图不在里面）。与 web 的 SubtaskShares 同一份接口、同一句话。
-import { apiErrorText, formatDateTime, TASK_STATUS_LABEL, type PlatformClient, type SubtaskInput, type SubtaskShareView } from '@platform/core';
+import { apiErrorText, formatDateTime, mediaUri, TASK_STATUS_LABEL, type PlatformClient, type SubtaskInput, type SubtaskShareView } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -55,8 +55,9 @@ export function PreviousStepInputsBlock({ client, taskId, baseUrl = '' }: { clie
           <Text style={s.row}>{r.title} · 开放于 {formatDateTime(r.shared_at)}</Text>
           {(Array.isArray(r.deliveries) ? r.deliveries : []).map((d, i) => <Text key={i}>{d.content}</Text>)}
           <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
-            {(Array.isArray(r.previews) ? r.previews : []).map((p) => (
-              <Image key={p.id} accessibilityLabel="前一步的预览图" source={{ uri: `${baseUrl}${p.url}` }} style={s.img} />
+            {/* APP-120（394 号 spec）统一走 mediaUri；拼不出来的不画 */}
+            {(Array.isArray(r.previews) ? r.previews : []).filter((p) => mediaUri(baseUrl, p.url)).map((p) => (
+              <Image key={p.id} accessibilityLabel="前一步的预览图" source={{ uri: mediaUri(baseUrl, p.url) }} style={s.img} />
             ))}
           </View>
         </View>

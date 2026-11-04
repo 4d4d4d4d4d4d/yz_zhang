@@ -479,7 +479,8 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       {/* AI-DEC-024（321 号 spec）项目里的一步：交付人开放给下一步；下一步的执行者看前一步开放的成果 */}
       {meId !== null && meId === task.executor_id && task.parent_id !== null && !['draft', 'published'].includes(task.status)
         && <ShareToNextStepsBlock client={client} taskId={task.id} />}
-      {meId !== null && meId === task.executor_id && task.parent_id !== null && <PreviousStepInputsBlock client={client} taskId={task.id} />}
+      {/* APP-120（394 号 spec）原来没传 baseUrl：前一步的预览图是相对路径，真机上加载不出来 */}
+      {meId !== null && meId === task.executor_id && task.parent_id !== null && <PreviousStepInputsBlock client={client} taskId={task.id} baseUrl={BASE_URL} />}
       {/* PROF-103 这单的画像（126 号 spec） */}
       {task.status !== 'draft' && <TaskProfileBlock client={client} taskId={task.id} isCreator={task.creator_id === me?.id}
         onApplyWithQuestions={actions.includes('apply') ? (m) => void act(() => client.apply(task.id, m)) : undefined} />}
