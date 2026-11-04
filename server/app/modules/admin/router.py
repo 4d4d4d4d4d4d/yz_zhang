@@ -2412,6 +2412,16 @@ def run_escalate_tickets(_triggered_by: int = Depends(_job_or_admin),
     return escalate_overdue(db)
 
 
+@router.post("/admin/jobs/escalate-reports")
+def run_escalate_reports(_triggered_by: int = Depends(_job_or_admin),
+                         db: Session = Depends(get_db, scope="function"),
+                         __=Depends(job_slot("report_escalations"), scope="function")):
+    """RISK-018（402 号 spec）举报超过处理时限还没处理：叫醒合规；每条只叫一次。"""
+    from .reports import escalate_overdue
+
+    return escalate_overdue(db)
+
+
 @router.post("/admin/jobs/remind-holiday-import")
 def run_remind_holiday_import(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
                               __=Depends(job_slot("holiday_import_reminders"), scope="function")):

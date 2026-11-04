@@ -25,6 +25,8 @@ class Report(Base):
     # 处理时间给举报人看「什么时候处理的」。老数据类型为 other、处理时间为空
     category: Mapped[str] = mapped_column(String(20), default="other", server_default="other")
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # RISK-018（402 号 spec，V429）超过处理时限、已经叫过合规的时间：每条只叫一次
+    escalated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class AdminAudit(Base):

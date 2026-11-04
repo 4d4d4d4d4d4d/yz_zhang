@@ -125,6 +125,9 @@ JOBS: tuple[ScheduledJob, ...] = (
     ScheduledJob("/admin/jobs/escalate-tickets", 3600, "ticket_escalations",
                  "ESCA-051 工单超时逐级升级——汇总通知发给全体管理员等于谁都没被点名；"
                  "到时限叫醒接手的客服，到升级线叫醒主管并告诉提单人（150 号 spec）"),
+    ScheduledJob("/admin/jobs/escalate-reports", 3600, "report_escalations",
+                 "RISK-018 举报超过处理时限（违法、诈骗、色情 24 小时，其余 72 小时）还没处理，叫醒合规；"
+                 "每条只叫一次，一人一轮一条汇总——不跑的话超时的举报只是在队列里标红，没人被点名（402 号 spec）"),
     ScheduledJob("/wallet/jobs/resolve-payouts", 600, "payout_resolve",
                  "CONC-067 出款两阶段之后，银行结果不明的出款单停在 sending：钱冻结着、"
                  "用户在等。按同一个单号重试（不会打两次），十分钟一次"),

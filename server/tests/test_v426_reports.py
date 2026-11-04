@@ -175,3 +175,46 @@ def test_risk016_urgent_sort_and_sla(client):
     from tests.test_client_shape_alignment import _assert_inline_shape
 
     _assert_inline_shape(rows[0], "adminReports")
+
+
+def test_risk018_overdue_reports_wake_compliance_once(client):
+    """RISK-018（402 号 spec，V429）超时没处理的举报叫醒合规：每条只叫一次、一人一轮一条汇总；
+    客服不叫（不能封禁）；没超时的、已处理的不叫。"""
+    from datetime import timedelta
+
+    from app.modules.account.models import User, utcnow
+    from app.modules.admin.models import Report
+    from tests.conftest import JOB_HEADERS
+
+    job = "/api/v1/admin/jobs/escalate-reports"
+    comp = make_admin(client, "13900429001", "合规")
+    sup = make_admin(client, "13900429002", "客服")
+    with SessionLocal() as db:
+        db.get(User, comp["id"]).admin_roles = ["compliance"]
+        db.get(User, sup["id"]).admin_roles = ["support"]
+        db.commit()
+    a = register(client, "13900429003", "举报人")
+    t = [register(client, f"1390042901{i}", f"对象{i}") for i in range(3)]
+    fraud = rep(client, a, "user", t[0]["id"], category="fraud").json()["id"]
+    fresh = rep(client, a, "user", t[1]["id"], category="fraud").json()["id"]
+    done = rep(client, a, "user", t[2]["id"], category="other").json()["id"]
+    client.post(f"/api/v1/admin/reports/{done}/resolve", json={"action": "dismiss"}, headers=auth(comp))
+    with SessionLocal() as db:
+        db.get(Report, fraud).created_at = utcnow() - timedelta(hours=25)
+        db.get(Report, done).created_at = utcnow() - timedelta(hours=100)
+        db.commit()
+
+    def notes(u):
+        b = client.get("/api/v1/notifications", headers=auth(u)).json()
+        return [n for n in (b["items"] if isinstance(b, dict) else b) if n["title"] == "举报超时：请尽快处理"]
+
+    r = client.post(job, headers=JOB_HEADERS)
+    assert r.status_code == 200, r.text
+    assert r.json()["escalated"] == 1 and r.json()["notified"] >= 1
+    got = notes(comp)
+    assert len(got) == 1 and f"#{fraud}" in got[0]["body"] and f"#{fresh}" not in got[0]["body"]
+    assert "诈骗、色情 1 条" in got[0]["body"]
+    assert notes(sup) == []                              # 客服不能封禁，不点名
+    assert client.post(job, headers=JOB_HEADERS).json()["escalated"] == 0   # 每条只叫一次
+    assert len(notes(comp)) == 1
+    assert client.post(job).status_code in (401, 403)     # 不带调度凭证、也没登录的调不动

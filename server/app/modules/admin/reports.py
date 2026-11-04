@@ -124,6 +124,35 @@ def sla_view(r: Report, now=None) -> dict:
             "overdue": r.status == "pending" and waited >= sla}
 
 
+def escalate_overdue(db: Session, now=None) -> dict:
+    """RISK-018（402 号 spec）超过处理时限还没处理的举报，叫醒合规（能下架、能封禁的人）。
+
+    - 每条只叫一次（`escalated_at`），下一轮不再重复叫；
+    - 一个人一轮只收一条汇总通知（写条数和编号），不是一条举报一条通知；
+    - 只叫有合规角色的管理员（超级管理员也算）：发给全体管理员等于谁都没被点名（与工单升级 ESCA-051 同一条理由）。
+    """
+    from app.core.admin_roles import has_role
+    from app.modules.notification.service import notify
+
+    now = now or utcnow()
+    due = [r for r in db.query(Report).filter(Report.status == "pending", Report.escalated_at.is_(None))
+           .order_by(Report.id).all() if sla_view(r, now)["overdue"]]
+    if not due:
+        return {"escalated": 0, "notified": 0}
+    for r in due:
+        r.escalated_at = now
+        db.add(r)
+    urgent = sum(1 for r in due if (r.category or "other") in URGENT_CATEGORIES)
+    ids = "、".join(f"#{r.id}" for r in due[:20]) + ("等" if len(due) > 20 else "")
+    body = (f"有 {len(due)} 条举报超过处理时限还没处理（其中违法、诈骗、色情 {urgent} 条）：{ids}。"
+            "请到后台「举报处置」勾上「最急的在前」处理。")
+    admins = [u for u in db.query(User).filter(User.is_admin.is_(True), User.is_banned.is_(False)).order_by(User.id).all()
+              if has_role(u, "compliance")]
+    for u in admins:
+        notify(db, u.id, "system", "举报超时：请尽快处理", body, force=True)
+    return {"escalated": len(due), "notified": len(admins)}
+
+
 def mine(db: Session, user_id: int, limit: int = 50) -> list[dict]:
     rows = (db.query(Report).filter(Report.reporter_id == user_id)
             .order_by(Report.id.desc()).limit(limit).all())
