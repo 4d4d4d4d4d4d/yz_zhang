@@ -91,3 +91,27 @@ describe('VER-050b 网页：被点名的核验人当场拒绝（374 号 spec）'
     expect(screen.queryByText('不方便，拒绝')).toBeNull();
   });
 });
+
+describe('VER-050c 网页：从合作过的人里选核验人（376 号 spec）', () => {
+  it('能点的可选，选了就带上编号；不能点的灰掉并写原因', async () => {
+    const calls = open('/tasks/7', { '/tasks/7/verifier-candidates': [
+      { user_id: 42, nickname: '小林', times: 3, eligible: true, reason: '' },
+      { user_id: 43, nickname: '小白', times: 1, eligible: false, reason: '账号不可用' }] });
+    const pick = await screen.findByLabelText('从合作过的人里选核验人') as HTMLSelectElement;
+    const bad = Array.from(pick.options).find((o) => o.value === '43')!;
+    expect(bad.disabled).toBe(true);
+    expect(bad.textContent).toBe('小白 · 合作过 1 次（现在不能点：账号不可用）');
+    fireEvent.change(pick, { target: { value: '42' } });
+    expect((screen.getByLabelText('点名核验人的用户编号') as HTMLInputElement).value).toBe('42');
+    fireEvent.click(screen.getByText('申请人工核验'));
+    await waitFor(() => expect(posts(calls).length).toBe(1));
+    expect(posts(calls)[0].body).toEqual({ verifier_id: 42 });
+  });
+
+  it('没合作过的人：不出现选择框，照旧可以填编号', async () => {
+    open('/tasks/7');
+    await screen.findByTestId('delivery-block');
+    expect(screen.queryByLabelText('从合作过的人里选核验人')).toBeNull();
+    expect(screen.getByLabelText('点名核验人的用户编号')).toBeTruthy();
+  });
+});

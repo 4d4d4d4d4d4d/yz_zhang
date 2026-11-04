@@ -17,3 +17,12 @@ describe('VER-050 点名核验人（372 号 spec）', () => {
     expect(verifyTriggerLabel(undefined)).toBe('核验单');
   });
 });
+
+describe('VER-050c 从合作过的人里点名（376 号 spec）', () => {
+  it('能点的写名字和合作次数；不能点的带上原因', async () => {
+    const { verifierCandidateLine } = await import('./designatedVerifier');
+    expect(verifierCandidateLine({ user_id: 5, nickname: '小林', times: 3, eligible: true, reason: '' })).toBe('小林 · 合作过 3 次');
+    expect(verifierCandidateLine({ user_id: 6, nickname: '小白', times: 1, eligible: false, reason: '账号不可用' })).toBe('小白 · 合作过 1 次（现在不能点：账号不可用）');
+    expect(verifierCandidateLine({ user_id: 7 })).toBe('#7');
+  });
+});

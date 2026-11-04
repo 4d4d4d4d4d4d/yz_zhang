@@ -119,3 +119,44 @@ def test_a_claimed_designated_order_cannot_be_declined(client, requester, runner
     assert client.post(f"{API}/verification-orders/{order['id']}/claim", headers=auth(friend)).status_code == 200
     r = client.post(f"{API}/verification-orders/{order['id']}/decline", headers=auth(friend))
     assert r.status_code == 409 and r.json()["detail"]["code"] == "verification_not_open"
+
+
+def _partner(client, requester, phone, nickname, times=1):
+    """造一个和发单人有过 times 张已结算合约的人。"""
+    from tests.conftest import topup
+    from tests.test_task_flow import match_and_fund, publish_task
+
+    u = register(client, phone, nickname)
+    verify_user(client, u, name=nickname)
+    for _ in range(times):
+        topup(client, requester, 50000)
+        t = publish_task(client, requester, category="设计", is_remote=True, budget_cents=10000)
+        match_and_fund(client, requester, u, t)
+        client.post(f"{API}/tasks/{t['id']}/deliver", headers=auth(u))
+        assert client.post(f"{API}/tasks/{t['id']}/accept-delivery", headers=auth(requester)).status_code == 200
+    return u
+
+
+def test_candidates_come_from_people_you_have_worked_with(client, requester, runner):  # noqa: F811
+    """VER-050c（376 号 spec）：候选是合作过的人，按点名时的同一个资格函数判；能点的排前面，不能点的写明为什么。"""
+    from app.modules.account.models import User
+
+    lin = _partner(client, requester, "13800039914", "小林")
+    ban = _partner(client, requester, "13800039915", "小白", times=2)   # 合作次数更多，但不能点：仍排在后面
+    with SessionLocal() as db:
+        db.get(User, ban["id"]).is_banned = True
+        db.commit()
+    admin = make_admin(client, "13800039916")
+    task, _ = escalated_task(client, requester, admin, runner)
+    url = f"{API}/tasks/{task['id']}/verifier-candidates"
+    assert client.get(url, headers=auth(lin)).status_code == 403, "只给发单人看"
+    rows = client.get(url, headers=auth(requester)).json()
+    from tests.test_client_shape_alignment import _assert_inline_shape
+    _assert_inline_shape(rows[0], "verifierCandidates")
+    by = {r["user_id"]: r for r in rows}
+    assert by[lin["id"]]["eligible"] is True and by[lin["id"]]["reason"] == "" and by[lin["id"]]["nickname"] == "小林"
+    assert by[ban["id"]]["eligible"] is False and by[ban["id"]]["reason"] == "账号不可用"
+    assert rows[0]["eligible"] is True and rows[-1]["user_id"] == ban["id"], "能点的排前面"
+    # 从候选里点名，和填编号是同一条路
+    r = client.post(f"{API}/tasks/{task['id']}/verification", json={"verifier_id": rows[0]["user_id"]}, headers=auth(requester))
+    assert r.status_code == 201 and r.json()["designated_verifier_id"] == lin["id"]

@@ -9,7 +9,7 @@
 // - 助理不可用时**原样显示服务端算好的理由**（CLI-064）；邀请由发布方主动发，平台不自动派单；
 //   置信度写明是助理**自报**的（AGT-013）；交付被平台判据拦下时给出人工核验入口。
 import {
-  apiErrorText, DESIGNATE_VERIFIER_HINT, fmtYuan, parseVerifierId, type AgentProfileView, type AgentRunView, type EligibleAgent,
+  apiErrorText, asList, DESIGNATE_VERIFIER_HINT, fmtYuan, parseVerifierId, verifierCandidateLine, type AgentProfileView, type AgentRunView, type EligibleAgent,
   type PlatformClient, type Recommendation, type Task,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -76,6 +76,8 @@ export function AgentBlock({ client, task, onChanged }: {
   const [notice, setNotice] = useState('');
   // VER-050（372 号 spec）点名核验人：填对方的用户编号；空着就由平台派单
   const [verifierInput, setVerifierInput] = useState('');
+  // VER-050c（376 号 spec）合作过的人：交付被拦下时才去取
+  const [partners, setPartners] = useState<Awaited<ReturnType<PlatformClient['verifierCandidates']>>>([]);
 
   const load = useCallback(async () => {
     const a = await client.agents().catch(() => []);
@@ -86,7 +88,10 @@ export function AgentBlock({ client, task, onChanged }: {
     }
     if (task.executor_id) {
       const r = await client.agentRuns(task.id).catch(() => null);
-      if (r && Array.isArray(r.runs)) { setRuns(r.runs); setDeliveryBlock(r.delivery_block ?? ''); }
+      if (r && Array.isArray(r.runs)) {
+        setRuns(r.runs); setDeliveryBlock(r.delivery_block ?? '');
+        if (r.delivery_block) setPartners(asList(await client.verifierCandidates(task.id).catch(() => [])));
+      }
     }
   }, [client, task.id, task.status, task.executor_id]);
   useEffect(() => { void load(); }, [load]);
@@ -164,6 +169,11 @@ export function AgentBlock({ client, task, onChanged }: {
           {!!deliveryBlock && (
             <>
               <Text style={s.error} testID="delivery-block">{deliveryBlock}</Text>
+              {partners.map((p) => p.eligible ? (
+                <TouchableOpacity key={p.user_id} style={s.ghost} onPress={() => setVerifierInput(String(p.user_id))}>
+                  <Text>{verifierInput === String(p.user_id) ? '✓ ' : ''}点名 {verifierCandidateLine(p)}</Text>
+                </TouchableOpacity>
+              ) : <Text key={p.user_id} style={s.muted}>{verifierCandidateLine(p)}</Text>)}
               <TextInput style={s.input} keyboardType="numeric" value={verifierInput} onChangeText={setVerifierInput}
                          placeholder="点名核验人（用户编号，可不填）" />
               <TouchableOpacity style={[s.ghost, busy && s.disabled]} disabled={busy}

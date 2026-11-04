@@ -151,6 +151,8 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
      "抢单要满足核验人资格（CERT 资质门槛），不是任何登录用户都能接核验单"),
     (r"^POST /verification-orders/.*/outcome$", "party",
      "结论只能由抢到这一单的核验人提交：别人提交的结论会影响任务验收"),
+    (r"^GET /tasks/.*/verifier-candidates$", "party",
+     "VER-050c（376 号 spec）只给发布方：列的是他合作过的人和各自能不能核验这一单"),
     (r"^POST /verification-orders/.*/decline$", "party",
      "VER-050b（374 号 spec）只有被点名的核验人能拒绝：别人 403 verifier_not_designated，发单人也不能替他拒"),
     (r"^GET /verification-orders/", "party", "核验单详情只对相关方开放：里面有任务内容与核验结论"),

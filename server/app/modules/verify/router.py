@@ -104,6 +104,34 @@ def request_verification(task_id: int, body: VerifyRequestIn | None = None, user
     return _dump(order)
 
 
+MAX_CANDIDATES = 20
+
+
+@router.get("/tasks/{task_id}/verifier-candidates")
+def verifier_candidates(task_id: int, user: User = Depends(get_current_user),
+                        db: Session = Depends(get_db, scope="function")):
+    """VER-050c（376 号 spec）从合作过的人里点名：不用记用户编号。
+
+    候选就是 IM-022「合作过的人」（已结算合约的对手方），逐个按点名时的同一个资格函数判一遍：
+    能点的排前面；不能点的也列出来并写明为什么，免得发单人以为人丢了。只给发单人看。
+    """
+    from app.modules.im.router_social import worked_with_rows
+
+    task = _task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden("仅发布方可查看核验人候选")
+    out = []
+    for row in worked_with_rows(db, user.id)[:MAX_CANDIDATES]:
+        target = db.get(User, row["user_id"])
+        if not target or target.is_deleted:
+            continue
+        block = service.designated_block(db, task, target, payer_id=user.id)
+        out.append({"user_id": target.id, "nickname": row["nickname"], "times": row["times"],
+                    "eligible": not block, "reason": block})
+    out.sort(key=lambda r: (not r["eligible"], -r["times"]))
+    return out
+
+
 @router.get("/verification-orders")
 def open_orders(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     """可接的核验单。不能接的**说明理由**——只显示空列表，

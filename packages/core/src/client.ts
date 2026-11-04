@@ -2351,6 +2351,12 @@ export class PlatformClient {
       category: string; task_title: string; claimable: boolean; reason: string;
     }>>('GET', '/verification-orders').then(listOf);
   }
+  /** VER-050c（376 号 spec）从合作过的人里点名核验人：能点的排前面，不能点的带理由。只给发布方 */
+  verifierCandidates(taskId: number) {
+    return this.request<Array<{ user_id: number; nickname: string; times: number; eligible: boolean; reason: string }>>(
+      'GET', `/tasks/${taskId}/verifier-candidates`,
+    ).then(listOf);
+  }
   /** VER-050b（374 号 spec）被点名的核验人当场拒绝：核验费立刻退回发单人；只在还没接时能拒 */
   declineVerificationOrder(orderId: number, reason = '') {
     return this.request<VerificationOrderView>('POST', `/verification-orders/${orderId}/decline`, { reason });

@@ -145,3 +145,25 @@ describe('VER-050 App：点名核验人（372 号 spec）', () => {
     expect(posts(calls)[1].body).toBeNull();
   });
 });
+
+describe('VER-050c App：从合作过的人里点名（376 号 spec）', () => {
+  it('点一下合作过的人就填上编号；不能点的只显示原因', async () => {
+    const calls: Call[] = [];
+    const running = { ...TASK, status: 'in_progress', executor_id: 9 } as Task;
+    render(<AgentBlock task={running} onChanged={() => undefined} client={makeClient({
+      '/agents': [AGENT],
+      '/tasks/7/agent-runs': { runs: [{ id: 1, task_id: 7, status: 'escalated', confidence_bps: 6200, output: '初稿', criteria_results: [],
+        error: '', moderation_status: 'pass', created_at: null, finished_at: null }], delivery_block: '平台判据未通过' },
+      '/tasks/7/verifier-candidates': [
+        { user_id: 42, nickname: '小林', times: 3, eligible: true, reason: '' },
+        { user_id: 43, nickname: '小白', times: 1, eligible: false, reason: '账号不可用' }],
+      'POST /tasks/7/verification': { id: 2, status: 'open' },
+    }, calls)} />);
+    fireEvent.press(await screen.findByText('点名 小林 · 合作过 3 次'));
+    expect(screen.getByText('小白 · 合作过 1 次（现在不能点：账号不可用）')).toBeTruthy();
+    expect(screen.queryByText('点名 小白 · 合作过 1 次（现在不能点：账号不可用）')).toBeNull();
+    fireEvent.press(screen.getByText('申请人工核验'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/tasks/7/verification')).toBe(true));
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks/7/verification')!.body).toEqual({ verifier_id: 42 });
+  });
+});

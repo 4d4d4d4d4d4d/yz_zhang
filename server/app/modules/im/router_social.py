@@ -161,18 +161,23 @@ def worked_with(user: User = Depends(get_current_user), db: Session = Depends(ge
     而漏一处就是一条永远错着的记录。这里直接查已结算合约的对手方——
     它不可能过时。
     """
+    return worked_with_rows(db, user.id)
+
+
+def worked_with_rows(db: Session, user_id: int) -> list[dict]:
+    """合作过的人（按合作次数从多到少）。VER-050c（376 号 spec）点名核验人的候选也从这里来。"""
     from app.modules.contract.models import SETTLED_STATUSES, Contract
 
     rows = (
         db.query(Contract)
-        .filter(or_(Contract.requester_id == user.id, Contract.executor_id == user.id),
+        .filter(or_(Contract.requester_id == user_id, Contract.executor_id == user_id),
                 Contract.status.in_(tuple(SETTLED_STATUSES)))
         .all()
     )
     seen: dict[int, int] = {}
     for c in rows:
-        other = c.executor_id if c.requester_id == user.id else c.requester_id
-        if other and other != user.id:
+        other = c.executor_id if c.requester_id == user_id else c.requester_id
+        if other and other != user_id:
             seen[other] = seen.get(other, 0) + 1
     out = []
     for uid, times in sorted(seen.items(), key=lambda kv: -kv[1]):

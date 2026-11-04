@@ -21,6 +21,13 @@ export function verifyTriggerLabel(trigger: string | null | undefined): string {
   }
 }
 
+/** 候选一行：「小林 · 合作过 3 次」；不能点的带上原因（VER-050c，376 号 spec） */
+export function verifierCandidateLine(c: { nickname?: string; user_id: number; times?: number; eligible?: boolean; reason?: string }): string {
+  const name = c.nickname || `#${c.user_id}`;
+  const times = typeof c.times === 'number' && c.times > 0 ? ` · 合作过 ${c.times} 次` : '';
+  return c.eligible === false ? `${name}${times}（现在不能点：${c.reason || '资格不够'}）` : `${name}${times}`;
+}
+
 /** 点名前给发单人的一句话：谁付钱、对方要满足什么 */
 export const DESIGNATE_VERIFIER_HINT =
   '可以点名一位你信得过的懂行的人（填对方的用户编号）：只有他能接，核验费由你付；对方要实名、不是本单当事人。不填就由平台派单。';

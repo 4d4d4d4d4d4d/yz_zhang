@@ -235,6 +235,7 @@ api GET /api/v1/tasks/{task_id}/reviews
 api GET /api/v1/tasks/{task_id}/shares
 api GET /api/v1/tasks/{task_id}/tree
 api GET /api/v1/tasks/{task_id}/trip
+api GET /api/v1/tasks/{task_id}/verifier-candidates
 api GET /api/v1/tasks/{task_id}/visits
 api GET /api/v1/team-invites/{token}
 api GET /api/v1/teams/mine
@@ -1250,6 +1251,7 @@ sdk ventureRiskDisclosure
 sdk ventureSentInvitations
 sdk ventureShares
 sdk verificationOrder
+sdk verifierCandidates
 sdk verifyAnchorChain
 sdk verifyAuditChain
 sdk verifyIdentity

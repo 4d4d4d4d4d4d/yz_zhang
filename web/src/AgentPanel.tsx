@@ -1,5 +1,5 @@
 import {
-  apiErrorText, DESIGNATE_VERIFIER_HINT, fmtYuan, parseVerifierId,
+  apiErrorText, DESIGNATE_VERIFIER_HINT, fmtYuan, parseVerifierId, verifierCandidateLine,
   type AgentProfileView, type AgentRunView, type EligibleAgent, type Task, asList,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -25,6 +25,8 @@ export function AgentPanel({ task, onChanged }: { task: Task; onChanged: () => v
   const [notice, setNotice] = useState('');
   // VER-050（372 号 spec）点名核验人：填对方的用户编号；空着就由平台派单
   const [verifierInput, setVerifierInput] = useState('');
+  // VER-050c（376 号 spec）合作过的人：交付被拦下时才去取
+  const [partners, setPartners] = useState<Awaited<ReturnType<typeof client.verifierCandidates>>>([]);
 
   const executorIsAgent = task.executor_id != null
     && agents.some((a) => a.user_id === task.executor_id);
@@ -37,7 +39,10 @@ export function AgentPanel({ task, onChanged }: { task: Task; onChanged: () => v
     }
     if (task.executor_id) {
       const r = await client.agentRuns(task.id).catch(() => null);
-      if (r && typeof r === 'object') { setRuns(asList(r.runs)); setDeliveryBlock(r.delivery_block ?? ''); }
+      if (r && typeof r === 'object') {
+        setRuns(asList(r.runs)); setDeliveryBlock(r.delivery_block ?? '');
+        if (r.delivery_block) setPartners(asList(await client.verifierCandidates(task.id).catch(() => [])));
+      }
     }
   }, [client, task.id, task.status, task.executor_id]);
 
@@ -118,6 +123,15 @@ export function AgentPanel({ task, onChanged }: { task: Task; onChanged: () => v
           {deliveryBlock && (
             <>
               <p className="error" style={{ marginTop: 8 }} data-testid="delivery-block">{deliveryBlock}</p>
+              {partners.length > 0 && (
+                <select aria-label="从合作过的人里选核验人" value="" style={{ marginTop: 8 }}
+                        onChange={(e) => setVerifierInput(e.target.value)}>
+                  <option value="">从合作过的人里选…</option>
+                  {partners.map((p) => (
+                    <option key={p.user_id} value={String(p.user_id)} disabled={!p.eligible}>{verifierCandidateLine(p)}</option>
+                  ))}
+                </select>
+              )}
               <div className="row">
                 <input aria-label="点名核验人的用户编号" placeholder="点名核验人（用户编号，可不填）" value={verifierInput}
                        onChange={(e) => setVerifierInput(e.target.value)} style={{ maxWidth: 220 }} />
