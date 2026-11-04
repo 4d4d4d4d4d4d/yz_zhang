@@ -183,3 +183,16 @@ def test_red_a_new_app_file_missing_from_the_feature_surface_is_caught(sandbox, 
     assert any("sdk declineVerificationOrder" in p for p in harness.check())
     fs.write_text(text, encoding="utf-8")
     assert not any("功能面清单" in p for p in harness.check())
+
+
+def test_red_owed_count_in_status_doc_must_match_the_ledger(tmp_path):
+    """DOC-022（405 号 spec，V432）现状文档里的「台账「欠」（N 条」与台账实数对不上就报；对得上不报。"""
+    real = len(harness.owed_ids())
+    assert real > 0
+    ok = tmp_path / "STATUS-ok.md"
+    ok.write_text(f"| 台账「欠」（{real} 条，按台账实数核对） | … |\n", encoding="utf-8")
+    bad = tmp_path / "STATUS-bad.md"
+    bad.write_text(f"| 台账「欠」（{real + 1} 条，2026-11-03 核对） | … |\n", encoding="utf-8")
+    assert harness._owed_count_problems([ok]) == []
+    probs = harness._owed_count_problems([bad])
+    assert len(probs) == 1 and f"实际是 {real} 条" in probs[0]

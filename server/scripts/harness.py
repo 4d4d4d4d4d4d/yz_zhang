@@ -189,6 +189,7 @@ def check() -> list[str]:
     problems += _closeout_problems(rows)
     problems += _ledger_id_problems()
     problems += _stale_owed_problems()
+    problems += _owed_count_problems()
     problems += _frontend_surface_problems()
     if not CLAUDE.exists() or "BACKLOG" not in CLAUDE.read_text(encoding="utf-8"):
         problems.append("根目录 CLAUDE.md 缺失或没有指向 docs/BACKLOG.md")
@@ -274,6 +275,31 @@ def _stale_owed_problems() -> list[str]:
             named.add(m.group(1))
         for i in sorted(named & owed):
             out.append(f"{p.name} 写着本批实现并点名了 {i}，台账（{LEDGER_NAME}）里 {i} 却还是「欠」：改成「已做」，没做完的另起一个带后缀的编号")
+    return out
+
+
+_OWED_ROW = re.compile(r"^\| ([A-Z][A-Z0-9-]*-\d+[a-z]?) \| [^|]* \| 欠[^|]* \|$", re.M)
+_OWED_CLAIM = re.compile(r"台账「欠」（(\d+) 条")
+
+
+def owed_ids() -> set[str]:
+    """台账逐条索引里记作「欠」的编号。"""
+    ledger = SPECS / LEDGER_NAME
+    return {m.group(1) for m in _OWED_ROW.finditer(ledger.read_text(encoding="utf-8"))} if ledger.exists() else set()
+
+
+def _owed_count_problems(status_docs: list[Path] | None = None) -> list[str]:
+    """DOC-022（405 号 spec，V432）现状文档里写的「台账「欠」（N 条」要等于台账里真的「欠」条数。
+
+    这个数 2026-11-03 核对时是 58，之后几批关了几条、又记了几条，文档没人改——一个写给决策人看的数字悄悄过期。
+    """
+    docs = status_docs if status_docs is not None else sorted((REPO / "docs").glob("STATUS-*.md"))
+    real = len(owed_ids())
+    out = []
+    for d in docs:
+        for m in _OWED_CLAIM.finditer(d.read_text(encoding="utf-8")):
+            if int(m.group(1)) != real:
+                out.append(f"{d.name} 写着台账「欠」{m.group(1)} 条，台账（{LEDGER_NAME}）里实际是 {real} 条：改成 {real}")
     return out
 
 
