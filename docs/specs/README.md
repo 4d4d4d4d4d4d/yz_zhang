@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 398 | 第五十五轮场景发掘：室内设计出图、婚礼策划 | [398-scenario-round-55.md](./398-scenario-round-55.md) | P0 |
 | 397 | 第五十四轮场景发掘：空调加氟维修（要操作证）、数据分析报告 | [397-scenario-round-54.md](./397-scenario-round-54.md) | P0 |
 | 396 | 场景包问法离线试分工具 | [396-pack-probe.md](./396-pack-probe.md) | P0 |
 | 395 | 第五十三轮场景发掘：宠物家庭寄养、汽车搭电换胎 | [395-scenario-round-53.md](./395-scenario-round-53.md) | P0 |
