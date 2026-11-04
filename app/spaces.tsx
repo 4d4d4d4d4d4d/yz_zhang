@@ -23,6 +23,7 @@ import {
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { InfluenceBlock } from './influence';
+import { ReportBlock } from './report';
 
 const KIND_LABEL: Record<SpaceItem['kind'], string> = {
   work: '作品', article: '文章', video: '视频', shop: '小店', live: '直播', service: '服务',
@@ -240,6 +241,8 @@ export function PublicSpaceScreen({ client, userId, onBack, onOpenConversation }
                   onPress={() => void contact()} />
           <Button title={stats?.viewer_following ? '已关注（点此取消）' : '关注'}
                   disabled={busy || !stats} onPress={() => void toggleFollow()} />
+          {/* RISK-010（399 号 spec）举报这个用户；没登录（关注状态未知）时不画 */}
+          {stats?.viewer_following != null && <ReportBlock client={client} targetType="user" targetId={space.user_id} />}
         </>
       )}
     </ScrollView>

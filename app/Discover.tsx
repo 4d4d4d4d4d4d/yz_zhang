@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { mediaUri, type ContentItem, type PlatformClient } from '@platform/core';
+import { ReportBlock } from './report';
 import { cardMediaTranslate, heroTitleOpacity, heroTransform, useReduceMotion, useScrollDriver } from './motion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -89,6 +90,7 @@ export function DiscoverScreen({ client, baseUrl, onOpenAuthor }: {
         {items.map((c, i) => (
           <ParallaxCard
             key={c.id}
+            client={client}
             item={c}
             index={i}
             baseUrl={baseUrl}
@@ -112,7 +114,8 @@ export function DiscoverScreen({ client, baseUrl, onOpenAuthor }: {
 }
 
 /** 单张卡片：配图在卡片内部反向位移，卡片滚过屏幕时图像像在"窗后平移"。 */
-function ParallaxCard({ item, index, baseUrl, scrollY, reduceMotion, onPressAuthor, onToggleFollow }: {
+function ParallaxCard({ client, item, index, baseUrl, scrollY, reduceMotion, onPressAuthor, onToggleFollow }: {
+  client: PlatformClient;
   item: ContentItem;
   index: number;
   baseUrl: string;
@@ -162,6 +165,10 @@ function ParallaxCard({ item, index, baseUrl, scrollY, reduceMotion, onPressAuth
             ♥ {item.like_count} · 💬 {item.comment_count}
           </Text>
         </View>
+        {/* RISK-014（399 号 spec）举报别人的动态；null = 自己的内容，不画 */}
+        {item.author_followed_by_viewer !== null && (
+          <ReportBlock client={client} targetType="content" targetId={item.id} />
+        )}
       </View>
     </View>
   );

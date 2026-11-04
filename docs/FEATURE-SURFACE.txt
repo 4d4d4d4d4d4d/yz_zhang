@@ -201,6 +201,7 @@ api GET /api/v1/packs
 api GET /api/v1/packs/{key}
 api GET /api/v1/packs/{key}/assistants/{akey}/contract
 api GET /api/v1/recipient-progress/{token}
+api GET /api/v1/reports/mine
 api GET /api/v1/sandbox/models
 api GET /api/v1/search
 api GET /api/v1/search/suggest
@@ -692,6 +693,7 @@ app profiles
 app progressLog
 app recipient
 app recipientLink
+app report
 app rights
 app sandbox
 app search
@@ -1026,6 +1028,7 @@ sdk myInvitations
 sdk myInvoices
 sdk myMissions
 sdk myReferrals
+sdk myReports
 sdk mySandbox
 sdk mySessions
 sdk mySubscriptions

@@ -4066,3 +4066,36 @@ export interface AnnouncementReadByCategory {
   overlap: number;
   note: string;
 }
+
+/** RISK-010（399 号 spec）举报类型 */
+export type ReportCategory = 'illegal' | 'porn' | 'fraud' | 'harassment' | 'infringement' | 'other';
+
+/** RISK-010 举报对象 */
+export type ReportTarget = 'task' | 'content' | 'user' | 'message';
+
+/** RISK-012 提交举报的返回：同一对象没处理完再举报，返回原来那条，duplicate 为 true */
+export interface ReportSubmitResult {
+  id: number;
+  status: string;
+  duplicate?: boolean;
+}
+
+/** RISK-013 我提交过的一条举报（不带审核员是谁） */
+export interface MyReport {
+  id: number;
+  target_type: ReportTarget;
+  target_id: number;
+  category: ReportCategory;
+  category_label: string;
+  reason: string;
+  status: 'pending' | 'resolved';
+  result: string;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+/** RISK-013 `GET /reports/mine` */
+export interface MyReportsResponse {
+  items: MyReport[];
+  categories: Record<string, string>;
+}

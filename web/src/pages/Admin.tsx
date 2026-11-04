@@ -4,7 +4,7 @@
 // 理由写着「提现人审是风控岗位的动作，在管理后台做」——那句话是对的，
 // 同时也是一个承诺，而**没有任何东西核对过那个地方是否真的有这一条**。
 // 于是 V91 把提现接通之后，大额进人审的钱就冻在那儿，没有任何界面能放行。
-import { categoryCerts, type Category, type CertAliasList, apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, adminActionHint, canDoAdminAction, canSeeAdminSection, copyScheduleDay, parseHolidayNotice, type HolidayDraft, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type SupportLocalHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementCurveCompareRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type TaxRemitRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
+import { categoryCerts, reportCategoryLabel, type Category, type CertAliasList, apiErrorText, asList, autoVerifyLevel, autoVerifyLine, type AutoVerifyUsage, adminActionHint, canDoAdminAction, canSeeAdminSection, copyScheduleDay, parseHolidayNotice, type HolidayDraft, fmtYuan, formatDateTime, hiddenAdminSections, type AdminSectionKey, type ClientErrorRow, type AdminAuditRow, type AdminRow, type AuditChainReport, type AdminTicketDetail, type AdminTicketRow, type SupportAgentStatus, type SupportScope, type SupportScheduleWindow, type SupportHoliday, type SupportLocalHoliday, type TicketCategory, type AnnouncementAudience, type AnnouncementReadByCategory, type AnnouncementReadCurve, type AnnouncementCurveCompareRow, type AnnouncementPreview, type AnnouncementRow, type ReviewQueuesView, type BanImpactView, type PendingCertificationRow, type PendingTeamRow, type PendingUploadRow, type PlatformFinancePeriods, type FinanceCorrectionRow, type FinanceCorrectionReport, type PlatformGmvTaxPeriods, type PlatformFinanceView, type PlatformSettleRequestRow, type TaxRemitRequestRow, type SecurityBoardView, type SuspiciousActivityRow, type WithdrawRequestRow } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { KnowledgeAdmin } from '../AdminKnowledge';
 import { LegalFaqAdmin } from '../AdminLegal';
@@ -25,7 +25,7 @@ type Metrics = {
   gmv_cents: number; fee_income_cents: number;
   auto_verify?: AutoVerifyUsage;
 };
-type ReportRow = { id: number; reporter_id: number; target_type: string; target_id: number; reason: string };
+type ReportRow = { id: number; reporter_id: number; target_type: string; target_id: number; reason: string; category?: string };
 type UserRow = { id: number; phone: string; nickname: string; is_verified: boolean; is_banned: boolean; credit_score: number; tasks_completed: number };
 
 export default function Admin() {
@@ -115,13 +115,15 @@ export default function Admin() {
       {see('reports') && <div className="card" aria-label="举报处置">
         <h3>待处置举报（{reports.length}）</h3>
         <table style={{ marginTop: 8 }}>
-          <thead><tr><th>#</th><th>对象</th><th>理由</th><th>处置</th></tr></thead>
+          <thead><tr><th>#</th><th>对象</th><th>类型</th><th>理由</th><th>处置</th></tr></thead>
           <tbody>
-            {reports.length === 0 && <tr><td colSpan={4} className="muted">队列为空</td></tr>}
+            {reports.length === 0 && <tr><td colSpan={5} className="muted">队列为空</td></tr>}
             {reports.map((r) => (
               <tr key={r.id}>
                 <td>{r.id}</td>
                 <td>{r.target_type}#{r.target_id}</td>
+                {/* RISK-010（399 号 spec）举报类型，先分轻重 */}
+                <td>{reportCategoryLabel(r.category)}</td>
                 <td>{r.reason}</td>
                 <td className="row">
                   <button className="ghost" style={{ padding: '2px 8px' }}

@@ -3,6 +3,7 @@ import { CapabilityCard, InfluenceCard } from '../Profiles';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApp } from '../store';
+import { ReportButton } from '../Report';
 import { Reveal } from '../Motion';
 
 const LABELS: Record<SpaceItem['kind'], string> = { work: '作品', article: '文章', video: '视频', shop: '小店', live: '直播', service: '服务' };
@@ -72,7 +73,7 @@ export function PublicSpace() {
     catch (e) { setError(apiErrorText(e)); } finally { setBusy(false); }
   }
   return <main className={`page personal-space ${space?.theme || 'clay'}`}><Link className="quiet-link" to="/">← 发现</Link>{error && <p role="alert" className="error">{error}</p>}{!space && !error && <p role="status">正在打开空间…</p>}{space && <>
-    <header className="personal-intro"><div><span className="overline">{space.kind === 'person' ? 'INDEPENDENT / 独立个体' : space.kind === 'agent' ? 'AGENT / 智能体' : 'ORGANIZATION / 组织'}</span><h1>{space.nickname}</h1><p className="personal-headline">{space.headline}</p><div className="personal-actions">{me?.id === space.user_id ? <Link className="solid-link" to="/space/edit">编辑我的空间 ↗</Link> : <><button disabled={busy} onClick={() => void contact()}>聊聊一个想法 ↗</button><button className="ghost" disabled={busy} onClick={() => void toggleFollow()}>{stats?.viewer_following ? '已关注' : '关注'}</button></>}{stats && <Link className="muted" to={`/people/${space.user_id}/follows?tab=followers`}>{stats.followers} 人关注</Link>}<span className="muted">{space.accepting_orders ? '愿意认识新的合作伙伴' : '先认识，慢慢聊'}</span></div></div><WindowArt theme={space.theme} /></header>
+    <header className="personal-intro"><div><span className="overline">{space.kind === 'person' ? 'INDEPENDENT / 独立个体' : space.kind === 'agent' ? 'AGENT / 智能体' : 'ORGANIZATION / 组织'}</span><h1>{space.nickname}</h1><p className="personal-headline">{space.headline}</p><div className="personal-actions">{me?.id === space.user_id ? <Link className="solid-link" to="/space/edit">编辑我的空间 ↗</Link> : <><button disabled={busy} onClick={() => void contact()}>聊聊一个想法 ↗</button><button className="ghost" disabled={busy} onClick={() => void toggleFollow()}>{stats?.viewer_following ? '已关注' : '关注'}</button>{hasToken && <ReportButton targetType="user" targetId={space.user_id} />}</>}{stats && <Link className="muted" to={`/people/${space.user_id}/follows?tab=followers`}>{stats.followers} 人关注</Link>}<span className="muted">{space.accepting_orders ? '愿意认识新的合作伙伴' : '先认识，慢慢聊'}</span></div></div><WindowArt theme={space.theme} /></header>
     {space.introduction && <section className="personal-about"><span className="overline">ABOUT / 关于我</span><p>{space.introduction}</p></section>}
     {space.track_record && <TrackRecord record={space.track_record} />}
     {hasToken && <CapabilityCard userId={space.user_id} />}

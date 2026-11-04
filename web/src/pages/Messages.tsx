@@ -2,6 +2,7 @@ import { apiErrorText, fmtYuan, parseQuoteCard, type Conversation, type Message,
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../store';
+import { ReportButton } from '../Report';
 
 export default function Messages() {
   const { client, me } = useApp();
@@ -95,6 +96,8 @@ export default function Messages() {
                   {m.risk_flagged && <span title="疑似站外引导"> ⚠️</span>}
                   {/* IM-004 服务端给了 2 分钟撤回窗口，此前**没有任何端能点**。
                       过期与否由服务端判并给理由，客户端不重算那 2 分钟。 */}
+                  {/* RISK-010（399 号 spec）举报对方发来的消息（骚扰、诈骗、引导站外转账） */}
+                  {me && m.sender_id !== me.id && !m.recalled && <ReportButton targetType="message" targetId={m.id} />}
                   {m.sender_id === me?.id && !m.recalled && (
                     <button className="ghost" style={{ padding: '0 6px', marginLeft: 6 }}
                             onClick={async () => {

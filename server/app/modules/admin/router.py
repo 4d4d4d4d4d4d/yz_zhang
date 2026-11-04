@@ -19,6 +19,7 @@ from app.modules.dispute.models import Dispute
 from app.modules.task.models import Task
 
 from .models import AdminAudit, Report
+from .reports import REPORT_CATEGORIES
 from app.core.timefmt import UtcDatetime, day, iso
 from app.core.admin_roles import ANY, require_role
 
@@ -201,6 +202,8 @@ class ReportIn(BaseModel):
     target_type: str
     target_id: int
     reason: str = Field(min_length=2, max_length=500)
+    # RISK-010（399 号 spec）举报类型；不传就是「其他」，老客户端照旧能用
+    category: Literal["illegal", "porn", "fraud", "harassment", "infringement", "other"] = "other"
 
 
 class ResolveIn(BaseModel):
@@ -212,10 +215,26 @@ class ResolveIn(BaseModel):
 def create_report(body: ReportIn, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     if body.target_type not in ("task", "content", "user", "message"):
         raise bad_request("非法举报对象", "invalid_target")
+    from . import reports as rpt
+
+    # RISK-011/012（399 号 spec）对象要在、不能举报自己的；同一对象没处理完不再新建；每天有上限
+    rpt.check_target(db, user, body.target_type, body.target_id)
+    dup = rpt.pending_duplicate(db, user.id, body.target_type, body.target_id)
+    if dup is not None:
+        return {"id": dup.id, "status": dup.status, "duplicate": True}
+    rpt.check_daily_limit(db, user.id)
     row = Report(reporter_id=user.id, **body.model_dump())
     db.add(row)
     db.flush()
-    return {"id": row.id, "status": row.status}
+    return {"id": row.id, "status": row.status, "duplicate": False}
+
+
+@router.get("/reports/mine")
+def my_reports(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """RISK-013（399 号 spec）我提交过的举报和处理结果（最近 50 条）。"""
+    from . import reports as rpt
+
+    return {"items": rpt.mine(db, user.id), "categories": rpt.REPORT_CATEGORIES}
 
 
 # ---------- 审核队列（RISK-002） ----------
@@ -226,7 +245,9 @@ def report_queue(
     rows = db.query(Report).filter(Report.status == status).order_by(Report.id).limit(100).all()
     return [
         {"id": r.id, "reporter_id": r.reporter_id, "target_type": r.target_type,
-         "target_id": r.target_id, "reason": r.reason, "created_at": iso(r.created_at)}
+         "target_id": r.target_id, "reason": r.reason, "created_at": iso(r.created_at),
+         # RISK-010（399 号 spec）类型给审核员先分轻重
+         "category": r.category or "other", "category_label": REPORT_CATEGORIES.get(r.category or "other", "其他")}
         for r in rows
     ]
 
@@ -269,7 +290,12 @@ def resolve_report(
     report.status = "resolved"
     report.action = body.action
     report.handled_by = admin.id
+    report.resolved_at = utcnow()
     db.add(report)
+    # RISK-013（399 号 spec）处理完告诉举报人结果
+    from .reports import notify_reporter
+
+    notify_reporter(db, report)
     # MOD-004 每一次处置都记审计，**包括驳回**——谁在什么时候驳回了哪条举报，
     # 是事后复盘的关键。只写 report.handled_by 不够：审计日志按动作查询时看不到它
     record_audit(db, admin.id, f"report_{body.action}", report.target_type,

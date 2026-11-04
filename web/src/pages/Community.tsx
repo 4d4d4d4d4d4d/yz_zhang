@@ -4,6 +4,7 @@ import { BlogEditor } from '../BlogEditor';
 import { VideoFeed } from '../VideoFeed';
 import { ParallaxHero } from '../Motion';
 import { useApp } from '../store';
+import { ReportButton } from '../Report';
 
 export default function Community() {
   const { client } = useApp();
@@ -116,6 +117,8 @@ export default function Community() {
                 {c.liked_by_me ? '❤️' : '🤍'} {c.like_count}
               </a>
               <a onClick={() => void toggleComments(c.id)} style={{ cursor: 'pointer' }}>💬 {c.comment_count}</a>
+              {/* RISK-010（399 号 spec）举报动态；null = 自己的内容，不画 */}
+              {c.author_followed_by_viewer !== null && <ReportButton targetType="content" targetId={c.id} />}
             </div>
             {openComments === c.id && (
               <div style={{ marginTop: 8 }}>

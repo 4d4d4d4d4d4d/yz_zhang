@@ -13,6 +13,7 @@ import { isSandbox, loadSandbox } from './sandboxState';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
 import { ProgressBlock, canSeeProgress } from './progressLog';
+import { ReportBlock } from './report';
 import { VisitsBlock, hasVisits } from './visits';
 import { TaskReboostBlock } from './taskReboost';
 import { PreviousStepInputsBlock, ShareToNextStepsBlock } from './subtaskShares';
@@ -850,7 +851,6 @@ function ReportAndBlock({ client, task, meId }: {
   client: PlatformClient; task: Task; meId: number | null;
 }) {
   const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState('');
   const [notice, setNotice] = useState('');
   const other = meId === task.creator_id ? task.executor_id : task.creator_id;
 
@@ -861,16 +861,10 @@ function ReportAndBlock({ client, task, meId }: {
       </TouchableOpacity>
       {open && (
         <View style={{ gap: 6 }}>
-          <TextInput style={styles.input} placeholder="说明问题（会进入人工审核队列）"
-                     value={reason} onChangeText={setReason} />
-          <Button title="举报这个任务" onPress={async () => {
-            setNotice('');
-            try {
-              await client.report('task', task.id, reason || '内容不当');
-              setNotice('已提交，运营会在审核队列里看到');
-              setReason('');
-            } catch (e) { setNotice(apiErrorText(e)); }
-          }} />
+          {/* RISK-010（399 号 spec）能选类型、说明至少 2 个字；自己发的任务不画（服务端也拒） */}
+          {meId !== task.creator_id && (
+            <ReportBlock client={client} targetType="task" targetId={task.id} label="举报这个任务" />
+          )}
           {other != null && (
             <Button title="拉黑对方（不再收到 TA 的私信）" onPress={async () => {
               setNotice('');

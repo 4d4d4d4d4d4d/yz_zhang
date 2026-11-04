@@ -4,6 +4,7 @@ import { ticketReplyNotice, apiErrorText, formatDateTime, mediaUri, type MyTicke
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Image, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { MyReportsBlock } from './report';
 
 // ESCA-057（227 号 spec）截图：一条最多 4 张（与服务端一致），每张不超过 2MB
 const MAX_TICKET_IMAGES = 4;
@@ -166,6 +167,8 @@ export function SupportTicketsScreen({ client, baseUrl = DEFAULT_BASE }: { clien
           )}
         </View>
       ))}
+      {/* RISK-013（399 号 spec）我提交过的举报与处理结果 */}
+      <MyReportsBlock client={client} />
     </View>
   );
 }

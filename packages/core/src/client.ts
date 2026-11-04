@@ -43,6 +43,9 @@ import type {
   SpendRequestView,
   TeamDetail,
   TeamBudgetResult,
+  ReportCategory,
+  ReportSubmitResult,
+  MyReportsResponse,
   BudgetTimezone,
   TeamView,
   VentureDetail,
@@ -1708,10 +1711,18 @@ export class PlatformClient {
       'POST', `/legal/consents/${scope}/revoke`,
     );
   }
-  report(targetType: 'task' | 'content' | 'user' | 'message', targetId: number, reason: string) {
-    return this.request<{ id: number; status: string }>('POST', '/reports', {
-      target_type: targetType, target_id: targetId, reason,
+  /** RISK-007；V426（399 号 spec）多一个可选的举报类型，不传就是「其他」（老调用照旧）。
+   * 同一对象还没处理完再举报，返回原来那条（`duplicate: true`）。 */
+  report(targetType: 'task' | 'content' | 'user' | 'message', targetId: number, reason: string,
+         category?: ReportCategory) {
+    // 不传 category 时它是 undefined，JSON 里不出现这个字段，请求体与以前一样
+    return this.request<ReportSubmitResult>('POST', '/reports', {
+      target_type: targetType, target_id: targetId, reason, category,
     });
+  }
+  /** RISK-013（399 号 spec）我提交过的举报与处理结果 */
+  myReports() {
+    return this.request<MyReportsResponse>('GET', '/reports/mine');
   }
 
   // ---- search / recurring / export ----
@@ -1750,7 +1761,8 @@ export class PlatformClient {
     }>('GET', '/admin/metrics');
   }
   adminReports(status = 'pending') {
-    return this.request<Array<{ id: number; reporter_id: number; target_type: string; target_id: number; reason: string; created_at: string }>>(
+    // RISK-010（399 号 spec）多了举报类型（老数据为 other）
+    return this.request<Array<{ id: number; reporter_id: number; target_type: string; target_id: number; reason: string; created_at: string; category?: string; category_label?: string }>>(
       'GET', `/admin/reports?status=${status}`,
     ).then(listOf);
   }

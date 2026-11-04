@@ -13,6 +13,7 @@ import {
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ReportBlock } from './report';
 
 type ConversationRow = Awaited<ReturnType<PlatformClient['conversations']>>[number];
 
@@ -87,6 +88,13 @@ function Thread({ client, convId, onBack }: {
   const [warning, setWarning] = useState<string | null>(null);
   const [support, setSupport] = useState('');
   const [error, setError] = useState('');
+  // RISK-010（399 号 spec）只在对方发的消息旁边画「举报」：要先知道我是谁，查不到就不画
+  const [meId, setMeId] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    client.me().then((u) => { if (live && typeof u?.id === 'number') setMeId(u.id); }).catch(() => {});
+    return () => { live = false; };
+  }, [client]);
 
   const load = useCallback(async () => {
     setRows(await client.messages(convId).catch(() => []));
@@ -101,6 +109,9 @@ function Thread({ client, convId, onBack }: {
       {rows.map((m) => (
         <View key={m.id} style={s.card}>
           <Text style={s.muted}>#{m.sender_id}</Text>
+          {meId != null && m.sender_id !== meId && !m.recalled && (
+            <ReportBlock client={client} targetType="message" targetId={m.id} />
+          )}
           {/* IM-009 报价卡：发布方报自己的单 → 对方按这个价报名；执行方报价 → 发布方去报名列表选 TA */}
           {m.kind === 'quote' && parseQuoteCard(m.content) ? (() => {
             const c = parseQuoteCard(m.content)!;

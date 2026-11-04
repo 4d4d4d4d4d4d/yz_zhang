@@ -21,6 +21,10 @@ class Report(Base):
     action: Mapped[str] = mapped_column(String(20), default="")  # dismiss/remove_content/ban_user
     handled_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # RISK-010/012（399 号 spec，V426）举报类型与处理时间：类型让审核员先分轻重，
+    # 处理时间给举报人看「什么时候处理的」。老数据类型为 other、处理时间为空
+    category: Mapped[str] = mapped_column(String(20), default="other", server_default="other")
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class AdminAudit(Base):

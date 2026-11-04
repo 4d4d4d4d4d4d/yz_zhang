@@ -1,6 +1,7 @@
 import { ticketReplyNotice, apiErrorText, formatDateTime, type MyTicket, type TicketCategory, type UrgentHint } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../store';
+import { MyReports } from '../Report';
 import PhotoPicker from '../PhotoPicker';
 
 interface QA { q: string; a: string; human: boolean; ctx: string | null }
@@ -45,6 +46,8 @@ export default function Support() {
         </div>
       </div>
       <MyTickets />
+      {/* RISK-013（399 号 spec）我提交过的举报与处理结果 */}
+      <MyReports />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { DisputePanel } from '../DisputePanel';
 import { ExperienceTools } from '../ExperienceUnits';
 import PhotoPicker from '../PhotoPicker';
 import { useApp } from '../store';
+import { ReportButton } from '../Report';
 import DeliverablesBlock from '../Deliverables';
 import LicensesBlock from '../Licenses';
 import HandoverBlock from '../Handover';
@@ -144,6 +145,8 @@ export default function TaskDetail() {
             <button onClick={() => act(() => client.apply(taskId, '我可以做'))}>报名接单</button>
           )}
           {task.status === 'published' && !isCreator && me && <QuoteToCreator taskId={taskId} creatorId={task.creator_id} />}
+          {/* RISK-010（399 号 spec）举报这个任务：不是自己发的才有 */}
+          {me && !isCreator && <ReportButton targetType="task" targetId={taskId} label="举报任务" />}
           {task.status === 'in_progress' && isExecutor && (
             <button onClick={() => act(() => client.deliver(taskId))}>提交验收</button>
           )}

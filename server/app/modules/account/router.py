@@ -809,6 +809,12 @@ def _export_gig(db: Session, user_id: int) -> dict:
     }
 
 
+def _export_reports(db: Session, user_id: int) -> dict:
+    from app.modules.admin.reports import export_mine
+
+    return export_mine(db, user_id)
+
+
 @router.get("/users/me/export")
 def export_my_data(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
     from app.modules.content.models import Content
@@ -843,6 +849,8 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
         # SCN-219（336 号 spec）发单拦截的复核申请：有才带
         **_export_errand_reviews(db, user.id),
         **_export_recipient_links(db, user.id),
+        # RISK-015（399 号 spec）我提交过的举报：有才带
+        **_export_reports(db, user.id),
         "real_name": user.real_name,
         "tasks": [{"id": t.id, "title": t.title, "status": t.status, "budget_cents": t.budget_cents,
                    "role": "creator" if t.creator_id == user.id else "executor",
