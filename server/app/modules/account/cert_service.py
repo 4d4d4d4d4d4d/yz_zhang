@@ -101,9 +101,10 @@ def submit(db: Session, user: User, *, name: str, holder_name: str, cert_number:
             raise bad_request("健康证明的有效期最长一年：按证明上写的到期日填", "certificate_expiry_too_far")
     # SCN-160（286 号 spec）高处作业属特种作业，操作证有效期 6 年、每 3 年复审：有效期必填、最长 6 年
     # SCN-199（325 号 spec）低压电工作业操作证同属特种作业操作证，同一条规则
-    from app.modules.task.service import ELECTRICIAN_CERT, HEIGHT_WORK_CERT
+    # SCN-288（397 号 spec）制冷与空调作业操作证也是特种作业操作证，同一条规则
+    from app.modules.task.service import ELECTRICIAN_CERT, HEIGHT_WORK_CERT, REFRIGERATION_CERT
 
-    if name in (HEIGHT_WORK_CERT, ELECTRICIAN_CERT):
+    if name in (HEIGHT_WORK_CERT, ELECTRICIAN_CERT, REFRIGERATION_CERT):
         if expires_at is None:
             raise bad_request(f"{name}要填有效期（按证上写的，最长 6 年）", "certificate_expiry_required")
         if expires_at > utcnow() + timedelta(days=366 * 6):

@@ -2,7 +2,7 @@
 
     python -m scripts.pack_probe pet-boarding "要看疫苗本吗=>vaccine-and-health-check" "!猫瘟=>vaccine-and-health-check"
 
-- 每一项写成「问题=>知识 key」；知识也可以写标题的开头几个字。
+- 每一项写成「问题=>知识 key」；知识也可以写 key 或标题的开头几个字（能唯一确定就行）。
 - 前面加 `!` 的是「只靠标签」的问法（测试里注释「只有标签里的口语才接得住」之后的那几行），多查两条：
   去掉那条知识的标签还答不答得上（答得上就钉不住标签，PACK-090）；是不是正好命中一个标签（V404）。
 - 先过一遍助手问答前面的三道拦截：想伤害自己、人身安全与刑事风险、角色契约禁区——被拦下的问法测试里拿不到引用。
@@ -35,7 +35,8 @@ def _find(d, want: str):
     for k in d.knowledge:
         if k.key == want:
             return k
-    hits = [k for k in d.knowledge if k.title.startswith(want)]
+    # V424（397 号 spec）用起来才发现：手写时常只记得 key 的开头，也认（能唯一确定才算）
+    hits = [k for k in d.knowledge if k.key.startswith(want)] or [k for k in d.knowledge if k.title.startswith(want)]
     if len(hits) != 1:
         raise LookupError(f"「{want}」对不上 {d.key} 里的哪条知识（写 key，或标题开头能唯一确定的几个字）")
     return hits[0]

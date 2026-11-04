@@ -57,3 +57,11 @@ def test_agrees_with_every_tag_only_question_already_in_the_tests():
         if not ok:
             bad.append(f"{f}：「{q}」{note}")
     assert not bad, "\n".join(bad)
+
+
+def test_knowledge_can_be_named_by_a_unique_key_prefix(capsys):
+    """V424（397 号 spec）用起来才发现：手写时常只记得 key 的开头。能唯一确定就认，认不出说清楚。"""
+    code, out = _run(capsys, "搭电怎么接线=>jumpstart", "!小备胎=>spare-tire")
+    assert code == 0, out
+    code, out = _run(capsys, "搭电怎么接线=>s")          # safe-spot… 与 spare-tire… 都以 s 开头
+    assert code == 1 and "对不上" in out, out

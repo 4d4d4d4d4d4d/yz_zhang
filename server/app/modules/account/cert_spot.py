@@ -40,7 +40,7 @@ def high_risk_certs() -> set[str]:
     from app.modules.task import service as ts
 
     return {ts.MINOR_CARE_CERT, ts.DRIVER_CERT, ts.CAREGIVER_CERT, ts.ELECTRICIAN_CERT, ts.HEIGHT_WORK_CERT, ts.LOCKSMITH_CERT,
-            ts.SWIM_CERT, ts.GAS_CERT}
+            ts.SWIM_CERT, ts.GAS_CERT, ts.REFRIGERATION_CERT}
 
 
 def _sampled(application_id: int, rate: float | None = None) -> bool:
