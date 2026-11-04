@@ -18,8 +18,9 @@ type OpenOrder = VerificationOrderView & {
  * 「只显示空列表，核验人不知道是资格不够还是真没单」。
  */
 export default function Verify() {
-  const { client } = useApp();
+  const { client, me } = useApp();
   const [orders, setOrders] = useState<OpenOrder[]>([]);
+  const [notice, setNotice] = useState('');
   const [detail, setDetail] = useState<VerificationOrderDetail | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -51,6 +52,7 @@ export default function Verify() {
           核验是「看一遍」不是「重做」，报酬按原任务金额的一个比例计。
         </p>
         {error && <p className="error">{error}</p>}
+        {notice && <p className="muted">{notice}</p>}
         <div className="list">
           {orders.length === 0 && <p className="muted">当前没有待核验的任务。</p>}
           {orders.map((o) => (
@@ -71,6 +73,17 @@ export default function Verify() {
                       })}>
                 接下
               </button>
+              {/* VER-050b（374 号 spec）点名请我核验的单：不方便就当场拒绝，钱立刻退给发布方 */}
+              {o.designated_verifier_id != null && o.designated_verifier_id === me?.id && o.status === 'open' && (
+                <button className="ghost" disabled={busy}
+                        onClick={() => act(async () => {
+                          setNotice('');
+                          await client.declineVerificationOrder(o.id, window.prompt('告诉发布方为什么不方便（可不填）：') ?? '');
+                          setNotice('已拒绝，核验费已退回给发布方');
+                        })}>
+                  不方便，拒绝
+                </button>
+              )}
             </div>
           ))}
         </div>

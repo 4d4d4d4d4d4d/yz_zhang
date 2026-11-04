@@ -80,3 +80,42 @@ def test_the_single_eligibility_function_also_knows_about_designation(client, re
         order, t = db.get(VerificationOrder, oid), db.get(Task, task["id"])
         assert service.verifier_block(db, t, order, db.get(User, other["id"])) == "发单人点名了别的核验人"
         assert service.verifier_block(db, t, order, db.get(User, friend["id"])) == ""
+
+
+def test_designated_verifier_can_decline_and_the_fee_comes_back_at_once(client, requester, runner):  # noqa: F811
+    """VER-050b（374 号 spec）：被点名的人不方便，当场退款，不用等截止；只有他能拒、只在没接时能拒。"""
+    admin = make_admin(client, "13800039909")
+    task, _ = escalated_task(client, requester, admin, runner)
+    friend = register(client, "13800039910", "老郑")
+    verify_user(client, friend, name="郑工")
+    stranger = make_verifier(client, "13800039911")
+    before = _wallet(client, requester)
+    order = client.post(f"{API}/tasks/{task['id']}/verification", json={"verifier_id": friend["id"]}, headers=auth(requester)).json()
+    assert _wallet(client, requester) == before - order["fee_cents"]
+    url = f"{API}/verification-orders/{order['id']}/decline"
+    assert client.post(url, json={}, headers=auth(stranger)).json()["detail"]["code"] == "verifier_not_designated"
+    assert client.post(url, json={}, headers=auth(requester)).status_code == 403, "发单人自己不能替对方拒"
+    assert client.post(url, json={"reason": "x" * 201}, headers=auth(friend)).status_code == 422
+    r = client.post(url, json={"reason": "这周在外地出差"}, headers=auth(friend))
+    assert r.status_code == 200, r.text
+    _assert_shape(r.json(), "VerificationOrderView")
+    assert r.json()["status"] == "cancelled"
+    assert _wallet(client, requester) == before, "核验费当场退回"
+    with SessionLocal() as db:
+        n = db.query(Notification).filter(Notification.user_id == requester["id"], Notification.title == "你点名的核验人不方便").one()
+        assert "这周在外地出差" in n.body and "已退回" in n.body
+    again = client.post(url, json={}, headers=auth(friend))
+    assert again.status_code == 409 and again.json()["detail"]["code"] == "verification_not_open"
+    # 退回后可以重新申请（点名别人或由平台派单）
+    assert client.post(f"{API}/tasks/{task['id']}/verification", headers=auth(requester)).status_code == 201
+
+
+def test_a_claimed_designated_order_cannot_be_declined(client, requester, runner):  # noqa: F811
+    admin = make_admin(client, "13800039912")
+    task, _ = escalated_task(client, requester, admin, runner)
+    friend = register(client, "13800039913", "老钱")
+    verify_user(client, friend, name="钱工")
+    order = client.post(f"{API}/tasks/{task['id']}/verification", json={"verifier_id": friend["id"]}, headers=auth(requester)).json()
+    assert client.post(f"{API}/verification-orders/{order['id']}/claim", headers=auth(friend)).status_code == 200
+    r = client.post(f"{API}/verification-orders/{order['id']}/decline", headers=auth(friend))
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "verification_not_open"

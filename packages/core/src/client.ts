@@ -2351,6 +2351,10 @@ export class PlatformClient {
       category: string; task_title: string; claimable: boolean; reason: string;
     }>>('GET', '/verification-orders').then(listOf);
   }
+  /** VER-050b（374 号 spec）被点名的核验人当场拒绝：核验费立刻退回发单人；只在还没接时能拒 */
+  declineVerificationOrder(orderId: number, reason = '') {
+    return this.request<VerificationOrderView>('POST', `/verification-orders/${orderId}/decline`, { reason });
+  }
   claimVerificationOrder(orderId: number) {
     return this.request<VerificationOrderView>('POST', `/verification-orders/${orderId}/claim`);
   }

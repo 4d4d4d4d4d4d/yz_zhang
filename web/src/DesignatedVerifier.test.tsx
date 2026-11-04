@@ -70,3 +70,24 @@ describe('VER-050 网页：点名核验人', () => {
     expect(await screen.findByText('发布方点名请你核验（发布方付费）')).toBeTruthy();
   });
 });
+
+describe('VER-050b 网页：被点名的核验人当场拒绝（374 号 spec）', () => {
+  const order = (designated: number | null) => ({ id: 3, task_id: 7, status: 'open', trigger: designated ? 'designated' : 'requested', fee_cents: 3000,
+    payer_id: 5, verifier_id: null, designated_verifier_id: designated, outcome: '', comment: '', revised_output: '', criteria_results: [],
+    deadline: null, created_at: null, category: '软件开发', task_title: '写一篇接口文档', claimable: true, reason: '' });
+
+  it('点名我的单：能拒绝，理由带上去，并说清钱已退回', async () => {
+    vi.spyOn(window, 'prompt').mockReturnValue('这周出差');
+    const calls = open('/verify', { '/verification-orders': [order(1)], 'POST /verification-orders/3/decline': { ...order(1), status: 'cancelled' } });
+    fireEvent.click(await screen.findByText('不方便，拒绝'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/verification-orders/3/decline')).toBe(true));
+    expect(calls.find((c) => c.path === '/verification-orders/3/decline')!.body).toEqual({ reason: '这周出差' });
+    expect(await screen.findByText('已拒绝，核验费已退回给发布方')).toBeTruthy();
+  });
+
+  it('平台派的单、点名别人的单：没有拒绝按钮', async () => {
+    open('/verify', { '/verification-orders': [order(null), { ...order(9), id: 4 }] });
+    await screen.findAllByText('写一篇接口文档');
+    expect(screen.queryByText('不方便，拒绝')).toBeNull();
+  });
+});

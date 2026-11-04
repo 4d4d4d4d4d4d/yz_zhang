@@ -608,6 +608,7 @@ api POST /api/v1/ventures/{venture_id}/organization-records
 api POST /api/v1/ventures/{venture_id}/payout-proposals
 api POST /api/v1/ventures/{venture_id}/payout-proposals/{proposal_id}/vote
 api POST /api/v1/verification-orders/{order_id}/claim
+api POST /api/v1/verification-orders/{order_id}/decline
 api POST /api/v1/verification-orders/{order_id}/outcome
 api POST /api/v1/verify/jobs/expire-orders
 api POST /api/v1/wallet/jobs/purge-idempotency
@@ -885,6 +886,7 @@ sdk decideTeamSpend
 sdk decideWithdraw
 sdk declineInvitation
 sdk declineVentureInvitation
+sdk declineVerificationOrder
 sdk decompositionTemplate
 sdk defineMilestones
 sdk deleteDecompositionNode

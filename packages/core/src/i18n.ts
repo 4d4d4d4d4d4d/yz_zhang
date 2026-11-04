@@ -546,6 +546,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   valuation_required: '确认贡献时必须给出计价',
   verification_closed: '核验单已结束',
   verification_in_progress: '该任务已有进行中的核验单',
+  verification_not_open: '这一单已经接下或已结束，不能再拒绝',
   verification_required: '请先完成实名认证再领取',
   verifier_not_designated: '发单人点名了别的核验人，这一单只能由被点名的人接',
   verifier_not_found: '没有这个用户：请核对对方的用户编号',

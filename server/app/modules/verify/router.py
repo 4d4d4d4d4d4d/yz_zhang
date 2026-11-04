@@ -23,6 +23,12 @@ class VerifyRequestIn(BaseModel):
     verifier_id: int | None = Field(default=None, ge=1)
 
 
+class DeclineIn(BaseModel):
+    """VER-050b（374 号 spec）被点名的核验人当场拒绝；理由可不填，填了会转告发单人。"""
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(default="", max_length=200)
+
+
 class OutcomeIn(BaseModel):
     outcome: str = Field(pattern="^(approved|revised|rejected)$")
     comment: str = Field(default="", max_length=2000)
@@ -139,6 +145,33 @@ def claim(order_id: int, user: User = Depends(get_current_user),
         raise forbidden(block, "verifier_not_eligible")
     order.verifier_id = user.id
     order.status = "claimed"
+    db.add(order)
+    return _dump(order)
+
+
+@router.post("/verification-orders/{order_id}/decline")
+def decline(order_id: int, body: DeclineIn | None = None, user: User = Depends(get_current_user),
+            db: Session = Depends(get_db, scope="function")):
+    """VER-050b 被点名的人不方便：当场退款给发单人，不用等截止。
+
+    只有被点名的人能拒绝、只在还没接的时候能拒绝（接了就走原来的提交结论或到期）。
+    平台派的单没有「拒绝」——不接就是了，别人会接。
+    """
+    order = db.get(VerificationOrder, order_id)
+    if not order:
+        raise not_found("核验单不存在")
+    if order.designated_verifier_id != user.id:
+        raise forbidden("只有被点名的核验人能拒绝这一单", "verifier_not_designated")
+    if order.status != "open":
+        raise conflict("这一单已经接下或已结束，不能再拒绝", "verification_not_open")
+    task = _task(db, order.task_id)
+    service.cancel_order(db, order, memo="被点名的核验人拒绝，核验费退回")
+    reason = (body.reason.strip() if body else "")
+    from app.modules.notification.service import notify
+
+    notify(db, order.payer_id, "verify", "你点名的核验人不方便",
+           f"「{task.title}」你点名的核验人这次不方便接{('：' + reason) if reason else ''}。"
+           f"核验费 ¥{order.fee_cents / 100:.2f} 已退回；可以重新申请，点名别人或由平台派单")
     db.add(order)
     return _dump(order)
 
