@@ -12,6 +12,7 @@ import { ApiError, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, Plat
 import { isSandbox, loadSandbox } from './sandboxState';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
+import { ProgressBlock, canSeeProgress } from './progressLog';
 import { VisitsBlock, hasVisits } from './visits';
 import { TaskReboostBlock } from './taskReboost';
 import { PreviousStepInputsBlock, ShareToNextStepsBlock } from './subtaskShares';
@@ -468,6 +469,8 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       )}
       {/* SPACE-024 合作驾驶舱（移动简化版：进度、钱、预警、关键路径；APP-007）——只给发布方 */}
       {hasChildTasks(task) && meId === task.creator_id && <CockpitBlock client={client} taskId={task.id} />}
+      {/* TASK-022 执行动态（386 号 spec）：成交双方看进度、写进度，接单人可报「还要几天」（AI-DEC-021d） */}
+      {canSeeProgress(task, meId) && <ProgressBlock client={client} task={task} meId={meId} />}
       {/* SCN-120 一单多次上门的逐次回报（176 号 spec）：成交双方 */}
       {hasVisits(task) && meId !== null && (meId === task.creator_id || meId === task.executor_id)
         && !['draft', 'published'].includes(task.status) && (

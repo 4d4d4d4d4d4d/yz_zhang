@@ -700,9 +700,12 @@ export class PlatformClient {
   acceptApplication(applicationId: number) {
     return this.request<{ contract_id: number; task: Task }>('POST', `/applications/${applicationId}/accept`);
   }
-  /** MOB-021 进度留痕可附图片凭证（先调 uploadImage 拿 url）。 */
-  addProgress(taskId: number, content: string, images: string[] = []) {
-    return this.request<{ ok: boolean }>('POST', `/tasks/${taskId}/progress`, { content, images });
+  /** MOB-021 进度留痕可附图片凭证（先调 uploadImage 拿 url）。
+   *  AI-DEC-021d（386 号 spec）接单人可带「还要几天」（0~365），驾驶舱时间线按它重排；不传就不带这个字段 */
+  addProgress(taskId: number, content: string, images: string[] = [], daysLeft?: number) {
+    return this.request<{ ok: boolean }>('POST', `/tasks/${taskId}/progress`, {
+      content, images, ...(daysLeft !== undefined ? { days_left: daysLeft } : {}),
+    });
   }
 
   /** VND-031 上传图片：传客户端压缩后的 base64（不含 data: 前缀）。 */
@@ -796,7 +799,7 @@ export class PlatformClient {
     return this.request<{ ok: boolean; distance_m: number }>('POST', `/tasks/${taskId}/checkin`, { lat, lng });
   }
   listProgress(taskId: number) {
-    return this.request<Array<{ id: number; user_id: number; kind: string; content: string; images: string[]; created_at: string }>>(
+    return this.request<Array<{ id: number; user_id: number; kind: string; content: string; images: string[]; created_at: string; days_left?: number | null }>>(
       'GET', `/tasks/${taskId}/progress`,
     ).then(listOf);
   }

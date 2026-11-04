@@ -689,6 +689,7 @@ app notebook
 app opc
 app packs
 app profiles
+app progressLog
 app recipient
 app recipientLink
 app rights

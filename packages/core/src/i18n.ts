@@ -417,6 +417,8 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   recipient_link_expired: '这条链接已经过期了：请找发单的家人重新发一条',
   depart_not_executor: '只有接这一单的人能报「出发了」',
   depart_remote_task: '线上任务不用上门，不用报「出发了」',
+  // AI-DEC-021d（386 号 spec）
+  days_left_executor_only: '「还要几天」只有接单人能报：活在他手上，他最清楚。你可以在进度里问他',
   depart_not_active: '这一单现在不在待上门的状态，不用报「出发了」',
   handover_full: '一份合约最多登记 30 个要交接的账号',
   handover_confirmed: '发单人已经确认这一项在他名下，不能再删',

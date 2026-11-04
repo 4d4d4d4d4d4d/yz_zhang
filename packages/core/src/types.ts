@@ -2899,9 +2899,13 @@ export interface CockpitTimelineRow {
   task_id: number;
   start: string | null;
   end: string | null;
-  basis: 'estimate' | 'deadline' | 'unknown' | 'done';
+  /** reported：AI-DEC-021d（386 号 spec）按接单人最近一次报的「还要几天」排 */
+  basis: 'estimate' | 'deadline' | 'unknown' | 'done' | 'reported';
   /** 按工期估计排出来的完成时间晚于这一步自己的截止 */
   late: boolean;
+  /** AI-DEC-021d（386 号 spec）basis 为 reported 时：接单人哪天报的、报的还要几天；否则 null（老服务端没有） */
+  reported_at?: string | null;
+  days_left?: number | null;
 }
 export interface CockpitTimeline {
   rows: CockpitTimelineRow[];

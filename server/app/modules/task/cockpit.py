@@ -14,7 +14,7 @@ from datetime import timedelta
 from sqlalchemy.orm import Session
 
 from app.modules.account.models import User, utcnow
-from app.modules.task.models import Application, Task
+from app.modules.task.models import Application, ProgressLog, Task
 
 MAX_DEPTH = 6
 MAX_NODES = 300
@@ -86,14 +86,18 @@ def schedule_conflicts(nodes: list[Task]) -> dict[int, list[int]]:
     return out
 
 
-def timeline(nodes: list[Task], now) -> dict:
+def timeline(nodes: list[Task], now, reports: dict | None = None) -> dict:
     """AI-DEC-021c（384 号 spec）按依赖把还没完成的步骤排成一条条时间段，算出整件事预计哪天做完。
 
     每一步最早从「现在」开始，要等的前一步没完就从前一步的预计完成时间开始；
     长度按这一步的工期估计（天）；没填工期但填了截止的，就排到截止为止（`basis = deadline`）；
     两样都没有，或者它要等的步骤排不出来，这一步就排不出来（`basis = unknown`），整件事的预计完成日也给不出。
     进行中的步骤不知道做了几成，按整段工期从现在算——宁可估晚，不估早。已完成、已取消的不画条。
+
+    AI-DEC-021d（386 号 spec）`reports` = {步骤 id: (报的时间, 还要几天)}：接单人报过的，以他最近一次报的为准
+    （`basis = reported`），完成时间 = 报的时间 + 天数；那个时间已经过了还没做完，就按「现在」算，不往回画。
     """
+    reports = reports or {}
     by_id = {n.id: n for n in nodes}
     memo: dict[int, tuple] = {}
     UNKNOWN = (None, None, "unknown")
@@ -111,7 +115,10 @@ def timeline(nodes: list[Task], now) -> dict:
                 memo[nid] = UNKNOWN
                 return UNKNOWN
             start = max(start, end)
-        if n.est_days:
+        if n.id in reports:
+            at, days = reports[n.id]
+            out = (start, max(start, at + timedelta(days=days)), "reported")
+        elif n.est_days:
             out = (start, start + timedelta(days=n.est_days), "estimate")
         elif n.deadline and n.deadline > start:
             out = (start, n.deadline, "deadline")
@@ -123,12 +130,15 @@ def timeline(nodes: list[Task], now) -> dict:
     rows = []
     for n in nodes:
         if not _live(n):
-            rows.append({"task_id": n.id, "start": None, "end": None, "basis": "done", "late": False})
+            rows.append({"task_id": n.id, "start": None, "end": None, "basis": "done", "late": False,
+                         "reported_at": None, "days_left": None})
             continue
         start, end, basis = plan(n.id, frozenset())
         rows.append({"task_id": n.id, "start": start, "end": end, "basis": basis,
-                     # 按工期估计排出来的完成时间晚于这一步自己的截止
-                     "late": bool(basis == "estimate" and n.deadline and end > n.deadline)})
+                     # 按工期估计（或接单人报的天数）排出来的完成时间晚于这一步自己的截止
+                     "late": bool(basis in ("estimate", "reported") and n.deadline and end > n.deadline),
+                     "reported_at": reports[n.id][0] if basis == "reported" else None,
+                     "days_left": reports[n.id][1] if basis == "reported" else None})
     live = [r for r in rows if r["basis"] != "done"]
     unknown = [r["task_id"] for r in live if r["basis"] == "unknown"]
     finish = max((r["end"] for r in live), default=None) if live and not unknown else None
@@ -198,12 +208,17 @@ def cockpit(db: Session, parent: Task) -> dict:
                 alerts.append({"task_id": n.id, "kind": "past_parent_deadline",
                                "text": f"「{n.title}」的截止晚于整件事的截止：这一步按时了，整件事也会晚"})
     # ---- AI-DEC-021c（384 号 spec）按工期估计排出来，这一步或整件事赶不上截止
-    plan = timeline(leaves, now)
+    # AI-DEC-021d（386 号 spec）每一步接单人最近一次报的「还要几天」：一条查询取全部，按 id 升序覆盖成最新的
+    reports = {r.task_id: (r.created_at, r.days_left) for r in db.query(ProgressLog).filter(
+        ProgressLog.task_id.in_([n.id for n in leaves] or [-1]), ProgressLog.days_left.isnot(None)).order_by(ProgressLog.id)}
+    plan = timeline(leaves, now, reports)
     for r in plan["rows"]:
         if r["late"]:
             alerts.append({"task_id": r["task_id"], "kind": "estimate_past_deadline",
-                           "text": f"「{by_id[r['task_id']].title}」按工期估计做不完：等前面的步骤加上它自己要的天数，"
-                                   "会晚于它的截止。改截止、缩短前面的步骤，或者分给更多人并行"})
+                           "text": (f"「{by_id[r['task_id']].title}」接单人报的还要 {r['days_left']} 天，会晚于这一步的截止："
+                                    "和他商量能不能加快，或者走变更单改期") if r["basis"] == "reported" else
+                                   (f"「{by_id[r['task_id']].title}」按工期估计做不完：等前面的步骤加上它自己要的天数，"
+                                    "会晚于它的截止。改截止、缩短前面的步骤，或者分给更多人并行")})
     if parent.deadline and plan["projected_finish"] and plan["projected_finish"] > parent.deadline:
         alerts.append({"task_id": parent.id, "kind": "projected_late",
                        "text": "按各步的工期估计排下来，整件事会晚于截止：看时间线上最晚的那条，"
@@ -225,7 +240,8 @@ def cockpit(db: Session, parent: Task) -> dict:
         "alerts": alerts,
         # AI-DEC-021c（384 号 spec）时间线：每一步的预计起止；有一步排不出来，整件事的预计完成日就是 null
         "timeline": {
-            "rows": [{**r, "start": iso(r["start"]), "end": iso(r["end"])} for r in plan["rows"]],
+            "rows": [{**r, "start": iso(r["start"]), "end": iso(r["end"]), "reported_at": iso(r["reported_at"])}
+                     for r in plan["rows"]],
             "projected_finish": iso(plan["projected_finish"]),
             "unknown_steps": plan["unknown_steps"],
         },

@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { OperationKey, minorTaskLine, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, canReboostTask, taskReboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, isUrgentCockpitAlert, scheduleConflictNote, projectedFinishLine, timelineBars, timelineBasisLabel, formatDate, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { OperationKey, minorTaskLine, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, canReboostTask, taskReboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, isUrgentCockpitAlert, scheduleConflictNote, daysLeftNote, parseDaysLeft, projectedFinishLine, timelineBars, timelineBasisLabel, formatDate, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -27,10 +27,12 @@ export default function TaskDetail() {
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [tree, setTree] = useState<TaskTree | null>(null);
   const [progress, setProgress] = useState<
-    Array<{ id: number; kind: string; content: string; images?: string[]; created_at: string }>
+    Array<{ id: number; kind: string; content: string; images?: string[]; created_at: string; days_left?: number | null }>
   >([]);
   const [note, setNote] = useState('');
   const [shots, setShots] = useState<string[]>([]);
+  // AI-DEC-021d（386 号 spec）接单人更新进度时可报「还要几天」，发单人的驾驶舱按它重排
+  const [daysLeft, setDaysLeft] = useState('');
   const [error, setError] = useState('');
 
   const isCreator = me && task?.creator_id === me.id;
@@ -444,7 +446,7 @@ export default function TaskDetail() {
           <div className="list">
             {progress.map((p) => (
               <div key={p.id}>
-                <p className="muted">[{p.kind}] {p.content} · {formatDateTime(p.created_at)}</p>
+                <p className="muted">[{p.kind}] {p.content}{daysLeftNote(p)} · {formatDateTime(p.created_at)}</p>
                 {!!p.images?.length && (
                   <div className="row" style={{ gap: 6, marginTop: 4 }}>
                     {p.images.map((u) => (
@@ -462,12 +464,19 @@ export default function TaskDetail() {
             <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
               <div className="row">
                 <input className="grow" placeholder="进度说明…" value={note} onChange={(e) => setNote(e.target.value)} />
-                <button onClick={() => act(async () => {
-                  await client.addProgress(taskId, note, shots);
+                {isExecutor && (
+                  <input type="number" min={0} max={365} style={{ width: 120 }} aria-label="还要几天" placeholder="还要几天（选填）"
+                         value={daysLeft} onChange={(e) => setDaysLeft(e.target.value)} />
+                )}
+                <button disabled={isExecutor ? parseDaysLeft(daysLeft) === null : false} onClick={() => act(async () => {
+                  const d = isExecutor ? parseDaysLeft(daysLeft) : undefined;
+                  await client.addProgress(taskId, note, shots, d ?? undefined);
                   setNote('');
                   setShots([]);
+                  setDaysLeft('');
                 })}>更新进度</button>
               </div>
+              {isExecutor && parseDaysLeft(daysLeft) === null && <p className="error">还要几天填 0~365 的整数（0 = 今天做完）</p>}
               {/* MOB-021 拍照留证：纠纷时最有力的证据往往是现场照片 */}
               <PhotoPicker urls={shots} onChange={setShots} />
             </div>

@@ -186,6 +186,8 @@ class ProgressLog(Base):
     objection: Mapped[str] = mapped_column(String(300), default="", server_default="")
     # SCN-122c（364 号 spec）接单人点「出发了」（kind=depart）时报的预计到达时间
     eta_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # AI-DEC-021d（386 号 spec）接单人更新进度时报的「还要几天」（0 = 今天做完）；驾驶舱时间线按它重排
+    days_left: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class Review(Base):

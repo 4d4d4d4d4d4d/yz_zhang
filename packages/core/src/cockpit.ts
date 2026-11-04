@@ -71,6 +71,23 @@ export function projectedFinishLine(cp: Pick<Cockpit, 'timeline'> | null | undef
 /** 一条的说明：「按工期 3 天」「没填工期，按截止排」「排不出来」，晚于自己截止的加一句 */
 export function timelineBasisLabel(basis: CockpitTimelineRow['basis'] | string, late = false): string {
   const base = basis === 'estimate' ? '按工期估计' : basis === 'deadline' ? '没填工期，按截止排'
+    : basis === 'reported' ? '按接单人报的剩余天数'
     : basis === 'done' ? '已完成' : '排不出来：没填工期也没填截止';
   return late ? `${base}（赶不上这一步的截止）` : base;
+}
+
+/** AI-DEC-021d（386 号 spec）进度里那一条的补充：「（还要 3 天）」「（今天做完）」；没报为空串 */
+export function daysLeftNote(p: { days_left?: unknown } | null | undefined): string {
+  const d = p?.days_left;
+  if (typeof d !== 'number' || !Number.isInteger(d) || d < 0) return '';
+  return d === 0 ? '（今天做完）' : `（还要 ${d} 天）`;
+}
+
+/** 进度表单里「还要几天」的输入：空 = 不报（undefined）；0~365 的整数才算数，否则 null（不让提交） */
+export function parseDaysLeft(raw: string): number | undefined | null {
+  const t = raw.trim();
+  if (t === '') return undefined;
+  if (!/^\d{1,3}$/.test(t)) return null;
+  const n = Number(t);
+  return n <= 365 ? n : null;
 }

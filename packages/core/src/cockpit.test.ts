@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { isUrgentCockpitAlert, projectedFinishLine, scheduleConflictNote, timelineBars, timelineBasisLabel } from './cockpit';
+import { daysLeftNote, isUrgentCockpitAlert, parseDaysLeft, projectedFinishLine, scheduleConflictNote, timelineBars, timelineBasisLabel } from './cockpit';
+import { PlatformClient } from './client';
 
 describe('AI-DEC-021b 驾驶舱排期冲突（368 号 spec）', () => {
   it('款项冻结、逾期、排期排不开都标红；等你验收、没人报名、超预算不标', () => {
@@ -68,5 +69,41 @@ describe('AI-DEC-021c 驾驶舱时间线（384 号 spec）', () => {
     expect(timelineBasisLabel('estimate')).toBe('按工期估计');
     expect(timelineBasisLabel('deadline', true)).toBe('没填工期，按截止排（赶不上这一步的截止）');
     expect(timelineBasisLabel('unknown')).toBe('排不出来：没填工期也没填截止');
+  });
+});
+
+describe('AI-DEC-021d 接单人报「还要几天」（386 号 spec）', () => {
+  it('进度里那一条的补充说明', () => {
+    expect(daysLeftNote({ days_left: 3 })).toBe('（还要 3 天）');
+    expect(daysLeftNote({ days_left: 0 })).toBe('（今天做完）');
+    for (const v of [null, undefined, -1, 1.5, '3']) expect(daysLeftNote({ days_left: v })).toBe('');
+    expect(daysLeftNote(null)).toBe('');
+  });
+
+  it('输入框：空是不报，0~365 的整数才算数', () => {
+    expect(parseDaysLeft('')).toBeUndefined();
+    expect(parseDaysLeft('  ')).toBeUndefined();
+    expect(parseDaysLeft('0')).toBe(0);
+    expect(parseDaysLeft(' 12 ')).toBe(12);
+    expect(parseDaysLeft('365')).toBe(365);
+    for (const v of ['366', '-1', '1.5', 'abc', '1000']) expect(parseDaysLeft(v)).toBeNull();
+  });
+
+  it('按接单人报的那一条有自己的说明', () => {
+    expect(timelineBasisLabel('reported')).toBe('按接单人报的剩余天数');
+    expect(timelineBasisLabel('reported', true)).toBe('按接单人报的剩余天数（赶不上这一步的截止）');
+  });
+
+  it('addProgress 只在报了天数时带 days_left', async () => {
+    const bodies: unknown[] = [];
+    const fetchImpl = (async (_url: string, init?: { body?: string }) => {
+      bodies.push(init?.body ? JSON.parse(init.body) : null);
+      return { ok: true, status: 200, text: async () => '{"ok":true}' };
+    }) as unknown as typeof fetch;
+    const c = new PlatformClient({ baseUrl: '', getToken: () => 't', fetchImpl });
+    await c.addProgress(1, '做了一半');
+    await c.addProgress(1, '做了一半', [], 0);
+    expect(bodies[0]).toEqual({ content: '做了一半', images: [] });
+    expect(bodies[1]).toEqual({ content: '做了一半', images: [], days_left: 0 });
   });
 });
