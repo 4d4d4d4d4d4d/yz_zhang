@@ -162,3 +162,33 @@ describe('AI-DEC-041 一层一层拆', () => {
     expect(calls.some((c) => c.method === 'POST' && c.path === '/tasks/9/decompositions')).toBe(true);
   });
 });
+
+describe('AI-DEC-021c 拆解时给一步填工期（384 号 spec）', () => {
+  it('填了工期就随这一步一起保存；超范围不让存；已填的写在这一步下面', async () => {
+    const calls: Call[] = [];
+    open({ ...BASE, 'GET /tasks/9/decomposition': { ...DEC, nodes: DEC.nodes.map((n) => n.id === 2 ? { ...n, est_days: 4 } : n) },
+      'PATCH /decompositions/5/nodes/3': DEC }, calls);
+    const law = (await screen.findAllByText('审租赁合同'))[0].closest('li')!;
+    expect(law.textContent).toContain('工期 4 天');
+    const li = screen.getAllByText('搞定营业执照')[0].closest('li')!;
+    fireEvent.click(within(li).getByText('编辑'));
+    const est = within(li).getByLabelText(/要几天/);
+    fireEvent.change(est, { target: { value: '500' } });
+    expect(within(li).getByText('工期填 1~365 天')).toBeTruthy();
+    expect((within(li).getByText('保存这一步') as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(est, { target: { value: '6' } });
+    fireEvent.click(within(li).getByText('保存这一步'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+    expect(calls.find((c) => c.method === 'PATCH')!.body).toMatchObject({ revision: 3, est_days: 6 });
+  });
+
+  it('不填工期：请求里不带这个字段', async () => {
+    const calls: Call[] = [];
+    open({ ...BASE, 'PATCH /decompositions/5/nodes/3': DEC }, calls);
+    const li = (await screen.findAllByText('搞定营业执照'))[0].closest('li')!;
+    fireEvent.click(within(li).getByText('编辑'));
+    fireEvent.click(within(li).getByText('保存这一步'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+    expect(calls.find((c) => c.method === 'PATCH')!.body).not.toHaveProperty('est_days');
+  });
+});

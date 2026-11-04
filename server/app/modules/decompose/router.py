@@ -157,6 +157,8 @@ class NodePatchIn(BaseModel):
     category: str | None = Field(default=None, max_length=50)
     executor_hint: str | None = None
     depends_on: list[int] | None = None
+    # AI-DEC-021c（384 号 spec）这一步要几天（1~365）
+    est_days: int | None = Field(default=None, ge=1, le=365)
 
 
 @router.patch("/decompositions/{dec_id}/nodes/{node_id}")

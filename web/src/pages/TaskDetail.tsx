@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { OperationKey, minorTaskLine, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, canReboostTask, taskReboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, isUrgentCockpitAlert, scheduleConflictNote, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { OperationKey, minorTaskLine, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, canReboostTask, taskReboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, isUrgentCockpitAlert, scheduleConflictNote, projectedFinishLine, timelineBars, timelineBasisLabel, formatDate, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -998,7 +998,8 @@ function CockpitPanel({ taskId }: { taskId: number }) {
   const { client } = useApp();
   const [data, setData] = useState<Cockpit | null>(null);
   const [error, setError] = useState('');
-  useEffect(() => { client.cockpit(taskId).then(setData).catch((e) => setError(apiErrorText(e))); }, [client, taskId]);
+  const load = useCallback(() => { client.cockpit(taskId).then(setData).catch((e) => setError(apiErrorText(e))); }, [client, taskId]);
+  useEffect(() => { load(); }, [load]);
   if (error) return <div className="card"><p className="error">{error}</p></div>;
   // 驾驶舱是详情页上的一块：响应不像预期时不画，不许把整页带崩（与 App 的 CockpitBlock 同一条）
   if (!data || !Array.isArray(data.nodes) || !data.budget) return null;
@@ -1026,7 +1027,7 @@ function CockpitPanel({ taskId }: { taskId: number }) {
       {/* AGT-090 全部步骤完成后：结项报告（132 号 spec） */}
       {data.steps_total > 0 && data.steps_done === data.steps_total && <FinalReportBox taskId={taskId} />}
       <table aria-label="每一步">
-        <thead><tr><th>步骤</th><th>谁在做</th><th>状态</th><th>预算</th><th>截止</th><th>卡在</th></tr></thead>
+        <thead><tr><th>步骤</th><th>谁在做</th><th>状态</th><th>预算</th><th>截止</th><th>卡在</th><th>工期</th></tr></thead>
         <tbody>
           {data.nodes.filter((n) => !n.is_container).map((n) => (
             <tr key={n.id} data-critical={n.on_critical_path || undefined}>
@@ -1036,10 +1037,56 @@ function CockpitPanel({ taskId }: { taskId: number }) {
               <td>{fmtYuan(n.budget_cents)}</td>
               <td className={n.overdue || scheduleConflictNote(n, title) ? 'error' : ''}>{n.deadline ? formatDateTime(n.deadline) : '—'}{n.overdue ? '（已逾期）' : ''}{scheduleConflictNote(n, title)}</td>
               <td>{n.blocked_by.length ? n.blocked_by.map(title).join('、') : '—'}</td>
+              <td><EstDaysCell taskId={n.id} status={n.status} value={n.est_days ?? null} onSaved={load} /></td>
             </tr>
           ))}
         </tbody>
       </table>
+      <CockpitTimelineView data={data} title={title} />
+    </div>
+  );
+}
+
+/** AI-DEC-021c（384 号 spec）这一步要几天：还没开工（未开始 / 招募中）的可以直接改，开工以后只读（改期走合约变更单） */
+function EstDaysCell({ taskId, status, value, onSaved }: { taskId: number; status: string; value: number | null; onSaved: () => void }) {
+  const { client } = useApp();
+  const [draft, setDraft] = useState(value ? String(value) : '');
+  const [error, setError] = useState('');
+  if (status !== 'draft' && status !== 'published') return <>{value ? `${value} 天` : '—'}</>;
+  const n = Number(draft);
+  const ok = Number.isInteger(n) && n >= 1 && n <= 365;
+  return (
+    <span className="row">
+      <input type="number" min={1} max={365} style={{ width: 64 }} aria-label="工期（天）" value={draft}
+             onChange={(e) => setDraft(e.target.value)} />
+      <button className="secondary" disabled={!ok || n === value}
+              onClick={() => { setError(''); client.editTask(taskId, { est_days: n }).then(onSaved).catch((e) => setError(apiErrorText(e))); }}>存</button>
+      {draft !== '' && !ok && <span className="error">1~365 天</span>}
+      {error && <span className="error">{error}</span>}
+    </span>
+  );
+}
+
+/** AI-DEC-021c（384 号 spec）时间线：每一步一条，从最早开始的那步画到最晚结束的那步；赶不上自己截止的标红 */
+function CockpitTimelineView({ data, title }: { data: Cockpit; title: (id: number) => string }) {
+  const line = projectedFinishLine(data);
+  const bars = timelineBars(data.timeline);
+  if (!line && !bars.length) return null;
+  return (
+    <div aria-label="时间线">
+      <h4>时间线</h4>
+      {line && <p className={data.timeline?.unknown_steps?.length ? 'muted' : ''}>{line}</p>}
+      {bars.map((b) => (
+        <div key={b.task_id} className="row" data-late={b.late || undefined}>
+          <span style={{ width: 140, flexShrink: 0 }}>{title(b.task_id)}</span>
+          <div style={{ position: 'relative', flex: 1, height: 14, background: '#eef2ef', borderRadius: 7 }}>
+            <div title={`${formatDate(b.start)} → ${formatDate(b.end)}，${timelineBasisLabel(b.basis, b.late)}`}
+                 style={{ position: 'absolute', left: `${b.offsetPct}%`, width: `${b.widthPct}%`, top: 0, bottom: 0, borderRadius: 7,
+                   background: b.late ? '#b91c1c' : b.basis === 'deadline' ? '#94a3b8' : '#275c52' }} />
+          </div>
+          <span className={b.late ? 'error' : 'muted'} style={{ flexShrink: 0 }}>{formatDate(b.end)}{b.late ? '（赶不上截止）' : ''}</span>
+        </div>
+      ))}
     </div>
   );
 }

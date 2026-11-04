@@ -388,6 +388,8 @@ export interface Task {
   guardian_mode?: GuardianMode | '';
   status: TaskStatus;
   deadline: string | null;
+  /** AI-DEC-021c（384 号 spec）工期估计（天）；没填为 null */
+  est_days?: number | null;
   reject_count: number;
   created_at: string;
   /** SCN-156（278 号 spec）发单人授权接单人把这一单放进作品集的时间；只给成交双方、授权了才有 */
@@ -969,6 +971,8 @@ export interface DecompositionNode {
   executor_basis: string;
   required_cert: string;
   task_id: number | null;
+  /** AI-DEC-021c（384 号 spec）工期估计（天），人填；没填为 null */
+  est_days?: number | null;
 }
 
 /** OPS-004 任务类目；SCN-181（307 号 spec）要多张资质的类目多 `extra_certs`（张张都要有） */
@@ -1018,6 +1022,8 @@ export interface DecompositionNodePatch {
   category?: string;
   executor_hint?: '' | 'human' | 'expert' | 'ai';
   depends_on?: number[];
+  /** AI-DEC-021c（384 号 spec）1~365 天 */
+  est_days?: number;
 }
 
 export interface TaskTree {
@@ -2862,7 +2868,8 @@ export interface CockpitBudget {
 export interface CockpitAlert {
   task_id: number;
   /** schedule_conflict / past_parent_deadline：AI-DEC-021b 排期冲突（368 号 spec） */
-  kind: 'dispute' | 'overdue' | 'no_applicants' | 'to_accept' | 'over_budget' | 'schedule_conflict' | 'past_parent_deadline';
+  /** projected_late / estimate_past_deadline：AI-DEC-021c 按工期估计赶不上截止（384 号 spec） */
+  kind: 'dispute' | 'overdue' | 'no_applicants' | 'to_accept' | 'over_budget' | 'schedule_conflict' | 'past_parent_deadline' | 'projected_late' | 'estimate_past_deadline';
   text: string;
 }
 export interface CockpitNode {
@@ -2884,6 +2891,24 @@ export interface CockpitNode {
   in_dispute: boolean;
   /** AI-DEC-021b：截止不晚于这几步（它要等的前一步），排不开 */
   schedule_conflicts: number[];
+  /** AI-DEC-021c（384 号 spec）工期估计（天）；没填为 null */
+  est_days?: number | null;
+}
+/** AI-DEC-021c（384 号 spec）时间线上的一步。basis：estimate 按工期排 / deadline 没填工期按截止排 / unknown 排不出来 / done 已完成或取消（不画条） */
+export interface CockpitTimelineRow {
+  task_id: number;
+  start: string | null;
+  end: string | null;
+  basis: 'estimate' | 'deadline' | 'unknown' | 'done';
+  /** 按工期估计排出来的完成时间晚于这一步自己的截止 */
+  late: boolean;
+}
+export interface CockpitTimeline {
+  rows: CockpitTimelineRow[];
+  /** 整件事预计做完的时间；有一步排不出来就是 null */
+  projected_finish: string | null;
+  /** 排不出来的步骤：没填工期也没填截止，或者它要等的步骤排不出来 */
+  unknown_steps: number[];
 }
 export interface Cockpit {
   task_id: number;
@@ -2897,6 +2922,8 @@ export interface Cockpit {
   critical_path: number[];
   alerts: CockpitAlert[];
   nodes: CockpitNode[];
+  /** AI-DEC-021c（384 号 spec）；老服务端没有 */
+  timeline?: CockpitTimeline;
 }
 
 // ---- KB-100 个人知识库（122 号 spec）：只属于本人 ----

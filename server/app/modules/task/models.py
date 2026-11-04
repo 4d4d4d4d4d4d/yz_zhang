@@ -108,6 +108,8 @@ class Task(Base):
 
     status: Mapped[str] = mapped_column(String(30), default="draft", index=True)
     deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # AI-DEC-021c（384 号 spec）工期估计（天）：拆解时填或发布前改；驾驶舱按依赖排出时间线、算预计完成日
+    est_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # AI-DEC-023（320 号 spec）招募多天没人报名时上次提醒发单人的时间（每 3 天最多提醒一次）

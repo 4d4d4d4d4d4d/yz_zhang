@@ -1,5 +1,5 @@
 """SPACE-024 / AI-DEC-021 合作驾驶舱（120 号 spec）：一棵树、一条关键路径、一本预算账、一张预警单；
-AI-DEC-021b（368 号）预警单里加上排期冲突。
+AI-DEC-021b（368 号）预警单里加上排期冲突；AI-DEC-021c（384 号）按工期估计排出时间线、算预计完成日。
 
 母任务拆成十几步、分给几个人之后，发布方要回答四个问题：
 **现在做到哪了？卡在谁那里？钱花了多少？哪里要我出手？**
@@ -86,6 +86,55 @@ def schedule_conflicts(nodes: list[Task]) -> dict[int, list[int]]:
     return out
 
 
+def timeline(nodes: list[Task], now) -> dict:
+    """AI-DEC-021c（384 号 spec）按依赖把还没完成的步骤排成一条条时间段，算出整件事预计哪天做完。
+
+    每一步最早从「现在」开始，要等的前一步没完就从前一步的预计完成时间开始；
+    长度按这一步的工期估计（天）；没填工期但填了截止的，就排到截止为止（`basis = deadline`）；
+    两样都没有，或者它要等的步骤排不出来，这一步就排不出来（`basis = unknown`），整件事的预计完成日也给不出。
+    进行中的步骤不知道做了几成，按整段工期从现在算——宁可估晚，不估早。已完成、已取消的不画条。
+    """
+    by_id = {n.id: n for n in nodes}
+    memo: dict[int, tuple] = {}
+    UNKNOWN = (None, None, "unknown")
+
+    def plan(nid: int, seen: frozenset) -> tuple:
+        if nid in memo:
+            return memo[nid]
+        n = by_id[nid]
+        start = now
+        for d in (n.depends_on or []):
+            if d not in by_id or d in seen or not _live(by_id[d]):
+                continue
+            _, end, _ = plan(d, seen | {nid})
+            if end is None:
+                memo[nid] = UNKNOWN
+                return UNKNOWN
+            start = max(start, end)
+        if n.est_days:
+            out = (start, start + timedelta(days=n.est_days), "estimate")
+        elif n.deadline and n.deadline > start:
+            out = (start, n.deadline, "deadline")
+        else:
+            out = UNKNOWN
+        memo[nid] = out
+        return out
+
+    rows = []
+    for n in nodes:
+        if not _live(n):
+            rows.append({"task_id": n.id, "start": None, "end": None, "basis": "done", "late": False})
+            continue
+        start, end, basis = plan(n.id, frozenset())
+        rows.append({"task_id": n.id, "start": start, "end": end, "basis": basis,
+                     # 按工期估计排出来的完成时间晚于这一步自己的截止
+                     "late": bool(basis == "estimate" and n.deadline and end > n.deadline)})
+    live = [r for r in rows if r["basis"] != "done"]
+    unknown = [r["task_id"] for r in live if r["basis"] == "unknown"]
+    finish = max((r["end"] for r in live), default=None) if live and not unknown else None
+    return {"rows": rows, "projected_finish": finish, "unknown_steps": unknown}
+
+
 def cockpit(db: Session, parent: Task) -> dict:
     from app.core.timefmt import iso
     from app.modules.contract.models import Contract
@@ -148,6 +197,17 @@ def cockpit(db: Session, parent: Task) -> dict:
             if _live(n) and n.deadline and n.deadline > parent.deadline:
                 alerts.append({"task_id": n.id, "kind": "past_parent_deadline",
                                "text": f"「{n.title}」的截止晚于整件事的截止：这一步按时了，整件事也会晚"})
+    # ---- AI-DEC-021c（384 号 spec）按工期估计排出来，这一步或整件事赶不上截止
+    plan = timeline(leaves, now)
+    for r in plan["rows"]:
+        if r["late"]:
+            alerts.append({"task_id": r["task_id"], "kind": "estimate_past_deadline",
+                           "text": f"「{by_id[r['task_id']].title}」按工期估计做不完：等前面的步骤加上它自己要的天数，"
+                                   "会晚于它的截止。改截止、缩短前面的步骤，或者分给更多人并行"})
+    if parent.deadline and plan["projected_finish"] and plan["projected_finish"] > parent.deadline:
+        alerts.append({"task_id": parent.id, "kind": "projected_late",
+                       "text": "按各步的工期估计排下来，整件事会晚于截止：看时间线上最晚的那条，"
+                               "砍掉一步、让没有依赖的步骤并行，或者改截止"})
     if planned and allocated > planned:
         alerts.append({"task_id": parent.id, "kind": "over_budget",
                        "text": f"各步骤预算合计 ¥{allocated / 100:.2f}，超出母任务预算 ¥{planned / 100:.2f}"})
@@ -163,6 +223,12 @@ def cockpit(db: Session, parent: Task) -> dict:
                    "paid_cents": paid, "remaining_cents": max(planned - committed - paid, 0)},
         "critical_path": path,
         "alerts": alerts,
+        # AI-DEC-021c（384 号 spec）时间线：每一步的预计起止；有一步排不出来，整件事的预计完成日就是 null
+        "timeline": {
+            "rows": [{**r, "start": iso(r["start"]), "end": iso(r["end"])} for r in plan["rows"]],
+            "projected_finish": iso(plan["projected_finish"]),
+            "unknown_steps": plan["unknown_steps"],
+        },
         "nodes": [{
             "id": n.id, "parent_id": n.parent_id, "title": n.title, "status": n.status,
             "status_name": STATUS_NAMES.get(n.status, n.status), "budget_cents": n.budget_cents,
@@ -174,5 +240,6 @@ def cockpit(db: Session, parent: Task) -> dict:
             "on_critical_path": n.id in path,
             "in_dispute": n.id in disputes,
             "schedule_conflicts": conflicts.get(n.id, []),
+            "est_days": n.est_days,
         } for n in nodes],
     }

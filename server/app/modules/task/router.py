@@ -188,6 +188,8 @@ def dump_task(task: Task, viewer: User | None = None) -> dict:
         "recurred_from_id": task.recurred_from_id,
         "status": task.status,
         "deadline": iso(task.deadline),
+        # AI-DEC-021c（384 号 spec）工期估计（天）；没填为 null
+        "est_days": task.est_days,
         "reject_count": task.reject_count,
         "created_at": iso(task.created_at),
         # SCN-156（278 号 spec）作品展示授权：只给成交双方、授权了才带
@@ -541,6 +543,8 @@ class TaskEditIn(BaseModel):
     address_hint: str | None = None
     address_exact: str | None = None
     deadline: UtcDatetime | None = None
+    # AI-DEC-021c（384 号 spec）工期估计（天）：非实质字段，不受防调包保护
+    est_days: int | None = Field(default=None, ge=1, le=365)
 
 
 # 已发布任务上「实质性」字段（影响报名者决策），有人报名后受保护（TASK-014 防调包）

@@ -6,7 +6,7 @@
 // 「判不了」的步骤就地给去处，没说清之前不让确认。
 import {
   LEAF_CRITERION_LABEL, TASK_STATUS_LABEL, apiErrorText, childrenOf, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine,
-  decompositionSourceLabel, executorLabel, fmtYuan, isOpenEnd, isUrgentCockpitAlert, type Decomposition, type DecompositionNode,
+  decompositionSourceLabel, executorLabel, fmtYuan, formatDate, isOpenEnd, isUrgentCockpitAlert, projectedFinishLine, timelineBars, timelineBasisLabel, type Decomposition, type DecompositionNode,
   type Cockpit, type DayApplicant, type DecompositionNodePatch, type PlatformClient, type Task, type TaskTree,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -139,6 +139,10 @@ function Node(props: LevelProps & { node: DecompositionNode }) {
   const [editing, setEditing] = useState(false);
   const [deliverable, setDeliverable] = useState(n.deliverable);
   const [acceptance, setAcceptance] = useState(n.acceptance);
+  // AI-DEC-021c（384 号 spec）这一步要几天：选填，确认后带到子任务
+  const [estDays, setEstDays] = useState(n.est_days ? String(n.est_days) : '');
+  const est = Number(estDays);
+  const estOk = estDays === '' || (Number.isInteger(est) && est >= 1 && est <= 365);
   const editable = dec.status === 'proposed';
   const openEnd = isOpenEnd(dec.nodes, n);
   const titleOf = (id: number) => dec.nodes.find((x) => x.id === id)?.title ?? `#${id}`;
@@ -150,7 +154,7 @@ function Node(props: LevelProps & { node: DecompositionNode }) {
         <Text style={n.executor_kind === 'unknown' ? styles.warn : styles.badge}>{executorLabel(n)}</Text>
       )}
       {n.depends_on.length > 0 && <Text style={styles.muted}>前置：{n.depends_on.map(titleOf).join('、')}</Text>}
-      {openEnd && n.leaf && <Text style={styles.muted}>交付物：{n.deliverable} · 验收：{n.acceptance}</Text>}
+      {openEnd && n.leaf && <Text style={styles.muted}>交付物：{n.deliverable} · 验收：{n.acceptance}{n.est_days ? ` · 工期 ${n.est_days} 天` : ''}</Text>}
       {openEnd && !!n.executor_basis && <Text style={styles.small}>依据：{n.executor_basis}</Text>}
       {openEnd && !n.leaf && n.missing.length > 0 && (
         <Text style={styles.error}>还差：{n.missing.map((m) => LEAF_CRITERION_LABEL[m]).join('、')}</Text>
@@ -189,8 +193,14 @@ function Node(props: LevelProps & { node: DecompositionNode }) {
                      value={deliverable} onChangeText={setDeliverable} />
           <TextInput style={styles.input} placeholder="验收标准（不懂全局的人也能判断做没做完）"
                      value={acceptance} onChangeText={setAcceptance} />
-          <TouchableOpacity disabled={busy} style={styles.primary}
-                            onPress={() => { props.onEdit(n, { deliverable, acceptance }); setEditing(false); }}>
+          <TextInput style={styles.input} placeholder="要几天（工期估计，选填）" keyboardType="number-pad"
+                     value={estDays} onChangeText={setEstDays} />
+          {!estOk && <Text style={styles.error}>工期填 1~365 天</Text>}
+          <TouchableOpacity disabled={busy || !estOk} style={[styles.primary, !estOk && styles.disabled]}
+                            onPress={() => {
+                              props.onEdit(n, { deliverable, acceptance, ...(estDays !== '' && estOk ? { est_days: est } : {}) });
+                              setEditing(false);
+                            }}>
             <Text style={styles.primaryText}>保存这一步</Text>
           </TouchableOpacity>
         </View>
@@ -366,7 +376,8 @@ export function TaskTreeBlock({ client, task, onOpenTask, meId = null }: {
 export function CockpitBlock({ client, taskId }: { client: PlatformClient; taskId: number }) {
   const [data, setData] = useState<Cockpit | null>(null);
   const [report, setReport] = useState<Awaited<ReturnType<PlatformClient['finalReport']>> | null>(null);
-  useEffect(() => { void client.cockpit(taskId).then(setData).catch(() => setData(null)); }, [client, taskId]);
+  const load = useCallback(() => { void client.cockpit(taskId).then(setData).catch(() => setData(null)); }, [client, taskId]);
+  useEffect(() => { load(); }, [load]);
   if (!data || !Array.isArray(data.nodes) || data.nodes.length === 0) return null;
   const title = (id: number) => data.nodes.find((n) => n.id === id)?.title ?? `#${id}`;
   const b = data.budget;
@@ -380,6 +391,7 @@ export function CockpitBlock({ client, taskId }: { client: PlatformClient; taskI
       {data.critical_path.length > 0 && (
         <Text style={styles.small}>关键路径：{data.critical_path.map(title).join(' → ')}</Text>
       )}
+      <TimelineBlock client={client} data={data} title={title} onSaved={load} />
       {/* AGT-090 全部步骤完成后：结项报告（132 号 spec） */}
       {data.steps_total > 0 && data.steps_done === data.steps_total && (report ? (
         <View accessibilityLabel="结项报告">
@@ -393,6 +405,57 @@ export function CockpitBlock({ client, taskId }: { client: PlatformClient; taskI
           <Text>看结项报告</Text>
         </TouchableOpacity>
       ))}
+    </View>
+  );
+}
+
+/** AI-DEC-021c（384 号 spec）时间线：预计哪天做完、每一步一条；还没开工的步骤就地填工期（与网页同一套 SDK 判断） */
+function TimelineBlock({ client, data, title, onSaved }: {
+  client: PlatformClient; data: Cockpit; title: (id: number) => string; onSaved: () => void;
+}) {
+  const line = projectedFinishLine(data);
+  const bars = timelineBars(data.timeline);
+  const editable = data.nodes.filter((n) => !n.is_container && (n.status === 'draft' || n.status === 'published'));
+  if (!line && !bars.length && !editable.length) return null;
+  return (
+    <View accessibilityLabel="时间线" style={{ gap: 4 }}>
+      <Text style={styles.title}>时间线</Text>
+      {!!line && <Text style={data.timeline?.unknown_steps?.length ? styles.muted : styles.row}>{line}</Text>}
+      {bars.map((b) => (
+        <View key={b.task_id} testID={`bar-${b.task_id}`} style={{ gap: 2 }}>
+          <Text style={b.late ? styles.warn : styles.small}>
+            {title(b.task_id)} · 到 {formatDate(b.end)} · {timelineBasisLabel(b.basis, b.late)}
+          </Text>
+          <View style={{ height: 10, backgroundColor: '#eef2ef', borderRadius: 5 }}>
+            <View testID={`bar-fill-${b.task_id}`} style={{ position: 'absolute', top: 0, bottom: 0, borderRadius: 5,
+              left: `${b.offsetPct}%`, width: `${b.widthPct}%`,
+              backgroundColor: b.late ? '#b91c1c' : b.basis === 'deadline' ? '#94a3b8' : '#275c52' }} />
+          </View>
+        </View>
+      ))}
+      {editable.map((n) => <EstDaysRow key={n.id} client={client} taskId={n.id} title={n.title} value={n.est_days ?? null} onSaved={onSaved} />)}
+    </View>
+  );
+}
+
+function EstDaysRow({ client, taskId, title, value, onSaved }: {
+  client: PlatformClient; taskId: number; title: string; value: number | null; onSaved: () => void;
+}) {
+  const [draft, setDraft] = useState(value ? String(value) : '');
+  const [error, setError] = useState('');
+  const n = Number(draft);
+  const ok = Number.isInteger(n) && n >= 1 && n <= 365;
+  return (
+    <View style={styles.chips}>
+      <Text style={styles.small}>{title} 要几天</Text>
+      <TextInput accessibilityLabel={`${title} 工期（天）`} keyboardType="number-pad" style={[styles.input, { minWidth: 60, padding: 6 }]}
+                 value={draft} onChangeText={setDraft} />
+      <TouchableOpacity accessibilityRole="button" disabled={!ok || n === value} style={[styles.ghost, { padding: 6 }, (!ok || n === value) && styles.disabled]}
+                        onPress={() => { setError(''); void client.editTask(taskId, { est_days: n }).then(onSaved).catch((e) => setError(apiErrorText(e))); }}>
+        <Text>存</Text>
+      </TouchableOpacity>
+      {draft !== '' && !ok && <Text style={styles.error}>1~365 天</Text>}
+      {!!error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
 }

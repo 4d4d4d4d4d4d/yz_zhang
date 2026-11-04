@@ -59,7 +59,7 @@ def stop_counts() -> dict[str, int]:
 
 
 EDITABLE = {"title", "description", "budget_cents", "deliverable", "acceptance",
-            "single_owner", "category", "executor_hint", "depends_on"}
+            "single_owner", "category", "executor_hint", "depends_on", "est_days"}
 USER_HINTS = ("", "human", "expert", "ai")
 
 
@@ -78,6 +78,8 @@ def new_node(nid: int, parent: int | None, depth: int, spec: dict, budget: int,
         "leaf": False, "missing": [], "stop_reason": "", "expanded": False,
         "executor_kind": "", "executor_basis": "", "required_cert": "",
         "task_id": None,
+        # AI-DEC-021c（384 号 spec）工期估计（天），人填；确认时带到子任务上
+        "est_days": None,
     }
 
 
@@ -512,6 +514,7 @@ def confirm(db: Session, nodes: list[dict], parent) -> tuple[list[dict], list]:
                 f"\n\n交付物：{n['deliverable']}\n验收标准：{n['acceptance']}" if n["leaf"] else ""),
             category=n["category"] or parent.category, task_type=parent.task_type,
             required_skills=n["required_skills"], budget_cents=n["budget_cents"],
+            est_days=n.get("est_days") if n["leaf"] else None,
             is_remote=parent.is_remote, city=parent.city, lat=parent.lat, lng=parent.lng,
             address_hint=parent.address_hint, address_exact=parent.address_exact,
         )

@@ -678,6 +678,8 @@ export class PlatformClient {
   editTask(id: number, patch: Partial<{
     title: string; description: string; budget_cents: number;
     required_skills: string[]; address_hint: string; address_exact: string; deadline: string;
+    /** AI-DEC-021c（384 号 spec）工期估计（天），1~365 */
+    est_days: number;
   }>) {
     return this.request<Task>('PATCH', `/tasks/${id}`, patch);
   }

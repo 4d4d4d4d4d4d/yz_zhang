@@ -234,3 +234,79 @@ describe('AI-DEC-021b App 驾驶舱的排期冲突（368 号 spec）', () => {
     expect(screen.getByText('• 「页面开发」已交付，等你验收').props.style.fontWeight).toBeUndefined();
   });
 });
+
+describe('AI-DEC-021c App 驾驶舱的时间线（384 号 spec）', () => {
+  const node = (id: number, title: string, extra: Record<string, unknown> = {}) => ({ id, parent_id: 20, title, status: 'published',
+    status_name: '招募中', budget_cents: 200000, is_container: false, depends_on: [], blocked_by: [], executor_id: null,
+    executor_nickname: null, deadline: null, overdue: false, on_critical_path: false, in_dispute: false, schedule_conflicts: [], ...extra });
+  const base = { task_id: 20, title: '公司官网', status: 'draft', progress_pct: 0, steps_total: 2, steps_done: 0,
+    budget: { planned_cents: 400000, allocated_cents: 400000, committed_cents: 0, paid_cents: 0, remaining_cents: 400000 },
+    critical_path: [], alerts: [{ task_id: 20, kind: 'projected_late', text: '整件事会晚于截止' }] };
+
+  it('预计完成日、每一步一条（赶不上截止的用警示样式），预警标警示', async () => {
+    const client = makeClient({ '/tasks/20/cockpit': { ...base,
+      nodes: [node(21, '需求梳理', { status: 'in_progress', est_days: 2 }), node(22, '页面开发', { status: 'in_progress', est_days: 8 })],
+      timeline: { projected_finish: '2026-11-20T12:00:00Z', unknown_steps: [], rows: [
+        { task_id: 21, start: '2026-11-10T12:00:00Z', end: '2026-11-12T12:00:00Z', basis: 'estimate', late: false },
+        { task_id: 22, start: '2026-11-12T12:00:00Z', end: '2026-11-20T12:00:00Z', basis: 'estimate', late: true }] } } });
+    render(<CockpitBlock client={client} taskId={20} />);
+    expect(await screen.findByText(/^按各步工期排下来，预计 .*20.* 做完$/)).toBeTruthy();
+    expect(screen.getByTestId('bar-fill-22').props.style.left).toBe('20%');
+    expect(screen.getByTestId('bar-fill-22').props.style.width).toBe('80%');
+    expect(screen.getByText(/页面开发 · 到 .* · 按工期估计（赶不上这一步的截止）/).props.style.fontWeight).toBe('600');
+    expect(screen.getByText(/需求梳理 · 到 .* · 按工期估计$/).props.style.fontWeight).toBeUndefined();
+    expect(screen.getByText('• 整件事会晚于截止').props.style.fontWeight).toBe('600');
+    // 都开工了：没有可填工期的步骤
+    expect(screen.queryByLabelText('需求梳理 工期（天）')).toBeNull();
+  });
+
+  it('排不出来时说清几步没填；没开工的步骤就地填工期，存完重新取驾驶舱', async () => {
+    const calls: Call[] = [];
+    const client = makeClient({ '/tasks/20/cockpit': { ...base, alerts: [],
+      nodes: [node(21, '需求梳理'), node(22, '页面开发', { status: 'in_progress', est_days: 5 })],
+      timeline: { projected_finish: null, unknown_steps: [21], rows: [
+        { task_id: 21, start: null, end: null, basis: 'unknown', late: false },
+        { task_id: 22, start: '2026-11-10T12:00:00Z', end: '2026-11-15T12:00:00Z', basis: 'estimate', late: false }] } } }, calls);
+    render(<CockpitBlock client={client} taskId={20} />);
+    expect(await screen.findByText('有 1 步没填工期也没填截止，排不出整件事的完成日：给每一步填上要几天')).toBeTruthy();
+    expect(screen.queryByLabelText('页面开发 工期（天）')).toBeNull();
+    fireEvent.changeText(screen.getByLabelText('需求梳理 工期（天）'), '400');
+    expect(screen.getByText('1~365 天')).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('需求梳理 工期（天）'), '3');
+    const before = calls.filter((c) => c.path === '/tasks/20/cockpit').length;
+    fireEvent.press(screen.getByText('存'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH' && c.path === '/tasks/21')).toBe(true));
+    expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({ est_days: 3 });
+    await waitFor(() => expect(calls.filter((c) => c.path === '/tasks/20/cockpit').length).toBe(before + 1));
+  });
+
+  it('老服务端没有时间线、步骤都开工了：不画这一块', async () => {
+    const client = makeClient({ '/tasks/20/cockpit': { ...base, alerts: [],
+      nodes: [node(21, '需求梳理', { status: 'in_progress' })] } });
+    render(<CockpitBlock client={client} taskId={20} />);
+    await screen.findByText('合作驾驶舱 · 0/2 步完成');
+    expect(screen.queryByLabelText('时间线')).toBeNull();
+  });
+});
+
+describe('AI-DEC-021c App 拆解时给一步填工期（384 号 spec）', () => {
+  it('填了工期随这一步保存，超范围不让存，不填不带字段', async () => {
+    const calls: Call[] = [];
+    render(<DecomposeScreen client={makeClient({ ...BASE, 'GET /tasks/9/decomposition': { ...DEC,
+      nodes: DEC.nodes.map((n) => n.id === 2 ? { ...n, est_days: 4 } : n) }, 'PATCH /decompositions/5/nodes/3': DEC }, calls)}
+      task={TASK} onBack={() => {}} onConfirmed={() => {}} />);
+    expect(within(await screen.findByTestId('node-2')).getByText(/工期 4 天/)).toBeTruthy();
+    const box = screen.getByTestId('node-3');
+    fireEvent.press(within(box).getByText('编辑'));
+    fireEvent.changeText(within(box).getByPlaceholderText('要几天（工期估计，选填）'), '0');
+    expect(within(box).getByText('工期填 1~365 天')).toBeTruthy();
+    fireEvent.changeText(within(box).getByPlaceholderText('要几天（工期估计，选填）'), '6');
+    fireEvent.press(within(box).getByText('保存这一步'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+    expect(calls.find((c) => c.method === 'PATCH')!.body).toMatchObject({ revision: 3, est_days: 6 });
+    fireEvent.press(within(screen.getByTestId('node-2')).getByText('编辑'));
+    fireEvent.press(within(screen.getByTestId('node-2')).getByText('保存这一步'));
+    await waitFor(() => expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(2));
+    expect(calls.filter((c) => c.method === 'PATCH')[1].body).toMatchObject({ est_days: 4 });
+  });
+});

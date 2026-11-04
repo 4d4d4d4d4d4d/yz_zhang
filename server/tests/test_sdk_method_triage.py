@@ -98,7 +98,8 @@ SCHEDULED: dict[str, str] = {
     "publicProfile": "CONTENT-050", "signVideoUpload": "CONTENT-050",
     "mySubscriptions": "CONTENT-050", "unsubscribe": "CONTENT-050",
     # 任务侧的三条（03 号 spec）：我的任务、草稿发布、编辑
-    "publishTask": "TASK-060", "editTask": "TASK-060",
+    # editTask 由 V411 接上两端：驾驶舱里给没开工的步骤填工期（384 号 spec）；改标题、描述等的通用编辑页仍属 TASK-060
+    "publishTask": "TASK-060",
     "trip": "TASK-060",
     # 编排循环（17 号 spec）：mission 的用户侧界面 V154 已接上两端（131 号）；母任务结项报告 finalReport 由 V161 接上（132 号）
     # 团队与合作体的成员管理（53/50 号 spec）；团队成员管理 TEAM-065 由 V156 接上两端（136 号）；

@@ -179,6 +179,10 @@ function TreeNode(props: Parameters<typeof TreeLevel>[0] & { node: Decomposition
   const [deliverable, setDeliverable] = useState(n.deliverable);
   const [acceptance, setAcceptance] = useState(n.acceptance);
   const [budget, setBudget] = useState(String(n.budget_cents / 100));
+  // AI-DEC-021c（384 号 spec）这一步要几天：选填，确认后带到子任务，驾驶舱按它排时间线
+  const [estDays, setEstDays] = useState(n.est_days ? String(n.est_days) : '');
+  const est = Number(estDays);
+  const estOk = estDays === '' || (Number.isInteger(est) && est >= 1 && est <= 365);
   const openEnd = isOpenEnd(nodes, n);
   const byId = (id: number) => nodes.find((x) => x.id === id)?.title ?? `#${id}`;
 
@@ -194,7 +198,7 @@ function TreeNode(props: Parameters<typeof TreeLevel>[0] & { node: Decomposition
       </div>
       {n.depends_on.length > 0 && <p className="muted">前置：{n.depends_on.map(byId).join('、')}</p>}
       {openEnd && n.leaf && (
-        <p className="muted">交付物：{n.deliverable} · 验收：{n.acceptance}</p>
+        <p className="muted">交付物：{n.deliverable} · 验收：{n.acceptance}{n.est_days ? ` · 工期 ${n.est_days} 天` : ''}</p>
       )}
       {openEnd && n.executor_basis && <p className="muted" style={{ fontSize: 12 }}>依据：{n.executor_basis}</p>}
       {openEnd && !n.leaf && n.missing.length > 0 && (
@@ -234,6 +238,7 @@ function TreeNode(props: Parameters<typeof TreeLevel>[0] & { node: Decomposition
           props.onEdit(n, {
             deliverable, acceptance,
             budget_cents: Math.round(parseFloat(budget || '0') * 100),
+            ...(estDays !== '' && estOk ? { est_days: est } : {}),
           });
           setEditing(false);
         }}>
@@ -246,7 +251,11 @@ function TreeNode(props: Parameters<typeof TreeLevel>[0] & { node: Decomposition
           <label>预算（元）
             <input type="number" min={0.01} step={0.01} value={budget} onChange={(e) => setBudget(e.target.value)} />
           </label>
-          <button type="submit" disabled={busy}>保存这一步</button>
+          <label>要几天（工期估计，选填；驾驶舱按它排时间线）
+            <input type="number" min={1} max={365} value={estDays} onChange={(e) => setEstDays(e.target.value)} />
+          </label>
+          {!estOk && <p className="error">工期填 1~365 天</p>}
+          <button type="submit" disabled={busy || !estOk}>保存这一步</button>
         </form>
       )}
       <TreeLevel {...props} parent={n.id} />
