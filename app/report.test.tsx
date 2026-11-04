@@ -6,6 +6,7 @@ import { MyReportsBlock, ReportBlock } from './report';
 import { MessagesScreen } from './MessagesAndInvites';
 import { PublicSpaceScreen } from './spaces';
 import { DiscoverScreen } from './Discover';
+import * as ImagePicker from 'expo-image-picker';
 
 type Call = { method: string; path: string; body: unknown };
 type Reply = (method: string, path: string) => { status?: number; body: unknown } | undefined;
@@ -107,5 +108,39 @@ describe('RISK-014 App 动态流里的举报', () => {
     render(<DiscoverScreen client={makeClient((_m, p) => p === '/feed' ? { body: [post(1, false), post(2, null)] } : undefined)} baseUrl="" />);
     await screen.findByText('动态1');
     expect(screen.getAllByLabelText('举报这条内容')).toHaveLength(1);
+  });
+});
+
+describe('RISK-017 App 举报附截图（404 号 spec）', () => {
+  it('附两张截图提交：先上传，请求带上地址；不附图时请求体不带 images', async () => {
+    jest.spyOn(ImagePicker, 'requestMediaLibraryPermissionsAsync').mockResolvedValue({ status: 'granted' } as never);
+    jest.spyOn(ImagePicker, 'launchImageLibraryAsync').mockResolvedValue({ canceled: false, assets: [{ base64: 'QUJD', mimeType: 'image/png' }] } as never);
+    const calls: Call[] = [];
+    let n = 0;
+    const client = makeClient((m, p) => m === 'POST' && p === '/files' ? { status: 201, body: { url: `/api/v1/files/shot${++n}abcdefgh`, ref: `r${n}` } }
+      : m === 'POST' && p === '/reports' ? { status: 201, body: { id: 3, status: 'pending', duplicate: false } } : undefined, calls);
+    render(<ReportBlock client={client} targetType="message" targetId={9} />);
+    fireEvent.press(screen.getByLabelText('举报这条私信'));
+    for (let i = 0; i < 2; i++) {
+      await act(async () => { fireEvent.press(screen.getByLabelText('附截图')); await new Promise((r) => setTimeout(r, 0)); });
+    }
+    expect(screen.getByLabelText('已附截图').props.children.join('')).toContain('2 张');
+    fireEvent.changeText(screen.getByLabelText('举报说明'), '骗我转账');
+    await act(async () => { fireEvent.press(screen.getByText('提交举报')); await new Promise((r) => setTimeout(r, 0)); });
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/reports')?.body).toEqual(
+      { target_type: 'message', target_id: 9, reason: '骗我转账', category: 'other', images: ['/api/v1/files/shot1abcdefgh', '/api/v1/files/shot2abcdefgh'] });
+  });
+
+  it('附满 3 张后不再给「附截图」', async () => {
+    jest.spyOn(ImagePicker, 'requestMediaLibraryPermissionsAsync').mockResolvedValue({ status: 'granted' } as never);
+    jest.spyOn(ImagePicker, 'launchImageLibraryAsync').mockResolvedValue({ canceled: false, assets: [{ base64: 'QUJD', mimeType: 'image/png' }] } as never);
+    let n = 0;
+    render(<ReportBlock client={makeClient((m, p) => m === 'POST' && p === '/files' ? { status: 201, body: { url: `/api/v1/files/s${++n}abcdefgh`, ref: 'r' } } : undefined)}
+                        targetType="user" targetId={7} />);
+    fireEvent.press(screen.getByLabelText('举报这条用户'));
+    for (let i = 0; i < 3; i++) {
+      await act(async () => { fireEvent.press(screen.getByLabelText('附截图')); await new Promise((r) => setTimeout(r, 0)); });
+    }
+    expect(screen.queryByLabelText('附截图')).toBeNull();
   });
 });

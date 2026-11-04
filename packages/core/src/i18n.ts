@@ -424,6 +424,9 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   report_target_not_found: '要举报的东西找不到了（可能已经删除），刷新页面再看看',
   report_own_target: '这是你自己的，不能举报；要删除或修改请直接去编辑',
   report_daily_limit: '你今天举报的次数到上限了；已经提交的都会处理，明天还可以继续举报，急事请联系客服',
+  // RISK-017（404 号 spec）
+  report_too_many_images: '一条举报最多附 3 张截图：挑最能说明问题的',
+  report_image_not_yours: '只能附你自己刚上传的截图：请重新选择图片上传',
   handover_full: '一份合约最多登记 30 个要交接的账号',
   handover_confirmed: '发单人已经确认这一项在他名下，不能再删',
   licenses_full: '一份合约最多登记 50 项授权：合并同一来源的几项再登记',

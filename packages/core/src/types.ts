@@ -4088,6 +4088,8 @@ export interface MyReport {
   category: ReportCategory;
   category_label: string;
   reason: string;
+  /** RISK-017（404 号 spec）附的截图地址 */
+  images: string[];
   status: 'pending' | 'resolved';
   result: string;
   created_at: string;

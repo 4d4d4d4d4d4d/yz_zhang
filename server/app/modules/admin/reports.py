@@ -43,6 +43,9 @@ RESULT_LABELS = {
 URGENT_CATEGORIES = ("illegal", "fraud", "porn")
 SLA_HOURS = {"urgent": 24, "normal": 72}
 
+# RISK-017（404 号 spec，V431）一条举报最多附几张截图
+MAX_REPORT_IMAGES = 3
+
 # 一个人一天最多举报这么多次：正常用户一天举报十次以上极少见，再多就是在刷队列
 DAILY_LIMIT = 20
 
@@ -81,6 +84,32 @@ def check_target(db: Session, user: User, target_type: str, target_id: int) -> N
         raise bad_request(f"这是你自己的{TARGET_LABELS[target_type]}，不能举报；要删除或修改请直接去编辑", "report_own_target")
 
 
+def own_screenshots(db: Session, user: User, urls: list[str]) -> list[str]:
+    """只收举报人**自己上传过**的图（上传时已过内容审核），存图片名。别人的图、不存在的、证件类敏感材料都拒绝——
+    否则举报就成了把任意一张图塞进审核员眼前的口子。与客服工单附图（ESCA-057）同一条规矩。"""
+    import re
+
+    from app.modules.files.models import UploadedFile
+
+    if len(urls) > MAX_REPORT_IMAGES:
+        raise bad_request(f"一条举报最多附 {MAX_REPORT_IMAGES} 张截图：挑最能说明问题的", "report_too_many_images")
+    names: list[str] = []
+    for u in urls:
+        m = re.search(r"/files/([A-Za-z0-9_.-]{8,80})$", u or "")
+        row = db.get(UploadedFile, m.group(1)) if m else None
+        if row is None or row.owner_id != user.id or row.sensitive:
+            raise bad_request("只能附你自己刚上传的截图：请重新选择图片上传", "report_image_not_yours")
+        if row.name not in names:
+            names.append(row.name)
+    return names
+
+
+def image_urls(names: list | None) -> list[str]:
+    from app.modules.support.router import image_urls as _urls
+
+    return _urls(names)
+
+
 def pending_duplicate(db: Session, user_id: int, target_type: str, target_id: int) -> Report | None:
     """同一个人对同一个对象已经有一条没处理的举报：不再新建（RISK-012）。"""
     return (db.query(Report)
@@ -107,6 +136,7 @@ def view(r: Report) -> dict:
         "category": r.category or "other",
         "category_label": REPORT_CATEGORIES.get(r.category or "other", "其他"),
         "reason": r.reason,
+        "images": image_urls(r.images),
         "status": r.status,
         "result": RESULT_LABELS.get(r.action, "") if r.status == "resolved" else "",
         "created_at": iso(r.created_at),

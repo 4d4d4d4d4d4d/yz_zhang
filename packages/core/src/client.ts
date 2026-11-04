@@ -1714,10 +1714,11 @@ export class PlatformClient {
   /** RISK-007；V426（399 号 spec）多一个可选的举报类型，不传就是「其他」（老调用照旧）。
    * 同一对象还没处理完再举报，返回原来那条（`duplicate: true`）。 */
   report(targetType: 'task' | 'content' | 'user' | 'message', targetId: number, reason: string,
-         category?: ReportCategory) {
-    // 不传 category 时它是 undefined，JSON 里不出现这个字段，请求体与以前一样
+         category?: ReportCategory, images?: string[]) {
+    // 不传 category / images 时它们是 undefined，JSON 里不出现这两个字段，请求体与以前一样
+    // RISK-017（404 号 spec）images：自己上传的截图地址，最多 3 张
     return this.request<ReportSubmitResult>('POST', '/reports', {
-      target_type: targetType, target_id: targetId, reason, category,
+      target_type: targetType, target_id: targetId, reason, category, images,
     });
   }
   /** RISK-013（399 号 spec）我提交过的举报与处理结果 */
@@ -1763,7 +1764,7 @@ export class PlatformClient {
   /** RISK-016（401 号 spec）`sort='urgent'`：违法、诈骗、色情排前面；不传与以前一样按编号 */
   adminReports(status = 'pending', sort?: 'id' | 'urgent') {
     // RISK-010（399 号 spec）多了举报类型（老数据为 other）；RISK-016 多了轻重与时限
-    return this.request<Array<{ id: number; reporter_id: number; target_type: string; target_id: number; reason: string; created_at: string; category?: string; category_label?: string; urgent?: boolean; waited_hours?: number; sla_hours?: number; overdue?: boolean }>>(
+    return this.request<Array<{ id: number; reporter_id: number; target_type: string; target_id: number; reason: string; created_at: string; category?: string; category_label?: string; urgent?: boolean; waited_hours?: number; sla_hours?: number; overdue?: boolean; images?: string[] }>>(
       'GET', `/admin/reports?status=${status}${sort ? `&sort=${sort}` : ''}`,
     ).then(listOf);
   }

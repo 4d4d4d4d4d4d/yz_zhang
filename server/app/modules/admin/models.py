@@ -27,6 +27,8 @@ class Report(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # RISK-018（402 号 spec，V429）超过处理时限、已经叫过合规的时间：每条只叫一次
     escalated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # RISK-017（404 号 spec，V431）举报附的截图：存图片名，读的时候再拼地址；只收举报人自己上传的
+    images: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
 
 
 class AdminAudit(Base):

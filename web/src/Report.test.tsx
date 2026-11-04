@@ -46,12 +46,15 @@ describe('RISK-010 举报入口', () => {
     fireEvent.click(await screen.findByRole('button', { name: '举报这条任务' }));
     const submit = screen.getByRole('button', { name: '提交举报' });
     expect((submit as HTMLButtonElement).disabled).toBe(true);                         // 说明不到 2 个字不能交
+    expect(screen.getByText(/截图（可选，最多 3 张/)).toBeTruthy();   // RISK-017 截图入口
     fireEvent.change(screen.getByLabelText('举报类型'), { target: { value: 'fraud' } });
     fireEvent.change(screen.getByLabelText('举报说明'), { target: { value: '要求先转定金到私人账户' } });
     fireEvent.click(submit);
     await screen.findByText(/我的举报/);
     expect(calls.find((c) => c.method === 'POST' && c.path === '/reports')?.body).toEqual(
       { target_type: 'task', target_id: 60, reason: '要求先转定金到私人账户', category: 'fraud' });
+    // RISK-017：截图入口在表单里（不附图时请求体不带 images，见上面的断言）
+
   });
 
   it('自己发的任务没有举报按钮', async () => {
@@ -109,13 +112,15 @@ describe('RISK-011/012 提交结果', () => {
 describe('RISK-013 我的举报', () => {
   it('客服页列出我的举报与处理结果；畸形响应不崩', async () => {
     open('/support', [], (_m, p) => p === '/reports/mine' ? { body: { categories: {}, items: [
-      { id: 8, target_type: 'content', target_id: 4, category: 'porn', category_label: '色情低俗', reason: '露骨图片', status: 'resolved',
+      { id: 8, target_type: 'content', target_id: 4, category: 'porn', category_label: '色情低俗', reason: '露骨图片', images: ['/api/v1/files/a1', '/api/v1/files/a2'], status: 'resolved',
         result: '已下架违规内容', created_at: '2026-11-04T01:00:00Z', resolved_at: '2026-11-04T03:00:00Z' },
       { id: 9, target_type: 'user', target_id: 5, category: 'other', category_label: '其他', reason: '冒充', status: 'pending',
         result: '', created_at: '2026-11-04T02:00:00Z', resolved_at: null }] } } : undefined);
     const row = await screen.findByTestId('report-8');
     expect(row.textContent).toContain('内容 #4');
     expect(row.textContent).toContain('已处理：已下架违规内容');
+    expect(row.textContent).toContain('附图 2 张');
+    expect(screen.getByTestId('report-9').textContent).not.toContain('附图');
     expect(screen.getByTestId('report-9').textContent).toContain('处理中');
   });
 
@@ -140,7 +145,7 @@ describe('RISK-016 处置队列：最急的在前与处理时限（401 号 spec�
           { id: 3, reporter_id: 2, target_type: 'user', target_id: 9, reason: '冒充客服', created_at: '2026-11-03T00:00:00Z', category: 'fraud',
             urgent: true, waited_hours: 30, sla_hours: 24, overdue: true },
           { id: 1, reporter_id: 2, target_type: 'content', target_id: 4, reason: '不喜欢', created_at: '2026-11-04T00:00:00Z', category: 'other',
-            urgent: false, waited_hours: 2, sla_hours: 72, overdue: false }] : [];
+            urgent: false, waited_hours: 2, sla_hours: 72, overdue: false, images: ['/api/v1/files/shotaaaaaaaa'] }] : [];
       return { ok: true, status: 200, text: async () => JSON.stringify(body) };
     }) as unknown as typeof fetch;
     render(<MemoryRouter initialEntries={['/admin']}><AppProvider client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })}>
@@ -150,6 +155,9 @@ describe('RISK-016 处置队列：最急的在前与处理时限（401 号 spec�
     expect(screen.getByTestId('report-sla-3').textContent).toContain('已超时');
     expect(screen.getByTestId('report-sla-1').textContent).toBe('已等 2 小时（72 小时内处理）');
     expect(screen.getByTestId('reports-overdue').textContent).toContain('1 条');
+    // RISK-017（404 号 spec）审核员点得开举报人附的截图；没附的不画
+    expect(screen.getByTestId('report-shot-1-0').getAttribute('href')).toBe('/api/v1/files/shotaaaaaaaa');
+    expect(screen.queryByTestId('report-shot-3-0')).toBeNull();
     fireEvent.click(screen.getByLabelText('最急的在前'));
     await waitFor(() => expect(calls.some((c) => c.path === '/admin/reports?status=pending&sort=urgent')).toBe(true));
   });

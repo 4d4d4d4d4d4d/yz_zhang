@@ -25,7 +25,7 @@ type Metrics = {
   gmv_cents: number; fee_income_cents: number;
   auto_verify?: AutoVerifyUsage;
 };
-type ReportRow = { id: number; reporter_id: number; target_type: string; target_id: number; reason: string; category?: string; urgent?: boolean; waited_hours?: number; sla_hours?: number; overdue?: boolean };
+type ReportRow = { id: number; reporter_id: number; target_type: string; target_id: number; reason: string; category?: string; urgent?: boolean; waited_hours?: number; sla_hours?: number; overdue?: boolean; images?: string[] };
 type UserRow = { id: number; phone: string; nickname: string; is_verified: boolean; is_banned: boolean; credit_score: number; tasks_completed: number };
 
 export default function Admin() {
@@ -128,7 +128,8 @@ export default function Admin() {
                 <td>{r.target_type}#{r.target_id}</td>
                 {/* RISK-010（399 号 spec）举报类型，先分轻重 */}
                 <td>{reportCategoryLabel(r.category)}{r.urgent && <span className="badge warn"> 急</span>}<br /><small className={r.overdue ? 'error' : 'muted'} data-testid={`report-sla-${r.id}`}>{reportSlaLine(r)}</small></td>
-                <td>{r.reason}</td>
+                <td>{r.reason}{/* RISK-017（404 号 spec）举报人附的截图 */}
+                  {(r.images ?? []).map((u, n) => <a key={u} href={u} target="_blank" rel="noreferrer" data-testid={`report-shot-${r.id}-${n}`}> 截图{n + 1}</a>)}</td>
                 <td className="row">
                   <button className="ghost" style={{ padding: '2px 8px' }}
                           onClick={async () => { await client.resolveReport(r.id, 'dismiss'); await load(); }}>驳回</button>

@@ -6,11 +6,12 @@
  * 这里一个按钮四处用：任务、内容、用户（个人空间）、私信。
  */
 import {
-  REPORT_CATEGORY_OPTIONS, apiErrorText, formatDateTime, reportStatusLine, reportSubmittedNote, reportTargetLabel,
+  MAX_REPORT_IMAGES, REPORT_CATEGORY_OPTIONS, apiErrorText, formatDateTime, reportStatusLine, reportSubmittedNote, reportTargetLabel,
   type MyReport, type ReportCategory, type ReportTarget,
 } from '@platform/core';
 import { useEffect, useState } from 'react';
 import { useApp } from './store';
+import PhotoPicker from './PhotoPicker';
 
 export function ReportButton({ targetType, targetId, label }: {
   targetType: ReportTarget; targetId: number; label?: string;
@@ -22,6 +23,7 @@ export function ReportButton({ targetType, targetId, label }: {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
+  const [images, setImages] = useState<string[]>([]);
   const what = reportTargetLabel(targetType);
   if (!open) {
     return <span>
@@ -39,12 +41,15 @@ export function ReportButton({ targetType, targetId, label }: {
       </label>
       <textarea aria-label="举报说明" placeholder="说说哪里有问题（至少 2 个字，会进入人工审核）"
                 value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
+      {/* RISK-017（404 号 spec）附截图，最多 3 张：聊天记录、页面截图让审核员不用只凭一句话判断 */}
+      <span className="muted">截图（可选，最多 {MAX_REPORT_IMAGES} 张，截之前请遮住与举报无关的个人信息）</span>
+      <PhotoPicker urls={images} onChange={setImages} max={MAX_REPORT_IMAGES} />
       {error && <p className="error">{error}</p>}
       <div className="row">
         <button type="button" disabled={busy || reason.trim().length < 2} onClick={() => {
           setBusy(true); setError('');
-          client.report(targetType, targetId, reason.trim(), category)
-            .then((r) => { setNote(reportSubmittedNote(r)); setOpen(false); setReason(''); setCategory('other'); })
+          client.report(targetType, targetId, reason.trim(), category, images.length ? images : undefined)
+            .then((r) => { setNote(reportSubmittedNote(r)); setOpen(false); setReason(''); setCategory('other'); setImages([]); })
             .catch((e) => setError(apiErrorText(e)))
             .finally(() => setBusy(false));
         }}>提交举报</button>
@@ -75,7 +80,7 @@ export function MyReports() {
         <div className="task-item" key={r.id} data-testid={`report-${r.id}`}>
           <div>
             <strong>{reportTargetLabel(r.target_type)} #{r.target_id}</strong> <span className="badge">{r.category_label}</span>
-            <p className="muted">{r.reason} · {formatDateTime(r.created_at)}</p>
+            <p className="muted">{r.reason}{Array.isArray(r.images) && r.images.length ? ` · 附图 ${r.images.length} 张` : ''} · {formatDateTime(r.created_at)}</p>
             <p>{reportStatusLine(r)}{r.resolved_at ? ` · ${formatDateTime(r.resolved_at)}` : ''}</p>
           </div>
         </div>

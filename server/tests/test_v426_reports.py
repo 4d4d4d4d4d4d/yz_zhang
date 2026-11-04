@@ -218,3 +218,40 @@ def test_risk018_overdue_reports_wake_compliance_once(client):
     assert client.post(job, headers=JOB_HEADERS).json()["escalated"] == 0   # 每条只叫一次
     assert len(notes(comp)) == 1
     assert client.post(job).status_code in (401, 403)     # 不带调度凭证、也没登录的调不动
+
+
+def _shot(client, user, seed: bytes) -> str:
+    import base64
+
+    png = base64.b64encode(b"\x89PNG\r\n\x1a\n" + seed * 96).decode()
+    r = client.post("/api/v1/files", json={"content_type": "image/png", "data_base64": png}, headers=auth(user))
+    assert r.status_code == 201, r.text
+    return r.json()["url"]
+
+
+def test_risk017_report_with_own_screenshots_only(client):
+    """RISK-017（404 号 spec，V431）举报可附自己上传的截图（最多 3 张），审核员与举报人都看得到；
+    别人的图、超过张数的被拒；不传与以前一样。"""
+    a = register(client, "13900431001", "举报人")
+    other = register(client, "13900431002", "别人")
+    b = register(client, "13900431003", "被举报")
+    c = register(client, "13900431004", "被举报二")
+    adm = make_admin(client, "13900431005")
+    mine1, mine2 = _shot(client, a, b"\x31"), _shot(client, a, b"\x32")
+    theirs = _shot(client, other, b"\x33")
+
+    r = rep(client, a, "user", b["id"], "聊天记录里骗我转账", category="fraud", images=[theirs])
+    assert r.status_code == 400 and code(r) == "report_image_not_yours"
+    r = rep(client, a, "user", b["id"], "x" * 3, images=[mine1, mine2, mine1, mine2])
+    assert r.status_code == 400 and code(r) == "report_too_many_images"
+    r = rep(client, a, "user", b["id"], "聊天记录里骗我转账", category="fraud", images=[mine1, mine2, mine1])
+    assert r.status_code == 201, r.text
+    rid = r.json()["id"]
+
+    q = {x["id"]: x for x in client.get("/api/v1/admin/reports", headers=auth(adm)).json()}
+    assert q[rid]["images"] == [mine1, mine2]                      # 重复的只存一次
+    assert client.get(mine1, headers=auth(adm)).status_code == 200  # 审核员打得开
+    assert [x["images"] for x in client.get(f"{R}/mine", headers=auth(a)).json()["items"] if x["id"] == rid] == [[mine1, mine2]]
+    plain = rep(client, a, "user", c["id"]).json()["id"]
+    assert q.get(plain) is None or q[plain]["images"] == []
+    assert [x["images"] for x in client.get("/api/v1/admin/reports", headers=auth(adm)).json() if x["id"] == plain] == [[]]

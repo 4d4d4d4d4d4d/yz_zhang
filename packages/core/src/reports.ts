@@ -15,6 +15,9 @@ export const REPORT_CATEGORY_OPTIONS: ReadonlyArray<{ value: ReportCategory; lab
   { value: 'other', label: '其他' },
 ];
 
+/** RISK-017（404 号 spec）一条举报最多附几张截图（与服务端 MAX_REPORT_IMAGES 一致） */
+export const MAX_REPORT_IMAGES = 3;
+
 const TARGETS: Record<ReportTarget, string> = { task: '任务', content: '内容', user: '用户', message: '私信' };
 
 export function reportCategoryLabel(c: unknown): string {

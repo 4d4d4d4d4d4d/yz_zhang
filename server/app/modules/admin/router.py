@@ -20,6 +20,7 @@ from app.modules.task.models import Task
 
 from .models import AdminAudit, Report
 from .reports import REPORT_CATEGORIES
+from .reports import image_urls as rpt_image_urls
 from app.core.timefmt import UtcDatetime, day, iso
 from app.core.admin_roles import ANY, require_role
 
@@ -204,6 +205,8 @@ class ReportIn(BaseModel):
     reason: str = Field(min_length=2, max_length=500)
     # RISK-010（399 号 spec）举报类型；不传就是「其他」，老客户端照旧能用
     category: Literal["illegal", "porn", "fraud", "harassment", "infringement", "other"] = "other"
+    # RISK-017（404 号 spec）截图：自己上传过的图片地址，最多 3 张；不传与以前一样
+    images: list[str] = Field(default_factory=list, max_length=20)
 
 
 class ResolveIn(BaseModel):
@@ -223,7 +226,8 @@ def create_report(body: ReportIn, user: User = Depends(get_current_user), db: Se
     if dup is not None:
         return {"id": dup.id, "status": dup.status, "duplicate": True}
     rpt.check_daily_limit(db, user.id)
-    row = Report(reporter_id=user.id, **body.model_dump())
+    images = rpt.own_screenshots(db, user, body.images)
+    row = Report(reporter_id=user.id, **body.model_dump(exclude={"images"}), images=images)
     db.add(row)
     db.flush()
     return {"id": row.id, "status": row.status, "duplicate": False}
@@ -260,6 +264,8 @@ def report_queue(
          "target_id": r.target_id, "reason": r.reason, "created_at": iso(r.created_at),
          # RISK-010（399 号 spec）类型给审核员先分轻重
          "category": r.category or "other", "category_label": REPORT_CATEGORIES.get(r.category or "other", "其他"),
+         # RISK-017（404 号 spec）举报人附的截图
+         "images": rpt_image_urls(r.images),
          # RISK-016 轻重与时限
          **sla_view(r, now)}
         for r in rows
