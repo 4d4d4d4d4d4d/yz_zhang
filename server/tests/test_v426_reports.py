@@ -142,3 +142,36 @@ def test_risk015_export_includes_reports_only_when_present(client):
     ex = client.get("/api/v1/users/me/export", headers=auth(a)).json()
     assert [x["category"] for x in ex["reports"]] == ["harassment"]
     assert "reports" not in client.get("/api/v1/users/me/export", headers=auth(b)).json()
+
+
+def test_risk016_urgent_sort_and_sla(client):
+    """RISK-016（401 号 spec，V428）违法、诈骗、色情排前面；时限 24 / 72 小时，超了标出来；默认排序不变。"""
+    from datetime import timedelta
+
+    from app.modules.account.models import utcnow
+    from app.modules.admin.models import Report
+
+    adm = make_admin(client, "13900428001")
+    a = register(client, "13900428002", "举报人")
+    targets = [register(client, f"1390042801{i}", f"对象{i}") for i in range(3)]
+    ids = [rep(client, a, "user", targets[0]["id"], category="other").json()["id"],
+           rep(client, a, "user", targets[1]["id"], category="harassment").json()["id"],
+           rep(client, a, "user", targets[2]["id"], category="fraud").json()["id"]]
+    with SessionLocal() as db:   # 第一条是三天前交的，第三条（诈骗）是 25 小时前
+        db.get(Report, ids[0]).created_at = utcnow() - timedelta(hours=73)
+        db.get(Report, ids[2]).created_at = utcnow() - timedelta(hours=25)
+        db.commit()
+    plain = [x["id"] for x in client.get("/api/v1/admin/reports", headers=auth(adm)).json() if x["id"] in ids]
+    assert plain == ids
+    rows = [x for x in client.get("/api/v1/admin/reports?sort=urgent", headers=auth(adm)).json() if x["id"] in ids]
+    assert [x["id"] for x in rows] == [ids[2], ids[0], ids[1]]
+    by = {x["id"]: x for x in rows}
+    assert by[ids[2]]["urgent"] is True and by[ids[2]]["sla_hours"] == 24 and by[ids[2]]["overdue"] is True
+    assert by[ids[0]]["urgent"] is False and by[ids[0]]["sla_hours"] == 72 and by[ids[0]]["overdue"] is True
+    assert by[ids[0]]["waited_hours"] >= 72
+    assert by[ids[1]]["overdue"] is False and by[ids[1]]["waited_hours"] == 0
+    assert client.get("/api/v1/admin/reports?sort=bogus", headers=auth(adm)).status_code == 422
+    # 真实响应与 SDK 的内联声明对上（CLI-083：这一行里有 **sla_view 展开，静态读不出）
+    from tests.test_client_shape_alignment import _assert_inline_shape
+
+    _assert_inline_shape(rows[0], "adminReports")

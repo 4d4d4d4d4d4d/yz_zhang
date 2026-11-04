@@ -50,3 +50,23 @@ describe('RISK-010/013 client', () => {
     expect(calls[2][1].method).toBe('GET');
   });
 });
+
+describe('RISK-016 处置队列时限（401 号 spec）', () => {
+  it('等了多久、时限多少、超没超；字段缺了不显示', async () => {
+    const { reportSlaLine } = await import('./reports');
+    expect(reportSlaLine({ waited_hours: 5, sla_hours: 24, overdue: false })).toBe('已等 5 小时（24 小时内处理）');
+    expect(reportSlaLine({ waited_hours: 80, sla_hours: 72, overdue: true })).toBe('已等 80 小时（72 小时内处理） · 已超时');
+    expect(reportSlaLine({})).toBe('');
+    expect(reportSlaLine(null)).toBe('');
+  });
+
+  it('adminReports 不传排序时地址与以前一样', async () => {
+    const { PlatformClient } = await import('./client');
+    const urls: string[] = [];
+    const fetchImpl = (async (url: string) => { urls.push(url); return { ok: true, status: 200, text: async () => '[]' }; }) as unknown as typeof fetch;
+    const c = new PlatformClient({ baseUrl: 'http://x', getToken: () => 't', fetchImpl });
+    await c.adminReports();
+    await c.adminReports('pending', 'urgent');
+    expect(urls).toEqual(['http://x/api/v1/admin/reports?status=pending', 'http://x/api/v1/admin/reports?status=pending&sort=urgent']);
+  });
+});

@@ -1760,10 +1760,11 @@ export class PlatformClient {
       auto_verify: AutoVerifyUsage;
     }>('GET', '/admin/metrics');
   }
-  adminReports(status = 'pending') {
-    // RISK-010（399 号 spec）多了举报类型（老数据为 other）
-    return this.request<Array<{ id: number; reporter_id: number; target_type: string; target_id: number; reason: string; created_at: string; category?: string; category_label?: string }>>(
-      'GET', `/admin/reports?status=${status}`,
+  /** RISK-016（401 号 spec）`sort='urgent'`：违法、诈骗、色情排前面；不传与以前一样按编号 */
+  adminReports(status = 'pending', sort?: 'id' | 'urgent') {
+    // RISK-010（399 号 spec）多了举报类型（老数据为 other）；RISK-016 多了轻重与时限
+    return this.request<Array<{ id: number; reporter_id: number; target_type: string; target_id: number; reason: string; created_at: string; category?: string; category_label?: string; urgent?: boolean; waited_hours?: number; sla_hours?: number; overdue?: boolean }>>(
+      'GET', `/admin/reports?status=${status}${sort ? `&sort=${sort}` : ''}`,
     ).then(listOf);
   }
   /** MOD-060 封禁影响面。**封禁前**调它——`banUser` 是不可逆的处置，

@@ -38,6 +38,11 @@ RESULT_LABELS = {
     "ban_user": "已处理违规账号",
 }
 
+# RISK-016（401 号 spec，V428）违法、诈骗、色情先处理：这三类拖一天就可能有人受骗或扩散。
+# 处理时限：这三类 24 小时，其余 72 小时。时限是内部承诺，超了在队列里标红，不对外承诺
+URGENT_CATEGORIES = ("illegal", "fraud", "porn")
+SLA_HOURS = {"urgent": 24, "normal": 72}
+
 # 一个人一天最多举报这么多次：正常用户一天举报十次以上极少见，再多就是在刷队列
 DAILY_LIMIT = 20
 
@@ -107,6 +112,16 @@ def view(r: Report) -> dict:
         "created_at": iso(r.created_at),
         "resolved_at": iso(r.resolved_at),
     }
+
+
+def sla_view(r: Report, now=None) -> dict:
+    """队列里一条的轻重与时限：等了几个小时、时限几个小时、超没超（时间差在服务端算好，客户端不自己解析时间）。"""
+    now = now or utcnow()
+    urgent = (r.category or "other") in URGENT_CATEGORIES
+    sla = SLA_HOURS["urgent" if urgent else "normal"]
+    waited = max(0, int((now - r.created_at).total_seconds() // 3600)) if r.created_at else 0
+    return {"urgent": urgent, "waited_hours": waited, "sla_hours": sla,
+            "overdue": r.status == "pending" and waited >= sla}
 
 
 def mine(db: Session, user_id: int, limit: int = 50) -> list[dict]:

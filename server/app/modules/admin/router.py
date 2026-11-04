@@ -240,14 +240,28 @@ def my_reports(user: User = Depends(get_current_user), db: Session = Depends(get
 # ---------- 审核队列（RISK-002） ----------
 @router.get("/admin/reports")
 def report_queue(
-    status: str = "pending", admin: User = Depends(require_role("support", "compliance")), db: Session = Depends(get_db, scope="function")
+    status: str = "pending", admin: User = Depends(require_role("support", "compliance")), db: Session = Depends(get_db, scope="function"),
+    # RISK-016（401 号 spec）urgent：违法、诈骗、色情排在前面，同一档里先来的在前；默认按编号，与以前一样
+    sort: Literal["id", "urgent"] = "id",
 ):
-    rows = db.query(Report).filter(Report.status == status).order_by(Report.id).limit(100).all()
+    from sqlalchemy import case
+
+    from .reports import URGENT_CATEGORIES, sla_view
+
+    q = db.query(Report).filter(Report.status == status)
+    if sort == "urgent":
+        q = q.order_by(case((Report.category.in_(URGENT_CATEGORIES), 0), else_=1), Report.id)
+    else:
+        q = q.order_by(Report.id)
+    rows = q.limit(100).all()
+    now = utcnow()
     return [
         {"id": r.id, "reporter_id": r.reporter_id, "target_type": r.target_type,
          "target_id": r.target_id, "reason": r.reason, "created_at": iso(r.created_at),
          # RISK-010（399 号 spec）类型给审核员先分轻重
-         "category": r.category or "other", "category_label": REPORT_CATEGORIES.get(r.category or "other", "其他")}
+         "category": r.category or "other", "category_label": REPORT_CATEGORIES.get(r.category or "other", "其他"),
+         # RISK-016 轻重与时限
+         **sla_view(r, now)}
         for r in rows
     ]
 

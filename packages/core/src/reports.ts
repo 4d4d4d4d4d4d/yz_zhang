@@ -31,6 +31,12 @@ export function reportSubmittedNote(r: Partial<ReportSubmitResult> | null | unde
   return '已提交，审核员会尽快处理，处理完会通知你；结果可以在「我的举报」里看';
 }
 
+/** RISK-016（401 号 spec）处置队列里一行的时限：「已等 5 小时（24 小时内处理）」，超了写「已超时」。字段缺了不显示。 */
+export function reportSlaLine(r: { waited_hours?: unknown; sla_hours?: unknown; overdue?: unknown } | null | undefined): string {
+  if (!r || typeof r.waited_hours !== 'number' || typeof r.sla_hours !== 'number') return '';
+  return `已等 ${r.waited_hours} 小时（${r.sla_hours} 小时内处理）${r.overdue ? ' · 已超时' : ''}`;
+}
+
 /** 「我的举报」里一行的状态：处理中，或处理结果。 */
 export function reportStatusLine(r: Pick<MyReport, 'status' | 'result'> | null | undefined): string {
   if (!r || r.status !== 'resolved') return '处理中';

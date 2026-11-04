@@ -124,3 +124,33 @@ describe('RISK-013 我的举报', () => {
     await waitFor(() => expect(screen.getByLabelText('我的举报').textContent).toContain('还没有举报过'));
   });
 });
+
+describe('RISK-016 处置队列：最急的在前与处理时限（401 号 spec）', () => {
+  it('默认按编号请求；勾上「最急的在前」带 sort=urgent；超时的标出来', async () => {
+    const calls: Call[] = [];
+    const ADMIN = { ...ME, is_admin: true };
+    localStorage.setItem('token', 'tok');
+    const fetchImpl = vi.fn(async (url: string, init?: { method?: string }) => {
+      const full = String(url).replace(/^.*\/api\/v1/, '');
+      const p = full.split('?')[0];
+      calls.push({ method: init?.method ?? 'GET', path: full });
+      const body = p === '/users/me' ? ADMIN : p === '/admin/metrics' ? { total_users: 0, verified_users: 0, total_tasks: 0, published_tasks: 0,
+        completed_tasks: 0, closed_loop_rate: 0, dispute_count: 0, gmv_cents: 0, fee_income_cents: 0 }
+        : p === '/admin/reports' ? [
+          { id: 3, reporter_id: 2, target_type: 'user', target_id: 9, reason: '冒充客服', created_at: '2026-11-03T00:00:00Z', category: 'fraud',
+            urgent: true, waited_hours: 30, sla_hours: 24, overdue: true },
+          { id: 1, reporter_id: 2, target_type: 'content', target_id: 4, reason: '不喜欢', created_at: '2026-11-04T00:00:00Z', category: 'other',
+            urgent: false, waited_hours: 2, sla_hours: 72, overdue: false }] : [];
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    }) as unknown as typeof fetch;
+    render(<MemoryRouter initialEntries={['/admin']}><AppProvider client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })}>
+      <App /></AppProvider></MemoryRouter>);
+    await screen.findByText('冒充客服');
+    expect(calls.some((c) => c.path === '/admin/reports?status=pending')).toBe(true);
+    expect(screen.getByTestId('report-sla-3').textContent).toContain('已超时');
+    expect(screen.getByTestId('report-sla-1').textContent).toBe('已等 2 小时（72 小时内处理）');
+    expect(screen.getByTestId('reports-overdue').textContent).toContain('1 条');
+    fireEvent.click(screen.getByLabelText('最急的在前'));
+    await waitFor(() => expect(calls.some((c) => c.path === '/admin/reports?status=pending&sort=urgent')).toBe(true));
+  });
+});
