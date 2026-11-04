@@ -82,7 +82,7 @@ def test_only_a_reviewed_swim_licence_can_take_a_lesson(client, requester):
     ("pest-control", "pest-control-helper", ("13900004019", "13900004020"), "老鼠洞要不要堵", "先找源头，堵洞清源再下药"),
     # 只有标签里的口语才接得住（标题与正文里没有这些词）
     ("swim-coach", "swim-coach-helper", ("13900004021", "13900004022"), "能去江边练吗", "只在有救生员的正规泳池上课"),
-    ("swim-coach", "swim-coach-helper", ("13900004023", "13900004024"), "一个人带好几个", "一对一或小班，人在水里视线不离"),
+    ("swim-coach", "swim-coach-helper", ("13900004023", "13900004024"), "一下带好几个", "一对一或小班，人在水里视线不离"),
     ("swim-coach", "swim-coach-helper", ("13900004025", "13900004026"), "多久能学会", "课时和目标写清，不承诺包会"),
     ("pest-control", "pest-control-helper", ("13900004027", "13900004028"), "有没有猛药", "只用登记过的药，按标签用量"),
     ("pest-control", "pest-control-helper", ("13900004029", "13900004030"), "孕妇在家行不行", "家里有孩子宠物先说，药饵放在够不着的地方"),

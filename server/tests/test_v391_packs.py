@@ -76,7 +76,7 @@ def test_only_a_reviewed_electrician_can_install_a_charger(client, requester):
     ("ev-charger-install", "ev-charger-helper", ("13900004419", "13900004420"), "没电工证能接吗", "持低压电工证上岗"),
     # 只有标签里的口语才接得住（标题与正文里没有这些词）
     ("smart-lock-install", "smart-lock-helper", ("13900004421", "13900004422"), "锁装不上", "先量门、看锁体，能不能直接换说清楚"),
-    ("smart-lock-install", "smart-lock-helper", ("13900004423", "13900004424"), "钥匙少给了", "机械钥匙全部当面交给主人，不留不配不拍"),
+    ("smart-lock-install", "smart-lock-helper", ("13900004423", "13900004424"), "少给了一把", "机械钥匙全部当面交给主人，不留不配不拍"),
     ("smart-lock-install", "smart-lock-helper", ("13900004425", "13900004426"), "门锁不上了", "装完逐项试，讲清电池怎么换"),
     ("ev-charger-install", "ev-charger-helper", ("13900004427", "13900004428"), "线发烫了", "从电表拉专用回路，配漏电保护和合适的线径"),
     ("ev-charger-install", "ev-charger-helper", ("13900004429", "13900004430"), "用拖线板行不行", "不从插座、楼道私拉飞线"),

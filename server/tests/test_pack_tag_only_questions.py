@@ -53,6 +53,20 @@ def test_the_scanner_sees_the_tag_only_questions():
     assert {r[0] for r in rows} >= {"test_v402_packs.py", "test_v391_packs.py"}
 
 
+def test_each_tag_only_question_leans_on_exactly_one_tag():
+    """V404（378 号 spec）：一句里含两个标签（「前任要来查记录」含「前任」「查记录」），删掉其中一个另一个照样接住，
+    逐个标签变异就测不出来。每条「只靠标签」的提问只许命中那条知识的一个标签。"""
+    many = []
+    for f, key, q, title in tag_only_questions():
+        d = json.loads((psvc.SEEDS / f"{key}.json").read_text(encoding="utf-8"))
+        k = next(k for k in d["knowledge"] if k["title"] == title)
+        hit = [t for t in k["tags"] if len(t) >= 2 and t in q]
+        if len(hit) != 1:
+            many.append((f, q, hit))
+    assert not many, ("这些提问命中的标签不是正好一个（删一个标签还有别的接住，或者一个都没命中）：\n"
+                      + "\n".join(f"  {f}：「{q}」命中 {hit}" for f, q, hit in many))
+
+
 def test_tag_only_questions_really_need_the_tags():
     weak = [(f, q, title, s) for f, key, q, title in tag_only_questions()
             if (s := score_without_tags(key, q, title)) >= MIN_RELATED]
