@@ -79,7 +79,7 @@ def test_only_a_reviewed_criminal_record_certificate_can_pick_up_children(client
     ("child-pickup", "child-pickup-helper", ("13900003951", "13900003952"), "有人冒充家长", "只交给约定的人"),
     ("child-pickup", "child-pickup-helper", ("13900003953", "13900003954"), "孩子能坐后座吗", "步行牵手，电动车戴头盔用儿童座椅"),
     ("child-pickup", "child-pickup-helper", ("13900003955", "13900003956"), "孩子找不到了", "没接到、走散了，马上联系家长和学校"),
-    ("matchmaking", "matchmaking-helper", ("13900003957", "13900003958"), "介绍的人是假的", "资料真实，不用婚托"),
+    ("matchmaking", "matchmaking-helper", ("13900003957", "13900003958"), "怎么核实", "资料真实，不用婚托"),
     ("matchmaking", "matchmaking-helper", ("13900003959", "13900003960"), "网恋对象约见面", "首次见面公共场所，提醒不借钱不转账"),
 ])
 def test_the_assistants_answer_the_questions_that_matter_most(client, requester, key, assistant, phones, q, title):

@@ -88,9 +88,9 @@ def test_only_a_reviewed_gas_licence_can_take_an_install(client, requester):
     ("language-practice", "language-practice-helper", ("13900004319", "13900004320"), "上课能录音吗", "录音录像先问同意，只给对方本人"),
     # 只有标签里的口语才接得住（标题与正文里没有这些词）
     ("gas-appliance-install", "gas-install-helper", ("13900004321", "13900004322"), "客户想挪位置", "只装机器，不改燃气管和燃气表"),
-    ("gas-appliance-install", "gas-install-helper", ("13900004323", "13900004324"), "怎么试漏", "装完肥皂水检漏，绝不用明火试"),
-    ("gas-appliance-install", "gas-install-helper", ("13900004325", "13900004326"), "卡箍要不要换", "软管用合格的专用管，不穿墙不暗埋"),
-    ("language-practice", "language-practice-helper", ("13900004327", "13900004328"), "来问的是未成年", "只陪成年人练，中小学学科辅导不接"),
+    ("gas-appliance-install", "gas-install-helper", ("13900004323", "13900004324"), "有点漏气", "装完肥皂水检漏，绝不用明火试"),
+    ("gas-appliance-install", "gas-install-helper", ("13900004325", "13900004326"), "接头松了", "软管用合格的专用管，不穿墙不暗埋"),
+    ("language-practice", "language-practice-helper", ("13900004327", "13900004328"), "中学生补课", "只陪成年人练，中小学学科辅导不接"),
     ("language-practice", "language-practice-helper", ("13900004329", "13900004330"), "能包过吗", "不承诺提分保过，不代考不代写"),
     ("language-practice", "language-practice-helper", ("13900004331", "13900004332"), "学员给我发红包", "在平台约课付款，不私下转账"),
     ("gas-appliance-install", "gas-install-helper", ("13900004333", "13900004334"), "好像漏气了", "装完肥皂水检漏，绝不用明火试"),

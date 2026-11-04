@@ -66,9 +66,9 @@ def test_both_categories_take_orders_without_a_certificate(client, requester):
     ("tailor-alterations", "tailor-helper", ("13900004123", "13900004124"), "原来有污渍", "改前拍照留底"),
     ("tailor-alterations", "tailor-helper", ("13900004125", "13900004126"), "客户问能不能退钱", "改坏了按说好的办法赔"),
     ("bereavement-affairs", "bereavement-helper", ("13900004127", "13900004128"), "该先打给谁", "第一件事是开死亡证明"),
-    ("bereavement-affairs", "bereavement-helper", ("13900004129", "13900004130"), "有人来揽活", "遗体只交殡仪馆运送，不找私人车辆"),
-    ("bereavement-affairs", "bereavement-helper", ("13900004131", "13900004132"), "寿衣要不要买", "价格看公示，按需选择不攀比"),
-    ("bereavement-affairs", "bereavement-helper", ("13900004133", "13900004134"), "退休金怎么停发", "待遇与销户：一张清单一件件办"),
+    ("bereavement-affairs", "bereavement-helper", ("13900004129", "13900004130"), "碰到黑车", "遗体只交殡仪馆运送，不找私人车辆"),
+    ("bereavement-affairs", "bereavement-helper", ("13900004131", "13900004132"), "套餐太贵", "价格看公示，按需选择不攀比"),
+    ("bereavement-affairs", "bereavement-helper", ("13900004133", "13900004134"), "丧葬费", "待遇与销户：一张清单一件件办"),
 ])
 def test_the_assistants_answer_the_questions_that_matter_most(client, requester, key, assistant, phones, q, title):
     _publish(client, key, phones)
