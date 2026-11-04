@@ -35,6 +35,9 @@ description: Run one spec-driven batch in this repo end to end — pick the next
 - SDK 方法分诊：两端都还没调用的，进 `server/tests/test_sdk_method_triage.py`
 - 发单拦截新类别（354 号 spec）：`errand.KIND_CODES`、i18n 文案、复核类别名 `errand_reviews.KIND_LABEL`、
   SDK `ERRAND_REVIEW_CODES` 四处一起登记，`server/tests/test_errand_registry.py` 核对
+- 新脚本（`server/scripts/*.py`）：在 `server/tests/test_script_rot.py` 的 `EXERCISED` 表里写明是谁在跑
+  （V423 的 `pack_probe.py` 漏了这一步，到 V430 的全量回归才红出来）
+- 定时任务、表、迁移的数目：`tests/test_doc_counts.py` 报的真实数写进 OPERATIONS / GO-LIVE
 
 ## 6. 文档
 - spec 状态改成「本批实现（V1xx）」；`docs/BACKLOG.md` 勾掉；台账（72 号）对应 ID 改成「已做」；

@@ -49,6 +49,8 @@ EXERCISED: dict[str, str] = {
                                 "+ 回归里用伪造结果核对比对逻辑（test_doc_counts）",
     # 160 号 spec：走查要连一个真服务端与 Postgres，回归跑不了全程；回归里至少编译一遍（本文件）
     "walk_review.py": "功能检视时对真服务端手动跑（160 号 spec 第 0 节）；回归里编译检查（本文件）",
+    # 396 号 spec（V423）加的，当时漏登记，V430 的全量回归才红出来
+    "pack_probe.py": "写场景包问法之前由开发者跑（skill scenario-discovery）；回归里的 test_pack_probe 直接调用 probe() / main() 并做红验",
 }
 
 
