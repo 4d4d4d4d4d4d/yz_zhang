@@ -8,6 +8,8 @@ export const ERRAND_REVIEW_CODES = [
   'fake_inspection', 'voice_clone',
   // SCN-243（351 号 spec）
   'odometer_fraud',
+  // SCN-271（379 号 spec）
+  'covert_spying',
 ] as const;
 
 export const ERRAND_REVIEW_MIN_EXPLANATION = 6;

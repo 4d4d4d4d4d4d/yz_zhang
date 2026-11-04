@@ -36,6 +36,7 @@ KIND_LABEL = {
     "ghostwrite": "代写学位论文代考", "fake_review": "刷单虚假评价", "fake_traffic": "刷粉刷量买卖账号",
     "fake_inspection": "年检包过不上线", "voice_clone": "克隆他人声音",
     "odometer_fraud": "篡改里程表",
+    "covert_spying": "偷看定位他人",
 }
 
 

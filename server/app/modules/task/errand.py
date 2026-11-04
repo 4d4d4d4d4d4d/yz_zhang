@@ -24,6 +24,10 @@
 - SCN-218（335 号 spec）：刷粉刷量、买卖租借账号。网信办「清朗」系列专项行动持续打击流量造假、网络水军、
   批量账号与账号买卖，并要求「一人一号、一企两号」。做内容、投正规广告涨粉不在此列。
 
+- SCN-271（379 号 spec）：偷看、调取他人的聊天记录、通话记录，或定位、跟踪他人。行踪轨迹、通信内容都是个人信息，
+  未经同意获取、出售或提供属于侵犯公民个人信息（《刑法》第二百五十三条之一、《个人信息保护法》第十条）。
+  恢复自己设备上的数据、怀疑自己被定位或被装了跟踪器请人排查的，不在此列。
+
 和 k12.py 一样：纯文本规则，只看词同时出现，不调模型；拿不准的由运营人工复核。
 """
 from __future__ import annotations
@@ -69,6 +73,30 @@ CAR_CONTEXT = re.compile(r"车|里程|公里|仪表|码表")
 _DETECTING = re.compile(r"(?:警惕|防止|防|识别|鉴别|查|看看|是否|有没有|有无|怀疑|检测)[^。；;，,！!？?\n]{0,4}$")
 
 
+# SCN-271 偷看、定位他人：对象是「另一个人」才算，自己的手机、自己的数据不在此列
+_OTHER = r"他的|她的|老公|老婆|丈夫|妻子|男友|女友|男朋友|女朋友|前任|前夫|前妻|对象|另一半|情人|小三|别人|他人|同事|老板|员工|邻居"
+_RECORDS = r"聊天记录|微信记录|聊天内容|通话记录|短信|开房记录|浏览记录|行程记录|消费记录"
+SPY_RECORDS = re.compile(
+    rf"(?:恢复|查看|查|偷看|翻看|导出|调取|获取|拿到|监控|截取)[^。；;\n]{{0,12}}(?:{_OTHER})[^。；;\n]{{0,8}}(?:{_RECORDS})|"
+    rf"(?:{_OTHER})[^。；;\n]{{0,8}}(?:{_RECORDS})[^。；;\n]{{0,6}}(?:恢复|查看|导出|调取|拿到|查一下|查查)")
+SPY_TRACK = re.compile(
+    rf"(?:定位|追踪|跟踪|监控|监听|偷拍)[^。；;\n]{{0,6}}(?:{_OTHER})|"
+    rf"(?:查|看|知道|掌握|摸清|找出)[^。；;\n]{{0,6}}(?:{_OTHER})[^。；;\n]{{0,4}}(?:行踪|位置|在哪)|"
+    rf"(?:定位器|跟踪器|追踪器|窃听器)[^。；;\n]{{0,10}}(?:{_OTHER})|(?:{_OTHER})[^。；;\n]{{0,10}}(?:定位器|跟踪器|追踪器|窃听器)")
+# 自己是被定位、被监控的那一方，请人帮忙排查、拆除的放行
+_VICTIM = re.compile(r"被[^。；;\n]{0,4}(?:定位|跟踪|追踪|监控|监听|偷拍|装)|怀疑[^。；;\n]{0,8}(?:在我|给我|我的|我被|被)|"
+                     r"排查|拆(?:掉|除)|检查[^。；;\n]{0,6}有没有")
+
+
+def _spying(t: str) -> bool:
+    for seg in re.split(r"[。；;！!？?\n]", t):
+        if _VICTIM.search(seg):
+            continue
+        if _affirmed(SPY_RECORDS, seg) or _affirmed(SPY_TRACK, seg):
+            return True
+    return False
+
+
 def _odometer(t: str) -> bool:
     for pat in ([ODO_DIRECT, ODO_SLANG] if CAR_CONTEXT.search(t) else [ODO_DIRECT]):
         for m in pat.finditer(t):
@@ -94,6 +122,7 @@ KIND_CODES = {
     "rx": "errand_restricted", "resale": "errand_restricted", "learner": "unlicensed_driving_practice",
     "ghostwrite": "academic_ghostwriting", "fake_review": "fake_review", "fake_traffic": "fake_traffic",
     "fake_inspection": "fake_inspection", "voice_clone": "voice_clone", "odometer_fraud": "odometer_fraud",
+    "covert_spying": "covert_spying",
 }
 
 
@@ -117,6 +146,8 @@ def restricted_errand(text: str) -> str | None:
         return "voice_clone"
     if _odometer(t):
         return "odometer_fraud"
+    if _spying(t):
+        return "covert_spying"
     return None
 
 
@@ -206,4 +237,10 @@ def _raise_for(kind: str) -> None:
             "平台不承接篡改里程表（调表）：把里程调小再卖车是欺诈，买家可以要求三倍赔偿，帮忙调的人也脱不了干系。"
             "想买二手车怕被坑，可以发「二手车陪验」单请人帮你核对里程、识别调表。",
             "odometer_fraud",
+        )
+    if kind == "covert_spying":
+        raise bad_request(
+            "平台不承接偷看、调取别人的聊天记录、通话记录，或定位、跟踪别人：未经同意获取他人的通信内容、行踪轨迹属于侵犯个人信息，"
+            "情节严重的触犯刑法。恢复你自己设备上的数据，可以发「数据恢复」单；怀疑自己被定位、被装了跟踪器，可以发单请人帮你排查。",
+            "covert_spying",
         )
