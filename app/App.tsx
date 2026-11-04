@@ -470,7 +470,7 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       {/* SPACE-024 合作驾驶舱（移动简化版：进度、钱、预警、关键路径；APP-007）——只给发布方 */}
       {hasChildTasks(task) && meId === task.creator_id && <CockpitBlock client={client} taskId={task.id} />}
       {/* TASK-022 执行动态（386 号 spec）：成交双方看进度、写进度，接单人可报「还要几天」（AI-DEC-021d） */}
-      {canSeeProgress(task, meId) && <ProgressBlock client={client} task={task} meId={meId} />}
+      {canSeeProgress(task, meId) && <ProgressBlock client={client} task={task} meId={meId} baseUrl={BASE_URL} />}
       {/* SCN-120 一单多次上门的逐次回报（176 号 spec）：成交双方 */}
       {hasVisits(task) && meId !== null && (meId === task.creator_id || meId === task.executor_id)
         && !['draft', 'published'].includes(task.status) && (
@@ -544,7 +544,8 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
                          isExecutor={meId === contract.executor_id} onChanged={(c) => { setContract(c); void reload(); }} />
       )}
       {/* SCN-166（297 号 spec）交付文件：原图放款完毕前锁着 */}
-      {contract && <DeliverablesList client={client} contractId={contract.id} isExecutor={meId === contract.executor_id}
+      {/* TASK-022d（390 号 spec）原来没传 baseUrl：预览图是相对路径，真机上一张都加载不出来 */}
+      {contract && <DeliverablesList client={client} contractId={contract.id} isExecutor={meId === contract.executor_id} baseUrl={BASE_URL}
                                      live={contract.status === 'funded' && !contract.frozen} stages={contract.milestones} />}
       {/* SCN-202（329 号 spec）交付附授权清单 */}
       {contract && <LicensesList client={client} contractId={contract.id} isExecutor={meId === contract.executor_id}

@@ -139,3 +139,14 @@ describe('TASK-022c App 写进度拍照留证（388 号 spec）', () => {
     expect(screen.getByText(/已附 9 张照片/)).toBeTruthy();
   });
 });
+
+describe('TASK-022d App 执行动态里直接看照片（390 号 spec）', () => {
+  it('进度照片拼上服务端地址画出来；畸形、外链协议不画', async () => {
+    const logs = [{ id: 1, user_id: 5, kind: 'note', content: '现场', created_at: '2026-11-04T08:00:00Z',
+      images: ['/api/v1/files/a', 'javascript:alert(1)', 7, '/api/v1/files/b'] }];
+    render(<ProgressBlock client={makeClient(logs)} task={TASK} meId={2} baseUrl="https://api.x.com/" />);
+    expect((await screen.findByLabelText('进度照片 1')).props.source).toEqual({ uri: 'https://api.x.com/api/v1/files/a' });
+    expect(screen.getByLabelText('进度照片 2').props.source).toEqual({ uri: 'https://api.x.com/api/v1/files/b' });
+    expect(screen.queryByLabelText('进度照片 3')).toBeNull();
+  });
+});

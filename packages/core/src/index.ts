@@ -1,4 +1,5 @@
 export * from './types';
+export * from './media';
 export * from './ledger';
 export * from './i18n';
 export * from './time';

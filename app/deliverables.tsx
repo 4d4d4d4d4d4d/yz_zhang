@@ -3,7 +3,7 @@
 // 放款后的原图保存到相册要新依赖（相册写入），本批没有接，记作 SCN-174；仍提示到网页版下载。
 // SC-017（304 号 spec）多于一期时执行方可以选「挂到哪一期」，那一期放款后原图就解锁。
 import {
-  apiErrorText, deliverableLockedText, deliverableStageTag, type ContractDeliverable, type Milestone, type PlatformClient,
+  apiErrorText, deliverableLockedText, deliverableStageTag, mediaUri, type ContractDeliverable, type Milestone, type PlatformClient,
 } from '@platform/core';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useState } from 'react';
@@ -53,7 +53,7 @@ export function DeliverablesList({ client, contractId, baseUrl = '', isExecutor 
     <View style={s.card} accessibilityLabel="交付文件">
       <Text style={s.title}>交付文件</Text>
       <View style={s.row}>
-        {previews.map((d) => <Image key={d.id} accessibilityLabel={`预览${deliverableStageTag(d)}`} source={{ uri: `${baseUrl}${d.url}` }} style={s.img} />)}
+        {previews.map((d) => <Image key={d.id} accessibilityLabel={`预览${deliverableStageTag(d)}`} source={{ uri: mediaUri(baseUrl, d.url) }} style={s.img} />)}
       </View>
       {locked > 0 && <Text style={s.muted}>{deliverableLockedText(lockedRows)}</Text>}
       {originals.length - locked > 0 && <Text style={s.muted}>原图 {originals.length - locked} 张已可下载：请在网页版下载</Text>}

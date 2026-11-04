@@ -2,10 +2,10 @@
 // 发单人的驾驶舱时间线按它重排。网页早有这一块，App 上原来没有——接单人在手机上发不了进度，发单人也看不到。
 // 与网页同一组接口、同一套判断（共享 SDK 的 daysLeftNote / parseDaysLeft）。
 // TASK-022c（388 号 spec）写进度可以拍照或从相册选图留证（MOB-021：纠纷时最有力的证据往往是现场照片），与网页一样最多 9 张。
-import { apiErrorText, daysLeftNote, formatDateTime, parseDaysLeft, type PlatformClient, type Task } from '@platform/core';
+import { apiErrorText, daysLeftNote, formatDateTime, mediaUri, parseDaysLeft, type PlatformClient, type Task } from '@platform/core';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 type Entry = Awaited<ReturnType<PlatformClient['listProgress']>>[number];
 
@@ -18,8 +18,10 @@ export function canSeeProgress(task: Pick<Task, 'status' | 'creator_id' | 'execu
   return meId != null && (meId === task.creator_id || meId === task.executor_id) && !['draft', 'published'].includes(task.status);
 }
 
-export function ProgressBlock({ client, task, meId }: {
+export function ProgressBlock({ client, task, meId, baseUrl = '' }: {
   client: PlatformClient; task: Pick<Task, 'id' | 'status' | 'executor_id'>; meId: number | null;
+  /** TASK-022d（390 号 spec）服务端地址：进度照片是相对路径，App 要拼上它才加载得出来 */
+  baseUrl?: string;
 }) {
   const [logs, setLogs] = useState<Entry[]>([]);
   const [note, setNote] = useState('');
@@ -70,12 +72,23 @@ export function ProgressBlock({ client, task, meId }: {
     <View style={s.card} accessibilityLabel="执行动态">
       <Text style={s.title}>执行动态</Text>
       {logs.length === 0 && <Text style={s.muted}>还没有进度。</Text>}
-      {logs.map((p) => (
-        <Text key={p.id} style={s.row}>
-          {p.content}{daysLeftNote(p)}
-          <Text style={s.muted}> · {formatDateTime(p.created_at)}{Array.isArray(p.images) && p.images.length ? ` · ${p.images.length} 张图` : ''}</Text>
-        </Text>
-      ))}
+      {logs.map((p) => {
+        // TASK-022d（390 号 spec）照片直接看：地址拼不出来的（畸形、外链）不画
+        const pics = (Array.isArray(p.images) ? p.images : []).map((u) => mediaUri(baseUrl, u)).filter(Boolean);
+        return (
+          <View key={p.id} style={{ gap: 4 }}>
+            <Text style={s.row}>
+              {p.content}{daysLeftNote(p)}
+              <Text style={s.muted}> · {formatDateTime(p.created_at)}{Array.isArray(p.images) && p.images.length ? ` · ${p.images.length} 张图` : ''}</Text>
+            </Text>
+            {pics.length > 0 && (
+              <View style={s.chips}>
+                {pics.map((uri, i) => <Image key={uri} accessibilityLabel={`进度照片 ${i + 1}`} source={{ uri }} style={s.thumb} />)}
+              </View>
+            )}
+          </View>
+        );
+      })}
       {task.status === 'in_progress' && (
         <View style={{ gap: 6 }}>
           <TextInput style={s.input} placeholder="进度说明…" value={note} onChangeText={setNote} />
@@ -121,4 +134,5 @@ const s = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
   ghost: { borderRadius: 10, paddingVertical: 8, paddingHorizontal: 14, borderWidth: 1, borderColor: '#cbd5e1' },
   link: { color: '#275c52', fontSize: 13 },
+  thumb: { width: 64, height: 64, borderRadius: 8, backgroundColor: '#f1f5f2' },
 });
