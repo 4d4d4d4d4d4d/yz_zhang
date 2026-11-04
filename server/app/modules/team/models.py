@@ -49,6 +49,8 @@ class Team(Base):
     # TEAM-056（370 号 spec）预算池按每月几号重置：1~28，1 = 原来的自然月。企业按自己的财务月结账，
     # 只能按自然月重置的话，池子的「本期已用」和财务的账期对不上
     budget_cycle_day: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    # TEAM-056b（392 号 spec）账期按哪个时区的 0 点起算；空 = UTC（与原来一样）。由团队负责人明确选，不推断个人时区（TZ-065）
+    budget_tz: Mapped[str | None] = mapped_column(String(40), nullable=True)
     # TEAM-055 本月已经预警过没有（"2026-09" 这样的月份串，75 号 spec）。
     # 记月份而不是布尔：池子是按自然月重置的，布尔位需要另一个 job 去清，
     # 而那个 job 一旦没跑，预警就永久沉默。

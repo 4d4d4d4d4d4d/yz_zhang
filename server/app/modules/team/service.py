@@ -1,5 +1,5 @@
 """TEAM 权限、额度与审批（53 号 spec）。"""
-from datetime import timedelta
+from datetime import timedelta, timezone
 
 from sqlalchemy.orm import Session
 
@@ -53,13 +53,21 @@ def _cycle_day(team: Team | None) -> int:
     return d if 1 <= d <= MAX_CYCLE_DAY else 1
 
 
-def cycle_start(team: Team | None, now=None):
-    """TEAM-056（370 号 spec）这一期的起点：每月 `budget_cycle_day` 号 00:00（UTC，与 `month_start` 同一口径）。
+# TEAM-056b（392 号 spec）账期可选的时区：团队负责人明确选一个，不推断个人时区（TZ-065）。
+# 列表故意短：都是没有夏令时歧义之外别的花样的常见时区；要加就在这里加，SDK 的选项表同步。
+BUDGET_TIMEZONES = ("UTC", "Asia/Shanghai", "Asia/Hong_Kong", "Asia/Taipei", "Asia/Tokyo",
+                    "Asia/Singapore", "Europe/London", "America/New_York", "America/Los_Angeles")
 
-    1 号就是 `month_start`，既有团队行为一字不变；今天还没到重置日的，起点是上个月的那一天。
-    """
-    now = now or utcnow()
-    d = _cycle_day(team)
+
+def _budget_tz(team: Team | None):
+    from zoneinfo import ZoneInfo
+
+    name = getattr(team, "budget_tz", None)
+    return ZoneInfo(name) if name and name != "UTC" and name in BUDGET_TIMEZONES else None
+
+
+def _start_on(now, d: int):
+    """不带时区的「这一期起点」：本月 d 号 00:00，今天还没到就是上个月 d 号。"""
     if d == 1:
         return month_start(now)
     this = now.replace(day=d, hour=0, minute=0, second=0, microsecond=0)
@@ -69,11 +77,41 @@ def cycle_start(team: Team | None, now=None):
     return prev.replace(day=d, hour=0, minute=0, second=0, microsecond=0)
 
 
-def cycle_resets_at(team: Team | None, now=None):
-    """下一次重置的时刻：本期起点的下一个月同一天。"""
-    start = cycle_start(team, now)
+def _next_after(start, d: int):
     nxt = (start.replace(day=1) + timedelta(days=32)).replace(day=1)
-    return nxt.replace(day=_cycle_day(team))
+    return nxt.replace(day=d)
+
+
+def _to_local(now, tz):
+    return now.replace(tzinfo=timezone.utc).astimezone(tz).replace(tzinfo=None)
+
+
+def _to_utc(local, tz):
+    return local.replace(tzinfo=tz).astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def cycle_start(team: Team | None, now=None):
+    """TEAM-056（370 号 spec）这一期的起点：每月 `budget_cycle_day` 号 00:00（UTC，与 `month_start` 同一口径）。
+
+    1 号就是 `month_start`，既有团队行为一字不变；今天还没到重置日的，起点是上个月的那一天。
+    TEAM-056b（392 号 spec）团队选了时区的，按那个时区的 00:00 起算，返回值仍是 UTC（平台内部全是 UTC）。
+    """
+    now = now or utcnow()
+    d = _cycle_day(team)
+    tz = _budget_tz(team)
+    if tz is None:
+        return _start_on(now, d)
+    return _to_utc(_start_on(_to_local(now, tz), d), tz)
+
+
+def cycle_resets_at(team: Team | None, now=None):
+    """下一次重置的时刻：本期起点的下一个月同一天（选了时区的，按那个时区算再换回 UTC）。"""
+    now = now or utcnow()
+    d = _cycle_day(team)
+    tz = _budget_tz(team)
+    if tz is None:
+        return _next_after(_start_on(now, d), d)
+    return _to_utc(_next_after(_start_on(_to_local(now, tz), d), d), tz)
 
 
 def _spent_since(db: Session, team_id: int, since, user_id: int | None = None) -> int:

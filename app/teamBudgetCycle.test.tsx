@@ -58,3 +58,27 @@ describe('TEAM-056 App 预算池账期', () => {
     expect(screen.queryByText('改账期')).toBeNull();
   });
 });
+
+describe('TEAM-056b App 预算池按团队选的时区换期（392 号 spec）', () => {
+  it('所有者点一个时区：只带时区、金额照旧；提示改成按哪里的 0 点', async () => {
+    const calls = open('owner', { budget_tz: 'UTC' });
+    await waitFor(() => expect(screen.getByText('某某科技')).toBeTruthy());
+    fireEvent.press(screen.getByText('某某科技'));
+    await screen.findByLabelText('预算池时区');
+    expect(screen.getByText('● 协调世界时（UTC，默认）')).toBeTruthy();
+    fireEvent.press(screen.getByText('● 协调世界时（UTC，默认）'));
+    expect(calls.some((c) => c.path === '/teams/5/budget')).toBe(false);
+    fireEvent.press(screen.getByText('北京时间'));
+    await waitFor(() => expect(calls.find((c) => c.path === '/teams/5/budget')?.body).toEqual({ monthly_budget_cents: 300000, budget_tz: 'Asia/Shanghai' }));
+    expect(await screen.findByText('预算池改为按北京时间 0 点重置')).toBeTruthy();
+  });
+
+  it('成员和老服务端都看不到时区选择', async () => {
+    open('member', { budget_tz: 'Asia/Shanghai' });
+    await waitFor(() => expect(screen.getByText('某某科技')).toBeTruthy());
+    fireEvent.press(screen.getByText('某某科技'));
+    const line = await screen.findByLabelText('预算池账期');
+    expect(String(line.props.children.join(''))).toContain('按北京时间 0 点');
+    expect(screen.queryByLabelText('预算池时区')).toBeNull();
+  });
+});

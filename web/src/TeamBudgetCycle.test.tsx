@@ -62,3 +62,30 @@ describe('TEAM-056 预算池账期（370 号 spec）', () => {
     expect(screen.queryByTestId('team-budget-cycle')).toBeNull();
   });
 });
+
+describe('TEAM-056b 预算池按团队选的时区换期（392 号 spec）', () => {
+  it('所有者选时区：只带时区、金额照旧，不带账期日；选了的写在账期那一行', async () => {
+    const calls = open('owner', [], { '/teams/9': { ...TEAM('owner'), budget_tz: 'Asia/Shanghai' } });
+    fireEvent.click(await screen.findByText('打开'));
+    expect((await screen.findByTestId('team-budget-cycle')).textContent).toContain('每月 25 日重置（按北京时间 0 点）');
+    const sel = screen.getByLabelText('预算池按哪个时区的 0 点重置') as HTMLSelectElement;
+    expect(sel.value).toBe('Asia/Shanghai');
+    fireEvent.change(sel, { target: { value: 'America/New_York' } });
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/teams/9/budget')).toBe(true));
+    expect(calls.find((x) => x.method === 'POST')!.body).toEqual({ monthly_budget_cents: 300000, budget_tz: 'America/New_York' });
+  });
+
+  it('成员看不到时区选择；老服务端没有时区字段也不显示', async () => {
+    open('member', [], { '/teams/9': { ...TEAM('member'), budget_tz: 'UTC' } });
+    fireEvent.click(await screen.findByText('打开'));
+    await screen.findByTestId('team-budget-cycle');
+    expect(screen.queryByLabelText('预算池按哪个时区的 0 点重置')).toBeNull();
+  });
+
+  it('老服务端：所有者也看不到时区选择', async () => {
+    open('owner');
+    fireEvent.click(await screen.findByText('打开'));
+    await screen.findByTestId('team-budget-cycle');
+    expect(screen.queryByLabelText('预算池按哪个时区的 0 点重置')).toBeNull();
+  });
+});

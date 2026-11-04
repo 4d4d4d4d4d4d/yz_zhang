@@ -1,5 +1,5 @@
 import {
-  apiErrorText, budgetCycleLine, fmtYuan, formatDateTime, inviteJoinedLine, MAX_BUDGET_CYCLE_DAY, memberSourceLabel, teamHandoverDetail,
+  apiErrorText, BUDGET_TIMEZONE_OPTIONS, budgetCycleLine, fmtYuan, formatDateTime, inviteJoinedLine, MAX_BUDGET_CYCLE_DAY, memberSourceLabel, teamHandoverDetail,
   type SpendRequestView, type TeamDetail, type TeamInviteLink, type TeamView,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -128,6 +128,16 @@ function TeamCard({ teamId }: { teamId: number }) {
                 {Array.from({ length: MAX_BUDGET_CYCLE_DAY }, (_, i) => i + 1).map((d) => (
                   <option key={d} value={d}>{d === 1 ? '每月 1 日（自然月）' : `每月 ${d} 日`}</option>
                 ))}
+              </select>
+            )}
+            {/* TEAM-056b（392 号 spec）按哪个时区的 0 点换期；老服务端没有这个字段就不显示 */}
+            {team.my_role === 'owner' && team.budget_tz && (
+              <select aria-label="预算池按哪个时区的 0 点重置" style={{ marginLeft: 8 }} value={team.budget_tz}
+                      onChange={(e) => {
+                        const tz = e.target.value as (typeof BUDGET_TIMEZONE_OPTIONS)[number][0];
+                        void act(() => client.setTeamBudget(teamId, team.monthly_budget_cents, undefined, tz));
+                      }}>
+                {BUDGET_TIMEZONE_OPTIONS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
               </select>
             )}
           </p>

@@ -15,7 +15,7 @@ import { KeyUsageBlock, QuotaRequestsBlock } from './apiKeyUsage';
 // 按钮的可用性一律读服务端的判断（`can_decide` / `invoice_block`），
 // 客户端不重写：**第二份实现必然抄漏**（UI-075 立过这条）。
 import {
-  apiErrorText, budgetCycleLine, fmtYuan, formatDateTime, parseBudgetCycleDay,
+  apiErrorText, BUDGET_TIMEZONE_OPTIONS, budgetCycleLine, fmtYuan, formatDateTime, parseBudgetCycleDay,
   type ApiKeyView, type ContributionView, type ShareRow,
   type SpendRequestView, type TeamDetail, type TeamView, type VentureView,
   type PackTaskTemplateBrief, type PlatformClient,
@@ -216,6 +216,21 @@ function TeamDetailBlock({ client, teamId }: { client: PlatformClient; teamId: n
               await load();
             });
           }} />
+        </View>
+      )}
+      {/* TEAM-056b（392 号 spec）按哪个时区的 0 点换期：所有者选；老服务端没有这个字段就不显示 */}
+      {budgetCycleLine(team) !== '' && team.my_role === 'owner' && !!team.budget_tz && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }} accessibilityLabel="预算池时区">
+          {BUDGET_TIMEZONE_OPTIONS.map(([v, label]) => (
+            <Button key={v} title={`${v === team.budget_tz ? '● ' : ''}${label}`} onPress={() => {
+              if (v === team.budget_tz) return;
+              void act(async () => {
+                await client.setTeamBudget(teamId, team.monthly_budget_cents, undefined, v);
+                setNotice(`预算池改为按${label.replace('（UTC，默认）', '（UTC）')} 0 点重置`);
+                await load();
+              });
+            }} />
+          ))}
         </View>
       )}
 

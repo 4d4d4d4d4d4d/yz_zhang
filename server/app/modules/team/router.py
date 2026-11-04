@@ -1,5 +1,7 @@
 """TEAM 团队账户端点（53 号 spec）。"""
 import secrets
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
@@ -50,6 +52,9 @@ class BudgetIn(BaseModel):
     monthly_budget_cents: int = Field(ge=0)
     # TEAM-056（370 号 spec）每月几号重置；不传就不改（老客户端照旧只改金额）
     budget_cycle_day: int | None = Field(default=None, ge=1, le=28)
+    # TEAM-056b（392 号 spec）账期按哪个时区的 0 点起算；不传就不改；"UTC" = 与原来一样
+    budget_tz: Literal["UTC", "Asia/Shanghai", "Asia/Hong_Kong", "Asia/Taipei", "Asia/Tokyo",
+                       "Asia/Singapore", "Europe/London", "America/New_York", "America/Los_Angeles"] | None = None
 
 
 class CompanyIn(BaseModel):
@@ -185,6 +190,8 @@ def _cycle(team) -> dict:
     from app.core.timefmt import iso
 
     return {"budget_cycle_day": team.budget_cycle_day or 1,
+            # TEAM-056b（392 号 spec）账期按哪个时区起算；没选过 = "UTC"（与原来一样）
+            "budget_tz": team.budget_tz or "UTC",
             "budget_cycle_starts_at": iso(service.cycle_start(team)),
             "budget_cycle_resets_at": iso(service.cycle_resets_at(team))}
 
@@ -389,6 +396,8 @@ def set_budget(team_id: int, body: BudgetIn, user: User = Depends(get_current_us
     team.monthly_budget_cents = body.monthly_budget_cents
     if body.budget_cycle_day is not None:
         team.budget_cycle_day = body.budget_cycle_day
+    if body.budget_tz is not None:
+        team.budget_tz = None if body.budget_tz == "UTC" else body.budget_tz
     # TEAM-055 池子一改，「按当前池子快到顶了」这句话就不成立了，
     # 所以本月的预警标记要清掉：不清的话，调高预算后再次逼近上限
     # **不会有第二次预警**——那正是这一批要修的毛病本身。

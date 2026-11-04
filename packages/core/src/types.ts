@@ -1810,7 +1810,12 @@ export interface TeamDetail extends TeamView {
   /** 这一期的起点与下次重置（UTC，带时区） */
   budget_cycle_starts_at?: string;
   budget_cycle_resets_at?: string;
+  /** TEAM-056b（392 号 spec）账期按哪个时区的 0 点起算；"UTC" = 与原来一样；老服务端没有 */
+  budget_tz?: BudgetTimezone;
 }
+
+/** TEAM-056b（392 号 spec）账期可选的时区（与服务端 BUDGET_TIMEZONES 同一张表） */
+export type BudgetTimezone = 'UTC' | 'Asia/Shanghai' | 'Asia/Hong_Kong' | 'Asia/Taipei' | 'Asia/Tokyo' | 'Asia/Singapore' | 'Europe/London' | 'America/New_York' | 'America/Los_Angeles';
 
 /** TEAM-052 / TEAM-056 设预算池的返回 */
 export interface TeamBudgetResult {
@@ -1820,6 +1825,7 @@ export interface TeamBudgetResult {
   budget_cycle_day?: number;
   budget_cycle_starts_at?: string;
   budget_cycle_resets_at?: string;
+  budget_tz?: BudgetTimezone;
 }
 
 export interface SpendRequestView {
