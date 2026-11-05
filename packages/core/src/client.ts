@@ -2182,7 +2182,7 @@ export class PlatformClient {
   }
   /** SCN-181 `extra_certs` 用顿号分隔；空字符串 = 只要 required_cert。
    * KB-062b `experience_fresh_days` 30~3650 天，0 = 回到平台默认 */
-  updateCategory(categoryId: number, params: { active?: boolean; required_cert?: string; extra_certs?: string; experience_fresh_days?: number } = {}) {
+  updateCategory(categoryId: number, params: { active?: boolean; required_cert?: string; extra_certs?: string; experience_fresh_days?: number; optional_certs?: string } = {}) {
     const qs = Object.entries(params)
       .filter(([, v]) => v !== undefined)
       .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)

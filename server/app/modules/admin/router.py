@@ -1197,6 +1197,8 @@ def update_category(
     category_id: int, active: bool | None = None, required_cert: str | None = None,
     extra_certs: str | None = None, experience_fresh_days: int | None = None,
     admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function"),
+    # SCN-294b（407 号 spec）发单人可以加选的资质，顿号或逗号分隔；空字符串 = 没有可加的
+    optional_certs: str | None = None,
 ):
     from app.modules.task.models import Category
 
@@ -1215,6 +1217,13 @@ def update_category(
         if len(items) > 5:
             raise bad_request("一个类目最多再要 5 张资质", "too_many_certs")
         row.extra_certs = [c for c in items if c != (row.required_cert or "").strip()]
+    if optional_certs is not None:
+        import re as _re2
+
+        opts = _cert_list(_re2.split(r"[、,，]", optional_certs))
+        if len(opts) > 5:
+            raise bad_request("一个类目最多列 5 张可加选的资质", "too_many_certs")
+        row.optional_certs = [c for c in opts if c not in category_required(row)]
     if experience_fresh_days is not None:
         # KB-062b（327 号 spec）这个类目的经验多久算旧；0 = 回到平台默认
         from app.modules.knowledge.units import FRESH_DAYS_MAX, FRESH_DAYS_MIN
@@ -1232,7 +1241,16 @@ def update_category(
         out["extra_certs"] = list(row.extra_certs)
     if row.experience_fresh_days:
         out["experience_fresh_days"] = row.experience_fresh_days
+    if row.optional_certs:
+        out["optional_certs"] = list(row.optional_certs)
     return out
+
+
+def category_required(row) -> list[str]:
+    """类目本来就要的资质：可加选的里面不再重复列它们。"""
+    from app.modules.task.service import category_certs
+
+    return category_certs(row)
 
 
 # ---------- SCN-213（334 号 spec）资质别名：四眼 ----------

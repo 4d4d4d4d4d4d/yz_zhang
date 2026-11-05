@@ -386,6 +386,8 @@ export interface Task {
   minor_involved?: boolean;
   /** 监护人安排：guardian_present（监护人在场）/ public_place（公开场所）；不涉及未成年人是空串 */
   guardian_mode?: GuardianMode | '';
+  /** SCN-294b（407 号 spec）发单人为这一单加选的资质；报名的人要都有 */
+  task_certs?: string[];
   status: TaskStatus;
   deadline: string | null;
   /** AI-DEC-021c（384 号 spec）工期估计（天）；没填为 null */
@@ -686,6 +688,8 @@ export interface TaskCreateInput {
   /** 没选时是空串：服务端会说清要选哪一种 */
   guardian_mode?: GuardianMode | '';
   guardian_consented?: boolean;
+  /** SCN-294b（407 号 spec）这一单另外要的资质：只能从类目的 optional_certs 里挑 */
+  task_certs?: string[];
   acceptance_criteria?: string[];
   bonus_cents?: number;
   publish_now?: boolean;
@@ -982,6 +986,8 @@ export interface Category {
   /** 准入资质；空 = 不限 */
   required_cert: string;
   extra_certs?: string[];
+  /** SCN-294b（407 号 spec）发单人可以按这一单加选的资质；没有就不带 */
+  optional_certs?: string[];
   /** KB-062b（327 号 spec）运营设了才有：这个类目的经验多久算旧（天）；没有 = 平台默认 365 天 */
   experience_fresh_days?: number;
 }

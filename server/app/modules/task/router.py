@@ -82,6 +82,8 @@ class TaskIn(BaseModel):
     minor_involved: bool = False
     guardian_mode: str = Field(default="", max_length=20)
     guardian_consented: bool = False
+    # SCN-294b（407 号 spec）这一单另外要的资质：只能从类目的 optional_certs 里挑；不传与以前一样
+    task_certs: list[str] = Field(default_factory=list, max_length=5)
 
 
 class DeliverIn(BaseModel):
@@ -187,6 +189,8 @@ def dump_task(task: Task, viewer: User | None = None) -> dict:
         # SCN-144 服务对象是未成年人：公开（接单前就要知道要求什么证明、在什么场合）；不含孩子的任何信息
         "minor_involved": bool(task.minor_involved),
         "guardian_mode": task.guardian_mode or "",
+        # SCN-294b（407 号 spec）发单人为这一单加选的资质：公开（报名前就要知道）
+        "task_certs": list(task.task_certs or []),
         "recurred_from_id": task.recurred_from_id,
         "status": task.status,
         "deadline": iso(task.deadline),
@@ -310,6 +314,26 @@ def _validate_visits(body: TaskIn) -> None:
     body.visit_checklist = items
 
 
+def _validate_task_certs(body: TaskIn, db: Session) -> None:
+    """SCN-294b（407 号 spec）发单人为这一单加选的资质：只能是类目列出来可加的那几张（去空、去重）。
+
+    不让随便写：写一个平台不审核的证件名，报名的人永远交不上，这一单就永远招不到人。"""
+    if not body.task_certs:
+        return
+    category = service.get_category(db, body.category)
+    offered = list(getattr(category, "optional_certs", None) or [])
+    picked: list[str] = []
+    for c in body.task_certs:
+        c = (c or "").strip()
+        if not c or c in picked:
+            continue
+        if c not in offered:
+            hint = f"这个类目可以加的是{''.join(f'「{o}」' for o in offered)}" if offered else "这个类目没有可以另外加的资质"
+            raise bad_request(f"「{c}」不能加在这一单上：{hint}；不需要就别勾", "task_cert_not_offered")
+        picked.append(c)
+    body.task_certs = picked
+
+
 GUARDIAN_MODES = ("guardian_present", "public_place")
 
 
@@ -375,6 +399,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
     _validate_on_behalf(body)
     _validate_visits(body)
     _validate_minor(body)
+    _validate_task_certs(body, db)
     multi = body.people_needed > 1 or body.days > 1
     publishing = body.publish_now or multi
     if publishing:
@@ -427,7 +452,7 @@ def create_task(body: TaskIn, user: User = Depends(get_current_user), db: Sessio
                     onsite_contact=task.onsite_contact, recipient_consent_at=task.recipient_consent_at,
                     visits_planned=task.visits_planned, visit_checklist=task.visit_checklist,
                     minor_involved=task.minor_involved, guardian_mode=task.guardian_mode,
-                    guardian_consent_at=task.guardian_consent_at,
+                    guardian_consent_at=task.guardian_consent_at, task_certs=list(task.task_certs or []),
                     visibility=task.visibility, circle_id=task.circle_id,
                     work_date=day_, deadline=_day_end_utc(day_) if day_ else None,
                     shift_start=s_start, shift_end=s_end,
@@ -718,6 +743,8 @@ def list_categories(db: Session = Depends(get_db, scope="function")):
     # SCN-181（307 号 spec）要多张资质的类目才带 extra_certs
     return [{"id": c.id, "name": c.name, "required_cert": c.required_cert,
              **({"extra_certs": list(c.extra_certs)} if c.extra_certs else {}),
+             # SCN-294b（407 号 spec）发单人可以加选的资质，有才带
+             **({"optional_certs": list(c.optional_certs)} if c.optional_certs else {}),
              # KB-062b（327 号 spec）运营按类目设了经验时效的才带
              **({"experience_fresh_days": c.experience_fresh_days} if c.experience_fresh_days else {})} for c in rows]
 

@@ -92,6 +92,8 @@ class Task(Base):
     # 选「监护人在场」或「公开场所」；接这类单要持有审核通过的无犯罪记录证明。不存孩子的任何信息
     minor_involved: Mapped[bool] = mapped_column(Boolean, default=False)
     guardian_mode: Mapped[str] = mapped_column(String(20), default="")
+    # SCN-294b（407 号 spec，V434）发单人为这一单加选的资质（类目 optional_certs 里挑）；报名的人要都有
+    task_certs: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
     guardian_consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # SCN-156（278 号 spec）发单人同意接单人把这一单（前后对比照等）放进作品集的时间；撤回则清空
     showcase_consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -146,6 +148,8 @@ class Category(Base):
     extra_certs: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
     # KB-062b（327 号 spec）这个类目的经验多久算「旧」（天）；空 = 平台默认 365 天
     experience_fresh_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # SCN-294b（407 号 spec，V434）发单人可以按这一单的情况加选的资质（例如展台 2 米以上要高处作业证）；空 = 没有可加的
+    optional_certs: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
 
 
 class Application(Base):

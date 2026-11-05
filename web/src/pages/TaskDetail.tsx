@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { OperationKey, minorTaskLine, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, canReboostTask, taskReboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, isUrgentCockpitAlert, scheduleConflictNote, daysLeftNote, parseDaysLeft, projectedFinishLine, timelineBars, timelineBasisLabel, formatDate, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { OperationKey, minorTaskLine, taskCertsLine, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, canReboostTask, taskReboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, isUrgentCockpitAlert, scheduleConflictNote, daysLeftNote, parseDaysLeft, projectedFinishLine, timelineBars, timelineBasisLabel, formatDate, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -112,6 +112,8 @@ export default function TaskDetail() {
         )}
         {/* SCN-144 服务对象是未成年人：安排方式与要求的证明 */}
         {minorTaskLine(task) && <p className="muted" aria-label="未成年人服务">{minorTaskLine(task)}</p>}
+        {/* SCN-294b（407 号 spec）发单人为这一单加选的资质：报名前就要看到 */}
+        {taskCertsLine(task) && <p className="muted" aria-label="这一单另外要的资质">⚠️ {taskCertsLine(task)}</p>}
         {/* SCN-119 替别人发的单：谁都看得到是替别人发的；称呼与到场联系只给成交双方 */}
         {task.on_behalf && (
           <p className="muted" aria-label="服务对象">

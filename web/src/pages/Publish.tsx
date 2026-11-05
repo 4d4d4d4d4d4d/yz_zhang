@@ -1,4 +1,4 @@
-import { ApiError, canRequestErrandReview, categoryCertsText, type Category, GUARDIAN_MODE_LABEL, minorPayload, type GuardianMode, apiErrorText, IP_ASSIGNMENT_LABEL, dayLabel, dayShiftsPayload, priceReferenceLine, localInputToServerTime, type IpAssignment, type PriceReference, type Task } from '@platform/core';
+import { ApiError, canRequestErrandReview, categoryCertsText, keepOfferedCerts, optionalCerts, type Category, GUARDIAN_MODE_LABEL, minorPayload, type GuardianMode, apiErrorText, IP_ASSIGNMENT_LABEL, dayLabel, dayShiftsPayload, priceReferenceLine, localInputToServerTime, type IpAssignment, type PriceReference, type Task } from '@platform/core';
 import { DraftHints } from '../Profiles';
 import { ErrandReviewRequest } from '../ErrandReview';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -40,7 +40,9 @@ export default function Publish() {
     // 替发布方猜归属，对执行方不公平，对含第三方素材的交付物直接就是错的。
     ip_assignment: '',
   });
-  const [categories, setCategories] = useState<Array<Pick<Category, 'name' | 'required_cert' | 'extra_certs'>>>([]);
+  const [categories, setCategories] = useState<Array<Pick<Category, 'name' | 'required_cert' | 'extra_certs' | 'optional_certs'>>>([]);
+  // SCN-294b（407 号 spec）发单人为这一单加选的资质
+  const [taskCerts, setTaskCerts] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [checklist, setChecklist] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -125,6 +127,8 @@ export default function Publish() {
         ...(form.on_behalf ? { on_behalf: true, recipient_label: form.recipient_label, onsite_contact: form.onsite_contact,
           recipient_consented: form.recipient_consented } : {}),
         ...minorPayload(form.minor_involved, form.guardian_mode, form.guardian_consented),
+        // SCN-294b 勾了才带
+        ...(taskCerts.length ? { task_certs: taskCerts } : {}),
         // TZ-063 发出去的是**带偏移**的 ISO：datetime-local 给的是没有偏移的
         // 本地字符串，直发的话服务端会当 UTC，差一个时区
         ...(form.deadline_local ? { deadline: localInputToServerTime(form.deadline_local) } : {}),
@@ -166,7 +170,7 @@ export default function Publish() {
           <label>描述<textarea rows={3} value={form.description} onChange={(e) => set('description', e.target.value)} /></label>
           <div className="row">
             <label className="grow">类目
-              <select value={form.category} onChange={(e) => set('category', e.target.value)} required>
+              <select value={form.category} onChange={(e) => { set('category', e.target.value); setTaskCerts((p) => keepOfferedCerts(p, categories.find((c) => c.name === e.target.value))); }} required>
                 <option value="" disabled>请选择类目</option>
                 {(categories.length ? categories.map((c) => c.name) : ['保洁']).map((c) => <option key={c}>{c}</option>)}
               </select>
@@ -183,6 +187,16 @@ export default function Publish() {
           {/* SCN-181（307 号 spec）要多张资质的类目全部列出（张张都要有） */}
           {categoryCertsText(categories.find((c) => c.name === form.category)) && (
             <p className="muted">⚠️ 该类目为受限类目，仅持{categoryCertsText(categories.find((c) => c.name === form.category))}资质的执行者可接单</p>
+          )}
+          {/* SCN-294b（407 号 spec）这个类目可以按这一单加选的资质：例如展台要上 2 米以上、要接电时勾上 */}
+          {optionalCerts(categories.find((c) => c.name === form.category)).length > 0 && (
+            <fieldset aria-label="这一单另外要的资质">
+              <legend>这一单另外要的资质（报名的人要有审核通过的证件；不需要就别勾）</legend>
+              {optionalCerts(categories.find((c) => c.name === form.category)).map((c) => (
+                <label key={c}><input type="checkbox" checked={taskCerts.includes(c)}
+                  onChange={(e) => setTaskCerts((p) => e.target.checked ? [...p, c] : p.filter((x) => x !== c))} /> {c}</label>
+              ))}
+            </fieldset>
           )}
           <div className="row">
             <label className="grow">预算（元）

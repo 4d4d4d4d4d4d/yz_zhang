@@ -1856,6 +1856,12 @@ function CityAndCategory() {
                     (c.extra_certs ?? []).join('、'));
                   if (v !== null) void act(() => client.updateCategory(c.id, { extra_certs: v.trim() }));
                 }}>其余资质</button>}
+                {/* SCN-294b（407 号 spec）发单人可以按这一单加选的资质 */}
+                <button className="text-link" onClick={() => {
+                  const v = prompt(`「${c.name}」发单人可以按这一单加选哪些资质？（用顿号分隔，例如「高处作业操作证、低压电工作业操作证」；留空 = 没有可加的）`,
+                    (c.optional_certs ?? []).join('、'));
+                  if (v !== null) void act(() => client.updateCategory(c.id, { optional_certs: v.trim() }));
+                }}>可加选资质</button>
                 <button className="text-link" onClick={() => {
                   const v = prompt(`「${c.name}」的经验多久算旧？填天数（30~3650），填 0 回到平台默认 365 天`,
                     String(c.experience_fresh_days ?? 365));

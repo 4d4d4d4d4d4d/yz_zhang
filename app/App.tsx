@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
 import { ProgressBlock, canSeeProgress } from './progressLog';
 import { ReportBlock } from './report';
+import { TaskCertsNote, TaskCertsPicker } from './taskCerts';
 import { VisitsBlock, hasVisits } from './visits';
 import { TaskReboostBlock } from './taskReboost';
 import { PreviousStepInputsBlock, ShareToNextStepsBlock } from './subtaskShares';
@@ -503,6 +504,7 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       {!!shiftLabel(task) && <Text style={styles.mutedLeft} accessibilityLabel="时段">🕘 {shiftLabel(task)}（北京时间）</Text>}
       {/* SCN-144 服务对象是未成年人：安排方式与要求的证明 */}
       {!!minorTaskLine(task) && <Text style={styles.mutedLeft} accessibilityLabel="未成年人服务">{minorTaskLine(task)}</Text>}
+      <TaskCertsNote task={task} />
       {/* SCN-119 替别人发的单：谁都看得到；称呼与到场联系只给成交双方 */}
       {!!task.on_behalf && (
         <Text style={styles.mutedLeft} accessibilityLabel="服务对象">
@@ -1035,6 +1037,8 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
   const [minor, setMinor] = useState(false);
   const [guardianMode, setGuardianMode] = useState<GuardianMode | ''>('');
   const [guardianOk, setGuardianOk] = useState(false);
+  // SCN-294b（407 号 spec）发单人为这一单加选的资质
+  const [taskCerts, setTaskCerts] = useState<string[]>([]);
   // SCN-120（176 号 spec）一单多次上门：上门几次、每次要做的事
   const [visits, setVisits] = useState(prefill?.visits ?? '');
   const [checklist, setChecklist] = useState(prefill?.checklist ?? '');
@@ -1091,6 +1095,8 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
           )}
         </>
       )}
+      {/* SCN-294b（407 号 spec）这个类目可以按这一单加选的资质 */}
+      {!project && <TaskCertsPicker client={client} category={category} value={taskCerts} onChange={setTaskCerts} />}
       {/* SCN-120 一单多次上门：接单人每次按清单回报 */}
       {!project && (
         <>
@@ -1184,6 +1190,7 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
             ...(!project && checklist.trim() ? { visit_checklist: checklist.split(/[、,，]/).map((x) => x.trim()).filter(Boolean) } : {}),
             ...(onBehalf ? { on_behalf: true, recipient_label: recipient, onsite_contact: onsite, recipient_consented: consented } : {}),
             ...minorPayload(minor, guardianMode, guardianOk),
+            ...(taskCerts.length ? { task_certs: taskCerts } : {}),
             // 项目先存草稿：拆好、说清每一步谁来做之后，只有能开工的步骤发布出去
             ...(!project && offline && pos
               ? { is_remote: false, city: city.trim(), address_hint: addressHint.trim(), lat: pos.lat, lng: pos.lng }

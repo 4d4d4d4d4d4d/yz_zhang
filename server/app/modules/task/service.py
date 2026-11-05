@@ -48,6 +48,8 @@ SWIM_CERT = "游泳社会体育指导员证书"
 GAS_CERT = "燃气具安装维修从业资格证明"
 # 制冷与空调作业属特种作业（特种作业目录），加氟、焊管、修制冷系统要持操作证——第五十四轮场景发掘（397 号 spec，V424）
 REFRIGERATION_CERT = "制冷与空调作业操作证"
+# SCN-294b（407 号 spec）小型及以上无人机要操控员执照；消费级轻型机多数不要，所以做成发单人按这一单加选
+DRONE_PILOT_CERT = "民用无人机操控员执照"
 ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助老陪伴"},
                     {"name": "陪练看护", "required_cert": MINOR_CARE_CERT},
                     # 「翻译」——第七轮场景发掘的自由译者服务包的发单模板与去处（259 号 spec，V286）
@@ -152,9 +154,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「网店代发货打包」「用户访谈」——第五十六轮场景发掘（400 号 spec，V427）
                     {"name": "网店代发货打包"}, {"name": "用户访谈"},
                     # 「无人机航拍」「电脑组装与重装」——第五十七轮场景发掘（403 号 spec，V430）
-                    {"name": "无人机航拍"}, {"name": "电脑组装与重装"},
+                    {"name": "无人机航拍", "optional_certs": [DRONE_PILOT_CERT]}, {"name": "电脑组装与重装"},
                     # 「展台搭建」「外卖店铺代运营」——第五十八轮场景发掘（406 号 spec，V433）
-                    {"name": "展台搭建"}, {"name": "外卖店铺代运营"}]
+                    {"name": "展台搭建", "optional_certs": [HEIGHT_WORK_CERT, ELECTRICIAN_CERT]}, {"name": "外卖店铺代运营"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
@@ -174,8 +176,12 @@ def seed_categories(db: Session) -> None:
         for c in SEED_CATEGORIES:
             db.add(Category(**c))
     for c in ADDED_CATEGORIES:
-        if not db.query(Category.id).filter(Category.name == c["name"]).first():
+        row = db.query(Category).filter(Category.name == c["name"]).first()
+        if row is None:
             db.add(Category(**c))
+        elif c.get("optional_certs") and not row.optional_certs:
+            # SCN-294b（407 号 spec）已经在库里的类目补上可加选的资质；运营改过的不动
+            row.optional_certs = list(c["optional_certs"])
     if not db.query(City).first():
         for name in SEED_CITIES:
             db.add(City(name=name))
@@ -212,13 +218,17 @@ def category_certs(category) -> list[str]:
 
 
 def check_category_qualification(db: Session, task, user) -> None:
-    """ACC-022 受限类目准入（读类目表，运营后台可配）。SCN-181 类目可以要多张，张张都要有。"""
+    """ACC-022 受限类目准入（读类目表，运营后台可配）。SCN-181 类目可以要多张，张张都要有。
+    SCN-294b（407 号 spec）发单人为这一单加选的资质（task_certs）也要都有。"""
     category = get_category(db, task.category)
     required = category_certs(category)
     if not required and getattr(task, "minor_involved", False):
         required = [MINOR_CARE_CERT]        # SCN-144 服务对象是未成年人的单，不论哪个类目都要这份证明
+    task_certs = [c for c in (getattr(task, "task_certs", None) or []) if c and c not in required]
+    required = [*required, *task_certs]
     if not required:
         return
+    scope = "这一单" if task_certs else "该类目"
     # CERT-001/005 读的是**已核准且未过期**的资质，不是 user.certifications 里
     # 有没有这个名字。改造前那个字段是用户自己 POST 进去的，这道门一直是虚的。
     from app.modules.account import cert_service
@@ -231,11 +241,11 @@ def check_category_qualification(db: Session, task, user) -> None:
         others = sorted(cert_service.cert_aliases(required[0], db) - {required[0]})
         alias = f"（持{''.join(f'「{c}」' for c in others)}也可以）" if others else ""
         raise bad_request(
-            f"该类目需「{required[0]}」职业资质{alias}，请提交证件影像并通过平台核验后接单",
+            f"{scope}需「{required[0]}」职业资质{alias}，请提交证件影像并通过平台核验后接单",
             "certification_required",
         )
     raise bad_request(
-        f"该类目需{''.join(f'「{c}」' for c in required)}{len(required)} 项职业资质，你还缺"
+        f"{scope}需{''.join(f'「{c}」' for c in required)}{len(required)} 项职业资质，你还缺"
         f"{''.join(f'「{c}」' for c in missing)}：请提交证件影像并通过平台核验后接单",
         "certification_required",
     )
