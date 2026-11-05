@@ -211,6 +211,7 @@ ADMIN_EXEMPT: dict[str, str] = {
     "/admin/jobs/reconcile": "日终对账由调度器执行（32 号调度表里在册），不靠人点",
     "/admin/jobs/remind-review-queues": "队列催办由调度器按 32 号调度表执行，不该由界面触发",
     "/admin/jobs/escalate-tickets": "工单超时升级由调度器按调度表每小时执行（150 号），不该由界面触发",
+    "/admin/jobs/escalate-reports": "举报超时叫醒合规由调度器按调度表每小时执行（402 号），不该由界面触发",
     "/admin/jobs/send-scheduled-announcements": "定时公告由调度器每 5 分钟发出（151 号），不该由界面触发",
     "/admin/jobs/remind-legal-reviews": "法律条目复核提醒由调度器每天发出（169 号），不该由界面触发",
     "/admin/jobs/remind-holiday-import": "放假安排导入提醒由调度器每天检查、每周最多发一次（293 号），不该由界面触发",

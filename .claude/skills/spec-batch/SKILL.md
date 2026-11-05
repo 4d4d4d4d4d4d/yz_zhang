@@ -31,7 +31,8 @@ description: Run one spec-driven batch in this repo end to end — pick the next
 - 对象级授权：`server/tests/test_object_level_authz.py` 的 `OWNERSHIP_RULES`
 - 补救入口：新的祈使句错误码进 `server/tests/test_remedy_ui.py`
 - 注销处置与数据导出：`app/modules/account/deletion.py`、`/users/me/export`
-- 定时任务：`app/core/jobs.py`
+- 定时任务：`app/core/jobs.py`；它的 `/admin/jobs/...` 端点还要进 `server/tests/test_admin_surface_coverage.py`
+  的 `ADMIN_EXEMPT`（或在后台接上入口）——V429 漏了这一步，到全量回归才红
 - SDK 方法分诊：两端都还没调用的，进 `server/tests/test_sdk_method_triage.py`
 - 发单拦截新类别（354 号 spec）：`errand.KIND_CODES`、i18n 文案、复核类别名 `errand_reviews.KIND_LABEL`、
   SDK `ERRAND_REVIEW_CODES` 四处一起登记，`server/tests/test_errand_registry.py` 核对
