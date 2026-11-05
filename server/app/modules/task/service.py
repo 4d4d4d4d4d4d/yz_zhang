@@ -217,18 +217,42 @@ def category_certs(category) -> list[str]:
     return out
 
 
-def check_category_qualification(db: Session, task, user) -> None:
-    """ACC-022 受限类目准入（读类目表，运营后台可配）。SCN-181 类目可以要多张，张张都要有。
-    SCN-294b（407 号 spec）发单人为这一单加选的资质（task_certs）也要都有。"""
-    category = get_category(db, task.category)
-    required = category_certs(category)
+def task_required_certs(db: Session, task) -> tuple[list[str], bool]:
+    """接这一单要的全部资质，以及其中有没有发单人加选的（报名准入与推荐共用这一份，不各算各的）。
+
+    类目要的（SCN-181 可多张）；没有时服务对象是未成年人要无犯罪记录证明（SCN-144）；
+    再加发单人为这一单加选的（SCN-294b，407 号）。"""
+    required = category_certs(get_category(db, task.category))
     if not required and getattr(task, "minor_involved", False):
         required = [MINOR_CARE_CERT]        # SCN-144 服务对象是未成年人的单，不论哪个类目都要这份证明
     task_certs = [c for c in (getattr(task, "task_certs", None) or []) if c and c not in required]
-    required = [*required, *task_certs]
+    return [*required, *task_certs], bool(task_certs)
+
+
+def holders_of(db: Session, user_ids: list[int], required: list[str]) -> set[int]:
+    """SCN-294d（408 号 spec）这些人里，张张资质都有（审核通过、未过期、认别名）的是谁——一次查完，不按人逐个查。"""
+    if not required or not user_ids:
+        return set(user_ids)
+    from app.modules.account import cert_service
+    from app.modules.account.models_cert import CertificationApplication
+
+    now = cert_service.utcnow()
+    have: dict[int, set[str]] = {}
+    for r in (db.query(CertificationApplication)
+              .filter(CertificationApplication.user_id.in_(user_ids), CertificationApplication.status == "approved").all()):
+        if r.expires_at is None or r.expires_at > now:
+            have.setdefault(r.user_id, set()).add(r.name)
+    alias = {c: cert_service.cert_aliases(c, db) for c in required}
+    return {uid for uid in user_ids if all(alias[c] & have.get(uid, set()) for c in required)}
+
+
+def check_category_qualification(db: Session, task, user) -> None:
+    """ACC-022 受限类目准入（读类目表，运营后台可配）。SCN-181 类目可以要多张，张张都要有。
+    SCN-294b（407 号 spec）发单人为这一单加选的资质（task_certs）也要都有。"""
+    required, added = task_required_certs(db, task)
     if not required:
         return
-    scope = "这一单" if task_certs else "该类目"
+    scope = "这一单" if added else "该类目"
     # CERT-001/005 读的是**已核准且未过期**的资质，不是 user.certifications 里
     # 有没有这个名字。改造前那个字段是用户自己 POST 进去的，这道门一直是虚的。
     from app.modules.account import cert_service

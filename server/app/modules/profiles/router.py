@@ -29,6 +29,8 @@ class DraftIn(BaseModel):
     deadline: UtcDatetime | None = None
     required_skills: list[str] = Field(default_factory=list, max_length=20)
     acceptance_criteria: list[str] = Field(default_factory=list, max_length=20)
+    # SCN-294d（408 号 spec）发单人为这一单加选的资质：风险里一并说「没有的人报不了名」；不传与以前一样
+    task_certs: list[str] = Field(default_factory=list, max_length=5)
 
 
 @router.post("/profiles/task-draft")

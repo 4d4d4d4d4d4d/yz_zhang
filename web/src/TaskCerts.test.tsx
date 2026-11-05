@@ -49,6 +49,9 @@ describe('SCN-294b 发单人按这一单加选资质（407 号 spec）', () => {
     const again = await screen.findByLabelText('这一单另外要的资质');
     expect((within(again).getByLabelText(/高处作业操作证/) as HTMLInputElement).checked).toBe(false);
     fireEvent.click(within(again).getByLabelText(/低压电工作业操作证/));
+    // SCN-294d（408 号 spec）画像草稿也带上加选资质，风险里会说「没有的人报不了名」
+    await waitFor(() => expect(calls.some((c) => c.path === '/profiles/task-draft'
+      && JSON.stringify(c.body?.task_certs) === JSON.stringify(['低压电工作业操作证']))).toBe(true), { timeout: 3000 });
     fireEvent.click(screen.getByLabelText(/线上任务/));
     fireEvent.submit(title.closest('form')!);
     await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks')).toBeTruthy());

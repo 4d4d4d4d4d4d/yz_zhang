@@ -3508,6 +3508,8 @@ export interface TaskDraftInput {
   deadline?: string | null;
   required_skills?: string[];
   acceptance_criteria?: string[];
+  /** SCN-294d（408 号 spec）发单人为这一单加选的资质：风险里会说「没有的人报不了名」 */
+  task_certs?: string[];
 }
 export interface CapabilityCategory {
   category: string;

@@ -547,11 +547,13 @@ export class PlatformClient {
 
   // ---- PROF-100 任务画像与能力画像（126 号 spec） ----
   /** 发布页实时调用：还缺什么、价格在什么位置、有什么风险（不落库） */
+  // SCN-294d（408 号 spec）task_certs：发单人加选的资质；没加时是 undefined，JSON 里不出现。
+  // 这里只发列出来的字段——新加字段要记得加进来（原来会被悄悄丢掉）
   taskDraftProfile(draft: TaskDraftInput) {
     return this.request<TaskProfile>('POST', '/profiles/task-draft', {
       title: draft.title, description: draft.description, category: draft.category, budget_cents: draft.budget_cents,
       is_remote: draft.is_remote, city: draft.city, lat: draft.lat, deadline: draft.deadline,
-      required_skills: draft.required_skills, acceptance_criteria: draft.acceptance_criteria,
+      required_skills: draft.required_skills, acceptance_criteria: draft.acceptance_criteria, task_certs: draft.task_certs,
     });
   }
   taskProfile(taskId: number) { return this.request<TaskProfileView>('GET', `/tasks/${taskId}/profile`); }

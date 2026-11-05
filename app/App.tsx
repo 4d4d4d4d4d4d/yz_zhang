@@ -1063,7 +1063,8 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
       <TextInput style={styles.input} placeholder="预算（元）" value={budget} onChangeText={setBudget} keyboardType="numeric" />
       <PriceRefBlock client={client} category={category} />
       {/* PROF-101 边写边提示还缺什么（126 号 spec） */}
-      <DraftHints client={client} draft={{ title, category, budget_cents: Math.round(parseFloat(budget || '0') * 100), is_remote: !offline }} />
+      <DraftHints client={client} draft={{ title, category, budget_cents: Math.round(parseFloat(budget || '0') * 100), is_remote: !offline,
+        ...(taskCerts.length ? { task_certs: taskCerts } : {}) }} />
       {!project && (
         <>
           <TextInput style={styles.input} accessibilityLabel="需要几个人" placeholder="需要几个人" value={people} onChangeText={setPeople} keyboardType="numeric" />

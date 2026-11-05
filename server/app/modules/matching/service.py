@@ -250,6 +250,14 @@ def recommend(db: Session, task, limit: int = 10) -> list[dict]:
         u for u in candidates
         if (task.creator_id, u.id) not in blocked_pairs and (u.id, task.creator_id) not in blocked_pairs
     ]
+    # SCN-294d（408 号 spec）这一单要资质的，只推荐张张都有的人：推荐一个报不了名的人，
+    # 发单人去邀请、对方去报名，两头都白跑（类目资质、未成年人证明、发单人加选的，与报名准入同一份）
+    from app.modules.task.service import holders_of, task_required_certs
+
+    required, _ = task_required_certs(db, task)
+    if required:
+        ok = holders_of(db, [u.id for u in candidates], required)
+        candidates = [u for u in candidates if u.id in ok]
     weights = get_weights(db)
     # CIR-010 同圈信任加成：发布者所在圈层的活跃成员集合
     from app.modules.circle.models import CircleMember
@@ -287,6 +295,8 @@ def recommend(db: Session, task, limit: int = 10) -> list[dict]:
         )
         # MATCH-002 可解释推荐理由
         reasons = []
+        if required:
+            reasons.append(f"持{''.join(f'「{c}」' for c in required)}")
         if user.id in same_circle_users:
             total += 0.05  # CIR-010 同圈信任加成
             reasons.append("同圈成员")

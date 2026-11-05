@@ -164,6 +164,8 @@ export default function Publish() {
           title: form.title, description: form.description, category: form.category,
           budget_cents: Math.round(Number(form.budget_yuan || 0) * 100), is_remote: form.is_remote, city: form.city,
           lat: form.is_remote ? null : Number(form.lat), deadline: form.deadline_local ? localInputToServerTime(form.deadline_local) : null,
+          // SCN-294d（408 号 spec）勾了加选资质，风险里一并说「没有的人报不了名」
+          ...(taskCerts.length ? { task_certs: taskCerts } : {}),
         }} />
         <form className="form" onSubmit={submit}>
           <label>标题<input value={form.title} onChange={(e) => set('title', e.target.value)} required minLength={2} /></label>

@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { PlatformClient } from '@platform/core';
 import { useState } from 'react';
 import { TaskCertsNote, TaskCertsPicker } from './taskCerts';
+import { PublishScreen } from './App';
 
 const CATS = [
   { id: 1, name: '展台搭建', required_cert: '', optional_certs: ['高处作业操作证', '低压电工作业操作证'] },
@@ -48,5 +49,28 @@ describe('SCN-294b App 加选资质（407 号 spec）', () => {
   it('详情写明这一单另外要什么证；没加不画', () => {
     render(<TaskCertsNote task={{ task_certs: ['民用无人机操控员执照'] }} />);
     expect(screen.getByLabelText('这一单另外要的资质').props.children.join('')).toContain('「民用无人机操控员执照」');
+  });
+});
+
+describe('SCN-294b/d App 发布页（407 / 408 号 spec）', () => {
+  it('勾了加选资质：画像草稿与发单请求都带上', async () => {
+    const calls: Array<{ method: string; path: string; body: Record<string, unknown> | null }> = [];
+    const fetchImpl = (async (url: string, init?: { method?: string; body?: string }) => {
+      const path = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+      const method = init?.method ?? 'GET';
+      calls.push({ method, path, body: init?.body ? JSON.parse(init.body) : null });
+      const body = path === '/categories' ? CATS : method === 'POST' && path === '/tasks' ? { id: 9, title: 'x', status: 'published' } : [];
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    }) as unknown as typeof fetch;
+    const done = jest.fn();
+    render(<PublishScreen client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })} onDone={done} category="展台搭建" />);
+    fireEvent.press(await screen.findByLabelText('加选资质：高处作业操作证'));
+    await waitFor(() => expect(calls.some((c) => c.path === '/profiles/task-draft'
+      && JSON.stringify(c.body?.task_certs) === JSON.stringify(['高处作业操作证']))).toBe(true), { timeout: 3000 });
+    fireEvent.changeText(screen.getByPlaceholderText(/标题/), '展台背板');
+    fireEvent.press(screen.getAllByText(/^○ /)[0]);
+    fireEvent.press(screen.getByText('发布（线上任务）'));
+    await waitFor(() => expect(done).toHaveBeenCalled());
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks')!.body!.task_certs).toEqual(['高处作业操作证']);
   });
 });

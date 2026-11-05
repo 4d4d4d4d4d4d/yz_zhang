@@ -132,6 +132,10 @@ def task_profile(db: Session, t: dict) -> dict:
     certs = category_certs(cat)
     if certs:
         risks.append({"kind": "cert", "text": f"这个类目要求{''.join(f'「{c}」' for c in certs)}资质，没有的人报不了名"})
+    # SCN-294d（408 号 spec）发单人为这一单加选的资质同样会挡人：写的时候就说清
+    added = [c for c in (t.get("task_certs") or []) if c and c not in certs]
+    if added:
+        risks.append({"kind": "cert", "text": f"这一单另外要{''.join(f'「{c}」' for c in added)}，没有的人报不了名，能接的人会少一些"})
     for kind, (pat, msg) in RISK_WORDS.items():
         if pat.search(text) and not (kind == "onsite_home" and remote):
             risks.append({"kind": kind, "text": msg})
@@ -176,7 +180,7 @@ def task_fields(task) -> dict:
     return {"title": task.title, "description": task.description, "category": task.category,
             "budget_cents": task.budget_cents, "is_remote": task.is_remote, "city": task.city, "lat": task.lat,
             "deadline": task.deadline, "required_skills": task.required_skills,
-            "acceptance_criteria": task.acceptance_criteria}
+            "acceptance_criteria": task.acceptance_criteria, "task_certs": list(task.task_certs or [])}
 
 
 # ------------------------------------------------------------------ 能力画像（PROF-105~107）
