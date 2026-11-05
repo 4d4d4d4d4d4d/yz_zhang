@@ -156,7 +156,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「无人机航拍」「电脑组装与重装」——第五十七轮场景发掘（403 号 spec，V430）
                     {"name": "无人机航拍", "optional_certs": [DRONE_PILOT_CERT]}, {"name": "电脑组装与重装"},
                     # 「展台搭建」「外卖店铺代运营」——第五十八轮场景发掘（406 号 spec，V433）
-                    {"name": "展台搭建", "optional_certs": [HEIGHT_WORK_CERT, ELECTRICIAN_CERT]}, {"name": "外卖店铺代运营"}]
+                    {"name": "展台搭建", "optional_certs": [HEIGHT_WORK_CERT, ELECTRICIAN_CERT]}, {"name": "外卖店铺代运营"},
+                    # 「居家适老化改造」「社区团购分拣配送」——第五十九轮场景发掘（409 号 spec，V436）
+                    {"name": "居家适老化改造"}, {"name": "社区团购分拣配送"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
