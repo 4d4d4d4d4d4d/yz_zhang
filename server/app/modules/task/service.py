@@ -180,7 +180,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     {"name": "太阳能热水器清洗维修", "optional_certs": [HEIGHT_WORK_CERT, ELECTRICIAN_CERT]},
                     {"name": "老录像带转数字"},
                     # 「新生儿上门摄影」「儿童居家安全防护安装」——第六十九轮场景发掘（429 号 spec，V456）
-                    {"name": "新生儿上门摄影"}, {"name": "儿童居家安全防护安装"}]
+                    {"name": "新生儿上门摄影"}, {"name": "儿童居家安全防护安装"},
+                    # 「淋浴房安装」「智能马桶安装」——第七十轮场景发掘（430 号 spec，V457）；后者新拉插座可加选电工证
+                    {"name": "淋浴房安装"}, {"name": "智能马桶安装", "optional_certs": [ELECTRICIAN_CERT]}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
