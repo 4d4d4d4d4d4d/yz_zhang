@@ -7,11 +7,11 @@
 //
 // 规则都在服务端与 SDK：下线是服务端吊销那个会话；券的写法用 SDK 的 couponValueText，与网页一致。
 import {
-  apiErrorText, asList, COUPON_STATUS_LABEL, couponTermsText, couponValueText, formatDate, formatDateTime,
-  type CouponTemplate, type MyCoupon, type Notice, type PlatformClient,
+  apiErrorText, asList, COUPON_STATUS_LABEL, couponTermsText, couponValueText, formatDate, formatDateTime, newcomerLine,
+  prefLabel, referralLine, type CouponTemplate, type MyCoupon, type Notice, type NotificationPrefsView, type PlatformClient,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 
 type Session = { id: number; device: string; created_at: string };
 
@@ -129,6 +129,85 @@ export function NoticesList({ client, onChanged }: { client: PlatformClient; onC
           <Text style={s.muted}>{n.body}</Text>
         </TouchableOpacity>
       ))}
+    </View>
+  );
+}
+
+/**
+ * NTF-065 通知开关（APP-074d，420 号 spec）。「哪些关不掉」来自服务端（资金类与错过就无法挽回的几条），
+ * 界面里不抄一份；关不掉的类目服务端拒绝时，理由原样显示。
+ */
+export function NotificationPrefsBlock({ client }: { client: PlatformClient }) {
+  const [view, setView] = useState<NotificationPrefsView | null>(null);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    const v = await client.notificationPrefs().catch(() => null);
+    setView(v && v.prefs && typeof v.prefs === 'object' ? v : null);
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+
+  if (!view) return null;
+  return (
+    <View style={s.card}>
+      <Text style={s.title}>通知偏好</Text>
+      {!!error && <Text style={s.error}>{error}</Text>}
+      {Object.entries(view.prefs).map(([category, enabled]) => (
+        <View key={category} style={s.row}>
+          <Text style={{ flex: 1 }}>{prefLabel(category)}</Text>
+          <Switch testID={`pref-${category}`} value={!!enabled} onValueChange={async (v) => {
+            setError('');
+            try {
+              await client.setNotificationPref(category, v);
+              await load();
+            } catch (e) {
+              setError(apiErrorText(e));
+            }
+          }} />
+        </View>
+      ))}
+      {Array.isArray(view.always_on) && view.always_on.length > 0 && (
+        <>
+          <Text style={s.muted}>
+            以下通知不受开关影响：资金类（{asList<string>(view.always_on_categories).join('、')}）一律送达，另外这几条错过就无法挽回——
+          </Text>
+          {view.always_on.map((a) => (
+            <Text key={`${a.category}/${a.title}`} style={s.muted}>· {a.title}：{a.why}</Text>
+          ))}
+        </>
+      )}
+    </View>
+  );
+}
+
+type Newcomer = { steps: Array<{ key: string; label: string; done: boolean }>; finished: number; total: number; completed: boolean };
+type Referrals = { referral_code: string; invited_count: number; achieved_count: number; earned_cents: number };
+
+/** GRW 新人任务与邀请好友（APP-074d）：新人做完的步骤打钩；邀请码与战绩。 */
+export function GrowthBlock({ client }: { client: PlatformClient }) {
+  const [newcomer, setNewcomer] = useState<Newcomer | null>(null);
+  const [ref, setRef] = useState<Referrals | null>(null);
+  useEffect(() => {
+    void client.newcomerProgress().then((n) => setNewcomer(n && Array.isArray(n.steps) ? n : null)).catch(() => setNewcomer(null));
+    void client.myReferrals().then((r) => setRef(r && typeof r.referral_code === 'string' ? r : null)).catch(() => setRef(null));
+  }, [client]);
+
+  const head = newcomerLine(newcomer);
+  if (!head && !ref) return null;
+  return (
+    <View style={s.card} testID="growth">
+      {!!head && newcomer && (
+        <>
+          <Text style={s.title}>{head}</Text>
+          {newcomer.steps.map((x) => <Text key={x.key} style={s.muted}>{x.done ? '✅' : '⬜️'} {x.label}</Text>)}
+        </>
+      )}
+      {ref && (
+        <>
+          <Text style={s.title}>邀请好友</Text>
+          <Text selectable>我的邀请码：{ref.referral_code}</Text>
+          {!!referralLine(ref) && <Text style={s.muted}>{referralLine(ref)}</Text>}
+        </>
+      )}
     </View>
   );
 }

@@ -33,7 +33,7 @@ import { ExperienceToolsBlock } from './experience';
 import { MessagesScreen } from './MessagesAndInvites';
 import { MySpaceScreen, PublicSpaceScreen, SpacesDiscoverScreen } from './spaces';
 import { SearchScreen } from './search';
-import { CouponsBlock, DeviceSessionsBlock, NoticesList } from './accountExtras';
+import { CouponsBlock, DeviceSessionsBlock, GrowthBlock, NoticesList, NotificationPrefsBlock } from './accountExtras';
 import { SUB_SCREEN_LABEL, SubScreenHost, type SubScreen } from './TeamCoopDev';
 import { VideoFeedScreen } from './VideoFeed';
 import {
@@ -1368,6 +1368,8 @@ function NoticesScreen({ client, onChanged }: { client: PlatformClient; onChange
   // APP-074（418 号 spec）原来不分已读未读、也标不了已读：看不出哪些是新的催办与临期提醒
   return (
     <ScrollView contentContainerStyle={styles.center}>
+      {/* NTF-065 通知开关（APP-074d，420 号 spec）：服务端那张「关不掉」表的前提是用户能关掉其余的 */}
+      <NotificationPrefsBlock client={client} />
       <NoticesList client={client} onChanged={onChanged} />
     </ScrollView>
   );
@@ -1503,6 +1505,8 @@ function MeScreen({ client, me, refresh, onLogout }: {
       }} />
       {/* ACC-005 登录设备（APP-074，418 号 spec）：不认识的设备能在手机上踢下线 */}
       <DeviceSessionsBlock client={client} />
+      {/* GRW 新人任务与邀请好友（APP-074d，420 号 spec） */}
+      <GrowthBlock client={client} />
 
       {/* APP-069 团队 / 合作体 / 开发者。三条线此前**只有网页看得见**，
           而 V92 刚给团队审批加了通知——通知把人叫来、他点进去无路可走，
