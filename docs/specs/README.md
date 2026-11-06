@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 427 | 第六十七轮场景发掘：民宿退房保洁、露营搭建 | [427-scenario-round-67.md](./427-scenario-round-67.md) | P0 |
 | 426 | 发布后加上加选资质的界面入口 | [426-add-task-cert-ui.md](./426-add-task-cert-ui.md) | P0 |
 | 425 | 第六十六轮场景发掘：代祭扫、办公设备维修 | [425-scenario-round-66.md](./425-scenario-round-66.md) | P0 |
 | 424 | 第六十五轮场景发掘：上门取送洗衣、老人助餐送餐 | [424-scenario-round-65.md](./424-scenario-round-65.md) | P0 |
