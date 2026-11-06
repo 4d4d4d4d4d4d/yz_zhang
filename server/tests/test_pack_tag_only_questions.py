@@ -72,3 +72,35 @@ def test_tag_only_questions_really_need_the_tags():
             if (s := score_without_tags(key, q, title)) >= MIN_RELATED]
     assert not weak, ("这些提问去掉标签照样答得上，标签删了测试也不会红；换成只在标签里、和正文标题没有两字重叠的说法：\n"
                       + "\n".join(f"  {f}：「{q}」→「{t}」不靠标签也得 {s} 分" for f, q, t, s in weak))
+
+
+def pinned_score(k: dict, q: str) -> int:
+    """PACK-093（422 号 spec）只拿掉问法命中的那个标签、其余标签留着，这条知识还得几分。
+    （问法里直接出现的标签已经全拿掉了，「标签整个在问题里」的加分在这里恒为 0，不再算。）"""
+    rest = [t for t in k["tags"] if not (len(t) >= 2 and t in q)]
+    return psvc.knowledge_score(k["title"], k["body"], rest, terms(expand_query(q, None)), q)
+
+
+def score_without_pinned_tag(key: str, q: str, title: str) -> int:
+    d = json.loads((psvc.SEEDS / f"{key}.json").read_text(encoding="utf-8"))
+    return pinned_score(next(k for k in d["knowledge"] if k["title"] == title), q)
+
+
+def test_tag_only_questions_need_that_one_tag():
+    """PACK-093（422 号 spec，V449）：上面那条把标签**全拿掉**再算；逐个标签变异却只删一个。
+    421 号「话筒没电」删掉后，同一条知识的另一个标签「没电了」的切片补上了，测试不红。
+    这里只拿掉命中的那一个，其余标签留着，还够得上「相关」就红。首跑 282 条里查出存量 1 条（「跑腿费怎么收」），已换标签。"""
+    weak = [(f, q, title, s) for f, key, q, title in tag_only_questions()
+            if (s := score_without_pinned_tag(key, q, title)) >= MIN_RELATED]
+    assert not weak, ("这些提问只拿掉命中的标签、靠别的标签照样答得上，删这个标签测试也不会红；"
+                      "换掉和它重叠的那个标签，或换一个问法：\n"
+                      + "\n".join(f"  {f}：「{q}」→「{t}」靠别的标签也得 {s} 分" for f, q, t, s in weak))
+
+
+def test_the_one_tag_check_sees_an_overlapping_tag():
+    """扫描器自己的红验：给一条知识加一个和问法有切片重叠的标签，必须被查出来。"""
+    from app.modules.notebook.service import MIN_RELATED as M
+
+    k = {"title": "设备清单、型号、数量和备用写清", "body": "报价单列清音箱、调音台、话筒、灯具的型号和数量，备用话筒和电池写进去。"}
+    assert pinned_score({**k, "tags": ["断音", "话筒没电"]}, "话筒没电") < M
+    assert pinned_score({**k, "tags": ["没电了", "话筒没电"]}, "话筒没电") >= M

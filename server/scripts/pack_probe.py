@@ -79,6 +79,11 @@ def probe(d, q: str, want: str, tag_only: bool, assistant: str | None = None) ->
         tags = [t for t in k.tags if len(t) >= 2 and t in q]
         if len(tags) != 1:
             problems.append(f"命中的标签是 {tags or '没有'}，要正好一个")
+        # PACK-093（422 号 spec）只拿掉命中的那一个、别的标签留着：别的标签的切片补得上，逐个标签变异就测不出来
+        rest = [t for t in k.tags if t not in tags]
+        others = psvc.knowledge_score(k.title, k.body, rest, terms(expand_query(q, None)), q)
+        if tags and others >= MIN_RELATED:
+            problems.append(f"只拿掉「{tags[0]}」、靠别的标签也得 {others} 分，换掉和它重叠的标签")
     if problems:
         return False, "；".join(problems)
     rank = titles.index(k.title) + 1
