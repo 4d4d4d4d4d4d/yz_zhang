@@ -185,9 +185,47 @@ def tag_bonus(tags: list[str], q: str) -> int:
     return sum(TAG_IN_QUESTION for t in dict.fromkeys(tags) if len(t) >= 2 and t.lower() in low)
 
 
+# PACK-092（416 号 spec）问题的主题打头、后面粘着「要」「能」之类（「楼下要拦」「打药要注意」）：
+# 整串不命中，二字切片里只有打头那片命中，不到「一半且至少 2 片」就整组不算，明明知识标题里就有「楼下」「打药」。
+# 情态词前面那段就是主题：它整段出现在**标题**里（三字以上的，至少两片二字在标题里），这条知识加一次分。
+# 只看标题、只看情态词前面那段：正文里随处可见的「客户」「孩子」不算，免得把只靠标签的口语也接住。
+# 只用于场景包；个人知识库的检索不变。
+_MODAL = re.compile(r"(?<=[一-鿿]{2})(?:可以|应该|要|能|该|会)(?=[一-鿿])")
+TOPIC_IN_TITLE = 3
+
+
+def topics(q: str) -> list[str]:
+    """问题里每一串汉字在第一个情态词前面的那段（至少两个字）；没有情态词的串不算。"""
+    from app.modules.notebook.service import _FILLER_RE
+
+    out = []
+    for tok in re.findall(r"[一-鿿]+", _FILLER_RE.sub(" ", q.lower())):
+        m = _MODAL.search(tok)
+        if m:                              # 正则已要求情态词前面至少两个汉字
+            out.append(tok[:m.start()])
+    return list(dict.fromkeys(out))
+
+
+def topic_bonus(title: str, q: str) -> int:
+    low = title.lower()
+    total = 0
+    for t in topics(q):
+        bigrams = [t[i:i + 2] for i in range(len(t) - 1)]
+        if t in low or (len(bigrams) >= 2 and sum(1 for b in bigrams if b in low) >= 2):
+            total += TOPIC_IN_TITLE
+    return total
+
+
+def knowledge_score(title: str, body: str, tags: list[str], ts: list[tuple[str, int, int]], q: str = "") -> int:
+    """一条知识对这个问题的分（不含「问题里直接出现标签」的加分）。助手问答、离线试问法与只靠标签的闸门共用。"""
+    from app.modules.notebook.service import score
+
+    return score(SimpleNamespace(title=title, body=body, tags=tags, url=""), ts) + topic_bonus(title, q)
+
+
 def _knowledge_hits(d: schema.PackDef, keys: list[str], q: str,
                     db: Session | None = None) -> list[tuple[schema.KnowledgeDef, int]]:
-    from app.modules.notebook.service import MIN_RELATED, score, terms
+    from app.modules.notebook.service import MIN_RELATED, terms
     from app.modules.skills.service import expand_query
 
     # SCN-105 与个人知识库一样，问题里的技能概念展开成「规范名 + 别名」再检索（135 号的概念表）
@@ -195,7 +233,7 @@ def _knowledge_hits(d: schema.PackDef, keys: list[str], q: str,
     pool = [k for k in d.knowledge if not keys or k.key in keys]
     scored = []
     for k in pool:
-        s = score(SimpleNamespace(title=k.title, body=k.body, tags=k.tags, url=""), ts) + tag_bonus(k.tags, q)
+        s = knowledge_score(k.title, k.body, k.tags, ts, q) + tag_bonus(k.tags, q)
         if s >= MIN_RELATED:
             scored.append((k, s))
     scored.sort(key=lambda x: -x[1])

@@ -16,9 +16,8 @@ from __future__ import annotations
 
 import json
 import sys
-from types import SimpleNamespace
 
-from app.modules.notebook.service import MIN_RELATED, score, terms
+from app.modules.notebook.service import MIN_RELATED, terms
 from app.modules.packs import schema
 from app.modules.packs import service as psvc
 from app.modules.skills.service import expand_query
@@ -74,7 +73,7 @@ def probe(d, q: str, want: str, tag_only: bool, assistant: str | None = None) ->
         top = "、".join(f"「{t}」" for t in titles) or "什么都没有"
         problems.append(f"答不上（前三条是 {top}）")
     if tag_only:
-        notag = score(SimpleNamespace(title=k.title, body=k.body, tags=[], url=""), terms(expand_query(q, None)))
+        notag = psvc.knowledge_score(k.title, k.body, [], terms(expand_query(q, None)), q)   # 与助手问答同一套打分
         if notag >= MIN_RELATED:
             problems.append(f"去掉标签也得 {notag} 分（够 {MIN_RELATED} 就算相关），钉不住标签")
         tags = [t for t in k.tags if len(t) >= 2 and t in q]
