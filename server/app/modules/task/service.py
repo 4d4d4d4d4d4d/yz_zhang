@@ -166,7 +166,10 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「电视投影挂装」「空置房屋代看护」——第六十二轮场景发掘（417 号 spec，V444）
                     {"name": "电视投影挂装"}, {"name": "空置房屋代看护"},
                     # 「志愿填报咨询」「户外徒步领队」——第六十三轮场景发掘（419 号 spec，V446）
-                    {"name": "志愿填报咨询"}, {"name": "户外徒步领队"}]
+                    {"name": "志愿填报咨询"}, {"name": "户外徒步领队"},
+                    # 「门头招牌安装」「活动音响灯光」——第六十四轮场景发掘（421 号 spec，V448）；发单人可按这一单加选高处作业证、电工证（SCN-294b）
+                    {"name": "门头招牌安装", "optional_certs": [HEIGHT_WORK_CERT, ELECTRICIAN_CERT]},
+                    {"name": "活动音响灯光", "optional_certs": [ELECTRICIAN_CERT]}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
