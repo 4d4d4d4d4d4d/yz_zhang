@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 424 | 第六十五轮场景发掘：上门取送洗衣、老人助餐送餐 | [424-scenario-round-65.md](./424-scenario-round-65.md) | P0 |
 | 423 | 回归脚本漏判前端计数不一致 | [423-regress-counts-verdict.md](./423-regress-counts-verdict.md) | P0 |
 | 422 | 只靠标签的闸门：只拿掉命中的那一个标签也要答不上 | [422-tag-only-one-tag.md](./422-tag-only-one-tag.md) | P0 |
 | 421 | 第六十四轮场景发掘：门头招牌安装、活动音响灯光 | [421-scenario-round-64.md](./421-scenario-round-64.md) | P0 |

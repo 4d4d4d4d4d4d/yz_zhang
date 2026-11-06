@@ -169,7 +169,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     {"name": "志愿填报咨询"}, {"name": "户外徒步领队"},
                     # 「门头招牌安装」「活动音响灯光」——第六十四轮场景发掘（421 号 spec，V448）；发单人可按这一单加选高处作业证、电工证（SCN-294b）
                     {"name": "门头招牌安装", "optional_certs": [HEIGHT_WORK_CERT, ELECTRICIAN_CERT]},
-                    {"name": "活动音响灯光", "optional_certs": [ELECTRICIAN_CERT]}]
+                    {"name": "活动音响灯光", "optional_certs": [ELECTRICIAN_CERT]},
+                    # 「上门取送洗衣」「老人助餐送餐」——第六十五轮场景发掘（424 号 spec，V451）
+                    {"name": "上门取送洗衣"}, {"name": "老人助餐送餐"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
