@@ -103,4 +103,17 @@ describe('SCN-294b 发单人按这一单加选资质（407 号 spec）', () => {
     expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({ task_certs: ['低压电工作业操作证'] });
     expect(screen.queryByText('这一单不要「低压电工作业操作证」了')).toBeNull();   // 没人只差这一张，不给按钮
   });
+
+  it('SCN-294f（426 号 spec）发单人发布后能加上类目列出的资质；加不上时说清为什么', async () => {
+    const calls: Call[] = [];
+    open('/tasks/63', calls, (m, p) => p === '/tasks/63' && m === 'GET' ? { id: 63, title: '展台背板', description: '', category: '展台搭建', status: 'published',
+      budget_cents: 20000, creator_id: 2, executor_id: null, is_remote: false, city: '上海', address_hint: '', address_exact: '', parent_id: null,
+      task_type: 'service', pricing: 'fixed', bonus_cents: 0, ip_assignment: 'assign', deposit_status: 'none', task_certs: ['高处作业操作证'] }
+      : p === '/tasks/63' && m === 'PATCH' ? { __status: 409 } : undefined);
+    const box = await screen.findByLabelText('加上这一单另外要的资质', {}, { timeout: 3000 });
+    expect(within(box).queryByText('加上「高处作业操作证」')).toBeNull();
+    fireEvent.click(within(box).getByText('加上「低压电工作业操作证」'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'PATCH' && c.path === '/tasks/63')).toBeTruthy());
+    expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({ task_certs: ['高处作业操作证', '低压电工作业操作证'] });
+  });
 });

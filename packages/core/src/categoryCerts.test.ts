@@ -75,3 +75,15 @@ describe('SCN-294c 发布后去掉加选资质', () => {
     expect(dropCertPatch({ task_certs: null }, 'x')).toEqual({ task_certs: [] });
   });
 });
+
+describe('SCN-294f 发布后加上加选资质', () => {
+  it('只列类目可加、这一单还没加的；加的时候原有的照留', async () => {
+    const { addableCerts, addCertPatch } = await import('./categoryCerts');
+    const cat = { required_cert: '', optional_certs: ['高处作业操作证', '低压电工作业操作证'] };
+    expect(addableCerts({ task_certs: ['高处作业操作证'] }, cat)).toEqual(['低压电工作业操作证']);
+    expect(addableCerts({ task_certs: null }, cat)).toEqual(['高处作业操作证', '低压电工作业操作证']);
+    expect(addableCerts({ task_certs: [] }, null)).toEqual([]);
+    expect(addCertPatch({ task_certs: ['高处作业操作证'] }, '低压电工作业操作证')).toEqual({ task_certs: ['高处作业操作证', '低压电工作业操作证'] });
+    expect(addCertPatch({ task_certs: ['高处作业操作证'] }, '高处作业操作证')).toEqual({ task_certs: ['高处作业操作证'] });
+  });
+});

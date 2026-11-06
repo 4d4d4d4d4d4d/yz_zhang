@@ -68,3 +68,19 @@ export function dropCertPatch(t: { task_certs?: unknown } | null | undefined, ce
   const list = Array.isArray(t?.task_certs) ? (t!.task_certs as unknown[]).filter((x): x is string => typeof x === 'string' && !!x) : [];
   return { task_certs: list.filter((x) => x !== cert) };
 }
+
+/** SCN-294f（426 号 spec）发布后还能加上的资质：类目列出可加选、这一单还没加的 */
+export function addableCerts(t: { task_certs?: unknown } | null | undefined,
+                             c: Parameters<typeof optionalCerts>[0]): string[] {
+  const have = Array.isArray(t?.task_certs) ? (t!.task_certs as unknown[]) : [];
+  return optionalCerts(c).filter((x) => !have.includes(x));
+}
+
+/** 加上一张加选资质的改动：原有的照留 */
+export function addCertPatch(t: { task_certs?: unknown } | null | undefined, cert: string): { task_certs: string[] } {
+  const list = Array.isArray(t?.task_certs) ? (t!.task_certs as unknown[]).filter((x): x is string => typeof x === 'string' && !!x) : [];
+  return { task_certs: list.includes(cert) ? list : [...list, cert] };
+}
+
+/** 加严之前给发单人的一句提醒 */
+export const ADD_CERT_HINT = '加上以后，没有这张证的人报不了名；已报名的人里有没证的，会加不上，要先处理他们的报名';

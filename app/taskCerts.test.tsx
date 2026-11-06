@@ -2,7 +2,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { PlatformClient } from '@platform/core';
 import { useState } from 'react';
-import { TaskCertsNote, TaskCertsPicker } from './taskCerts';
+import { TaskCertsAdd, TaskCertsNote, TaskCertsPicker } from './taskCerts';
 import { PublishScreen } from './App';
 
 const CATS = [
@@ -73,4 +73,50 @@ describe('SCN-294b/d App 发布页（407 / 408 号 spec）', () => {
     await waitFor(() => expect(done).toHaveBeenCalled());
     expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks')!.body!.task_certs).toEqual(['高处作业操作证']);
   });
+});
+
+describe('SCN-294f App 发布后加上加选资质（426 号 spec）', () => {
+  type Call = { method: string; path: string; body: unknown };
+  function routed(patch: { status: number; body: unknown }, calls: Call[]): PlatformClient {
+    const fetchImpl = (async (url: string, init?: { method?: string; body?: string }) => {
+      const path = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+      const method = init?.method ?? 'GET';
+      calls.push({ method, path, body: init?.body ? JSON.parse(init.body) : null });
+      if (method === 'PATCH') return { ok: patch.status < 400, status: patch.status, text: async () => JSON.stringify(patch.body) };
+      return { ok: true, status: 200, text: async () => JSON.stringify(CATS) };
+    }) as unknown as typeof fetch;
+    return new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl });
+  }
+
+  it('只列还没加的；点了带上原有的一起发，改完通知刷新', async () => {
+    const calls: Call[] = [];
+    const onChanged = jest.fn();
+    render(<TaskCertsAdd client={routed({ status: 200, body: { id: 7 } }, calls)} onChanged={onChanged}
+                         task={{ id: 7, category: '展台搭建', task_certs: ['高处作业操作证'] }} />);
+    fireEvent.press(await screen.findByText('加上「低压电工作业操作证」'));
+    expect(screen.queryByText('加上「高处作业操作证」')).toBeNull();
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    expect(calls.find((c) => c.method === 'PATCH')).toEqual({ method: 'PATCH', path: '/tasks/7', body: { task_certs: ['高处作业操作证', '低压电工作业操作证'] } });
+  });
+
+  it('已报名的人里有没证的：说清为什么、怎么办（错误码 task_certs_locked 的文案）', async () => {
+    render(<TaskCertsAdd onChanged={jest.fn()} task={{ id: 7, category: '展台搭建', task_certs: [] }}
+                         client={routed({ status: 409, body: { detail: { code: 'task_certs_locked', message: '已有 1 个报名的人没有「高处作业操作证」，加上他们就接不了这一单；先谢绝这些报名，或等他们补交证件，再加' } } }, [])} />);
+    fireEvent.press(await screen.findByText('加上「高处作业操作证」'));
+    expect(await screen.findByText(/先谢绝这些报名，或等他们补交证件/)).toBeTruthy();
+  });
+
+  it('类目没有可加的、或都加过了：不画', async () => {
+    const calls: Call[] = [];
+    render(<TaskCertsAdd client={routed({ status: 200, body: {} }, calls)} onChanged={jest.fn()}
+                         task={{ id: 7, category: '展台搭建', task_certs: ['高处作业操作证', '低压电工作业操作证'] }} />);
+    await waitFor(() => expect(calls.length).toBe(1));
+    expect(screen.queryByLabelText('加上这一单另外要的资质')).toBeNull();
+  });
+});
+
+it('SCN-294f 任务详情里接上：只给发单人、招募中', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const src = require('fs').readFileSync(`${__dirname}/App.tsx`, 'utf8') as string;
+  expect(src).toContain("{meId === task.creator_id && task.status === 'published' && <TaskCertsAdd client={client} task={task} onChanged={onChanged} />}");
 });

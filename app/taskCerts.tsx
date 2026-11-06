@@ -2,7 +2,7 @@
 //
 // 类目列出可加的资质（例如展台搭建：2 米以上作业要高处作业证、接电要电工证；无人机航拍：小型机要操控员执照），
 // 发单人这一单需要就勾上，报名的人要都有审核通过的证件。不需要就别勾：多要一张证，能接单的人就少一批。
-import { optionalCerts, taskCertsLine, type Category, type PlatformClient } from '@platform/core';
+import { ADD_CERT_HINT, addableCerts, addCertPatch, apiErrorText, optionalCerts, taskCertsLine, type Category, type PlatformClient } from '@platform/core';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -53,3 +53,40 @@ const s = StyleSheet.create({
   chip: { borderWidth: 1, borderColor: '#ccc', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
   chipOn: { borderColor: '#1565c0', color: '#1565c0' },
 });
+
+/** SCN-294f（426 号 spec）发布后加上加选资质（发单人、招募中）。已报名的人里有没证的，服务端拒，理由原样显示。 */
+export function TaskCertsAdd({ client, task, onChanged }: {
+  client: PlatformClient; task: { id: number; category: string; task_certs?: unknown }; onChanged: () => void | Promise<void>;
+}) {
+  const [offered, setOffered] = useState<string[]>([]);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let live = true;
+    Promise.resolve().then(() => client.categories())
+      .then((cs: Category[]) => { if (live) setOffered(addableCerts(task, Array.isArray(cs) ? cs.find((c) => c.name === task.category) : null)); })
+      .catch(() => { if (live) setOffered([]); });
+    return () => { live = false; };
+  }, [client, task]);
+  if (!offered.length) return null;
+  return (
+    <View accessibilityLabel="加上这一单另外要的资质" style={{ gap: 4 }}>
+      <Text style={s.muted}>这一单还可以另外要：{ADD_CERT_HINT}</Text>
+      {!!error && <Text style={{ color: '#b91c1c' }}>{error}</Text>}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        {offered.map((c) => (
+          <TouchableOpacity key={c} style={s.chip} onPress={async () => {
+            setError('');
+            try {
+              await client.editTask(task.id, addCertPatch(task, c));
+              await onChanged();
+            } catch (e) {
+              setError(apiErrorText(e));
+            }
+          }}>
+            <Text>加上「{c}」</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}

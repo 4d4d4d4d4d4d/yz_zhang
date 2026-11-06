@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { OperationKey, minorTaskLine, taskCertsLine, certGapLine, relaxableCerts, dropCertPatch, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, canReboostTask, taskReboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, isUrgentCockpitAlert, scheduleConflictNote, daysLeftNote, parseDaysLeft, projectedFinishLine, timelineBars, timelineBasisLabel, formatDate, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { OperationKey, minorTaskLine, taskCertsLine, certGapLine, relaxableCerts, dropCertPatch, addableCerts, addCertPatch, ADD_CERT_HINT, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, canReboostTask, taskReboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, isUrgentCockpitAlert, scheduleConflictNote, daysLeftNote, parseDaysLeft, projectedFinishLine, timelineBars, timelineBasisLabel, formatDate, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type Category, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -121,6 +121,10 @@ export default function TaskDetail() {
         {minorTaskLine(task) && <p className="muted" aria-label="未成年人服务">{minorTaskLine(task)}</p>}
         {/* SCN-294b（407 号 spec）发单人为这一单加选的资质：报名前就要看到 */}
         {taskCertsLine(task) && <p className="muted" aria-label="这一单另外要的资质">⚠️ {taskCertsLine(task)}</p>}
+        {/* SCN-294f（426 号 spec）发布后加上加选资质：接口 414 号就支持，原来两端只给「去掉」 */}
+        {isCreator && task.status === 'published' && (
+          <AddTaskCert client={client} task={task} onAdded={() => void load()} />
+        )}
         {/* SCN-119 替别人发的单：谁都看得到是替别人发的；称呼与到场联系只给成交双方 */}
         {task.on_behalf && (
           <p className="muted" aria-label="服务对象">
@@ -1119,6 +1123,39 @@ function CockpitTimelineView({ data, title }: { data: Cockpit; title: (id: numbe
           <span className={b.late ? 'error' : 'muted'} style={{ flexShrink: 0 }}>{formatDate(b.end)}{b.late ? '（赶不上截止）' : ''}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** SCN-294f（426 号 spec）发布后加上类目列出的加选资质；已报名的人里有没证的，服务端拒，理由原样显示。 */
+function AddTaskCert({ client, task, onAdded }: { client: PlatformClient; task: Task; onAdded: () => void }) {
+  const [offered, setOffered] = useState<string[]>([]);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let live = true;
+    Promise.resolve().then(() => client.categories())
+      .then((cs) => { if (live) setOffered(addableCerts(task, asList<Category>(cs).find((c) => c.name === task.category))); })
+      .catch(() => { if (live) setOffered([]); });
+    return () => { live = false; };
+  }, [client, task]);
+  if (!offered.length) return null;
+  return (
+    <div className="muted" aria-label="加上这一单另外要的资质">
+      <p>这一单还可以另外要：{ADD_CERT_HINT}</p>
+      {error && <p className="error">{error}</p>}
+      <p className="row">
+        {offered.map((c) => (
+          <button key={c} className="ghost" style={{ padding: '4px 10px' }} onClick={async () => {
+            setError('');
+            try {
+              await client.editTask(task.id, addCertPatch(task, c));
+              onAdded();
+            } catch (e) {
+              setError(apiErrorText(e));
+            }
+          }}>加上「{c}」</button>
+        ))}
+      </p>
     </div>
   );
 }

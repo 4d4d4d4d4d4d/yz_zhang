@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
 import { ProgressBlock, canSeeProgress } from './progressLog';
 import { ReportBlock } from './report';
-import { TaskCertsNote, TaskCertsPicker } from './taskCerts';
+import { TaskCertsAdd, TaskCertsNote, TaskCertsPicker } from './taskCerts';
 import { VisitsBlock, hasVisits } from './visits';
 import { TaskReboostBlock } from './taskReboost';
 import { PreviousStepInputsBlock, ShareToNextStepsBlock } from './subtaskShares';
@@ -515,6 +515,8 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       {/* SCN-144 服务对象是未成年人：安排方式与要求的证明 */}
       {!!minorTaskLine(task) && <Text style={styles.mutedLeft} accessibilityLabel="未成年人服务">{minorTaskLine(task)}</Text>}
       <TaskCertsNote task={task} />
+      {/* SCN-294f（426 号 spec）发布后加上加选资质 */}
+      {meId === task.creator_id && task.status === 'published' && <TaskCertsAdd client={client} task={task} onChanged={onChanged} />}
       {/* SCN-119 替别人发的单：谁都看得到；称呼与到场联系只给成交双方 */}
       {!!task.on_behalf && (
         <Text style={styles.mutedLeft} accessibilityLabel="服务对象">
