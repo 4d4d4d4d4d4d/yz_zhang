@@ -106,3 +106,14 @@ def test_every_ci_job_has_a_local_step_or_a_written_reason():
     missing = [(job, m) for job, marks in LOCAL_STEPS.items() for m in marks if m not in src]
     assert not missing, f"说了本地有对应步骤，regress.sh 里却找不到：{missing}"
     assert all(len(r) >= 15 for r in CI_ONLY.values()), "只在 CI 上跑要写清理由"
+
+
+def test_local_regression_fails_when_frontend_counts_drift():
+    """REG-003（423 号 spec，V450）计数核对把不一致写在 stderr、失败时退出码 1。
+    原来那一行既没 `2>&1` 进 fe.txt，也不看退出码，最后的判定只 grep fe.txt：
+    V439~V445 的两次回归都打印了「前端计数与真实结果不一致」，结论仍是「回归全绿」，84f7125 带着偏了的计数被推送。"""
+    src = open(os.path.join(ROOT, "tools", "regress.sh"), encoding="utf-8").read()
+    line = next(x for x in src.splitlines() if "check_frontend_counts" in x and "python3 -m" in x)
+    assert line.count("2>&1") == 2, line                     # 两次调用的 stderr 都并进 fe.txt
+    after = src.split(line, 1)[1].splitlines()[1]
+    assert "rc=$?" in after and "步骤失败" in after and "前端计数核对" in after, after

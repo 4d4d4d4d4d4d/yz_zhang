@@ -44,7 +44,9 @@ J="$W/counts"; mkdir -p "$J"
   # CI-005：App 也做类型检查（GitHub CI 的 App job 有这一步，本地以前没有——测试文件里的类型错误本地回归放得过去）
   ( cd app && npx tsc --noEmit 2>&1 | tail -3; exit "${PIPESTATUS[0]}" )
   rc=$?; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：App 类型检查"
-  ( cd server && python3 -m scripts.check_frontend_counts --dir "$J" core web && python3 -m scripts.check_frontend_counts --dir "$J" app )
+  # REG-003（423 号 spec）计数不一致写在 stderr，原来既不进 fe.txt、也不看退出码：V439~V445 两次回归都报了不一致，结论仍是「全绿」
+  ( cd server && python3 -m scripts.check_frontend_counts --dir "$J" core web 2>&1 && python3 -m scripts.check_frontend_counts --dir "$J" app 2>&1 )
+  rc=$?; [ "$rc" -eq 0 ] || echo "步骤失败（退出码 $rc）：前端计数核对"
   ( cd server && python3 -m scripts.harness check )
   # CI-006：CI 上便宜、不要外部依赖的两项本地也跑——沙箱合规态闭环、迁移与模型一致性（SQLite 路径）
   ( cd server && PLATFORM_DATABASE_URL="sqlite:///$W/sbx.db" python -m scripts.sandbox_check 2>&1 | tail -1; exit "${PIPESTATUS[0]}" )
