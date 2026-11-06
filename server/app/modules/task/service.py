@@ -171,7 +171,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     {"name": "门头招牌安装", "optional_certs": [HEIGHT_WORK_CERT, ELECTRICIAN_CERT]},
                     {"name": "活动音响灯光", "optional_certs": [ELECTRICIAN_CERT]},
                     # 「上门取送洗衣」「老人助餐送餐」——第六十五轮场景发掘（424 号 spec，V451）
-                    {"name": "上门取送洗衣"}, {"name": "老人助餐送餐"}]
+                    {"name": "上门取送洗衣"}, {"name": "老人助餐送餐"},
+                    # 「代祭扫」「办公设备维修」——第六十六轮场景发掘（425 号 spec，V452）
+                    {"name": "代祭扫"}, {"name": "办公设备维修"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
