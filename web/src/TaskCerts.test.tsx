@@ -77,4 +77,16 @@ describe('SCN-294b 发单人按这一单加选资质（407 号 spec）', () => {
     const line = await screen.findByLabelText('这一单另外要的资质');
     expect(line.textContent).toContain('这一单另外要「高处作业操作证」');
   });
+
+  it('SCN-294e（413 号 spec）发单人看得到因为没证被排除了几个人，推荐一个都没有时也看得到', async () => {
+    const calls: Call[] = [];
+    open('/tasks/61', calls, (_m, p) => p === '/tasks/61' ? { id: 61, title: '展台背板', description: '', category: '展台搭建', status: 'published',
+      budget_cents: 20000, creator_id: 2, executor_id: null, is_remote: false, city: '上海', address_hint: '', address_exact: '', parent_id: null,
+      task_type: 'service', pricing: 'fixed', bonus_cents: 0, ip_assignment: 'assign', deposit_status: 'none', task_certs: ['高处作业操作证'] }
+      : p === '/tasks/61/recommendations/cert-gap' ? { required: ['高处作业操作证'], task_certs: ['高处作业操作证'], pool: 4, eligible: 0, excluded: 4,
+        only_missing: [{ cert: '高处作业操作证', count: 3 }] } : undefined);
+    const line = await screen.findByTestId('cert-gap', {}, { timeout: 3000 });
+    expect(line.textContent).toBe('现在没有人同时有「高处作业操作证」，4 个人因此没进推荐；其中 3 人只差你加选的「高处作业操作证」。这张证真用不上的话，下次发单别勾');
+    expect(screen.getByText('AI 推荐人选')).toBeTruthy();
+  });
 });

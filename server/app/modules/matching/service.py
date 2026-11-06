@@ -224,7 +224,9 @@ def _availability(db: Session, task, users: list[User]) -> dict[int, tuple[float
     return out
 
 
-def recommend(db: Session, task, limit: int = 10) -> list[dict]:
+def _pool(db: Session, task) -> list:
+    """推荐的候选池（过资质之前）：实名、开着接单、不是发单人本人、不是 agent / 创业项目 / 团队、双方没有互相拉黑。
+    推荐与「因为没证被排除了几个人」（SCN-294e）共用这一份，两边数得上。"""
     from app.modules.account.models import Block
 
     # 召回：实名认证 + 非发布者本人 + 接单开关开启（ACC-014）；
@@ -246,10 +248,38 @@ def recommend(db: Session, task, limit: int = 10) -> list[dict]:
             (Block.blocker_id == task.creator_id) | (Block.blocked_id == task.creator_id)
         )
     }
-    candidates = [
+    return [
         u for u in candidates
         if (task.creator_id, u.id) not in blocked_pairs and (u.id, task.creator_id) not in blocked_pairs
     ]
+
+
+def cert_gap(db: Session, task) -> dict:
+    """SCN-294e（413 号 spec）这一单因为资质被挡在推荐外的有几个人，其中几个人只差发单人加选的某一张证。
+
+    只给人数，不给是谁：发单人拿这个判断要不要放宽，不是拿来挑人。
+    类目要的资质、未成年人证明不能由发单人放宽，所以只按加选的逐张算「只差这一张」。"""
+    from app.modules.task.service import holders_of, task_required_certs
+
+    required, _ = task_required_certs(db, task)
+    added = [c for c in (getattr(task, "task_certs", None) or []) if c in required]
+    pool = [u.id for u in _pool(db, task)]
+    if not required:
+        return {"required": [], "task_certs": [], "pool": len(pool), "eligible": len(pool), "excluded": 0, "only_missing": []}
+    ok = holders_of(db, pool, required)
+    only_missing = []
+    for c in added:
+        rest = [x for x in required if x != c]
+        gain = len(holders_of(db, pool, rest) - ok)
+        if gain:
+            only_missing.append({"cert": c, "count": gain})
+    return {"required": required, "task_certs": added, "pool": len(pool), "eligible": len(ok),
+            "excluded": len(pool) - len(ok), "only_missing": only_missing}
+
+
+def recommend(db: Session, task, limit: int = 10) -> list[dict]:
+    # 召回在 _pool（实名、接单开关、AGT-018 排除 agent、ACC-033 黑名单双向排除）
+    candidates = _pool(db, task)
     # SCN-294d（408 号 spec）这一单要资质的，只推荐张张都有的人：推荐一个报不了名的人，
     # 发单人去邀请、对方去报名，两头都白跑（类目资质、未成年人证明、发单人加选的，与报名准入同一份）
     from app.modules.task.service import holders_of, task_required_certs

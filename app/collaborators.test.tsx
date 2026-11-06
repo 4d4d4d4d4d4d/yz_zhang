@@ -51,8 +51,27 @@ describe('MATCH-001/002 App：AI 推荐人选', () => {
   it('没有推荐：整块不出现', async () => {
     const calls: Call[] = [];
     render(<RecommendationsBlock task={TASK} client={makeClient({}, calls)} />);
-    await waitFor(() => expect(calls.length).toBe(1));
+    // SCN-294e（413 号 spec）起多问一次「因为没证被排除了几个人」；两次都没有内容，整块仍不出现
+    await waitFor(() => expect(calls.map((c) => c.path)).toEqual(['/tasks/7/recommendations', '/tasks/7/recommendations/cert-gap']));
     expect(screen.queryByText('AI 推荐人选')).toBeNull();
+  });
+
+  it('SCN-294e 推荐一个都没有、但有人因为没证被排除：说出人数和只差哪一张', async () => {
+    render(<RecommendationsBlock task={TASK} client={makeClient({
+      '/tasks/7/recommendations/cert-gap': { required: ['高处作业操作证'], task_certs: ['高处作业操作证'], pool: 3, eligible: 0, excluded: 3,
+        only_missing: [{ cert: '高处作业操作证', count: 2 }] },
+    })} />);
+    const line = await screen.findByTestId('cert-gap');
+    expect(line.props.children).toBe('现在没有人同时有「高处作业操作证」，3 个人因此没进推荐；其中 2 人只差你加选的「高处作业操作证」。这张证真用不上的话，下次发单别勾');
+    expect(screen.getByText('AI 推荐人选')).toBeTruthy();
+    expect(screen.queryByText(/邀约是请对方来报名/)).toBeNull();
+  });
+
+  it('SCN-294e 服务端畸形或旧服务端没有这个接口：照旧，不画', async () => {
+    const calls: Call[] = [];
+    render(<RecommendationsBlock task={TASK} client={makeClient({ '/tasks/7/recommendations/cert-gap': { excluded: 'x' } }, calls)} />);
+    await waitFor(() => expect(calls.length).toBe(2));
+    expect(screen.queryByTestId('cert-gap')).toBeNull();
   });
 });
 

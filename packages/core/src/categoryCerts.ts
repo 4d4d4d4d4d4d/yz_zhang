@@ -1,5 +1,5 @@
 // SCN-181（307 号 spec）一个类目要的全部资质：required_cert 在前，再加 extra_certs（去空、去重）——与服务端 category_certs 一致。
-import type { Category } from './types';
+import type { Category, RecommendationCertGap } from './types';
 
 export function categoryCerts(c: Pick<Category, 'required_cert' | 'extra_certs'> | null | undefined): string[] {
   const out: string[] = [];
@@ -35,4 +35,22 @@ export function keepOfferedCerts(picked: string[], c: Parameters<typeof optional
 export function taskCertsLine(t: { task_certs?: unknown } | null | undefined): string {
   const list = Array.isArray(t?.task_certs) ? (t!.task_certs as unknown[]).filter((x): x is string => typeof x === 'string' && !!x) : [];
   return list.length ? `这一单另外要${list.map((x) => `「${x}」`).join('')}，报名的人要有审核通过的证件` : '';
+}
+
+/**
+ * SCN-294e（413 号 spec）推荐里因为没证被排除了几个人、其中几个只差你加选的某一张。
+ * 没人被排除、响应畸形时是空串（不画）；只说人数，不说是谁。
+ */
+export function certGapLine(g: Partial<RecommendationCertGap> | null | undefined): string {
+  const n = typeof g?.excluded === 'number' ? g.excluded : 0;
+  const req = Array.isArray(g?.required) ? g!.required.filter((x): x is string => typeof x === 'string' && !!x) : [];
+  if (n <= 0 || !req.length) return '';
+  const certs = req.map((x) => `「${x}」`).join('');
+  const head = g?.eligible === 0
+    ? `现在没有人同时有${certs}，${n} 个人因此没进推荐`
+    : `另有 ${n} 个人因为没有${certs}没进推荐`;
+  const only = (Array.isArray(g?.only_missing) ? g!.only_missing : [])
+    .filter((x) => x && typeof x.cert === 'string' && typeof x.count === 'number' && x.count > 0)
+    .map((x) => `${x.count} 人只差你加选的「${x.cert}」`);
+  return only.length ? `${head}；其中 ${only.join('，')}。这张证真用不上的话，下次发单别勾` : head;
 }

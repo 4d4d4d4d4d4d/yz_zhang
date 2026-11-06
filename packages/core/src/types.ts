@@ -931,6 +931,16 @@ export interface Recommendation {
   reasons: string[];
 }
 
+/** SCN-294e（413 号 spec）推荐里因为资质被挡在外面的人数（只给人数） */
+export interface RecommendationCertGap {
+  required: string[];
+  task_certs: string[];
+  pool: number;
+  eligible: number;
+  excluded: number;
+  only_missing: { cert: string; count: number }[];
+}
+
 export interface DecompositionItem {
   title: string;
   description?: string;

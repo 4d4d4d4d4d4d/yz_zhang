@@ -1212,6 +1212,17 @@ def recommendations(
     return matching.recommend(db, task)
 
 
+@router.get("/tasks/{task_id}/recommendations/cert-gap")
+def recommendation_cert_gap(
+    task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")
+):
+    """SCN-294e（413 号 spec）推荐里因为没证被排除了几个人、其中几个只差发单人加选的某一张：只给人数。"""
+    task = _get_task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden()
+    return matching.cert_gap(db, task)
+
+
 @router.post("/applications/{application_id}/accept")
 def accept_application(
     application_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")

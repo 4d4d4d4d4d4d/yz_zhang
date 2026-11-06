@@ -232,6 +232,7 @@ api GET /api/v1/tasks/{task_id}/profile
 api GET /api/v1/tasks/{task_id}/progress
 api GET /api/v1/tasks/{task_id}/recipient-link
 api GET /api/v1/tasks/{task_id}/recommendations
+api GET /api/v1/tasks/{task_id}/recommendations/cert-gap
 api GET /api/v1/tasks/{task_id}/reviews
 api GET /api/v1/tasks/{task_id}/shares
 api GET /api/v1/tasks/{task_id}/tree
@@ -1095,6 +1096,7 @@ sdk reboostTask
 sdk recallMessage
 sdk recipientLink
 sdk recipientProgress
+sdk recommendationCertGap
 sdk recommendations
 sdk register
 sdk registerDevice

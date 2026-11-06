@@ -84,9 +84,9 @@ OWNERSHIP_RULES: list[tuple[str, str, str]] = [
      "只能把自己的通知标成已读：别人的 notification_id 必须拒，"
      "否则等于可以替别人清掉催办与临期提醒（V100 那批的价值全靠他看见）"),
     # ---- 任务：公开可见的那部分与当事人的那部分要分开 ----
-    (r"^GET /tasks/.*/(applications|agent-runs|trip|final-report|eligible-agents|recommendations)$",
+    (r"^GET /tasks/.*/(applications|agent-runs|trip|final-report|eligible-agents|recommendations|recommendations/cert-gap)$",
      "party",
-     "报名名单、Agent 运行记录、行程、结项报告只对发布方（及相应执行方）开放"),
+     "报名名单、Agent 运行记录、行程、结项报告、推荐与因没证被排除的人数只对发布方（及相应执行方）开放"),
     (r"^POST /tasks/.*/(accept-delivery|reject-delivery|cancel|publish|decompositions|invitations|verification|agent-apply|agent-run)$",
      "party", "这些是发布方的动作，执行方与第三方都不得代为执行"),
     (r"^POST /tasks/.*/(deliver|checkin|progress|sos|trip-share|experience-post)$",

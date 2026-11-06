@@ -119,6 +119,7 @@ import type {
   Notice,
   PriceReference,
   Recommendation,
+  RecommendationCertGap,
   Task,
   TaskTree,
   TaxSummary,
@@ -702,6 +703,11 @@ export class PlatformClient {
   }
   recommendations(taskId: number) {
     return this.request<Recommendation[]>('GET', `/tasks/${taskId}/recommendations`).then(listOf);
+  }
+
+  /** SCN-294e（413 号 spec）推荐里因为没证被排除了几个人、其中几个只差加选的某一张（只给发单人，只给人数） */
+  recommendationCertGap(taskId: number) {
+    return this.request<RecommendationCertGap>('GET', `/tasks/${taskId}/recommendations/cert-gap`);
   }
   acceptApplication(applicationId: number) {
     return this.request<{ contract_id: number; task: Task }>('POST', `/applications/${applicationId}/accept`);

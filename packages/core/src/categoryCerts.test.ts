@@ -38,3 +38,24 @@ describe('SCN-294b 发单人按这一单加选资质（407 号 spec）', () => {
     expect(taskCertsLine(null)).toBe('');
   });
 });
+
+describe('SCN-294e 推荐里因为没证被排除了几个人', () => {
+  it('有人只差加选的那一张就说出来；没人能接时换个说法', async () => {
+    const { certGapLine } = await import('./categoryCerts');
+    const g = { required: ['高处作业操作证', '低压电工作业操作证'], task_certs: ['高处作业操作证', '低压电工作业操作证'], pool: 5, eligible: 1, excluded: 4,
+      only_missing: [{ cert: '高处作业操作证', count: 1 }, { cert: '低压电工作业操作证', count: 2 }] };
+    expect(certGapLine(g)).toBe('另有 4 个人因为没有「高处作业操作证」「低压电工作业操作证」没进推荐；其中 1 人只差你加选的「高处作业操作证」，2 人只差你加选的「低压电工作业操作证」。这张证真用不上的话，下次发单别勾');
+    expect(certGapLine({ ...g, eligible: 0, only_missing: [] })).toBe('现在没有人同时有「高处作业操作证」「低压电工作业操作证」，4 个人因此没进推荐');
+  });
+  it('没人被排除、畸形响应：不画', async () => {
+    const { certGapLine } = await import('./categoryCerts');
+    expect(certGapLine({ required: [], excluded: 0, eligible: 3, pool: 3, task_certs: [], only_missing: [] })).toBe('');
+    expect(certGapLine({ required: ['x'], excluded: 0 })).toBe('');
+    expect(certGapLine({ required: 'x' as unknown as string[], excluded: 2 })).toBe('');
+    expect(certGapLine({ required: ['x'], excluded: 2, eligible: 1, only_missing: 'bad' as unknown as [] })).toBe('另有 2 个人因为没有「x」没进推荐');
+    expect(certGapLine(null)).toBe('');
+    // 只差人数是 0、或条目畸形的，不写「其中 0 人只差……」
+    expect(certGapLine({ required: ['x'], excluded: 2, eligible: 1,
+      only_missing: [{ cert: 'x', count: 0 }, { cert: 'y' } as unknown as { cert: string; count: number }] })).toBe('另有 2 个人因为没有「x」没进推荐');
+  });
+});

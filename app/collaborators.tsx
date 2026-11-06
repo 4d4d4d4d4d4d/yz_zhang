@@ -9,7 +9,7 @@
 // - 助理不可用时**原样显示服务端算好的理由**（CLI-064）；邀请由发布方主动发，平台不自动派单；
 //   置信度写明是助理**自报**的（AGT-013）；交付被平台判据拦下时给出人工核验入口。
 import {
-  apiErrorText, asList, DESIGNATE_VERIFIER_HINT, fmtYuan, parseVerifierId, verifierCandidateLine, type AgentProfileView, type AgentRunView, type EligibleAgent,
+  apiErrorText, asList, certGapLine, DESIGNATE_VERIFIER_HINT, fmtYuan, parseVerifierId, verifierCandidateLine, type AgentProfileView, type AgentRunView, type EligibleAgent,
   type PlatformClient, type Recommendation, type Task,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -20,18 +20,24 @@ export function RecommendationsBlock({ client, task }: { client: PlatformClient;
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [invited, setInvited] = useState<Record<number, boolean>>({});
   const [error, setError] = useState('');
+  // SCN-294e（413 号 spec）因为没证被排除了几个人：推荐一个都没有时也要说，不然发单人以为是没人
+  const [certGap, setCertGap] = useState('');
 
   useEffect(() => {
     client.recommendations(task.id)
       .then((r) => setRecs(Array.isArray(r) ? r : []))
       .catch(() => setRecs([]));
+    Promise.resolve().then(() => client.recommendationCertGap(task.id))
+      .then((g) => setCertGap(certGapLine(g)))
+      .catch(() => setCertGap(''));
   }, [client, task.id]);
 
-  if (recs.length === 0) return null;
+  if (recs.length === 0 && !certGap) return null;
   return (
     <View style={s.card}>
       <Text style={s.title}>AI 推荐人选</Text>
-      <Text style={s.muted}>邀约是请对方来报名，最后选谁、签不签仍由你定。</Text>
+      {!!certGap && <Text style={s.muted} testID="cert-gap">{certGap}</Text>}
+      {recs.length > 0 && <Text style={s.muted}>邀约是请对方来报名，最后选谁、签不签仍由你定。</Text>}
       {!!error && <Text style={s.error}>{error}</Text>}
       {recs.slice(0, 5).map((r) => (
         <View key={r.user_id} style={s.item}>
