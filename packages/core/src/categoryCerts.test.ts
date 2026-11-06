@@ -59,3 +59,19 @@ describe('SCN-294e 推荐里因为没证被排除了几个人', () => {
       only_missing: [{ cert: 'x', count: 0 }, { cert: 'y' } as unknown as { cert: string; count: number }] })).toBe('另有 2 个人因为没有「x」没进推荐');
   });
 });
+
+describe('SCN-294c 发布后去掉加选资质', () => {
+  it('只有确实是这一单加选、只差人数大于 0 的才能一键去掉', async () => {
+    const { relaxableCerts } = await import('./categoryCerts');
+    expect(relaxableCerts({ task_certs: ['高处作业操作证'], only_missing: [{ cert: '高处作业操作证', count: 2 }, { cert: '健康证明', count: 3 }] }))
+      .toEqual(['高处作业操作证']);
+    expect(relaxableCerts({ task_certs: ['高处作业操作证'], only_missing: [{ cert: '高处作业操作证', count: 0 }] })).toEqual([]);
+    expect(relaxableCerts({ task_certs: 'x' as unknown as string[], only_missing: [{ cert: 'x', count: 1 }] })).toEqual([]);
+    expect(relaxableCerts(null)).toEqual([]);
+  });
+  it('去掉一张，其余照留', async () => {
+    const { dropCertPatch } = await import('./categoryCerts');
+    expect(dropCertPatch({ task_certs: ['高处作业操作证', '低压电工作业操作证'] }, '高处作业操作证')).toEqual({ task_certs: ['低压电工作业操作证'] });
+    expect(dropCertPatch({ task_certs: null }, 'x')).toEqual({ task_certs: [] });
+  });
+});

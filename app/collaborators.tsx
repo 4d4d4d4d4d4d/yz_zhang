@@ -9,7 +9,7 @@
 // - 助理不可用时**原样显示服务端算好的理由**（CLI-064）；邀请由发布方主动发，平台不自动派单；
 //   置信度写明是助理**自报**的（AGT-013）；交付被平台判据拦下时给出人工核验入口。
 import {
-  apiErrorText, asList, certGapLine, DESIGNATE_VERIFIER_HINT, fmtYuan, parseVerifierId, verifierCandidateLine, type AgentProfileView, type AgentRunView, type EligibleAgent,
+  apiErrorText, asList, certGapLine, dropCertPatch, relaxableCerts, DESIGNATE_VERIFIER_HINT, fmtYuan, parseVerifierId, verifierCandidateLine, type AgentProfileView, type AgentRunView, type EligibleAgent,
   type PlatformClient, type Recommendation, type Task,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -22,21 +22,41 @@ export function RecommendationsBlock({ client, task }: { client: PlatformClient;
   const [error, setError] = useState('');
   // SCN-294e（413 号 spec）因为没证被排除了几个人：推荐一个都没有时也要说，不然发单人以为是没人
   const [certGap, setCertGap] = useState('');
+  // SCN-294c（414 号 spec）只差某一张加选资质的，可以一键去掉；去掉后用改过的任务重新算
+  const [relaxable, setRelaxable] = useState<string[]>([]);
+  const [certs, setCerts] = useState<unknown>(task.task_certs);
+  const [round, setRound] = useState(0);
 
   useEffect(() => {
     client.recommendations(task.id)
       .then((r) => setRecs(Array.isArray(r) ? r : []))
       .catch(() => setRecs([]));
     Promise.resolve().then(() => client.recommendationCertGap(task.id))
-      .then((g) => setCertGap(certGapLine(g)))
-      .catch(() => setCertGap(''));
-  }, [client, task.id]);
+      .then((g) => { setCertGap(certGapLine(g)); setRelaxable(relaxableCerts(g)); })
+      .catch(() => { setCertGap(''); setRelaxable([]); });
+  }, [client, task.id, round]);
+
+  async function drop(cert: string) {
+    setError('');
+    try {
+      const t = await client.editTask(task.id, dropCertPatch({ task_certs: certs }, cert));
+      setCerts(t?.task_certs);
+      setRound((n) => n + 1);
+    } catch (e) {
+      setError(apiErrorText(e));
+    }
+  }
 
   if (recs.length === 0 && !certGap) return null;
   return (
     <View style={s.card}>
       <Text style={s.title}>AI 推荐人选</Text>
       {!!certGap && <Text style={s.muted} testID="cert-gap">{certGap}</Text>}
+      {relaxable.map((c) => (
+        <TouchableOpacity key={c} style={s.ghost} onPress={() => { void drop(c); }}>
+          <Text>这一单不要「{c}」了</Text>
+        </TouchableOpacity>
+      ))}
       {recs.length > 0 && <Text style={s.muted}>邀约是请对方来报名，最后选谁、签不签仍由你定。</Text>}
       {!!error && <Text style={s.error}>{error}</Text>}
       {recs.slice(0, 5).map((r) => (

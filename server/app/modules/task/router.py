@@ -320,10 +320,15 @@ def _validate_task_certs(body: TaskIn, db: Session) -> None:
     不让随便写：写一个平台不审核的证件名，报名的人永远交不上，这一单就永远招不到人。"""
     if not body.task_certs:
         return
-    category = service.get_category(db, body.category)
+    body.task_certs = _clean_task_certs(db, body.category, body.task_certs)
+
+
+def _clean_task_certs(db: Session, category_name: str, certs: list[str]) -> list[str]:
+    """发单时与发布后改（SCN-294c）共用：去空、去重，只认类目列出来可加的。"""
+    category = service.get_category(db, category_name)
     offered = list(getattr(category, "optional_certs", None) or [])
     picked: list[str] = []
-    for c in body.task_certs:
+    for c in certs:
         c = (c or "").strip()
         if not c or c in picked:
             continue
@@ -331,7 +336,31 @@ def _validate_task_certs(body: TaskIn, db: Session) -> None:
             hint = f"这个类目可以加的是{''.join(f'「{o}」' for o in offered)}" if offered else "这个类目没有可以另外加的资质"
             raise bad_request(f"「{c}」不能加在这一单上：{hint}；不需要就别勾", "task_cert_not_offered")
         picked.append(c)
-    body.task_certs = picked
+    return picked
+
+
+def _change_task_certs(db: Session, task: Task, certs: list[str]) -> None:
+    """SCN-294c（414 号 spec）发布后改加选资质。
+
+    - 去掉（放宽）随时可以：只会让更多人能接。
+    - 加上（加严）时，已报名还在等的人里有没这张证的，就拒：悄悄加上等于替发单人把这些人挡掉，
+      他们还以为自己在候选里。先谢绝这些报名、或等他们补交证件，再加。
+    - 多人、多天的单：还在招（草稿 / 已发布）的名额一起改；已经选了人的名额不动。
+    """
+    new = _clean_task_certs(db, task.category, certs)
+    targets = [task, *db.query(Task).filter(Task.parent_id == task.id, Task.status.in_(("draft", "published"))).all()]
+    added = [c for c in new if c not in (task.task_certs or [])]
+    if added:
+        ids = sorted({a.applicant_id for a in db.query(Application).filter(
+            Application.task_id.in_([t.id for t in targets]), Application.status == "pending").all()})
+        lacking = set(ids) - service.holders_of(db, ids, added)
+        if lacking:
+            raise conflict(
+                f"已有 {len(lacking)} 个报名的人没有{''.join(f'「{c}」' for c in added)}，加上他们就接不了这一单；"
+                "先谢绝这些报名，或等他们补交证件，再加", "task_certs_locked")
+    for t in targets:
+        t.task_certs = list(new)
+        db.add(t)
 
 
 GUARDIAN_MODES = ("guardian_present", "public_place")
@@ -572,6 +601,8 @@ class TaskEditIn(BaseModel):
     deadline: UtcDatetime | None = None
     # AI-DEC-021c（384 号 spec）工期估计（天）：非实质字段，不受防调包保护
     est_days: int | None = Field(default=None, ge=1, le=365)
+    # SCN-294c（414 号 spec）发布后改加选资质：去掉随时可以，加上时已报名的人都得有
+    task_certs: list[str] | None = Field(default=None, max_length=5)
 
 
 # 已发布任务上「实质性」字段（影响报名者决策），有人报名后受保护（TASK-014 防调包）
@@ -596,6 +627,8 @@ def edit_task(
     changes = body.model_dump(exclude_none=True)
     if not changes:
         return dump_task(task, user)
+    if "task_certs" in changes:
+        _change_task_certs(db, task, changes.pop("task_certs"))
 
     has_applicants = db.query(Application).filter(
         Application.task_id == task_id, Application.status == "pending"

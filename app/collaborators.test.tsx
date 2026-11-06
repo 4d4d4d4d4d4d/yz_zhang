@@ -67,6 +67,34 @@ describe('MATCH-001/002 App：AI 推荐人选', () => {
     expect(screen.queryByText(/邀约是请对方来报名/)).toBeNull();
   });
 
+  it('SCN-294c 只差加选的那一张：一键去掉，去掉后重新算', async () => {
+    const calls: Call[] = [];
+    render(<RecommendationsBlock task={{ ...TASK, task_certs: ['高处作业操作证', '低压电工作业操作证'] } as Task} client={makeClient({
+      'GET /tasks/7/recommendations/cert-gap': { required: ['高处作业操作证', '低压电工作业操作证'], task_certs: ['高处作业操作证', '低压电工作业操作证'],
+        pool: 3, eligible: 0, excluded: 3, only_missing: [{ cert: '高处作业操作证', count: 2 }] },
+      'PATCH /tasks/7': { id: 7, task_certs: ['低压电工作业操作证'] },
+    }, calls)} />);
+    fireEvent.press(await screen.findByText('这一单不要「高处作业操作证」了'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'PATCH')).toBeTruthy());
+    expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({ task_certs: ['低压电工作业操作证'] });
+    await waitFor(() => expect(calls.filter((c) => c.path === '/tasks/7/recommendations/cert-gap').length).toBe(2));
+    expect(screen.queryByText('这一单不要「低压电工作业操作证」了')).toBeNull();
+  });
+
+  it('SCN-294c 去不掉时说清为什么', async () => {
+    const fetchImpl = (async (url: string, init?: { method?: string }) => {
+      const path = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+      if (init?.method === 'PATCH') return { ok: false, status: 409, text: async () => JSON.stringify({ detail: { code: 'task_not_editable_x', message: '任务已进入执行阶段，不可编辑（请走合约变更单）' } }) };
+      const body = path.endsWith('/cert-gap') ? { required: ['高处作业操作证'], task_certs: ['高处作业操作证'], pool: 2, eligible: 0, excluded: 2,
+        only_missing: [{ cert: '高处作业操作证', count: 2 }] } : [];
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    }) as unknown as typeof fetch;
+    render(<RecommendationsBlock task={{ ...TASK, task_certs: ['高处作业操作证'] } as Task}
+      client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })} />);
+    fireEvent.press(await screen.findByText('这一单不要「高处作业操作证」了'));
+    expect(await screen.findByText(/不可编辑/)).toBeTruthy();
+  });
+
   it('SCN-294e 服务端畸形或旧服务端没有这个接口：照旧，不画', async () => {
     const calls: Call[] = [];
     render(<RecommendationsBlock task={TASK} client={makeClient({ '/tasks/7/recommendations/cert-gap': { excluded: 'x' } }, calls)} />);

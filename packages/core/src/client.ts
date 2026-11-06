@@ -687,6 +687,8 @@ export class PlatformClient {
     required_skills: string[]; address_hint: string; address_exact: string; deadline: string;
     /** AI-DEC-021c（384 号 spec）工期估计（天），1~365 */
     est_days: number;
+    /** SCN-294c（414 号 spec）发布后改加选资质：去掉随时可以，加上时已报名的人都得有（否则 409 task_certs_locked） */
+    task_certs: string[];
   }>) {
     return this.request<Task>('PATCH', `/tasks/${id}`, patch);
   }

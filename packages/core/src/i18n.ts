@@ -426,6 +426,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   report_daily_limit: '你今天举报的次数到上限了；已经提交的都会处理，明天还可以继续举报，急事请联系客服',
   // SCN-294b（407 号 spec）
   task_cert_not_offered: '这项资质不能加在这一单上：只能勾这个类目列出来可加的那几张；不需要就别勾',
+  task_certs_locked: '已报名的人里有没这张证的，加上他们就接不了这一单：先谢绝这些报名，或等他们补交证件，再加',
   // RISK-017（404 号 spec）
   report_too_many_images: '一条举报最多附 3 张截图：挑最能说明问题的',
   report_image_not_yours: '只能附你自己刚上传的截图：请重新选择图片上传',

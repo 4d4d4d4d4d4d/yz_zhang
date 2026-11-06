@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { OperationKey, minorTaskLine, taskCertsLine, certGapLine, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, canReboostTask, taskReboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, isUrgentCockpitAlert, scheduleConflictNote, daysLeftNote, parseDaysLeft, projectedFinishLine, timelineBars, timelineBasisLabel, formatDate, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { OperationKey, minorTaskLine, taskCertsLine, certGapLine, relaxableCerts, dropCertPatch, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, canReboostTask, taskReboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, isUrgentCockpitAlert, scheduleConflictNote, daysLeftNote, parseDaysLeft, projectedFinishLine, timelineBars, timelineBasisLabel, formatDate, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -28,6 +28,8 @@ export default function TaskDetail() {
   const [recs, setRecs] = useState<Recommendation[]>([]);
   // SCN-294e（413 号 spec）推荐里因为没证被排除了几个人：推荐一个都没有时最要紧
   const [certGap, setCertGap] = useState('');
+  // SCN-294c（414 号 spec）只差某一张加选资质的，可以一键去掉
+  const [relaxable, setRelaxable] = useState<string[]>([]);
   const [tree, setTree] = useState<TaskTree | null>(null);
   const [progress, setProgress] = useState<
     Array<{ id: number; kind: string; content: string; images?: string[]; created_at: string; days_left?: number | null }>
@@ -48,7 +50,9 @@ export default function TaskDetail() {
       // APP-090 列表响应不是数组时当作空表（不把详情页带崩）
       setApps(asList(await client.listApplications(taskId)));
       setRecs(asList(await client.recommendations(taskId)));
-      setCertGap(certGapLine(await Promise.resolve().then(() => client.recommendationCertGap(taskId)).catch(() => null)));
+      const gap = await Promise.resolve().then(() => client.recommendationCertGap(taskId)).catch(() => null);
+      setCertGap(certGapLine(gap));
+      setRelaxable(relaxableCerts(gap));
     }
     // SCN-116：多人、多天的母任务也拉（以前只有项目型，名额在详情页上看不到）
     if (hasChildTasks(t)) {
@@ -282,6 +286,16 @@ export default function TaskDetail() {
             <div className="card">
               <h3>AI 推荐人选</h3>
               {!!certGap && <p className="muted" data-testid="cert-gap">{certGap}</p>}
+              {relaxable.length > 0 && (
+                <p className="row">
+                  {relaxable.map((c) => (
+                    <button key={c} className="ghost" style={{ padding: '4px 10px' }}
+                            onClick={() => act(() => client.editTask(taskId, dropCertPatch(task, c)))}>
+                      这一单不要「{c}」了
+                    </button>
+                  ))}
+                </p>
+              )}
               {recs.length > 0 && <div className="list">
                 {recs.slice(0, 5).map((r) => (
                   <div className="task-item" key={r.user_id}>

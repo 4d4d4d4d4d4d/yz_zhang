@@ -54,3 +54,17 @@ export function certGapLine(g: Partial<RecommendationCertGap> | null | undefined
     .map((x) => `${x.count} 人只差你加选的「${x.cert}」`);
   return only.length ? `${head}；其中 ${only.join('，')}。这张证真用不上的话，下次发单别勾` : head;
 }
+
+/** SCN-294c（414 号 spec）可以一键去掉的加选资质：只差这一张的人数大于 0、而且确实是这一单加选的 */
+export function relaxableCerts(g: Partial<RecommendationCertGap> | null | undefined): string[] {
+  const added = Array.isArray(g?.task_certs) ? g!.task_certs : [];
+  return (Array.isArray(g?.only_missing) ? g!.only_missing : [])
+    .filter((x) => x && typeof x.cert === 'string' && typeof x.count === 'number' && x.count > 0 && added.includes(x.cert))
+    .map((x) => x.cert);
+}
+
+/** 去掉一张加选资质的改动：其余照留 */
+export function dropCertPatch(t: { task_certs?: unknown } | null | undefined, cert: string): { task_certs: string[] } {
+  const list = Array.isArray(t?.task_certs) ? (t!.task_certs as unknown[]).filter((x): x is string => typeof x === 'string' && !!x) : [];
+  return { task_certs: list.filter((x) => x !== cert) };
+}
