@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 410 | SDK 入参字段漏发闸门 | [410-sdk-input-fields.md](./410-sdk-input-fields.md) | P0 |
 | 409 | 第五十九轮场景发掘：居家适老化改造、社区团购分拣配送 | [409-scenario-round-59.md](./409-scenario-round-59.md) | P0 |
 | 408 | 要资质的单只推荐持证的人，画像风险看加选资质 | [408-recommend-cert-holders.md](./408-recommend-cert-holders.md) | P0 |
 | 407 | 发单人按这一单加选资质 | [407-task-level-certs.md](./407-task-level-certs.md) | P0 |
