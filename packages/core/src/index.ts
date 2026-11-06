@@ -36,3 +36,4 @@ export * from './cockpit';
 export * from './teamBudget';
 export * from './designatedVerifier';
 export * from './reports';
+export * from './coupons';

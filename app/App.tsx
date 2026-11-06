@@ -8,7 +8,7 @@ import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
-import { ApiError, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, canRequestErrandReview, TASK_STATUS_LABEL, apiErrorText, canReboostTask, dayLabel, dayShiftsPayload, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, isAuthRejection, shiftLabel, templatePrefill, GUARDIAN_MODE_LABEL, minorPayload, minorTaskLine, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type DayShiftInput, type LedgerRow, type Me, type PackTaskTemplateBrief, type GuardianMode, type Notice, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
+import { ApiError, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, canRequestErrandReview, TASK_STATUS_LABEL, apiErrorText, canReboostTask, dayLabel, dayShiftsPayload, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, isAuthRejection, shiftLabel, templatePrefill, GUARDIAN_MODE_LABEL, minorPayload, minorTaskLine, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, unreadBadge, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type DayShiftInput, type LedgerRow, type Me, type PackTaskTemplateBrief, type GuardianMode, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { isSandbox, loadSandbox } from './sandboxState';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
@@ -33,6 +33,7 @@ import { ExperienceToolsBlock } from './experience';
 import { MessagesScreen } from './MessagesAndInvites';
 import { MySpaceScreen, PublicSpaceScreen, SpacesDiscoverScreen } from './spaces';
 import { SearchScreen } from './search';
+import { CouponsBlock, DeviceSessionsBlock, NoticesList } from './accountExtras';
 import { SUB_SCREEN_LABEL, SubScreenHost, type SubScreen } from './TeamCoopDev';
 import { VideoFeedScreen } from './VideoFeed';
 import {
@@ -75,6 +76,8 @@ export default function App() {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [conversation, setConversation] = useState<number | null>(null);
+  // APP-074（418 号 spec）顶栏「通知」带未读数：关掉通知页时重新数一次
+  const [unread, setUnread] = useState('');
 
   const client = useMemo(
     // SBX-102 隐私沙箱开着：把原文交给云端 AI 的请求在发出之前就拦下（128 号 spec）
@@ -83,6 +86,13 @@ export default function App() {
   );
 
   useEffect(() => { void loadSandbox(); }, []);
+
+  const refreshUnread = useCallback(() => {
+    if (!token) { setUnread(''); return; }
+    void Promise.resolve().then(() => client.unreadCount())
+      .then((r) => setUnread(unreadBadge(r?.unread))).catch(() => setUnread(''));
+  }, [client, token]);
+  useEffect(() => { if (!overlay) refreshUnread(); }, [overlay, refreshUnread]);
 
   useEffect(() => {
     // REG-002（222 号 spec）只有服务端明确不认这个登录才清；手机信号一抖就登出是不对的
@@ -136,7 +146,7 @@ export default function App() {
           看见通知，钱包是钱的入口。折进二级页面等于把那两批的价值折掉。 */}
       <View style={styles.topbar}>
         <TouchableOpacity onPress={() => setOverlay({ kind: 'notices' })}>
-          <Text style={styles.topbarItem}>通知</Text>
+          <Text style={styles.topbarItem}>{unread ? `通知 ${unread}` : '通知'}</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setOverlay({ kind: 'wallet' })}>
           <Text style={styles.topbarItem}>钱包</Text>
@@ -164,7 +174,7 @@ export default function App() {
             <TouchableOpacity onPress={() => setOverlay(null)}>
               <Text style={styles.linkRow}>← 返回</Text>
             </TouchableOpacity>
-            {overlay.kind === 'notices' && <NoticesScreen client={client} />}
+            {overlay.kind === 'notices' && <NoticesScreen client={client} onChanged={refreshUnread} />}
             {overlay.kind === 'wallet' && <WalletScreen client={client} />}
             {overlay.kind === 'account' && (
               <MeScreen client={client} me={me} refresh={() => client.me().then(setMe)}
@@ -1284,6 +1294,8 @@ export function WalletScreen({ client }: { client: PlatformClient }) {
       <TeamReturnsBlock client={client} onChanged={() => void load()} />
       {/* APP-090 平台服务费发票（136 号 spec） */}
       <InvoicesBlock client={client} />
+      {/* APP-074（418 号 spec）领券与我的券：托管资金时能用券，App 用户原来看不到自己有券 */}
+      <CouponsBlock client={client} />
 
       {/* APP-065 账单流水。此前这一页只有三个数字：「余额少了一百块」
           而看不到为什么，是最容易变成工单的一类问题。 */}
@@ -1352,23 +1364,12 @@ function PayoutAccountBlock({ client }: { client: PlatformClient }) {
   );
 }
 
-function NoticesScreen({ client }: { client: PlatformClient }) {
-  const [notes, setNotes] = useState<Notice[]>([]);
-  useEffect(() => { void client.notifications().then(setNotes); }, [client]);
+function NoticesScreen({ client, onChanged }: { client: PlatformClient; onChanged?: () => void }) {
+  // APP-074（418 号 spec）原来不分已读未读、也标不了已读：看不出哪些是新的催办与临期提醒
   return (
-    <FlatList
-      data={notes}
-      keyExtractor={(n) => String(n.id)}
-      ListEmptyComponent={<Text style={styles.muted}>暂无通知</Text>}
-      renderItem={({ item }) => (
-        <View style={styles.cardRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.mutedLeft}>{item.body}</Text>
-          </View>
-        </View>
-      )}
-    />
+    <ScrollView contentContainerStyle={styles.center}>
+      <NoticesList client={client} onChanged={onChanged} />
+    </ScrollView>
   );
 }
 
@@ -1500,6 +1501,8 @@ function MeScreen({ client, me, refresh, onLogout }: {
           setNotice(apiErrorText(e));
         }
       }} />
+      {/* ACC-005 登录设备（APP-074，418 号 spec）：不认识的设备能在手机上踢下线 */}
+      <DeviceSessionsBlock client={client} />
 
       {/* APP-069 团队 / 合作体 / 开发者。三条线此前**只有网页看得见**，
           而 V92 刚给团队审批加了通知——通知把人叫来、他点进去无路可走，

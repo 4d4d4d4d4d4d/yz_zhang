@@ -669,6 +669,7 @@ app PayoutGovernance
 app ScreenBoundary
 app TeamCoopDev
 app VideoFeed
+app accountExtras
 app apiKeyUsage
 app appGaps
 app ask
