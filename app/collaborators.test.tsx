@@ -1,0 +1,216 @@
+// APP-079 找合作者——App 这一端（110 号 spec）。
+//
+// 钉的是三件容易做错的事：推荐要带理由、不可用的助理要原样说出服务端的理由
+// （按钮同时点不动）、置信度要写明是助理自报的。
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { PlatformClient, type Task } from '@platform/core';
+import { AgentBlock, RecommendationsBlock } from './collaborators';
+
+type Call = { method: string; path: string; body: unknown };
+
+function makeClient(routes: Record<string, unknown>, calls: Call[] = []): PlatformClient {
+  const fetchImpl = (async (url: string, init?: { method?: string; body?: string }) => {
+    const full = decodeURIComponent(String(url).replace(/^.*\/api\/v1/, ''));
+    const path = full.split('?')[0];
+    const method = init?.method ?? 'GET';
+    calls.push({ method, path: full, body: init?.body ? JSON.parse(init.body) : null });
+    // 精确匹配：`/tasks/7` 不许吃掉 `/tasks/7/agent-runs`
+    const hit = routes[`${method} ${path}`] ?? routes[path];
+    return { ok: true, status: 200, text: async () => JSON.stringify(hit ?? []) };
+  }) as unknown as typeof fetch;
+  return new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl });
+}
+
+const TASK = {
+  id: 7, title: '写一篇接口文档', category: '软件开发', status: 'published', budget_cents: 20000,
+  creator_id: 1, executor_id: null, is_remote: true,
+} as unknown as Task;
+
+const AGENT = {
+  user_id: 9, name: '开发助理', domains: ['软件开发'], max_task_budget_cents: 10000,
+  runs_total: 3, runs_succeeded: 2, is_active: true,
+};
+
+describe('MATCH-001/002 App：AI 推荐人选', () => {
+  it('每个推荐带理由与匹配度；邀约打到 invitations 并标已邀约', async () => {
+    const calls: Call[] = [];
+    render(<RecommendationsBlock task={TASK} client={makeClient({
+      '/tasks/7/recommendations': [
+        { user_id: 5, nickname: '小李', score: 0.87, credit_score: 98, rating_avg: 4.9, skills: ['接口文档'],
+          reasons: ['技能匹配：接口文档', '信用 98'] },
+      ],
+      'POST /tasks/7/invitations': { id: 1, status: 'pending' },
+    }, calls)} />);
+    expect(await screen.findByText('技能匹配：接口文档 · 信用 98')).toBeTruthy();
+    expect(screen.getByText(/匹配 87%/)).toBeTruthy();
+    fireEvent.press(screen.getByText('邀约 小李'));
+    expect(await screen.findByText('已邀约')).toBeTruthy();
+    expect(calls.find((c) => c.method === 'POST')!.body).toEqual({ user_id: 5, message: '诚邀接单' });
+  });
+
+  it('没有推荐：整块不出现', async () => {
+    const calls: Call[] = [];
+    render(<RecommendationsBlock task={TASK} client={makeClient({}, calls)} />);
+    // SCN-294e（413 号 spec）起多问一次「因为没证被排除了几个人」；两次都没有内容，整块仍不出现
+    await waitFor(() => expect(calls.map((c) => c.path)).toEqual(['/tasks/7/recommendations', '/tasks/7/recommendations/cert-gap']));
+    expect(screen.queryByText('AI 推荐人选')).toBeNull();
+  });
+
+  it('SCN-294e 推荐一个都没有、但有人因为没证被排除：说出人数和只差哪一张', async () => {
+    render(<RecommendationsBlock task={TASK} client={makeClient({
+      '/tasks/7/recommendations/cert-gap': { required: ['高处作业操作证'], task_certs: ['高处作业操作证'], pool: 3, eligible: 0, excluded: 3,
+        only_missing: [{ cert: '高处作业操作证', count: 2 }] },
+    })} />);
+    const line = await screen.findByTestId('cert-gap');
+    expect(line.props.children).toBe('现在没有人同时有「高处作业操作证」，3 个人因此没进推荐；其中 2 人只差你加选的「高处作业操作证」。这张证真用不上的话，下次发单别勾');
+    expect(screen.getByText('AI 推荐人选')).toBeTruthy();
+    expect(screen.queryByText(/邀约是请对方来报名/)).toBeNull();
+  });
+
+  it('SCN-294c 只差加选的那一张：一键去掉，去掉后重新算', async () => {
+    const calls: Call[] = [];
+    render(<RecommendationsBlock task={{ ...TASK, task_certs: ['高处作业操作证', '低压电工作业操作证'] } as Task} client={makeClient({
+      'GET /tasks/7/recommendations/cert-gap': { required: ['高处作业操作证', '低压电工作业操作证'], task_certs: ['高处作业操作证', '低压电工作业操作证'],
+        pool: 3, eligible: 0, excluded: 3, only_missing: [{ cert: '高处作业操作证', count: 2 }] },
+      'PATCH /tasks/7': { id: 7, task_certs: ['低压电工作业操作证'] },
+    }, calls)} />);
+    fireEvent.press(await screen.findByText('这一单不要「高处作业操作证」了'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'PATCH')).toBeTruthy());
+    expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({ task_certs: ['低压电工作业操作证'] });
+    await waitFor(() => expect(calls.filter((c) => c.path === '/tasks/7/recommendations/cert-gap').length).toBe(2));
+    expect(screen.queryByText('这一单不要「低压电工作业操作证」了')).toBeNull();
+  });
+
+  it('SCN-294c 去不掉时说清为什么', async () => {
+    const fetchImpl = (async (url: string, init?: { method?: string }) => {
+      const path = String(url).replace(/^.*\/api\/v1/, '').split('?')[0];
+      if (init?.method === 'PATCH') return { ok: false, status: 409, text: async () => JSON.stringify({ detail: { code: 'task_not_editable_x', message: '任务已进入执行阶段，不可编辑（请走合约变更单）' } }) };
+      const body = path.endsWith('/cert-gap') ? { required: ['高处作业操作证'], task_certs: ['高处作业操作证'], pool: 2, eligible: 0, excluded: 2,
+        only_missing: [{ cert: '高处作业操作证', count: 2 }] } : [];
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    }) as unknown as typeof fetch;
+    render(<RecommendationsBlock task={{ ...TASK, task_certs: ['高处作业操作证'] } as Task}
+      client={new PlatformClient({ baseUrl: '', getToken: () => 'tok', fetchImpl })} />);
+    fireEvent.press(await screen.findByText('这一单不要「高处作业操作证」了'));
+    expect(await screen.findByText(/不可编辑/)).toBeTruthy();
+  });
+
+  it('SCN-294e 服务端畸形或旧服务端没有这个接口：照旧，不画', async () => {
+    const calls: Call[] = [];
+    render(<RecommendationsBlock task={TASK} client={makeClient({ '/tasks/7/recommendations/cert-gap': { excluded: 'x' } }, calls)} />);
+    await waitFor(() => expect(calls.length).toBe(2));
+    expect(screen.queryByTestId('cert-gap')).toBeNull();
+  });
+});
+
+describe('CLI-063/064 App：AI 助理', () => {
+  it('不可用的助理原样显示服务端给的理由，而且邀请点不动', async () => {
+    const calls: Call[] = [];
+    render(<AgentBlock task={TASK} onChanged={() => undefined} client={makeClient({
+      '/agents': [AGENT],
+      '/tasks/7/eligible-agents': [{ ...AGENT, eligible: false, reason: '任务金额超出 AI 助理的承接上限，请交由人工执行' }],
+    }, calls)} />);
+    expect(await screen.findByTestId('agent-reason')).toBeTruthy();
+    expect(screen.getByText('任务金额超出 AI 助理的承接上限，请交由人工执行')).toBeTruthy();
+    fireEvent.press(screen.getByText('邀请 开发助理'));
+    expect(calls.some((c) => c.path.includes('/agent-apply'))).toBe(false);
+  });
+
+  it('可用的助理：邀请打到 agent-apply', async () => {
+    const calls: Call[] = [];
+    render(<AgentBlock task={TASK} onChanged={() => undefined} client={makeClient({
+      '/agents': [AGENT],
+      '/tasks/7/eligible-agents': [{ ...AGENT, eligible: true, reason: '' }],
+      'POST /tasks/7/agent-apply': { id: 3, status: 'pending', agent_user_id: 9 },
+    }, calls)} />);
+    fireEvent.press(await screen.findByText('邀请 开发助理'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/tasks/7/agent-apply?agent_user_id=9')).toBe(true));
+    expect(await screen.findByText('已邀请 开发助理')).toBeTruthy();
+  });
+
+  it('需到场的任务：不出现助理面板（AGT-010）', async () => {
+    const calls: Call[] = [];
+    render(<AgentBlock task={{ ...TASK, is_remote: false } as Task} onChanged={() => undefined}
+                       client={makeClient({ '/agents': [AGENT] }, calls)} />);
+    await waitFor(() => expect(calls.length).toBeGreaterThan(0));
+    expect(screen.queryByText('AI 助理')).toBeNull();
+  });
+
+  it('助理在执行：置信度写明是自报的；交付被拦下时给人工核验入口', async () => {
+    const calls: Call[] = [];
+    const running = { ...TASK, status: 'in_progress', executor_id: 9 } as Task;
+    render(<AgentBlock task={running} onChanged={() => undefined} client={makeClient({
+      '/agents': [AGENT],
+      '/tasks/7/agent-runs': {
+        runs: [{ id: 1, task_id: 7, status: 'escalated', confidence_bps: 6200, output: '初稿……',
+          criteria_results: [{ text: '包含全部接口', kind: 'auto', passed: false }], error: '',
+          moderation_status: 'pass', created_at: null, finished_at: null }],
+        delivery_block: '平台判据未通过：包含全部接口',
+      },
+      'POST /tasks/7/verification': { id: 2, status: 'open' },
+    }, calls)} />);
+    expect(await screen.findByText('待人工核验 · 助理自报置信度 62.0%')).toBeTruthy();
+    expect(screen.getByText('✗ 包含全部接口')).toBeTruthy();
+    expect(screen.getByTestId('delivery-block')).toBeTruthy();
+    fireEvent.press(screen.getByText('申请人工核验'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/tasks/7/verification')).toBe(true));
+    expect(screen.getByText('重新执行')).toBeTruthy();
+  });
+});
+
+describe('VER-050 App：点名核验人（372 号 spec）', () => {
+  const running = { ...TASK, status: 'in_progress', executor_id: 9 } as Task;
+  const routes = {
+    '/agents': [AGENT],
+    '/tasks/7/agent-runs': {
+      runs: [{ id: 1, task_id: 7, status: 'escalated', confidence_bps: 6200, output: '初稿', criteria_results: [], error: '',
+        moderation_status: 'pass', created_at: null, finished_at: null }],
+      delivery_block: '平台判据未通过：包含全部接口',
+    },
+    'POST /tasks/7/verification': { id: 2, status: 'open', trigger: 'designated', designated_verifier_id: 42 },
+  };
+  const posts = (calls: Call[]) => calls.filter((c) => c.method === 'POST' && c.path === '/tasks/7/verification');
+
+  it('填了编号带 verifier_id；乱填不发请求并说清；空着不带请求体', async () => {
+    const calls: Call[] = [];
+    render(<AgentBlock task={running} onChanged={() => undefined} client={makeClient(routes, calls)} />);
+    await screen.findByTestId('delivery-block');
+    expect(screen.getByText(/核验费由你付/)).toBeTruthy();
+    const input = screen.getByPlaceholderText('点名核验人（用户编号，可不填）');
+    fireEvent.changeText(input, 'abc');
+    fireEvent.press(screen.getByText('申请人工核验'));
+    expect(await screen.findByText('用户编号填正整数；不点名就空着')).toBeTruthy();
+    expect(posts(calls).length).toBe(0);
+    fireEvent.changeText(input, '42');
+    fireEvent.press(screen.getByText('申请人工核验'));
+    await waitFor(() => expect(posts(calls).length).toBe(1));
+    expect(posts(calls)[0].body).toEqual({ verifier_id: 42 });
+    expect(await screen.findByText('核验单已提交，已通知你点名的核验人')).toBeTruthy();
+    fireEvent.changeText(screen.getByPlaceholderText('点名核验人（用户编号，可不填）'), '');
+    fireEvent.press(screen.getByText('申请人工核验'));
+    await waitFor(() => expect(posts(calls).length).toBe(2));
+    expect(posts(calls)[1].body).toBeNull();
+  });
+});
+
+describe('VER-050c App：从合作过的人里点名（376 号 spec）', () => {
+  it('点一下合作过的人就填上编号；不能点的只显示原因', async () => {
+    const calls: Call[] = [];
+    const running = { ...TASK, status: 'in_progress', executor_id: 9 } as Task;
+    render(<AgentBlock task={running} onChanged={() => undefined} client={makeClient({
+      '/agents': [AGENT],
+      '/tasks/7/agent-runs': { runs: [{ id: 1, task_id: 7, status: 'escalated', confidence_bps: 6200, output: '初稿', criteria_results: [],
+        error: '', moderation_status: 'pass', created_at: null, finished_at: null }], delivery_block: '平台判据未通过' },
+      '/tasks/7/verifier-candidates': [
+        { user_id: 42, nickname: '小林', times: 3, eligible: true, reason: '' },
+        { user_id: 43, nickname: '小白', times: 1, eligible: false, reason: '账号不可用' }],
+      'POST /tasks/7/verification': { id: 2, status: 'open' },
+    }, calls)} />);
+    fireEvent.press(await screen.findByText('点名 小林 · 合作过 3 次'));
+    expect(screen.getByText('小白 · 合作过 1 次（现在不能点：账号不可用）')).toBeTruthy();
+    expect(screen.queryByText('点名 小白 · 合作过 1 次（现在不能点：账号不可用）')).toBeNull();
+    fireEvent.press(screen.getByText('申请人工核验'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/tasks/7/verification')).toBe(true));
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/tasks/7/verification')!.body).toEqual({ verifier_id: 42 });
+  });
+});

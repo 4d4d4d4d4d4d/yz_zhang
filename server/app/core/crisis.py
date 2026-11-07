@@ -1,0 +1,38 @@
+"""SCN-170（298 号 spec）有人说到想伤害自己时，所有助手都先给心理援助热线。
+
+以前法律问答与场景包助手碰到「自杀」只回「请立即拨打 110 或联系专业机构」——对一个正想不开的人，
+110 不是最合适的第一个号码。2025 年 5 月 1 日起全国统一使用 12356 心理援助热线（心理疏导与危机干预）。
+规则只看几种常见说法，不调模型；宁可多给一次热线，也不漏。
+"""
+import re
+
+SELF_HARM = re.compile(r"自杀|轻生|不想活|活不下去|想死|寻死|自残|割腕|结束自己|伤害自己")
+
+CRISIS_ANSWER = ("如果你或身边的人现在有伤害自己的念头，请马上拨打 12356 全国心理援助热线（心理疏导与危机干预）；"
+                 "情况紧急请拨 110 或 120，并请身边可信任的人陪着你。平台的助手不能代替专业帮助。")
+
+
+def is_self_harm(text: str) -> bool:
+    return bool(SELF_HARM.search(text or ""))
+
+
+NUDGE_TITLE = "需要的话，有人可以陪你聊聊"
+
+
+def nudge(db, user_id: int, text: str) -> bool:
+    """SCN-172（299 号 spec）发单、私聊、提工单时写下想伤害自己的话：只给写的这个人发一条站内信（热线），
+    不拦、不告诉对方、不上报；一天最多一次，免得反复打扰。"""
+    if not is_self_harm(text):
+        return False
+    from datetime import timedelta
+
+    from app.modules.account.models import utcnow
+    from app.modules.notification.models import Notification
+    from app.modules.notification.service import notify
+
+    recent = (db.query(Notification.id)
+              .filter(Notification.user_id == user_id, Notification.title == NUDGE_TITLE,
+                      Notification.created_at >= utcnow() - timedelta(hours=24)).first())
+    if recent is None:
+        notify(db, user_id, "system", NUDGE_TITLE, CRISIS_ANSWER)
+    return True

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>离线 · 协作任务平台</title>
+    <style>
+      body { font-family: -apple-system, "PingFang SC", sans-serif; background: #f5f6f8;
+             color: #1a1d24; display: grid; place-items: center; height: 100vh; margin: 0; }
+      .box { text-align: center; padding: 24px; }
+      h1 { font-size: 20px; margin: 0 0 8px; }
+      p { color: #6b7280; font-size: 14px; margin: 0 0 16px; }
+      button { background: #2f6fed; color: #fff; border: 0; border-radius: 8px;
+               padding: 12px 24px; font-size: 16px; min-height: 44px; }
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <h1>当前处于离线状态</h1>
+      <p>任务、合约与资金数据必须实时获取，无法离线查看。<br />请恢复网络后重试。</p>
+      <button onclick="location.reload()">重新加载</button>
+    </div>
+  </body>
+</html>

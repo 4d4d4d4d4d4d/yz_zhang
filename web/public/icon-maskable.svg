@@ -1,0 +1,6 @@
+<!-- maskable：关键图形收在中心 80% 安全区内，任何裁切形状下都不会被切掉 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" fill="#2f6fed"/>
+  <path d="M62 98l24 24 48-48" fill="none" stroke="#fff" stroke-width="14"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

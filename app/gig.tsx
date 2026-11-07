@@ -1,0 +1,220 @@
+// GIG-100 接单（125 号 spec）——App 端：现在有空（附近新单推给我）、附近的单与行情、常用地点与顺路单。
+// 位置只用到约 1 公里；「现在有空」到点自动关掉、位置随之删除；距离都是直线估算。
+import {
+  apiErrorText, departAt, departLine, DEPART_HINT, fmtYuan, formatDateTime,
+  gigRouteLabel, gigWhenLabel, type GigAlong, type GigRouteView, type GigAvailabilityView, type GigNearby, type GigPlaceRow, type GigQuote, type GigTaskCard, type PlatformClient,
+} from '@platform/core';
+import { useCallback, useEffect, useState } from 'react';
+import { Button, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+
+export type Locate = () => Promise<{ lat: number; lng: number } | null>;
+
+/** 拿不到定位就返回 null：「现在有空」不能拿 0,0 去推单。 */
+const deviceLocate: Locate = async () => {
+  try {
+    const Location = await import('expo-location');
+    const perm = await Location.requestForegroundPermissionsAsync();
+    if (perm.status !== 'granted') return null;
+    const pos = await Location.getCurrentPositionAsync({});
+    return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  } catch {
+    return null;
+  }
+};
+
+export function GigScreen({ client, locate = deviceLocate, onOpenTask }: {
+  client: PlatformClient; locate?: Locate; onOpenTask?: (taskId: number) => void;
+}) {
+  const [avail, setAvail] = useState<GigAvailabilityView | null>(null);
+  const [radius, setRadius] = useState(5);
+  const [near, setNear] = useState<GigNearby | null>(null);
+  const [places, setPlaces] = useState<GigPlaceRow[]>([]);
+  const [to, setTo] = useState<number | null>(null);
+  const [along, setAlong] = useState<GigAlong | null>(null);
+  // SCN-134 出发时间：今天 / 明天几点；空着按「现在有空」
+  const [departDay, setDepartDay] = useState(0);
+  const [departHm, setDepartHm] = useState('');
+  // SCN-140 常用路线：从哪个常用地点出发（终点用上面选的「到哪」）、几点、工作日 / 每天 / 周末
+  const [routes, setRoutes] = useState<GigRouteView[]>([]);
+  const [fromPlace, setFromPlace] = useState<number | null>(null);
+  const [routeHm, setRouteHm] = useState('');
+  const [routeDays, setRouteDays] = useState<keyof typeof ROUTE_DAYS>('workdays');
+  const [quote, setQuote] = useState<GigQuote | null>(null);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    try {
+      const a = await client.gigAvailability();
+      setAvail(a);
+      setPlaces(await client.gigPlaces());
+      setRoutes(await client.gigRoutes().catch(() => []));
+      setNear(a.available ? await client.gigNearby() : null);
+    } catch (e) { setError(apiErrorText(e)); }
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+
+  async function withHere(fn: (here: { lat: number; lng: number }) => Promise<string>) {
+    setError(''); setNotice('');
+    const here = await locate();
+    if (!here) { setError('没拿到位置：请在系统设置里允许使用定位'); return; }
+    try { setNotice(await fn(here)); await load(); } catch (e) { setError(apiErrorText(e)); }
+  }
+  const showQuote = (id: number) => void client.gigQuote({ task_id: id }).then(setQuote).catch((e) => setError(apiErrorText(e)));
+
+  return (
+    <View style={s.box}>
+      <Text style={s.muted}>位置只用到约 1 公里，距离是直线估算。</Text>
+      {avail?.available ? (
+        <View style={s.card}>
+          <Text style={s.title}>现在有空：{avail.radius_km} 公里内，到 {formatDateTime(avail.until)}（已推 {avail.pushed} 条）</Text>
+          <Button title="不接了" onPress={() => void client.stopGigAvailable().then(() => { setNear(null); setNotice('已关掉，位置已删除'); return load(); })} />
+        </View>
+      ) : (
+        <View style={s.card}>
+          <View style={s.row}>
+            {[1, 3, 5, 10].map((n) => (
+              <TouchableOpacity key={n} onPress={() => setRadius(n)} accessibilityState={{ selected: radius === n }}>
+                <Text style={radius === n ? s.tabOn : s.tab}>{n} 公里</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Button title="我现在有空（2 小时）" onPress={() => void withHere(async (here) => {
+            await client.setGigAvailable({ ...here, radius_km: radius, hours: 2 });
+            return '好的：接下来 2 小时附近有新单就推给你';
+          })} />
+        </View>
+      )}
+      {near && <Cards items={near.items} empty="附近暂时没有招募中的单" onQuote={showQuote} onOpen={onOpenTask} />}
+
+      <Text style={s.h}>顺路单</Text>
+      <View style={s.row}>
+        {places.map((p) => (
+          <TouchableOpacity key={p.id} onPress={() => setTo(p.id)} accessibilityState={{ selected: to === p.id }}>
+            <Text style={to === p.id ? s.tabOn : s.tab}>到{p.name}</Text>
+          </TouchableOpacity>
+        ))}
+        {['家', '公司'].filter((n) => !places.some((p) => p.name === n)).map((n) => (
+          <TouchableOpacity key={n} onPress={() => void withHere(async (here) => {
+            await client.addGigPlace(n, here.lat, here.lng);
+            return `已把这里存为「${n}」`;
+          })}><Text style={s.link}>把这里存为「{n}」</Text></TouchableOpacity>
+        ))}
+      </View>
+      {to !== null && (
+        <View>
+          <View style={s.row}>
+            {['今天', '明天'].map((label, i) => (
+              <TouchableOpacity key={label} onPress={() => setDepartDay(i)} accessibilityState={{ selected: departDay === i }}>
+                <Text style={departDay === i ? s.tabOn : s.tab}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+            <TextInput style={s.input} accessibilityLabel="几点出发" placeholder="几点出发（如 08:30，空着 = 现在）"
+                       value={departHm} onChangeText={setDepartHm} />
+          </View>
+          <Button title="从这里出发，看顺路的单" onPress={() => {
+            const at = departAt(departDay, departHm);
+            if (at === null) { setError(DEPART_HINT); return; }
+            void withHere(async (here) => {
+              const r = await client.gigAlong({ to_place: to, from_lat: here.lat, from_lng: here.lng, max_detour_km: 2,
+                ...(at ? { depart_at: at, within_hours: 3 } : {}) });
+              setAlong(r);
+              return '';
+            });
+          }} />
+        </View>
+      )}
+      {along && !!departLine(along) && <Text style={s.muted}>{departLine(along)}</Text>}
+
+      {places.length > 1 && (
+        <View style={s.card} accessibilityLabel="常用路线">
+          <Text style={s.title}>常用路线</Text>
+          <Text style={s.muted}>固定要走的路存一次：出发前一小时内推一次顺路的名额，一天一次，没有就不打扰。</Text>
+          {routes.map((r) => (
+            <View key={r.id} style={s.row}>
+              <Text>{gigRouteLabel(r)}</Text>
+              <TouchableOpacity accessibilityLabel={`删掉路线：${gigRouteLabel(r)}`}
+                                onPress={() => void client.deleteGigRoute(r.id).then(() => load()).catch((e) => setError(apiErrorText(e)))}>
+                <Text style={s.link}>删除</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+          <View style={s.row}>
+            {places.filter((p) => p.id !== to).map((p) => (
+              <TouchableOpacity key={p.id} onPress={() => setFromPlace(p.id)} accessibilityState={{ selected: fromPlace === p.id }}>
+                <Text style={fromPlace === p.id ? s.tabOn : s.tab}>从{p.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={s.row}>
+            {(Object.keys(ROUTE_DAYS) as Array<keyof typeof ROUTE_DAYS>).map((k) => (
+              <TouchableOpacity key={k} onPress={() => setRouteDays(k)} accessibilityState={{ selected: routeDays === k }}>
+                <Text style={routeDays === k ? s.tabOn : s.tab}>{ROUTE_DAYS[k].label}</Text>
+              </TouchableOpacity>
+            ))}
+            <TextInput style={s.input} accessibilityLabel="路线几点出发" placeholder="几点出发（如 08:30）" value={routeHm} onChangeText={setRouteHm} />
+          </View>
+          <Button title="存为常用路线" disabled={fromPlace === null || to === null || fromPlace === to} onPress={() => {
+            const hm = routeHm.trim();
+            if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(hm)) { setError(DEPART_HINT); return; }
+            setError('');
+            void client.addGigRoute({ from_place: fromPlace as number, to_place: to as number, depart_hm: hm, weekdays: ROUTE_DAYS[routeDays].days })
+              .then(() => { setNotice('已存为常用路线：出发前一小时内会推顺路的名额'); return load(); })
+              .catch((e) => setError(apiErrorText(e)));
+          }} />
+        </View>
+      )}
+      {along && <Cards items={along.items} empty={`去「${along.to}」的路上暂时没有顺路的单`} onQuote={showQuote} onOpen={onOpenTask} />}
+      {quote && (
+        <View style={s.card}>
+          <Text style={s.title}>报价参考：{quote.category}</Text>
+          {quote.basis.map((b) => <Text key={b}>· {b}</Text>)}
+          <Text style={s.muted}>{quote.disclaimer}</Text>
+        </View>
+      )}
+      {!!notice && <Text>{notice}</Text>}
+      {!!error && <Text style={s.error}>{error}</Text>}
+    </View>
+  );
+}
+
+function Cards({ items, empty, onQuote, onOpen }: {
+  items: GigTaskCard[]; empty: string; onQuote: (id: number) => void; onOpen?: (id: number) => void;
+}) {
+  if (!items.length) return <Text style={s.muted}>{empty}</Text>;
+  return (
+    <View style={s.box}>
+      {items.map((t) => (
+        <View key={t.task_id} style={s.card}>
+          <TouchableOpacity onPress={() => onOpen?.(t.task_id)}><Text style={s.title}>{t.title}</Text></TouchableOpacity>
+          <Text style={s.muted}>
+            {t.category} · {t.address_hint}
+            {gigWhenLabel(t) ? ` · ${gigWhenLabel(t)}` : ''}
+            {t.distance_m !== undefined ? ` · 约 ${(t.distance_m / 1000).toFixed(1)} 公里` : ''}
+            {t.detour_m !== undefined ? ` · 多走约 ${(t.detour_m / 1000).toFixed(1)} 公里` : ''} · 到手约 {fmtYuan(t.net_cents)}
+          </Text>
+          <TouchableOpacity onPress={() => onQuote(t.task_id)}><Text style={s.link}>看行情</Text></TouchableOpacity>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const ROUTE_DAYS = {
+  workdays: { label: '工作日', days: [0, 1, 2, 3, 4] },
+  everyday: { label: '每天', days: [0, 1, 2, 3, 4, 5, 6] },
+  weekend: { label: '周末', days: [5, 6] },
+};
+
+const s = StyleSheet.create({
+  box: { gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  tab: { paddingVertical: 6, paddingHorizontal: 10, color: '#666' },
+  tabOn: { paddingVertical: 6, paddingHorizontal: 10, color: '#b5532f', fontWeight: '600' },
+  card: { borderWidth: 1, borderColor: '#eee', borderRadius: 10, padding: 10, gap: 4 },
+  title: { fontSize: 15, fontWeight: '600' },
+  h: { fontSize: 16, fontWeight: '600', marginTop: 6 },
+  muted: { color: '#777' },
+  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, minWidth: 160 },
+  error: { color: '#c0392b' },
+  link: { color: '#b5532f' },
+});

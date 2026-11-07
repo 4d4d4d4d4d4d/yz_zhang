@@ -1,0 +1,24 @@
+groups:
+  - name: opc-chain-index
+    rules:
+      - alert: OPCChainIndexUpdateFailed
+        expr: opc_chain_index_healthy == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OPC chain event index cannot update"
+      - alert: OPCChainIndexStale
+        expr: time() - opc_chain_index_last_success_seconds > 180
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OPC chain event index has stopped reporting"
+      - alert: OPCChainIndexBehind
+        expr: opc_chain_index_lag_blocks > 200
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OPC chain event index is falling behind"

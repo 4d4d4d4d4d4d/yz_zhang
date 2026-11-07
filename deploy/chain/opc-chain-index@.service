@@ -1,0 +1,27 @@
+[Unit]
+Description=OPC confirmed chain event index (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+User=opc-chain
+StateDirectory=opc-chain
+WorkingDirectory=/opt/opc-platform/chain
+EnvironmentFile=/etc/opc-chain/index-%i.env
+# Requires Node >=24. Compile artifacts with npm run compile before enabling.
+ExecStart=/usr/bin/node /opt/opc-platform/chain/scripts/index-events.mjs ${CHAIN_MANIFEST} ${CHAIN_INDEX_DATABASE} ${CHAIN_CONTRACT_TYPE} --watch
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=192M
+
+[Install]
+WantedBy=multi-user.target

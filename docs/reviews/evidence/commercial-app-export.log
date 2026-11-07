@@ -1,0 +1,36 @@
+
+> app@0.1.0 typecheck
+> tsc --noEmit
+
+
+> app@0.1.0 test
+> jest --runInBand
+
+PASS ./money-and-safety.test.tsx
+PASS ./team-approval.test.tsx
+PASS ./change-and-checkin.test.tsx
+PASS ./login-recovery.test.tsx
+
+Test Suites: 4 passed, 4 total
+Tests:       21 passed, 21 total
+Snapshots:   0 total
+Time:        2.57 s, estimated 3 s
+Ran all test suites.
+env: load .env.local
+env: export EXPO_PUBLIC_API_BASE_URL
+Starting Metro Bundler
+transform[stderr]: (node:73579) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+transform[stderr]: (Use `node --trace-warnings ...` to show where the warning was created)
+iOS Bundled 1029ms node_modules/expo/AppEntry.js (483 modules)
+Android Bundled 1713ms node_modules/expo/AppEntry.js (578 modules)
+
+Exporting 1 bundle for ios:
+_expo/static/js/ios/AppEntry-605bc4734f381d8626b5c4f5af49450b.hbc (1.78 MB)
+
+Exporting 1 bundle for android:
+_expo/static/js/android/AppEntry-09279fbe8fee242d3f2e4b1276766428.hbc (1.78 MB)
+
+Exporting 1 file:
+metadata.json (250 B)
+
+App exported to: dist-integration

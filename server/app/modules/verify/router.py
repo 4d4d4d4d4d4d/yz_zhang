@@ -1,0 +1,295 @@
+"""VER 核验单 + ESCA 争议升级阶梯（49 号 spec）。"""
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.orm import Session
+
+from app.core.db import get_db
+from app.core.deps import get_current_user, require_job_auth
+from app.core.locks import job_slot
+from app.core.errors import bad_request, conflict, forbidden, not_found
+from app.modules.account.models import User
+from app.modules.wallet import service as wallet
+
+from . import service
+from .models import VerificationOrder
+from app.core.timefmt import iso
+
+router = APIRouter(tags=["verify"])
+
+
+class VerifyRequestIn(BaseModel):
+    """VER-050（372 号 spec）发单人点名一位核验人；不传就和原来一样由平台派单。"""
+    model_config = ConfigDict(extra="forbid")
+    verifier_id: int | None = Field(default=None, ge=1)
+
+
+class DeclineIn(BaseModel):
+    """VER-050b（374 号 spec）被点名的核验人当场拒绝；理由可不填，填了会转告发单人。"""
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(default="", max_length=200)
+
+
+class OutcomeIn(BaseModel):
+    outcome: str = Field(pattern="^(approved|revised|rejected)$")
+    comment: str = Field(default="", max_length=2000)
+    revised_output: str = Field(default="", max_length=20000)
+
+
+def _dump(o: VerificationOrder) -> dict:
+    return {
+        "id": o.id, "task_id": o.task_id, "status": o.status, "trigger": o.trigger,
+        "fee_cents": o.fee_cents, "payer_id": o.payer_id, "verifier_id": o.verifier_id,
+        "designated_verifier_id": o.designated_verifier_id,
+        "outcome": o.outcome, "comment": o.comment,
+        "revised_output": o.revised_output, "criteria_results": o.criteria_results,
+        "deadline": iso(o.deadline),
+        "created_at": iso(o.created_at),
+    }
+
+
+def _task(db: Session, task_id: int):
+    from app.modules.task.router import _get_task
+
+    return _get_task(db, task_id)
+
+
+@router.post("/tasks/{task_id}/verification", status_code=201)
+def request_verification(task_id: int, body: VerifyRequestIn | None = None, user: User = Depends(get_current_user),
+                         db: Session = Depends(get_db, scope="function")):
+    """下一张核验单。
+
+    VER-002 **谁付费是个有立场的判断**：
+    - agent 置信度不足自动升级 → **平台付**。平台自有 agent 没把握是平台的问题，
+      让发布方为 AI 的不确定性买单，等于把技术不成熟的成本转嫁给用户。
+    - 发布方主动要求核验一个已成功的 run → 发布方付（他额外买的一份确定性）。
+
+    这条有直接的经济后果：置信度阈值调得越松，平台自己掏的核验费越多——
+    **这正是它该有的激励**，调松阈值的成本由调的人承担。
+    """
+    from app.modules.agent import service as agent_service
+
+    task = _task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden("仅发布方可发起核验")
+    run = agent_service.latest_run(db, task_id)
+    if not run:
+        raise conflict("该任务没有 AI 执行记录，无需核验", "no_agent_run")
+    if run.status == "running":
+        raise conflict("执行中，请稍候", "agent_run_in_progress")
+
+    escalated = run.status == "escalated"
+    designated = body.verifier_id if body else None
+    if designated:
+        # VER-050 点名的核验人：核验费由发单人付。平台付费的单任由发单人点人，
+        # 等于让他拿平台的钱给熟人发报酬；所以点名了就自己付，升级的单也一样（界面上说清楚）
+        target = db.get(User, designated)
+        if not target or target.is_deleted:
+            raise not_found("没有这个用户：请核对对方的用户编号", "verifier_not_found")
+        block = service.designated_block(db, task, target, payer_id=user.id)
+        if block:
+            raise bad_request(f"对方现在不能核验这一单：{block}", "verifier_not_eligible")
+        order = service.create_order(db, task, trigger="designated", agent_run_id=run.id,
+                                     payer_id=user.id, designated_verifier_id=target.id)
+        from app.modules.notification.service import notify
+
+        notify(db, target.id, "verify", "有人点名请你核验",
+               f"「{task.title}」的发单人请你核验 AI 的产出，报酬 ¥{order.fee_cents / 100:.2f}；"
+               f"请在核验台接单，截止前没接会自动退回给发单人")
+        return _dump(order)
+    payer_id = wallet.PLATFORM_USER_ID if escalated else user.id
+    order = service.create_order(
+        db, task, trigger="escalation" if escalated else "requested",
+        agent_run_id=run.id, payer_id=payer_id,
+    )
+    return _dump(order)
+
+
+MAX_CANDIDATES = 20
+
+
+@router.get("/tasks/{task_id}/verifier-candidates")
+def verifier_candidates(task_id: int, user: User = Depends(get_current_user),
+                        db: Session = Depends(get_db, scope="function")):
+    """VER-050c（376 号 spec）从合作过的人里点名：不用记用户编号。
+
+    候选就是 IM-022「合作过的人」（已结算合约的对手方），逐个按点名时的同一个资格函数判一遍：
+    能点的排前面；不能点的也列出来并写明为什么，免得发单人以为人丢了。只给发单人看。
+    """
+    from app.modules.im.router_social import worked_with_rows
+
+    task = _task(db, task_id)
+    if task.creator_id != user.id:
+        raise forbidden("仅发布方可查看核验人候选")
+    out = []
+    for row in worked_with_rows(db, user.id)[:MAX_CANDIDATES]:
+        target = db.get(User, row["user_id"])
+        if not target or target.is_deleted:
+            continue
+        block = service.designated_block(db, task, target, payer_id=user.id)
+        out.append({"user_id": target.id, "nickname": row["nickname"], "times": row["times"],
+                    "eligible": not block, "reason": block})
+    out.sort(key=lambda r: (not r["eligible"], -r["times"]))
+    return out
+
+
+@router.get("/verification-orders")
+def open_orders(user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """可接的核验单。不能接的**说明理由**——只显示空列表，
+    核验人不知道是资格不够还是真没单。"""
+    rows = (
+        db.query(VerificationOrder)
+        .filter(VerificationOrder.status == "open")
+        .order_by(VerificationOrder.id.desc())
+        .limit(50)
+        .all()
+    )
+    out = []
+    for o in rows:
+        # VER-050 点名了别人的单不出现在别人的列表里：接不了，也不该看到是谁家的单
+        if o.designated_verifier_id and o.designated_verifier_id != user.id:
+            continue
+        task = _task(db, o.task_id)
+        block = service.verifier_block(db, task, o, user)
+        out.append({
+            **_dump(o), "category": task.category, "task_title": task.title,
+            "claimable": not block, "reason": block,
+        })
+    return out
+
+
+@router.post("/verification-orders/{order_id}/claim")
+def claim(order_id: int, user: User = Depends(get_current_user),
+          db: Session = Depends(get_db, scope="function")):
+    order = db.get(VerificationOrder, order_id)
+    if not order:
+        raise not_found("核验单不存在")
+    if order.status != "open":
+        raise conflict("该核验单已被接走或已结束", "not_claimable")
+    task = _task(db, order.task_id)
+    if order.designated_verifier_id and order.designated_verifier_id != user.id:
+        raise forbidden("发单人点名了别的核验人，这一单只能由被点名的人接", "verifier_not_designated")
+    block = service.verifier_block(db, task, order, user)
+    if block:
+        raise forbidden(block, "verifier_not_eligible")
+    order.verifier_id = user.id
+    order.status = "claimed"
+    db.add(order)
+    return _dump(order)
+
+
+@router.post("/verification-orders/{order_id}/decline")
+def decline(order_id: int, body: DeclineIn | None = None, user: User = Depends(get_current_user),
+            db: Session = Depends(get_db, scope="function")):
+    """VER-050b 被点名的人不方便：当场退款给发单人，不用等截止。
+
+    只有被点名的人能拒绝、只在还没接的时候能拒绝（接了就走原来的提交结论或到期）。
+    平台派的单没有「拒绝」——不接就是了，别人会接。
+    """
+    order = db.get(VerificationOrder, order_id)
+    if not order:
+        raise not_found("核验单不存在")
+    if order.designated_verifier_id != user.id:
+        raise forbidden("只有被点名的核验人能拒绝这一单", "verifier_not_designated")
+    if order.status != "open":
+        raise conflict("这一单已经接下或已结束，不能再拒绝", "verification_not_open")
+    task = _task(db, order.task_id)
+    service.cancel_order(db, order, memo="被点名的核验人拒绝，核验费退回")
+    reason = (body.reason.strip() if body else "")
+    from app.modules.notification.service import notify
+
+    notify(db, order.payer_id, "verify", "你点名的核验人不方便",
+           f"「{task.title}」你点名的核验人这次不方便接{('：' + reason) if reason else ''}。"
+           f"核验费 ¥{order.fee_cents / 100:.2f} 已退回；可以重新申请，点名别人或由平台派单")
+    db.add(order)
+    return _dump(order)
+
+
+@router.get("/verification-orders/{order_id}")
+def get_order(order_id: int, user: User = Depends(get_current_user),
+              db: Session = Depends(get_db, scope="function")):
+    order = db.get(VerificationOrder, order_id)
+    if not order:
+        raise not_found("核验单不存在")
+    task = _task(db, order.task_id)
+    if user.id not in (task.creator_id, order.verifier_id) and not user.is_admin:
+        raise forbidden()
+    from app.modules.agent.models import AgentRun
+
+    run = db.get(AgentRun, order.agent_run_id) if order.agent_run_id else None
+    return {
+        **_dump(order),
+        "task_title": task.title, "task_description": task.description,
+        "category": task.category,
+        "acceptance_criteria": task.acceptance_criteria,
+        # 核验人要看的就是这个：AI 产出 + 它自报的置信度 + 平台判据结果
+        "agent_output": run.output if run else "",
+        "agent_confidence_bps": run.confidence_bps if run else None,
+        "agent_criteria_results": run.criteria_results if run else [],
+    }
+
+
+@router.post("/verification-orders/{order_id}/outcome")
+def submit(order_id: int, body: OutcomeIn, user: User = Depends(get_current_user),
+           db: Session = Depends(get_db, scope="function")):
+    order = db.get(VerificationOrder, order_id)
+    if not order:
+        raise not_found("核验单不存在")
+    if order.verifier_id != user.id:
+        raise forbidden("仅接单的核验人可提交结论")
+    task = _task(db, order.task_id)
+    return service.submit_outcome(
+        db, order, task, outcome=body.outcome, comment=body.comment,
+        revised_output=body.revised_output,
+    )
+
+
+@router.post("/verify/jobs/expire-orders")
+def expire_orders(db: Session = Depends(get_db, scope="function"), _=Depends(require_job_auth),
+                  __=Depends(job_slot("expire_verifications"), scope="function")):
+    """VER-041 超时未接单自动退款。已接单的不自动退——那笔活可能正在做，
+    钱退了人还在干是更糟的状态，那种情况走人工。"""
+    return service.expire_overdue(db)
+
+
+# ----------------------------------------------------------------- ESCA 升级阶梯
+class EscalateIn(BaseModel):
+    task_id: int
+    reason: str = Field(min_length=4, max_length=1000)
+
+
+@router.post("/support/tickets/{ticket_id}/escalate-to-dispute", status_code=201)
+def escalate_ticket(ticket_id: int, body: EscalateIn,
+                    user: User = Depends(get_current_user), db: Session = Depends(get_db, scope="function")):
+    """ESCA-001 工单转纠纷，**带上下文**。
+
+    不带上下文的话用户要把话重说一遍——而他刚刚已经在工单里说过一次了。
+    重说一遍不只是麻烦：**两次陈述不一致会被当成翻供**，在纠纷里对他不利。
+    """
+    from app.modules.dispute.router import OpenIn, open_dispute
+    from app.modules.support.models import Ticket
+
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket:
+        raise not_found("工单不存在")
+    if ticket.user_id != user.id:
+        raise forbidden()
+    if ticket.escalated_to_dispute_id:
+        raise conflict("该工单已转纠纷", "already_escalated")
+
+    result = open_dispute(body.task_id, OpenIn(reason=body.reason), user, db)
+
+    from app.modules.dispute.models import Dispute
+
+    dispute = db.get(Dispute, result["id"])
+    # 上下文进证据链，两边互相能找到
+    evidence = dict(dispute.evidence or {})
+    evidence["from_ticket"] = {
+        "ticket_id": ticket.id, "subject": ticket.subject,
+        "body": ticket.body, "support_reply": ticket.reply,
+        "created_at": iso(ticket.created_at),
+    }
+    dispute.evidence = evidence
+    ticket.escalated_to_dispute_id = dispute.id
+    ticket.status = "escalated"
+    db.add_all([dispute, ticket])
+    return {"dispute_id": dispute.id, "ticket_id": ticket.id}

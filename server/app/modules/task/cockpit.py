@@ -1,0 +1,261 @@
+"""SPACE-024 / AI-DEC-021 合作驾驶舱（120 号 spec）：一棵树、一条关键路径、一本预算账、一张预警单；
+AI-DEC-021b（368 号）预警单里加上排期冲突；AI-DEC-021c（384 号）按工期估计排出时间线、算预计完成日。
+
+母任务拆成十几步、分给几个人之后，发布方要回答四个问题：
+**现在做到哪了？卡在谁那里？钱花了多少？哪里要我出手？**
+原来的 `/tasks/{id}/tree` 只回答第一个（按预算加权的进度），而且只看一层。
+
+取数一律按层批量查（与节点数无关的几条查询，115 号闸门同一条要求），节点数有上限。
+"""
+from __future__ import annotations
+
+from datetime import timedelta
+
+from sqlalchemy.orm import Session
+
+from app.modules.account.models import User, utcnow
+from app.modules.task.models import Application, ProgressLog, Task
+
+MAX_DEPTH = 6
+MAX_NODES = 300
+STALE_RECRUIT_DAYS = 3       # 招募超过 3 天没人报名：该改价、改说明或主动邀约了
+DONE = ("completed",)
+OPEN_DISPUTE = ("open", "appealed")
+STATUS_NAMES = {"draft": "未开始", "published": "招募中", "matched": "已成交", "in_progress": "进行中",
+                "pending_acceptance": "待验收", "completed": "已完成", "cancelled": "已取消", "disputed": "纠纷中"}
+
+
+def _descendants(db: Session, root: Task) -> list[Task]:
+    out, frontier, depth = [], [root.id], 0
+    while frontier and depth < MAX_DEPTH and len(out) < MAX_NODES:
+        rows = db.query(Task).filter(Task.parent_id.in_(frontier)).order_by(Task.id).all()
+        out.extend(rows)
+        frontier = [r.id for r in rows]
+        depth += 1
+    return out[:MAX_NODES]
+
+
+def critical_path(nodes: list[Task]) -> list[int]:
+    """剩余步骤最多的那条依赖链（只在同一层兄弟之间有依赖）。
+
+    没有工期估计，就不假装算「最长工期」：按**还没完成的步骤数**取最长链——
+    这条链上任何一步拖一天，整件事就晚一天。已完成的步骤不计入长度。
+    """
+    by_id = {n.id: n for n in nodes}
+    memo: dict[int, tuple[int, list[int]]] = {}
+
+    def longest(nid: int, seen: frozenset) -> tuple[int, list[int]]:
+        if nid in memo:
+            return memo[nid]
+        n = by_id[nid]
+        best = (0, [])
+        for dep in (n.depends_on or []):
+            if dep in by_id and dep not in seen:
+                cand = longest(dep, seen | {nid})
+                if cand[0] > best[0]:
+                    best = cand
+        own = 0 if n.status in DONE or n.status == "cancelled" else 1
+        memo[nid] = (best[0] + own, best[1] + [nid])
+        return memo[nid]
+
+    best: tuple[int, list[int]] = (0, [])
+    for n in nodes:
+        if n.status == "cancelled":
+            continue
+        cand = longest(n.id, frozenset())
+        if cand[0] > best[0]:
+            best = cand
+    return [i for i in best[1] if by_id[i].status not in DONE] if best[0] else []
+
+
+def _live(n: Task) -> bool:
+    return n.status not in DONE and n.status != "cancelled"
+
+
+def schedule_conflicts(nodes: list[Task]) -> dict[int, list[int]]:
+    """后一步的截止不晚于它依赖的前一步：{后一步 id: [前一步 id, ...]}。两步都还没完成、都填了截止才算。"""
+    by_id = {n.id: n for n in nodes}
+    out: dict[int, list[int]] = {}
+    for n in nodes:
+        if not _live(n) or not n.deadline:
+            continue
+        bad = [d for d in (n.depends_on or []) if d in by_id and _live(by_id[d]) and by_id[d].deadline
+               and n.deadline <= by_id[d].deadline]
+        if bad:
+            out[n.id] = bad
+    return out
+
+
+def timeline(nodes: list[Task], now, reports: dict | None = None) -> dict:
+    """AI-DEC-021c（384 号 spec）按依赖把还没完成的步骤排成一条条时间段，算出整件事预计哪天做完。
+
+    每一步最早从「现在」开始，要等的前一步没完就从前一步的预计完成时间开始；
+    长度按这一步的工期估计（天）；没填工期但填了截止的，就排到截止为止（`basis = deadline`）；
+    两样都没有，或者它要等的步骤排不出来，这一步就排不出来（`basis = unknown`），整件事的预计完成日也给不出。
+    进行中的步骤不知道做了几成，按整段工期从现在算——宁可估晚，不估早。已完成、已取消的不画条。
+
+    AI-DEC-021d（386 号 spec）`reports` = {步骤 id: (报的时间, 还要几天)}：接单人报过的，以他最近一次报的为准
+    （`basis = reported`），完成时间 = 报的时间 + 天数；那个时间已经过了还没做完，就按「现在」算，不往回画。
+    """
+    reports = reports or {}
+    by_id = {n.id: n for n in nodes}
+    memo: dict[int, tuple] = {}
+    UNKNOWN = (None, None, "unknown")
+
+    def plan(nid: int, seen: frozenset) -> tuple:
+        if nid in memo:
+            return memo[nid]
+        n = by_id[nid]
+        start = now
+        for d in (n.depends_on or []):
+            if d not in by_id or d in seen or not _live(by_id[d]):
+                continue
+            _, end, _ = plan(d, seen | {nid})
+            if end is None:
+                memo[nid] = UNKNOWN
+                return UNKNOWN
+            start = max(start, end)
+        if n.id in reports:
+            at, days = reports[n.id]
+            out = (start, max(start, at + timedelta(days=days)), "reported")
+        elif n.est_days:
+            out = (start, start + timedelta(days=n.est_days), "estimate")
+        elif n.deadline and n.deadline > start:
+            out = (start, n.deadline, "deadline")
+        else:
+            out = UNKNOWN
+        memo[nid] = out
+        return out
+
+    rows = []
+    for n in nodes:
+        if not _live(n):
+            rows.append({"task_id": n.id, "start": None, "end": None, "basis": "done", "late": False,
+                         "reported_at": None, "days_left": None})
+            continue
+        start, end, basis = plan(n.id, frozenset())
+        rows.append({"task_id": n.id, "start": start, "end": end, "basis": basis,
+                     # 按工期估计（或接单人报的天数）排出来的完成时间晚于这一步自己的截止
+                     "late": bool(basis in ("estimate", "reported") and n.deadline and end > n.deadline),
+                     "reported_at": reports[n.id][0] if basis == "reported" else None,
+                     "days_left": reports[n.id][1] if basis == "reported" else None})
+    live = [r for r in rows if r["basis"] != "done"]
+    unknown = [r["task_id"] for r in live if r["basis"] == "unknown"]
+    finish = max((r["end"] for r in live), default=None) if live and not unknown else None
+    return {"rows": rows, "projected_finish": finish, "unknown_steps": unknown}
+
+
+def cockpit(db: Session, parent: Task) -> dict:
+    from app.core.timefmt import iso
+    from app.modules.contract.models import Contract
+    from app.modules.dispute.models import Dispute
+
+    now = utcnow()
+    nodes = _descendants(db, parent)
+    ids = [n.id for n in nodes]
+    has_children = {n.parent_id for n in nodes}
+    leaves = [n for n in nodes if n.id not in has_children]
+    contracts = {c.task_id: c for c in db.query(Contract).filter(Contract.task_id.in_(ids or [-1]))}
+    disputes = {d.task_id for d in db.query(Dispute.task_id).filter(
+        Dispute.task_id.in_(ids or [-1]), Dispute.status.in_(OPEN_DISPUTE))}
+    applicants = dict(db.query(Application.task_id, Application.id).filter(Application.task_id.in_(ids or [-1])))
+    people = {u.id: u.nickname for u in db.query(User).filter(
+        User.id.in_({n.executor_id for n in nodes if n.executor_id} or {-1}))}
+    status_of = {n.id: n.status for n in nodes}
+
+    # ---- 预算账：只算叶子（容器步骤自己不托管，算进去会重复）
+    planned = parent.budget_cents
+    allocated = committed = paid = 0
+    for n in leaves:
+        if n.status == "cancelled":
+            continue
+        allocated += n.budget_cents
+        c = contracts.get(n.id)
+        if c is None or c.status in ("cancelled", "refunded", "pending_signatures"):
+            continue
+        if c.status == "released":
+            paid += c.amount_cents
+        else:
+            committed += c.amount_cents - (c.released_cents or 0)
+            paid += c.released_cents or 0
+
+    # ---- 预警
+    alerts = []
+    for n in leaves:
+        if n.id in disputes:
+            alerts.append({"task_id": n.id, "kind": "dispute", "text": f"「{n.title}」在纠纷中，相关款项已冻结"})
+        elif n.deadline and n.deadline < now and n.status not in DONE + ("cancelled",):
+            alerts.append({"task_id": n.id, "kind": "overdue",
+                           "text": f"「{n.title}」已过截止时间（{STATUS_NAMES.get(n.status, n.status)}）：催办、改期或发起纠纷"})
+        elif n.status == "published" and n.id not in applicants and n.created_at < now - timedelta(days=STALE_RECRUIT_DAYS):
+            alerts.append({"task_id": n.id, "kind": "no_applicants",
+                           "text": f"「{n.title}」招募超过 {STALE_RECRUIT_DAYS} 天还没人报名：改价、改说明或主动邀约"})
+        elif n.status == "pending_acceptance":
+            alerts.append({"task_id": n.id, "kind": "to_accept", "text": f"「{n.title}」已交付，等你验收"})
+    # ---- AI-DEC-021b（368 号 spec）排期冲突：拆完以后各步截止时间是分别填的，最容易排错的两处——
+    # ① 后一步的截止不晚于它依赖的前一步（前一步做完才能开始，后一步不可能按时）；
+    # ② 某一步的截止晚于母任务的截止（这一步按时了，整件事也晚了）。只看还没完成、没取消的步骤
+    conflicts = schedule_conflicts(leaves)
+    by_id = {n.id: n for n in leaves}
+    for nid, deps in conflicts.items():
+        n = by_id[nid]
+        names = "、".join(f"「{by_id[d].title}」" for d in deps)
+        alerts.append({"task_id": nid, "kind": "schedule_conflict",
+                       "text": f"「{n.title}」的截止不晚于它要等的{names}：前一步做完才能开始，改一下这一步的截止"})
+    if parent.deadline:
+        for n in leaves:
+            if _live(n) and n.deadline and n.deadline > parent.deadline:
+                alerts.append({"task_id": n.id, "kind": "past_parent_deadline",
+                               "text": f"「{n.title}」的截止晚于整件事的截止：这一步按时了，整件事也会晚"})
+    # ---- AI-DEC-021c（384 号 spec）按工期估计排出来，这一步或整件事赶不上截止
+    # AI-DEC-021d（386 号 spec）每一步接单人最近一次报的「还要几天」：一条查询取全部，按 id 升序覆盖成最新的
+    reports = {r.task_id: (r.created_at, r.days_left) for r in db.query(ProgressLog).filter(
+        ProgressLog.task_id.in_([n.id for n in leaves] or [-1]), ProgressLog.days_left.isnot(None)).order_by(ProgressLog.id)}
+    plan = timeline(leaves, now, reports)
+    for r in plan["rows"]:
+        if r["late"]:
+            alerts.append({"task_id": r["task_id"], "kind": "estimate_past_deadline",
+                           "text": (f"「{by_id[r['task_id']].title}」接单人报的还要 {r['days_left']} 天，会晚于这一步的截止："
+                                    "和他商量能不能加快，或者走变更单改期") if r["basis"] == "reported" else
+                                   (f"「{by_id[r['task_id']].title}」按工期估计做不完：等前面的步骤加上它自己要的天数，"
+                                    "会晚于它的截止。改截止、缩短前面的步骤，或者分给更多人并行")})
+    if parent.deadline and plan["projected_finish"] and plan["projected_finish"] > parent.deadline:
+        alerts.append({"task_id": parent.id, "kind": "projected_late",
+                       "text": "按各步的工期估计排下来，整件事会晚于截止：看时间线上最晚的那条，"
+                               "砍掉一步、让没有依赖的步骤并行，或者改截止"})
+    if planned and allocated > planned:
+        alerts.append({"task_id": parent.id, "kind": "over_budget",
+                       "text": f"各步骤预算合计 ¥{allocated / 100:.2f}，超出母任务预算 ¥{planned / 100:.2f}"})
+
+    path = critical_path([n for n in leaves])
+    done_budget = sum(n.budget_cents for n in leaves if n.status in DONE)
+    live = [n for n in leaves if n.status != "cancelled"]
+    return {
+        "task_id": parent.id, "title": parent.title, "status": parent.status,
+        "progress_pct": round(done_budget * 100 / (sum(n.budget_cents for n in live) or 1), 1) if live else 0,
+        "steps_total": len(live), "steps_done": sum(1 for n in live if n.status in DONE),
+        "budget": {"planned_cents": planned, "allocated_cents": allocated, "committed_cents": committed,
+                   "paid_cents": paid, "remaining_cents": max(planned - committed - paid, 0)},
+        "critical_path": path,
+        "alerts": alerts,
+        # AI-DEC-021c（384 号 spec）时间线：每一步的预计起止；有一步排不出来，整件事的预计完成日就是 null
+        "timeline": {
+            "rows": [{**r, "start": iso(r["start"]), "end": iso(r["end"]), "reported_at": iso(r["reported_at"])}
+                     for r in plan["rows"]],
+            "projected_finish": iso(plan["projected_finish"]),
+            "unknown_steps": plan["unknown_steps"],
+        },
+        "nodes": [{
+            "id": n.id, "parent_id": n.parent_id, "title": n.title, "status": n.status,
+            "status_name": STATUS_NAMES.get(n.status, n.status), "budget_cents": n.budget_cents,
+            "is_container": n.id in has_children, "depends_on": list(n.depends_on or []),
+            "blocked_by": [d for d in (n.depends_on or []) if status_of.get(d) not in DONE and d in status_of],
+            "executor_id": n.executor_id, "executor_nickname": people.get(n.executor_id) if n.executor_id else None,
+            "deadline": iso(n.deadline),
+            "overdue": bool(n.deadline and n.deadline < now and n.status not in DONE + ("cancelled",)),
+            "on_critical_path": n.id in path,
+            "in_dispute": n.id in disputes,
+            "schedule_conflicts": conflicts.get(n.id, []),
+            "est_days": n.est_days,
+        } for n in nodes],
+    }

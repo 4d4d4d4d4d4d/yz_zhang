@@ -1,0 +1,417 @@
+{
+ "_说明": "XAPP-015 出计划规则的两端对照：服务端 tests/test_xapp_plan.py 与 SDK xapp.test.ts 都读这个文件；rules 必须等于服务端 /xapp/catalog 的 plan_rules，cases 的 expect 两边都要出得一模一样。改规则时重新生成：见 161 号 spec 第 6 节。",
+ "rules": {
+  "apps": [
+   {
+    "app": "com.autonavi.minimap",
+    "names": [
+     "高德",
+     "地图",
+     "导航",
+     "路线"
+    ],
+    "channels": [
+     "deeplink",
+     "a11y",
+     "vision"
+    ]
+   },
+   {
+    "app": "com.baidu.BaiduMap",
+    "names": [
+     "百度地图"
+    ],
+    "channels": [
+     "deeplink",
+     "a11y",
+     "vision"
+    ]
+   },
+   {
+    "app": "com.tencent.mm",
+    "names": [
+     "微信"
+    ],
+    "channels": [
+     "a11y",
+     "vision"
+    ]
+   },
+   {
+    "app": "com.eg.android.AlipayGphone",
+    "names": [
+     "支付宝"
+    ],
+    "channels": [
+     "deeplink",
+     "a11y",
+     "vision"
+    ]
+   },
+   {
+    "app": "com.sankuai.meituan",
+    "names": [
+     "美团"
+    ],
+    "channels": [
+     "deeplink",
+     "a11y",
+     "vision"
+    ]
+   },
+   {
+    "app": "com.ss.android.lark",
+    "names": [
+     "飞书"
+    ],
+    "channels": [
+     "api",
+     "deeplink",
+     "a11y",
+     "vision"
+    ]
+   },
+   {
+    "app": "com.alibaba.android.rimet",
+    "names": [
+     "钉钉"
+    ],
+    "channels": [
+     "api",
+     "deeplink",
+     "a11y",
+     "vision"
+    ]
+   },
+   {
+    "app": "com.taobao.taobao",
+    "names": [
+     "淘宝"
+    ],
+    "channels": [
+     "deeplink",
+     "a11y",
+     "vision"
+    ]
+   }
+  ],
+  "default_channels": [
+   "a11y",
+   "vision"
+  ],
+  "actions": [
+   {
+    "action": "pay",
+    "words": [
+     "付款",
+     "支付",
+     "付钱",
+     "买单",
+     "下单"
+    ],
+    "intent": "付款（你亲手完成）"
+   },
+   {
+    "action": "transfer",
+    "words": [
+     "转账",
+     "转钱",
+     "打钱"
+    ],
+    "intent": "转账（你亲手完成）"
+   },
+   {
+    "action": "sign",
+    "words": [
+     "签署",
+     "签字",
+     "签合同",
+     "签约"
+    ],
+    "intent": "签署（你亲手完成）"
+   },
+   {
+    "action": "publish",
+    "words": [
+     "发布",
+     "发帖",
+     "发朋友圈"
+    ],
+    "intent": "发布（你亲手完成）"
+   },
+   {
+    "action": "send_message",
+    "words": [
+     "回复",
+     "发消息",
+     "发给",
+     "告诉",
+     "通知"
+    ],
+    "intent": "发出消息（你亲手点发送）"
+   },
+   {
+    "action": "change_security",
+    "words": [
+     "改密码",
+     "修改密码",
+     "安全设置"
+    ],
+    "intent": "改安全设置（你亲手完成）"
+   },
+   {
+    "action": "delete",
+    "words": [
+     "删除",
+     "删掉",
+     "清空"
+    ],
+    "intent": "删除（你亲手完成）"
+   },
+   {
+    "action": "fill",
+    "words": [
+     "搜索",
+     "搜",
+     "填写",
+     "输入",
+     "查一下",
+     "查"
+    ],
+    "intent": "填写或搜索"
+   },
+   {
+    "action": "read",
+    "words": [
+     "看看",
+     "查看",
+     "读取",
+     "看一下",
+     "多久",
+     "多少"
+    ],
+    "intent": "读取页面上的结果"
+   },
+   {
+    "action": "tap",
+    "words": [
+     "点击",
+     "选择",
+     "点一下"
+    ],
+    "intent": "点选"
+   },
+   {
+    "action": "navigate",
+    "words": [
+     "跳到",
+     "切换到",
+     "进入"
+    ],
+    "intent": "跳转页面"
+   }
+  ],
+  "channel_order": [
+   "api",
+   "deeplink",
+   "a11y",
+   "vision"
+  ],
+  "max_steps": 30
+ },
+ "cases": [
+  {
+   "goal": "用高德查一下去客户公司要多久，然后在微信里告诉客户预计到达时间",
+   "apps": [
+    "com.autonavi.minimap",
+    "com.tencent.mm"
+   ],
+   "expect": [
+    {
+     "app": "com.autonavi.minimap",
+     "action": "open",
+     "channel": "deeplink",
+     "red_line": false
+    },
+    {
+     "app": "com.autonavi.minimap",
+     "action": "fill",
+     "channel": "a11y",
+     "red_line": false
+    },
+    {
+     "app": "com.autonavi.minimap",
+     "action": "read",
+     "channel": "a11y",
+     "red_line": false
+    },
+    {
+     "app": "com.tencent.mm",
+     "action": "open",
+     "channel": "a11y",
+     "red_line": false
+    },
+    {
+     "app": "com.tencent.mm",
+     "action": "send_message",
+     "channel": "a11y",
+     "red_line": true
+    }
+   ]
+  },
+  {
+   "goal": "查看今天的订单",
+   "apps": [
+    "com.sankuai.meituan"
+   ],
+   "expect": [
+    {
+     "app": "com.sankuai.meituan",
+     "action": "open",
+     "channel": "deeplink",
+     "red_line": false
+    },
+    {
+     "app": "com.sankuai.meituan",
+     "action": "read",
+     "channel": "a11y",
+     "red_line": false
+    }
+   ]
+  },
+  {
+   "goal": "在支付宝给房东转账两千块",
+   "apps": [
+    "com.eg.android.AlipayGphone"
+   ],
+   "expect": [
+    {
+     "app": "com.eg.android.AlipayGphone",
+     "action": "open",
+     "channel": "deeplink",
+     "red_line": false
+    },
+    {
+     "app": "com.eg.android.AlipayGphone",
+     "action": "transfer",
+     "channel": "a11y",
+     "red_line": true
+    }
+   ]
+  },
+  {
+   "goal": "打开飞书看看今天的日程，然后回复老板",
+   "apps": [
+    "com.ss.android.lark"
+   ],
+   "expect": [
+    {
+     "app": "com.ss.android.lark",
+     "action": "open",
+     "channel": "api",
+     "red_line": false
+    },
+    {
+     "app": "com.ss.android.lark",
+     "action": "read",
+     "channel": "api",
+     "red_line": false
+    },
+    {
+     "app": "com.ss.android.lark",
+     "action": "send_message",
+     "channel": "api",
+     "red_line": true
+    }
+   ]
+  },
+  {
+   "goal": "搜索运动鞋然后下单",
+   "apps": [
+    "com.example.shop"
+   ],
+   "expect": [
+    {
+     "app": "com.example.shop",
+     "action": "open",
+     "channel": "a11y",
+     "red_line": false
+    },
+    {
+     "app": "com.example.shop",
+     "action": "fill",
+     "channel": "a11y",
+     "red_line": false
+    },
+    {
+     "app": "com.example.shop",
+     "action": "pay",
+     "channel": "a11y",
+     "red_line": true
+    }
+   ]
+  },
+  {
+   "goal": "到公司要多久",
+   "apps": [
+    "com.autonavi.minimap",
+    "com.tencent.mm"
+   ],
+   "expect": [
+    {
+     "app": "com.autonavi.minimap",
+     "action": "open",
+     "channel": "deeplink",
+     "red_line": false
+    },
+    {
+     "app": "com.autonavi.minimap",
+     "action": "read",
+     "channel": "a11y",
+     "red_line": false
+    }
+   ]
+  },
+  {
+   "goal": "打开微信",
+   "apps": [
+    "com.tencent.mm",
+    "com.autonavi.minimap"
+   ],
+   "expect": [
+    {
+     "app": "com.tencent.mm",
+     "action": "open",
+     "channel": "a11y",
+     "red_line": false
+    }
+   ]
+  },
+  {
+   "goal": "在钉钉里删除上周的草稿，再发消息给同事",
+   "apps": [
+    "com.alibaba.android.rimet"
+   ],
+   "expect": [
+    {
+     "app": "com.alibaba.android.rimet",
+     "action": "open",
+     "channel": "api",
+     "red_line": false
+    },
+    {
+     "app": "com.alibaba.android.rimet",
+     "action": "delete",
+     "channel": "api",
+     "red_line": true
+    },
+    {
+     "app": "com.alibaba.android.rimet",
+     "action": "send_message",
+     "channel": "api",
+     "red_line": true
+    }
+   ]
+  }
+ ]
+}
