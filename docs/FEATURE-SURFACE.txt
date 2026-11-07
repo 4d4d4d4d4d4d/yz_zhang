@@ -683,6 +683,7 @@ app certifications
 app circles
 app clarify
 app collaborators
+app contentCompose
 app decompose
 app deliverables
 app depart

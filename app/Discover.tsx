@@ -24,6 +24,7 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { mediaUri, type ContentItem, type PlatformClient } from '@platform/core';
 import { ReportBlock } from './report';
+import { ComposeBlock, ContentActions } from './contentCompose';
 import { cardMediaTranslate, heroTitleOpacity, heroTransform, useReduceMotion, useScrollDriver } from './motion';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -86,6 +87,8 @@ export function DiscoverScreen({ client, baseUrl, onOpenAuthor }: {
         onScroll={onScroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} />}
       >
+        {/* APP-074f（441 号 spec）发动态、存草稿、草稿改了再发；发布后刷新内容流 */}
+        <ComposeBlock client={client} onPublished={() => void load()} />
         {items.length === 0 && <Text style={styles.empty}>还没有内容，下拉刷新试试。</Text>}
         {items.map((c, i) => (
           <ParallaxCard
@@ -165,6 +168,8 @@ function ParallaxCard({ client, item, index, baseUrl, scrollY, reduceMotion, onP
             ♥ {item.like_count} · 💬 {item.comment_count}
           </Text>
         </View>
+        {/* APP-074f（441 号 spec）点赞与评论 */}
+        <ContentActions client={client} item={item} />
         {/* RISK-014（399 号 spec）举报别人的动态；null = 自己的内容，不画 */}
         {item.author_followed_by_viewer !== null && (
           <ReportBlock client={client} targetType="content" targetId={item.id} />
