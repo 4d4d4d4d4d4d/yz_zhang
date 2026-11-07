@@ -190,7 +190,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「签证材料准备」「门窗五金维修」——第七十三轮场景发掘（438 号 spec，V465）；后者到室外高处作业可加选高处作业证
                     {"name": "签证材料准备"}, {"name": "门窗五金维修", "optional_certs": [HEIGHT_WORK_CERT]},
                     # 「电热水器安装」「汽车凹陷修复补漆」——第七十四轮场景发掘（440 号 spec，V467）；前者新拉线路可加选电工证
-                    {"name": "电热水器安装", "optional_certs": [ELECTRICIAN_CERT]}, {"name": "汽车凹陷修复补漆"}]
+                    {"name": "电热水器安装", "optional_certs": [ELECTRICIAN_CERT]}, {"name": "汽车凹陷修复补漆"},
+                    # 「健身器材安装维修」「木地板维修」——第七十五轮场景发掘（442 号 spec，V469）
+                    {"name": "健身器材安装维修"}, {"name": "木地板维修"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
