@@ -51,6 +51,8 @@ EXERCISED: dict[str, str] = {
     "walk_review.py": "功能检视时对真服务端手动跑（160 号 spec 第 0 节）；回归里编译检查（本文件）",
     # 396 号 spec（V423）加的，当时漏登记，V430 的全量回归才红出来
     "pack_probe.py": "写场景包问法之前由开发者跑（skill scenario-discovery）；回归里的 test_pack_probe 直接调用 probe() / main() 并做红验",
+    # 432 号 spec（V459）：各批场景包测试写完后由开发者跑；回归里的 test_pack_mutate 推导三类变异并实跑一次改坏与改回
+    "pack_mutate.py": "写完场景包测试后由开发者跑（skill scenario-discovery）；回归里的 test_pack_mutate 直接调用 derive() / run_one()",
 }
 
 
