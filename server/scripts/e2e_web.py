@@ -487,7 +487,11 @@ def main() -> int:
         with sync_playwright() as pw:
             # CI-001：以前写死了开发容器里的浏览器路径，CI 机器上没有这个文件，联调一步就失败。
             # 有这份就用它（开发容器里 Playwright 版本与预装浏览器对不上时要靠它）；没有就用 Playwright 自己装的
-            local_chrome = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"
+            # TEST-091（434 号 spec）换了容器浏览器版本号就变（1194 → 1243），只写一个版本号的路径又会对不上：
+            # 先找不带版本号的软链接，再找老路径
+            for local_chrome in ("/opt/pw-browsers/chromium", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"):
+                if os.path.exists(local_chrome):
+                    break
             browser = pw.chromium.launch(
                 **({"executable_path": local_chrome} if os.path.exists(local_chrome) else {}),
                 args=["--no-sandbox"])

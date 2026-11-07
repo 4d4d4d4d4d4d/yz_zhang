@@ -201,6 +201,11 @@ class Guarded:
     def __setattr__(self, name: str, value) -> None:  # noqa: ANN001
         setattr(self._inner, name, value)
 
+    def __delattr__(self, name: str) -> None:
+        # TEST-090（434 号 spec）写能转发，删也要转发：pytest 9.2 的 monkeypatch 撤销时对代理做 delattr，
+        # 不转发就报「'Guarded' object has no attribute」，测试本身过了却在收尾时报错
+        delattr(self._inner, name)
+
     @property
     def unwrapped(self):
         return self._inner

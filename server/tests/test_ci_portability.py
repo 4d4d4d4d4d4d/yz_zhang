@@ -25,6 +25,8 @@ def test_e2e_does_not_require_the_dev_container_browser():
     src = open(os.path.join(ROOT, "server", "scripts", "e2e_web.py"), encoding="utf-8").read()
     assert 'executable_path="/opt/' not in src, "写死开发容器的浏览器路径，CI 上没有这个文件"
     assert "os.path.exists(local_chrome)" in src
+    # TEST-091（434 号 spec）容器换了浏览器版本号（1194 → 1243）：先找不带版本号的软链接
+    assert '"/opt/pw-browsers/chromium"' in src
 
 
 def test_app_jest_falls_back_to_app_node_modules_for_shared_sdk_sources():
@@ -117,3 +119,22 @@ def test_local_regression_fails_when_frontend_counts_drift():
     assert line.count("2>&1") == 2, line                     # 两次调用的 stderr 都并进 fe.txt
     after = src.split(line, 1)[1].splitlines()[1]
     assert "rc=$?" in after and "步骤失败" in after and "前端计数核对" in after, after
+
+
+def test_local_regression_keeps_every_backend_failure(tmp_path):
+    """REG-004（434 号 spec，V461）后端结果以前只留最后 3 行：V458 的回归 6 条失败、be.txt 里只看得到 1 条。
+    现在完整输出进 be.full.txt，be.txt 收下每一条 FAILED / ERROR 和汇总行——这里真跑一遍那行提取命令。"""
+    import subprocess
+
+    src = open(os.path.join(ROOT, "tools", "regress.sh"), encoding="utf-8").read()
+    assert 'tail -3 > "$W/be.txt"' not in src
+    assert '> "$W/be.full.txt" 2>&1' in src
+    line = next(x for x in src.splitlines() if 'grep -E "^(FAILED|ERROR) "' in x).strip()
+    line = line.removesuffix(" )")                           # 去掉子 shell 的右括号，只留提取那一句
+    fails = [f"FAILED tests/test_{i}.py::test_x - AssertionError" for i in range(6)]
+    full = ["....F...", "=== short test summary info ===", *fails, "ERROR tests/test_y.py::test_z",
+            "6 failed, 3916 passed, 1 error in 2709.11s (0:45:09)"]
+    (tmp_path / "be.full.txt").write_text("\n".join(full) + "\n", encoding="utf-8")
+    subprocess.run(["bash", "-c", line], env={**os.environ, "W": str(tmp_path)}, check=True)
+    got = (tmp_path / "be.txt").read_text(encoding="utf-8").splitlines()
+    assert got == [*fails, "ERROR tests/test_y.py::test_z", "6 failed, 3916 passed, 1 error in 2709.11s (0:45:09)"], got

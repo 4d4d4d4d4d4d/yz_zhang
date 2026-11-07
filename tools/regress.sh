@@ -17,10 +17,13 @@ for d in node_modules web/node_modules app/node_modules packages/core/node_modul
   [ -e "$W/$d" ] || ln -s "$REPO/$d" "$W/$d"
 done
 # 每一轮的库都从空开始：sbx.db 以前没删，上一轮留下的旧表结构让沙箱自检撞上新加的列（V334 的 categories.extra_certs）
-rm -rf "$W/reg.db" "$W/sbx.db" "$W/mig.db" "$W/be.txt" "$W/fe.txt" "$W/counts"
+rm -rf "$W/reg.db" "$W/sbx.db" "$W/mig.db" "$W/be.txt" "$W/be.full.txt" "$W/fe.txt" "$W/counts"
 echo "回归 $SHA 于 $W"
 # LINT-005（280 号 spec）全量回归里静态检查不许因为没装 ruff 而静默跳过
-( cd "$W/server" && PLATFORM_REQUIRE_RUFF=1 PLATFORM_DATABASE_URL="sqlite:///$W/reg.db" python -m pytest -q -p no:cacheprovider 2>&1 | tail -3 > "$W/be.txt" )
+# REG-004（434 号 spec）以前只留最后 3 行：6 条失败只看得到 1 条，还得再跑 45 分钟才知道是哪几条。
+# 完整输出留在 be.full.txt；be.txt 收下每一条 FAILED / ERROR 和最后的汇总行
+( cd "$W/server" && PLATFORM_REQUIRE_RUFF=1 PLATFORM_DATABASE_URL="sqlite:///$W/reg.db" python -m pytest -q -p no:cacheprovider > "$W/be.full.txt" 2>&1
+  { grep -E "^(FAILED|ERROR) " "$W/be.full.txt"; tail -1 "$W/be.full.txt"; } > "$W/be.txt" )
 J="$W/counts"; mkdir -p "$J"
 ( cd "$W" && {
   # CI-002：只 grep「Tests」那行会漏掉 vitest 的「Errors  3 errors」（未处理的异步错误：测试全过、退出码却是 1，
