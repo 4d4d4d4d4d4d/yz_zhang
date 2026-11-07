@@ -160,8 +160,12 @@ HEAD_JOINTS: tuple[Joint, ...] = (
 
 FACE_JOINTS: tuple[Joint, ...] = (
     #: 0 = jaws closed, positive = open.  The gripper that picks the ball up.
+    #: The small negative range is deliberate: it lets the servo press the jaws
+    #: together on an object, and it keeps the closed pose off the hard stop,
+    #: so the joint-limit penalty does not charge the policy for every step it
+    #: spends with its beak shut.
     Joint("beak", "head", "upper_beak", (0, 1, 0), (0.022, 0.0, 0.004),
-          (0.0, 1.0), 0.0, AUX_SERVO, "face"),
+          (-0.08, 1.0), 0.0, AUX_SERVO, "face"),
     Joint("tail", "torso", "tail", (0, 1, 0), (-0.040, 0.0, 0.012),
           (-0.5, 0.5), 0.10, AUX_SERVO, "face"),
 )

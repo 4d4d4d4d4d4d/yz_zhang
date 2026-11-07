@@ -1,0 +1,29 @@
+{
+  "task": "walk",
+  "total_steps": 150000000,
+  "seed": 1,
+  "output_dir": "runs/walk_v100x4",
+  "save_interval": 50,
+  "keep_checkpoints": 5,
+  "torch_threads": 1,
+  "num_workers": 0,
+  "ppo": {
+    "num_envs": 32,
+    "rollout_steps": 32,
+    "num_minibatches": 4,
+    "update_epochs": 5,
+    "learning_rate": 0.0003,
+    "final_lr_fraction": 0.1,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "clip_range": 0.2,
+    "clip_range_value": 0.4,
+    "entropy_coef": 0.005,
+    "value_coef": 0.5,
+    "max_grad_norm": 1.0,
+    "target_kl": 0.02,
+    "global_advantage_norm": true,
+    "amp": false
+  },
+  "curriculum": {"enabled": false}
+}

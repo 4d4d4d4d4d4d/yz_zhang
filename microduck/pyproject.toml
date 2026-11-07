@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "microduck"
+version = "0.1.0"
+description = "Open reproduction of the Microduck biped duck robot: MJCF model, MuJoCo tasks, and a distributed PPO stack"
+requires-python = ">=3.10"
+dependencies = [
+    "mujoco>=3.1",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+train = ["torch>=2.1"]
+export = ["onnx>=1.15", "onnxruntime>=1.17", "onnxscript>=0.1"]
+dev = ["pytest>=7.4"]
+
+[project.scripts]
+microduck = "microduck.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+microduck = ["model/*.xml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["error::UserWarning"]
+markers = [
+    "slow: spawns real subprocesses (the 4-rank distributed check); deselect with -m 'not slow'",
+]

@@ -311,12 +311,20 @@ class MicroduckEnv:
             "gait_phase": np.array(gait.phase_signal(self.gait_phase)),
         }
 
-    def _observation(self) -> np.ndarray:
-        raw = self.raw_observation()
+    def _apply_sensor_noise(self, raw: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+        """Corrupt the channels the way the real sensors do.
+
+        Subclasses extend this for the channels they add rather than
+        reassembling the observation themselves.
+        """
         noise = self.randomizer
         raw["joint_pos"] = raw["joint_pos"] + noise.joint_bias + noise.observation_noise(
             "joint_pos", ACTION_DIM)
         raw["joint_vel"] = raw["joint_vel"] + noise.observation_noise("joint_vel", ACTION_DIM)
         raw["base_ang_vel"] = raw["base_ang_vel"] + noise.observation_noise("gyro", 3)
         raw["projected_gravity"] = raw["projected_gravity"] + noise.observation_noise("gravity", 3)
+        return raw
+
+    def _observation(self) -> np.ndarray:
+        raw = self._apply_sensor_noise(self.raw_observation())
         return assemble_observation(raw, self.observation_layout)

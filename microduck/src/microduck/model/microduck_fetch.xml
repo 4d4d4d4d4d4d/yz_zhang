@@ -84,7 +84,7 @@
             <inertial pos="0 0.002 0.01" mass="0.064" diaginertia="2.47125e-05 2.5188e-05 2.47125e-05"/>
             <geom name="head" rgba="0.98 0.78 0.15 1" contype="0" conaffinity="0" type="capsule" fromto="0 -0.008 0.01 0 0.012 0.01" size="0.028"/>
             <body name="upper_beak" pos="0.022 0 0.004">
-              <joint name="beak" type="hinge" axis="0 1 0" range="0 1" armature="0.0002" damping="0.22" frictionloss="0.006" limited="true"/>
+              <joint name="beak" type="hinge" axis="0 1 0" range="-0.08 1" armature="0.0002" damping="0.22" frictionloss="0.006" limited="true"/>
               <inertial pos="0.012 0 0" mass="0.01" diaginertia="5.20833e-07 5.20833e-07 9.6e-07"/>
               <geom name="upper_beak" rgba="0.95 0.45 0.1 1" contype="1" conaffinity="1" type="box" size="0.012 0.012 0.0035" pos="0.012 0 0"/>
             </body>
@@ -129,7 +129,7 @@
     <position name="neck_yaw" joint="neck_yaw" kp="6" kv="0.22" ctrlrange="-1.6 1.6" forcerange="-0.5 0.5"/>
     <position name="neck_pitch" joint="neck_pitch" kp="6" kv="0.22" ctrlrange="-0.9 1.7" forcerange="-0.5 0.5"/>
     <position name="head_roll" joint="head_roll" kp="6" kv="0.22" ctrlrange="-0.6 0.6" forcerange="-0.5 0.5"/>
-    <position name="beak" joint="beak" kp="6" kv="0.22" ctrlrange="0 1" forcerange="-0.5 0.5"/>
+    <position name="beak" joint="beak" kp="6" kv="0.22" ctrlrange="-0.08 1" forcerange="-0.5 0.5"/>
     <position name="tail" joint="tail" kp="6" kv="0.22" ctrlrange="-0.5 0.5" forcerange="-0.5 0.5"/>
   </actuator>
   <sensor>
