@@ -139,7 +139,7 @@ def run_one(m: Mutation, test_file: Path) -> bool:
         cmd = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", str(test_file)]
         if m.select:
             cmd += ["-k", m.select]
-        r = subprocess.run(cmd, cwd=SERVER, capture_output=True, text=True)
+        r = subprocess.run(cmd, cwd=SERVER, capture_output=True, text=True, check=False)
         return r.returncode == 1
     finally:
         m.path.write_text(original, encoding="utf-8")
