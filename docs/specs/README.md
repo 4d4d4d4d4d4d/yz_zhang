@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 437 | 发单拦下伪造证件、假流水与虚开发票 | [437-forgery-guard.md](./437-forgery-guard.md) | P0 |
 | 436 | 场景包近义说法在后台维护 | [436-pack-synonym-admin.md](./436-pack-synonym-admin.md) | P0 |
 | 435 | 场景包检索认近义说法 | [435-pack-synonyms.md](./435-pack-synonyms.md) | P0 |
 | 434 | pytest 9.2 兼容与回归输出留全失败 | [434-pytest92-regress-output.md](./434-pytest92-regress-output.md) | P0 |

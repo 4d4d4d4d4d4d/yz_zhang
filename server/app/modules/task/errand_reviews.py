@@ -37,6 +37,7 @@ KIND_LABEL = {
     "fake_inspection": "年检包过不上线", "voice_clone": "克隆他人声音",
     "odometer_fraud": "篡改里程表",
     "covert_spying": "偷看定位他人",
+    "forged_documents": "伪造证件假流水假发票",
 }
 
 

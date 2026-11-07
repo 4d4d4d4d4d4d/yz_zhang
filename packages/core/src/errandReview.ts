@@ -10,6 +10,8 @@ export const ERRAND_REVIEW_CODES = [
   'odometer_fraud',
   // SCN-271（379 号 spec）
   'covert_spying',
+  // SCN-326（437 号 spec）
+  'forged_documents',
 ] as const;
 
 export const ERRAND_REVIEW_MIN_EXPLANATION = 6;

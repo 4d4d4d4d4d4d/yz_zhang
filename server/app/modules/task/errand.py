@@ -28,6 +28,11 @@
   未经同意获取、出售或提供属于侵犯公民个人信息（《刑法》第二百五十三条之一、《个人信息保护法》第十条）。
   恢复自己设备上的数据、怀疑自己被定位或被装了跟踪器请人排查的，不在此列。
 
+- SCN-326（437 号 spec）：伪造、变造证件证明印章，做假银行流水、假收入证明，虚开、买卖发票。伪造、变造、买卖
+  国家机关公文证件印章，伪造公司印章，伪造身份证件（《刑法》第二百八十条）；虚开增值税专用发票（第二百零五条）、
+  虚开普通发票（第二百零五条之一）。识别假证假票、核验发票真伪、整理翻译签证与贷款的真实材料、
+  到税务机关代开发票、帮人跑腿去银行打流水、证件照修图换底色，不在此列。
+
 和 k12.py 一样：纯文本规则，只看词同时出现，不调模型；拿不准的由运营人工复核。
 """
 from __future__ import annotations
@@ -71,6 +76,30 @@ ODO_DIRECT = re.compile(r"(?:调|改|修改|篡改|改小|调小|往回调)[^。
 ODO_SLANG = re.compile(r"调表|改表|调码表")
 CAR_CONTEXT = re.compile(r"车|里程|公里|仪表|码表")
 _DETECTING = re.compile(r"(?:警惕|防止|防|识别|鉴别|查|看看|是否|有没有|有无|怀疑|检测)[^。；;，,！!？?\n]{0,4}$")
+
+
+# SCN-326 伪造证件证明印章、假流水、虚开买卖发票。「证件照」是修图，不算；「请假的诊断证明」「病假条」是真的请假，不算
+_DOCS = (r"身份证|证件(?!照)|学历|学位证|毕业证|文凭|资格证|职业证书|驾照|驾驶证|行驶证|护照|签证|户口本|户口簿|"
+         r"结婚证|离婚证|房产证|不动产证|营业执照|公章|印章|合同章|财务章|银行流水|流水|收入证明|在职证明|工作证明|"
+         r"病历|诊断证明|诊断书|体检报告|发票")
+FORGERY = re.compile(
+    rf"(?:伪造|造假|做假|仿造|变造|假冒|(?<![A-Za-z])[Pp][Ss]?(?![A-Za-z]))[^。；;\n]{{0,8}}(?:{_DOCS})|"
+    rf"(?<![请休放病事年产婚度寒暑])假(?:冒)?的?(?:{_DOCS})|办假证|假证(?!明)|做假账|私刻[^。；;\n]{{0,4}}章|"
+    r"虚开[^。；;\n]{0,6}(?:发票|专票)|(?:买|卖|出售|收购)[张份]?(?:增值税)?(?:发票|专票)|"
+    rf"(?:{_DOCS})[^。；;，,\n]{{0,8}}(?:做假|造假|作假|伪造|改高|做高)")
+_CHECKING = re.compile(r"(?:辨别|分辨|辨认|核验|查验|举报|鉴定|真伪)[^。；;，,！!？?\n]{0,4}$")
+# 后面紧跟着「怎么举报」「怎么识别」「被骗了」的，是在问怎么防、怎么办，不是要做
+_CHECKING_AFTER = re.compile(r"^[^。；;，,！!？?\n]{0,4}(?:举报|识别|辨别|鉴别|核验|查验|被骗|上当|报警)")
+
+
+def _forgery(t: str) -> bool:
+    for m in FORGERY.finditer(t):
+        before = t[max(0, m.start() - 6):m.start()]
+        if _NEGATED.search(before) or _DETECTING.search(before) or _CHECKING.search(before):
+            continue
+        if not _CHECKING_AFTER.search(t[m.end():m.end() + 10]):
+            return True
+    return False
 
 
 # SCN-271 偷看、定位他人：对象是「另一个人」才算，自己的手机、自己的数据不在此列
@@ -122,7 +151,7 @@ KIND_CODES = {
     "rx": "errand_restricted", "resale": "errand_restricted", "learner": "unlicensed_driving_practice",
     "ghostwrite": "academic_ghostwriting", "fake_review": "fake_review", "fake_traffic": "fake_traffic",
     "fake_inspection": "fake_inspection", "voice_clone": "voice_clone", "odometer_fraud": "odometer_fraud",
-    "covert_spying": "covert_spying",
+    "covert_spying": "covert_spying", "forged_documents": "forged_documents",
 }
 
 
@@ -148,6 +177,8 @@ def restricted_errand(text: str) -> str | None:
         return "odometer_fraud"
     if _spying(t):
         return "covert_spying"
+    if _forgery(t):
+        return "forged_documents"
     return None
 
 
@@ -243,4 +274,11 @@ def _raise_for(kind: str) -> None:
             "平台不承接偷看、调取别人的聊天记录、通话记录，或定位、跟踪别人：未经同意获取他人的通信内容、行踪轨迹属于侵犯个人信息，"
             "情节严重的触犯刑法。恢复你自己设备上的数据，可以发「数据恢复」单；怀疑自己被定位、被装了跟踪器，可以发单请人帮你排查。",
             "covert_spying",
+        )
+    if kind == "forged_documents":
+        raise bad_request(
+            "平台不承接伪造、变造证件证明印章，做假银行流水、假收入证明，或者虚开、买卖发票："
+            "这些都可能触犯刑法（第二百八十条、第二百零五条）。需要证明请向出具的单位申请；个人要开发票可以到税务机关代开；"
+            "签证、贷款材料的整理、翻译、核对可以照常发单，写清用的是真实材料。",
+            "forged_documents",
         )
