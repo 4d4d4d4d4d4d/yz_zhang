@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 440 | 第七十四轮场景发掘：电热水器安装、汽车凹陷修复补漆 | [440-scenario-round-74.md](./440-scenario-round-74.md) | P0 |
 | 439 | App 补齐圈层 | [439-app-circles.md](./439-app-circles.md) | P0 |
 | 438 | 第七十三轮场景发掘：签证材料准备、门窗五金维修 | [438-scenario-round-73.md](./438-scenario-round-73.md) | P0 |
 | 437 | 发单拦下伪造证件、假流水与虚开发票 | [437-forgery-guard.md](./437-forgery-guard.md) | P0 |

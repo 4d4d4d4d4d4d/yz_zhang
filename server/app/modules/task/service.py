@@ -188,7 +188,9 @@ ADDED_CATEGORIES = [{"name": "财税"}, {"name": "宠物照护"}, {"name": "助�
                     # 「墙纸墙布铺贴」「石材地面翻新养护」——第七十二轮场景发掘（433 号 spec，V460）
                     {"name": "墙纸墙布铺贴"}, {"name": "石材地面翻新养护"},
                     # 「签证材料准备」「门窗五金维修」——第七十三轮场景发掘（438 号 spec，V465）；后者到室外高处作业可加选高处作业证
-                    {"name": "签证材料准备"}, {"name": "门窗五金维修", "optional_certs": [HEIGHT_WORK_CERT]}]
+                    {"name": "签证材料准备"}, {"name": "门窗五金维修", "optional_certs": [HEIGHT_WORK_CERT]},
+                    # 「电热水器安装」「汽车凹陷修复补漆」——第七十四轮场景发掘（440 号 spec，V467）；前者新拉线路可加选电工证
+                    {"name": "电热水器安装", "optional_certs": [ELECTRICIAN_CERT]}, {"name": "汽车凹陷修复补漆"}]
 
 SEED_CITIES = ["上海", "北京", "深圳", "杭州"]
 
