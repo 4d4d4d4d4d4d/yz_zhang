@@ -698,6 +698,7 @@ app missions
 app motion
 app notebook
 app opc
+app outcomePublish
 app packs
 app profiles
 app progressLog

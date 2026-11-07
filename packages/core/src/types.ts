@@ -722,11 +722,19 @@ export interface TaskCreateInput {
   guardian_consented?: boolean;
   /** SCN-294b（407 号 spec）这一单另外要的资质：只能从类目的 optional_certs 里挑 */
   task_certs?: string[];
-  acceptance_criteria?: string[];
+  /** OUT-052（444 号 spec）服务端要的是对象（text / kind / check）；按结果计价至少一条 kind 为 auto 的。原来的 string[] 写法留着（只增不减） */
+  acceptance_criteria?: Array<string | AcceptanceCriterionInput>;
   bonus_cents?: number;
   /** OUT-050（443 号 spec）分档加付；给了分档，bonus_cents 可以不填（取最高一档） */
   bonus_tiers?: BonusTier[];
   publish_now?: boolean;
+}
+
+/** OUT-052（444 号 spec）一条验收指标：auto 由平台按 check 判定（如交付说明里包含某个关键词），manual 由发布方确认 */
+export interface AcceptanceCriterionInput {
+  text: string;
+  kind: 'auto' | 'manual';
+  check?: { op: string; value: unknown };
 }
 
 /** OUT-050（443 号 spec）一档加付：通过的平台判定指标至少 min_passed 条，加付 bonus_cents */

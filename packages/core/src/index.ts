@@ -19,6 +19,7 @@ export * from './packTemplates';
 export * from './minor';
 export * from './circles';
 export * from './bonusTiers';
+export * from './outcome';
 export * from './autoVerify';
 export * from './teamReturns';
 export * from './teamInviteUsage';

@@ -34,6 +34,7 @@ import { MessagesScreen } from './MessagesAndInvites';
 import { MySpaceScreen, PublicSpaceScreen, SpacesDiscoverScreen } from './spaces';
 import { SearchScreen } from './search';
 import { CirclesScreen } from './circles';
+import { EMPTY_OUTCOME, OutcomeFields, outcomeFields, type OutcomeDraft } from './outcomePublish';
 import { CouponsBlock, DeviceSessionsBlock, GrowthBlock, NoticesList, NotificationPrefsBlock } from './accountExtras';
 import { SUB_SCREEN_LABEL, SubScreenHost, type SubScreen } from './TeamCoopDev';
 import { VideoFeedScreen } from './VideoFeed';
@@ -1058,6 +1059,7 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
   const [guardianOk, setGuardianOk] = useState(false);
   // SCN-294b（407 号 spec）发单人为这一单加选的资质
   const [taskCerts, setTaskCerts] = useState<string[]>([]);
+  const [outcome, setOutcome] = useState<OutcomeDraft>(EMPTY_OUTCOME);   // OUT-052（444 号 spec）
   // SCN-120（176 号 spec）一单多次上门：上门几次、每次要做的事
   const [visits, setVisits] = useState(prefill?.visits ?? '');
   const [checklist, setChecklist] = useState(prefill?.checklist ?? '');
@@ -1192,9 +1194,13 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
           }} />
         </>
       )}
+      {/* OUT-052（444 号 spec）按结果计价：项目型先拆解，不在这里选 */}
+      {!project && <OutcomeFields value={outcome} onChange={setOutcome} />}
       <Button title={project ? '创建并开始拆解' : offline ? '发布（线下任务）' : '发布（线上任务）'} onPress={async () => {
         setError('');
         if (!ip) { setError('请选择交付成果的知识产权归属'); return; }
+        const outcomeBody = project ? {} : outcomeFields(outcome);
+        if ('error' in outcomeBody) { setError(outcomeBody.error); return; }
         if (!project && offline && (!city.trim() || !pos)) { setError('线下单要写城市、取一次当前位置'); return; }
         try {
           const created = await client.createTask({
@@ -1211,6 +1217,7 @@ export function PublishScreen({ client, onDone, category = '跑腿', allowProjec
             ...(onBehalf ? { on_behalf: true, recipient_label: recipient, onsite_contact: onsite, recipient_consented: consented } : {}),
             ...minorPayload(minor, guardianMode, guardianOk),
             ...(taskCerts.length ? { task_certs: taskCerts } : {}),
+            ...outcomeBody,
             // 项目先存草稿：拆好、说清每一步谁来做之后，只有能开工的步骤发布出去
             ...(!project && offline && pos
               ? { is_remote: false, city: city.trim(), address_hint: addressHint.trim(), lat: pos.lat, lng: pos.lng }

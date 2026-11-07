@@ -1,4 +1,4 @@
-import { ApiError, canRequestErrandReview, categoryCertsText, keepOfferedCerts, optionalCerts, type Category, GUARDIAN_MODE_LABEL, minorPayload, type GuardianMode, apiErrorText, IP_ASSIGNMENT_LABEL, dayLabel, dayShiftsPayload, priceReferenceLine, localInputToServerTime, type IpAssignment, type PriceReference, type Task } from '@platform/core';
+import { ApiError, canRequestErrandReview, categoryCertsText, keepOfferedCerts, optionalCerts, type Category, GUARDIAN_MODE_LABEL, minorPayload, type GuardianMode, apiErrorText, IP_ASSIGNMENT_LABEL, dayLabel, dayShiftsPayload, priceReferenceLine, localInputToServerTime, type IpAssignment, type PriceReference, type Task, outcomePayload, type OutcomeTierDraft } from '@platform/core';
 import { DraftHints } from '../Profiles';
 import { ErrandReviewRequest } from '../ErrandReview';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -17,6 +17,9 @@ export default function Publish() {
   const [params] = useSearchParams();
   // SCN-127（201 号 spec）多天单每天不同时段：勾上才出现每天一行
   const [perDay, setPerDay] = useState(false);
+  // OUT-052（444 号 spec）按结果计价：关键词、加付上限、分档
+  const [outcome, setOutcome] = useState({ keywords: '', bonusYuan: '' });
+  const [tiers, setTiers] = useState<OutcomeTierDraft[]>([]);
   const [dayRows, setDayRows] = useState<DayShiftInput[]>([]);
   const [form, setForm] = useState({
     // PWB-008 从个人工作台「找人一起做」过来时带着标题和说明
@@ -96,6 +99,8 @@ export default function Publish() {
     if (!form.category) { setError('请选择类目'); return; }
     if (!form.is_remote && !form.city) { setError('线下任务请选择城市，或勾选「线上任务」'); return; }
     const isProject = form.task_type === 'project';
+    const outcomeBody = form.pricing === 'outcome' ? outcomePayload({ ...outcome, tiers }) : null;
+    if (outcomeBody && 'error' in outcomeBody) { setError(outcomeBody.error); return; }
     try {
       const task = await client.createTask({
         title: form.title,
@@ -129,6 +134,8 @@ export default function Publish() {
         ...minorPayload(form.minor_involved, form.guardian_mode, form.guardian_consented),
         // SCN-294b 勾了才带
         ...(taskCerts.length ? { task_certs: taskCerts } : {}),
+        // OUT-052 按结果计价：平台判定指标与加付上限或分档（规则在服务端）
+        ...(outcomeBody ?? {}),
         // TZ-063 发出去的是**带偏移**的 ISO：datetime-local 给的是没有偏移的
         // 本地字符串，直发的话服务端会当 UTC，差一个时区
         ...(form.deadline_local ? { deadline: localInputToServerTime(form.deadline_local) } : {}),
@@ -209,10 +216,37 @@ export default function Publish() {
               <select value={form.pricing} onChange={(e) => set('pricing', e.target.value)}>
                 <option value="fixed">一口价</option>
                 <option value="bidding">竞价（执行者报价比选）</option>
+                <option value="outcome">按结果计价（达标加付）</option>
               </select>
             </label>
             <button type="button" className="ghost" onClick={() => void checkPrice()}>查参考价</button>
           </div>
+          {form.pricing === 'outcome' && (
+            <fieldset aria-label="按结果计价">
+              <legend>按结果计价：预算是基础报酬，达标另外加付（加付部分也先托管）</legend>
+              <label>交付说明里必须写明的关键词（用逗号隔开，每个算一条平台判定的指标）
+                <input value={outcome.keywords} placeholder="如：已自测，已附文档，已部署"
+                       onChange={(e) => setOutcome({ ...outcome, keywords: e.target.value })} />
+              </label>
+              <label>全部达标加付（元）
+                <input type="number" min={0} value={outcome.bonusYuan} disabled={tiers.length > 0}
+                       onChange={(e) => setOutcome({ ...outcome, bonusYuan: e.target.value })} />
+              </label>
+              <p className="muted">也可以分档：通过的条数越多加付越多，取达到的最高一档、不累加；写了分档就不用写上面的金额。</p>
+              {tiers.map((t, i) => (
+                <div className="row" key={i}>
+                  <label>通过几条<input aria-label={`第${i + 1}档通过几条`} type="number" min={1} value={t.min_passed}
+                    onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, min_passed: e.target.value } : x)))} /></label>
+                  <label>加付（元）<input aria-label={`第${i + 1}档加付`} type="number" min={0} value={t.yuan}
+                    onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, yuan: e.target.value } : x)))} /></label>
+                  <button type="button" className="ghost" onClick={() => setTiers(tiers.filter((_, j) => j !== i))}>删去</button>
+                </div>
+              ))}
+              {tiers.length < 5 && (
+                <button type="button" className="ghost" onClick={() => setTiers([...tiers, { min_passed: '', yuan: '' }])}>＋加一档</button>
+              )}
+            </fieldset>
+          )}
           {feasibility && feasibility.level !== 'no_data' && (
             <p className={feasibility.level === 'ok' ? 'muted' : 'error'}>🤖 {feasibility.message}</p>
           )}
