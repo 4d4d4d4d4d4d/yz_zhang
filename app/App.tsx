@@ -33,6 +33,7 @@ import { ExperienceToolsBlock } from './experience';
 import { MessagesScreen } from './MessagesAndInvites';
 import { MySpaceScreen, PublicSpaceScreen, SpacesDiscoverScreen } from './spaces';
 import { SearchScreen } from './search';
+import { CirclesScreen } from './circles';
 import { CouponsBlock, DeviceSessionsBlock, GrowthBlock, NoticesList, NotificationPrefsBlock } from './accountExtras';
 import { SUB_SCREEN_LABEL, SubScreenHost, type SubScreen } from './TeamCoopDev';
 import { VideoFeedScreen } from './VideoFeed';
@@ -238,11 +239,11 @@ export function DiscoverHost({ client, baseUrl, onOpenSpace, onOpenTask }: {
   client: PlatformClient; baseUrl: string; onOpenSpace: (userId: number) => void;
   onOpenTask: (taskId: number) => void;
 }) {
-  const [seg, setSeg] = useState<'people' | 'search' | 'feed' | 'video'>('people');
+  const [seg, setSeg] = useState<'people' | 'search' | 'circles' | 'feed' | 'video'>('people');
   return (
     <>
       <View style={styles.segbar}>
-        {([['people', '人与空间'], ['search', '搜索'], ['feed', '内容'], ['video', '视频']] as const).map(([k, label]) => (
+        {([['people', '人与空间'], ['search', '搜索'], ['circles', '圈层'], ['feed', '内容'], ['video', '视频']] as const).map(([k, label]) => (
           <TouchableOpacity key={k} onPress={() => setSeg(k)}>
             <Text style={[styles.seg, seg === k && styles.segOn]}>{label}</Text>
           </TouchableOpacity>
@@ -252,6 +253,8 @@ export function DiscoverHost({ client, baseUrl, onOpenSpace, onOpenTask }: {
       {/* SRCH-001 全站搜索（V127）：任务、人、内容、圈层一次查。
           找不到东西的平台等于没有内容（72 号台账 SEARCH-050 的原话）。 */}
       {seg === 'search' && <SearchScreen client={client} onOpenSpace={onOpenSpace} onOpenTask={onOpenTask} />}
+      {/* APP-074e（439 号 spec）圈层：网页早就有，App 补上——进圈、圈内任务板、圈内动态、建圈 */}
+      {seg === 'circles' && <CirclesScreen client={client} onOpenTask={onOpenTask} />}
       {/* APP-002 发现流：视差滚动，尊重系统「减弱动态效果」开关 */}
       {seg === 'feed' && <DiscoverScreen client={client} baseUrl={baseUrl} />}
       {/* CNT-014 沉浸流：任何时刻有且只有一个 <Video> 在播 */}
