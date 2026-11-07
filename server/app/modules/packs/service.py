@@ -225,22 +225,77 @@ SYNONYM_WEIGHT = 3
 
 
 @lru_cache(maxsize=1)
-def synonym_groups() -> dict[str, dict]:
+def _seed_synonyms() -> tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...]:
     data = json.loads(SYNONYMS.read_text(encoding="utf-8"))
-    return {g["name"]: {"words": list(g["words"]), "includes": list(g.get("includes") or [])} for g in data["groups"]}
+    return tuple((g["name"], tuple(g["words"]), tuple(g.get("includes") or [])) for g in data["groups"])
 
 
-def synonyms_in(q: str) -> list[str]:
+def synonym_groups(db: Session | None = None) -> dict[str, dict]:
+    """生效的近义表：仓库里的 + 后台确认过的（PACK-092c，436 号）。后台的一行组名对得上就并进那一组，对不上是新的一组；
+    只加不删。"""
+    out = {name: {"words": list(words), "includes": list(inc)} for name, words, inc in _seed_synonyms()}
+    if db is not None:
+        from .models import PackSynonym
+
+        for r in db.query(PackSynonym).filter(PackSynonym.status == "active").order_by(PackSynonym.id):
+            g = out.setdefault(r.name, {"words": [r.name], "includes": []})
+            g["words"] = list(dict.fromkeys([*g["words"], *(r.words or [])]))
+            g["includes"] = list(dict.fromkeys([*g["includes"], *(r.includes or [])]))
+    return out
+
+
+# 一组连同它包含的组，展开后最多这么多个写法：再宽就会把不相干的知识拉进来。
+# V462 定的是 24，可仓库里「天气不好」一组就正好 24，后台一个词也加不进去；V463（436 号）放到 32
+SYNONYM_MAX_EXPANSION = 32
+
+
+def expansion_size(groups: dict[str, dict], name: str) -> int:
+    g = groups[name]
+    return len(dict.fromkeys([*g["words"], *(w for i in g["includes"] if i in groups for w in groups[i]["words"])]))
+
+
+def check_synonym(groups: dict[str, dict], name: str, words: list[str], includes: list[str]) -> None:
+    """PACK-092c 后台提出或确认一行之前的检查（与仓库近义表的闸门同一套规则）：不合规就抛 400，说清为什么、怎么办。"""
+    from app.core.errors import bad_request
+    from app.modules.skills.service import concepts, norm
+
+    if not 2 <= len(name) <= 12 or any(not 2 <= len(w) <= 12 for w in words):
+        raise bad_request("组名和每个写法都要 2 到 12 个字：单字几乎哪条知识里都有", "pack_synonym_short")
+    owner = {w: n for n, g in groups.items() for w in g["words"]}
+    taken = [f"「{w}」在「{owner[w]}」组" for w in words if w in owner and owner[w] != name]
+    if taken:
+        raise bad_request("一个写法只能在一组里：" + "、".join(taken) + "。要么把它们写进那一组，要么换个写法", "pack_synonym_word_taken")
+    skill = {norm(w) for c in concepts(None) for w in [c["name"], *c["aliases"]]}
+    clash = [w for w in words if norm(w) in skill]
+    if clash:
+        raise bad_request(f"「{'、'.join(clash)}」是技能概念表里的词，放进来会和技能展开重复；技能的叫法去技能概念表里加", "pack_synonym_skill_word")
+    bad = [i for i in includes if i not in groups or i == name]
+    if bad:
+        raise bad_request(f"包含的「{'、'.join(bad)}」不是已有的另一组：先建那一组，或者去掉它", "pack_synonym_unknown_include")
+    if name in groups and not [w for w in words if w not in groups[name]["words"]] and \
+            not [i for i in includes if i not in groups[name]["includes"]]:
+        raise bad_request(f"这些写法已经都在「{name}」组里了", "pack_synonym_exists")
+    merged = {k: {"words": list(v["words"]), "includes": list(v["includes"])} for k, v in groups.items()}
+    g = merged.setdefault(name, {"words": [name], "includes": []})
+    g["words"] = list(dict.fromkeys([*g["words"], *words]))
+    g["includes"] = list(dict.fromkeys([*g["includes"], *includes]))
+    wide = [n for n in merged if expansion_size(merged, n) > SYNONYM_MAX_EXPANSION]
+    if wide:
+        raise bad_request(f"加上以后「{'、'.join(wide)}」一展开就超过 {SYNONYM_MAX_EXPANSION} 个写法，"
+                          "会把不相干的知识拉进来；拆成更窄的几组", "pack_synonym_too_wide")
+
+
+def synonyms_in(q: str, db: Session | None = None) -> list[str]:
     """问题里出现了近义表里的哪个写法，就返回那一组（加上它单向包含的组）里问题中没有的其余写法。"""
     from app.modules.skills.service import norm
 
     low = norm(q)
-    groups = synonym_groups()
+    groups = synonym_groups(db)
     hit = [name for name, g in groups.items() if any(norm(w) in low for w in g["words"])]
     out: list[str] = []
     for name in hit:
         for n in [name, *groups[name]["includes"]]:
-            out += [w for w in groups[n]["words"] if norm(w) not in low]
+            out += [w for w in groups.get(n, {"words": []})["words"] if norm(w) not in low]
     return list(dict.fromkeys(out))
 
 
@@ -253,7 +308,7 @@ def pack_terms(q: str, db: Session | None = None) -> list[tuple[str, int, int]]:
     ts = terms(expand_query(q, db))
     have = {t for t, _, _ in ts}
     g0 = max((g for _, _, g in ts), default=-1) + 1
-    extra = [w for w in synonyms_in(q) if w.lower() not in have]
+    extra = [w for w in synonyms_in(q, db) if w.lower() not in have]
     return ts + [(w.lower(), SYNONYM_WEIGHT, g0 + i) for i, w in enumerate(extra)]
 
 

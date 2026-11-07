@@ -63,6 +63,10 @@ REACHED_BY: dict[str, str] = {
     "/admin/cert-aliases": "proposeCertAlias",                          # SCN-213（334 号 spec）
     "/admin/cert-aliases/{x}/approve": "approveCertAlias",
     "/admin/cert-aliases/{x}/revoke": "revokeCertAlias",
+    "/admin/pack-synonyms": "proposePackSynonym",                       # PACK-092c（436 号 spec）
+    "/admin/pack-synonyms/expand": "expandPackSynonyms",
+    "/admin/pack-synonyms/{x}/approve": "approvePackSynonym",
+    "/admin/pack-synonyms/{x}/revoke": "revokePackSynonym",
     "/admin/cert-spot-checks": "certSpotChecks",                        # CERT-053（348 号 spec）
     "/admin/cert-spot-checks/{x}/confirm": "confirmCertSpotCheck",
     "/admin/cert-spot-checks/{x}/overturn": "overturnCertSpotCheck",

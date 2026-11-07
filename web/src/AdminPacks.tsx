@@ -1,6 +1,6 @@
 import {
   apiErrorText, formatDateTime,
-  type PackValidation, type RadarSignal, type ScenarioPackAdminListRow,
+  type PackSynonymList, type PackValidation, type RadarSignal, type ScenarioPackAdminListRow,
 } from '@platform/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from './store';
@@ -131,6 +131,73 @@ export function PacksAdmin() {
           ))}
         </tbody>
       </table>
+      <PackSynonyms />
+    </div>
+  );
+}
+
+/** PACK-092c（436 号 spec）近义说法：一位管理员提出给一组加写法，另一位确认才生效；随时可以收回。仓库里写死的收不回。 */
+export function PackSynonyms() {
+  const { client, me } = useApp();
+  const [view, setView] = useState<PackSynonymList | null>(null);
+  const [name, setName] = useState('');
+  const [words, setWords] = useState('');
+  const [includes, setIncludes] = useState('');
+  const [reason, setReason] = useState('');
+  const [probe, setProbe] = useState('');
+  const [probed, setProbed] = useState<string[] | null>(null);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    const v = await client.packSynonyms().catch(() => null);
+    setView(v && Array.isArray(v.items) && Array.isArray(v.effective) ? v : null);
+  }, [client]);
+  useEffect(() => { void load(); }, [load]);
+  async function act(fn: () => Promise<unknown>) {
+    setError('');
+    try { await fn(); await load(); } catch (e) { setError(apiErrorText(e)); }
+  }
+  const split = (s: string) => s.split(/[\s,，、]+/).map((x) => x.trim()).filter(Boolean);
+  if (!view) return null;
+  const label = { pending: '待另一位确认', active: '已生效', revoked: '已收回' } as const;
+  return (
+    <div aria-label="近义说法" style={{ marginTop: 12 }}>
+      <h4>近义说法（助手检索时一起找）</h4>
+      <p className="muted">问「天气不好还走吗」也能找到写着「下雨」的知识。配错会让助手引用不相干的内容：一位提出、另一位确认才生效；只能加写法，仓库里写死的收不回。</p>
+      <ul aria-label="生效的近义表">
+        {view.effective.map((g) => (
+          <li key={g.name}><b>{g.name}</b>：{g.words.join('、')}{g.includes.length > 0 && <span className="muted">（还包含 {g.includes.join('、')}）</span>}</li>
+        ))}
+      </ul>
+      <ul aria-label="后台提出的近义说法">
+        {view.items.map((r) => (
+          <li key={r.id}>{r.name} + {r.words.join('、')}{r.includes.length > 0 && `；包含 ${r.includes.join('、')}`} <span className="muted">（{r.reason}）{label[r.status] ?? r.status}</span>
+            {r.status === 'pending' && me?.id !== r.proposed_by && (
+              <button className="text-link" onClick={() => void act(() => client.approvePackSynonym(r.id))}>确认</button>
+            )}
+            {r.status !== 'revoked' && <button className="text-link" onClick={() => void act(() => client.revokePackSynonym(r.id))}>收回</button>}
+          </li>
+        ))}
+      </ul>
+      <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+        <input aria-label="组名" placeholder="组名（已有的组就并进去，如 大风）" value={name} onChange={(e) => setName(e.target.value)} />
+        <input aria-label="要加的写法" placeholder="要加的写法，用逗号隔开（如 风力）" value={words} onChange={(e) => setWords(e.target.value)} />
+        <input aria-label="包含的组" placeholder="单向包含的组（可不填）" value={includes} onChange={(e) => setIncludes(e.target.value)} />
+        <input aria-label="理由" placeholder="为什么是一回事" value={reason} onChange={(e) => setReason(e.target.value)} />
+        <button disabled={!name.trim() || (!split(words).length && !split(includes).length) || reason.trim().length < 4}
+          onClick={() => void act(async () => {
+            await client.proposePackSynonym(name.trim(), split(words), reason.trim(), split(includes));
+            setName(''); setWords(''); setIncludes(''); setReason('');
+          })}>提出</button>
+      </div>
+      <div className="row" style={{ gap: 6 }}>
+        <input aria-label="试一句" placeholder="试一句问话" value={probe} onChange={(e) => setProbe(e.target.value)} />
+        <button className="ghost" disabled={!probe.trim()} onClick={() => void act(async () => {
+          const r = await client.expandPackSynonyms(probe.trim());
+          setProbed(Array.isArray(r.words) ? r.words : []);
+        })}>试</button>
+        {probed && <span role="status">{probed.length ? `会一起找：${probed.join('、')}` : '这句不会多带上别的写法'}</span>}
+      </div>
+      {error && <p className="error">{error}</p>}
     </div>
   );
 }

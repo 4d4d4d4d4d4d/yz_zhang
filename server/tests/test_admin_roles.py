@@ -53,6 +53,11 @@ ROUTE_ROLES = {
     "POST /admin/cert-aliases": ('ops',),
     "POST /admin/cert-aliases/{alias_id}/approve": ('ops',),
     "POST /admin/cert-aliases/{alias_id}/revoke": ('ops',),
+    "GET /admin/pack-synonyms": ('ops',),                                # PACK-092c（436 号 spec）近义说法，四眼
+    "GET /admin/pack-synonyms/expand": ('ops',),
+    "POST /admin/pack-synonyms": ('ops',),
+    "POST /admin/pack-synonyms/{synonym_id}/approve": ('ops',),
+    "POST /admin/pack-synonyms/{synonym_id}/revoke": ('ops',),
     "GET /admin/cert-spot-checks": ('compliance',),                      # CERT-053（348 号 spec）资质审核抽检
     "POST /admin/cert-spot-checks/{spot_id}/confirm": ('compliance',),
     "POST /admin/cert-spot-checks/{spot_id}/overturn": ('compliance',),

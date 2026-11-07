@@ -453,6 +453,36 @@ export interface CertAliasList {
   builtin: string[][];
   items: CertAliasItem[];
 }
+/** PACK-092c（436 号 spec）后台给场景包近义表加的一行（四眼） */
+export interface PackSynonymItem {
+  id: number;
+  /** 组名：对得上已有的一组就并进去，对不上是新的一组 */
+  name: string;
+  words: string[];
+  /** 单向包含的组 */
+  includes: string[];
+  reason: string;
+  status: 'pending' | 'active' | 'revoked';
+  proposed_by: number;
+  /** 确认的人；还没确认的没有 */
+  approved_by?: number;
+  created_at: string;
+}
+export interface PackSynonymGroup {
+  name: string;
+  words: string[];
+  includes: string[];
+}
+export interface PackSynonymList {
+  /** 生效的近义表：仓库里的 + 后台确认过的 */
+  effective: PackSynonymGroup[];
+  items: PackSynonymItem[];
+}
+export interface PackSynonymExpansion {
+  q: string;
+  /** 这句检索时多带上的写法 */
+  words: string[];
+}
 /** SCN-219（336 号 spec）被发单拦截挡下时申请的人工复核 */
 export interface ErrandReviewItem {
   id: number;

@@ -63,6 +63,9 @@ import type {
   ContractHandoverItem,
   CertAliasItem,
   CertAliasList,
+  PackSynonymExpansion,
+  PackSynonymItem,
+  PackSynonymList,
   CertSpotCheckItem,
   CertSpotCheckList,
   RecipientLinkCreated,
@@ -2133,6 +2136,29 @@ export class PlatformClient {
   /** SCN-213 收回（待确认或已生效的都可以） */
   revokeCertAlias(id: number) {
     return this.request<CertAliasItem>('POST', `/admin/cert-aliases/${id}/revoke`);
+  }
+
+  /** PACK-092c（436 号 spec）场景包近义表：生效的表与后台提出过的每一行 */
+  packSynonyms() {
+    return this.request<PackSynonymList>('GET', '/admin/pack-synonyms');
+  }
+
+  /** 试一句：检索时会多带上哪些写法 */
+  expandPackSynonyms(q: string) {
+    return this.request<PackSynonymExpansion>('GET', `/admin/pack-synonyms/expand?q=${encodeURIComponent(q)}`);
+  }
+
+  /** 提出给一组加写法（组名对不上就是新的一组）；另一位管理员确认才生效 */
+  proposePackSynonym(name: string, words: string[], reason: string, includes: string[] = []) {
+    return this.request<PackSynonymItem>('POST', '/admin/pack-synonyms', { name, words, includes, reason });
+  }
+
+  approvePackSynonym(id: number) {
+    return this.request<PackSynonymItem>('POST', `/admin/pack-synonyms/${id}/approve`);
+  }
+
+  revokePackSynonym(id: number) {
+    return this.request<PackSynonymItem>('POST', `/admin/pack-synonyms/${id}/revoke`);
   }
   /** CERT-053 资质审核抽检列表（默认只看在等的）与每位审核员被推翻的次数 */
   certSpotChecks(status: 'pending' | 'confirmed' | 'overturned' | 'all' = 'pending') {

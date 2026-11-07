@@ -68,7 +68,7 @@ def test_synonym_table_stays_clean():
         for inc in g["includes"]:
             assert inc in groups and inc != name, f"「{name}」包含的「{inc}」不是别的组"
         size = len(g["words"]) + sum(len(groups[i]["words"]) for i in g["includes"])
-        assert size <= 24, f"「{name}」一展开就 {size} 个词，太宽"
+        assert size <= psvc.SYNONYM_MAX_EXPANSION, f"「{name}」一展开就 {size} 个词，太宽"   # V463 起 32（436 号）
     raw = json.loads(psvc.SYNONYMS.read_text(encoding="utf-8"))
     assert len(raw["groups"]) == len(groups), "组名重复了"
 

@@ -64,6 +64,8 @@ api GET /api/v1/admin/market-health
 api GET /api/v1/admin/matching-config
 api GET /api/v1/admin/metrics
 api GET /api/v1/admin/north-star
+api GET /api/v1/admin/pack-synonyms
+api GET /api/v1/admin/pack-synonyms/expand
 api GET /api/v1/admin/packs
 api GET /api/v1/admin/packs/radar
 api GET /api/v1/admin/platform-finance
@@ -369,6 +371,9 @@ api POST /api/v1/admin/legal/faqs/{faq_id}/reject
 api POST /api/v1/admin/legal/faqs/{faq_id}/renew
 api POST /api/v1/admin/legal/faqs/{faq_id}/retire
 api POST /api/v1/admin/legal/faqs/{faq_id}/submit
+api POST /api/v1/admin/pack-synonyms
+api POST /api/v1/admin/pack-synonyms/{synonym_id}/approve
+api POST /api/v1/admin/pack-synonyms/{synonym_id}/revoke
 api POST /api/v1/admin/packs
 api POST /api/v1/admin/packs/import-seeds
 api POST /api/v1/admin/packs/radar/draft-knowledge
@@ -801,6 +806,7 @@ sdk approveCertAlias
 sdk approveCircleMember
 sdk approveErrandReview
 sdk approveFinanceCorrection
+sdk approvePackSynonym
 sdk approveSettle
 sdk askNotebook
 sdk askPackAssistant
@@ -937,6 +943,7 @@ sdk errandReviews
 sdk escalateTicket
 sdk executeTeamSpend
 sdk expandDecomposition
+sdk expandPackSynonyms
 sdk expireTasks
 sdk exportAuditLog
 sdk exportContract
@@ -1067,6 +1074,7 @@ sdk organizationRecords
 sdk overturnCertSpotCheck
 sdk ownSpace
 sdk packFeedback
+sdk packSynonyms
 sdk pauseMySupport
 sdk pauseSupportAgent
 sdk payoutProposals
@@ -1084,6 +1092,7 @@ sdk propose
 sdk proposeCertAlias
 sdk proposeChange
 sdk proposeChangeOrder
+sdk proposePackSynonym
 sdk proposePayout
 sdk proposeSettlement
 sdk publicProfile
@@ -1152,6 +1161,7 @@ sdk revokeApiKey
 sdk revokeCertAlias
 sdk revokeCertification
 sdk revokeConsent
+sdk revokePackSynonym
 sdk revokeRecipientLink
 sdk revokeSession
 sdk revokeSubtaskShare

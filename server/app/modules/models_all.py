@@ -91,7 +91,7 @@ from app.modules.workbench.models import WbItem, WbLog, WbMemory, WbProject, WbR
 
 from app.modules.notebook.models import NbMethod, NbMethodVersion, NbNote  # noqa: F401
 
-from app.modules.packs.models import PackEnrollment, PackEvent, ScenarioPack  # noqa: F401
+from app.modules.packs.models import PackEnrollment, PackEvent, PackSynonym, ScenarioPack  # noqa: F401
 
 from app.modules.opc.models import OpcEntry, OpcProfile  # noqa: F401
 

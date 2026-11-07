@@ -1,13 +1,13 @@
 """PACK-100 场景包接口（123 号 spec）：用户浏览 / 启用 / 问助手专家 / 反馈；管理员定义 / 审核（四眼）/ 上线 / 下线 / 指标 / 雷达。"""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.deps import get_current_user, require_job_auth
-from app.core.errors import bad_request, conflict, not_found
+from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.core.timefmt import day, iso
 from app.core.admin_roles import require_role
 from app.core.locks import job_slot
@@ -403,3 +403,110 @@ def run_remind_expiring(db: Session = Depends(get_db, scope="function"), _=Depen
                         __=Depends(job_slot("pack_expiry_reminders"), scope="function")):
     """SCN-163（292 号 spec）知识 30 天内到期的场景包：直接提醒写这个包的运营（一周一次）。"""
     return svc.remind_expiring_knowledge(db)
+
+
+# ---------- PACK-092c（436 号 spec）近义说法：后台加写法，四眼 ----------
+class SynonymIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=12)
+    words: list[str] = Field(default_factory=list, max_length=16)
+    includes: list[str] = Field(default_factory=list, max_length=6)
+    reason: str = Field(min_length=4, max_length=200)
+
+
+def _synonym_row(r) -> dict:
+    out = {"id": r.id, "name": r.name, "words": list(r.words or []), "includes": list(r.includes or []),
+           "reason": r.reason, "status": r.status, "proposed_by": r.proposed_by, "created_at": iso(r.created_at)}
+    if r.approved_by is not None:
+        out["approved_by"] = r.approved_by
+    return out
+
+
+def _clean(xs: list[str]) -> list[str]:
+    return list(dict.fromkeys(x.strip() for x in xs if x.strip()))
+
+
+@router.get("/admin/pack-synonyms")
+def admin_synonyms(admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
+    """生效的近义表（仓库里的 + 后台确认过的）与后台提出过的每一行。"""
+    from .models import PackSynonym
+
+    rows = db.query(PackSynonym).order_by(PackSynonym.id.desc()).limit(200).all()
+    groups = svc.synonym_groups(db)
+    return {"effective": [{"name": n, "words": g["words"], "includes": g["includes"]} for n, g in groups.items()],
+            "items": [_synonym_row(r) for r in rows]}
+
+
+@router.get("/admin/pack-synonyms/expand")
+def admin_synonym_expand(q: str, admin: User = Depends(require_role("ops")), db: Session = Depends(get_db, scope="function")):
+    """试一句：这句问话检索时会多带上哪些写法（只看生效的）。"""
+    return {"q": q, "words": svc.synonyms_in(q[:200], db)}
+
+
+@router.post("/admin/pack-synonyms", status_code=201)
+def admin_propose_synonym(body: SynonymIn, admin: User = Depends(require_role("ops")),
+                          db: Session = Depends(get_db, scope="function")):
+    """一位管理员提出「给这一组加这几个写法」（组名对不上就是新的一组），写明理由；另一位确认才生效。"""
+    from app.modules.admin.router import record_audit
+
+    from .models import PackSynonym
+
+    name, words, includes = body.name.strip(), _clean(body.words), _clean(body.includes)
+    groups = svc.synonym_groups(db)
+    if name not in groups and name not in words:
+        words = [name, *words]                       # 新的一组：组名本身也是一个写法
+    if not words and not includes:
+        raise bad_request("至少写一个要加的写法", "pack_synonym_short")
+    if db.query(PackSynonym).filter(PackSynonym.name == name, PackSynonym.status == "pending").first():
+        raise conflict(f"「{name}」组已经有一行在等确认：先确认或收回那一行", "pack_synonym_pending")
+    svc.check_synonym(groups, name, words, includes)
+    row = PackSynonym(name=name, words=words, includes=includes, reason=body.reason.strip(), proposed_by=admin.id)
+    db.add(row)
+    db.flush()
+    record_audit(db, admin.id, "pack_synonym_propose", "pack_synonym", row.id,
+                 f"{name}：{'、'.join(words)}{'；包含 ' + '、'.join(includes) if includes else ''}：{row.reason}"[:300])
+    return _synonym_row(row)
+
+
+@router.post("/admin/pack-synonyms/{synonym_id}/approve")
+def admin_approve_synonym(synonym_id: int, admin: User = Depends(require_role("ops")),
+                          db: Session = Depends(get_db, scope="function")):
+    """另一位管理员确认后生效：从这一刻起所有场景包助手检索时都带上这些写法。确认时按当时的表再查一遍。"""
+    from app.modules.admin.router import record_audit
+
+    from .models import PackSynonym
+
+    row = db.get(PackSynonym, synonym_id)
+    if row is None:
+        raise not_found("没有这一行")
+    if row.status != "pending":
+        raise conflict("这一行已经处理过了", "pack_synonym_decided")
+    if row.proposed_by == admin.id:
+        raise forbidden("不能确认自己提出的近义说法：配错会让助手引用不相干的知识，要另一位管理员看一眼", "pack_synonym_self")
+    try:
+        svc.check_synonym(svc.synonym_groups(db), row.name, list(row.words or []), list(row.includes or []))
+    except HTTPException as e:       # 提出时合规、确认时不合规：表在这期间变了，用 409 说清
+        raise conflict(f"提出以后近义表变了，现在不能确认：{e.detail['message']}", e.detail["code"]) from None
+    row.status, row.approved_by, row.decided_at = "active", admin.id, utcnow()
+    db.add(row)
+    record_audit(db, admin.id, "pack_synonym_approve", "pack_synonym", row.id, f"{row.name}：{'、'.join(row.words or [])}"[:300])
+    return _synonym_row(row)
+
+
+@router.post("/admin/pack-synonyms/{synonym_id}/revoke")
+def admin_revoke_synonym(synonym_id: int, admin: User = Depends(require_role("ops")),
+                         db: Session = Depends(get_db, scope="function")):
+    """收回一行（待确认或已生效的都可以）：收窄检索一个人就够。仓库里写死的写法收不回。"""
+    from app.modules.admin.router import record_audit
+
+    from .models import PackSynonym
+
+    row = db.get(PackSynonym, synonym_id)
+    if row is None:
+        raise not_found("没有这一行")
+    if row.status == "revoked":
+        raise conflict("这一行已经处理过了", "pack_synonym_decided")
+    row.status, row.decided_at = "revoked", utcnow()
+    db.add(row)
+    record_audit(db, admin.id, "pack_synonym_revoke", "pack_synonym", row.id, row.name)
+    return _synonym_row(row)

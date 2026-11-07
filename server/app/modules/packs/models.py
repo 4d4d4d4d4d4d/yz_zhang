@@ -64,3 +64,24 @@ class PackEvent(Base):
     user_id: Mapped[int] = mapped_column(Integer, index=True)
     kind: Mapped[str] = mapped_column(String(16))      # enable / disable / ask / unanswered / refused / helpful / unhelpful
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class PackSynonym(Base):
+    """PACK-092c（436 号 spec）运营在后台加的场景包近义说法。
+
+    一行是「给一组近义词加几个写法」：组名对得上仓库近义表（packs/synonyms.json）或已生效的另一行，就并进那一组；
+    对不上就是新的一组。只能加词、不能删仓库里的词（与资质别名一样，写死的后台收不回）。
+    配错会让助手引用不相干的知识，所以四眼：一位提出（写理由），另一位确认才生效；任何一位都可以收回。"""
+
+    __tablename__ = "pack_synonyms"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(12))
+    words: Mapped[list] = mapped_column(JSON, default=list)
+    includes: Mapped[list] = mapped_column(JSON, default=list)
+    reason: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(10), default="pending")   # pending / active / revoked
+    proposed_by: Mapped[int] = mapped_column(Integer)
+    approved_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
