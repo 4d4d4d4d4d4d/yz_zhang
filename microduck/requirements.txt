@@ -1,0 +1,14 @@
+# Simulation only.
+mujoco>=3.1
+numpy>=1.24
+
+# Training. Install the build that matches the box's CUDA:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+torch>=2.1
+
+# ONNX export for the robot runtime.
+onnx>=1.15
+onnxruntime>=1.17
+onnxscript>=0.1
+
+pytest>=7.4
