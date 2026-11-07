@@ -78,7 +78,7 @@ def ip_clause(assignment: str) -> str:
     return _IP_CLAUSES[assignment]
 
 
-def outcome_clause(base_cents: int, bonus_cents: int, criteria: list) -> str:
+def outcome_clause(base_cents: int, bonus_cents: int, criteria: list, tiers: list | None = None) -> str:
     """OUT-001/002 浮动对价条款。
 
     必须写清楚三件事，否则它就是一句口头承诺：浮动**上限**是多少、
@@ -93,6 +93,13 @@ def outcome_clause(base_cents: int, bonus_cents: int, criteria: list) -> str:
         "任一方均不得覆盖；标注为「人工确认」的指标由发布方确认，"
         "不予确认的应说明理由，执行方有异议可依争议解决条款处理。",
     ]
+    if tiers:
+        # OUT-050（443 号 spec）分档：写清每一档要通过几条平台判定指标、加付多少，取达到的最高一档，不累加
+        lines[0] = (f"浮动对价: 基础报酬 {base_cents / 100:.2f} 元；按通过的「平台判定」指标条数分档加付，"
+                    f"取达到的最高一档、不累加，最多加付 {bonus_cents / 100:.2f} 元（**上限即此数，不随任何收益浮动**）。")
+        lines[1] = "加付部分按最高一档与基础报酬一并托管；没达到的档位差额原路退回发布方。"
+        for t in tiers:
+            lines.append(f"  分档：通过至少 {int(t['min_passed'])} 条平台判定指标，加付 {int(t['bonus_cents']) / 100:.2f} 元")
     for i, c in enumerate(criteria or [], 1):
         kind = "平台判定" if c.get("kind") == "auto" else "人工确认"
         lines.append(f"  {i}. [{kind}] {c.get('text', '')}")

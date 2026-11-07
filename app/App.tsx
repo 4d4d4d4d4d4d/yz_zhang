@@ -8,7 +8,7 @@ import { ContractEvidence } from './ContractEvidence';
 // App 端（13 号 spec 五 Tab 信息架构）
 // 复用 @platform/core SDK，与 Web 同一套后端 API。
 // 运行：npm install && npx expo start（后端默认 http://localhost:8000）
-import { ApiError, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, canRequestErrandReview, TASK_STATUS_LABEL, apiErrorText, canReboostTask, dayLabel, dayShiftsPayload, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, isAuthRejection, shiftLabel, templatePrefill, GUARDIAN_MODE_LABEL, minorPayload, minorTaskLine, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, unreadBadge, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type DayShiftInput, type LedgerRow, type Me, type PackTaskTemplateBrief, type GuardianMode, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
+import { ApiError, bonusLine, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, OperationKey, PlatformClient, canRequestErrandReview, TASK_STATUS_LABEL, apiErrorText, canReboostTask, dayLabel, dayShiftsPayload, describeChangeOrder, fmtYuan, formatDateTime, hasChildTasks, isAuthRejection, shiftLabel, templatePrefill, GUARDIAN_MODE_LABEL, minorPayload, minorTaskLine, visitShortfall, localInputToServerTime, ledgerKindLabel, millisUntil, taskActions, unreadBadge, type Contract, type Dispute, type DisputeStatement, type IpAssignment, type ChangeOrderView, type DayShiftInput, type LedgerRow, type Me, type PackTaskTemplateBrief, type GuardianMode, type PayoutAccountView, type Task, type Wallet } from '@platform/core';
 import { isSandbox, loadSandbox } from './sandboxState';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CockpitBlock, DecomposeScreen, TaskTreeBlock } from './decompose';
@@ -511,6 +511,10 @@ export function TaskDetailScreen({ client, me, task, onBack, onChanged, onOpenTa
       <Text style={styles.mutedLeft}>
         {task.category} · {TASK_STATUS_LABEL[task.status]} · {fmtYuan(task.budget_cents)}
       </Text>
+      {/* OUT-050（443 号 spec）浮动对价：App 以前一个字都不显示，执行方看不到「做到几条拿多少」 */}
+      {task.pricing === 'outcome' && (
+        <Text style={styles.mutedLeft} accessibilityLabel="浮动对价">{bonusLine(task.bonus_cents, task.bonus_tiers)}</Text>
+      )}
       {!!task.description && <Text>{task.description}</Text>}
       {!!task.address_exact && <Text style={styles.mutedLeft}>📍 {task.address_exact}</Text>}
       {/* SCN-117 每天几点到几点 */}

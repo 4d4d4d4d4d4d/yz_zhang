@@ -68,7 +68,7 @@ def generate(db: Session, task, executor_id: int, amount_cents: int) -> Contract
     # OUT-001 浮动对价的条款要写清楚上限、判据与判定人，否则它就是口头承诺
     if task.pricing == "outcome" and task.bonus_cents > 0:
         terms += "\n" + clauses.outcome_clause(
-            task.budget_cents, task.bonus_cents, task.acceptance_criteria or []
+            task.budget_cents, task.bonus_cents, task.acceptance_criteria or [], task.bonus_tiers or []
         )
     # CRED-003 信用等级权益：高信用执行者享费率折扣
     from app.modules.account import service as credit
@@ -93,6 +93,7 @@ def generate(db: Session, task, executor_id: int, amount_cents: int) -> Contract
     contract = Contract(
         task_id=task.id,
         bonus_cents=bonus,
+        bonus_tiers=list(task.bonus_tiers or []) if bonus else [],
         requester_id=task.creator_id,
         executor_id=executor_id,
         amount_cents=amount_cents + bonus,
@@ -387,6 +388,35 @@ def _bonus_earned(db: Session, contract: Contract) -> bool:
     return all_passed
 
 
+def _auto_passed_count(db: Session, contract: Contract) -> int:
+    """OUT-050 最后一次交付说明上，平台判定指标通过了几条（与 _bonus_earned 同一套判据、同一份交付说明）。"""
+    from app.modules.agent import criteria as crit
+    from app.modules.task.models import ProgressLog, Task
+
+    task = db.get(Task, contract.task_id)
+    auto = [c for c in ((task.acceptance_criteria or []) if task else []) if c.get("kind") == "auto"]
+    if not auto:
+        return 0
+    log = (db.query(ProgressLog).filter(ProgressLog.task_id == contract.task_id, ProgressLog.kind == "delivery")
+           .order_by(ProgressLog.id.desc()).first())
+    results, _ = crit.evaluate(auto, log.content if log else "")
+    return sum(1 for r in results if r["passed"] is True)
+
+
+def bonus_earned_cents(db: Session, contract: Contract) -> int:
+    """OUT-050（443 号 spec）这一单的浮动部分该付多少。
+
+    有分档的：取「通过条数 ≥ 那一档要求」里最高的一档；一档都够不上就是 0。
+    没分档的照旧（OUT-004）：平台判定指标全部通过付全额，否则 0。
+    分档读的是**合同里签约时的快照**，事后改任务的分档不影响这一单。"""
+    tiers = list(contract.bonus_tiers or [])
+    if not tiers:
+        return contract.bonus_cents if _bonus_earned(db, contract) else 0
+    passed = _auto_passed_count(db, contract)
+    earned = max((int(t["bonus_cents"]) for t in tiers if passed >= int(t["min_passed"])), default=0)
+    return min(earned, contract.bonus_cents)
+
+
 def release(db: Session, contract: Contract) -> Contract:
     """SC-005 整体验收放款：放出全部剩余托管（已分期放款的部分不重复）。"""
     lock_contract_funds(db, contract)  # CONC-012 放款是重复执行代价最高的路径
@@ -399,16 +429,16 @@ def release(db: Session, contract: Contract) -> Contract:
     # 没达标的原路退回发布方——这一段必须在放款之前做，
     # 否则 remaining 里就把 bonus 一起付出去了。
     if contract.bonus_cents > 0 and remaining >= contract.bonus_cents:
-        if not _bonus_earned(db, contract):
-            wallet.escrow_refund(db, contract.requester_id, contract.bonus_cents,
-                                 contract.id, "浮动对价未达标退回")
+        # OUT-050（443 号 spec）分档的按达到的那一档付，差额退回；没分档的照旧全付或全退
+        unearned = contract.bonus_cents - bonus_earned_cents(db, contract)
+        if unearned > 0:
+            memo = "浮动对价未达标退回" if unearned == contract.bonus_cents else "浮动对价按达到的档位退回差额"
+            wallet.escrow_refund(db, contract.requester_id, unearned, contract.id, memo)
             # 用既有的 `refund` 分账类型，不新造一个近义的——
             # 语义就是「退还发布方」，memo 已经把场景说清楚了。
-            _settle(db, contract, "refund",
-                    [(contract.requester_id, contract.bonus_cents, "refund")],
-                    "浮动对价未达标退回")
-            remaining -= contract.bonus_cents
-            contract.released_cents += contract.bonus_cents
+            _settle(db, contract, "refund", [(contract.requester_id, unearned, "refund")], memo)
+            remaining -= unearned
+            contract.released_cents += unearned
     if remaining > 0:
         fee = _fee(contract, remaining)
         wallet.escrow_release(

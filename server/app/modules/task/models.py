@@ -58,6 +58,8 @@ class Task(Base):
     # OUT-002 浮动对价的**确定上限**。不是比例、不是开放式承诺——
     # 有确定上限的附加对价是价款，随收益浮动的比例是分配，两者性质不同。
     bonus_cents: Mapped[int] = mapped_column(Integer, default=0)
+    # OUT-050（443 号 spec）分档加付：[{min_passed, bonus_cents}]，通过的平台判定指标越多加付越多；最高一档就是上面的上限
+    bonus_tiers: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
 
     budget_cents: Mapped[int] = mapped_column(Integer, default=0)
     pricing: Mapped[str] = mapped_column(String(20), default="fixed")  # fixed 一口价 / bidding 竞价

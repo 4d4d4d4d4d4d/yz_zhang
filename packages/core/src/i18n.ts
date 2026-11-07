@@ -233,6 +233,7 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
   bonus_not_allowed: '仅 outcome 计价支持浮动对价',
   bonus_required: '浮动对价必须给出确定的加付上限金额',
   bonus_too_large: '浮动部分不得超过基础报酬，超出请改为提高基础报酬',
+  bonus_tiers_not_increasing: '分档要按「通过几条」和「加付多少」都从低到高排，后一档两样都要比前一档多',
   budget_locked: '已有报名者，预算不可下调（防调包），只能上调',
   budget_required: '预算必须大于 0',
   budget_too_small: '预算不足以拆分名额',
@@ -583,6 +584,8 @@ export const ERROR_MESSAGE_ZH: Record<string, string> = {
  * 这件事可数、可查——一个说不清自己覆盖了多少的翻译表，等于没有覆盖率。
  */
 export const SERVER_WORDED_CODES: string[] = [
+  // OUT-050（443 号 spec）消息里带着这一单的条数与金额
+  'bonus_tier_unreachable', 'bonus_tiers_mismatch',
   // TEAM-070（226 号 spec）消息里写明还能退多少、当前余额多少
   'return_exceeds_spend',
   'return_insufficient_balance',

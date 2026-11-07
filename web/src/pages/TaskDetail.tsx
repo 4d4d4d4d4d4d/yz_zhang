@@ -1,6 +1,6 @@
 import ContractEvidence from '../ContractEvidence';
 import { TaskProfilePanel } from '../Profiles';
-import { OperationKey, minorTaskLine, taskCertsLine, certGapLine, relaxableCerts, dropCertPatch, addableCerts, addCertPatch, ADD_CERT_HINT, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, canReboostTask, taskReboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, isUrgentCockpitAlert, scheduleConflictNote, daysLeftNote, parseDaysLeft, projectedFinishLine, timelineBars, timelineBasisLabel, formatDate, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type Category, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
+import { OperationKey, bonusLine, minorTaskLine, taskCertsLine, certGapLine, relaxableCerts, dropCertPatch, addableCerts, addCertPatch, ADD_CERT_HINT, DEPOSIT_STATUS_LABEL, IP_ASSIGNMENT_LABEL, TASK_STATUS_LABEL, apiErrorText, asList, daySummaryLine, daysStillShort, dayShiftChangeLine, shiftEditableDays, raiseToCents, REBOOST_INVITE_COUNT, reboostLine, canReboostTask, taskReboostLine, describeChangeOrder, hasChildTasks, shiftLabel, visitPresence, visitShortfall, fmtYuan, formatDateTime, isUrgentCockpitAlert, scheduleConflictNote, daysLeftNote, parseDaysLeft, projectedFinishLine, timelineBars, timelineBasisLabel, formatDate, localInputToServerTime, type ChangeOrderView, type Cockpit, type PlatformClient, type Contract, type Recommendation, type ApplyDaysResult, type Category, type DayApplicant, type Task, type TaskTree, type TaskVisits } from '@platform/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AgentPanel } from '../AgentPanel';
@@ -102,9 +102,11 @@ export default function TaskDetail() {
             却看不到浮动多少，被强制选定的知识产权归属他也看不见。
             必须选 ≠ 看得见——只做前一件，公平没有兑现。 */}
         <p className="muted" data-testid="task-terms">
-          {task.pricing === 'outcome' && (
+          {task.pricing === 'outcome' && !task.bonus_tiers?.length && (
             <>达标可加付至多 <span className="price">{fmtYuan(task.bonus_cents)}</span>（按验收指标判定） · </>
           )}
+          {/* OUT-050（443 号 spec）分档的逐档写出来 */}
+          {task.pricing === 'outcome' && !!task.bonus_tiers?.length && <>{bonusLine(task.bonus_cents, task.bonus_tiers)} · </>}
           交付成果归属：{task.ip_assignment
             ? IP_ASSIGNMENT_LABEL[task.ip_assignment]
             : '未声明'}

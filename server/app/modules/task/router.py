@@ -26,6 +26,13 @@ router = APIRouter(tags=["task"])
 
 
 # ---------- schemas ----------
+class BonusTierIn(BaseModel):
+    """OUT-050（443 号 spec）一档加付：通过的平台判定指标至少 min_passed 条，加付 bonus_cents。"""
+    model_config = ConfigDict(extra="forbid")
+    min_passed: int = Field(ge=1, le=20)
+    bonus_cents: int = Field(gt=0)
+
+
 class DayShiftIn(BaseModel):
     """SCN-127 某一天单独的时段（北京时间 HH:MM）。"""
     model_config = ConfigDict(extra="forbid")
@@ -69,6 +76,8 @@ class TaskIn(BaseModel):
     ip_assignment: str = ""
     # OUT-002 浮动对价的确定上限
     bonus_cents: int = Field(default=0, ge=0)
+    # OUT-050（443 号 spec）分档加付，最多 5 档；给了分档，bonus_cents 就是最高一档（不填自动取最高一档）
+    bonus_tiers: list[BonusTierIn] = Field(default_factory=list, max_length=5)
     publish_now: bool = True
     # SCN-119（175 号 spec）替别人发单：服务对象怎么称呼、到场时联系谁、问过本人没有
     on_behalf: bool = False
@@ -157,6 +166,8 @@ def dump_task(task: Task, viewer: User | None = None) -> dict:
         # 却看不到浮动部分有多少——而平台托管时已经按 budget+bonus 全额锁了钱，
         # 只有他不知道这笔钱存在。一个没给到当事人的「确定上限」，对他不成立。
         "bonus_cents": task.bonus_cents,
+        # OUT-050（443 号 spec）分档：执行方报名前就要看得到「做到几条拿多少」
+        "bonus_tiers": list(task.bonus_tiers or []),
         # IPC-001 V77 强制发布方选归属，理由是「替他猜对执行方不公平」；
         # 但**不返回这个字段**，执行方在报名前照样不知道自己做的东西归谁——
         # 他能看到的最早时点是签约时的合同条款，而那时他已经决定接了。
@@ -276,6 +287,7 @@ def _validate_ip_and_pricing(body: "TaskIn", db: Session | None = None, user_id:
             "ip_assignment_required",
         )
     if body.pricing == "outcome":
+        _validate_bonus_tiers(body)
         # OUT-002 浮动部分必须是确定的正数上限
         if body.bonus_cents <= 0:
             raise bad_request("浮动对价必须给出确定的加付上限金额",
@@ -296,8 +308,35 @@ def _validate_ip_and_pricing(body: "TaskIn", db: Session | None = None, user_id:
                 "否则达标与否完全由发布方说了算。",
                 "auto_criterion_required",
             )
-    elif body.bonus_cents:
+    elif body.bonus_cents or body.bonus_tiers:
         raise bad_request("仅 outcome 计价支持浮动对价", "bonus_not_allowed")
+
+
+def _validate_bonus_tiers(body: "TaskIn") -> None:
+    """OUT-050（443 号 spec）分档加付：「通过的平台判定指标至少 k 条，加付 X 元」。
+
+    - 档位按条数、按金额都要严格递增：多做到一条反而少拿，或者两档一样，都说不清；
+    - 每一档要的条数不能超过平台判定指标的条数：够不着的一档是空头承诺；
+    - 最高一档就是托管的上限（OUT-002/003）：bonus_cents 不填就取最高一档，填了必须相等。
+    原来的一档（全部达标才加付）就是只有一档、条数等于全部平台判定指标的情形，照旧可用。"""
+    tiers = body.bonus_tiers
+    if not tiers:
+        return
+    auto = sum(1 for c in (body.acceptance_criteria or []) if c.get("kind") == "auto")
+    for a, b in zip(tiers, tiers[1:]):
+        if b.min_passed <= a.min_passed or b.bonus_cents <= a.bonus_cents:
+            raise bad_request("分档要按「通过几条」和「加付多少」都从低到高排，后一档两样都要比前一档多",
+                              "bonus_tiers_not_increasing")
+    if tiers[-1].min_passed > auto:
+        raise bad_request(f"最高一档要通过 {tiers[-1].min_passed} 条平台判定指标，可这一单只有 {auto} 条："
+                          "够不着的一档是空头承诺。加几条平台判定指标，或者把那一档的条数改小",
+                          "bonus_tier_unreachable")
+    top = tiers[-1].bonus_cents
+    if body.bonus_cents == 0:
+        body.bonus_cents = top
+    elif body.bonus_cents != top:
+        raise bad_request(f"浮动上限要等于最高一档的加付（{top / 100:.2f} 元）：托管就按这个数锁钱",
+                          "bonus_tiers_mismatch")
 
 
 def _validate_visits(body: TaskIn) -> None:

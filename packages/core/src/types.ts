@@ -353,6 +353,8 @@ export interface Task {
   // OUT-002 浮动对价的确定上限。非 outcome 任务恒为 0，同样每次都返回——
   // 一个没给到当事人的「确定上限」，对他不成立（TASK-060）。
   bonus_cents: number;
+  /** OUT-050（443 号 spec）分档加付；没分档的是空数组（老数据可能没有这个字段） */
+  bonus_tiers?: BonusTier[];
   is_remote: boolean;
   city: string;
   lat: number | null;
@@ -722,7 +724,15 @@ export interface TaskCreateInput {
   task_certs?: string[];
   acceptance_criteria?: string[];
   bonus_cents?: number;
+  /** OUT-050（443 号 spec）分档加付；给了分档，bonus_cents 可以不填（取最高一档） */
+  bonus_tiers?: BonusTier[];
   publish_now?: boolean;
+}
+
+/** OUT-050（443 号 spec）一档加付：通过的平台判定指标至少 min_passed 条，加付 bonus_cents */
+export interface BonusTier {
+  min_passed: number;
+  bonus_cents: number;
 }
 
 /** 与服务端 contract/clauses.py 的 IP_LABELS 一致 */
