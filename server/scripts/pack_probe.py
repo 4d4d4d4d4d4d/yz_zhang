@@ -17,10 +17,9 @@ from __future__ import annotations
 import json
 import sys
 
-from app.modules.notebook.service import MIN_RELATED, terms
+from app.modules.notebook.service import MIN_RELATED
 from app.modules.packs import schema
 from app.modules.packs import service as psvc
-from app.modules.skills.service import expand_query
 
 
 def load(key: str):
@@ -73,7 +72,7 @@ def probe(d, q: str, want: str, tag_only: bool, assistant: str | None = None) ->
         top = "、".join(f"「{t}」" for t in titles) or "什么都没有"
         problems.append(f"答不上（前三条是 {top}）")
     if tag_only:
-        notag = psvc.knowledge_score(k.title, k.body, [], terms(expand_query(q, None)), q)   # 与助手问答同一套打分
+        notag = psvc.knowledge_score(k.title, k.body, [], psvc.pack_terms(q), q)   # 与助手问答同一套打分
         if notag >= MIN_RELATED:
             problems.append(f"去掉标签也得 {notag} 分（够 {MIN_RELATED} 就算相关），钉不住标签")
         tags = [t for t in k.tags if len(t) >= 2 and t in q]
@@ -81,7 +80,7 @@ def probe(d, q: str, want: str, tag_only: bool, assistant: str | None = None) ->
             problems.append(f"命中的标签是 {tags or '没有'}，要正好一个")
         # PACK-093（422 号 spec）只拿掉命中的那一个、别的标签留着：别的标签的切片补得上，逐个标签变异就测不出来
         rest = [t for t in k.tags if t not in tags]
-        others = psvc.knowledge_score(k.title, k.body, rest, terms(expand_query(q, None)), q)
+        others = psvc.knowledge_score(k.title, k.body, rest, psvc.pack_terms(q), q)
         if tags and others >= MIN_RELATED:
             problems.append(f"只拿掉「{tags[0]}」、靠别的标签也得 {others} 分，换掉和它重叠的标签")
     if problems:

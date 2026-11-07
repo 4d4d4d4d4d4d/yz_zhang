@@ -11,9 +11,8 @@ import ast
 import json
 from pathlib import Path
 
-from app.modules.notebook.service import MIN_RELATED, terms
+from app.modules.notebook.service import MIN_RELATED
 from app.modules.packs import service as psvc
-from app.modules.skills.service import expand_query
 
 TESTS = Path(__file__).parent
 MARK = "只有标签里的口语才接得住"
@@ -44,7 +43,7 @@ def score_without_tags(key: str, q: str, title: str) -> int:
     d = json.loads((psvc.SEEDS / f"{key}.json").read_text(encoding="utf-8"))
     k = next(k for k in d["knowledge"] if k["title"] == title)
     # PACK-092（416 号 spec）与助手问答同一套打分（含「情态词前面的主题在标题里」那一条），不然闸门比真实检索宽
-    return psvc.knowledge_score(k["title"], k["body"], [], terms(expand_query(q, None)), q)
+    return psvc.knowledge_score(k["title"], k["body"], [], psvc.pack_terms(q), q)
 
 
 def test_the_scanner_sees_the_tag_only_questions():
@@ -78,7 +77,7 @@ def pinned_score(k: dict, q: str) -> int:
     """PACK-093（422 号 spec）只拿掉问法命中的那个标签、其余标签留着，这条知识还得几分。
     （问法里直接出现的标签已经全拿掉了，「标签整个在问题里」的加分在这里恒为 0，不再算。）"""
     rest = [t for t in k["tags"] if not (len(t) >= 2 and t in q)]
-    return psvc.knowledge_score(k["title"], k["body"], rest, terms(expand_query(q, None)), q)
+    return psvc.knowledge_score(k["title"], k["body"], rest, psvc.pack_terms(q), q)
 
 
 def score_without_pinned_tag(key: str, q: str, title: str) -> int:

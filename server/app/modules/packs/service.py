@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import date, timedelta
+from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -216,6 +217,46 @@ def topic_bonus(title: str, q: str) -> int:
     return total
 
 
+# PACK-092b（435 号 spec）近义说法：「天气不好还走吗」整串不命中，二字切片只有「天气」一片，
+# 写着「下雨」「打雷」的那条知识就接不住。问题里认出近义表里的词，把同组（和它单向包含的组）的其余写法
+# 当成整词加进检索：每个词单独一组、只算整词不切二字，也不受 MAX_TERMS 截断——问题本身的词照旧在前面。
+SYNONYMS = Path(__file__).resolve().parent / "synonyms.json"
+SYNONYM_WEIGHT = 3
+
+
+@lru_cache(maxsize=1)
+def synonym_groups() -> dict[str, dict]:
+    data = json.loads(SYNONYMS.read_text(encoding="utf-8"))
+    return {g["name"]: {"words": list(g["words"]), "includes": list(g.get("includes") or [])} for g in data["groups"]}
+
+
+def synonyms_in(q: str) -> list[str]:
+    """问题里出现了近义表里的哪个写法，就返回那一组（加上它单向包含的组）里问题中没有的其余写法。"""
+    from app.modules.skills.service import norm
+
+    low = norm(q)
+    groups = synonym_groups()
+    hit = [name for name, g in groups.items() if any(norm(w) in low for w in g["words"])]
+    out: list[str] = []
+    for name in hit:
+        for n in [name, *groups[name]["includes"]]:
+            out += [w for w in groups[n]["words"] if norm(w) not in low]
+    return list(dict.fromkeys(out))
+
+
+def pack_terms(q: str, db: Session | None = None) -> list[tuple[str, int, int]]:
+    """场景包检索用的词：问题本身的词（含技能概念展开，135 号）+ 近义说法（整词、各自一组）。
+    助手问答、离线试问法（pack_probe）与只靠标签的闸门共用这一份，免得三处算得不一样。"""
+    from app.modules.notebook.service import terms
+    from app.modules.skills.service import expand_query
+
+    ts = terms(expand_query(q, db))
+    have = {t for t, _, _ in ts}
+    g0 = max((g for _, _, g in ts), default=-1) + 1
+    extra = [w for w in synonyms_in(q) if w.lower() not in have]
+    return ts + [(w.lower(), SYNONYM_WEIGHT, g0 + i) for i, w in enumerate(extra)]
+
+
 def knowledge_score(title: str, body: str, tags: list[str], ts: list[tuple[str, int, int]], q: str = "") -> int:
     """一条知识对这个问题的分（不含「问题里直接出现标签」的加分）。助手问答、离线试问法与只靠标签的闸门共用。"""
     from app.modules.notebook.service import score
@@ -225,11 +266,11 @@ def knowledge_score(title: str, body: str, tags: list[str], ts: list[tuple[str, 
 
 def _knowledge_hits(d: schema.PackDef, keys: list[str], q: str,
                     db: Session | None = None) -> list[tuple[schema.KnowledgeDef, int]]:
-    from app.modules.notebook.service import MIN_RELATED, terms
-    from app.modules.skills.service import expand_query
+    from app.modules.notebook.service import MIN_RELATED
 
-    # SCN-105 与个人知识库一样，问题里的技能概念展开成「规范名 + 别名」再检索（135 号的概念表）
-    ts = terms(expand_query(q, db))
+    # SCN-105 与个人知识库一样，问题里的技能概念展开成「规范名 + 别名」再检索（135 号的概念表）；
+    # PACK-092b（435 号）再加上场景包的近义说法
+    ts = pack_terms(q, db)
     pool = [k for k in d.knowledge if not keys or k.key in keys]
     scored = []
     for k in pool:

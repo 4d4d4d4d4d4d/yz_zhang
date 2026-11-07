@@ -39,6 +39,7 @@ description: Discover, score and queue new user scenarios for the platform on yo
    包的测试里「只有标签里的口语才接得住」的提问，跑 `tests/test_pack_tag_only_questions.py`：去掉标签还答得上的会被点名。
    检索按两个字一组切词，提问里任何两个字和正文、标题撞上都算命中，只看整词在不在正文里不够（377 号 spec）。
    测试写完做变异红验（PACK-094，432 号）：`python -m scripts.pack_mutate tests/test_vXXX_packs.py`。它从测试里自动推出要改坏的关键禁止项、只靠标签的标签和类目，逐个改坏、跑、改回；有没变红的就补断言或换标签。spec 的闸门表写这条命令和「N/N 红」，不要再写 scratchpad 里的脚本（换容器就没了）。
+   答不上是因为换了个说法（「天气不好」对「下雨」、「暴雨」对「下大雨」）的，先补近义表 `server/app/modules/packs/synonyms.json`（PACK-092b，435 号），不要往标签里堆同义词。
 3. 合入后，运营在管理后台「服务包」点「导入仓库里的种子包」→ 成为**草稿** → 提交审核 → **另一位管理员**上线（四眼，文件不能绕过）。
 4. 上线后看后台的指标（在用、答不上、有用率）与「场景雷达」，答不上多的就补知识，过期的就更新——又回到第 1 步。
 
