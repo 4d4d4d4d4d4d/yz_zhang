@@ -125,6 +125,7 @@
 | 102 | 关注列表、内容流里的关注状态，与那一页的查询次数（关注关系按隐私过滤 / 内容流 N+1） | [102-follow-lists-and-feed-follow-state.md](./102-follow-lists-and-feed-follow-state.md) | P1 |
 | 103 | 另外那些没人核对的数字：前端测试计数与结构计数（CI 里与测试框架输出比 / 表、迁移、job 回归里直接比） | [103-the-other-numbers-nobody-checks.md](./103-the-other-numbers-nobody-checks.md) | P2 |
 | 104 | 幂等键：从「支持」到真的护住钱（先占键再动钱 / 过期 / 两端真的发键） | [104-idempotency-that-actually-protects.md](./104-idempotency-that-actually-protects.md) | P0 |
+| 445 | 第七十六轮场景发掘：鱼缸水族维护、形象穿搭顾问 | [445-scenario-round-76.md](./445-scenario-round-76.md) | P0 |
 | 444 | 两端发单页选按结果计价与分档 | [444-outcome-publish.md](./444-outcome-publish.md) | P0 |
 | 443 | 浮动对价分档 | [443-bonus-tiers.md](./443-bonus-tiers.md) | P0 |
 | 442 | 第七十五轮场景发掘：健身器材安装维修、木地板维修 | [442-scenario-round-75.md](./442-scenario-round-75.md) | P0 |

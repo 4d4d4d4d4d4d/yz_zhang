@@ -331,7 +331,8 @@
 | V469 | 第七十五轮场景发掘（scenario-discovery）（SCN-331~332） | 442 | done | 健身器材安装维修（12.8）、木地板维修（14.4）两个包与两个类目；pack_mutate 20/20 红 |
 | V470 | 浮动对价分档（OUT-050） | 443 | done | 「通过至少 k 条平台判定指标加付 X」，取最高一档；托管最高档、差额退回、随已签合同走；两端详情显示 |
 | V471 | 两端发单页选按结果计价与分档（OUT-052） | 444 | done | 网页计价方式加「按结果计价」、App 加开关：关键词变成平台判定指标，写上限或分档；SDK outcomePayload 两端共用，修正 acceptance_criteria 的类型声明 |
-| V472 | 第七十六轮场景发掘（scenario-discovery） | — | todo | 上一轮是 V469；按方法补新场景包，问法先用 pack_probe 试，写完用 pack_mutate 红验 |
+| V472 | 第七十六轮场景发掘（scenario-discovery）（SCN-333~334） | 445 | done | 鱼缸水族维护（12）、形象穿搭顾问（7.2）两个包与两个类目；pack_mutate 20/20 红 |
+| V473 | 第七十七轮场景发掘（scenario-discovery） | — | todo | 上一轮是 V472；按方法补新场景包，问法先用 pack_probe 试，写完用 pack_mutate 红验 |
 | V410 | 功能面漏登记在 harness check 当场报（FEAT-002） | 382 | done | V408 回归失败：新 App 子页没登记，等了 74 分钟才红 |
 | V405 | 场景包「只靠标签」提问的静态闸门（PACK-090） | 377 | done | 375 号的经验；首跑 122 条查出存量 11 条（V380~V389）不靠标签也答得上，已改正 |
 | V308 | 本机没装 ruff 时静态检查不再静默跳过（LINT-005） | 280 | done | CI / 回归里失败、本机跳过；红验 2 处 |
