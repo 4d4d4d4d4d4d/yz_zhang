@@ -170,3 +170,9 @@ Potential features for future versions:
 - Move vs Copy mode
 - Integration with cloud storage
 - GUI interface
+
+---
+
+## Sub-project: G1 Backflip (Isaac Sim / Isaac Lab)
+
+See [`g1_backflip/README.md`](g1_backflip/README.md) — one-click RL training of a Unitree G1 backflip on an RTX 3060 12GB (`cd g1_backflip && ./train.sh`).

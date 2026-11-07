@@ -1,0 +1,7 @@
+third_party/
+logs/
+outputs/
+.venv_*/
+.installed
+__pycache__/
+*.egg-info/
