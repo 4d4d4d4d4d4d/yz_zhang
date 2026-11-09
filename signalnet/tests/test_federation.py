@@ -50,6 +50,7 @@ class TestCli(unittest.TestCase):
         self.assertTrue(out["replay_matches"])
         self.assertGreater(out["consensus"]["good"], out["consensus"]["spam"])
         self.assertTrue(all(r < 100 for r in out["shill_rep"]))
+        self.assertEqual(len(out["feed"]), 1)  # REQ-RK-005：垃圾内容不进推荐流
 
 
 if __name__ == "__main__":

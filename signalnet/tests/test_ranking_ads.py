@@ -51,6 +51,13 @@ class TestRanking(unittest.TestCase):
         self.assertEqual(rank([old, new], T0 + 3 * 86400), ["new", "old"])
         self.assertEqual(rank([ri("z", confidence=0.0)], T0), [])
 
+    def test_low_consensus_filtered(self):
+        """REQ-RK-005"""
+        items = [ri("ok", "a", 0.3), ri("spam", "b", 0.29), ri("good", "c", 0.9)]
+        self.assertEqual(rank(items, T0), ["good", "ok"])
+        loose = ranking.RankParams(min_consensus=0.0)
+        self.assertIn("spam", rank(items, T0, loose))
+
     def test_author_diversity(self):
         """REQ-RK-004"""
         items = [ri("a1", "a", 0.9), ri("a2", "a", 0.9), ri("b1", "b", 0.6)]

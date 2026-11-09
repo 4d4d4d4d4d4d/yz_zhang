@@ -5,7 +5,7 @@
 
 score = consensus * confidence * 0.5 ** (age / half_life) * diversity_penalty
 
-相关需求：REQ-RK-001 ~ REQ-RK-004
+相关需求：REQ-RK-001 ~ REQ-RK-005
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ class RankParams:
     half_life_s: int = 48 * 3600
     same_author_penalty: float = 0.5  # 同一作者第 k 条内容乘以 penalty**k
     min_confidence: float = 0.05  # 置信度过低的内容不进入推荐流（仍可被订阅/搜索）
+    min_consensus: float = 0.3  # 共识质量过低的内容不进入推荐流（REQ-RK-005）
 
 
 def base_score(item: RankInput, now: int, p: RankParams) -> float:
@@ -38,7 +39,9 @@ def base_score(item: RankInput, now: int, p: RankParams) -> float:
 def rank(items: list[RankInput], now: int, params: RankParams | None = None) -> list[str]:
     """返回排序后的 content_id 列表。确定性：同分按 content_id 升序。"""
     p = params or RankParams()
-    eligible = [i for i in items if i.confidence >= p.min_confidence]
+    eligible = [
+        i for i in items if i.confidence >= p.min_confidence and i.consensus >= p.min_consensus
+    ]
     pre = sorted(eligible, key=lambda i: (-base_score(i, now, p), i.content_id))
     seen: dict[str, int] = {}
     scored: list[tuple[float, str]] = []
