@@ -162,6 +162,8 @@ class SignalNode:
                 s.consensus,
                 s.confidence,
                 self.contents[cid].created_at,
+                s.evidence,
+                s.agreement,
             )
             for cid, s in self.settlements.items()
         ]
@@ -182,7 +184,14 @@ class SignalNode:
             {
                 "rep": self.rep.snapshot(),
                 "settlements": {
-                    cid: [s.consensus, s.confidence, s.author_delta, list(s.aligned)]
+                    cid: [
+                        s.consensus,
+                        s.confidence,
+                        s.author_delta,
+                        list(s.aligned),
+                        s.evidence,
+                        s.agreement,
+                    ]
                     for cid, s in sorted(self.settlements.items())
                 },
                 "earnings": dict(sorted(self.exchange.earnings.items())),

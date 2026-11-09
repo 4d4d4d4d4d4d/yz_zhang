@@ -3,11 +3,14 @@
 **架构不变量**：本模块禁止导入 `ads`（由 harness 的分层门禁强制），
 排序输入中不存在任何“花费/出价”字段——广告预算在结构上无法购买自然流量（REQ-RK-002）。
 
-score = consensus * confidence * (1 + fresh_boost * 0.5 ** (age / half_life)) * diversity_penalty
+score   = quality * (1 + fresh_boost * 0.5 ** (age / half_life)) * diversity_penalty
+quality = [(E*consensus + n0*prior)/(E+n0) + beta/sqrt(E+n0)] * agreement
 
-“金子总会发光”：质量部分永不衰减，时间只影响有上限的新鲜度加成（REQ-EV-001）。
+- “金子总会发光”：quality 永不衰减，时间只影响有上限的新鲜度加成（REQ-EV-001）。
+- 去规模偏置：评审少只代表“不确定”——向先验收缩并获得探索加成，而不是被直接打折；
+  评审人数多不再自动换来高分（REQ-CS-004）。
 
-相关需求：REQ-RK-001 ~ REQ-RK-005, REQ-EV-001
+相关需求：REQ-RK-001 ~ REQ-RK-005, REQ-EV-001, REQ-CS-004
 """
 
 from __future__ import annotations
@@ -22,6 +25,8 @@ class RankInput:
     consensus: float
     confidence: float
     created_at: int
+    evidence: float = 0.0  # 评审权重和 E
+    agreement: float = 1.0  # 评审一致度
 
 
 @dataclass(frozen=True)
@@ -31,12 +36,22 @@ class RankParams:
     same_author_penalty: float = 0.5  # 同一作者第 k 条内容乘以 penalty**k
     min_confidence: float = 0.05  # 置信度过低的内容不进入推荐流（仍可被订阅/搜索）
     min_consensus: float = 0.3  # 共识质量过低的内容不进入推荐流（REQ-RK-005）
+    prior: float = 0.5  # 贝叶斯先验均值（REQ-CS-004）
+    prior_strength: float = 5.0  # n0：先验相当于多少评审权重
+    explore_beta: float = 0.2  # 不确定性探索加成系数
+
+
+def quality(item: RankInput, p: RankParams) -> float:
+    """与时间无关的质量项（REQ-CS-004）。"""
+    n = max(0.0, item.evidence) + p.prior_strength
+    posterior = (item.evidence * item.consensus + p.prior_strength * p.prior) / n
+    return (posterior + p.explore_beta / n**0.5) * max(0.0, item.agreement)
 
 
 def base_score(item: RankInput, now: int, p: RankParams) -> float:
     age = max(0, now - item.created_at)
     freshness = p.fresh_boost * 0.5 ** (age / p.half_life_s)
-    return item.consensus * item.confidence * (1.0 + freshness)
+    return quality(item, p) * (1.0 + freshness)
 
 
 def rank(items: list[RankInput], now: int, params: RankParams | None = None) -> list[str]:

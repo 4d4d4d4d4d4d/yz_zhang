@@ -45,6 +45,8 @@ class Settlement:
     author: str = ""
     author_delta: int = 0
     aligned: tuple[str, ...] = ()  # 与共识一致的评审者（用于广告收益里的策展人分成）
+    evidence: float = 0.0  # 评审权重和 E（排序用于贝叶斯收缩，REQ-CS-004）
+    agreement: float = 1.0  # 一致度 = 1 - 2×加权离散度，∈[0,1]
 
 
 def weighted_median(values: list[tuple[float, float]]) -> float:
@@ -170,6 +172,8 @@ class ReputationBook:
             author=author,
             author_delta=author_delta,
             aligned=tuple(sorted(set(aligned))),
+            evidence=round(total_w, 6),
+            agreement=round(max(0.0, 1.0 - 2.0 * dispersion), 6),
         )
 
     def apply(self, s: Settlement, attestations: list[Attestation]) -> None:

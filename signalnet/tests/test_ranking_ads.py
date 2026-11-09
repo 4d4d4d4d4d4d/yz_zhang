@@ -8,8 +8,10 @@ from signalnet.ranking import RankInput, rank
 from tests.helpers import T0, ident, make_att, make_content
 
 
-def ri(cid, author="a", consensus=0.8, confidence=0.8, created_at=T0):
-    return RankInput(cid, author, consensus, confidence, created_at)
+def ri(
+    cid, author="a", consensus=0.8, confidence=0.8, created_at=T0, evidence=100.0, agreement=1.0
+):
+    return RankInput(cid, author, consensus, confidence, created_at, evidence, agreement)
 
 
 class TestRanking(unittest.TestCase):
@@ -60,8 +62,33 @@ class TestRanking(unittest.TestCase):
         self.assertEqual(rank([gold, meh], T0 + 30 * day), ["gold", "meh"])
         self.assertEqual(rank([gold, good], T0 + 30 * day), ["good", "gold"])  # 新鲜加成可短暂领先
         self.assertEqual(rank([gold, good], T0 + 37 * day), ["gold", "good"])  # 一周后回归质量
+        no_fresh = ranking.RankParams(fresh_boost=0.0)
+        self.assertEqual(
+            ranking.base_score(gold, T0 + 30 * day, no_fresh),
+            ranking.base_score(gold, T0 + 365 * day, no_fresh),
+        )
+
+    def test_no_scale_bias(self):
+        """REQ-CS-004"""
+        n = SignalNode("n")
+        new = make_content(author="newbie", title="新人高质量")
+        old = make_content(author="veteran", title="头部中等")
+        n.publish(new)
+        n.publish(old)
+        for i in range(3):
+            n.attest(make_att(f"a{i}", new.id, 0.9))
+        for i in range(12):
+            n.attest(make_att(f"b{i}", old.id, 0.7))
+        n.settle_all()
+        self.assertEqual([f.content_id for f in n.feed(T0)], [new.id, old.id])
+        # 同共识分，评审意见一致的排在分歧大的前面
+        calm = ri("calm", "x", consensus=0.7, agreement=1.0)
+        split = ri("split", "y", consensus=0.7, agreement=0.4)
+        self.assertEqual(rank([split, calm], T0), ["calm", "split"])
+        # 评审越少越不确定：收缩向先验，但带探索加成，不会被直接打折到 0
         p = ranking.RankParams()
-        self.assertGreaterEqual(ranking.base_score(gold, T0 + 365 * day, p), 0.9)
+        few = ranking.quality(ri("f", consensus=0.9, evidence=3.0), p)
+        self.assertGreater(few, 0.5)
 
     def test_low_consensus_filtered(self):
         """REQ-RK-005"""
