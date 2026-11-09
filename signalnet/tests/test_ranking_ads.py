@@ -51,6 +51,18 @@ class TestRanking(unittest.TestCase):
         self.assertEqual(rank([old, new], T0 + 3 * 86400), ["new", "old"])
         self.assertEqual(rank([ri("z", confidence=0.0)], T0), [])
 
+    def test_quality_not_buried_by_time(self):
+        """REQ-EV-001"""
+        day = 86400
+        gold = ri("gold", "a", consensus=0.9, confidence=1.0, created_at=T0)
+        meh = ri("meh", "b", consensus=0.5, confidence=1.0, created_at=T0 + 30 * day)
+        good = ri("good", "c", consensus=0.7, confidence=1.0, created_at=T0 + 30 * day)
+        self.assertEqual(rank([gold, meh], T0 + 30 * day), ["gold", "meh"])
+        self.assertEqual(rank([gold, good], T0 + 30 * day), ["good", "gold"])  # 新鲜加成可短暂领先
+        self.assertEqual(rank([gold, good], T0 + 37 * day), ["gold", "good"])  # 一周后回归质量
+        p = ranking.RankParams()
+        self.assertGreaterEqual(ranking.base_score(gold, T0 + 365 * day, p), 0.9)
+
     def test_low_consensus_filtered(self):
         """REQ-RK-005"""
         items = [ri("ok", "a", 0.3), ri("spam", "b", 0.29), ri("good", "c", 0.9)]
