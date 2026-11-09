@@ -8,7 +8,7 @@
   lint      ruff check + ruff format --check
   tests     unittest 全量
   trace     每条 P0 需求至少被一个测试引用；测试引用的需求必须存在于 SPEC
-  demo      端到端仿真冒烟：日志可校验、重放状态一致
+  demo      端到端仿真冒烟（宽松 + 生产模式）：日志可校验、重放一致、对账平、搬运被识别
 
 用法：
   python3 harness/gate.py                # 全部门禁
@@ -52,6 +52,14 @@ LAYERS = {
     "content": 1,
     "attestation": 1,
     "fingerprint": 1,
+    "records": 1,
+    "jury": 2,
+    "classify": 2,
+    "disputes": 2,
+    "governance": 2,
+    "store": 3,
+    "api": 3,
+    "sync": 3,
     "reputation": 2,
     "ranking": 2,
     "ads": 2,
@@ -197,12 +205,19 @@ def gate_trace() -> Result:
 
 
 def gate_demo() -> Result:
-    code, out = _run([sys.executable, "-m", "signalnet", "demo"])
-    if code != 0:
-        return Result("demo", False, out.splitlines()[-10:])
-    data = json.loads(out)
-    errs = [k for k in ("ledger_ok", "replay_matches") if not data.get(k)]
-    return Result("demo", not errs, [f"{k} 为 False" for k in errs])
+    errs: list[str] = []
+    for args, keys in (
+        (["demo"], ("ledger_ok", "replay_matches")),
+        (["demo", "--production"], ("ledger_ok", "replay_matches", "reconciles", "copy_detected")),
+    ):
+        code, out = _run([sys.executable, "-m", "signalnet", *args])
+        name = " ".join(args)
+        if code != 0:
+            errs += [f"{name}: 运行失败", *out.splitlines()[-10:]]
+            continue
+        data = json.loads(out)
+        errs += [f"{name}: {k} 为 False" for k in keys if not data.get(k)]
+    return Result("demo", not errs, errs)
 
 
 GATES: dict[str, Callable[[], Result]] = {

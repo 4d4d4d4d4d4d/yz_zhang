@@ -3,7 +3,7 @@
 - 身份是自证明的：DID = ``did:sn:<ed25519 公钥 hex>``，无需中心化注册。
 - 所有对象使用规范化 JSON（排序键、无空白）后再哈希/签名，保证任意节点可复现。
 
-相关需求：REQ-ID-001, REQ-ID-002
+相关需求：REQ-ID-001, REQ-ID-002, REQ-ID-003
 """
 
 from __future__ import annotations
@@ -77,6 +77,27 @@ def is_valid_did(did: str) -> bool:
     try:
         bytes.fromhex(hex_part)
     except ValueError:
+        return False
+    return True
+
+
+def key_of_did(did: str) -> str:
+    """DID 内嵌的初始公钥（hex）。"""
+    return did[len(DID_PREFIX) :]
+
+
+def is_valid_key(key_hex: str) -> bool:
+    return is_valid_did(DID_PREFIX + key_hex)
+
+
+def verify_key(key_hex: str, payload: Any, signature_hex: str) -> bool:
+    """用指定公钥校验签名（密钥轮换后使用，REQ-ID-003）。"""
+    if not is_valid_key(key_hex):
+        return False
+    try:
+        pub = Ed25519PublicKey.from_public_bytes(bytes.fromhex(key_hex))
+        pub.verify(bytes.fromhex(signature_hex), canonical(payload))
+    except (InvalidSignature, ValueError):
         return False
     return True
 

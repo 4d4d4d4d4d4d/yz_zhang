@@ -36,7 +36,8 @@ class TestFederation(unittest.TestCase):
         # 篡改日志中的评审分数 → 签名失败，无法重放
         evs = list(n.ledger)
         i = next(k for k, e in enumerate(evs) if e.kind == "attest")
-        evs[i] = dataclasses.replace(evs[i], data={**evs[i].data, "accuracy": 1.0})
+        tampered = {**evs[i].data["att"], "accuracy": 1.0}
+        evs[i] = dataclasses.replace(evs[i], data={**evs[i].data, "att": tampered})
         with self.assertRaises(attestation.AttestationError):
             SignalNode.replay(evs, "c")
 

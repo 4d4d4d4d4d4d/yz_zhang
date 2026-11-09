@@ -10,11 +10,12 @@ quality = [(E*consensus + n0*prior)/(E+n0) + beta/sqrt(E+n0)] * agreement
 - 去规模偏置：评审少只代表“不确定”——向先验收缩并获得探索加成，而不是被直接打折；
   评审人数多不再自动换来高分（REQ-CS-004）。
 
-相关需求：REQ-RK-001 ~ REQ-RK-005, REQ-EV-001, REQ-CS-004
+相关需求：REQ-RK-001 ~ REQ-RK-006, REQ-EV-001 ~ REQ-EV-003, REQ-CS-004, REQ-CT-004
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 
@@ -27,6 +28,8 @@ class RankInput:
     created_at: int
     evidence: float = 0.0  # 评审权重和 E
     agreement: float = 1.0  # 评审一致度
+    timely: bool = False  # 时效型内容按乘法衰减（REQ-EV-002）
+    prior: float | None = None  # 修订内容继承原内容共识作为先验（REQ-CT-004）
 
 
 @dataclass(frozen=True)
@@ -44,14 +47,17 @@ class RankParams:
 def quality(item: RankInput, p: RankParams) -> float:
     """与时间无关的质量项（REQ-CS-004）。"""
     n = max(0.0, item.evidence) + p.prior_strength
-    posterior = (item.evidence * item.consensus + p.prior_strength * p.prior) / n
+    prior = p.prior if item.prior is None else item.prior
+    posterior = (item.evidence * item.consensus + p.prior_strength * prior) / n
     return (posterior + p.explore_beta / n**0.5) * max(0.0, item.agreement)
 
 
 def base_score(item: RankInput, now: int, p: RankParams) -> float:
     age = max(0, now - item.created_at)
-    freshness = p.fresh_boost * 0.5 ** (age / p.half_life_s)
-    return quality(item, p) * (1.0 + freshness)
+    decay = 0.5 ** (age / p.half_life_s)
+    if item.timely:  # 时效型：旧新闻应当退场（REQ-EV-002）
+        return quality(item, p) * (1.0 + p.fresh_boost) * decay
+    return quality(item, p) * (1.0 + p.fresh_boost * decay)
 
 
 def rank(items: list[RankInput], now: int, params: RankParams | None = None) -> list[str]:
@@ -69,3 +75,56 @@ def rank(items: list[RankInput], now: int, params: RankParams | None = None) -> 
         scored.append((base_score(it, now, p) * (p.same_author_penalty**k), it.content_id))
     scored.sort(key=lambda x: (-x[0], x[1]))
     return [cid for _, cid in scored]
+
+
+# ---------------- 可选排序算法（REQ-RK-006） ----------------
+# 任何算法只能看到 RankInput（不含任何广告/出价字段），因此第三方算法同样买不到流量。
+Algorithm = Callable[[list[RankInput], int, RankParams], list[str]]
+
+
+def rank_classic(items: list[RankInput], now: int, params: RankParams | None = None) -> list[str]:
+    """经典：只看质量，不加新鲜度。"""
+    p = params or RankParams()
+    eligible = [
+        i for i in items if i.confidence >= p.min_confidence and i.consensus >= p.min_consensus
+    ]
+    return [i.content_id for i in sorted(eligible, key=lambda i: (-quality(i, p), i.content_id))]
+
+
+def rank_latest(items: list[RankInput], now: int, params: RankParams | None = None) -> list[str]:
+    """最新：质量达标的内容按发布时间倒序。"""
+    p = params or RankParams()
+    eligible = [
+        i for i in items if i.confidence >= p.min_confidence and i.consensus >= p.min_consensus
+    ]
+    return [i.content_id for i in sorted(eligible, key=lambda i: (-i.created_at, i.content_id))]
+
+
+BUILTIN_ALGORITHMS: dict[str, Algorithm] = {
+    "signal": rank,
+    "classic": rank_classic,
+    "latest": rank_latest,
+}
+
+
+# ---------------- 曝光欠账（REQ-EV-003） ----------------
+def exposure_debt(
+    items: list[RankInput], impressions: dict[str, int], params: RankParams | None = None
+) -> dict[str, float]:
+    """欠账 = 同质量档（按 0.1 分档）的中位曝光 − 实际曝光；只返回正欠账。"""
+    p = params or RankParams()
+    tiers: dict[int, list[int]] = {}
+    tier_of: dict[str, int] = {}
+    for it in items:
+        t = min(9, int(quality(it, p) * 10))
+        tier_of[it.content_id] = t
+        tiers.setdefault(t, []).append(impressions.get(it.content_id, 0))
+    out: dict[str, float] = {}
+    for it in items:
+        vals = sorted(tiers[tier_of[it.content_id]])
+        mid = len(vals) // 2
+        median = vals[mid] if len(vals) % 2 else (vals[mid - 1] + vals[mid]) / 2
+        debt = median - impressions.get(it.content_id, 0)
+        if debt > 0:
+            out[it.content_id] = debt
+    return out

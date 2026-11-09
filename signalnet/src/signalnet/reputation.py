@@ -7,7 +7,7 @@
 - 权重 = sqrt(stake)，并对单个评审者的权重占比设上限，抑制“鲸鱼”和合谋。
 - 作者声誉随其内容的共识质量涨跌。
 
-相关需求：REQ-PS-001 ~ REQ-PS-007
+相关需求：REQ-PS-001 ~ REQ-PS-011
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-from .attestation import Attestation
+from .attestation import SCORE_WEIGHTS, Attestation
 
 
 class ReputationError(RuntimeError):
@@ -47,6 +47,8 @@ class Settlement:
     aligned: tuple[str, ...] = ()  # 与共识一致的评审者（用于广告收益里的策展人分成）
     evidence: float = 0.0  # 评审权重和 E（排序用于贝叶斯收缩，REQ-CS-004）
     agreement: float = 1.0  # 一致度 = 1 - 2×加权离散度，∈[0,1]
+    bridged: bool = False  # 跨群体一致（REQ-PS-008）
+    cluster_medians: dict[str, float] = field(default_factory=dict)
 
 
 def weighted_median(values: list[tuple[float, float]]) -> float:
@@ -63,14 +65,14 @@ def weighted_median(values: list[tuple[float, float]]) -> float:
     return items[-1][0]
 
 
-def capped_weights(stakes: list[int], max_share: float) -> list[float]:
-    """sqrt 权重 + 单者占比上限（精确水位解）。
+def cap_shares(w: list[float], max_share: float) -> list[float]:
+    """单者占比上限（精确水位解）。
 
     设被封顶集合为 C（大小 k），其余权重和为 R，封顶值 x 满足 x = s * (k*x + R)，
     即 x = s*R / (1 - s*k)。从大到小尝试 k，找到使 C 内都 >= x、C 外都 <= x 的解。
-    评审人数 < 3 或 n*s < 1（上限不可满足）时不封顶。
+    人数 < 3 或 n*s < 1（上限不可满足）时不封顶。
     """
-    w = [math.sqrt(s) for s in stakes]
+    w = list(w)
     n = len(w)
     if n < 3 or n * max_share < 1 or max(w) <= max_share * sum(w):
         return w
@@ -88,17 +90,28 @@ def capped_weights(stakes: list[int], max_share: float) -> list[float]:
     return w
 
 
+def capped_weights(stakes: list[int], max_share: float) -> list[float]:
+    """sqrt 权重 + 单者占比上限。"""
+    return cap_shares([math.sqrt(s) for s in stakes], max_share)
+
+
 class ReputationBook:
     def __init__(self, params: PoSParams | None = None) -> None:
         self.params = params or PoSParams()
         self._balance: dict[str, int] = {}
         self._locked: dict[str, int] = {}
+        self.fund = 0  # 新人扶持池（声誉衰减注入，REQ-PS-010）
 
     # ---- 账户 ----
-    def register(self, did: str) -> None:
-        if did not in self._balance:
-            self._balance[did] = self.params.initial_rep
-            self._locked[did] = 0
+    def register(self, did: str, bonus: int = 0) -> int:
+        """注册并返回实际发放的新人扶持声誉。"""
+        if did in self._balance:
+            return 0
+        grant = min(max(0, bonus), self.fund)
+        self.fund -= grant
+        self._balance[did] = self.params.initial_rep + grant
+        self._locked[did] = 0
+        return grant
 
     def is_registered(self, did: str) -> bool:
         return did in self._balance
@@ -115,11 +128,11 @@ class ReputationBook:
     def snapshot(self) -> dict[str, int]:
         return dict(sorted(self._balance.items()))
 
-    # ---- 质押 ----
-    def lock(self, did: str, amount: int) -> None:
+    # ---- 质押与直接奖惩 ----
+    def lock(self, did: str, amount: int, *, check_min: bool = True) -> None:
         if did not in self._balance:
             raise ReputationError("未注册的身份")
-        if self.balance(did) < self.params.min_rep_to_attest:
+        if check_min and self.balance(did) < self.params.min_rep_to_attest:
             raise ReputationError("声誉不足，无法评审")
         if amount <= 0:
             raise ReputationError("质押必须为正")
@@ -128,36 +141,102 @@ class ReputationBook:
             raise ReputationError(f"质押超过上限 {limit}")
         self._locked[did] += amount
 
+    def unlock(self, did: str, amount: int) -> None:
+        if did in self._locked:
+            self._locked[did] = max(0, self._locked[did] - amount)
+
+    def slash(self, did: str, amount: int) -> int:
+        """罚没，返回实际罚没数（声誉不为负）。"""
+        if did not in self._balance or amount <= 0:
+            return 0
+        actual = min(amount, self._balance[did])
+        self._balance[did] -= actual
+        self._locked[did] = min(self._locked[did], self._balance[did])
+        return actual
+
+    def reward(self, did: str, amount: int) -> None:
+        if amount > 0:
+            self.register(did)
+            self._balance[did] += amount
+
+    def decay(self, dids: list[str], rate: float) -> int:
+        """对不活跃账户超出初始值的部分按比例衰减，注入新人扶持池（REQ-PS-010）。"""
+        moved = 0
+        for did in sorted(dids):
+            excess = self.balance(did) - self.params.initial_rep
+            amt = int(excess * rate) if excess > 0 else 0
+            if amt > 0:
+                moved += self.slash(did, amt)
+        self.fund += moved
+        return moved
+
     # ---- 结算 ----
-    def compute(self, attestations: list[Attestation], author: str) -> Settlement:
-        """纯函数：只依据签名评审计算结算结果，不修改状态（任意节点可复算）。"""
+    def compute(
+        self,
+        attestations: list[Attestation],
+        author: str,
+        *,
+        score_weights: dict[str, float] | None = None,
+        multipliers: dict[str, float] | None = None,
+        clusters: dict[str, str] | None = None,
+        reward_for: set[str] | None = None,
+    ) -> Settlement:
+        """纯函数：只依据签名评审计算结算结果，不修改状态（任意节点可复算）。
+
+        - score_weights：分品类权重（REQ-PS-011）
+        - multipliers：评审者权重乘数（女巫抵抗渐进解锁，REQ-PS-009）
+        - clusters：评审者所属群体（桥接共识，REQ-PS-008）
+        - reward_for：本轮参与奖惩的评审 ID 集合；共识使用全部评审（波次结算，REQ-CS-003）
+        """
         if not attestations:
             raise ReputationError("没有评审")
         cid = attestations[0].content_id
         if any(a.content_id != cid for a in attestations):
             raise ReputationError("评审不属于同一内容")
         # 作者不得评审自己的内容（REQ-PS-006）
-        atts = sorted((a for a in attestations if a.reviewer != author), key=lambda a: a.reviewer)
+        atts = sorted(
+            (a for a in attestations if a.reviewer != author), key=lambda a: (a.reviewer, a.id)
+        )
         if not atts:
             raise ReputationError("只有作者本人评审")
-        weights = capped_weights([a.stake for a in atts], self.params.max_weight_share)
-        consensus = weighted_median([(a.score, w) for a, w in zip(atts, weights, strict=True)])
+        weights_def = score_weights or SCORE_WEIGHTS
+        scores = [a.score_with(weights_def) for a in atts]
+        mult = multipliers or {}
+        raw = [math.sqrt(a.stake) * mult.get(a.reviewer, 1.0) for a in atts]
+        weights = cap_shares(raw, self.params.max_weight_share)
+        consensus = weighted_median(list(zip(scores, weights, strict=True)))
         total_w = sum(weights)
         dispersion = (
-            sum(w * abs(a.score - consensus) for a, w in zip(atts, weights, strict=True)) / total_w
+            sum(w * abs(sc - consensus) for sc, w in zip(scores, weights, strict=True)) / total_w
         )
         volume = 1.0 - math.exp(-total_w / self.params.confidence_k)
         confidence = max(0.0, min(1.0, volume * (1.0 - 2.0 * dispersion)))
 
+        # 桥接共识：多个群体各自的中位数彼此接近才算 bridged
+        bridged = False
+        cluster_medians: dict[str, float] = {}
+        if clusters is not None:
+            groups: dict[str, list[tuple[float, float]]] = {}
+            for a, sc, w in zip(atts, scores, weights, strict=True):
+                groups.setdefault(clusters.get(a.reviewer, a.reviewer), []).append((sc, w))
+            cluster_medians = {k: round(weighted_median(v), 6) for k, v in sorted(groups.items())}
+            meds = list(cluster_medians.values())
+            bridged = len(meds) >= 2 and max(meds) - min(meds) <= 2 * self.params.tolerance
+            if not bridged:
+                confidence *= 0.5
+
         rewards: dict[str, int] = {}
         slashes: dict[str, int] = {}
         aligned: list[str] = []
-        for a in atts:
-            if abs(a.score - consensus) <= self.params.tolerance:
+        for a, sc in zip(atts, scores, strict=True):
+            if abs(sc - consensus) <= self.params.tolerance:
+                aligned.append(a.reviewer)
+            if reward_for is not None and a.id not in reward_for:
+                continue
+            if abs(sc - consensus) <= self.params.tolerance:
                 rewards[a.reviewer] = rewards.get(a.reviewer, 0) + int(
                     a.stake * self.params.reward_rate
                 )
-                aligned.append(a.reviewer)
             else:
                 slashes[a.reviewer] = slashes.get(a.reviewer, 0) + max(
                     1, int(a.stake * self.params.slash_rate)
@@ -174,6 +253,8 @@ class ReputationBook:
             aligned=tuple(sorted(set(aligned))),
             evidence=round(total_w, 6),
             agreement=round(max(0.0, 1.0 - 2.0 * dispersion), 6),
+            bridged=bridged,
+            cluster_medians=cluster_medians,
         )
 
     def apply(self, s: Settlement, attestations: list[Attestation]) -> None:
@@ -183,7 +264,7 @@ class ReputationBook:
         for did, amt in s.rewards.items():
             self._balance[did] = self.balance(did) + amt
         for did, amt in s.slashes.items():
-            self._balance[did] = max(0, self.balance(did) - amt)
+            self.slash(did, amt)
         if s.author:
             self.register(s.author)
             self._balance[s.author] = max(0, self.balance(s.author) + s.author_delta)
