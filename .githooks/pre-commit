@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# SignalNet 入库门禁：仅当暂存区包含 signalnet/ 改动时运行
+set -euo pipefail
+if git diff --cached --name-only | grep -q '^signalnet/'; then
+  echo "▶ SignalNet gate..."
+  (cd "$(git rev-parse --show-toplevel)/signalnet" && python3 harness/gate.py)
+fi

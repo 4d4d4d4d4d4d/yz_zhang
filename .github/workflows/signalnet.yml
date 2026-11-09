@@ -1,0 +1,27 @@
+name: signalnet-gate
+on:
+  push:
+    paths: ["signalnet/**", ".github/workflows/signalnet.yml"]
+  pull_request:
+    paths: ["signalnet/**", ".github/workflows/signalnet.yml"]
+  schedule:
+    - cron: "17 3 * * 1"   # 每周一跑一次 iterate，暴露 SPEC 过期等问题
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: signalnet
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - name: Gate
+        env:
+          SIGNALNET_STRICT: "1"
+        run: python harness/gate.py --json harness/reports/gate.json
+      - name: Iterate report
+        if: always()
+        run: python harness/iterate.py --check
