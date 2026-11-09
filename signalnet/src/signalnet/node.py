@@ -3,7 +3,7 @@
 所有状态变化都先校验、再写入哈希链日志；`SignalNode.replay` 可以从日志完全重建状态，
 用于跨节点验证（REQ-FD-002）。
 
-相关需求：REQ-FD-002, REQ-AT-003, REQ-AT-004, REQ-PS-005
+相关需求：REQ-FD-002, REQ-AT-003, REQ-AT-004, REQ-PS-005, REQ-OR-001
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from . import ads, attestation, content, crypto, ranking, reputation
+from . import ads, attestation, content, crypto, fingerprint, ranking, reputation
 from .ledger import Event, Ledger
 
 
@@ -43,6 +43,10 @@ class SignalNode:
         self.contents: dict[str, content.Content] = {}
         self.attestations: dict[str, list[attestation.Attestation]] = {}
         self.settlements: dict[str, reputation.Settlement] = {}
+        # 派生状态（由已签名内容确定性计算，重放时自动重建，不单独写日志）
+        self.fingerprints: dict[str, int] = {}
+        self.near_duplicates: dict[str, str] = {}  # 近重复内容 ID -> 更早的原作 ID
+        self.notifications: dict[str, list[dict[str, str]]] = {}
 
     # ---------- 写操作 ----------
     def register(self, did: str) -> None:
@@ -57,9 +61,38 @@ class SignalNode:
         if c.id in self.contents:
             raise NodeError("内容已存在")
         self.register(c.author)
+        self._check_duplicate(c)
         self.contents[c.id] = c
         self.ledger.append("content", c.to_dict())
         return c.id
+
+    def _check_duplicate(self, c: content.Content) -> None:
+        """与其他作者更早发布的内容比对（按日志顺序，不信任自报时间）。REQ-OR-001"""
+        text = (
+            c.body
+        )  # 只用正文：标题短且改动成本极低，纳入标题会成为绕过手段（实测改标题+调序距离升到 14）
+        if not fingerprint.long_enough(text):
+            return
+        fp = fingerprint.simhash(text)
+        for cid, other_fp in self.fingerprints.items():  # dict 保持插入顺序 = 日志顺序
+            if cid in self.near_duplicates:
+                continue  # 只与原作比对：否则作者重发自己的作品会被判为“抄袭了抄袭者”
+            original = self.contents[cid]
+            if original.author != c.author and fingerprint.is_near_duplicate(fp, other_fp):
+                self.near_duplicates[c.id] = cid
+                self.notifications.setdefault(original.author, []).append(
+                    {"kind": "near_duplicate", "copy": c.id, "original": cid}
+                )
+                break
+        self.fingerprints[c.id] = fp
+        # 线性扫描仅适用于 M1；规模化见 REQ-OR-009（LSH 分桶索引）
+
+    def near_duplicate_of(self, content_id: str) -> str | None:
+        return self.near_duplicates.get(content_id)
+
+    def explore_eligible(self, content_id: str) -> bool:
+        """是否具备探索池资格（探索池本身见 REQ-CS-001）。"""
+        return content_id in self.contents and content_id not in self.near_duplicates
 
     def attest(self, a: attestation.Attestation) -> None:
         attestation.validate(a)
@@ -195,6 +228,7 @@ class SignalNode:
                     for cid, s in sorted(self.settlements.items())
                 },
                 "earnings": dict(sorted(self.exchange.earnings.items())),
+                "near_duplicates": dict(sorted(self.near_duplicates.items())),
             }
         )
 

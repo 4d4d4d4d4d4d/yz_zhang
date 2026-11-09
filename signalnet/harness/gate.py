@@ -51,6 +51,7 @@ LAYERS = {
     "ledger": 0,
     "content": 1,
     "attestation": 1,
+    "fingerprint": 1,
     "reputation": 2,
     "ranking": 2,
     "ads": 2,
