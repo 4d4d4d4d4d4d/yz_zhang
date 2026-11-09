@@ -20,10 +20,10 @@
   "ad_view_prob": 0.3,
   "promote_threshold": 0.7,
   "explore_ratio": 0.1,
-  "round_window_s": 259200,
+  "round_window_s": 86400,
   "jury_size": 5,
   "explore_budget": 100,
-  "explore_backfill_max": 3.0
+  "explore_backfill_max": 1.0
  },
  "seeds": [
   1,
@@ -39,19 +39,19 @@
      "explore_ratio": 0.05
     },
     "quality_exposure_spearman": [
-     0.7327,
-     0.668,
-     0.7727
+     0.7774,
+     0.758,
+     0.8009
     ],
     "low_quality_exposure_share": [
-     0.0618,
-     0.0562,
-     0.0699
+     0.0419,
+     0.0375,
+     0.0498
     ],
     "colluder_vs_honest_rep": [
-     0.9198,
-     0.9127,
-     0.9323
+     0.8963,
+     0.8893,
+     0.9084
     ],
     "copy_detection_rate": [
      1.0,
@@ -59,19 +59,19 @@
      1.0
     ],
     "newcomer_l2_rate": [
-     1.0,
-     1.0,
+     0.9444,
+     0.8333,
      1.0
     ],
     "honest_rep": [
-     108.8933,
-     108.4,
-     109.2
+     112.9167,
+     111.62,
+     113.85
     ],
     "creator_earnings_share": [
-     0.6262,
-     0.6211,
-     0.6292
+     0.6259,
+     0.6162,
+     0.6343
     ],
     "pass_rate": 1.0
    },
@@ -82,19 +82,19 @@
      "explore_ratio": 0.1
     },
     "quality_exposure_spearman": [
-     0.7327,
-     0.668,
-     0.7727
+     0.7774,
+     0.758,
+     0.8009
     ],
     "low_quality_exposure_share": [
-     0.0618,
-     0.0562,
-     0.0699
+     0.0419,
+     0.0375,
+     0.0498
     ],
     "colluder_vs_honest_rep": [
-     0.9198,
-     0.9127,
-     0.9323
+     0.8963,
+     0.8893,
+     0.9084
     ],
     "copy_detection_rate": [
      1.0,
@@ -102,19 +102,19 @@
      1.0
     ],
     "newcomer_l2_rate": [
-     1.0,
-     1.0,
+     0.9444,
+     0.8333,
      1.0
     ],
     "honest_rep": [
-     108.8933,
-     108.4,
-     109.2
+     112.9167,
+     111.62,
+     113.85
     ],
     "creator_earnings_share": [
-     0.6262,
-     0.6211,
-     0.6292
+     0.6259,
+     0.6162,
+     0.6343
     ],
     "pass_rate": 1.0
    },
@@ -125,19 +125,19 @@
      "explore_ratio": 0.05
     },
     "quality_exposure_spearman": [
-     0.7327,
-     0.668,
-     0.7727
+     0.7774,
+     0.758,
+     0.8009
     ],
     "low_quality_exposure_share": [
-     0.0618,
-     0.0562,
-     0.0699
+     0.0419,
+     0.0375,
+     0.0498
     ],
     "colluder_vs_honest_rep": [
-     0.9198,
-     0.9127,
-     0.9323
+     0.8963,
+     0.8893,
+     0.9084
     ],
     "copy_detection_rate": [
      1.0,
@@ -145,19 +145,19 @@
      1.0
     ],
     "newcomer_l2_rate": [
-     1.0,
-     1.0,
+     0.9444,
+     0.8333,
      1.0
     ],
     "honest_rep": [
-     108.8933,
-     108.4,
-     109.2
+     112.9167,
+     111.62,
+     113.85
     ],
     "creator_earnings_share": [
-     0.6262,
-     0.6211,
-     0.6292
+     0.6259,
+     0.6162,
+     0.6343
     ],
     "pass_rate": 1.0
    },
@@ -168,19 +168,19 @@
      "explore_ratio": 0.1
     },
     "quality_exposure_spearman": [
-     0.7327,
-     0.668,
-     0.7727
+     0.7774,
+     0.758,
+     0.8009
     ],
     "low_quality_exposure_share": [
-     0.0618,
-     0.0562,
-     0.0699
+     0.0419,
+     0.0375,
+     0.0498
     ],
     "colluder_vs_honest_rep": [
-     0.9198,
-     0.9127,
-     0.9323
+     0.8963,
+     0.8893,
+     0.9084
     ],
     "copy_detection_rate": [
      1.0,
@@ -188,279 +188,21 @@
      1.0
     ],
     "newcomer_l2_rate": [
-     1.0,
-     1.0,
+     0.9444,
+     0.8333,
      1.0
     ],
     "honest_rep": [
-     108.8933,
-     108.4,
-     109.2
+     112.9167,
+     111.62,
+     113.85
     ],
     "creator_earnings_share": [
-     0.6262,
-     0.6211,
-     0.6292
+     0.6259,
+     0.6162,
+     0.6343
     ],
     "pass_rate": 1.0
-   },
-   {
-    "params": {
-     "explore_backfill_max": 2.0,
-     "explore_budget": 50,
-     "explore_ratio": 0.05
-    },
-    "quality_exposure_spearman": [
-     0.7327,
-     0.668,
-     0.7727
-    ],
-    "low_quality_exposure_share": [
-     0.0618,
-     0.0562,
-     0.0699
-    ],
-    "colluder_vs_honest_rep": [
-     0.9198,
-     0.9127,
-     0.9323
-    ],
-    "copy_detection_rate": [
-     1.0,
-     1.0,
-     1.0
-    ],
-    "newcomer_l2_rate": [
-     1.0,
-     1.0,
-     1.0
-    ],
-    "honest_rep": [
-     108.8933,
-     108.4,
-     109.2
-    ],
-    "creator_earnings_share": [
-     0.6262,
-     0.6211,
-     0.6292
-    ],
-    "pass_rate": 1.0
-   },
-   {
-    "params": {
-     "explore_backfill_max": 2.0,
-     "explore_budget": 100,
-     "explore_ratio": 0.05
-    },
-    "quality_exposure_spearman": [
-     0.7327,
-     0.668,
-     0.7727
-    ],
-    "low_quality_exposure_share": [
-     0.0618,
-     0.0562,
-     0.0699
-    ],
-    "colluder_vs_honest_rep": [
-     0.9198,
-     0.9127,
-     0.9323
-    ],
-    "copy_detection_rate": [
-     1.0,
-     1.0,
-     1.0
-    ],
-    "newcomer_l2_rate": [
-     1.0,
-     1.0,
-     1.0
-    ],
-    "honest_rep": [
-     108.8933,
-     108.4,
-     109.2
-    ],
-    "creator_earnings_share": [
-     0.6262,
-     0.6211,
-     0.6292
-    ],
-    "pass_rate": 1.0
-   },
-   {
-    "params": {
-     "explore_backfill_max": 3.0,
-     "explore_budget": 100,
-     "explore_ratio": 0.1
-    },
-    "quality_exposure_spearman": [
-     0.7595,
-     0.7282,
-     0.8023
-    ],
-    "low_quality_exposure_share": [
-     0.0806,
-     0.0724,
-     0.0947
-    ],
-    "colluder_vs_honest_rep": [
-     0.9238,
-     0.916,
-     0.9327
-    ],
-    "copy_detection_rate": [
-     1.0,
-     1.0,
-     1.0
-    ],
-    "newcomer_l2_rate": [
-     1.0,
-     1.0,
-     1.0
-    ],
-    "honest_rep": [
-     108.99,
-     108.42,
-     109.67
-    ],
-    "creator_earnings_share": [
-     0.6317,
-     0.6175,
-     0.6557
-    ],
-    "pass_rate": 1.0
-   },
-   {
-    "params": {
-     "explore_backfill_max": 3.0,
-     "explore_budget": 50,
-     "explore_ratio": 0.1
-    },
-    "quality_exposure_spearman": [
-     0.7493,
-     0.7282,
-     0.7719
-    ],
-    "low_quality_exposure_share": [
-     0.0841,
-     0.0724,
-     0.0947
-    ],
-    "colluder_vs_honest_rep": [
-     0.9236,
-     0.916,
-     0.9321
-    ],
-    "copy_detection_rate": [
-     1.0,
-     1.0,
-     1.0
-    ],
-    "newcomer_l2_rate": [
-     1.0,
-     1.0,
-     1.0
-    ],
-    "honest_rep": [
-     108.8767,
-     108.08,
-     109.67
-    ],
-    "creator_earnings_share": [
-     0.6285,
-     0.6175,
-     0.6463
-    ],
-    "pass_rate": 1.0
-   },
-   {
-    "params": {
-     "explore_backfill_max": 2.0,
-     "explore_budget": 50,
-     "explore_ratio": 0.1
-    },
-    "quality_exposure_spearman": [
-     0.7137,
-     0.6645,
-     0.7454
-    ],
-    "low_quality_exposure_share": [
-     0.1027,
-     0.0751,
-     0.1267
-    ],
-    "colluder_vs_honest_rep": [
-     0.9298,
-     0.9256,
-     0.9333
-    ],
-    "copy_detection_rate": [
-     1.0,
-     1.0,
-     1.0
-    ],
-    "newcomer_l2_rate": [
-     1.0,
-     1.0,
-     1.0
-    ],
-    "honest_rep": [
-     108.3667,
-     108.05,
-     108.9
-    ],
-    "creator_earnings_share": [
-     0.6287,
-     0.6129,
-     0.6584
-    ],
-    "pass_rate": 0.3333333333333333
-   },
-   {
-    "params": {
-     "explore_backfill_max": 2.0,
-     "explore_budget": 100,
-     "explore_ratio": 0.1
-    },
-    "quality_exposure_spearman": [
-     0.7137,
-     0.6645,
-     0.7454
-    ],
-    "low_quality_exposure_share": [
-     0.1027,
-     0.0751,
-     0.1267
-    ],
-    "colluder_vs_honest_rep": [
-     0.9298,
-     0.9256,
-     0.9333
-    ],
-    "copy_detection_rate": [
-     1.0,
-     1.0,
-     1.0
-    ],
-    "newcomer_l2_rate": [
-     1.0,
-     1.0,
-     1.0
-    ],
-    "honest_rep": [
-     108.3667,
-     108.05,
-     108.9
-    ],
-    "creator_earnings_share": [
-     0.6287,
-     0.6129,
-     0.6584
-    ],
-    "pass_rate": 0.3333333333333333
    },
    {
     "params": {
@@ -469,19 +211,19 @@
      "explore_ratio": 0.05
     },
     "quality_exposure_spearman": [
-     0.7137,
-     0.6645,
-     0.7454
+     0.7723,
+     0.7183,
+     0.8074
     ],
     "low_quality_exposure_share": [
-     0.1027,
-     0.0751,
-     0.1267
+     0.0534,
+     0.046,
+     0.0679
     ],
     "colluder_vs_honest_rep": [
-     0.9298,
-     0.9256,
-     0.9333
+     0.9012,
+     0.895,
+     0.9072
     ],
     "copy_detection_rate": [
      1.0,
@@ -494,16 +236,16 @@
      1.0
     ],
     "honest_rep": [
-     108.3667,
-     108.05,
-     108.9
+     111.78,
+     110.67,
+     112.5
     ],
     "creator_earnings_share": [
-     0.6287,
-     0.6129,
-     0.6584
+     0.6377,
+     0.6337,
+     0.6452
     ],
-    "pass_rate": 0.3333333333333333
+    "pass_rate": 1.0
    },
    {
     "params": {
@@ -512,19 +254,19 @@
      "explore_ratio": 0.05
     },
     "quality_exposure_spearman": [
-     0.7137,
-     0.6645,
-     0.7454
+     0.7723,
+     0.7183,
+     0.8074
     ],
     "low_quality_exposure_share": [
-     0.1027,
-     0.0751,
-     0.1267
+     0.0534,
+     0.046,
+     0.0679
     ],
     "colluder_vs_honest_rep": [
-     0.9298,
-     0.9256,
-     0.9333
+     0.9012,
+     0.895,
+     0.9072
     ],
     "copy_detection_rate": [
      1.0,
@@ -537,65 +279,22 @@
      1.0
     ],
     "honest_rep": [
-     108.3667,
-     108.05,
-     108.9
+     111.78,
+     110.67,
+     112.5
     ],
     "creator_earnings_share": [
-     0.6287,
-     0.6129,
-     0.6584
-    ],
-    "pass_rate": 0.3333333333333333
-   }
-  ],
-  "晋级节奏": [
-   {
-    "params": {
-     "promote_threshold": 0.6,
-     "round_window_s": 86400
-    },
-    "quality_exposure_spearman": [
-     0.7572,
-     0.6976,
-     0.811
-    ],
-    "low_quality_exposure_share": [
-     0.0493,
-     0.0413,
-     0.0623
-    ],
-    "colluder_vs_honest_rep": [
-     0.8941,
-     0.8864,
-     0.9051
-    ],
-    "copy_detection_rate": [
-     1.0,
-     1.0,
-     1.0
-    ],
-    "newcomer_l2_rate": [
-     1.0,
-     1.0,
-     1.0
-    ],
-    "honest_rep": [
-     113.9667,
-     112.55,
-     115.0
-    ],
-    "creator_earnings_share": [
-     0.6267,
-     0.6191,
-     0.6381
+     0.6377,
+     0.6337,
+     0.6452
     ],
     "pass_rate": 1.0
    },
    {
     "params": {
-     "promote_threshold": 0.7,
-     "round_window_s": 86400
+     "explore_backfill_max": 3.0,
+     "explore_budget": 100,
+     "explore_ratio": 0.1
     },
     "quality_exposure_spearman": [
      0.7762,
@@ -636,23 +335,24 @@
    },
    {
     "params": {
-     "promote_threshold": 0.8,
-     "round_window_s": 86400
+     "explore_backfill_max": 3.0,
+     "explore_budget": 50,
+     "explore_ratio": 0.1
     },
     "quality_exposure_spearman": [
-     0.7685,
-     0.7119,
-     0.8132
+     0.7669,
+     0.7129,
+     0.8057
     ],
     "low_quality_exposure_share": [
-     0.0694,
-     0.0553,
-     0.0841
+     0.0706,
+     0.0418,
+     0.0931
     ],
     "colluder_vs_honest_rep": [
-     0.9014,
-     0.8962,
-     0.9067
+     0.8964,
+     0.8829,
+     0.9102
     ],
     "copy_detection_rate": [
      1.0,
@@ -660,19 +360,105 @@
      1.0
     ],
     "newcomer_l2_rate": [
-     0.6131,
-     0.5,
-     0.7143
+     0.9444,
+     0.8333,
+     1.0
     ],
     "honest_rep": [
-     111.61,
-     111.25,
-     112.03
+     112.64,
+     110.6,
+     114.4
     ],
     "creator_earnings_share": [
-     0.6284,
-     0.6233,
-     0.6326
+     0.6278,
+     0.6269,
+     0.6294
+    ],
+    "pass_rate": 1.0
+   }
+  ],
+  "晋级节奏": [
+   {
+    "params": {
+     "promote_threshold": 0.6,
+     "round_window_s": 86400
+    },
+    "quality_exposure_spearman": [
+     0.7781,
+     0.747,
+     0.8064
+    ],
+    "low_quality_exposure_share": [
+     0.0415,
+     0.0336,
+     0.053
+    ],
+    "colluder_vs_honest_rep": [
+     0.8893,
+     0.8811,
+     0.8938
+    ],
+    "copy_detection_rate": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "newcomer_l2_rate": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "honest_rep": [
+     114.05,
+     113.75,
+     114.25
+    ],
+    "creator_earnings_share": [
+     0.6291,
+     0.6278,
+     0.6314
+    ],
+    "pass_rate": 1.0
+   },
+   {
+    "params": {
+     "promote_threshold": 0.7,
+     "round_window_s": 86400
+    },
+    "quality_exposure_spearman": [
+     0.7774,
+     0.758,
+     0.8009
+    ],
+    "low_quality_exposure_share": [
+     0.0419,
+     0.0375,
+     0.0498
+    ],
+    "colluder_vs_honest_rep": [
+     0.8963,
+     0.8893,
+     0.9084
+    ],
+    "copy_detection_rate": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "newcomer_l2_rate": [
+     0.9444,
+     0.8333,
+     1.0
+    ],
+    "honest_rep": [
+     112.9167,
+     111.62,
+     113.85
+    ],
+    "creator_earnings_share": [
+     0.6259,
+     0.6162,
+     0.6343
     ],
     "pass_rate": 1.0
    },
@@ -682,19 +468,19 @@
      "round_window_s": 259200
     },
     "quality_exposure_spearman": [
-     0.7506,
-     0.7329,
-     0.7667
+     0.7396,
+     0.6904,
+     0.7661
     ],
     "low_quality_exposure_share": [
-     0.0739,
-     0.0652,
-     0.0804
+     0.0602,
+     0.0593,
+     0.0611
     ],
     "colluder_vs_honest_rep": [
-     0.924,
-     0.9136,
-     0.9327
+     0.9128,
+     0.9022,
+     0.9248
     ],
     "copy_detection_rate": [
      1.0,
@@ -707,14 +493,14 @@
      1.0
     ],
     "honest_rep": [
-     109.28,
-     108.42,
-     109.75
+     109.46,
+     109.0,
+     110.03
     ],
     "creator_earnings_share": [
-     0.6312,
-     0.6182,
-     0.6552
+     0.6278,
+     0.6226,
+     0.6361
     ],
     "pass_rate": 1.0
    },
@@ -724,19 +510,19 @@
      "round_window_s": 259200
     },
     "quality_exposure_spearman": [
-     0.7595,
-     0.7282,
-     0.8023
+     0.7327,
+     0.668,
+     0.7727
     ],
     "low_quality_exposure_share": [
-     0.0806,
-     0.0724,
-     0.0947
+     0.0618,
+     0.0562,
+     0.0699
     ],
     "colluder_vs_honest_rep": [
-     0.9238,
-     0.916,
-     0.9327
+     0.9198,
+     0.9127,
+     0.9323
     ],
     "copy_detection_rate": [
      1.0,
@@ -749,16 +535,58 @@
      1.0
     ],
     "honest_rep": [
-     108.99,
-     108.42,
-     109.67
+     108.8933,
+     108.4,
+     109.2
     ],
     "creator_earnings_share": [
-     0.6317,
-     0.6175,
-     0.6557
+     0.6262,
+     0.6211,
+     0.6292
     ],
     "pass_rate": 1.0
+   },
+   {
+    "params": {
+     "promote_threshold": 0.8,
+     "round_window_s": 86400
+    },
+    "quality_exposure_spearman": [
+     0.7672,
+     0.7304,
+     0.8055
+    ],
+    "low_quality_exposure_share": [
+     0.0517,
+     0.0416,
+     0.0654
+    ],
+    "colluder_vs_honest_rep": [
+     0.8901,
+     0.8879,
+     0.8933
+    ],
+    "copy_detection_rate": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "newcomer_l2_rate": [
+     0.5,
+     0.0,
+     1.0
+    ],
+    "honest_rep": [
+     112.1267,
+     111.95,
+     112.33
+    ],
+    "creator_earnings_share": [
+     0.6108,
+     0.5947,
+     0.6197
+    ],
+    "pass_rate": 0.6666666666666666
    },
    {
     "params": {
@@ -766,19 +594,19 @@
      "round_window_s": 259200
     },
     "quality_exposure_spearman": [
-     0.7658,
-     0.746,
-     0.7782
+     0.7456,
+     0.6726,
+     0.7868
     ],
     "low_quality_exposure_share": [
-     0.0903,
-     0.074,
-     0.1207
+     0.0648,
+     0.0589,
+     0.076
     ],
     "colluder_vs_honest_rep": [
-     0.9276,
-     0.9196,
-     0.934
+     0.9217,
+     0.913,
+     0.932
     ],
     "copy_detection_rate": [
      1.0,
@@ -786,19 +614,19 @@
      1.0
     ],
     "newcomer_l2_rate": [
-     0.4667,
-     0.4,
-     0.5
+     0.5926,
+     0.3333,
+     1.0
     ],
     "honest_rep": [
-     108.72,
-     108.28,
-     109.33
+     108.9567,
+     108.47,
+     109.75
     ],
     "creator_earnings_share": [
-     0.6243,
-     0.6133,
-     0.6395
+     0.6251,
+     0.6187,
+     0.6323
     ],
     "pass_rate": 0.3333333333333333
    }
