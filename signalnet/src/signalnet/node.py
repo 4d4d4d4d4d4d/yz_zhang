@@ -3,11 +3,12 @@
 所有状态变化都先校验、再写入哈希链日志；`SignalNode.replay` 可以从日志完全重建状态，
 用于跨节点验证（REQ-FD-002）。
 
-相关需求：REQ-FD-002, REQ-AT-003, REQ-AT-004, REQ-PS-005, REQ-OR-001
+相关需求：REQ-FD-002, REQ-AT-003, REQ-AT-004, REQ-PS-005, REQ-OR-001, REQ-CS-001
 """
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -34,7 +35,11 @@ class SignalNode:
         pos_params: reputation.PoSParams | None = None,
         rank_params: ranking.RankParams | None = None,
         exchange: ads.AdExchange | None = None,
+        explore_ratio: float = 0.1,
     ) -> None:
+        if not 0.0 <= explore_ratio < 1.0:
+            raise NodeError("explore_ratio 必须在 [0,1)")
+        self.explore_ratio = explore_ratio
         self.node_id = node_id
         self.ledger = Ledger()
         self.rep = reputation.ReputationBook(pos_params)
@@ -47,6 +52,8 @@ class SignalNode:
         self.fingerprints: dict[str, int] = {}
         self.near_duplicates: dict[str, str] = {}  # 近重复内容 ID -> 更早的原作 ID
         self.notifications: dict[str, list[dict[str, str]]] = {}
+        # 服务状态（节点本地，非共识，不进入 state_digest）
+        self.explore_impressions: dict[str, int] = {}
 
     # ---------- 写操作 ----------
     def register(self, did: str) -> None:
@@ -201,15 +208,51 @@ class SignalNode:
             for cid, s in self.settlements.items()
         ]
 
-    def feed(self, now: int, limit: int = 20) -> list[FeedItem]:
-        organic = ranking.rank(self.rank_inputs(), now, self.rank_params)[:limit]
+    def explore_candidates(self, viewer: str = "") -> list[str]:
+        """未结算、具备探索资格的新内容；曝光最少者优先，同数按 sha256(viewer+id) 打散。"""
+        cands = [
+            cid
+            for cid in self.contents
+            if cid not in self.settlements and self.explore_eligible(cid)
+        ]
+        return sorted(
+            cands,
+            key=lambda c: (
+                self.explore_impressions.get(c, 0),
+                crypto.sha256_hex((viewer + c).encode()),
+            ),
+        )
+
+    def feed(self, now: int, limit: int = 20, viewer: str = "") -> list[FeedItem]:
+        """推荐流 = 自然内容 + 探索位（REQ-CS-001）+ 广告位（REQ-AD-005）。"""
+        ranked = ranking.rank(self.rank_inputs(), now, self.rank_params)
+        cands = self.explore_candidates(viewer)
+        guaranteed = math.ceil(limit * self.explore_ratio) if self.explore_ratio > 0 else 0
+        backfill = max(0, limit - len(ranked)) if self.explore_ratio > 0 else 0
+        n_explore = min(len(cands), max(guaranteed, backfill))
+        organic = ranked[: limit - n_explore]
+        explore = cands[:n_explore]
+        for cid in explore:
+            self.explore_impressions[cid] = self.explore_impressions.get(cid, 0) + 1
+        interval = max(1, round(1 / self.explore_ratio)) if self.explore_ratio > 0 else 0
+
         out: list[FeedItem] = []
-        for i, cid in enumerate(organic, start=1):
-            out.append(FeedItem("organic", cid))
-            if i % self.exchange.slot_interval == 0:
-                camp = self.exchange.select(self.contents[cid].tags)
-                if camp is not None:
-                    out.append(FeedItem("ad", cid, camp.campaign_id, label="广告"))
+        oi = ei = 0
+        pos = 1  # 只计自然位和探索位，广告位另计
+        while oi < len(organic) or ei < len(explore):
+            take_explore = ei < len(explore) and (oi >= len(organic) or pos % interval == 0)
+            if take_explore:
+                out.append(FeedItem("explore", explore[ei], label="新作探索"))
+                ei += 1
+            else:
+                cid = organic[oi]
+                oi += 1
+                out.append(FeedItem("organic", cid))
+                if oi % self.exchange.slot_interval == 0:
+                    camp = self.exchange.select(self.contents[cid].tags)
+                    if camp is not None:
+                        out.append(FeedItem("ad", cid, camp.campaign_id, label="广告"))
+            pos += 1
         return out
 
     def state_digest(self) -> str:
