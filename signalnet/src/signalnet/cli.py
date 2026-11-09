@@ -139,8 +139,8 @@ def run_production_demo() -> dict[str, object]:
             node.commit(attestation.create_commit(by_did[did], a, salt), T0 + 3600)
             salts[(cid, did)] = (a, salt)
     for (_cid, _did), (a, salt) in sorted(salts.items()):
-        node.reveal(a, salt, T0 + 49 * 3600)
-    node.tick(T0 + 73 * 3600)  # 截止：自动结算并晋级
+        node.reveal(a, salt, T0 + 60 + node.config.commit_window_s + 1)  # 揭示期
+    node.tick(T0 + 60 + node.config.round_window_s)  # 截止：自动结算并晋级
     node.add_campaign(ads.Campaign("camp-1", "acme", 10_000_000, 50_000, ("ai",)))
     viewers = [crypto.Identity.from_seed(f"viewer{i}".encode()) for i in range(20)]
     for v in viewers:

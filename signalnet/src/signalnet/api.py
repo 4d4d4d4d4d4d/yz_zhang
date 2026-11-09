@@ -6,6 +6,8 @@ GET  /digest                  状态摘要
 GET  /feed?now=&limit=&viewer=&algorithm=
 GET  /content/<id>            内容 + 状态
 GET  /jurors/<content_id>     当前轮抽中的陪审
+GET  /round/<content_id>      当前开放轮次（序号、类型、承诺/截止时间、陪审）
+GET  /similar/<content_id>    供陪审参考的相似候选
 POST /publish   {content, now}
 POST /attest    {att, now}              （宽松模式）
 POST /commit    {commit, now}
@@ -14,6 +16,7 @@ POST /settle    {content_id, now}       （宽松模式）
 POST /record    {record, now}           关注/密钥/邀请/读者信号/申诉/治理/提现
 POST /view      {record, now}           读者签名曝光回执
 POST /tick      {now}
+POST /impressions {items: [{kind, content_id, members}]}   曝光上报（GET /feed 无副作用）
 
 写请求串行执行；配置了 store 时每次写入后落盘。错误返回 400 {"error": ...}。
 """
@@ -27,7 +30,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from . import attestation, content, records
-from .node import SignalNode
+from .node import FeedItem, SignalNode
 from .store import SQLiteStore, event_to_dict
 
 
@@ -58,7 +61,7 @@ class NodeServer:
         if path == "/digest":
             return {"digest": n.state_digest()}
         if path == "/feed":
-            items = n.feed(
+            items = n.build_feed(
                 int(q.get("now", n.clock)),
                 int(q.get("limit", 20)),
                 q.get("viewer", ""),
@@ -79,6 +82,10 @@ class NodeServer:
                 "consensus": s.consensus if s else None,
                 "motif": n.motif_of(cid),
             }
+        if path.startswith("/round/"):
+            return n.current_round(path.rsplit("/", 1)[1])
+        if path.startswith("/similar/"):
+            return n.similar_candidates(path.rsplit("/", 1)[1])
         if path.startswith("/jurors/"):
             return list(n.jurors(path.rsplit("/", 1)[1]))
         raise KeyError(f"未知路径 {path}")
@@ -106,6 +113,14 @@ class NodeServer:
             elif path == "/view":
                 p = n.view_receipt(records.Record.from_dict(body["record"]), now)
                 out = {"charged": p.charged if p else 0}
+            elif path == "/impressions":
+                n.record_impressions(
+                    [
+                        FeedItem(i["kind"], i["content_id"], members=tuple(i.get("members", ())))
+                        for i in body["items"]
+                    ]
+                )
+                out = {"ok": True}
             elif path == "/tick":
                 n.tick(int(now))
                 out = {"ok": True}

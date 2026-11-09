@@ -38,9 +38,11 @@ LONG = (
 
 
 def body(i: int) -> str:
-    """足够长且彼此不相似的正文（避免触发查重/母题）。"""
-    words = [crypto.sha256_hex(f"{i}-{k}".encode())[:6] for k in range(12)]
-    return "第" + str(i) + "篇：" + "，".join(words) + "。这是一段用于测试的独立正文内容。"
+    """足够长且彼此真正不相似的正文（随机汉字，避免触发查重/语义/母题）。"""
+    import random
+
+    rng = random.Random(f"body-{i}")
+    return "".join(chr(0x4E00 + rng.randrange(20_000)) for _ in range(60))
 
 
 class World:

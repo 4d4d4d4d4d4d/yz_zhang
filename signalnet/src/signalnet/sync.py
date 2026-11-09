@@ -5,7 +5,7 @@
 也就是说，同步方不是“相信”对方的状态，而是**自己重新计算一遍**并比对。
 
 当前限制：只支持“单写者 / 线性扩展”的同步；两个节点各自写入导致分叉时报 ForkError，
-多写者合并（全序广播 / CRDT）留待 M3。
+多写者场景请使用 mesh.py（签名操作 G-Set + epoch 确定性折叠，REQ-FD-005）。
 """
 
 from __future__ import annotations

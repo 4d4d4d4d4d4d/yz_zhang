@@ -39,6 +39,7 @@ from . import (
     ranking,
     records,
     reputation,
+    semantic,
 )
 from .attestation import CATEGORY_WEIGHTS, Attestation, Commit
 from .ledger import Event, Ledger
@@ -57,8 +58,14 @@ class NodeConfig:
     jury_size: int = 5
     jury_min_rep: int = 20
     jury_min_age_s: int = 0  # 注册满多久才能被抽为陪审（创世身份除外），防止新号直接进陪审团
-    round_window_s: int = 72 * 3600  # 一轮评审的总时长（REQ-AT-005）
-    commit_window_s: int = 48 * 3600  # 其中前 48h 只收承诺，之后才可揭示（REQ-CS-005）
+    no_reveal_slash: int = 5  # 承诺后不揭示的罚没（REQ-CS-008）
+    audit_every_s: int = 7 * DAY_S  # 抽检轮间隔（REQ-CS-009）
+    audit_tolerance: float = 0.2
+    audit_reward: int = 2
+    audit_slash: int = 5
+    semantic_model: str = semantic.BASELINE
+    round_window_s: int = 24 * 3600  # 一轮评审的总时长（REQ-AT-005；仿真校准：24h 优于 72h）
+    commit_window_s: int = 16 * 3600  # 其中前 16h 只收承诺，之后才可揭示（REQ-CS-005）
     min_reveals: int = 1
     # 波次放量（REQ-CS-003）
     wave_caps: tuple[int, ...] = (100, 1_000, 10_000, 100_000)
@@ -82,6 +89,11 @@ class NodeConfig:
     reader_divergence: float = 0.3
     # 不被时间埋没（REQ-EV-003/004/005）
     explore_ratio: float = 0.1
+    explore_budget: int = 100  # 每条新内容结算前最多获得的探索曝光（L0 预算）
+    explore_backfill_max: float = (
+        1.0  # 自然内容不足时探索位最多补到 比例×该值，其余宁可留空（校准）
+    )
+    reader_stop_min: int = 3  # 读者早期止损所需的最少信号数
     revival_ratio: float = 0.05
     revival_min_quality: float = 0.6
     rereview_after_s: tuple[int, ...] = (30 * DAY_S, 180 * DAY_S)
@@ -209,6 +221,7 @@ class SignalNode:
         self.fingerprints: dict[str, int] = {}
         self.media_fps: dict[str, tuple[str, ...]] = {}
         self.near_duplicates: dict[str, str] = {}
+        self._vec_cache: dict[str, Any] = {}
         self.motifs = classify.MotifIndex(
             self.config.motif_bits, self.config.motif_burst, self.config.motif_window_s
         )
@@ -228,6 +241,9 @@ class SignalNode:
         self.expertise: dict[str, set[str]] = {}
         self.last_active: dict[str, int] = {}
         self.registered_at: dict[str, int] = {}
+        self.absent: dict[str, int] = {}  # 被抽中却未参与的次数（REQ-CS-008）
+        self.audit_misses: dict[str, int] = {}
+        self.gold: dict[str, tuple[float, int]] = {}  # 抽检题：cid -> (已知答案, 上次抽检时间)
         self.reader_signals: dict[str, dict[str, records.Record]] = {}
         self.explore_entries: dict[tuple[str, int], int] = {}
         # 申诉与治理
@@ -242,6 +258,12 @@ class SignalNode:
         self.algorithms: dict[str, ranking.Algorithm] = dict(ranking.BUILTIN_ALGORITHMS)
         self.viewer_algorithm: dict[str, str] = {}
         self.payment_rail: Callable[[str, int], None] | None = None
+        # 创世身份由配置决定，隐式注册（不写日志事件，任何同配置节点都相同）
+        self._genesis = frozenset(self.config.genesis)
+        for did in self.config.genesis:
+            if crypto.is_valid_did(did) and not self.rep.is_registered(did):
+                self.rep.register(did)
+                self.registered_at[did] = 0
         self.router = federation.TrafficRouter()
 
     # ======================================================================
@@ -264,8 +286,8 @@ class SignalNode:
 
     def multiplier(self, did: str) -> float:
         ramp = self.config.sybil_ramp
-        if ramp <= 1:
-            return 1.0
+        if ramp <= 1 or did in self._genesis:
+            return 1.0  # 创世身份是受信任的引导集合，不受新号权重限制
         return max(self.config.sybil_min, min(1.0, (self.aligned_count.get(did, 0) + 1) / ramp))
 
     def clusters(self) -> dict[str, str] | None:
@@ -546,6 +568,23 @@ class SignalNode:
                 break
             self.fingerprints[c.id] = fp
             self.fp_index.add(c.id, fp)
+        if not original and fingerprint.long_enough(c.body):
+            # 第二信号：语义向量对少量字词改动不敏感，弥补短文本 SimHash 的脆弱（REQ-OR-001）
+            vec = semantic.embed(c.title + "\n" + c.body, self.config.semantic_model)
+            self._vec_cache[c.id] = vec
+            for cid, v in self.motifs.vectors.items():
+                oc = self.contents[cid]
+                if cid in self.near_duplicates or oc.author == c.author:
+                    continue
+                if (
+                    c.media_fp
+                    and oc.media_fp
+                    and not fingerprint.media_near_duplicate(c.media_fp, oc.media_fp)
+                ):
+                    continue
+                if semantic.cosine(vec, v) >= semantic.NEAR_DUP:
+                    original = cid
+                    break
         if not original and c.media_fp:
             for cid, mfp in self.media_fps.items():
                 if cid in self.near_duplicates or self.contents[cid].author == c.author:
@@ -567,7 +606,10 @@ class SignalNode:
     def _check_motif(self, c: content.Content, st: CState, t: int) -> None:
         if c.id in self.near_duplicates:
             return
-        mid = self.motifs.add(c.id, c.author, self.fingerprints.get(c.id), t, c.tags)
+        vec = self._vec_cache.pop(c.id, None)
+        if vec is None and fingerprint.long_enough(c.body):
+            vec = semantic.embed(c.title + "\n" + c.body, self.config.semantic_model)
+        mid = self.motifs.add(c.id, c.author, self.fingerprints.get(c.id), t, c.tags, vec)
         if mid:
             for member in self.motifs.motifs[mid].members:
                 if member == mid:
@@ -578,6 +620,20 @@ class SignalNode:
 
     def near_duplicate_of(self, content_id: str) -> str | None:
         return self.near_duplicates.get(content_id)
+
+    def similar_candidates(self, content_id: str, k: int = 3) -> list[tuple[str, float]]:
+        """供陪审参考的相似候选：更早发布、语义最相似的 k 条（REQ-OR-010 / REQ-OR-002）。"""
+        vec = self.motifs.vectors.get(content_id)
+        if vec is None:
+            return []
+        pos = self.motifs.order[content_id]
+        scored = [
+            (c, round(semantic.cosine(vec, v), 4))
+            for c, v in self.motifs.vectors.items()
+            if self.motifs.order[c] < pos
+        ]
+        scored.sort(key=lambda x: (-x[1], x[0]))
+        return [x for x in scored[:k] if x[1] >= semantic.SIMILAR]
 
     def motif_of(self, content_id: str) -> str:
         return self.motifs.motif_of.get(content_id, "")
@@ -599,7 +655,7 @@ class SignalNode:
                 continue
             if did not in self.config.genesis and self.registered_at.get(did, 0) > cutoff:
                 continue
-            w = math.sqrt(bal) * self.multiplier(did)
+            w = math.sqrt(bal) * self.multiplier(did) / (1 + self.absent.get(did, 0))
             if tags and self.expertise.get(did, set()) & set(tags):
                 w *= 2  # 标签内有可靠评审记录者优先（REQ-CS-002）
             pool[did] = w
@@ -625,6 +681,34 @@ class SignalNode:
             r.jurors = jury.draw(self._juror_pool(exclude, c.tags), self.config.jury_size, seed)
         st.rounds.append(r)
         return r
+
+    def add_gold(self, content_id: str, now: int | None = None) -> float:
+        """把已有稳定共识的内容登记为抽检题，已知答案 = 当前共识（REQ-CS-009）。"""
+        s = self.settlements.get(content_id)
+        st = self.state.get(content_id)
+        if s is None or st is None or st.status != "active":
+            raise NodeError("只有已结算且状态正常的内容可以作为抽检题")
+        if s.confidence < 0.3 and not st.classic:
+            raise NodeError("共识不够稳定，不能作为抽检题")
+        t = self._now(now)
+        self.gold[content_id] = (s.consensus, t - self.config.audit_every_s)
+        self.ledger.append("gold", {"content_id": content_id, "now": t})
+        return s.consensus
+
+    def current_round(self, cid: str) -> dict[str, Any] | None:
+        """当前开放轮次信息（REQ-NW-004）。"""
+        st = self.state.get(cid)
+        r = st.open_round if st else None
+        if r is None:
+            return None
+        return {
+            "index": r.index,
+            "kind": r.kind,
+            "opened_at": r.opened_at,
+            "commit_until": r.opened_at + self.config.commit_window_s,
+            "closes_at": r.opened_at + self.config.round_window_s,
+            "jurors": list(r.jurors),
+        }
 
     def jurors(self, cid: str) -> tuple[str, ...]:
         r = self.state[cid].open_round
@@ -698,7 +782,8 @@ class SignalNode:
         except reputation.ReputationError as e:
             raise NodeError(str(e)) from e
         r.reveals.append(a)
-        self.attestations.setdefault(a.content_id, []).append(a)
+        if r.kind != "audit":  # 抽检轮的评审不进入内容的评审集合，不影响其共识
+            self.attestations.setdefault(a.content_id, []).append(a)
         self._touch(a.reviewer, t)
         self.ledger.append("reveal", {"att": a.to_dict(), "salt": salt, "now": t})
 
@@ -728,10 +813,38 @@ class SignalNode:
                 out.append(self.settle(cid, now))
         return out
 
+    def _jury_duty(self, r: Round) -> None:
+        """轮次结束时检查陪审履职：承诺未揭示者罚没；未参与者记缺席（REQ-CS-008）。"""
+        revealed = {a.reviewer for a in r.reveals}
+        for did in r.jurors:
+            if did in revealed:
+                continue
+            if did in r.commits:
+                self.rep.slash(did, self.config.no_reveal_slash)
+            else:
+                self.absent[did] = self.absent.get(did, 0) + 1
+
     def _votes_weight(self, a: Attestation) -> float:
         return math.sqrt(a.stake) * self.multiplier(a.reviewer)
 
+    def _settle_audit(self, cid: str, r: Round, t: int) -> None:
+        """抽检轮：按已知答案奖惩，不改变内容状态（REQ-CS-009）。"""
+        expected, _ = self.gold[cid]
+        weights = CATEGORY_WEIGHTS[self.contents[cid].category]
+        for a in r.reveals:
+            self.rep.unlock(a.reviewer, a.stake)
+            if abs(a.score_with(weights) - expected) <= self.config.audit_tolerance:
+                self.rep.reward(a.reviewer, self.config.audit_reward)
+            else:
+                self.rep.slash(a.reviewer, self.config.audit_slash)
+                self.audit_misses[a.reviewer] = self.audit_misses.get(a.reviewer, 0) + 1
+        r.settled = True
+        self._jury_duty(r)
+
     def _settle_round(self, cid: str, r: Round, t: int) -> reputation.Settlement:
+        if r.kind == "audit":
+            self._settle_audit(cid, r, t)
+            return self.settlements[cid]
         c = self.contents[cid]
         st = self.state[cid]
         all_atts = self.attestations.get(cid, [])
@@ -748,6 +861,7 @@ class SignalNode:
         )
         self.rep.apply(s, r.reveals)
         r.settled = True
+        self._jury_duty(r)
         for did in s.aligned:
             if did in {a.reviewer for a in r.reveals}:
                 self.aligned_count[did] = self.aligned_count.get(did, 0) + 1
@@ -814,9 +928,9 @@ class SignalNode:
                 st.promoted_pending = st.level < len(self.config.wave_caps)
         return s
 
-    def reader_score(self, cid: str) -> float | None:
+    def reader_score(self, cid: str, min_signals: int = 0) -> float | None:
         sig = self.reader_signals.get(cid, {})
-        if len(sig) < self.config.reader_min:
+        if len(sig) < (min_signals or self.config.reader_min):
             return None
         tot = wsum = 0.0
         for did, r in sorted(sig.items()):
@@ -844,8 +958,8 @@ class SignalNode:
                 continue
             r = st.open_round
             if r is not None and t >= r.opened_at + cfg.round_window_s:
-                if len(r.reveals) >= cfg.min_reveals:
-                    self._settle_round(cid, r, t)
+                if r.kind == "audit" or len(r.reveals) >= cfg.min_reveals:
+                    self._settle_round(cid, r, t)  # 抽检逐人比对已知答案，不需要最少揭示数
                 else:
                     self._fail_round(cid, st, r, t)
             if st.open_round is None and st.status == "active":
@@ -861,6 +975,9 @@ class SignalNode:
                     and t >= st.first_settled_at + cfg.rereview_after_s[st.rereviews]
                 ):
                     self._open_round(cid, "rereview", t)
+                elif cid in self.gold and t - self.gold[cid][1] >= cfg.audit_every_s:
+                    self.gold[cid] = (self.gold[cid][0], t)
+                    self._open_round(cid, "audit", t)
         self.exchange.release(t)
         self._resolve_disputes(t)
         self._resolve_proposals(t)
@@ -879,6 +996,9 @@ class SignalNode:
         r.failed = True
         for a in r.reveals:
             self.rep.unlock(a.reviewer, a.stake)
+        self._jury_duty(r)
+        if r.kind == "audit":
+            return
         if st.first_settled_at >= 0:
             return
         if st.chances < self.config.second_chances:
@@ -1131,11 +1251,17 @@ class SignalNode:
             mid = self.motif_of(cid)
             return self.motifs.motifs[mid].ordinal(cid) if mid else 1
 
-        cands = [
-            cid
-            for cid, st in self.state.items()
-            if st.first_settled_at < 0 and self.explore_eligible(cid)
-        ]
+        budget = self.config.explore_budget
+        cands = []
+        for cid, st in self.state.items():
+            if st.first_settled_at >= 0 or not self.explore_eligible(cid):
+                continue
+            if budget and self.explore_impressions.get(cid, 0) >= budget:
+                continue  # L0 探索预算用完，等待陪审结算
+            rs = self.reader_score(cid, self.config.reader_stop_min)
+            if rs is not None and rs < self.config.low_quality:
+                continue  # 读者早期止损：明确差评的新内容不再继续占用探索位
+            cands.append(cid)
         return sorted(
             cands,
             key=lambda c: (
@@ -1183,7 +1309,28 @@ class SignalNode:
     def feed(
         self, now: int, limit: int = 20, viewer: str = "", algorithm: str = ""
     ) -> list[FeedItem]:
-        """推荐流 = 自然内容（含母题聚合）+ 探索位 + 复兴位 + 广告位。"""
+        """生成推荐流并记录曝光（= build_feed + record_impressions）。"""
+        items = self.build_feed(now, limit, viewer, algorithm)
+        self.record_impressions(items)
+        return items
+
+    def record_impressions(self, items: list[FeedItem]) -> None:
+        """曝光上报（REQ-NW-004）。曝光计数是节点本地服务状态，不进入共识。"""
+        for f in items:
+            if f.kind == "ad":
+                continue
+            if f.kind == "explore":
+                self.explore_impressions[f.content_id] = (
+                    self.explore_impressions.get(f.content_id, 0) + 1
+                )
+            for cid in (f.content_id, *f.members):
+                if cid in self.contents:
+                    self.impressions[cid] = self.impressions.get(cid, 0) + 1
+
+    def build_feed(
+        self, now: int, limit: int = 20, viewer: str = "", algorithm: str = ""
+    ) -> list[FeedItem]:
+        """推荐流 = 自然内容（含母题聚合）+ 探索位 + 复兴位 + 广告位。无副作用（REQ-NW-004）。"""
         cfg = self.config
         name = algorithm or self.viewer_algorithm.get(viewer, "signal")
         inputs = self.rank_inputs()
@@ -1194,6 +1341,7 @@ class SignalNode:
         cands = self.explore_candidates(viewer)
         guaranteed = math.ceil(limit * cfg.explore_ratio) if cfg.explore_ratio > 0 else 0
         backfill = max(0, limit - len(slots)) if cfg.explore_ratio > 0 else 0
+        backfill = min(backfill, math.ceil(limit * cfg.explore_ratio * cfg.explore_backfill_max))
         n_explore = min(len(cands), max(guaranteed, backfill))
 
         # 曝光欠账复兴（REQ-EV-003）
@@ -1230,7 +1378,6 @@ class SignalNode:
             if pick == "e":
                 cid = explore[ei]
                 ei += 1
-                self.explore_impressions[cid] = self.explore_impressions.get(cid, 0) + 1
                 out.append(FeedItem("explore", cid, label="新作探索"))
             elif pick == "r":
                 cid = revival[ri]
@@ -1240,19 +1387,16 @@ class SignalNode:
                 cid, members = organic[oi]
                 oi += 1
                 n_organic_shown += 1
-                if members or (self.motif_of(cid) and self.motif_of(cid) == cid and members):
+                if members:
                     out.append(FeedItem("motif", cid, members=members, label="母题合集"))
                 else:
                     out.append(FeedItem("organic", cid))
-                for m in members:
-                    self.impressions[m] = self.impressions.get(m, 0) + 1
                 if n_organic_shown % self.exchange.slot_interval == 0:
                     camp = self.exchange.select(
                         self.contents[cid].tags, self.contents[cid].category
                     )
                     if camp is not None:
                         out.append(FeedItem("ad", cid, camp.campaign_id, label="广告"))
-            self.impressions[cid] = self.impressions.get(cid, 0) + 1
             pos += 1
         return out
 
@@ -1365,6 +1509,8 @@ class SignalNode:
                 "follows": {k: sorted(v) for k, v in sorted(self.follows.items())},
                 "disputes": {k: d.outcome for k, d in sorted(self.disputes.items())},
                 "params": self.params_changed,
+                "absent": dict(sorted(self.absent.items())),
+                "gold": {k: v[0] for k, v in sorted(self.gold.items())},
             }
         )
 
@@ -1386,6 +1532,8 @@ class SignalNode:
             self.settle(d["content_id"], now)
         elif ev.kind == "tick":
             self.tick(now)
+        elif ev.kind == "gold":
+            self.add_gold(d["content_id"], now)
         elif ev.kind == "record":
             self.submit(records.Record.from_dict(d["record"]), now)
         elif ev.kind == "campaign":

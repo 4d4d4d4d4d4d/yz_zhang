@@ -19,9 +19,11 @@ make gate       # 入库门禁
 make iterate    # 刷新 TODO.md，给出下一项任务
 ```
 
-当前状态：M2 完成——完整机制内核 + 单节点服务（HTTP API、SQLite、gossip 同步），72 条 P0 需求全部有测试追溯。
+当前状态：M3 完成——完整机制内核 + 单节点服务 + 多写者联邦（mesh）+ 多主体仿真校准，80 条 P0 需求全部有测试追溯。
 
 ```bash
 make demo                                  # 宽松模式仿真
 PYTHONPATH=src python3 -m signalnet demo --production   # 生产模式：陪审/回执/托管全流程
+PYTHONPATH=src python3 -m signalnet.sim                 # 对抗仿真：输出北极星指标
+python3 harness/calibrate.py                             # 参数校准扫描（约 6 分钟）
 ```

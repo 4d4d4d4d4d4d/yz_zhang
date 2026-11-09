@@ -234,8 +234,8 @@ class ReputationBook:
             if reward_for is not None and a.id not in reward_for:
                 continue
             if abs(sc - consensus) <= self.params.tolerance:
-                rewards[a.reviewer] = rewards.get(a.reviewer, 0) + int(
-                    a.stake * self.params.reward_rate
+                rewards[a.reviewer] = rewards.get(a.reviewer, 0) + max(
+                    1, int(a.stake * self.params.reward_rate)
                 )
             else:
                 slashes[a.reviewer] = slashes.get(a.reviewer, 0) + max(
