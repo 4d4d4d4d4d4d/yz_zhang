@@ -19,4 +19,9 @@ make gate       # 入库门禁
 make iterate    # 刷新 TODO.md，给出下一项任务
 ```
 
-当前状态：M1 可验证内核（单进程库），29 条 P0 需求全部有测试追溯。
+当前状态：M2 完成——完整机制内核 + 单节点服务（HTTP API、SQLite、gossip 同步），72 条 P0 需求全部有测试追溯。
+
+```bash
+make demo                                  # 宽松模式仿真
+PYTHONPATH=src python3 -m signalnet demo --production   # 生产模式：陪审/回执/托管全流程
+```

@@ -533,8 +533,15 @@ class SignalNode:
         if fingerprint.long_enough(c.body):  # 只用正文：标题改动成本极低，会成为绕过手段
             fp = fingerprint.simhash(c.body)
             for cid in self.fp_index.query(fp):
-                if cid in self.near_duplicates or self.contents[cid].author == c.author:
+                oc = self.contents[cid]
+                if cid in self.near_duplicates or oc.author == c.author:
                     continue  # 只与他人原作比对
+                if (
+                    c.media_fp
+                    and oc.media_fp
+                    and not fingerprint.media_near_duplicate(c.media_fp, oc.media_fp)
+                ):
+                    continue  # 文案相似但画面不同：不是搬运（可能是追随，交给母题识别）
                 original = cid
                 break
             self.fingerprints[c.id] = fp
@@ -558,9 +565,9 @@ class SignalNode:
             )
 
     def _check_motif(self, c: content.Content, st: CState, t: int) -> None:
-        if c.id in self.near_duplicates or not fingerprint.long_enough(c.body):
+        if c.id in self.near_duplicates:
             return
-        mid = self.motifs.add(c.id, c.author, self.fingerprints[c.id], t)
+        mid = self.motifs.add(c.id, c.author, self.fingerprints.get(c.id), t, c.tags)
         if mid:
             for member in self.motifs.motifs[mid].members:
                 if member == mid:
@@ -1273,12 +1280,18 @@ class SignalNode:
     # 数据可移植（REQ-FD-003）
     # ======================================================================
     def export_bundle(self, did: str) -> dict[str, Any]:
+        """导出用户自己签名的全部对象，**保持日志顺序**（密钥轮换前后的对象才能各自通过校验）。"""
+        objects: list[dict[str, Any]] = []
+        for ev in self.ledger:
+            if ev.kind == "content" and ev.data["content"]["author"] == did:
+                objects.append({"type": "content", "data": ev.data["content"]})
+            elif ev.kind == "record" and ev.data["record"]["signer"] == did:
+                objects.append({"type": "record", "data": ev.data["record"]})
         return {
             "type": "bundle/v1",
             "did": did,
             "key": self.current_key(did),
-            "records": [r.to_dict() for r in self.my_records.get(did, [])],
-            "contents": [c.to_dict() for c in self.contents.values() if c.author == did],
+            "objects": objects,
             "rep_claim": {
                 "balance": self.rep.balance(did),
                 "ledger_len": len(self.ledger),
@@ -1288,28 +1301,25 @@ class SignalNode:
         }
 
     def import_bundle(self, bundle: dict[str, Any], now: int | None = None) -> dict[str, int]:
-        """把用户数据迁入本节点：所有对象都重新校验签名后按正常流程写入。"""
+        """把用户数据迁入本节点：按原顺序逐个重新校验签名后写入；已存在的对象跳过。"""
         t = self._now(now)
         did = bundle["did"]
         n_rec = n_cont = 0
-        recs = [records.Record.from_dict(d) for d in bundle["records"]]
-        for r in recs:  # 先导入密钥相关记录，后续对象才能通过新密钥校验
-            if r.kind in ("rotate_key", "guardians") and r.id not in self.records_seen:
-                self.submit(r, t)
-                n_rec += 1
-        for d in bundle["contents"]:
-            c = content.Content.from_dict(d)
-            if c.id not in self.contents and all(s in self.contents for s in c.derived_from):
-                self.publish(c, t)
-                n_cont += 1
-        for r in recs:
-            if r.id not in self.records_seen:
-                self.submit(r, t)
-                n_rec += 1
+        for obj in bundle["objects"]:
+            if obj["type"] == "content":
+                c = content.Content.from_dict(obj["data"])
+                if c.id not in self.contents and all(s in self.contents for s in c.derived_from):
+                    self.publish(c, t)
+                    n_cont += 1
+            else:
+                r = records.Record.from_dict(obj["data"])
+                if r.id not in self.records_seen:
+                    self.submit(r, t)
+                    n_rec += 1
         claim = dict(bundle["rep_claim"])
         n = claim["ledger_len"]
         evs = list(self.ledger)
-        claim["verified"] = n <= len(evs) and n > 0 and evs[n - 1].hash == claim["ledger_head"]
+        claim["verified"] = 0 < n <= len(evs) and evs[n - 1].hash == claim["ledger_head"]
         self.claims[did] = claim
         return {"records": n_rec, "contents": n_cont}
 
