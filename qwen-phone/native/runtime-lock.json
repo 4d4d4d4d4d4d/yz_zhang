@@ -1,0 +1,7 @@
+{
+  "version": "b11527-ba6439a6b",
+  "libraries": {
+    "libggml-hexagon.so": "8a7e7ac272502679f1b3e5378cb3f3c46f234d6a267a785bf665143fb2fa951b",
+    "libggml-base.so": "96ba39756651f418c4a6af219bec5c9b038039eafe6e87f9f98901aebe94ee14"
+  }
+}

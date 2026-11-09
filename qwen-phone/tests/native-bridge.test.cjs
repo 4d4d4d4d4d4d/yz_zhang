@@ -1,0 +1,11 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const html=fs.readFileSync(require('node:path').join(__dirname,'../agent/index.html'),'utf8');
+const code=html.slice(html.indexOf('window.receiveNativeScreenshot='),html.indexOf("$('imageFile').onchange="));
+const elements={attachImage:{disabled:false},imageInfo:{prepend(){},scrollIntoView(){},hidden:true},imageLabel:{},answer:{textContent:'draft'},conversation:{querySelectorAll(){return []}}};
+let cleared=0;const c={window:{},bearer:'',job:null,imageLoading:false,imageData:'',nativePreviewUrl:'',$:id=>elements[id],clearImage(){cleared++;c.imageData='';},atob,Uint8Array,Blob,URL:{createObjectURL(){return 'blob:test'}},document:{createElement(){return {style:{}}}}};vm.createContext(c);vm.runInContext(code,c);
+const picture='data:image/jpeg;base64,/9j/';
+assert.equal(c.window.receiveNativeScreenshot(picture),false);assert.equal(c.window.latestAssistantDraft(),'');
+c.bearer='synthetic';c.job='busy';assert.equal(c.window.receiveNativeScreenshot(picture),false);c.job=null;
+assert.equal(c.window.receiveNativeScreenshot('https://example.com/image.jpg'),false);assert.equal(c.window.receiveNativeScreenshot('data:image/jpeg;base64,'+'A'.repeat(1400000)),false);
+assert.equal(c.window.receiveNativeScreenshot(picture),true);assert.equal(c.imageData,picture);assert.equal(elements.imageInfo.hidden,false);assert.equal(c.window.latestAssistantDraft(),'draft');
+c.bearer='';assert.equal(c.window.latestAssistantDraft(),'');console.log('NATIVE_BRIDGE_TEST_OK: locked/busy/remote/oversize denied; local draft and attachment only');

@@ -1,0 +1,27 @@
+{
+  "runtime": {
+    "repository": "ggml-org/llama.cpp",
+    "tag": "b11527",
+    "commit": "ba6439a6b",
+    "archive_sha256": "37f616db207df6982873f52c515e6fa258796e2ee99f1b103d5b6ce3ab8d7a32"
+  },
+  "model": {
+    "repository": "unsloth/Qwen3.5-4B-GGUF",
+    "base_model": "Qwen/Qwen3.5-4B",
+    "revision": "e87f176479d0855a907a41277aca2f8ee7a09523",
+    "file": "Qwen3.5-4B-Q4_0.gguf",
+    "bytes": 2583221408,
+    "sha256": "298fcb5fe7a77ccc79745ae24751560c5ac56874caff4bb39b1f2055bd72b8bb"
+  },
+  "device": {
+    "model": "PGEM10",
+    "soc": "SM8550",
+    "android": 16,
+    "hexagon_arch": "v73"
+  },
+  "build_dependencies": {
+    "r8.jar": "748ab0ef66e85b54cec5ad83d168999db9e3dad8c8f63170e836eff195cbd09b",
+    "android.jar": "84072541cbb711eff89f7277100ff854929a446dba7ceb1b195c340e0b4fd3cb",
+    "json.jar": "3cf6cd6892e32e2b4c1c39e0f52f5248a2f5b37646fdfbb79a66b46b618414ed"
+  }
+}

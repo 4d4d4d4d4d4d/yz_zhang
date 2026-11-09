@@ -1,0 +1,7 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const html=fs.readFileSync(require('node:path').join(__dirname,'../agent/index.html'),'utf8');
+const select={options:[],replaceChildren(x){this.options=[x]},add(x){this.options.push(x)},value:''};
+const c={session:'new',api:async()=>({sessions:[{id:'one',title:'First'},{id:'two',title:'Second'}]}),$:()=>select,Option:function(text,value){return {text,value}},document:{createElement:tag=>({tag,textContent:''}),createTextNode:text=>({textContent:text})}};
+vm.createContext(c);vm.runInContext(html.slice(html.indexOf('async function sessions('),html.indexOf("$('sessions').onchange=")),c);
+vm.runInContext(html.slice(html.indexOf('function renderMessage('),html.indexOf('async function loadConversation()')),c);
+(async()=>{await c.sessions(true);assert.equal(c.session,'two');c.session='one';await c.sessions();assert.equal(select.value,'one');const out={children:[],replaceChildren(){this.children=[]},append(n){this.children.push(n)}};c.renderMessage(out,'**bold** <img src=x onerror=alert(1)>');assert.equal(out.children.find(n=>n.tag==='strong').textContent,'bold');assert(out.children.some(n=>n.textContent.includes('<img')));assert(!out.children.some(n=>n.tag==='img'));console.log('CONVERSATION_DISPLAY_OK: restore selection, preserve active session, render markup as safe text');})().catch(e=>{console.error(e);process.exitCode=1});

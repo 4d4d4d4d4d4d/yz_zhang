@@ -1,0 +1,30 @@
+# Local toolchains, models, third-party source and build products
+/tools/
+/models/
+/vendor/
+/build/
+__pycache__/
+*.py[cod]
+.DS_Store
+# Credentials, signing keys and local configuration
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.pass
+# User data and raw device evidence
+*.db
+*.db-*
+*.sqlite*
+*.log
+*.apk
+*.aab
+*.gguf
+*.zip
+/reports/*
+!/reports/*.md
